@@ -113,3 +113,16 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
     }
 }
 #endif
+
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+
+    // This test relies on the fact that the cuda context will be created in
+    // each process separately after the fork. Using rmm_mode=pool will cause
+    // the cuda context to be created at rmmInitialize, which happens before
+    // the fork. So we hardcode the rmm_mode to "cuda"
+    auto const rmm_mode = "cuda";
+    auto const rmm_env = ::testing::AddGlobalTestEnvironment(
+        new cudf::test::RmmTestEnvironment(rmm_mode));
+    return RUN_ALL_TESTS();
+}

@@ -18,20 +18,14 @@
 
 #include <boost/filesystem.hpp>
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
-#include <cudf/types.hpp>
-#include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/column_utilities.hpp>
 
 #include <jit/cache.h>
-#include <cudf/cudf.h>
-#include <ftw.h>
 
 
-struct JitCacheTest : public GdfTest
+struct JitCacheTest : public cudf::test::BaseFixture
                     , public cudf::jit::cudfJitCache {
     JitCacheTest() : grid(1), block(1) {
     }
@@ -58,8 +52,8 @@ struct JitCacheTest : public GdfTest
         // Prime up the cache so that the in-memory and file cache is populated
 
         // Single value column
-        auto column = cudf::test::column_wrapper<int>{{4,0}};
-        auto expect = cudf::test::column_wrapper<int>{{64,0}};
+        auto column = cudf::test::fixed_width_column_wrapper<int>{{4,0}};
+        auto expect = cudf::test::fixed_width_column_wrapper<int>{{64,0}};
 
         // make program
         auto program = getProgram("MemoryCacheTestProg", program_source);
@@ -68,10 +62,9 @@ struct JitCacheTest : public GdfTest
                                                     program,
                                                     {"3", "int"});
         (*std::get<1>(kernel)).configure(grid, block)
-                 .launch(column.get()->data);
+                 .launch(column.operator cudf::mutable_column_view().data<int>());
 
-        ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                      << "  Actual col: " << column.to_str();
+        cudf::test::expect_columns_equal(expect, column);
     }
 
     const char* program_source =

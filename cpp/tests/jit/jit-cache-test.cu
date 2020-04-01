@@ -32,8 +32,8 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest) {
 
     // Single value column
     // TODO (dm): should be a scalar tho
-    auto column = cudf::test::column_wrapper<int>{{5,0}};
-    auto expect = cudf::test::column_wrapper<int>{{125,0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::fixed_width_column_wrapper<int>{{125,0}};
 
     // make new program and rename it to match old program
     auto program = getProgram("MemoryCacheTestProg1", program2_source);
@@ -50,10 +50,9 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest) {
                                          {"3", "int"});
 
     (*std::get<1>(kernel)).configure(grid, block)
-                .launch(column.get()->data);
+                .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                  << "  Actual col: " << column.to_str();
+    cudf::test::expect_columns_equal(expect, column);
 }
 
 TEST_F(JitCacheTest, MemoryCacheProgramTest) {
@@ -61,8 +60,8 @@ TEST_F(JitCacheTest, MemoryCacheProgramTest) {
 
     // Single value column
     // TODO (dm): should be a scalar tho
-    auto column = cudf::test::column_wrapper<int>{{5,0}};
-    auto expect = cudf::test::column_wrapper<int>{{625,0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::fixed_width_column_wrapper<int>{{625,0}};
 
     // remove any file cache so below program should not be obtained from file
     purgeFileCache();
@@ -74,10 +73,9 @@ TEST_F(JitCacheTest, MemoryCacheProgramTest) {
                                          {"4", "int"});
 
     (*std::get<1>(kernel)).configure(grid, block)
-                .launch(column.get()->data);
+                .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                  << "  Actual col: " << column.to_str();
+    cudf::test::expect_columns_equal(expect, column);
 }
 
 // Test the file caching ability
@@ -87,8 +85,8 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
     cudf::jit::cudfJitCache cache;
 
     // Single value column
-    auto column = cudf::test::column_wrapper<int>{{5,0}};
-    auto expect = cudf::test::column_wrapper<int>{{625,0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::fixed_width_column_wrapper<int>{{625,0}};
 
     // make program
     auto program = cache.getProgram("FileCacheTestProg", program_source);
@@ -97,10 +95,9 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
                                                 program,
                                                 {"4", "int"});
     (*std::get<1>(kernel)).configure(grid, block)
-                .launch(column.get()->data);
+                .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    ASSERT_EQ(expect, column) << "Expected col: " << expect.to_str()
-                              << "  Actual col: " << column.to_str();
+    cudf::test::expect_columns_equal(expect, column);
 }
 
 TEST_F(JitCacheTest, FileCacheKernelTest) {
@@ -108,8 +105,8 @@ TEST_F(JitCacheTest, FileCacheKernelTest) {
     cudf::jit::cudfJitCache cache;
 
     // Single value column
-    auto column = cudf::test::column_wrapper<int>{{5,0}};
-    auto expect = cudf::test::column_wrapper<int>{{125,0}};
+    auto column = cudf::test::fixed_width_column_wrapper<int>{{5,0}};
+    auto expect = cudf::test::fixed_width_column_wrapper<int>{{125,0}};
 
     // make program
     auto program = cache.getProgram("FileCacheTestProg", program_source);
@@ -118,13 +115,14 @@ TEST_F(JitCacheTest, FileCacheKernelTest) {
                                                 program,
                                                 {"3", "int"});
     (*std::get<1>(kernel)).configure(grid, block)
-                .launch(column.get()->data);
+                .launch(column.operator cudf::mutable_column_view().data<int>());
 
-    ASSERT_EQ(expect, column) << "Expected col: " << expect.to_str()
-                              << "  Actual col: " << column.to_str();
+    cudf::test::expect_columns_equal(expect, column);
 }
 #endif
 
 
 } // namespace test
-} // namespace gdf
+} // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

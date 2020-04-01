@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
@@ -468,19 +468,19 @@ set(TRANSFORM_TEST_SRC
 ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
-# - legacy jit cache tests ------------------------------------------------------------------------
+# - jit cache tests -------------------------------------------------------------------------------
 
-set(LEGACY_JITCACHE_TEST_SRC
+set(JITCACHE_TEST_SRC
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/jit/jit-cache-test.cu")
 
-ConfigureTest(LEGACY_JITCACHE_TEST "${LEGACY_JITCACHE_TEST_SRC}")
+ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
-set(LEGACY_JITCACHE_MULTI_TEST_SRC
+set(JITCACHE_MULTI_TEST_SRC
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-multiprocess-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/jit/jit-cache-multiprocess-test.cpp")
 
-ConfigureTest(LEGACY_JITCACHE_MULTIPROC_TEST "${LEGACY_JITCACHE_MULTI_TEST_SRC}")
+ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
