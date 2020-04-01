@@ -74,10 +74,8 @@ def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     gddf = dask_cudf.from_dask_dataframe(ddf)
     gddf.to_parquet(tmpdir, write_metadata_file=write_meta)
 
-    # NOTE: Need `.compute()` to resolve correct index
-    #       name after `from_dask_dataframe`
     gddf2 = dask_cudf.read_parquet(tmpdir, index="index")
-    assert_eq(gddf.compute(), gddf2)
+    assert_eq(gddf, gddf2, check_divisions=write_meta)
 
 
 def test_roundtrip_from_pandas(tmpdir):
