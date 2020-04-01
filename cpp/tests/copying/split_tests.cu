@@ -141,7 +141,7 @@ TEST_F(SplitCornerCases, EmptyColumn) {
 
     std::vector<cudf::column_view> result = cudf::experimental::split(col.view(), splits);
 
-    unsigned long expected = 0;
+    unsigned long expected = 1;
 
     EXPECT_EQ(expected, result.size());
 }
@@ -156,7 +156,7 @@ TEST_F(SplitCornerCases, EmptyIndices) {
 
     std::vector<cudf::column_view> result = cudf::experimental::split(col, splits);
 
-    unsigned long expected = 0;
+    unsigned long expected = 1;
 
     EXPECT_EQ(expected, result.size());
 }
@@ -264,7 +264,7 @@ void split_empty_indices(SplitFunc Split)
 
     auto result = Split(src_table, splits);
 
-    unsigned long expected = 0;
+    unsigned long expected = 1;
 
     EXPECT_EQ(expected, result.size());
 }

@@ -36,9 +36,11 @@
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
 - PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
+- PR #4660 Port `cudf::partition` api to python/cython
 
 ## Bug Fixes
 

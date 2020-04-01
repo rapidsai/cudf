@@ -8,7 +8,7 @@
 #include <array>
 
 #ifdef USE_NVTX
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 #endif
 
 // TODO: When we switch to a C++ Python interface, switch to using an

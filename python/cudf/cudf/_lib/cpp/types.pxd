@@ -38,10 +38,6 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         order ordering
         null_order null_ordering
 
-    ctypedef enum include_nulls "cudf::include_nulls":
-        NO "cudf::include_nulls::NO"
-        YES "cudf::include_nulls::YES"
-
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1
