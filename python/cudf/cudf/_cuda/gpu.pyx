@@ -261,9 +261,10 @@ def getDeviceAttribute(object attr, int device):
     Returns information about the device.
 
     Parameters
-        attr
+    ----------
+        attr : object (CudaDeviceAttr)
             Device attribute to query
-        device
+        device : int
             Device number to query
     """
 
