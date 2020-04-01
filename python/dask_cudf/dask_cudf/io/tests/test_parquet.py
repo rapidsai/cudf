@@ -125,14 +125,32 @@ def test_dask_timeseries_from_pandas(tmpdir):
 
 
 @pytest.mark.parametrize("index", [False, None])
-def test_dask_timeseries_from_dask(tmpdir, index):
+@pytest.mark.parametrize("stats", [False, True])
+def test_dask_timeseries_from_dask(tmpdir, index, stats):
 
     fn = str(tmpdir)
     ddf2 = dask.datasets.timeseries(freq="D")
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
-    read_df = dask_cudf.read_parquet(fn, index=index)
-    # Note: Loosing the index name here
-    assert_eq(ddf2, read_df.compute().to_pandas(), check_index=False)
+    read_df = dask_cudf.read_parquet(fn, index=index, gather_statistics=stats)
+    assert_eq(
+        ddf2, read_df, check_divisions=(stats and index), check_index=index
+    )
+
+
+@pytest.mark.parametrize("index", [False, None])
+@pytest.mark.parametrize("stats", [False, True])
+def test_dask_timeseries_from_daskcudf(tmpdir, index, stats):
+
+    fn = str(tmpdir)
+    ddf2 = dask_cudf.from_cudf(
+        cudf.datasets.timeseries(freq="D"), npartitions=4
+    )
+    ddf2.name = ddf2.name.astype("object")
+    ddf2.to_parquet(fn, write_index=index)
+    read_df = dask_cudf.read_parquet(fn, index=index, gather_statistics=stats)
+    assert_eq(
+        ddf2, read_df, check_divisions=(stats and index), check_index=index
+    )
 
 
 @pytest.mark.parametrize("index", [False, True])
