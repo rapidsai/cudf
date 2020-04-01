@@ -26,10 +26,6 @@ from cudf._libxx.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
-from cudf._libxx.nvtx import (
-    range_pop as nvtx_range_pop,
-    range_push as nvtx_range_push,
-)
 from cudf._libxx.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -2288,9 +2284,7 @@ class StringColumn(column.ColumnBase):
 
 
 def _string_column_binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
     out = libcudfxx.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    nvtx_range_pop()
     return out
 
 

@@ -408,7 +408,6 @@ class NumericalColumn(column.ColumnBase):
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
-    libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
@@ -420,7 +419,6 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if is_op_comparison:
         out = out.fillna(op == "ne")
 
-    libcudfxx.nvtx.range_pop()
     return out
 
 

@@ -14,10 +14,6 @@ from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
 from cudf.utils import ioutils
-from cudf._libxx.nvtx import (
-    range_push as nvtx_range_push,
-    range_pop as nvtx_range_pop
-)
 
 from io import BytesIO
 import errno

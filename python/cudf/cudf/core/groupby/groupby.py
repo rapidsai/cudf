@@ -9,7 +9,6 @@ import pandas as pd
 
 import cudf
 import cudf._libxx.groupby as libgroupby
-from cudf._libxx.nvtx import range_pop, range_push
 
 
 class GroupBy(object):

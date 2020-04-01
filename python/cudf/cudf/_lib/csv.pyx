@@ -6,10 +6,7 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
-from cudf._libxx.nvtx import (
-    range_push as nvtx_range_push,
-    range_pop as nvtx_range_pop
-)
+
 from cudf._lib.includes.csv cimport (
     reader as csv_reader,
     reader_options as csv_reader_options
@@ -89,8 +86,6 @@ cpdef read_csv(
     # Alias sep -> delimiter.
     if delimiter is None:
         delimiter = sep
-
-    nvtx_range_push("CUDF_READ_CSV", "PURPLE")
 
     # Setup reader options
     cdef csv_reader_options args = csv_reader_options()
@@ -243,8 +238,6 @@ cpdef read_csv(
         else:
             df = df.set_index(index_col)
 
-    nvtx_range_pop()
-
     return df
 
 cpdef write_csv(
@@ -264,8 +257,6 @@ cpdef write_csv(
     --------
     cudf.io.csv.write_csv
     """
-
-    nvtx_range_push("CUDF_WRITE_CSV", "PURPLE")
 
     from cudf.core.series import Series
 
@@ -327,7 +318,5 @@ cpdef write_csv(
 
     for c_col in list_cols:
         free_column(c_col)
-
-    nvtx_range_pop()
 
     return None
