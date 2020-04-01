@@ -5,7 +5,6 @@ channels:
   - rapidsai-nightly
   - conda-forge
   - defaults
-  - pytorch
 dependencies:
   - cupy>=6.6.0,<8.0.0a0,!=7.1.0
   - rmm=0.14.*
@@ -45,8 +44,6 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
-  - pytorch
-  - torchvision
   - pip:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git
