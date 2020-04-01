@@ -75,6 +75,7 @@
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
+- PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 
 
 # cuDF 0.13.0 (Date TBD)
