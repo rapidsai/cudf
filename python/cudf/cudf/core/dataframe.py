@@ -3614,7 +3614,7 @@ class DataFrame(Frame):
             result_df = DataFrame()
 
             for col in self.columns:
-                result_df[col] = self[col].isin(values)._column
+                result_df[col] = self._data[col].isin(values)
             result_df.index = self.index
             return result_df
 
