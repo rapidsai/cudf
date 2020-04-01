@@ -258,13 +258,9 @@ class Frame(libcudf.table.Table):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-<<<<<<< HEAD
             libcudfxx.copying.gather(
                 self, as_column(gather_map), keep_index=keep_index
             )
-=======
-            libcudf.copying.gather(self, as_column(gather_map))
->>>>>>> branch-0.14
         )
         result._copy_categories(self)
         return result
@@ -1331,12 +1327,8 @@ class Frame(libcudf.table.Table):
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, left_index, right_index, how
         )
-<<<<<<< HEAD
-        gdf_result = libcudfxx.join.join(
-=======
 
         gdf_result = libcudf.join.join(
->>>>>>> branch-0.14
             lhs,
             rhs,
             left_on,
