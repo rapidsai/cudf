@@ -38,6 +38,7 @@
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
+- PR #4772 Cleanup dask_cudf to_parquet and enable "_metadata" creation
 
 ## Bug Fixes
 

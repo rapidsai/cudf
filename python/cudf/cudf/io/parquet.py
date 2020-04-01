@@ -51,7 +51,7 @@ def write_to_dataset(
     partition_cols=None,
     fs=None,
     preserve_index=False,
-    collect_metadata=False,
+    return_metadata=False,
     **kwargs,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
@@ -78,7 +78,7 @@ def write_to_dataset(
     partition_cols : list,
         Column names by which to partition the dataset
         Columns are partitioned in the order they are given
-    collect_metadata : bool, default False
+    return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
         include the file-path metadata (relative to `root_path`).
     **kwargs : dict,
@@ -118,7 +118,7 @@ def write_to_dataset(
             full_path = "/".join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
-            if collect_metadata:
+            if return_metadata:
                 metadata.append(
                     write_df.to_parquet(
                         full_path,
@@ -133,7 +133,7 @@ def write_to_dataset(
     else:
         outfile = guid() + ".parquet"
         full_path = "/".join([root_path, outfile])
-        if collect_metadata:
+        if return_metadata:
             metadata.append(
                 df.to_parquet(
                     full_path,

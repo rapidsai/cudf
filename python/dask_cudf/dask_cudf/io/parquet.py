@@ -108,7 +108,7 @@ class CudfEngine(ArrowEngine):
                 partition_cols=partition_on,
                 fs=fs,
                 preserve_index=preserve_index,
-                collect_metadata=return_metadata,
+                return_metadata=return_metadata,
                 **kwargs,
             )
         else:
