@@ -147,7 +147,6 @@ mutable_column_device_view::mutable_column_device_view(
 
 // Handle freeing children
 void mutable_column_device_view::destroy() {
-  RMM_FREE(mutable_children,0);
   delete this;
 }
 

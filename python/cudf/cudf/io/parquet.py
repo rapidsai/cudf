@@ -170,6 +170,7 @@ def to_parquet(
     index=None,
     partition_cols=None,
     statistics="ROWGROUP",
+    metadata_file_path=None,
     *args,
     **kwargs,
 ):
@@ -195,7 +196,12 @@ def to_parquet(
                 )
 
         return libparquet.write_parquet(
-            df, path, index, compression=compression, statistics=statistics
+            df,
+            path,
+            index,
+            compression=compression,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
         )
     else:
 
@@ -207,3 +213,10 @@ def to_parquet(
         pq.write_to_dataset(
             pa_table, path, partition_cols=partition_cols, *args, **kwargs
         )
+
+
+@ioutils.doc_merge_parquet_filemetadata()
+def merge_parquet_filemetadata(filemetadata_list):
+    """{docstring}"""
+
+    return libparquet.merge_filemetadata(filemetadata_list)

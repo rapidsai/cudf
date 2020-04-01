@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "hostdevice_vector.hpp"
+#include "../hostdevice_vector.hpp"
 
 #include <cudf/cudf.h>
 #include <utilities/legacy/column_utils.hpp>
