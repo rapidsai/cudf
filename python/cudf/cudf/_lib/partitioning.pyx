@@ -5,18 +5,18 @@ from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._libxx.column cimport Column
-from cudf._libxx.table cimport Table
-from cudf._libxx.move cimport move
+from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
 
-from cudf._libxx.cpp.table.table cimport table
-from cudf._libxx.cpp.table.table_view cimport table_view
-from cudf._libxx.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.column.column_view cimport column_view
 
-from cudf._libxx.cpp.partitioning cimport (
+from cudf._lib.cpp.partitioning cimport (
     partition as cpp_partition,
 )
-cimport cudf._libxx.cpp.types as libcudf_types
+cimport cudf._lib.cpp.types as libcudf_types
 
 
 def partition(Table source_table, Column partition_map,
