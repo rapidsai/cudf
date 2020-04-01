@@ -680,6 +680,28 @@ class ColumnBase(Column):
             raise
 
     def isin(self, values):
+        """Check whether values are contained in the Column.
+
+        Parameters
+        ----------
+        values : set or list-like
+            The sequence of values to test. Passing in a single string will
+            raise a TypeError. Instead, turn a single string into a list
+            of one element.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Column
+            Column of booleans indicating if each element is in values.
+        Raises
+        -------
+        TypeError
+            If values is a string
+        """
         if is_scalar(values):
             raise TypeError(
                 "only list-like objects are allowed to be passed "
