@@ -243,7 +243,7 @@ table_with_metadata read_csv(
 /**
  * @brief Settings to use for `write_csv()`
  */
-  struct write_csv_args: public detail::csv::writer_options { // slicing requires public inheritance (see write_csv() usage of sliced object)
+struct write_csv_args: private detail::csv::writer_options { 
   write_csv_args(sink_info const& snk,
                  table_view const& table,
                  std::string const& na,
@@ -263,6 +263,11 @@ table_with_metadata read_csv(
       sink_(snk),
       table_(table)
   {}
+
+  detail::csv::writer_options const& get_options(void) const
+  {
+    return *this;//sliced to base
+  }
 
   sink_info const& sink(void) const
   {
