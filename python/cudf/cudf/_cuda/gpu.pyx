@@ -7,10 +7,26 @@ from cudf._cuda.gpu cimport (
     cudaDeviceGetAttribute,
     cudaDeviceAttr,
     cudaGetDeviceProperties,
-    cudaDeviceProp
+    cudaDeviceProp,
+    cudaGetErrorName,
+    cudaGetErrorString,
+    cudaError_t
 )
 from enum import IntEnum
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
+
+
+class CUDARuntimeError(RuntimeError):
+
+    def __init__(self, status):
+        self.status = status
+        cdef bytes name = cudaGetErrorName(<cudaError_t>status)
+        cdef bytes msg = cudaGetErrorString(<cudaError_t>status)
+        super(CUDARuntimeError, self).__init__(
+            '%s: %s' % (name.decode(), msg.decode()))
+
+    def __reduce__(self):
+        return (type(self), (self.status,))
 
 
 class CudaDeviceAttr(IntEnum):
@@ -228,7 +244,9 @@ def driverGetVersion():
     """
     cdef int version
     status = cudaDriverGetVersion(&version)
-    return -1 if status != 0 else version
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return version
 
 
 def runtimeGetVersion():
@@ -242,7 +260,9 @@ def runtimeGetVersion():
 
     cdef int version
     status = cudaRuntimeGetVersion(&version)
-    return -1 if status != 0 else version
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return version
 
 
 def getDeviceCount():
@@ -255,7 +275,9 @@ def getDeviceCount():
 
     cdef int count
     status = cudaGetDeviceCount(&count)
-    return -1 if status != 0 else count
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return count
 
 
 def getDeviceAttribute(object attr, int device):
@@ -272,10 +294,14 @@ def getDeviceAttribute(object attr, int device):
 
     cdef int value
     status = cudaDeviceGetAttribute(&value, attr, device)
-    return -1 if status != 0 else value
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return value
 
 
 def getDeviceProperties(int device):
     cdef cudaDeviceProp prop
     status = cudaGetDeviceProperties(&prop, device)
-    return None if status != 0 else prop
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return prop

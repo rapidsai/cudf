@@ -6,10 +6,15 @@ def validate_setup():
         getDeviceAttribute,
         CudaDeviceAttr,
         getDeviceProperties,
+        CUDARuntimeError,
     )
     import warnings
 
-    gpus_count = getDeviceCount()
+    try:
+        gpus_count = getDeviceCount()
+    except CUDARuntimeError:
+        # If there is no GPU detected, set `gpus_count` to -1
+        gpus_count = -1
 
     if gpus_count > 0:
         # Cupy throws RunTimeException to get GPU count,
