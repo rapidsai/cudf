@@ -31,15 +31,125 @@ R"***(
 const char* kernel =
 R"***(
 #include "operation.h"
-#include <thrust/iterator/transform_iterator.h>
+
+// #include <thrust/iterator/transform_iterator.h>
+// #include <thrust/iterator/counting_iterator.h>
+// #include <thrust/binary_search.h>
+
+template<class Iter, class T>
+cudf::size_type __device__ upper_bound(Iter iter, cudf::size_type first, cudf::size_type last, const T& value)
+{
+    cudf::size_type current;
+    cudf::size_type count, step;
+    count = last - first;
+
+    while (count > 0) {
+      current = first;
+      step = count / 2;
+      current += step;
+      if (!(value < iter[current])) {
+        first = ++current;
+        count -= step + 1;
+      }
+      else
+        count = step;
+    }
+    return first;
+}
+
+template<class Iter, class T>
+cudf::size_type __device__ lower_bound(Iter iter, cudf::size_type first, cudf::size_type last, const T& value)
+{
+    cudf::size_type current;
+    cudf::size_type count, step;
+    count = last - first;
+
+    while (count > 0) {
+      current = first;
+      step = count / 2;
+      current += step;
+      if (iter[current] < value) {
+        first = ++current;
+        count -= step + 1;
+      }
+      else
+        count = step;
+    }
+    return first;
+}
+
+  template<class T>
+  struct preceding_window_wrapper {
+
+    const cudf::size_type *d_group_offsets;
+    const cudf::size_type *d_group_labels;
+    const T *d_timestamps;
+    cudf::size_type preceding_window_in_days;
+    T mult_factor;
+  
+    preceding_window_wrapper(
+      const cudf::size_type *d_group_offsets_, 
+      const cudf::size_type *d_group_labels_,
+      const T *d_timestamps_,
+      cudf::size_type preceding_window_in_days_,
+      T mult_factor_
+    ):
+      d_group_offsets(d_group_offsets_),
+      d_group_labels(d_group_labels_),
+      d_timestamps(d_timestamps_),
+      preceding_window_in_days(preceding_window_in_days_),
+      mult_factor(mult_factor_)
+    {}
+
+    cudf::size_type __device__ operator[](cudf::size_type idx) {
+      auto group_label = d_group_labels[idx];
+      auto group_start = d_group_offsets[group_label];
+      auto lower_bound_ = d_timestamps[idx] - preceding_window_in_days*mult_factor;
+      
+      return idx - lower_bound(d_timestamps, group_start, idx, lower_bound_) + 1;
+      // Add 1, for `preceding` to account for current row.
+    } 
+  };
+ 
+  template<class T>
+  struct following_window_wrapper {
+
+    const cudf::size_type *d_group_offsets;
+    const cudf::size_type *d_group_labels;
+    const T *d_timestamps;
+    cudf::size_type following_window_in_days;
+    T mult_factor;
+  
+    following_window_wrapper(
+      const cudf::size_type *d_group_offsets_, 
+      const cudf::size_type *d_group_labels_,
+      const T *d_timestamps_,
+      cudf::size_type following_window_in_days_,
+      T mult_factor_
+    ):
+      d_group_offsets(d_group_offsets_),
+      d_group_labels(d_group_labels_),
+      d_timestamps(d_timestamps_),
+      following_window_in_days(following_window_in_days_),
+      mult_factor(mult_factor_)
+    {}
+
+    cudf::size_type __device__ operator[](cudf::size_type idx) {
+      auto group_label = d_group_labels[idx];
+      auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
+      auto upper_bound_ = d_timestamps[idx] + following_window_in_days*mult_factor;
+
+      return upper_bound(d_timestamps, idx, group_end, upper_bound_) - idx - 1;
+    }
+  };
 
 template <typename WindowType>
-cudf::size_type get_window(WindowType window, cudf::size_type index) { return window[index]; }
+cudf::size_type __device__ get_window(WindowType window, cudf::size_type index) { return window[index]; }
 
 template <>
-cudf::size_type get_window(cudf::size_type window, cudf::size_type index) { return window; }
+cudf::size_type __device__ get_window(cudf::size_type window, cudf::size_type index) { return window; }
 
-template <typename InType, typename OutType, class agg_op, typename WindowType>
+template <typename InType, typename OutType, class agg_op, typename PrecedingWindowType, typename FollowingWindowType>
 __global__
 void gpu_rolling_new(cudf::size_type nrows,
                  InType const* const __restrict__ in_col, 
@@ -47,8 +157,8 @@ void gpu_rolling_new(cudf::size_type nrows,
                  OutType* __restrict__ out_col, 
                  cudf::bitmask_type* __restrict__ out_col_valid,
                  cudf::size_type * __restrict__ output_valid_count,
-                 WindowType preceding_window_begin,
-                 WindowType following_window_begin,
+                 PrecedingWindowType preceding_window_begin,
+                 FollowingWindowType following_window_begin,
                  cudf::size_type min_periods)
 {
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
