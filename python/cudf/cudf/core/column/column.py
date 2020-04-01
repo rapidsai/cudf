@@ -716,7 +716,7 @@ class ColumnBase(Column):
         try:
             rhs = as_column(values, dtype=self.dtype)
             # if necessary, convert values via typecast
-            rhs = cudf.Series(rhs.astype(self.dtype))._column
+            rhs = rhs.astype(self.dtype)
         except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
