@@ -1,6 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf._libxx import dlpack as libdlpack
+from cudf._lib import dlpack as libdlpack
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
 from cudf.core.index import Index
