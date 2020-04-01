@@ -36,8 +36,17 @@ CUDA 10.0:
 
 ## Build From Source
 
-Build the native code first, and make sure the a JDK is installed and available. Then run maven
-as you would expect.
+Build the native code first, and make sure the a JDK is installed and available. 
+If you use the default cmake options libcudart will be dynamically linked to libcudf and librmm
+which are included.  If you do this the resulting jar will have a classifier associated with it
+because that jar can only be used with a single version of the cuda runtime.  If you want
+to remove that requirement you can build RMM and cuDF with `-DCUDA_RUNTIME_LIBRARY=Static` when
+running cmake.  This will statically link in the cuda runtime and result in a jar with no
+classifier that should run on any host that has a version of the diriver new enough to support
+the runtime that this was built with.  Official releases will indicate in the release notes
+the minimum driver version required.
+
+Then run maven as you would expect.
 
 ```
 mvn clean install

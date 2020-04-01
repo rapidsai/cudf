@@ -140,6 +140,17 @@ option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+if(CUDA_RUNTIME_LIBRARY AND CUDA_RUNTIME_LIBRARY MATCHES "^Static$")
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_RUNTIME_LIBRARY MATCHES "^Static$")
+
+###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -797,12 +808,12 @@ endif(HT_DEFAULT_ALLOCATOR)
 set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
 # link targets for NVStrings
-target_link_libraries(libNVStrings rmm cudart cuda)
-target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
-target_link_libraries(libNVText libNVStrings rmm cudart cuda)
+target_link_libraries(libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVCategory libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVText libNVStrings rmm ${CUDART_LIBRARY} cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
