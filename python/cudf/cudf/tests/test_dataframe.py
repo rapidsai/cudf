@@ -4457,7 +4457,7 @@ def test_change_column_dtype_in_empty():
 
 
 def test_dataframe_from_table_empty_index():
-    from cudf._libxx.table import Table
+    from cudf._lib.table import Table
 
     df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     odict = df._data

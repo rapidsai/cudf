@@ -84,7 +84,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
-        "str",
+        pytest.param("str", marks=pytest.mark.xfail()),
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])

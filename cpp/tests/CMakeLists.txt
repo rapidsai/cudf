@@ -341,13 +341,12 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 # - quantiles tests -------------------------------------------------------------------------------
 
 set(LEGACY_QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu")
 
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -365,7 +364,7 @@ ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
 
 set(REDUCTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cpp")
 
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
@@ -914,17 +913,3 @@ ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 ###################################################################################################
 
 enable_testing()
-
-###################################################################################################
-### benchmarks ####################################################################################
-###################################################################################################
-
-# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - iterator benchmarks----------------------------------------------------------------------------
-
-set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
-
-  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")

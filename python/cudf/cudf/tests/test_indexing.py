@@ -387,6 +387,46 @@ def test_series_loc_categorical():
     )
 
 
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3, 4]},
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+        pd.Series(
+            [1, 2, 3, 4],
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+    ],
+)
+def test_dataframe_series_loc_multiindex(obj):
+    pindex = pd.MultiIndex.from_frame(
+        pd.DataFrame({"A": [3, 2], "B": ["high", "low"]})
+    )
+
+    gobj = cudf.from_pandas(obj)
+    gindex = cudf.MultiIndex.from_pandas(pindex)
+
+    # cudf MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[gindex]
+    assert_eq(expected, got)
+
+    # pandas MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[pindex]
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
 

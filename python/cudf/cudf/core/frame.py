@@ -9,8 +9,8 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal
 
 import cudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.scalar import Scalar
+import cudf._lib as libcudf
+from cudf._lib.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -23,7 +23,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Frame(libcudfxx.table.Table):
+class Frame(libcudf.table.Table):
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -46,7 +46,7 @@ class Frame(libcudfxx.table.Table):
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
 
-        libcudfxx.nvtx.range_push("CUDF_CONCAT", "orange")
+        libcudf.nvtx.range_push("CUDF_CONCAT", "orange")
 
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
@@ -198,7 +198,7 @@ class Frame(libcudfxx.table.Table):
 
         # Concatenate the Tables
         out = cls._from_table(
-            libcudfxx.concat.concat_tables(tables, ignore_index=ignore_index)
+            libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
         )
 
         # Reassign the categories for any categorical table cols
@@ -220,7 +220,7 @@ class Frame(libcudfxx.table.Table):
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
 
-        libcudfxx.nvtx.range_pop()
+        libcudf.nvtx.range_pop()
 
         return out
 
@@ -258,20 +258,24 @@ class Frame(libcudfxx.table.Table):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
+<<<<<<< HEAD
             libcudfxx.copying.gather(
                 self, as_column(gather_map), keep_index=keep_index
             )
+=======
+            libcudf.copying.gather(self, as_column(gather_map))
+>>>>>>> branch-0.14
         )
         result._copy_categories(self)
         return result
 
     def _hash(self, initial_hash_values=None):
-        return libcudfxx.hash.hash(self, initial_hash_values)
+        return libcudf.hash.hash(self, initial_hash_values)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
     ):
-        output, offsets = libcudfxx.hash.hash_partition(
+        output, offsets = libcudf.hash.hash_partition(
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
@@ -292,14 +296,14 @@ class Frame(libcudfxx.table.Table):
         return self._data[None].copy(deep=False)
 
     def _scatter(self, key, value):
-        result = self._from_table(libcudfxx.copying.scatter(value, key, self))
+        result = self._from_table(libcudf.copying.scatter(value, key, self))
 
         result._copy_categories(self)
         return result
 
     def _empty_like(self, keep_index=True):
         result = self._from_table(
-            libcudfxx.copying.table_empty_like(self, keep_index)
+            libcudf.copying.table_empty_like(self, keep_index)
         )
 
         result._copy_categories(self, include_index=keep_index)
@@ -344,9 +348,7 @@ class Frame(libcudfxx.table.Table):
             stop = len(self) if stop > num_rows else stop
 
             result = self._from_table(
-                libcudfxx.copying.table_slice(self, [start, stop], keep_index)[
-                    0
-                ]
+                libcudf.copying.table_slice(self, [start, stop], keep_index)[0]
             )
 
             result._copy_categories(self, include_index=keep_index)
@@ -515,7 +517,7 @@ class Frame(libcudfxx.table.Table):
                         otr_col = otr_col.codes
                     input_col = input_col.codes
 
-                result = libcudfxx.copying.copy_if_else(
+                result = libcudf.copying.copy_if_else(
                     input_col, otr_col, boolean_mask[cond_col_name]._column
                 )
 
@@ -545,7 +547,7 @@ class Frame(libcudfxx.table.Table):
                 else:
                     other = other.codes
                 input_col = input_col.codes
-            result = libcudfxx.copying.copy_if_else(
+            result = libcudf.copying.copy_if_else(
                 self._column, other, boolean_mask._column
             )
 
@@ -563,6 +565,29 @@ class Frame(libcudfxx.table.Table):
             result.index = self.index
             return result
 
+    def _partition(self, scatter_map, npartitions, keep_index=True):
+
+        output_table, output_offsets = libcudf.partitioning.partition(
+            self, scatter_map, npartitions, keep_index
+        )
+
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = libcudf.copying.table_split(
+            output_table, output_offsets, keep_index=keep_index
+        )
+
+        result = [self.__class__._from_table(tbl) for tbl in result]
+
+        for frame in result:
+            frame._copy_categories(self, include_index=keep_index)
+
+        return result
+
     def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
@@ -570,7 +595,7 @@ class Frame(libcudfxx.table.Table):
 
        """
 
-        result = libcudfxx.copying.scatter_to_tables(
+        result = libcudf.copying.scatter_to_tables(
             self, scatter_map, keep_index
         )
         result = [self._from_table(tbl) for tbl in result]
@@ -646,7 +671,7 @@ class Frame(libcudfxx.table.Table):
         if len(subset_cols) == 0:
             return self.copy(deep=True)
         result = self.__class__._from_table(
-            libcudfxx.stream_compaction.drop_nulls(
+            libcudf.stream_compaction.drop_nulls(
                 self, how=how, keys=subset, thresh=thresh
             )
         )
@@ -683,7 +708,7 @@ class Frame(libcudfxx.table.Table):
         rows corresponding to `False` is dropped
         """
         result = self.__class__._from_table(
-            libcudfxx.stream_compaction.apply_boolean_mask(
+            libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
             )
         )
@@ -698,18 +723,18 @@ class Frame(libcudfxx.table.Table):
         column_order=(),
         null_precedence=(),
     ):
-        interpolation = libcudfxx.types.Interpolation[interpolation]
+        interpolation = libcudf.types.Interpolation[interpolation]
 
-        is_sorted = libcudfxx.types.Sorted["YES" if is_sorted else "NO"]
+        is_sorted = libcudf.types.Sorted["YES" if is_sorted else "NO"]
 
-        column_order = [libcudfxx.types.Order[key] for key in column_order]
+        column_order = [libcudf.types.Order[key] for key in column_order]
 
         null_precedence = [
-            libcudfxx.types.NullOrder[key] for key in null_precedence
+            libcudf.types.NullOrder[key] for key in null_precedence
         ]
 
         result = self.__class__._from_table(
-            libcudfxx.quantiles.quantiles(
+            libcudf.quantiles.quantiles(
                 self,
                 q,
                 interpolation,
@@ -766,7 +791,7 @@ class Frame(libcudfxx.table.Table):
         """
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
-        method_enum = libcudfxx.sort.RankMethod[method.upper()]
+        method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise KeyError(na_option)
 
@@ -775,7 +800,7 @@ class Frame(libcudfxx.table.Table):
         if numeric_only:
             warnings.warn("numeric_only=True is not implemented yet")
 
-        out_rank_table = libcudfxx.sort.rank_columns(
+        out_rank_table = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
         )
 
@@ -828,7 +853,7 @@ class Frame(libcudfxx.table.Table):
             count = as_column(count)
 
         result = self.__class__._from_table(
-            libcudfxx.filling.repeat(self, count)
+            libcudf.filling.repeat(self, count)
         )
 
         result._copy_categories(self)
@@ -888,7 +913,7 @@ class Frame(libcudfxx.table.Table):
             return self.copy(deep=True)
 
         result = self._from_table(
-            libcudfxx.stream_compaction.drop_duplicates(
+            libcudf.stream_compaction.drop_duplicates(
                 self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
             )
         )
@@ -988,7 +1013,7 @@ class Frame(libcudfxx.table.Table):
             )
 
         result = self._constructor_sliced(
-            libcudfxx.reshape.interleave_columns(self)
+            libcudf.reshape.interleave_columns(self)
         )
 
         return result
@@ -1018,9 +1043,7 @@ class Frame(libcudfxx.table.Table):
         -------
         The table containing the tiled "rows".
         """
-        result = self.__class__._from_table(
-            libcudfxx.reshape.tile(self, count)
-        )
+        result = self.__class__._from_table(libcudf.reshape.tile(self, count))
         result._copy_categories(self)
         return result
 
@@ -1046,12 +1069,74 @@ class Frame(libcudfxx.table.Table):
         1-D cupy array of insertion points
         """
         # Call libcudf++ search_sorted primitive
-        outcol = libcudfxx.search.search_sorted(
+        from cudf.utils.dtypes import is_scalar
+
+        scalar_flag = None
+        if is_scalar(values):
+            scalar_flag = True
+
+        if not isinstance(values, Frame):
+            values = as_column(values)
+            if values.dtype != self.dtype:
+                self = self.astype(values.dtype)
+            values = values.as_frame()
+        outcol = libcudf.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
 
-        # Retrun result as cupy array
-        return cupy.asarray(outcol.data_array_view)
+        # Retrun result as cupy array if the values is non-scalar
+        # If values is scalar, result is expected to be scalar.
+        result = cupy.asarray(outcol.data_array_view)
+        if scalar_flag:
+            return result[0].item()
+        else:
+            return result
+
+    def _get_sorted_inds(self, ascending=True, na_position="last"):
+        """
+        Sort by the values.
+
+        Parameters
+        ----------
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+        Returns
+        -------
+        out_column_inds : cuDF Column of indices sorted based on input
+
+        Difference from pandas:
+        * Support axis='index' only.
+        * Not supporting: inplace, kind
+        * Ascending can be a list of bools to control per column
+        """
+
+        # This needs to be updated to handle list of bools for ascending
+        if ascending is True:
+            if na_position == "last":
+                na_position = 0
+            elif na_position == "first":
+                na_position = 1
+        elif ascending is False:
+            if na_position == "last":
+                na_position = 1
+            elif na_position == "first":
+                na_position = 0
+        else:
+            warnings.warn(
+                "When using a sequence of booleans for `ascending`, "
+                "`na_position` flag is not yet supported and defaults to "
+                "treating nulls as greater than all numbers"
+            )
+            na_position = 0
+
+        # If given a scalar need to construct a sequence of length # of columns
+        if np.isscalar(ascending):
+            ascending = [ascending] * self._num_columns
+
+        return libcudf.sort.order_by(self, ascending, na_position)
 
     def sin(self):
         return self._unaryop("sin")
@@ -1246,7 +1331,12 @@ class Frame(libcudfxx.table.Table):
         (lhs, rhs, to_categorical) = self._typecast_before_merge(
             lhs, rhs, left_on, right_on, left_index, right_index, how
         )
+<<<<<<< HEAD
         gdf_result = libcudfxx.join.join(
+=======
+
+        gdf_result = libcudf.join.join(
+>>>>>>> branch-0.14
             lhs,
             rhs,
             left_on,
@@ -1453,6 +1543,6 @@ class Frame(libcudfxx.table.Table):
             Returns True, if sorted as expected by ``ascending`` and
             ``null_position``, False otherwise.
         """
-        return libcudfxx.sort.is_sorted(
+        return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )

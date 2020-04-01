@@ -29,7 +29,7 @@
 #include <iostream>
 
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 

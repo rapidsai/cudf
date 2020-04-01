@@ -445,7 +445,6 @@ add_library(cudf
             src/hash/hashing.cu
             src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
-            src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
@@ -774,11 +773,6 @@ add_dependencies(cudf stringify_run)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
-
-
-# Link NVTX library
-find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-target_link_libraries(cudf ${NVTX_LIBRARY})
 
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
