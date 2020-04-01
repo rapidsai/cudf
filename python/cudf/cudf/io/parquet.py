@@ -97,7 +97,7 @@ def write_to_dataset(
                 ]
             )
             prefix = "/".join([root_path, subdir])
-            fs.mkdirs(root_path, exist_ok=True)
+            fs.mkdirs(prefix, exist_ok=True)
             outfile = guid() + ".parquet"
             full_path = "/".join([prefix, outfile])
             write_df = sub_df.copy(deep=False)

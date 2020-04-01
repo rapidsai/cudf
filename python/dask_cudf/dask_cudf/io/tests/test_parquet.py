@@ -171,11 +171,12 @@ def test_filters(tmpdir):
     assert not len(c)
 
 
+@pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("daskcudf", [True, False])
 @pytest.mark.parametrize(
     "parts", [["year", "month", "day"], ["year", "month"], ["year"]]
 )
-def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf):
+def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
     tmpdir = str(tmpdir)
 
     df = pd.DataFrame()
@@ -186,10 +187,17 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf):
     df.index.name = "index"
     if daskcudf:
         ddf2 = dask_cudf.from_cudf(cudf.from_pandas(df), npartitions=2)
-        ddf2.to_parquet(tmpdir, write_metadata_file=False, partition_on=parts)
+        ddf2.to_parquet(
+            tmpdir, write_metadata_file=metadata, partition_on=parts
+        )
     else:
         ddf2 = dd.from_pandas(df, npartitions=2)
-        ddf2.to_parquet(tmpdir, engine="pyarrow", partition_on=parts)
+        ddf2.to_parquet(
+            tmpdir,
+            engine="pyarrow",
+            write_metadata_file=metadata,
+            partition_on=parts,
+        )
     df_read = dd.read_parquet(tmpdir, engine="pyarrow", index="index")
     gdf_read = dask_cudf.read_parquet(tmpdir, index="index")
 
