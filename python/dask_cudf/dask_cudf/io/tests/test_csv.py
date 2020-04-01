@@ -17,10 +17,10 @@ import dask_cudf
 def test_csv_roundtrip(tmp_path):
     df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
     ddf = dask_cudf.from_cudf(df, npartitions=2)
+    csv_path = str(tmp_path / "data-*.csv")
+    ddf.to_csv(csv_path, index=False)
 
-    ddf.to_csv(tmp_path / "data-*.csv", index=False)
-
-    ddf2 = dask_cudf.read_csv(tmp_path / "data-*.csv")
+    ddf2 = dask_cudf.read_csv(csv_path)
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
@@ -40,13 +40,14 @@ def test_read_csv(tmp_path):
         dtypes={"x": int, "y": int}, freq="120s"
     ).reset_index(drop=True)
 
-    df.to_csv(tmp_path / "data-*.csv", index=False)
+    csv_path = str(tmp_path / "data-*.csv")
+    df.to_csv(csv_path, index=False)
 
-    df2 = dask_cudf.read_csv(tmp_path / "data-*.csv")
+    df2 = dask_cudf.read_csv(csv_path)
     dd.assert_eq(df, df2)
 
     # file path test
-    stmp_path = str(tmp_path / "data-*.csv")
+    stmp_path = str(csv_path)
     df3 = dask_cudf.read_csv(f"file://{stmp_path}")
     dd.assert_eq(df2, df3)
 

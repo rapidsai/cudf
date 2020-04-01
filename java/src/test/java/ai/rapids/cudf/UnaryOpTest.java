@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
 public class UnaryOpTest extends CudfTestBase {
-  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY};
+  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY, 500.0, -500.0};
   private static final Integer[] INTS_1 = new Integer[]{1, 10, -100, 5, 50, 100, null};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
 

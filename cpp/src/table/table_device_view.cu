@@ -31,7 +31,6 @@ namespace detail {
 
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy() {
-  RMM_TRY(RMM_FREE(_columns, _stream));
   delete this;
 }
 
@@ -67,13 +66,13 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // We need this pointer in order to pass it down when creating the
     // ColumnDeviceViews so the column can set the pointer(s) for any
     // of its child objects.
-    RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
-    ColumnDeviceView* d_column = _columns;
+    _descendant_storage = new rmm::device_buffer(views_size_bytes, stream);
+    _columns = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // objects in order for _columns to be used as an array. Therefore,
     // any child data is assigned to the end of this array (h_end/d_end).
     auto h_end = (int8_t*)(h_column + source_view.num_columns());
-    auto d_end = (int8_t*)(d_column + source_view.num_columns());
+    auto d_end = (int8_t*)(_columns + source_view.num_columns());
     // Create the ColumnDeviceView from each column within the CPU memory
     // Any column child data should be copied into h_end and any
     // internal pointers should be set using d_end.
