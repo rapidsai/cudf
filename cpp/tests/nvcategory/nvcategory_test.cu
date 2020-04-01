@@ -17,9 +17,6 @@
  * limitations under the License.
  */
 
-
-#include <gtest/gtest.h>
-
 #include <cudf/legacy/binaryop.hpp>
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
@@ -37,8 +34,11 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
+
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/base_fixture.hpp>
+
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
@@ -95,7 +95,7 @@ int32_t* generate_int_data(cudf::size_type num_rows, size_t max_value, bool prin
 	return host_data;
 }
 
-struct NVCategoryTest : public GdfTest
+struct NVCategoryTest : public cudf::test::BaseFixture
 {
 	gdf_column * create_boolean_column(cudf::size_type num_rows){
 		gdf_column * column = new gdf_column{};
@@ -299,7 +299,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	delete data;
 }
 
-struct NVCategoryConcatTest : public GdfTest
+struct NVCategoryConcatTest : public cudf::test::BaseFixture
 {
 	std::vector<gdf_column *> concat_columns;
 	gdf_column * concat_out;
@@ -403,7 +403,7 @@ namespace std{
 	}
   }
 
-struct NVCategoryJoinTest : public GdfTest
+struct NVCategoryJoinTest : public cudf::test::BaseFixture
 {
   // Containers for the raw pointers to the gdf_columns that will be used as
   // input to the gdf_join functions
@@ -859,3 +859,5 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
   }
 
 }
+
+CUDF_TEST_PROGRAM_MAIN()
