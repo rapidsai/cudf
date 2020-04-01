@@ -7,6 +7,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 from numba import cuda
 
 import cudf
@@ -186,3 +187,43 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     a.name = "b"
     b = cupy.asarray([1, 1, 1])  # noqa: F841
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
+
+
+def test_cuda_array_interface_pytorch():
+    series = cudf.Series([1, -1, 10, -56])
+    tensor = torch.tensor(series)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, series)
+    from cudf.core.buffer import Buffer
+
+    buffer = Buffer(cupy.ones(10, dtype=np.bool_))
+    tensor = torch.tensor(buffer)
+    got = cudf.Series(tensor, dtype=np.bool_)
+
+    assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
+
+    with pytest.raises(RuntimeError):
+        torch.tensor(cudf.core.Index())
+
+    index = cudf.core.index.RangeIndex(start=0, stop=100)
+    tensor = torch.tensor(index)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, cudf.Series(index))
+
+    index = cudf.core.index.GenericIndex([1, 2, 8, 6])
+    tensor = torch.tensor(index)
+    got = cudf.Series(tensor)
+
+    assert_eq(got, cudf.Series(index))
+
+    str_series = cudf.Series(["a", "g"])
+
+    with pytest.raises(NotImplementedError):
+        str_series.__cuda_array_interface__
+
+    cat_series = str_series.astype("category")
+
+    with pytest.raises(TypeError):
+        cat_series.__cuda_array_interface__

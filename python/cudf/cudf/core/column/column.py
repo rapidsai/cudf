@@ -824,7 +824,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data_ptr, True),
+            "data": (self.data_ptr, False),
             "version": 1,
         }
 
