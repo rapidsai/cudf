@@ -39,7 +39,7 @@ class CudfEngine(ArrowEngine):
         if isinstance(piece, str):
             path = piece
             row_group = None
-            partition_keys = None
+            partition_keys = []
         else:
             (path, row_group, partition_keys) = piece
 

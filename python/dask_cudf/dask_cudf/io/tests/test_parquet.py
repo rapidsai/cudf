@@ -25,42 +25,47 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, npartitions=npartitions)
 
 
-def test_roundtrip_from_dask(tmpdir):
+@pytest.mark.parametrize("stats", [True, False])
+def test_roundtrip_from_dask(tmpdir, stats):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine="pyarrow")
     files = sorted(
         [
             os.path.join(tmpdir, f)
             for f in os.listdir(tmpdir)
+            # TODO: Allow "_metadata" in list after dask#6047
             if not f.endswith("_metadata")
         ],
         key=natural_sort_key,
     )
 
     # Read list of parquet files
-    ddf2 = dask_cudf.read_parquet(files, gather_statistics=True)
-    assert_eq(ddf, ddf2)
+    ddf2 = dask_cudf.read_parquet(files, gather_statistics=stats)
+    assert_eq(ddf, ddf2, check_divisions=stats)
 
     # Specify columns=['x']
-    ddf2 = dask_cudf.read_parquet(files, columns=["x"], gather_statistics=True)
-    assert_eq(ddf[["x"]], ddf2)
+    ddf2 = dask_cudf.read_parquet(
+        files, columns=["x"], gather_statistics=stats
+    )
+    assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
 
     # Specify columns='y'
-    ddf2 = dask_cudf.read_parquet(files, columns="y", gather_statistics=True)
-    assert_eq(ddf[["y"]], ddf2)
+    ddf2 = dask_cudf.read_parquet(files, columns="y", gather_statistics=stats)
+    assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
 
-    # Now include metadata; gather_statistics is True by default
-    # Read list of parquet files
-    ddf2 = dask_cudf.read_parquet(tmpdir)
-    assert_eq(ddf, ddf2)
+    # Now include metadata
+    ddf2 = dask_cudf.read_parquet(tmpdir, gather_statistics=stats)
+    assert_eq(ddf, ddf2, check_divisions=stats)
 
-    # Specify columns=['x']
-    ddf2 = dask_cudf.read_parquet(tmpdir, columns=["x"])
-    assert_eq(ddf[["x"]], ddf2)
+    # Specify columns=['x'] (with metadata)
+    ddf2 = dask_cudf.read_parquet(
+        tmpdir, columns=["x"], gather_statistics=stats
+    )
+    assert_eq(ddf[["x"]], ddf2, check_divisions=stats)
 
-    # Specify columns='y'
-    ddf2 = dask_cudf.read_parquet(tmpdir, columns="y")
-    assert_eq(ddf[["y"]], ddf2)
+    # Specify columns='y' (with metadata)
+    ddf2 = dask_cudf.read_parquet(tmpdir, columns="y", gather_statistics=stats)
+    assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
 
 
 @pytest.mark.parametrize("write_meta", [True, False])
