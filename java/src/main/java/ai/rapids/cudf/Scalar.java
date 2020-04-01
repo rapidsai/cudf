@@ -242,9 +242,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
-      LOG.error("Close called too many times on {}", this);
       offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+      throw new IllegalStateException("Close called too many times " + this);
     }
   }
 
@@ -465,7 +464,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       }
     }
 
-    sb.append("}");
+    sb.append("} (ID: ");
+    sb.append(offHeap.id);
+    sb.append(" ");
+    sb.append(Long.toHexString(offHeap.scalarHandle));
+    sb.append(")");
     return sb.toString();
   }
 
@@ -483,7 +486,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       if (scalarHandle != 0) {
         if (logErrorIfNotClean) {
-          LOG.error("LEAKED A SCALAR!!!");
+          LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");
           logRefCountDebug("Leaked scalar");
         }
         closeScalar(scalarHandle);
@@ -491,6 +494,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         return true;
       }
       return false;
+    }
+
+    @Override
+    public boolean isClean() {
+      return scalarHandle == 0;
     }
   }
 }

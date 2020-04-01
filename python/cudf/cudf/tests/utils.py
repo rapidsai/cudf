@@ -6,7 +6,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 from cudf import Series
-from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
 supported_numpy_dtypes = [
     "bool",

@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <regex>
 
 namespace cudf {
 namespace experimental {
@@ -214,30 +215,62 @@ struct metadata : public FileMetaData {
   }
 
   /**
-   * @brief Extracts the column name used for the row indexes in a dataframe
+   * @brief Extracts the pandas "index_columns" section
    *
    * PANDAS adds its own metadata to the key_value section when writing out the
    * dataframe to a file to aid in exact reconstruction. The JSON-formatted
    * metadata contains the index column(s) and PANDA-specific datatypes.
    *
-   * @return std::string Name of the index column
+   * @return comma-separated index column names in quotes
    */
-  std::string get_pandas_index_name() {
-    auto it =
-        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
+  std::string get_pandas_index() {
+    auto it = std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
                      [](const auto &item) { return item.key == "pandas"; });
-
     if (it != key_value_metadata.end()) {
-      const auto pos = it->value.find("index_columns");
-      if (pos != std::string::npos) {
-        const auto begin = it->value.find('[', pos);
-        const auto end = it->value.find(']', begin);
-        if ((end - begin) > 1) {
-          return it->value.substr(begin + 2, end - begin - 3);
-        }
+      // Captures a list of quoted strings found inside square brackets after `"index_columns":`
+      // Inside quotes supports newlines, brackets, escaped quotes, etc. 
+      // One-liner regex:
+      // "index_columns"\s*:\s*\[\s*((?:"(?:|(?:.*?(?![^\\]")).?)[^\\]?",?\s*)*)\]
+      // Documented below.
+      std::regex index_columns_expr{
+        R"("index_columns"\s*:\s*\[\s*)"    // match preamble, opening square bracket, whitespace
+          R"(()"                            // Open first capturing group
+            R"((?:")"                       // Open non-capturing group match opening quote
+              R"((?:|(?:.*?(?![^\\]")).?))" // match empty string or anything between quotes
+              R"([^\\]?")"                  // Match closing non-escaped quote
+              R"(,?\s*)"                    // Match optional comma and whitespace
+            R"()*)"                         // Close non-capturing group and repeat 0 or more times
+          R"())"                            // Close first capturing group
+        R"(\])"                             // Match closing square brackets
+      };
+      std::smatch sm;
+      if (std::regex_search(it->value, sm, index_columns_expr)) {
+        return std::move(sm[1].str());
       }
     }
     return "";
+  }
+
+  /**
+   * @brief Extracts the column name(s) used for the row indexes in a dataframe
+   *
+   * @param names List of column names to load, where index column name(s) will be added
+   */
+  void add_pandas_index_names(std::vector<std::string>& names) {
+    auto str = get_pandas_index();
+    if (str.length() != 0) {
+      std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
+      std::smatch sm;
+      while (std::regex_search(str, sm, index_name_expr)) {
+        if (sm.size() == 2) { // 2 = whole match, first item
+          if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
+            std::regex esc_quote{R"(\\")"};
+            names.emplace_back(std::move(std::regex_replace(sm[1].str(), esc_quote, R"(")")));
+          }
+        }
+        str = sm.suffix();
+      }
+    }
   }
 
   /**
@@ -289,13 +322,11 @@ struct metadata : public FileMetaData {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
-   * @param include_index Whether to always include the PANDAS index column
-   * @param pandas_index Name of the PANDAS index column
+   * @param include_index Whether to always include the PANDAS index column(s)
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index,
-                      const std::string &pandas_index) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index) {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto names = get_column_names();
@@ -307,10 +338,7 @@ struct metadata : public FileMetaData {
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       if (include_index) {
-        if (std::find(use_names.begin(), use_names.end(), pandas_index) ==
-            use_names.end()) {
-          use_names.push_back(pandas_index);
-        }
+        add_pandas_index_names(use_names);
       }
       for (const auto &use_name : use_names) {
         for (size_t i = 0; i < names.size(); ++i) {
@@ -327,7 +355,7 @@ struct metadata : public FileMetaData {
 };
 
 size_t reader::impl::count_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
     cudaStream_t stream) {
   size_t total_pages = 0;
 
@@ -348,8 +376,8 @@ size_t reader::impl::count_page_headers(
 }
 
 void reader::impl::decode_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages =
         chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -368,8 +396,8 @@ void reader::impl::decode_page_headers(
 }
 
 rmm::device_buffer reader::impl::decompress_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -479,8 +507,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
 }
 
 void reader::impl::decode_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
     size_t total_rows, const std::vector<int> &chunk_map,
     std::vector<column_buffer> &out_buffers, cudaStream_t stream) {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc &chunk) {
@@ -548,12 +576,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
-  // Store the index column (PANDAS-specific)
-  _pandas_index = _metadata->get_pandas_index_name();
-
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(
-      options.columns, options.use_pandas_metadata, _pandas_index);
+      options.columns, options.use_pandas_metadata);
 
   // Override output timestamp resolution if requested
   if (options.timestamp_type.id() != EMPTY) {
@@ -740,9 +765,6 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 
 // Destructor within this translation unit
 reader::~reader() = default;
-
-// Forward to implementation
-std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {

@@ -84,6 +84,36 @@ TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
+TEST_F(StringsReplaceTests, InvalidRegex)
+{
+    cudf::test::strings_column_wrapper strings( {"abc*def|ghi+jkl",""} ); // these do not really matter
+    auto strings_view = cudf::strings_column_view(strings);
+
+    // these are quantifiers that do not have a preceding character/class
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"*",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"|",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"+",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"ab(*)",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"\\",cudf::string_scalar("")), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::replace_re(strings_view,"\\p",cudf::string_scalar("")), cudf::logic_error );
+}
+
+
+TEST_F(StringsReplaceTests, WithEmptyPattern)
+{
+    std::vector<const char*> h_strings{ "asd", "xcv" };
+    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
+        thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+    auto strings_view = cudf::strings_column_view(strings);
+    std::vector<std::string> patterns({""});
+    cudf::test::strings_column_wrapper repls( {"bbb"} );
+    auto repls_view = cudf::strings_column_view(repls);
+    auto results = cudf::strings::replace_re(strings_view,patterns,repls_view);
+    cudf::test::expect_columns_equal(*results,strings);
+    results = cudf::strings::replace_re(strings_view,"",cudf::string_scalar("bbb"));
+    cudf::test::expect_columns_equal(*results,strings);
+}
+
 TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
 {
     std::vector<const char*> h_strings{ "the quick brown fox jumps over the lazy dog",

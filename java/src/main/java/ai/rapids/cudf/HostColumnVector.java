@@ -108,9 +108,8 @@ public final class HostColumnVector implements AutoCloseable {
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
-      log.error("Close called too many times on {}", this);
       offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+      throw new IllegalStateException("Close called too many times " + this);
     }
   }
 
@@ -500,7 +499,7 @@ public final class HostColumnVector implements AutoCloseable {
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("YOU LEAKED A HOST COLUMN VECTOR!!!!");
+        log.error("A HOST COLUMN VECTOR WAS LEAKED (ID: " + id + ")");
         logRefCountDebug("Leaked vector");
       }
       return neededCleanup;
@@ -520,6 +519,11 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
+    @Override
+    public boolean isClean() {
+      return data == null && valid == null && offsets == null;
+    }
+
     /**
      * This returns total memory allocated on the host for the ColumnVector.
      */
@@ -535,6 +539,11 @@ public final class HostColumnVector implements AutoCloseable {
         total += offsets.length;
       }
       return total;
+    }
+
+    @Override
+    public String toString() {
+      return "(ID: " + id + ")";
     }
   }
 
