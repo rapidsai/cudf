@@ -1,15 +1,13 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
-""" __init__.py
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
-   isort:skip_file
-"""
-
-from cudf.utils.gpu_utils import validate_setup
+from cudf.utils.gpu_utils import validate_setup  # isort:skip
 
 validate_setup()
 
 import cupy
+
 import rmm
+
 from cudf import core, datasets
 from cudf._version import get_versions
 from cudf.core import DataFrame, Index, MultiIndex, Series, from_pandas, merge
