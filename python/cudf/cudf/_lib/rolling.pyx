@@ -1,54 +1,83 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libc.stdint cimport uintptr_t
-from libcpp.string cimport string
+from __future__ import print_function
+import cudf
+import pandas as pd
 
-import numba.cuda
-import numba.numpy_support
+from libcpp.memory cimport unique_ptr
 
-from cudf.utils import cudautils
+from cudf._lib.column cimport Column
+from cudf._lib.move cimport move
+from cudf._lib.aggregation cimport make_aggregation
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._libxx.null_mask import create_null_mask, MaskState
-cimport cudf._lib.includes.rolling as cpp_rolling
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.aggregation cimport aggregation
+from cudf._lib.cpp.rolling cimport (
+    rolling_window as cpp_rolling_window
+)
 
 
-def rolling(inp, window, min_periods, center, op):
-    from cudf.core.buffer import Buffer
-    from cudf.core.column import build_column
+def rolling(Column source_column, Column pre_column_window,
+            Column fwd_column_window, window, min_periods, center, op):
+    """
+    Rolling on input executing operation within the given window for each row
 
-    cdef gdf_column* c_out_ptr = NULL
-    cdef size_type c_window = 0
-    cdef size_type c_forward_window = 0
-    cdef gdf_agg_op c_op
-    cdef size_type *c_window_col = NULL
-    cdef size_type *c_min_periods_col = NULL
-    cdef size_type *c_forward_window_col = NULL
+    Parameters
+    ----------
+    source_column : input column on which rolling operation is executed
+    pre_column_window : prior window for each element of source_column
+    fwd_column_window : forward window for each element of source_column
+    window : Size of the moving window, can be integer or None
+    min_periods : Minimum number of observations in window required to have
+                  a value (otherwise result is null)
+    center : Set the labels at the center of the window
+    op : operation to be executed, as of now it supports MIN, MAX, COUNT, SUM,
+         MEAN and UDF
 
-    cdef string cpp_str
-    cdef gdf_dtype g_type
-
-    if op == "mean":
-        inp = inp.astype("float64")
-
-    cdef gdf_column* c_in_col = column_view_from_column(inp)
-
-    if op == "count":
-        min_periods = 0
+    Returns
+    -------
+    A Column with rolling calculations
+    """
 
     cdef size_type c_min_periods = min_periods
+    cdef size_type c_window = 0
+    cdef size_type c_forward_window = 0
+    cdef unique_ptr[column] c_result
+    cdef column_view source_column_view = source_column.view()
+    cdef column_view pre_column_window_view
+    cdef column_view fwd_column_window_view
+    cdef unique_ptr[aggregation] agg
 
-    cdef uintptr_t c_window_ptr
-    if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
+    if callable(op):
+        agg = move(
+            make_aggregation(op, {'dtype': source_column.dtype})
+        )
+    else:
+        agg = move(make_aggregation(op))
+
+    if window is None:
         if center:
             # TODO: we can support this even though Pandas currently does not
             raise NotImplementedError(
                 "center is not implemented for offset-based windows"
             )
-        c_window_ptr = get_ctype_ptr(window)
-        c_window_col = <size_type*> c_window_ptr
+        pre_column_window_view = pre_column_window.view()
+        fwd_column_window_view = fwd_column_window.view()
+        with nogil:
+            c_result = move(
+                cpp_rolling_window(
+                    source_column_view,
+                    pre_column_window_view,
+                    fwd_column_window_view,
+                    c_min_periods,
+                    agg)
+            )
     else:
+        if op == "count":
+            min_periods = 0
+        c_min_periods = min_periods
         if center:
             c_window = (window // 2) + 1
             c_forward_window = window - (c_window)
@@ -56,71 +85,14 @@ def rolling(inp, window, min_periods, center, op):
             c_window = window
             c_forward_window = 0
 
-    data = None
-    mask = None
-    out_col = None
-    null_count = None
-
-    if window == 0:
-        fill_value = 0
-        null_count = 0
-        if op not in ["count", "sum"]:
-            null_count = len(inp)
-            fill_value = inp.default_na_value()
-            mask = create_null_mask(null_count, state=MaskState.ALL_NULL)
-        data = cudautils.full(
-            inp.data_array_view.size, fill_value, inp.data_array_view.dtype
-        )
-
-        out_col = build_column(Buffer(data),
-                               dtype=data.dtype,
-                               mask=mask)
-    else:
-        if callable(op):
-            nb_type = numba.numpy_support.from_dtype(inp.dtype)
-            type_signature = (nb_type[:],)
-            compiled_op = cudautils.compile_udf(op, type_signature)
-            cpp_str = compiled_op[0].encode('UTF-8')
-            if compiled_op[1] not in dtypes:
-                raise TypeError(
-                    "Result of window function has unsupported dtype {}"
-                    .format(op[1])
-                )
-            g_type = dtypes[compiled_op[1]]
-            with nogil:
-                c_out_col = cpp_rolling.rolling_window(
-                    c_in_col[0],
+        with nogil:
+            c_result = move(
+                cpp_rolling_window(
+                    source_column_view,
                     c_window,
-                    c_min_periods,
                     c_forward_window,
-                    cpp_str,
-                    GDF_NUMBA_GENERIC_AGG_OPS,
-                    g_type,
-                    c_window_col,
-                    c_min_periods_col,
-                    c_forward_window_col
-                )
-            out_col = gdf_column_to_column(&c_out_col)
-        else:
-            c_op = agg_ops[op]
-            with nogil:
-                c_out_ptr = cpp_rolling.rolling_window(
-                    c_in_col[0],
-                    c_window,
                     c_min_periods,
-                    c_forward_window,
-                    c_op,
-                    c_window_col,
-                    c_min_periods_col,
-                    c_forward_window_col
-                )
-            out_col = gdf_column_to_column(c_out_ptr)
+                    agg)
+            )
 
-    if c_window_col is NULL and op == "count":
-        # Pandas only does this for fixed windows...?
-        out_col = out_col.fillna(0)
-
-    free_column(c_in_col)
-    free_column(c_out_ptr)
-
-    return out_col
+    return Column.from_unique_ptr(move(c_result))
