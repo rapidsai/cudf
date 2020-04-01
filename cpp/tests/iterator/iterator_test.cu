@@ -100,18 +100,18 @@ struct IteratorTest : public cudf::test::BaseFixture
     T_output init{0};
     thrust::device_vector<T_output> dev_result(1, init);
 
-    void* d_temp_storage = NULL;
+    // Get temporary storage size
     size_t temp_storage_bytes = 0;
-
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+    cub::DeviceReduce::Reduce(nullptr, temp_storage_bytes, d_in,
                               dev_result.begin(), num_items,
                               thrust::minimum<T_output>{},
                               init);
+
     // Allocate temporary storage
-    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
+    rmm::device_buffer d_temp_storage(temp_storage_bytes);
 
     // Run reduction
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in,
+    cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in,
                               dev_result.begin(), num_items,
                               thrust::minimum<T_output>{},
                               init);
@@ -633,3 +633,5 @@ TYPED_TEST(IteratorTest, null_scalar_iterator) {
   auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

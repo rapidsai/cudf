@@ -382,8 +382,9 @@
                                   .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
                                   .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
                                 pom.properties['cuda.classifier'] = classifier
+                                println 'WARNING FOUND libcudart this means your jar will only work against a single version of the cuda runtime ' + classifier
                             } else {
-                                fail("Could not find cudart as a dependency of libcudfjni out> $sout err> $serr")
+                                pom.properties['cuda.classifier'] = ''
                             }
                             </source>
                         </configuration>

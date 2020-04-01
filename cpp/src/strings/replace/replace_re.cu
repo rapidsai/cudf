@@ -83,7 +83,7 @@ struct replace_regex_fn
         // copy input to output replacing strings as we go
         while( mxn-- > 0 ) // maximum number of replaces
         {
-            if( prog.find(idx,d_str,begin,end) <= 0 )
+            if( prog.is_empty() || prog.find(idx,d_str,begin,end) <= 0 )
                 break; // no more matches
             auto spos = d_str.byte_offset(begin); // get offset for these
             auto epos = d_str.byte_offset(end);   // character position values

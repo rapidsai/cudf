@@ -100,17 +100,17 @@ endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
 endforeach()
 
 list(GET GPU_ARCHS -1 ptx)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${ptx},code=compute_${ptx}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
 
 option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
 if(DISABLE_DEPRECATION_WARNING)
@@ -138,6 +138,19 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -445,7 +458,6 @@ add_library(cudf
             src/hash/hashing.cu
             src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
-            src/quantiles/legacy/quantiles.cu
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
@@ -584,6 +596,7 @@ add_library(cudf
             src/rolling/jit/code/operation.cpp
             src/sort/sort.cu
             src/sort/stable_sort.cu
+            src/sort/rank.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
@@ -774,11 +787,6 @@ add_dependencies(cudf stringify_run)
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 
-
-# Link NVTX library
-find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-target_link_libraries(cudf ${NVTX_LIBRARY})
-
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
@@ -792,7 +800,7 @@ endif(USE_NVTX)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
@@ -802,12 +810,12 @@ endif(HT_DEFAULT_ALLOCATOR)
 set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
 # link targets for NVStrings
-target_link_libraries(libNVStrings rmm cudart cuda)
-target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
-target_link_libraries(libNVText libNVStrings rmm cudart cuda)
+target_link_libraries(libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVCategory libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVText libNVStrings rmm ${CUDART_LIBRARY} cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 
 import cudf
-import cudf._libxx.json as libjson
+import cudf._lib.json as libjson
 from cudf.utils import ioutils
 
 

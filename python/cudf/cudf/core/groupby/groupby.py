@@ -8,8 +8,8 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._libxx.groupby as libgroupby
-from cudf._libxx.nvtx import range_pop, range_push
+import cudf._lib.groupby as libgroupby
+from cudf._lib.nvtx import range_pop, range_push
 
 
 class GroupBy(object):
@@ -240,11 +240,7 @@ class GroupBy(object):
         grouped_values = self.obj.__class__._from_table(grouped_values)
         grouped_values._copy_categories(self.obj)
         group_names = grouped_keys.unique()
-        return (
-            group_names,
-            offsets,
-            grouped_values,
-        )
+        return (group_names, offsets, grouped_values)
 
     def _agg_func_name_with_args(self, func_name, *args, **kwargs):
         """

@@ -47,7 +47,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if the input column is not BOOL8 type.
  *
- * @param column Boolean column to convert.
+ * @param booleans Boolean column to convert.
  * @param true_string String to use for true in the output column.
  * @param false_string String to use for false in the output column.
  * @param mr Resource for allocating device memory.
