@@ -7,7 +7,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pytest
-import torch
 from numba import cuda
 
 import cudf
@@ -189,7 +188,13 @@ def test_column_from_ephemeral_cupy_try_lose_reference():
     assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
 
 
+@pytest.mark.skipif(
+    cupy.cuda.runtime.runtimeGetVersion() >= 10020,
+    reason="Pytorch doesn't support 10.2 cuda yet \
+        without building from source.",
+)
 def test_cuda_array_interface_pytorch():
+    torch = pytest.importorskip("torch")
     series = cudf.Series([1, -1, 10, -56])
     tensor = torch.tensor(series)
     got = cudf.Series(tensor)
