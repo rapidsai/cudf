@@ -559,6 +559,29 @@ class Frame(libcudf.table.Table):
             result.index = self.index
             return result
 
+    def _partition(self, scatter_map, npartitions, keep_index=True):
+
+        output_table, output_offsets = libcudf.partitioning.partition(
+            self, scatter_map, npartitions, keep_index
+        )
+
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = libcudf.copying.table_split(
+            output_table, output_offsets, keep_index=keep_index
+        )
+
+        result = [self.__class__._from_table(tbl) for tbl in result]
+
+        for frame in result:
+            frame._copy_categories(self, include_index=keep_index)
+
+        return result
+
     def _scatter_to_tables(self, scatter_map, keep_index=True):
         """
        scatter the dataframe/table to a list of dataframes/tables
@@ -1040,12 +1063,28 @@ class Frame(libcudf.table.Table):
         1-D cupy array of insertion points
         """
         # Call libcudf++ search_sorted primitive
+        from cudf.utils.dtypes import is_scalar
+
+        scalar_flag = None
+        if is_scalar(values):
+            scalar_flag = True
+
+        if not isinstance(values, Frame):
+            values = as_column(values)
+            if values.dtype != self.dtype:
+                self = self.astype(values.dtype)
+            values = values.as_frame()
         outcol = libcudf.search.search_sorted(
             self, values, side, ascending=ascending, na_position=na_position
         )
 
-        # Retrun result as cupy array
-        return cupy.asarray(outcol.data_array_view)
+        # Retrun result as cupy array if the values is non-scalar
+        # If values is scalar, result is expected to be scalar.
+        result = cupy.asarray(outcol.data_array_view)
+        if scalar_flag:
+            return result[0].item()
+        else:
+            return result
 
     def _get_sorted_inds(self, ascending=True, na_position="last"):
         """

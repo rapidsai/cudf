@@ -1453,17 +1453,13 @@ class StringMethods(object):
                 as cudf uses native strings instead of Python objects"
             )
 
-        from cudf._lib.scalar import Scalar
-
-        # TODO: Cleanup if/else blocks after this issue is fixed:
-        # https://github.com/rapidsai/cudf/issues/4500
-        if pat == "":
-            result_col = column.as_column(
-                True, dtype="bool", length=len(self._column)
-            ).set_mask(self._column.mask)
-        elif pat is None:
-            result_col = column.as_column(np.nan, length=len(self._column))
+        if pat is None:
+            result_col = column.column_empty(
+                len(self._column), dtype="bool", masked=True
+            )
         else:
+            from cudf._lib.scalar import Scalar
+
             result_col = cpp_endswith(self._column, Scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -1490,17 +1486,13 @@ class StringMethods(object):
                 as cudf uses native strings instead of Python objects"
             )
 
-        from cudf._lib.scalar import Scalar
-
-        # TODO: Cleanup if/else blocks after this issue is fixed:
-        # https://github.com/rapidsai/cudf/issues/4500
-        if pat == "":
-            result_col = column.as_column(
-                True, dtype="bool", length=len(self._column)
-            ).set_mask(self._column.mask)
-        elif pat is None:
-            result_col = column.as_column(np.nan, length=len(self._column))
+        if pat is None:
+            result_col = column.column_empty(
+                len(self._column), dtype="bool", masked=True
+            )
         else:
+            from cudf._lib.scalar import Scalar
+
             result_col = cpp_startswith(self._column, Scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -1535,25 +1527,10 @@ class StringMethods(object):
 
         if end is None:
             end = -1
-        mask = self._column.mask
 
-        if sub == "":
-            result_col = column.as_column(
-                start, dtype="float", length=len(self._column)
-            )
-        else:
-            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
 
-        result_col = result_col.set_mask(mask)
-        if self._column.has_nulls:
-            result_col = result_col.astype("float64")
-        else:
-            result_col = result_col.astype("int64")
-
-        result = self._return_or_inplace(result_col, **kwargs)
-        if sub == "":
-            result[self._parent.str.len() < start] = -1
-        return result
+        return self._return_or_inplace(result_col, **kwargs)
 
     def rfind(self, sub, start=0, end=None, **kwargs):
         """
@@ -1585,27 +1562,10 @@ class StringMethods(object):
 
         if end is None:
             end = -1
-        mask = self._column.mask
 
-        if sub == "":
-            result_col = cpp_count_characters(self._column)
-        else:
-            result_col = cpp_rfind(
-                self._column, Scalar(sub, "str"), start, end
-            )
+        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
 
-        result_col = result_col.set_mask(mask)
-        if self._column.has_nulls:
-            result_col = result_col.astype("float64")
-        else:
-            result_col = result_col.astype("int64")
-
-        result = self._return_or_inplace(result_col, **kwargs)
-        if sub == "":
-            result[result < start] = -1
-            if end != -1:
-                result[result > end] = end
-        return result
+        return self._return_or_inplace(result_col, **kwargs)
 
     def index(self, sub, start=0, end=None, **kwargs):
         """
@@ -1639,16 +1599,9 @@ class StringMethods(object):
         if end is None:
             end = -1
 
-        if sub == "":
-            result_col = column.as_column(
-                0.0, dtype="float", length=len(self._column)
-            ).set_mask(self._column.mask)
-        else:
-            result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
-        if sub == "":
-            result[self._parent.str.len() < start] = -1
 
         if (result == -1).any():
             raise ValueError("substring not found")
@@ -1687,18 +1640,9 @@ class StringMethods(object):
         if end is None:
             end = -1
 
-        if sub == "":
-            result_col = cpp_count_characters(self._column)
-        else:
-            result_col = cpp_rfind(
-                self._column, Scalar(sub, "str"), start, end
-            )
+        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
-        if sub == "":
-            result[result < start] = -1
-            if end != -1:
-                result[result > end] = end
 
         if (result == -1).any():
             raise ValueError("substring not found")
@@ -1896,6 +1840,9 @@ class StringColumn(column.ColumnBase):
         dtype = np.dtype("object")
 
         if size is None:
+            for child in children:
+                assert child.offset == 0
+
             if len(children) == 0:
                 size = 0
             elif children[0].size == 0:

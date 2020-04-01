@@ -146,7 +146,7 @@ class CudfTestBase {
       String eq = (expected != 0 ?
                       " / Math.abs(expected) = " + Math.abs((expected - actual) / expected)
                     : " = " + Math.abs(expected - actual));
-      fail(msg + eq + " is not <= " + percentage);
+      fail(msg + eq + " is not <= " + percentage + " expected(" + expected + ") actual(" + actual + ")");
     }
   }
 }

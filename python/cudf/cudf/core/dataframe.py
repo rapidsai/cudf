@@ -3802,7 +3802,7 @@ class DataFrame(Frame):
         """{docstring}"""
         import cudf.io.parquet as pq
 
-        pq.to_parquet(self, path, *args, **kwargs)
+        return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
@@ -3913,7 +3913,17 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index, keep_index)
+        if map_size is None:
+            map_size = map_index.unique_count()
+        else:
+            unique_count = map_index.unique_count()
+            if map_size < unique_count:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (unique_count, map_size)
+                )
+
+        tables = self._partition(map_index, map_size, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index

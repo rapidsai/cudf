@@ -87,3 +87,4 @@ TEST(StreamCheck, CatchFailedKernel) {
   CUDA_TRY(cudaStreamDestroy(stream));
 }
 
+CUDF_TEST_PROGRAM_MAIN()
