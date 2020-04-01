@@ -169,7 +169,7 @@ enum type_id {
   INT64,      ///< 8 byte signed integer
   FLOAT32,    ///< 4 byte floating point
   FLOAT64,    ///< 8 byte floating point
-  BOOL8,
+  BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
   TIMESTAMP_DAYS,     ///< days since Unix Epoch in int32
   TIMESTAMP_SECONDS,  ///< duration of seconds since Unix Epoch in int64
   TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
