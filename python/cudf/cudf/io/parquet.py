@@ -4,6 +4,7 @@ import warnings
 
 import pyarrow.parquet as pq
 from pyarrow.compat import guid
+from pyarrow.filesystem import resolve_filesystem_and_path
 
 import cudf
 import cudf._lib.parquet as libparquet
@@ -25,6 +26,12 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
         df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
         for i in range(0, len(splits) - 1)
     ]
+
+
+def _get_filesystem_and_path(passed_filesystem, path):
+    if passed_filesystem is None:
+        return resolve_filesystem_and_path(path, passed_filesystem)
+    return passed_filesystem, path
 
 
 # Logic chosen to match: https://arrow.apache.org/
@@ -69,7 +76,7 @@ def write_to_dataset(
         kwargs for to_parquet function.
     """
 
-    fs, root_path = pq._get_filesystem_and_path(fs, root_path)
+    fs, root_path = _get_filesystem_and_path(fs, root_path)
     fs.mkdirs(root_path, exist_ok=True)
     metadata = []
 
