@@ -1,8 +1,6 @@
 import warnings
 from functools import partial
 
-import pyarrow.parquet as pq
-
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
@@ -39,37 +37,29 @@ class CudfEngine(ArrowEngine):
             columns += index
 
         if isinstance(piece, str):
-            # `piece` is a file-path string
-            piece = pq.ParquetDatasetPiece(
-                piece, open_file_func=partial(fs.open, mode="rb")
-            )
+            path = piece
+            row_group = None
+            partition_keys = None
         else:
-            # `piece` = (path, row_group, partition_keys)
             (path, row_group, partition_keys) = piece
-            piece = pq.ParquetDatasetPiece(
-                path,
-                row_group=row_group,
-                partition_keys=partition_keys,
-                open_file_func=partial(fs.open, mode="rb"),
-            )
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):
             df = cudf.read_parquet(
-                piece.path,
+                path,
                 engine="cudf",
                 columns=columns,
-                row_group=piece.row_group,
+                row_group=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
         else:
-            with fs.open(piece.path, mode="rb") as f:
+            with fs.open(path, mode="rb") as f:
                 df = cudf.read_parquet(
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=piece.row_group,
+                    row_group=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
@@ -77,10 +67,10 @@ class CudfEngine(ArrowEngine):
         if index and index[0] in df.columns:
             df = df.set_index(index[0])
 
-        if len(piece.partition_keys) > 0:
+        if len(partition_keys) > 0:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
-            for i, (name, index2) in enumerate(piece.partition_keys):
+            for i, (name, index2) in enumerate(partition_keys):
                 categories = [
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
