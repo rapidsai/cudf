@@ -579,10 +579,8 @@ class Frame(libcudfxx.table.Table):
 
         result = [self.__class__._from_table(tbl) for tbl in result]
 
-        [
+        for frame in result:
             frame._copy_categories(self, include_index=keep_index)
-            for frame in result
-        ]
 
         return result
 
