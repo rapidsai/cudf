@@ -259,7 +259,7 @@ rmm::device_buffer reader::impl::decompress_data(
 void reader::impl::decode_data(
     const rmm::device_buffer &block_data,
     const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-    const hostdevice_vector<uint8_t> &global_dictionary,
+    hostdevice_vector<uint8_t> &global_dictionary,
     size_t total_dictionary_entries, size_t num_rows,
     std::vector<std::pair<int, std::string>> selection,
     std::vector<column_buffer> &out_buffers, cudaStream_t stream) {

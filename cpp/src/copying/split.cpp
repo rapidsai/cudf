@@ -28,10 +28,9 @@ namespace experimental {
 namespace  {
     template<typename T>
     std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits) {
-        std::vector<T> result{};
 
         if(splits.size() == 0 or column_size == 0) {
-            return result;
+            return std::vector<T>{input};
         }
         CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
