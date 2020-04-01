@@ -307,18 +307,12 @@ struct column_view_printer {
         thrust::make_counting_iterator(col.size()),
         out.begin(),
         [&h_data](auto idx) {
-          return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL");
-        });
+          return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL"); });
 
     } else {
 
-      std::transform(
-        h_data.first.begin(), 
-        h_data.first.end(), 
-        out.begin(), 
-        [] (Element el) {
-          return std::to_string(el);
-        });
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(),
+        [] (Element el) { return std::to_string(el); });
 
     }
   }
