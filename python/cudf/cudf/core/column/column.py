@@ -1324,7 +1324,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         length = length or 1
         if (
             (nan_as_null is True)
-            and isinstance(arbitrary, float)
+            and not is_string_dtype(arbitrary)
             and np.isnan(arbitrary)
         ):
             arbitrary = None
