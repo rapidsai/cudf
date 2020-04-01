@@ -74,46 +74,32 @@ struct reduce_dispatch_functor {
     case aggregation::VARIANCE: {
       auto var_agg = static_cast<std_var_aggregation const*>(agg.get());
       return reduction::variance(col, output_dtype, var_agg->_ddof, mr, stream);
-      }
-      break;
+      } break;
     case aggregation::STD: {
       auto var_agg = static_cast<std_var_aggregation const*>(agg.get());
       return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, mr, stream);
-      }
-      break;
+      } break;
     case aggregation::MEDIAN: {
       auto col_ptr = quantile(col, {0.5}, interpolation::LINEAR, {}, mr);
       return reduction::nth_element(col_ptr->view(), col.type(), 0, mr, stream);
-      }
-      break;
+      } break;
     case aggregation::QUANTILE: {
       auto quantile_agg = static_cast<quantile_aggregation const*>(agg.get());
       CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                    "Reduction quantile accepts only one quantile value");
       auto col_ptr = quantile(col, quantile_agg->_quantiles, quantile_agg->_interpolation, {}, mr);
       return reduction::nth_element(col_ptr->view(), col.type(), 0, mr, stream);
-      }
-      break;
-    case aggregation::ARGMAX:
-      // TODO development in another PR
-      CUDF_FAIL("Unsupported reduction operator");
-      break;
-    case aggregation::ARGMIN:
-      // TODO development in another PR
-      CUDF_FAIL("Unsupported reduction operator");
-      break;
+      } break;
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<nunique_aggregation const*>(agg.get());
       return make_fixed_width_scalar(detail::unique_count(col, nunique_agg->_include_nulls, false), stream, mr);
-      }
-      break;
+      } break;
     case aggregation::NTH_ELEMENT: {
       auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
       CUDF_EXPECTS(nth_agg->_include_nulls == include_nulls::YES,
                     "Series nth is supported with nulls included only");
       return reduction::nth_element(col, col.type(), nth_agg->n, mr, stream);
-    } break;
-    // XXX: PTX, CUDA support needed?
+      } break;
     default:
       CUDF_FAIL("Unsupported reduction operator");
     }

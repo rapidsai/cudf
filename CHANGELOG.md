@@ -31,6 +31,7 @@
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
+- PR #4739 Add missing aggregations for cudf::experimental::reduce
 
 ## Bug Fixes
 
