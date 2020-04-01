@@ -143,12 +143,14 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 # - cudart options --------------------------------------------------------------------------------
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 
-if(CUDA_RUNTIME_LIBRARY AND CUDA_RUNTIME_LIBRARY MATCHES "^Static$")
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+if(CUDA_STATIC_RUNTIME)
     message(STATUS "Enabling static linking of cudart")
     set(CUDART_LIBRARY "cudart_static")
 else()
     set(CUDART_LIBRARY "cudart")
-endif(CUDA_RUNTIME_LIBRARY MATCHES "^Static$")
+endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
