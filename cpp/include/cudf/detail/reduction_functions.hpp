@@ -57,11 +57,15 @@ std::unique_ptr<scalar> mean(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 std::unique_ptr<scalar> variance(
-    column_view const& col, data_type const output_dtype, cudf::size_type ddof,
+    column_view const& col, data_type const output_dtype, size_type ddof,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 std::unique_ptr<scalar> standard_deviation(
-    column_view const& col, data_type const output_dtype, cudf::size_type ddof,
+    column_view const& col, data_type const output_dtype, size_type ddof,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+std::unique_ptr<scalar> nth_element(
+    column_view const& col, data_type const output_dtype, size_type n,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 

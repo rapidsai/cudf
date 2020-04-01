@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/quantiles.hpp>
@@ -80,14 +81,17 @@ struct reduce_dispatch_functor {
       return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, mr, stream);
       }
       break;
-    case aggregation::MEDIAN:
-      return quantile(col, 0.5, interpolation::LINEAR);
+    case aggregation::MEDIAN: {
+      auto col_ptr = quantile(col, {0.5}, interpolation::LINEAR, {}, mr);
+      return reduction::nth_element(col_ptr->view(), col.type(), 0, mr, stream);
+      }
       break;
     case aggregation::QUANTILE: {
       auto quantile_agg = static_cast<quantile_aggregation const*>(agg.get());
       CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                    "Reduction quantile accepts only one quantile value");
-      return quantile(col, quantile_agg->_quantiles[0], quantile_agg->_interpolation);
+      auto col_ptr = quantile(col, quantile_agg->_quantiles, quantile_agg->_interpolation, {}, mr);
+      return reduction::nth_element(col_ptr->view(), col.type(), 0, mr, stream);
       }
       break;
     case aggregation::ARGMAX:
@@ -99,15 +103,16 @@ struct reduce_dispatch_functor {
       CUDF_FAIL("Unsupported reduction operator");
       break;
     case aggregation::NUNIQUE: {
-    auto nunique_agg = static_cast<nunique_aggregation const*>(agg.get());
-      return make_fixed_width_scalar(
-        detail::unique_count(col, nunique_agg->_include_nulls, false),
-        stream, mr);
+      auto nunique_agg = static_cast<nunique_aggregation const*>(agg.get());
+      return make_fixed_width_scalar(detail::unique_count(col, nunique_agg->_include_nulls, false), stream, mr);
       }
       break;
-    case aggregation::NTH_ELEMENT:
-      // TODO call col.element(n)
-      break;
+    case aggregation::NTH_ELEMENT: {
+      auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
+      CUDF_EXPECTS(nth_agg->_include_nulls == include_nulls::YES,
+                    "Series nth is supported with nulls included only");
+      return reduction::nth_element(col, col.type(), nth_agg->n, mr, stream);
+    } break;
     // XXX: PTX, CUDA support needed?
     default:
       CUDF_FAIL("Unsupported reduction operator");
