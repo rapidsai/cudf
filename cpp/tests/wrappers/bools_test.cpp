@@ -208,3 +208,5 @@ TEST_F(Bool8Test, TestBool8NumericLimitsTest) {
     EXPECT_EQ(static_cast<uint8_t>(std::numeric_limits<cudf::experimental::bool8>::lowest()),
               static_cast<uint8_t>(static_cast<bool>(std::numeric_limits<uint8_t>::lowest())));
 }
+
+CUDF_TEST_PROGRAM_MAIN()

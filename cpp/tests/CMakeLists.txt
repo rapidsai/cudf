@@ -52,7 +52,10 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
         add_executable(${CMAKE_TEST_NAME}
                        ${CMAKE_TEST_SRC})
         set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf cudftestutil)
+        target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread cudf cudftestutil)
+        if (is_legacy_test)
+            target_link_libraries(${CMAKE_TEST_NAME} gmock_main gtest_main)
+        endif (is_legacy_test)
         set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
         add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -341,13 +344,12 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 # - quantiles tests -------------------------------------------------------------------------------
 
 set(LEGACY_QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu")
 
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -914,17 +916,3 @@ ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
 ###################################################################################################
 
 enable_testing()
-
-###################################################################################################
-### benchmarks ####################################################################################
-###################################################################################################
-
-# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - iterator benchmarks----------------------------------------------------------------------------
-
-set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
-
-  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")

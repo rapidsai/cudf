@@ -74,3 +74,5 @@ TEST_F(ReplaceTest, NormalizeNansAndZerosDouble)
    //
    normalize_nans_and_zeros_test_internal<double>(d_test_data, d_test_data_comp);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

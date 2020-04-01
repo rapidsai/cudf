@@ -430,7 +430,7 @@ def merge_sorted(
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
     result = objs[0].__class__._from_table(
-        cudf._libxx.merge.merge_sorted(
+        cudf._lib.merge.merge_sorted(
             objs,
             keys=keys,
             by_index=by_index,

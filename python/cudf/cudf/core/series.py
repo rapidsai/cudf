@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -611,6 +611,10 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
+<<<<<<< HEAD
+=======
+        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
+>>>>>>> branch-0.14
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -645,6 +649,10 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
+<<<<<<< HEAD
+=======
+        libcudf.nvtx.range_pop()
+>>>>>>> branch-0.14
         return result
 
     def add(self, other, fill_value=None, axis=0):
@@ -1234,7 +1242,7 @@ class Series(Frame):
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudfxx.transform.nans_to_nulls(sr._column)
+            newmask = libcudf.transform.nans_to_nulls(sr._column)
             return self.set_mask(newmask)
         else:
             return self
@@ -2088,7 +2096,7 @@ class Series(Frame):
         return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
-        """Returns unique values of this Series.
+        """Return a Series containing counts of unique values.
         """
 
         if self.null_count == len(self):
@@ -2211,11 +2219,8 @@ class Series(Frame):
 
         if isinstance(q, Number):
             res = self._column.quantile(q, interpolation, exact)
-            if len(res) == 0:
-                return np.nan
-            else:
-                # if q is an int/float, we shouldn't be constructing series
-                return res.pop()
+            res = res[0]
+            return np.nan if res is None else res
 
         if not quant_index:
             return Series(
