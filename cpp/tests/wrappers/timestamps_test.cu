@@ -27,7 +27,6 @@
 #include "tests/utilities/column_utilities.hpp"
 #include "tests/utilities/column_wrapper.hpp"
 
-#include <gmock/gmock.h>
 
 template <typename T>
 struct TimestampColumnTest : public cudf::test::BaseFixture {
