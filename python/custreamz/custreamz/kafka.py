@@ -9,19 +9,20 @@ from custreamz.utils import docutils
 
 
 class Consumer(object):
+
     def __init__(self, kafka_configs):
         self.kafka_configs = kafka_configs
-        libkafka.create_kafka_consumer(kafka_configs)
+        self.kafka_datasource = libkafka.librdkafka(kafka_configs)
 
     def metadata(self):
-        libkafka.print_consumer_metadata()
+        self.kafka_datasource.print_consumer_metadata()
 
     @docutils.doc_current_configs()
     def current_configs(self):
 
         """{docstring}"""
 
-        libkafka.current_configs()
+        self.kafka_datasource.current_configs()
 
     @docutils.doc_read_gdf()
     def read_gdf(
@@ -49,7 +50,7 @@ class Consumer(object):
                 + "that you want to consume from!"
             )
         else:
-            result = libkafka.read_gdf(
+            result = self.kafka_datasource.read_gdf(
                 lines=lines,
                 dtype=dtype,
                 compression=compression,
@@ -71,7 +72,7 @@ class Consumer(object):
     def committed(self, partitions, timeout=10000):
         toppars = []
         for part in partitions:
-            offset = libkafka.get_committed_offset(part.topic, part.partition)
+            offset = self.kafka_datasource.get_committed_offset(part.topic, part.partition)
             if offset < 0:
                 offset = 0
             toppars.append(ck.TopicPartition(part.topic, part.partition, offset))
@@ -84,7 +85,7 @@ class Consumer(object):
         offsets = ()
 
         try:
-            offsets = libkafka.get_watermark_offsets(
+            offsets = self.kafka_datasource.get_watermark_offsets(
                 topic=partition.topic,
                 partition=partition.partition,
                 timeout=timeout,
@@ -112,7 +113,7 @@ class Consumer(object):
 
     def commit(self, offsets=None, asynchronous=True):
         for offs in offsets:
-            libkafka.commit_topic_offset(
+            self.kafka_datasource.commit_topic_offset(
                 offs.topic, offs.partition, offs.offset, asynchronous
             )
 
@@ -130,13 +131,13 @@ class Consumer(object):
         if message_key == None:
             message_key = ""
 
-        return libkafka.produce_message(topic, message_val, message_key)
+        return self.kafka_datasource.produce_message(topic, message_val, message_key)
 
     def flush(self, timeout=10000):
-        return libkafka.flush(timeout=timeout)
+        return self.kafka_datasource.flush(timeout=timeout)
 
     def unsubscribe(self):
-        return libkafka.unsubscribe()
+        return self.kafka_datasource.unsubscribe()
 
     def close(self, timeout=10000):
-        return libkafka.close(timeout=timeout)
+        return self.kafka_datasource.close(timeout=timeout)

@@ -14,7 +14,7 @@ from libc.stdint cimport int32_t, int64_t
 
 cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
 
-    cdef cppclass kafka_datasource:
+    cpdef cppclass kafka_datasource:
 
         kafka_datasource(map[string, string] configs) except +
 
