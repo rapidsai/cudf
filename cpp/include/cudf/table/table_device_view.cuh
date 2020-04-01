@@ -70,6 +70,8 @@ class table_device_view_base {
 
  protected:
   table_device_view_base(HostTableView source_view, cudaStream_t stream);
+
+  rmm::device_buffer* _descendant_storage{};
 };
 }  // namespace detail
 
@@ -77,7 +79,10 @@ class table_device_view
     : public detail::table_device_view_base<column_device_view, table_view> {
  public:
   static auto create(table_view source_view, cudaStream_t stream = 0) {
-    auto deleter = [](table_device_view* t) { t->destroy(); };
+    auto deleter = [](table_device_view* t) { 
+        t->destroy(); 
+        delete t->_descendant_storage;
+      };
     return std::unique_ptr<table_device_view, decltype(deleter)>{
         new table_device_view(source_view, stream), deleter};
   }
