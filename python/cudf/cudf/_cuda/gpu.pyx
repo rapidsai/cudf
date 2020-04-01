@@ -5,7 +5,9 @@ from cudf._cuda.gpu cimport (
     cudaRuntimeGetVersion,
     cudaGetDeviceCount,
     cudaDeviceGetAttribute,
-    cudaDeviceAttr
+    cudaDeviceAttr,
+    cudaGetDeviceProperties,
+    cudaDeviceProp
 )
 from enum import IntEnum
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
@@ -271,3 +273,9 @@ def getDeviceAttribute(object attr, int device):
     cdef int value
     status = cudaDeviceGetAttribute(&value, attr, device)
     return -1 if status != 0 else value
+
+
+def getDeviceProperties(int device):
+    cdef cudaDeviceProp prop
+    status = cudaGetDeviceProperties(&prop, device)
+    return None if status != 0 else prop

@@ -103,11 +103,95 @@ cdef extern from "cuda.h" nogil:
         cudaDevAttrPageableMemoryAccessUsesHostPageTables = 100
         cudaDevAttrDirectManagedMemAccessFromHost = 101
 
+    ctypedef struct CUuuid_st:
+        char  bytes[16]
+
+    ctypedef CUuuid_st cudaUUID_t
+
+    ctypedef struct cudaDeviceProp:
+        int  ECCEnabled
+        int  asyncEngineCount
+        int  canMapHostMemory
+        int  canUseHostPointerForRegisteredMem
+        int  clockRate
+        int  computeMode
+        int  computePreemptionSupported
+        int  concurrentKernels
+        int  concurrentManagedAccess
+        int  cooperativeLaunch
+        int  cooperativeMultiDeviceLaunch
+        int  deviceOverlap
+        int  directManagedMemAccessFromHost
+        int  globalL1CacheSupported
+        int  hostNativeAtomicSupported
+        int  integrated
+        int  isMultiGpuBoard
+        int  kernelExecTimeoutEnabled
+        int  l2CacheSize
+        int  localL1CacheSupported
+        char  luid[8]
+        unsigned int  luidDeviceNodeMask
+        int  major
+        int  managedMemory
+        int  maxGridSize[3]
+        int  maxSurface1D
+        int  maxSurface1DLayered[2]
+        int  maxSurface2D[2]
+        int  maxSurface2DLayered[3]
+        int  maxSurface3D[3]
+        int  maxSurfaceCubemap
+        int  maxSurfaceCubemapLayered[2]
+        int  maxTexture1D
+        int  maxTexture1DLayered[2]
+        int  maxTexture1DLinear
+        int  maxTexture1DMipmap
+        int  maxTexture2D[2]
+        int  maxTexture2DGather[2]
+        int  maxTexture2DLayered[3]
+        int  maxTexture2DLinear[3]
+        int  maxTexture2DMipmap[2]
+        int  maxTexture3D[3]
+        int  maxTexture3DAlt[3]
+        int  maxTextureCubemap
+        int  maxTextureCubemapLayered[2]
+        int  maxThreadsDim[3]
+        int  maxThreadsPerBlock
+        int  maxThreadsPerMultiProcessor
+        size_t  memPitch
+        int  memoryBusWidth
+        int  memoryClockRate
+        int  minor
+        int  multiGpuBoardGroupID
+        int  multiProcessorCount
+        char  name[256]
+        int  pageableMemoryAccess
+        int  pageableMemoryAccessUsesHostPageTables
+        int  pciBusID
+        int  pciDeviceID
+        int  pciDomainID
+        int  regsPerBlock
+        int  regsPerMultiprocessor
+        size_t  sharedMemPerBlock
+        size_t  sharedMemPerBlockOptin
+        size_t  sharedMemPerMultiprocessor
+        int  singleToDoublePrecisionPerfRatio
+        int  streamPrioritiesSupported
+        size_t  surfaceAlignment
+        int  tccDriver
+        size_t  textureAlignment
+        size_t  texturePitchAlignment
+        size_t  totalConstMem
+        size_t  totalGlobalMem
+        int  unifiedAddressing
+        cudaUUID_t  uuid
+        int  warpSize
+
 cdef extern from "cuda_runtime_api.h" nogil:
 
     int cudaDriverGetVersion(int* driverVersion)
     int cudaRuntimeGetVersion(int* runtimeVersion)
     int cudaGetDeviceCount(int* count)
     int cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device)
+    int cudaGetDeviceProperties(cudaDeviceProp* prop, int device)
 
 ctypedef int underlying_type_attribute

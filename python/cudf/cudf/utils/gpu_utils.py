@@ -5,6 +5,7 @@ def validate_setup():
         runtimeGetVersion,
         getDeviceAttribute,
         CudaDeviceAttr,
+        getDeviceProperties,
     )
     import warnings
 
@@ -31,10 +32,15 @@ def validate_setup():
             #    Fermi	                2.x
             pass
         else:
-
+            device_props = getDeviceProperties(0)
             warnings.warn(
                 "You will need a GPU with NVIDIA Pascal™ architecture or \
-                    better"
+                    better\n"
+                "Detected GPU 0 : " + str(device_props["name"].decode()) + "\n"
+                "Detected Compute Capability : "
+                + str(device_props["major"])
+                + "."
+                + str(device_props["minor"])
             )
 
         cuda_runtime_version = runtimeGetVersion()
@@ -91,6 +97,4 @@ def validate_setup():
 
     else:
 
-        warnings.warn(
-            "No NVIDIA GPU detected"
-        )
+        warnings.warn("No NVIDIA GPU detected")
