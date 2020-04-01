@@ -408,7 +408,7 @@ size_t gather_stream_info(const size_t stripe_index,
 }  // namespace
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
-    const hostdevice_vector<gpu::ColumnDesc> &chunks,
+    hostdevice_vector<gpu::ColumnDesc> &chunks,
     const std::vector<rmm::device_buffer> &stripe_data,
     const OrcDecompressor *decompressor,
     std::vector<orc_stream_info> &stream_info, size_t num_stripes,
@@ -535,7 +535,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 }
 
 void reader::impl::decode_stream_data(
-    const hostdevice_vector<gpu::ColumnDesc> &chunks, size_t num_dicts,
+    hostdevice_vector<gpu::ColumnDesc> &chunks, size_t num_dicts,
     size_t skip_rows, size_t num_rows,
     const std::vector<int64_t> &timezone_table,
     const rmm::device_vector<gpu::RowGroup> &row_groups,

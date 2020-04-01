@@ -18,7 +18,7 @@
 #include <table/legacy/device_table_row_operators.cuh>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/legacy/column_utils.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <cudf/legacy/search.hpp>
 #include <cudf/legacy/copying.hpp>

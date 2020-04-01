@@ -31,12 +31,17 @@
 - PR #4691 Fix compiler argument syntax for ccache
 - PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
+- PR #4627 Remove legacy Cython
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
+- PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
+- PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
+- PR #4660 Port `cudf::partition` api to python/cython
 
 ## Bug Fixes
 

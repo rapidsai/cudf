@@ -26,7 +26,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 namespace cudf {
 namespace io {
@@ -84,7 +84,7 @@ class reader::Impl {
    * @return size_t The total number of pages
    **/
   size_t count_page_headers(
-      const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks);
+      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks);
 
   /**
    * @brief Returns the page information from the given column chunks.
@@ -93,8 +93,8 @@ class reader::Impl {
    * @param[in] pages List of page information
    **/
   void decode_page_headers(
-      const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      const hostdevice_vector<parquet::gpu::PageInfo> &pages);
+      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<parquet::gpu::PageInfo> &pages);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -105,8 +105,8 @@ class reader::Impl {
    * @return rmm::device_buffer Device buffer to decompressed page data
    **/
   rmm::device_buffer decompress_page_data(
-      const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      const hostdevice_vector<parquet::gpu::PageInfo> &pages);
+      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<parquet::gpu::PageInfo> &pages);
 
   /**
    * @brief Converts the page data and outputs to gdf_columns.
@@ -118,8 +118,8 @@ class reader::Impl {
    * @param[in] total_rows Total number of rows to output
    **/
   void decode_page_data(
-      const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      const hostdevice_vector<parquet::gpu::PageInfo> &pages,
+      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<parquet::gpu::PageInfo> &pages,
       const std::vector<gdf_column *> &chunk_map, size_t min_row,
       size_t total_rows);
 
