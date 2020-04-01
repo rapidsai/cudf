@@ -56,8 +56,13 @@ def validate_setup():
         else:
             from cudf.errors import UnSupportedCUDAError
 
+            minor_version = cuda_runtime_version % 100
+            major_version = (cuda_runtime_version - minor_version) // 1000
             raise UnSupportedCUDAError(
-                "Please update your CUDA Runtime to 10.0 or above"
+                "Detected CUDA Runtime version is {0}.{1}"
+                "Please update your CUDA Runtime to 10.0 or above".format(
+                    major_version, str(minor_version)[0]
+                )
             )
 
         cuda_driver_supported_rt_version = driverGetVersion()
