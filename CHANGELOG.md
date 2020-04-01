@@ -38,6 +38,7 @@
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
+- PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 
 ## Bug Fixes
 
