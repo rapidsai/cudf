@@ -3552,7 +3552,7 @@ class DataFrame(Frame):
             for col in self.columns:
                 if col in values:
                     val = values[col]
-                    result_df[col] = self[col].isin(val)._column
+                    result_df[col] = self._data[col].isin(val)
                 else:
                     result_df[col] = utils.scalar_broadcast_to(
                         False, len(self)
