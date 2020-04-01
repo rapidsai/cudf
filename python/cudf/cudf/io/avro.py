@@ -1,6 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -25,7 +25,7 @@ def read_avro(
 
     if engine == "cudf":
         return DataFrame._from_table(
-            libcudfxx.avro.read_avro(
+            libcudf.avro.read_avro(
                 filepath_or_buffer, columns, skip_rows, num_rows
             )
         )
