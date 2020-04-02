@@ -3570,7 +3570,7 @@ class DataFrame(Frame):
                 if is_categorical_dtype(
                     self[col].dtype
                 ) and is_categorical_dtype(values.dtype):
-                    res = self[col]._column.binary_operator(
+                    res = self._data[col].binary_operator(
                         "eq", values._column
                     )
                     result[col] = res
@@ -3583,7 +3583,7 @@ class DataFrame(Frame):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self[col]._column.binary_operator(
+                    result[col] = self._data[col].binary_operator(
                         "eq", values._column
                     )
 
@@ -3595,7 +3595,7 @@ class DataFrame(Frame):
             result = DataFrame()
             for col in self.columns:
                 if col in values.columns:
-                    result[col] = self[col]._column.binary_operator(
+                    result[col] = self._data[col].binary_operator(
                         "eq", values[col]._column
                     )
                 else:

@@ -720,7 +720,7 @@ class ColumnBase(Column):
         except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return cupy.zeros(len(self), dtype="bool")
+            return as_column(cupy.zeros(len(self), dtype="bool"))
 
         # If categorical, combine categories first
         if is_categorical_dtype(lhs):
