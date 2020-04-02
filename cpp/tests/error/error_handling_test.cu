@@ -18,7 +18,7 @@
 
 #include <rmm/rmm.h>
 
-#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/base_fixture.hpp>
 
 #include <cstring>
 
