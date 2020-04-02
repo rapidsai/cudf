@@ -582,24 +582,6 @@ class Frame(libcudf.table.Table):
 
         return result
 
-    def _scatter_to_tables(self, scatter_map, keep_index=True):
-        """
-       scatter the dataframe/table to a list of dataframes/tables
-       as per scatter_map
-
-       """
-
-        result = libcudf.copying.scatter_to_tables(
-            self, scatter_map, keep_index
-        )
-        result = [self._from_table(tbl) for tbl in result]
-        [
-            frame._copy_categories(self, include_index=keep_index)
-            for frame in result
-        ]
-
-        return result
-
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
         Drops rows (or columns) containing nulls from a Column.

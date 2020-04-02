@@ -1386,6 +1386,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
+        if (
+            (nan_as_null is True)
+            and isinstance(arbitrary, (np.floating, float))
+            and np.isnan(arbitrary)
+        ):
+            arbitrary = None
+            if dtype is None:
+                dtype = np.dtype("float64")
+
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
