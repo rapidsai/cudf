@@ -81,6 +81,7 @@
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 - PR #4777 Fix data pointer for column slices of zero length
+- PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
