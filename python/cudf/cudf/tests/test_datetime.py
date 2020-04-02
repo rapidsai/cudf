@@ -24,11 +24,29 @@ def data2():
     return pd.date_range("20010101", "20020215", freq="400h", name="times")
 
 
+def timeseries_ms_data():
+    return pd.date_range(
+        "2019-07-16 00:00:00",
+        "2019-07-16 00:00:01",
+        freq="100ms",
+        name="times",
+    )
+
+
 def timeseries_us_data():
     return pd.date_range(
         "2019-07-16 00:00:00",
         "2019-07-16 00:00:01",
         freq="5555us",
+        name="times",
+    )
+
+
+def timeseries_ns_data():
+    return pd.date_range(
+        "2019-07-16 00:00:00",
+        "2019-07-16 00:00:01",
+        freq="55555555ns",
         name="times",
     )
 
@@ -241,7 +259,9 @@ def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
 
 
-@pytest.mark.parametrize("data", [timeseries_us_data()])
+@pytest.mark.parametrize(
+    "data", [timeseries_ms_data(), timeseries_us_data(), timeseries_ns_data()]
+)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],

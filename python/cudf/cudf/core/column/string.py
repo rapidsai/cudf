@@ -2045,10 +2045,16 @@ class StringColumn(column.ColumnBase):
         if mem_dtype.type is np.datetime64:
             if "format" not in kwargs:
                 if len(self) > 0:
+                    element = self[self.notna()][0]
                     # infer on host from the first not na element
                     fmt = pd.core.tools.datetimes._guess_datetime_format(
-                        self[self.notna()][0]
+                        element
                     )
+                    if fmt is None:
+                        if "T" in element:
+                            fmt = "%Y-%m-%dT%H:%M:%S.%f"
+                        else:
+                            fmt = "%Y-%m-%d %H:%M:%S.%f"
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
 

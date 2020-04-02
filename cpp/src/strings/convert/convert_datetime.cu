@@ -192,12 +192,20 @@ struct parse_datetime
     {
         const char* ptr = str;
         int32_t value = 0;
+        bool read_last_ch = false;
         for( size_type idx=0; idx < bytes; ++idx )
         {
-            char chr = *ptr++;
-            if( chr < '0' || chr > '9' )
-                break;
-            value = (value * 10) + static_cast<int32_t>(chr - '0');
+            if (read_last_ch == false) {
+                char chr = *ptr++;
+                if( chr < '0' || chr > '9' ) {
+                    value = (value * 10);
+                    read_last_ch=true;
+                    continue;
+                }
+                value = (value * 10) + static_cast<int32_t>(chr - '0');
+            } else {
+                value = (value * 10);
+            }
         }
         return value;
     }
@@ -211,7 +219,7 @@ struct parse_datetime
         for( size_t idx=0; idx < items_count; ++idx )
         {
             auto item = d_format_items[idx];
-            if( length < item.length )
+            if( length <= 0 )
                 return 1;
             if(item.item_type==format_char_type::literal)
             {   // static character we'll just skip;
