@@ -664,14 +664,18 @@ class ColumnBase(Column):
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
         try:
-            return self.as_frame()._gather(indices)._as_column()
+            return (
+                self.as_frame()
+                ._gather(indices, keep_index=keep_index)
+                ._as_column()
+            )
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(
