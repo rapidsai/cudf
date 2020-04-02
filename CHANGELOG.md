@@ -47,6 +47,7 @@
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
+- PR #4466 Fix merge key column sorting
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
 - PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe
@@ -80,6 +81,7 @@
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 - PR #4777 Fix data pointer for column slices of zero length
+- PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 - PR #4780 Handle nulls in Statistical column operations
 
 
