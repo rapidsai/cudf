@@ -99,16 +99,16 @@ def write_to_dataset(
             keys = tuple([sub_df[col].iloc[0] for col in partition_cols])
             if not isinstance(keys, tuple):
                 keys = (keys,)
-            subdir = "/".join(
+            subdir = fs.sep.join(
                 [
                     "{colname}={value}".format(colname=name, value=val)
                     for name, val in zip(partition_cols, keys)
                 ]
             )
-            prefix = "/".join([root_path, subdir])
+            prefix = fs.sep.join([root_path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
             outfile = guid() + ".parquet"
-            full_path = "/".join([prefix, outfile])
+            full_path = fs.sep.join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
             if return_metadata:
@@ -125,7 +125,7 @@ def write_to_dataset(
 
     else:
         outfile = guid() + ".parquet"
-        full_path = "/".join([root_path, outfile])
+        full_path = fs.sep.join([root_path, outfile])
         if return_metadata:
             metadata.append(
                 df.to_parquet(
