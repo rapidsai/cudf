@@ -24,10 +24,10 @@ namespace strings
 {
 
 /**
- * @brief Returns a new datetime column converting a strings column into
+ * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
  *
- * The format can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+ * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -47,7 +47,7 @@ namespace strings
  * Other specifiers are not currently supported.
  *
  * Invalid formats are not checked. If the string contains unexpected
- * or insufficient characters, that output row enty timestamp value is undefined.
+ * or insufficient characters, that output row entry's timestamp value is undefined.
  * Negative timestamp values are not currently supported. These would have
  * dates formatted before 1970-01-01.
  *
@@ -73,10 +73,10 @@ std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
 
 
 /**
- * @brief Returns a new strings column converting a datetime column into
+ * @brief Returns a new strings column converting a timestamp column into
  * strings using the provided format pattern.
  *
- * The format can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z,%Z"
+ * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z,%Z"
  *
  * | Specifier | Description |
  * | :-------: | ----------- |
@@ -96,6 +96,7 @@ std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
  *
  * No checking is done for invalid formats or invalid timestamp values.
  * Negative timestamp values are not currently supported.
+ * All timestamps values are formatted to UTC.
  *
  * Any null input entry will result in a corresponding null entry in the output column.
  *
