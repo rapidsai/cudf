@@ -3,14 +3,8 @@
 import warnings
 
 import pyarrow.parquet as pq
-from fsspec.implementations.local import (
-    LocalFileSystem as FSSpecLocalFileSystem,
-)
+from fsspec.core import get_fs_token_paths
 from pyarrow.compat import guid
-from pyarrow.filesystem import (
-    LocalFileSystem as PyArrowLocalFileSystem,
-    resolve_filesystem_and_path,
-)
 
 import cudf
 import cudf._lib.parquet as libparquet
@@ -34,13 +28,12 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     ]
 
 
-def _get_filesystem_and_path(passed_filesystem, path):
+def _ensure_filesystem(passed_filesystem, path):
     if passed_filesystem is None:
-        fs, path = resolve_filesystem_and_path(path, passed_filesystem)
-        if isinstance(fs, PyArrowLocalFileSystem):
-            return FSSpecLocalFileSystem(), path
-        return fs, path
-    return passed_filesystem, path
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
 
 
 # Logic chosen to match: https://arrow.apache.org/
@@ -85,7 +78,7 @@ def write_to_dataset(
         kwargs for to_parquet function.
     """
 
-    fs, root_path = _get_filesystem_and_path(fs, root_path)
+    fs = _ensure_filesystem(fs, root_path)
     fs.mkdirs(root_path, exist_ok=True)
     metadata = []
 
