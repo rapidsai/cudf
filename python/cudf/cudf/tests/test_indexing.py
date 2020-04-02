@@ -551,6 +551,7 @@ def test_dataframe_take(ntake):
     np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
     np.testing.assert_array_equal(out.index, take_indices)
 
+
 @pytest.mark.parametrize("keep_index", [True, False])
 @pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
 def test_series_take(ntake, keep_index):
@@ -568,7 +569,9 @@ def test_series_take(ntake, keep_index):
     elif keep_index is False:
         out = sr.take(take_indices, keep_index=False)
         np.testing.assert_array_equal(out.to_array(), data[take_indices])
-        np.testing.assert_array_equal(out.index.to_array(), sr.index.to_array())
+        np.testing.assert_array_equal(
+            out.index.to_array(), sr.index.to_array()
+        )
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
