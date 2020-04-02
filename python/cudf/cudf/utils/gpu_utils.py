@@ -39,10 +39,9 @@ def validate_setup():
         else:
             device_props = getDeviceProperties(0)
             warnings.warn(
-                "You will need a GPU with NVIDIA Pascal™ architecture or \
-                    better\n"
-                "Detected GPU 0 : " + str(device_props["name"].decode()) + "\n"
-                "Detected Compute Capability : "
+                "You will need a GPU with NVIDIA Pascal™ or newer architecture\n"
+                "Detected GPU 0: " + str(device_props["name"].decode()) + "\n"
+                "Detected Compute Capability: "
                 + str(device_props["major"])
                 + "."
                 + str(device_props["minor"])
