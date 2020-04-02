@@ -478,10 +478,14 @@ class Series(Frame):
 
         self._column[key] = value
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.
         """
-        return self[indices]
+        if keep_index == True:
+            return self[indices]
+        else:
+            self._column = self._column.take(indices, keep_index=False)
+            
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
