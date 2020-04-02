@@ -741,6 +741,28 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
   cudf_io::write_parquet_chunked_end(state);    
 }
 
+TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
+
+  auto full_table = cudf::experimental::concatenate({*table2, *table1, *table2});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedRowGroups.parquet");
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+  read_args.row_group_list = {1, 0, 1};
+  auto result = cudf_io::read_parquet(read_args);
+
+  expect_tables_equal(*result.tbl, *full_table);
+}
+
 TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
