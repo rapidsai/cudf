@@ -16,6 +16,7 @@
 
 #include <cudf/utilities/traits.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/base_fixture.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -100,3 +101,5 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparable) {
 }
 
 // TODO: Tests for is_compound/is_simple, is_fixed_width
+
+CUDF_TEST_PROGRAM_MAIN()

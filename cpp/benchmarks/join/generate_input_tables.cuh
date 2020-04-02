@@ -198,58 +198,50 @@ void generate_input_tables(
     CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
     const int num_states = num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-    curandState *devStates;
-    RMM_TRY(RMM_ALLOC(&devStates, num_states * sizeof(curandState), 0));
+    rmm::device_vector<curandState> devStates(num_states);
 
-    init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates, num_states);
+    init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data().get(), num_states);
 
     CHECK_CUDA(0);
 
-    key_type* build_tbl_sorted;
-    RMM_TRY(RMM_ALLOC(&build_tbl_sorted, build_tbl_size * sizeof(key_type), 0));
+    rmm::device_vector<key_type> build_tbl_sorted(build_tbl_size);
 
     size_type lottery_size = rand_max < std::numeric_limits<key_type>::max() - 1 ? rand_max + 1 : rand_max;
-    key_type* lottery;
-
-    RMM_TRY(RMM_ALLOC(&lottery, lottery_size * sizeof(key_type), 0));
+    rmm::device_vector<key_type> lottery(lottery_size);
 
     if (uniq_build_tbl_keys) {
-        thrust::sequence(thrust::device, lottery, lottery + lottery_size, 0);
+        thrust::sequence(thrust::device, lottery.begin(), lottery.end(), 0);
     }
 
     init_build_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
         build_tbl, build_tbl_size, rand_max, uniq_build_tbl_keys,
-        lottery, lottery_size, devStates, num_states
+        lottery.data().get(), lottery_size, devStates.data().get(), num_states
     );
 
     CHECK_CUDA(0);
 
     CUDA_TRY(cudaMemcpy(
-        build_tbl_sorted, build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice
+        build_tbl_sorted.data().get(), build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice
     ));
 
-    thrust::sort(thrust::device, build_tbl_sorted, build_tbl_sorted + build_tbl_size);
+    thrust::sort(thrust::device, build_tbl_sorted.begin(), build_tbl_sorted.end());
 
     // Exclude keys used in build table from lottery
     thrust::counting_iterator<key_type> first_lottery_elem(0);
     thrust::counting_iterator<key_type> last_lottery_elem = first_lottery_elem + lottery_size;
     key_type *lottery_end = thrust::set_difference(
         thrust::device, first_lottery_elem, last_lottery_elem,
-        build_tbl_sorted, build_tbl_sorted + build_tbl_size, lottery
+        build_tbl_sorted.begin(), build_tbl_sorted.end(), lottery.data().get()
     );
 
-    lottery_size = thrust::distance(lottery, lottery_end);
+    lottery_size = thrust::distance(lottery.data().get(), lottery_end);
 
     init_probe_tbl<key_type, size_type><<<num_sms * num_blocks_init_build_tbl, block_size>>>(
         probe_tbl, probe_tbl_size, build_tbl, build_tbl_size,
-        lottery, lottery_size, selectivity, devStates, num_states
+        lottery.data().get(), lottery_size, selectivity, devStates.data().get(), num_states
     );
 
     CHECK_CUDA(0);
-
-    RMM_TRY(RMM_FREE(lottery, 0));
-    RMM_TRY(RMM_FREE(build_tbl_sorted, 0));
-    RMM_TRY(RMM_FREE(devStates, 0));
 }
 
 

@@ -87,7 +87,7 @@ class reader::impl {
    * @return The total number of pages
    */
   size_t count_page_headers(
-      const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
       cudaStream_t stream);
 
   /**
@@ -98,8 +98,8 @@ class reader::impl {
    * @param stream Stream to use for memory allocation and kernels
    */
   void decode_page_headers(
-      const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-      const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream);
+      hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -111,8 +111,8 @@ class reader::impl {
    * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_page_data(
-      const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-      const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream);
+      hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+      hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -125,8 +125,8 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream Stream to use for memory allocation and kernels
    */
-  void decode_page_data(const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-                        const hostdevice_vector<gpu::PageInfo> &pages,
+  void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                        hostdevice_vector<gpu::PageInfo> &pages,
                         size_t min_row, size_t total_rows,
                         const std::vector<int> &chunk_map,
                         std::vector<column_buffer> &out_buffers,

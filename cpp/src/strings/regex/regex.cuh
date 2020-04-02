@@ -73,7 +73,8 @@ public:
      * @param pattern The regex pattern to compile.
      * @param cp_flags The code-point lookup table for character types.
      * @param strings_count Number of strings that will be evaluated.
-     * @param stream CUDA stream for asynchronous memory allocations.
+     * @param stream CUDA stream for asynchronous memory allocations. To ensure correct synchronization on
+     *               destruction, the same stream should be used for all operations with the created objects.
      * @return The program device object.
      */
     static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
