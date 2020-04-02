@@ -3774,20 +3774,28 @@ def test_isin_index(data, values):
     ],
 )
 @pytest.mark.parametrize(
-    "values,level",
+    "values,level,err",
     [
-        (["red", "orange", "yellow"], "color"),
-        (["red", "white", "yellow"], "color"),
-        ([0, 1, 2, 10, 11, 15], "number"),
-        ([(1, "red"), (3, "red")], None),
+        (["red", "orange", "yellow"], "color", None),
+        (["red", "white", "yellow"], "color", None),
+        ([0, 1, 2, 10, 11, 15], "number", None),
+        ([0, 1, 2, 10, 11, 15], None, TypeError),
+        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        ([(1, "red"), (3, "red")], None, None),
         (
             pd.MultiIndex.from_arrays(
                 [[1, 2, 3], ["red", "blue", "green"]],
                 names=("number", "color"),
             ),
             None,
+            None,
         ),
-        (pd.MultiIndex.from_arrays([[], []], names=("number", "color")), None),
+        (
+            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+            None,
+            None,
+        ),
         (
             pd.MultiIndex.from_arrays(
                 [
@@ -3797,17 +3805,27 @@ def test_isin_index(data, values):
                 names=("number", "color"),
             ),
             None,
+            None,
         ),
     ],
 )
-def test_isin_multiindex(data, values, level):
+def test_isin_multiindex(data, values, level, err):
     pmdx = data
     gmdx = gd.from_pandas(data)
 
-    got = gmdx.isin(values, level=level)
-    expected = pmdx.isin(values, level=level)
+    if err is None:
+        expected = pmdx.isin(values, level=level)
+        if isinstance(values, pd.MultiIndex):
+            values = gd.from_pandas(values)
+        got = gmdx.isin(values, level=level)
 
-    assert_eq(got, expected)
+        assert_eq(got, expected)
+    else:
+        with pytest.raises((ValueError, TypeError)):
+            expected = pmdx.isin(values, level=level)
+
+        with pytest.raises(err):
+            got = gmdx.isin(values, level=level)
 
 
 @pytest.mark.parametrize(
