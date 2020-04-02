@@ -26,7 +26,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 namespace cudf {
 namespace io {
@@ -78,7 +78,7 @@ class reader::Impl {
    **/
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   const hostdevice_vector<uint8_t> &global_dictionary,
+                   hostdevice_vector<uint8_t> &global_dictionary,
                    size_t total_dictionary_entries,
                    const std::vector<gdf_column_wrapper> &columns);
 

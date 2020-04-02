@@ -1,102 +1,71 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from libc.stdlib cimport free
-from libc.stdint cimport uintptr_t, uint32_t
+from libc.stdint cimport uint32_t
+from libcpp cimport bool
+from libcpp.pair cimport pair
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from cudf._lib.includes.hash cimport *
+from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
+
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.hash cimport (
+    hash as cpp_hash
+)
+from cudf._lib.cpp.partitioning cimport (
+    hash_partition as cpp_hash_partition,
+)
+cimport cudf._lib.cpp.types as libcudf_types
 
 
-def hash_columns(columns, result, initial_hash_values=None):
-    """Hash the *columns* and store in *result*.
-    Returns *result*
-    """
-    assert len(columns) > 0
-    assert result.dtype == np.int32
-    # No-op for 0-sized
-    if len(result) == 0:
-        return result
-    cdef vector[gdf_column*] c_col_input
-    for col in columns:
-        c_col_input.push_back(column_view_from_column(col))
-    cdef gdf_column* c_col_out = column_view_from_column(result)
-    cdef int ncols = len(columns)
-    cdef gdf_hash_func hashfn = GDF_HASH_MURMUR3
-    cdef uintptr_t c_initial_hash_values
-    if initial_hash_values is None:
-        c_initial_hash_values = 0
+def hash_partition(Table source_table, object columns_to_hash,
+                   int num_partitions, bool keep_index=True):
+    cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
+    cdef int c_num_partitions = num_partitions
+    cdef table_view c_source_view
+    if keep_index is True:
+        c_source_view = source_table.view()
     else:
-        c_initial_hash_values = get_ctype_ptr(initial_hash_values)
+        c_source_view = source_table.data_view()
 
+    cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     with nogil:
-        err = gdf_hash(
-            ncols,
-            c_col_input.data(),
-            hashfn,
-            <uint32_t*>c_initial_hash_values,
-            c_col_out
+        c_result = move(
+            cpp_hash_partition(
+                c_source_view,
+                c_columns_to_hash,
+                c_num_partitions
+            )
         )
 
-    check_gdf_error(err)
+    return (
+        Table.from_unique_ptr(
+            move(c_result.first),
+            column_names=source_table._column_names,
+            index_names=source_table._index_names if(
+                keep_index is True)
+            else None
 
-    free_column(c_col_out)
-    for c_col in c_col_input:
-        free_column(c_col)
-
-    return result
+        ),
+        list(c_result.second)
+    )
 
 
-def hash_partition(input_columns, key_indices, nparts, output_columns):
-    """Partition the input_columns by the hash values on the keys.
+def hash(Table source_table, object initial_hash_values=None):
+    cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
+    cdef table_view c_source_view = source_table.data_view()
 
-    Parameters
-    ----------
-    input_columns : sequence of Column
-    key_indices : sequence of int
-        Indices into `input_columns` that indicates the key columns.
-    nparts : int
-        number of partitions
-
-    Returns
-    -------
-    partition_offsets : list of int
-        Each index indicates the start of a partition.
-    """
-    assert len(input_columns) == len(output_columns)
-
-    cdef int c_len_col_inputs = len(input_columns)
-    cdef vector[gdf_column*] c_col_input
-    for col in input_columns:
-        c_col_input.push_back(column_view_from_column(col))
-    cdef vector[int] c_key_indices = key_indices
-    cdef int c_len_key_indices = len(key_indices)
-    cdef int c_nparts = nparts
-    cdef vector[gdf_column*] c_col_output
-    for col in output_columns:
-        c_col_output.push_back(column_view_from_column(col))
-    cdef vector[int] offsets = vector[int](c_nparts)
-    cdef gdf_hash_func hashfn = GDF_HASH_MURMUR3
-
+    cdef unique_ptr[column] c_result
     with nogil:
-        err = gdf_hash_partition(
-            c_len_col_inputs,
-            c_col_input.data(),
-            c_key_indices.data(),
-            c_len_key_indices,
-            c_nparts,
-            c_col_output.data(),
-            offsets.data(),
-            hashfn
+        c_result = move(
+            cpp_hash(
+                c_source_view,
+                c_initial_hash
+            )
         )
 
-    check_gdf_error(err)
-
-    for c_col in c_col_input:
-        free_column(c_col)
-    for c_col in c_col_output:
-        free_column(c_col)
-
-    offsets = list(offsets)
-    return offsets
+    return Column.from_unique_ptr(move(c_result))

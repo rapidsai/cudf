@@ -31,7 +31,7 @@
  */
 #define NVTX3_MINOR_VERSION 0
 
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 #include <string>
 
