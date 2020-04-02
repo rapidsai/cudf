@@ -237,75 +237,6 @@ void concatenate_masks(std::vector<column_view> const &views,
   concatenate_masks(d_views, d_offsets, dest_mask, output_size, stream);
 }
 
-struct for_each_concatenate {
-  std::vector<cudf::column_view> views;
-  bool const has_nulls;
-  cudaStream_t stream;
-  rmm::mr::device_memory_resource *mr;
-
-  template <typename ColumnType,
-      std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()() {
-    std::vector<cudf::strings_column_view> sviews;
-    sviews.reserve(views.size());
-    for (auto &v : views) { sviews.emplace_back(v); }
-
-    auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
-
-    //If concatenated string column is nullable, proceed to calculate it
-    if (col->nullable()) {
-      cudf::detail::concatenate_masks(views,
-          (col->mutable_view()).null_mask(), stream);
-    }
-
-    return col;
-  }
-
-  template <typename ColumnType,
-      std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
-  std::unique_ptr<column> operator()() {
-    CUDF_FAIL("dictionary not supported yet");
-  }
-
-  template <typename ColumnType,
-      std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
-  std::unique_ptr<column> operator()() {
-
-    size_type const total_element_count =
-      std::accumulate(views.begin(), views.end(), 0,
-          [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-
-    using mask_policy = cudf::experimental::mask_allocation_policy;
-
-    mask_policy policy{mask_policy::NEVER};
-    if (has_nulls) { policy = mask_policy::ALWAYS; }
-
-    auto col = cudf::experimental::allocate_like(views.front(),
-        total_element_count, policy, mr);
-    col->set_null_count(0); // prevent null count from being materialized
-
-    auto m_view = col->mutable_view();
-    auto count = 0;
-    // NOTE fused_concatenate is more efficient for multiple views
-    for (auto &v : views) {
-      thrust::copy(rmm::exec_policy()->on(stream),
-          v.begin<ColumnType>(),
-          v.end<ColumnType>(),
-          m_view.begin<ColumnType>() + count);
-      count += v.size();
-    }
-
-    //If concatenated column is nullable, proceed to calculate it
-    if (col->nullable()) {
-      cudf::detail::concatenate_masks(views,
-          (col->mutable_view()).null_mask(), stream);
-    }
-
-    return col;
-  }
-
-};
-
 template <typename T, size_type block_size, bool Nullable>
 __global__ void fused_concatenate_kernel(column_device_view const* input_views,
                                          size_type const* input_offsets,
@@ -464,7 +395,122 @@ fused_concatenate_string_chars_kernel(column_device_view const* input_views,
   }
 }
 
-struct fused_concatenate {
+template <typename T>
+std::unique_ptr<column> fused_concatenate_fixed_width(
+    std::vector<column_view> const& views,
+    bool const has_nulls,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+  using mask_policy = cudf::experimental::mask_allocation_policy;
+
+  // Preprocess and upload inputs to device memory
+  auto const device_views = create_device_views(views, stream);
+  auto const& d_views = std::get<1>(device_views);
+  auto const& d_offsets = std::get<2>(device_views);
+  auto const output_size = std::get<3>(device_views);
+
+  // Allocate output
+  auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
+  auto out_col = experimental::detail::allocate_like(views.front(),
+      output_size, policy, mr, stream);
+  out_col->set_null_count(0); // prevent null count from being materialized
+  auto out_view = out_col->mutable_view();
+  auto d_out_view = mutable_column_device_view::create(out_view, stream);
+
+  rmm::device_scalar<size_type> d_valid_count(0);
+
+  // Launch kernel
+  constexpr size_type block_size{256};
+  cudf::experimental::detail::grid_1d config(output_size, block_size);
+  auto const kernel = has_nulls
+      ? fused_concatenate_kernel<T, block_size, true>
+      : fused_concatenate_kernel<T, block_size, false>;
+  kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+      d_views.data().get(),
+      d_offsets.data().get(),
+      static_cast<size_type>(d_views.size()),
+      *d_out_view,
+      d_valid_count.data());
+
+  if (has_nulls) {
+    out_col->set_null_count(output_size - d_valid_count.value(stream));
+  }
+
+  return out_col;
+}
+
+std::unique_ptr<column> fused_concatenate_strings(
+    std::vector<column_view> const& views,
+    bool const has_nulls,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+
+  using mask_policy = cudf::experimental::mask_allocation_policy;
+
+  // Preprocess and upload inputs to device memory
+  auto const device_views = create_strings_device_views(views, stream);
+  auto const& d_views = std::get<1>(device_views);
+  auto const& d_input_offsets = std::get<2>(device_views);
+  auto const& d_partition_offsets = std::get<3>(device_views);
+  auto const output_size = std::get<4>(device_views);
+  auto const output_chars_size = std::get<5>(device_views);
+  auto const output_offsets_size = output_size + 1;
+
+  // Allocate child columns and null mask
+  auto chars_column = make_numeric_column(data_type{INT8},
+      output_chars_size, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = make_numeric_column(data_type{INT32},
+      output_offsets_size, mask_state::UNALLOCATED, stream, mr);
+  rmm::device_buffer null_mask;
+  if (has_nulls) {
+    null_mask = create_null_mask(output_size, mask_state::UNINITIALIZED, stream, mr);
+  }
+  size_type null_count{0};
+
+  auto chars_view = chars_column->mutable_view();
+  auto offsets_view = offsets_column->mutable_view();
+
+  { // Launch offsets kernel
+    rmm::device_scalar<size_type> d_valid_count(0);
+
+    constexpr size_type block_size{256};
+    cudf::experimental::detail::grid_1d config(output_offsets_size, block_size);
+    auto const kernel = has_nulls
+        ? fused_concatenate_string_offset_kernel<block_size, true>
+        : fused_concatenate_string_offset_kernel<block_size, false>;
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+        d_views.data().get(),
+        d_input_offsets.data().get(),
+        d_partition_offsets.data().get(),
+        static_cast<size_type>(d_views.size()),
+        output_size,
+        offsets_view.data<size_type>(),
+        reinterpret_cast<bitmask_type*>(null_mask.data()),
+        d_valid_count.data());
+
+    if (has_nulls) {
+      null_count = output_size - d_valid_count.value(stream);
+    }
+  }
+
+  { // Launch chars kernel
+    constexpr size_type block_size{256};
+    cudf::experimental::detail::grid_1d config(output_chars_size, block_size);
+    auto const kernel = fused_concatenate_string_chars_kernel;
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+        d_views.data().get(),
+        d_partition_offsets.data().get(),
+        static_cast<size_type>(d_views.size()),
+        output_chars_size,
+        chars_view.data<int8_t>());
+  }
+
+  return make_strings_column(output_size,
+      std::move(offsets_column), std::move(chars_column),
+      null_count, std::move(null_mask), stream, mr);
+}
+
+struct concatenate_dispatch {
   std::vector<column_view> const& views;
   bool const has_nulls;
   rmm::mr::device_memory_resource* mr;
@@ -473,42 +519,42 @@ struct fused_concatenate {
   template <typename T,
       std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()() {
-    using mask_policy = cudf::experimental::mask_allocation_policy;
-
-    // Preprocess and upload inputs to device memory
-    auto const device_views = create_device_views(views, stream);
-    auto const& d_views = std::get<1>(device_views);
-    auto const& d_offsets = std::get<2>(device_views);
-    auto const output_size = std::get<3>(device_views);
-
-    // Allocate output
-    auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-    auto out_col = experimental::detail::allocate_like(views.front(),
-        output_size, policy, mr, stream);
-    out_col->set_null_count(0); // prevent null count from being materialized
-    auto out_view = out_col->mutable_view();
-    auto d_out_view = mutable_column_device_view::create(out_view, stream);
-
-    rmm::device_scalar<size_type> d_valid_count(0);
-
-    // Launch kernel
-    constexpr size_type block_size{256};
-    cudf::experimental::detail::grid_1d config(output_size, block_size);
-    auto const kernel = has_nulls
-        ? fused_concatenate_kernel<T, block_size, true>
-        : fused_concatenate_kernel<T, block_size, false>;
-    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-        d_views.data().get(),
-        d_offsets.data().get(),
-        static_cast<size_type>(d_views.size()),
-        *d_out_view,
-        d_valid_count.data());
-
-    if (has_nulls) {
-      out_col->set_null_count(output_size - d_valid_count.value(stream));
+    // Select fused kernel when it can improve performance
+    if (has_nulls || views.size() > 4) {
+      return fused_concatenate_fixed_width<T>(views, has_nulls, mr, stream);
     }
 
-    return out_col;
+    size_type const total_element_count =
+      std::accumulate(views.begin(), views.end(), 0,
+          [](auto accumulator, auto const& v) { return accumulator + v.size(); });
+
+    using mask_policy = cudf::experimental::mask_allocation_policy;
+
+    mask_policy policy{mask_policy::NEVER};
+    if (has_nulls) { policy = mask_policy::ALWAYS; }
+
+    auto col = cudf::experimental::allocate_like(views.front(),
+        total_element_count, policy, mr);
+    col->set_null_count(0); // prevent null count from being materialized
+
+    auto m_view = col->mutable_view();
+    auto count = 0;
+    // NOTE fused_concatenate is more efficient for multiple views
+    for (auto &v : views) {
+      thrust::copy(rmm::exec_policy()->on(stream),
+          v.begin<T>(),
+          v.end<T>(),
+          m_view.begin<T>() + count);
+      count += v.size();
+    }
+
+    //If concatenated column is nullable, proceed to calculate it
+    if (col->nullable()) {
+      cudf::detail::concatenate_masks(views,
+          (col->mutable_view()).null_mask(), stream);
+    }
+
+    return col;
   }
 
   template <typename T,
@@ -520,69 +566,25 @@ struct fused_concatenate {
   template <typename T,
       std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
-    using mask_policy = cudf::experimental::mask_allocation_policy;
-
-    // Preprocess and upload inputs to device memory
-    auto const device_views = create_strings_device_views(views, stream);
-    auto const& d_views = std::get<1>(device_views);
-    auto const& d_input_offsets = std::get<2>(device_views);
-    auto const& d_partition_offsets = std::get<3>(device_views);
-    auto const output_size = std::get<4>(device_views);
-    auto const output_chars_size = std::get<5>(device_views);
-    auto const output_offsets_size = output_size + 1;
-
-    // Allocate child columns and null mask
-    auto chars_column = make_numeric_column(data_type{INT8},
-        output_chars_size, mask_state::UNALLOCATED, stream, mr);
-    auto offsets_column = make_numeric_column(data_type{INT32},
-        output_offsets_size, mask_state::UNALLOCATED, stream, mr);
-    rmm::device_buffer null_mask;
-    if (has_nulls) {
-      null_mask = create_null_mask(output_size, mask_state::UNINITIALIZED, stream, mr);
-    }
-    size_type null_count{0};
-
-    auto chars_view = chars_column->mutable_view();
-    auto offsets_view = offsets_column->mutable_view();
-
-    { // Launch offsets kernel
-      rmm::device_scalar<size_type> d_valid_count(0);
-
-      constexpr size_type block_size{256};
-      cudf::experimental::detail::grid_1d config(output_offsets_size, block_size);
-      auto const kernel = has_nulls
-          ? fused_concatenate_string_offset_kernel<block_size, true>
-          : fused_concatenate_string_offset_kernel<block_size, false>;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-          d_views.data().get(),
-          d_input_offsets.data().get(),
-          d_partition_offsets.data().get(),
-          static_cast<size_type>(d_views.size()),
-          output_size,
-          offsets_view.data<size_type>(),
-          reinterpret_cast<bitmask_type*>(null_mask.data()),
-          d_valid_count.data());
-
-      if (has_nulls) {
-        null_count = output_size - d_valid_count.value(stream);
-      }
+    // TODO compute output size first so we can branch on that
+    bool const condition = true;
+    if (condition) {
+      return fused_concatenate_strings(views, has_nulls, mr, stream);
     }
 
-    { // Launch chars kernel
-      constexpr size_type block_size{256};
-      cudf::experimental::detail::grid_1d config(output_chars_size, block_size);
-      auto const kernel = fused_concatenate_string_chars_kernel;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-          d_views.data().get(),
-          d_partition_offsets.data().get(),
-          static_cast<size_type>(d_views.size()),
-          output_chars_size,
-          chars_view.data<int8_t>());
+    std::vector<cudf::strings_column_view> sviews;
+    sviews.reserve(views.size());
+    for (auto &v : views) { sviews.emplace_back(v); }
+
+    auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
+
+    //If concatenated string column is nullable, proceed to calculate it
+    if (col->nullable()) {
+      cudf::detail::concatenate_masks(views,
+          (col->mutable_view()).null_mask(), stream);
     }
 
-    return make_strings_column(output_size,
-        std::move(offsets_column), std::move(chars_column),
-        null_count, std::move(null_mask), stream, mr);
+    return col;
   }
 };
 
@@ -608,19 +610,9 @@ concatenate(std::vector<column_view> const& columns_to_concat,
   bool const has_nulls = std::any_of(
       columns_to_concat.begin(), columns_to_concat.end(),
       [](auto const& col) { return col.has_nulls(); });
-  bool const fixed_width = cudf::is_fixed_width(type);
-  bool const strings_col = (type.id() == type_id::STRING);
 
-  // Select fused kernel when it can improve performance
-  // TODO benchmark strings performance and update heuristic
-  if (strings_col ||
-      (fixed_width && (has_nulls || columns_to_concat.size() > 4))) {
-    return experimental::type_dispatcher(type,
-        detail::fused_concatenate{columns_to_concat, has_nulls, mr, stream});
-  } else {
-    return experimental::type_dispatcher(type,
-        detail::for_each_concatenate{columns_to_concat, has_nulls, stream, mr});
-  }
+  return experimental::type_dispatcher(type,
+      concatenate_dispatch{columns_to_concat, has_nulls, mr, stream});
 }
 
 }  // namespace detail
