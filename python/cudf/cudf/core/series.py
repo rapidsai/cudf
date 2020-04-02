@@ -15,6 +15,7 @@ from cudf.core.column import (
     DatetimeColumn,
     column,
     column_empty_like,
+    as_column
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -484,7 +485,9 @@ class Series(Frame):
         if keep_index == True:
             return self[indices]
         else:
-            self._column = self._column.take(indices, keep_index=False)
+            col_inds = as_column(indices)
+            self._column = self._column.take(col_inds, keep_index=False)
+            return self
             
 
     def __bool__(self):

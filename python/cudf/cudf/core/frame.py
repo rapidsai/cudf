@@ -258,7 +258,7 @@ class Frame(libcudf.table.Table):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudfxx.copying.gather(
+            libcudf.copying.gather(
                 self, as_column(gather_map), keep_index=keep_index
             )
         )
