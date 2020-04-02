@@ -160,7 +160,7 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   thrust::host_vector<size_type> h_offsets(strings_data.second);
 
   // build std::string vector from chars and offsets
-  thrust::host_vector<std::string> host_data;
+  std::vector<std::string> host_data;
   host_data.reserve(c.size());
 
   // When C++17, replace this loop with std::adjacent_difference()
