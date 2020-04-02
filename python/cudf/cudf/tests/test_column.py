@@ -117,3 +117,16 @@ def test_column_series_cuda_array_dtype(data, dtype):
     sr = cudf.Series(data, dtype=dtype)
 
     assert_eq(psr, sr)
+
+
+def test_column_zero_length_slice():
+    # see https://github.com/rapidsai/cudf/pull/4777
+    from numba import cuda
+
+    x = cudf.DataFrame({"a": [1]})
+    the_column = x[1:]["a"]._column
+
+    expect = np.array([], dtype="int8")
+    got = cuda.as_cuda_array(the_column.data).copy_to_host()
+
+    np.testing.assert_array_equal(expect, got)
