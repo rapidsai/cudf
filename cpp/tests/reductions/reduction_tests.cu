@@ -755,4 +755,125 @@ TEST_F(StringReductionTest, AllNull)
   EXPECT_FALSE(maxresult->is_valid());
 }
 
+TYPED_TEST(ReductionTest, Count)
+{
+    using T = TypeParam;
+    std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+    std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
+    std::vector<T> v = convert_values<T>(int_values);
+
+    // test without nulls
+    cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+    cudf::size_type expected_value = v.size();
+    this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_count_aggregation(cudf::include_nulls::NO));
+
+    // test with nulls
+    cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+    cudf::size_type valid_count = cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
+    auto r = replace_nulls(v, host_bools, T{0});
+    cudf::size_type expected_null_value = std::accumulate(host_bools.begin(), host_bools.end(), 0);
+
+    this->reduction_test(col_nulls, expected_value, this->ret_non_arithmetic,
+        cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+        cudf::experimental::make_count_aggregation(cudf::include_nulls::NO));    
+}
+
+TYPED_TEST(ReductionTest, Median)
+{
+  using T = TypeParam;
+  //{-20, -14, -13,  0, 6, 13, 45, 64/None} =  3.0, 0.0
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  double expected_value = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 3.0;
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic,
+                       cudf::experimental::make_median_aggregation());
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  double expected_null_value = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 0.0;
+
+  this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+                       cudf::experimental::make_median_aggregation());
+}
+
+TYPED_TEST(ReductionTest, Quantile)
+{
+  using T = TypeParam;
+  //{-20, -14, -13,  0, 6, 13, 45, 64/None} 
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+  cudf::experimental::interpolation interp{cudf::experimental::interpolation::LINEAR};
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  double expected_value0 = std::is_same<T, cudf::experimental::bool8>::value ? v[4] : v[6];
+  this->reduction_test(col, expected_value0, this->ret_non_arithmetic,
+                       cudf::experimental::make_quantile_aggregation({0.0}, interp));
+  double expected_value1 = v[3];
+  this->reduction_test(col, expected_value1, this->ret_non_arithmetic,
+                       cudf::experimental::make_quantile_aggregation({1.0}, interp));
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  double expected_null_value1 = v[7];
+
+  this->reduction_test(col_nulls, expected_value0, this->ret_non_arithmetic,
+                       cudf::experimental::make_quantile_aggregation({0}, interp));
+  this->reduction_test(col_nulls, expected_null_value1, this->ret_non_arithmetic,
+                       cudf::experimental::make_quantile_aggregation({1}, interp));
+}
+
+TYPED_TEST(ReductionTest, UniqueCount)
+{
+  using T = TypeParam;
+  std::vector<int>  int_values({1,-1, 1, 2, 0, 2,-2, 45}); //6
+  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});  //6
+  std::vector<T> v = convert_values<T>(int_values);
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  cudf::size_type expected_value = std::is_same<T, cudf::experimental::bool8>::value ? 2 : 6;
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
+  this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
+
+  // test with nulls
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
+  cudf::size_type expected_null_value0 = std::is_same<T, cudf::experimental::bool8>::value ? 3 : 7;
+  cudf::size_type expected_null_value1 = std::is_same<T, cudf::experimental::bool8>::value ? 2 : 6;
+
+  this->reduction_test(col_nulls, expected_null_value0, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
+  this->reduction_test(col_nulls, expected_null_value1, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
+}
+
+
+TYPED_TEST(ReductionTest, NthElement)
+{
+  using T = TypeParam;
+  std::vector<int>  int_values({8, 7,-6, 5, 4, 3,-2, 1});
+  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
+  std::vector<T> v = convert_values<T>(int_values);
+  cudf::size_type input_size = v.size();
+
+  // column
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools); 
+  for (cudf::size_type  n : {-input_size, -2, -1, 0, 1, 2, input_size-1}) {
+    T expected_value = v[n%v.size()];
+    this->reduction_test(col,       expected_value,  true, cudf::experimental::make_nth_element_aggregation(n, cudf::include_nulls::YES));
+    this->reduction_test(col_nulls, expected_value,  true, cudf::experimental::make_nth_element_aggregation(n, cudf::include_nulls::YES));
+    this->reduction_test(col,       expected_value, false, cudf::experimental::make_nth_element_aggregation(n, cudf::include_nulls::NO));
+    this->reduction_test(col_nulls, expected_value, false, cudf::experimental::make_nth_element_aggregation(n, cudf::include_nulls::NO));
+  }
+for (cudf::size_type n : {-input_size-2, input_size}) {
+  this->reduction_test(col, T{},  true, cudf::experimental::make_nth_element_aggregation(n, cudf::include_nulls::YES));
+} 
+}
+
 CUDF_TEST_PROGRAM_MAIN()
