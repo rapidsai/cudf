@@ -42,10 +42,9 @@ def validate_setup():
                 CudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
             warnings.warn(
-                "You will need a GPU with NVIDIA Pascal™ architecture or \
-                    better\n"
-                "Detected GPU 0 : " + str(device_name.decode()) + "\n"
-                "Detected Compute Capability : "
+                "You will need a GPU with NVIDIA Pascal™ or newer architecture"
+                "\nDetected GPU 0: " + str(device_name.decode()) + "\n"
+                "Detected Compute Capability: "
                 + str(major_version)
                 + "."
                 + str(minor_version)
