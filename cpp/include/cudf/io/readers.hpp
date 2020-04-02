@@ -520,6 +520,17 @@ class reader {
                                   cudaStream_t stream = 0);
 
   /**
+   * @brief Reads and returns specific stripes.
+   *
+   * @param stripe_list Indices of the stripes to read
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return The set of columns along with table metadata
+   */
+  table_with_metadata read_stripes(const std::vector<size_type>& stripe_list,
+                                   cudaStream_t stream = 0);
+
+  /**
    * @brief Reads and returns a range of rows.
    *
    * @param skip_rows Number of rows to skip from the start
@@ -634,6 +645,17 @@ class reader {
    */
   table_with_metadata read_row_group(size_type row_group, size_type row_group_count = 1,
                                      cudaStream_t stream = 0);
+
+  /**
+   * @brief Reads specific row groups.
+   *
+   * @param row_group_list Indices of the row groups
+   * @param stream Optional stream to use for device memory alloc and kernels
+   *
+   * @return The set of columns along with table metadata
+   */
+  table_with_metadata read_row_groups(const std::vector<size_type>& row_group_list,
+                                      cudaStream_t stream = 0);
 
   /**
    * @brief Reads a range of rows.

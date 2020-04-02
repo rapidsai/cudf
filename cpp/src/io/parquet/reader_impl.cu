@@ -278,15 +278,27 @@ struct metadata : public FileMetaData {
    *
    * @param row_group Index of the row group to select
    * @param max_rowgroup_count Max number of consecutive row groups if > 0
+   * @param row_group_indices Arbitrary rowgroup list[max_rowgroup_count] if non-null
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(int row_group, int max_rowgroup_count, int &row_start, int &row_count) {
+  auto select_row_groups(int row_group, int max_rowgroup_count,
+                         const size_type *row_group_indices,
+                         int &row_start, int &row_count) {
     std::vector<std::pair<int, int>> selection;
 
-    if (row_group != -1) {
+    if (row_group_indices) {
+      row_count = 0;
+      for (int i = 0; i < max_rowgroup_count; i++) {
+        auto rowgroup_idx = row_group_indices[i];
+        CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(), "Invalid rowgroup index");
+        selection.emplace_back(rowgroup_idx, row_count);
+        row_count += row_groups[rowgroup_idx].num_rows;
+      }
+    }
+    else if (row_group != -1) {
       CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
       for (int i = 0; i < row_group; ++i) {
         row_start += row_groups[i].num_rows;
@@ -590,13 +602,14 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 }
 
 table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
-                                       int max_rowgroup_count, cudaStream_t stream) {
+                                       int max_rowgroup_count, const size_type *row_group_indices,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only row groups required
   const auto selected_row_groups =
-      _metadata->select_row_groups(row_group, max_rowgroup_count, skip_rows, num_rows);
+      _metadata->select_row_groups(row_group, max_rowgroup_count, row_group_indices, skip_rows, num_rows);
 
   // Get a list of column data types
   std::vector<data_type> column_types;
@@ -667,6 +680,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
               _source->get_buffer(offset, col_meta.total_compressed_size);
           page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
           d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
+          CUDA_TRY(cudaStreamSynchronize(stream));
         }
         chunks.insert(gpu::ColumnChunkDesc(
             col_meta.total_compressed_size, d_compdata, col_meta.num_values,
@@ -768,20 +782,27 @@ reader::~reader() = default;
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, -1, stream);
+  return _impl->read(0, -1, -1, -1, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_row_group(size_type row_group, size_type row_group_count,
                                            cudaStream_t stream) {
-  return _impl->read(0, -1, row_group, row_group_count, stream);
+  return _impl->read(0, -1, row_group, row_group_count, nullptr, stream);
+}
+
+// Forward to implementation
+table_with_metadata reader::read_row_groups(const std::vector<size_type>& row_group_list,
+                                         cudaStream_t stream) {
+  return _impl->read(0, -1, -1, static_cast<int>(row_group_list.size()),
+                                row_group_list.data(), stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_rows(size_type skip_rows,
                                       size_type num_rows,
                                       cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
 }
 
 }  // namespace parquet
