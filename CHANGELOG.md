@@ -30,6 +30,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
 - PR #4627 Remove legacy Cython
 - PR #4688 Add Java count aggregation to include null values
