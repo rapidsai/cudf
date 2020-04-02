@@ -198,8 +198,12 @@ struct parse_datetime
             if (read_last_ch == false) {
                 char chr = *ptr++;
                 if( chr < '0' || chr > '9' ) {
+                    // The letter currently read doesn't belong
+                    // so last charatcer is already read, any
+                    // residual number bytes will be taken as 0
+                    // digit 
                     value = (value * 10);
-                    read_last_ch=true;
+                    read_last_ch = true;
                     continue;
                 }
                 value = (value * 10) + static_cast<int32_t>(chr - '0');
