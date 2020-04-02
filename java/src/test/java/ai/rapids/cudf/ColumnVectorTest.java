@@ -211,6 +211,39 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testNormalizeNANsAndZeros() {
+    // Must check boundaries of NaN representation, as described in javadoc for Double#longBitsToDouble.
+    // @see java.lang.Double#longBitsToDouble
+    // <quote>
+    //      If the argument is any value in the range 0x7ff0000000000001L through 0x7fffffffffffffffL,
+    //      or in the range 0xfff0000000000001L through 0xffffffffffffffffL, the result is a NaN.
+    // </quote>
+    final double MIN_PLUS_NaN  = Double.longBitsToDouble(0x7ff0000000000001L);
+    final double MAX_PLUS_NaN  = Double.longBitsToDouble(0x7fffffffffffffffL);
+    final double MAX_MINUS_NaN = Double.longBitsToDouble(0xfff0000000000001L);
+    final double MIN_MINUS_NaN = Double.longBitsToDouble(0xffffffffffffffffL);
+
+    Double[]  ins = new Double[] {0.0, -0.0, Double.NaN, MIN_PLUS_NaN, MAX_PLUS_NaN, MIN_MINUS_NaN, MAX_MINUS_NaN, null};
+    Double[] outs = new Double[] {0.0,  0.0, Double.NaN,   Double.NaN,   Double.NaN,    Double.NaN,    Double.NaN, null};
+
+    try (ColumnVector     input      = ColumnVector.fromBoxedDoubles(ins);
+         HostColumnVector expected   = ColumnVector.fromBoxedDoubles(outs).copyToHost();
+         HostColumnVector normalized = input.normalizeNANsAndZeros().copyToHost()) {
+      for (int i = 0; i<input.getRowCount(); ++i) {
+        if (expected.isNull(i)) {
+          assertTrue(normalized.isNull(i));
+        }
+        else {
+          assertEquals(
+                  Double.doubleToRawLongBits(expected.getDouble(i)),
+                  Double.doubleToRawLongBits(normalized.getDouble(i))
+          );
+        }
+      }
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
@@ -416,6 +449,83 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(35, v0.getDeviceMemorySize()); //19B data + 4*4B offsets = 35
       assertEquals(103, v1.getDeviceMemorySize()); //19B data + 5*4B + 64B validity vector = 103B
     }
+  }
+
+  @Test
+  void testSequenceInt() {
+    try (Scalar zero = Scalar.fromInt(0);
+         Scalar one = Scalar.fromInt(1);
+         Scalar negOne = Scalar.fromInt(-1);
+         Scalar nulls = Scalar.fromNull(DType.INT32)) {
+
+      try (
+          ColumnVector cv = ColumnVector.sequence(zero, 5);
+          ColumnVector expected = ColumnVector.fromInts(0, 1, 2, 3, 4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+
+      try (ColumnVector cv = ColumnVector.sequence(one, negOne,6);
+           ColumnVector expected = ColumnVector.fromInts(1, 0, -1, -2, -3, -4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      try (ColumnVector cv = ColumnVector.sequence(zero, 0);
+           ColumnVector expected = ColumnVector.fromInts()) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      assertThrows(IllegalArgumentException.class, () -> {
+        try (ColumnVector cv = ColumnVector.sequence(nulls, 5)) { }
+      });
+
+      assertThrows(CudfException.class, () -> {
+        try (ColumnVector cv = ColumnVector.sequence(zero, -3)) { }
+      });
+    }
+  }
+
+  @Test
+  void testSequenceDouble() {
+    try (Scalar zero = Scalar.fromDouble(0.0);
+         Scalar one = Scalar.fromDouble(1.0);
+         Scalar negOneDotOne = Scalar.fromDouble(-1.1)) {
+
+      try (
+          ColumnVector cv = ColumnVector.sequence(zero, 5);
+          ColumnVector expected = ColumnVector.fromDoubles(0, 1, 2, 3, 4)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+
+      try (ColumnVector cv = ColumnVector.sequence(one, negOneDotOne,6);
+           ColumnVector expected = ColumnVector.fromDoubles(1, -0.1, -1.2, -2.3, -3.4, -4.5)) {
+        assertColumnsAreEqual(expected, cv);
+      }
+
+      try (ColumnVector cv = ColumnVector.sequence(zero, 0);
+           ColumnVector expected = ColumnVector.fromDoubles()) {
+        assertColumnsAreEqual(expected, cv);
+      }
+    }
+  }
+
+  @Test
+  void testSequenceOtherTypes() {
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.fromString("0");
+      ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
+
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.fromBool(false);
+           ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
+
+    assertThrows(CudfException.class, () -> {
+      try (Scalar s = Scalar.timestampDaysFromInt(100);
+           ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
+    });
   }
 
   @Test

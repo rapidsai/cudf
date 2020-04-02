@@ -4,10 +4,13 @@
 
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
+- PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
+- PR #4771 Added in an option to statically link against cudart
 
 ## Improvements
 
+- PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
@@ -28,10 +31,18 @@
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
 - PR #4705 quantile cython bindings
+- PR #4627 Remove legacy Cython
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
+- PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
+- PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
+- PR #4765 Add in java support for sequence
+- PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
+- PR #4660 Port `cudf::partition` api to python/cython
+- PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
 
 ## Bug Fixes
 
@@ -64,12 +75,15 @@
 - PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
+- PR #4761 Fix issues with `nan_as_null` in certain case
+- PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
 - PR #4756 Fix regex error checking for valid quantifier condition
+- PR #4777 Fix data pointer for column slices of zero length
 
 
-# cuDF 0.13.0 (Date TBD)
+# cuDF 0.13.0 (31 Mar 2020)
 
 ## New Features
 
@@ -121,6 +135,9 @@
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
 - PR #4363 Grouped Rolling Window support
+- PR #3917 Add dictionary add_keys function
+- PR #3842 ORC writer: add support for column statistics
+- PR #4088 Added asString() on ColumnVector in Java that takes a format string
 
 ## Improvements
 
@@ -259,6 +276,10 @@
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
 - PR #4654 Upgrade version of `numba` required to `>=0.48.0`
+- PR #4035 Port NVText tokenize function to libcudf++
+- PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
+- PR #4058 Port hash.pyx to use libcudf++ APIs
+- PR #4133 Mask cleanup and fixes: use `int32` dtype, ensure 64 byte padding, handle offsets
 
 ## Bug Fixes
 
@@ -376,6 +397,10 @@
 - PR #4676 Fix bug in `_shuffle_group` for repartition
 - PR #4681 Fix `test_repr` tests that were generating a `RangeIndex` for column names
 - PR #4729 Fix `fsspec` versioning to prevent dask test failures
+- PR #4145 Support empty index case in DataFrame._from_table
+- PR #4108 Fix dtype bugs in dask_cudf metadata (metadata_nonempty overhaul)
+- PR #4138 Really fix strings concatenate logic with column offsets
+- PR #4119 Fix binary ops slowdown using jitify -remove-unused-globals
 
 
 # cuDF 0.12.0 (04 Feb 2020)
