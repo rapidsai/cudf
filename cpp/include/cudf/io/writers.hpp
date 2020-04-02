@@ -328,14 +328,14 @@ class writer {
    * @param options Settings for controlling writing behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit writer(
-      std::unique_ptr<cudf::io::data_sink> sinkp, writer_options const& options,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  writer(std::unique_ptr<cudf::io::data_sink> sinkp,
+         writer_options const& options,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());// <- TODO: cannot provide definition here (because _impl is incomplete, hence unique_ptr has not enough sizeof() info)
     
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~writer();
+  ~writer() = default;
 
   /**
    * @brief Writes the entire dataset.
@@ -349,7 +349,7 @@ class writer {
   
 } // namespace csv
 
-
+  
 }  // namespace detail
 }  // namespace io
 }  // namespace experimental

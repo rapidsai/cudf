@@ -63,8 +63,12 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
-                rmm::mr::device_memory_resource* mr);
+  impl(std::unique_ptr<data_sink> sink,
+       writer_options const& options,
+       rmm::mr::device_memory_resource* mr)
+  {
+    //TODO!
+  }
 
   /**
    * @brief Write an entire dataset to CSV format.
@@ -73,7 +77,9 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
+  void write(table_view const& table,
+             const table_metadata *metadata = nullptr,
+             cudaStream_t stream = nullptr);
 };
 
 }  // namespace csv

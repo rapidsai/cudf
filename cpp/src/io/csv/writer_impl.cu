@@ -37,9 +37,16 @@ namespace io {
 namespace detail {
 namespace csv {
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
-
+void writer::impl::write(table_view const &table,
+                         const table_metadata *metadata,
+                         cudaStream_t stream) {
+  //TODO!
 }
+
+void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+  _impl->write(table, metadata, stream);
+}
+
 
 
 }  // namespace csv
