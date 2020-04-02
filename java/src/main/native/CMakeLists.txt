@@ -224,7 +224,7 @@ endif(USE_NVTX)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm cudart cuda nvrtc)
+target_link_libraries(cudfjni cudf rmm cudart_static cuda nvrtc)
 
 
 

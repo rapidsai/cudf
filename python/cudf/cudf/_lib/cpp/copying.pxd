@@ -45,11 +45,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         bool bounds_check
     ) except +
 
-    cdef vector[unique_ptr[table]] scatter_to_tables (
-        table_view source_table,
-        column_view partition_map
-    ) except +
-
     ctypedef enum mask_allocation_policy:
         NEVER 'cudf::experimental::mask_allocation_policy::NEVER',
         RETAIN 'cudf::experimental::mask_allocation_policy::RETAIN',
