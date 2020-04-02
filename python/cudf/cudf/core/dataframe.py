@@ -3570,9 +3570,7 @@ class DataFrame(Frame):
                 if is_categorical_dtype(
                     self[col].dtype
                 ) and is_categorical_dtype(values.dtype):
-                    res = self._data[col].binary_operator(
-                        "eq", values._column
-                    )
+                    res = self._data[col].binary_operator("eq", values._column)
                     result[col] = res
                 elif (
                     is_categorical_dtype(self[col].dtype)
