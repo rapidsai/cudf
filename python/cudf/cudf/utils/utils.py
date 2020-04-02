@@ -112,7 +112,7 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
         - cudf.Buffer --> data
         - cudf.Buffer --> string characters
     """
-    from cudf._libxx.null_mask import bitmask_allocation_size_bytes
+    from cudf._lib.null_mask import bitmask_allocation_size_bytes
 
     buffers = pa_arr.buffers()
 
@@ -418,7 +418,7 @@ def to_nested_dict(d):
 
 def time_col_replace_nulls(input_col):
     from cudf.core.column import column_empty_like, as_column
-    import cudf._libxx.replace as replace
+    import cudf._lib.replace as replace
 
     null = column_empty_like(input_col, masked=True, newsize=1)
     out_col = replace.replace(

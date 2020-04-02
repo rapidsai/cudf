@@ -27,7 +27,7 @@
 
 #include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/thrust_rmm_allocator.h>

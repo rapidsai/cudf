@@ -22,11 +22,9 @@ from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.null_mask import MaskState, create_null_mask
-from cudf._libxx.transform import bools_to_mask
+from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf._lib.transform import bools_to_mask
 from cudf.core import column
-from cudf.core._sort import get_sorted_inds
 from cudf.core.column import (
     CategoricalColumn,
     StringColumn,
@@ -263,7 +261,9 @@ class DataFrame(Frame):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    data[col_name] = column.as_column(data[col_name])
+                    data[col_name] = column.as_column(
+                        data[col_name], nan_as_null=True
+                    )
                     num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
@@ -603,14 +603,12 @@ class DataFrame(Frame):
                         mask=None,
                     )
                 else:
-                    if not is_scalar(value):
-                        value = column.as_column(value)
                     for col in arg:
                         # we will raise a key error if col not in dataframe
                         # this behavior will make it
                         # consistent to pandas >0.21.0
                         if not is_scalar(value):
-                            self._data[col] = value
+                            self._data[col] = column.as_column(value)
                         else:
                             self._data[col][:] = value
 
@@ -1534,7 +1532,7 @@ class DataFrame(Frame):
         else:
             return result
 
-    def take(self, positions):
+    def take(self, positions, keep_index=True):
         """
         Return a new DataFrame containing the rows specified by *positions*
 
@@ -1568,7 +1566,7 @@ class DataFrame(Frame):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
-        out = self._gather(positions)
+        out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
         return out
 
@@ -2043,8 +2041,8 @@ class DataFrame(Frame):
         return outdf
 
     def argsort(self, ascending=True, na_position="last"):
-        return get_sorted_inds(
-            self, ascending=ascending, na_position=na_position
+        return self._get_sorted_inds(
+            ascending=ascending, na_position=na_position
         )
 
     def sort_index(self, ascending=True):
@@ -2150,9 +2148,7 @@ class DataFrame(Frame):
         if self._num_columns == 0 or self._num_rows == 0:
             return DataFrame(index=index, columns=columns)
         # Cython renames the columns to the range [0...ncols]
-        result = self.__class__._from_table(
-            libcudfxx.transpose.transpose(self)
-        )
+        result = self.__class__._from_table(libcudf.transpose.transpose(self))
         # Set the old column names as the new index
         result._index = as_index(index)
         # Set the old index as the new column names
@@ -2275,7 +2271,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
+        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2315,8 +2311,9 @@ class DataFrame(Frame):
             rsuffix,
             how,
             method,
+            sort=sort,
         )
-        libcudfxx.nvtx.range_pop()
+        libcudf.nvtx.range_pop()
         return gdf_result
 
     def join(
@@ -2355,7 +2352,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudfxx.nvtx.range_push("CUDF_JOIN", "blue")
+        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2495,7 +2492,7 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudfxx.nvtx.range_pop()
+        libcudf.nvtx.range_pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2612,7 +2609,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudfxx.nvtx.range_push("CUDF_QUERY", "purple")
+        libcudf.nvtx.range_push("CUDF_QUERY", "purple")
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2629,7 +2626,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudfxx.nvtx.range_pop()
+        libcudf.nvtx.range_pop()
         return result
 
     @applyutils.doc_apply()
@@ -3510,7 +3507,7 @@ class DataFrame(Frame):
         if isinstance(q, numbers.Number):
             q_is_number = True
             q = [float(q)]
-        elif isinstance(q, (list, tuple)):
+        elif pd.api.types.is_list_like(q):
             q_is_number = False
         else:
             msg = "`q` must be either a single element or list"
@@ -3806,7 +3803,7 @@ class DataFrame(Frame):
         """{docstring}"""
         import cudf.io.parquet as pq
 
-        pq.to_parquet(self, path, *args, **kwargs)
+        return pq.to_parquet(self, path, *args, **kwargs)
 
     @ioutils.doc_to_feather()
     def to_feather(self, path, *args, **kwargs):
@@ -3917,7 +3914,17 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        tables = self._scatter_to_tables(map_index, keep_index)
+        if map_size is None:
+            map_size = map_index.unique_count()
+        else:
+            unique_count = map_index.unique_count()
+            if map_size < unique_count:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (unique_count, map_size)
+                )
+
+        tables = self._partition(map_index, map_size, keep_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
@@ -3970,13 +3977,19 @@ class DataFrame(Frame):
 
         # Collect datatypes and cast columns as that type
         common_type = np.result_type(*self.dtypes)
-        homogenized_cols = [
-            c.astype(common_type)
-            if not np.issubdtype(c.dtype, common_type)
-            else c
-            for c in self._columns
-        ]
-        data_col = libcudf.reshape.stack(homogenized_cols)
+        homogenized = DataFrame(
+            {
+                c: (
+                    self._data[c].astype(common_type)
+                    if not np.issubdtype(self._data[c].dtype, common_type)
+                    else self._data[c]
+                )
+                for c in self._data
+            }
+        )
+
+        data_col = libcudf.reshape.interleave_columns(homogenized)
+
         result = Series(data=data_col, index=new_index)
         if dropna:
             return result.dropna()

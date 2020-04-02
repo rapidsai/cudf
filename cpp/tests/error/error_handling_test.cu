@@ -18,7 +18,7 @@
 
 #include <rmm/rmm.h>
 
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 
 #include <cstring>
 
@@ -95,3 +95,4 @@ TEST(StreamCheck, CatchFailedKernel) {
   CUDA_TRY(cudaStreamDestroy(stream));
 }
 
+CUDF_TEST_PROGRAM_MAIN()

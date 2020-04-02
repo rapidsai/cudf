@@ -42,9 +42,9 @@ public class DoubleColumnVectorTest extends CudfTestBase {
   public void testArrayAllocation() {
     try (HostColumnVector doubleColumnVector = HostColumnVector.fromDoubles(2.1, 3.02, 5.003)) {
       assertFalse(doubleColumnVector.hasNulls());
-      assertEquals(doubleColumnVector.getDouble(0), 2.1, 0.01);
-      assertEquals(doubleColumnVector.getDouble(1), 3.02, 0.01);
-      assertEquals(doubleColumnVector.getDouble(2), 5.003, 0.001);
+      assertEqualsWithinPercentage(doubleColumnVector.getDouble(0), 2.1, 0.01);
+      assertEqualsWithinPercentage(doubleColumnVector.getDouble(1), 3.02, 0.01);
+      assertEqualsWithinPercentage(doubleColumnVector.getDouble(2), 5.003, 0.001);
     }
   }
 
