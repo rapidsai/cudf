@@ -10,9 +10,11 @@ from cudf._cuda.gpu cimport (
     cudaDeviceProp,
     cudaGetErrorName,
     cudaGetErrorString,
-    cudaError_t
+    cudaError_t,
+    cuDeviceGetName
 )
 from enum import IntEnum
+from libc.stdlib cimport malloc
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 
@@ -323,3 +325,23 @@ def getDeviceProperties(int device):
     if status != 0:
         raise CUDARuntimeError(status)
     return prop
+
+
+def deviceGetName(int device):
+    """
+    Returns an identifer string for the device.
+
+    Parameters
+    ----------
+        device : int
+            Device number to query
+
+    This function automatically raises CUDARuntimeError with error message
+    and status code.
+    """
+
+    cdef char* device_name = <char*> malloc(256 * sizeof(char))
+    status = cuDeviceGetName(device_name, 256, device)
+    if status != 0:
+        raise CUDARuntimeError(status)
+    return device_name
