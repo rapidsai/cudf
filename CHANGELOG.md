@@ -74,6 +74,7 @@
 - PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
+- PR #4761 Fix issues with `nan_as_null` in certain case
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays

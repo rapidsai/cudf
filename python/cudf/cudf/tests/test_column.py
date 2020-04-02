@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.column.column import as_column
 from cudf.tests.utils import assert_eq
 
 dtypes = [
@@ -88,6 +89,20 @@ def test_column_series_misc_input(data):
 
     assert_eq(psr.dtype, sr.dtype)
     assert_eq(psr.astype("str"), sr)
+
+
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_as_column_scalar_with_nan(nan_as_null):
+    size = 10
+    scalar = np.nan
+
+    expected = cudf.Series([np.nan] * size, nan_as_null=nan_as_null).to_array()
+
+    got = cudf.Series(
+        as_column(scalar, length=size, nan_as_null=nan_as_null)
+    ).to_array()
+
+    np.testing.assert_equal(expected, got)
 
 
 @pytest.mark.parametrize("data", [[1.1, 2.2, 3.3, 4.4], [1, 2, 3, 4]])
