@@ -567,8 +567,6 @@ def test_series_take(ntake, keep_index):
         np.testing.assert_array_equal(out.to_array(), data[take_indices])
     elif keep_index is False:
         out = sr.take(take_indices, keep_index=False)
-        import pdb
-        pdb.set_trace()
         np.testing.assert_array_equal(out.to_array(), data[take_indices])
         np.testing.assert_array_equal(out.index.to_array(), sr.index.to_array())
 
