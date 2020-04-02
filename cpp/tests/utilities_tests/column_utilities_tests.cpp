@@ -21,10 +21,7 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
-
 #include <thrust/iterator/constant_iterator.h>
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/adaptor/transformed.hpp>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture
@@ -178,17 +175,23 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
-  auto to_string = [] (auto e) { return std::to_string(e); };
-  auto const expected = boost::join(std_col | boost::adaptors::transformed(to_string), delimiter);
+  std::ostringstream tmp;
 
-  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), expected);
+  int index = 0;
+  for (auto x : std_col) {
+    tmp << ((index == 0) ? "" : delimiter);
+    tmp << std::to_string(x);
+    ++index;
+  }
+
+  EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
-                                                                       {1, 0, 1, 0, 1} };
+                                                              {1, 0, 1, 0, 1} };
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
