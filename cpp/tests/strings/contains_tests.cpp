@@ -165,9 +165,8 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
     {   // is_ip
         std::string pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
         auto results = cudf::strings::matches_re(strings_view,pattern);
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {true, true, false, false, false, false,
-                                                                                     true, true, true,
-                                                                                     true} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {true,  true, false, false, false, 
+                                                                false, true, true,  true,  true} );
         cudf::test::expect_columns_equal(results->view(),expected);
     }
     {   // is_loopback
@@ -175,9 +174,8 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
                               "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
                               "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))$";
         auto results = cudf::strings::matches_re(strings_view,pattern);
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {false, false, false, false, false, false,
-                                                                                     false, false, false,
-                                                                                     true} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {false, false, false, false, false, 
+                                                                false, false, false, false, true} );
         cudf::test::expect_columns_equal(results->view(),expected);
     }
     {   // is_multicast
@@ -185,9 +183,8 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
                               "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
                               "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))$";
         auto results = cudf::strings::matches_re(strings_view,pattern);
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {false, false, false, false, false, false,
-                                                                                     true, true, false,
-                                                                                     false} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {false, false, false, false, false, 
+                                                                false, true,  true,  false, false} );
         cudf::test::expect_columns_equal(results->view(),expected);
     }
 }
