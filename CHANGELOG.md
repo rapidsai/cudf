@@ -43,6 +43,7 @@
 - PR #4765 Add in java support for sequence
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
+- PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
 
 ## Bug Fixes
 
@@ -75,9 +76,11 @@
 - PR #4701 Fix issue related to mixed input types in `as_column`
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
+- PR #4761 Fix issues with `nan_as_null` in certain case
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
+- PR #4777 Fix data pointer for column slices of zero length
 
 
 # cuDF 0.13.0 (31 Mar 2020)
