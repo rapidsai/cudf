@@ -273,7 +273,7 @@ some_invalid() {
     double mid = -0.43200002610683441;
     double lin = -0.43200002610683441;
     return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 6.8, high, 3.4, 4.17, 2.13, 1.11, low, 0.8, 5.7 },
+        fixed_width_column_wrapper<T> ({ T(6.8), high, T(3.4), T(4.17), T(2.13), T(1.11), low, T(0.8), T(5.7) },
                                        { 0,      1,   0,    0,    0,    0,   1,   0,   0 }),
         {
             q_expect{ -1.0, low,  low,  low,  low,  low },

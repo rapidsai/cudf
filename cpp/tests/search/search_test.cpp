@@ -255,7 +255,7 @@ TEST_F(SearchTest, table__find_first)
   fixed_width_column_wrapper<int8_t>  column_2 {  90,  77,  78,  61,  62,  63,  41 };
 
   fixed_width_column_wrapper<int32_t> values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>   values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
   fixed_width_column_wrapper<int8_t>  values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
   fixed_width_column_wrapper<size_type>  expect { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
@@ -296,7 +296,7 @@ TEST_F(SearchTest, table__find_last)
   fixed_width_column_wrapper<int8_t>  column_2 {  90,  77,  78,  61,  62,  63,  41 };
 
   fixed_width_column_wrapper<int32_t> values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>   values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
   fixed_width_column_wrapper<int8_t>  values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
 
@@ -338,7 +338,7 @@ TEST_F(SearchTest, table_partial_desc__find_first)
   fixed_width_column_wrapper<int8_t>     column_2 {  41,  78,  77,  63,  62,  61,  90 };
 
   fixed_width_column_wrapper<int32_t>    values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-  fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>      values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
   fixed_width_column_wrapper<int8_t>     values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
   fixed_width_column_wrapper<size_type>  expect   { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
@@ -379,7 +379,7 @@ TEST_F(SearchTest, table_partial_desc__find_last)
   fixed_width_column_wrapper<int8_t>     column_2 {  41,  78,  77,  63,  62,  61,  90 };
 
   fixed_width_column_wrapper<int32_t>    values_0 { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
-  fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>      values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
   fixed_width_column_wrapper<int8_t>     values_2 { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
 
   fixed_width_column_wrapper<size_type>  expect   { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
@@ -424,7 +424,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
 
   fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
                                                         {  1,  0,  1 } };
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
   fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
                                                         {  1,  1,  0 } };
@@ -471,7 +471,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
 
   fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
                                                         {  1,  0,  1 } };
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
   fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
                                                         {  1,  1,  0 } };
@@ -518,7 +518,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
 
   fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
                                                         {  1,  0,  1 } };
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
   fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
                                                         {  1,  1,  0 } };
@@ -565,7 +565,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
 
   fixed_width_column_wrapper<int32_t>        values_0 { { 10, 40, 20 },
                                                         {  1,  0,  1 } };
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
   fixed_width_column_wrapper<int8_t>         values_2 { { 95, 50, 77 },
                                                         {  1,  1,  0 } };
@@ -999,7 +999,7 @@ TEST_F(SearchTest, table__find_first_string)
   std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
 
   fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
-  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>   values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
 
   fixed_width_column_wrapper<size_type>  expect { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
 
@@ -1058,7 +1058,7 @@ TEST_F(SearchTest, table__find_last_string)
   std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
 
   fixed_width_column_wrapper<float>   column_1 { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
-  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>   values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
 
   fixed_width_column_wrapper<size_type>  expect { 0,  0,  0,  0,  0,  0,  1,  1,  0,  1,  1,  1,  1,  1,  1,  2,  3,  1,  3,  3,  3,  6,  5,  6,  6,  7,  7 };
 
@@ -1117,7 +1117,7 @@ TEST_F(SearchTest, table_partial_desc__find_first_string)
   std::vector<const char*> h_val_2_strings { "0", "91",  "0", "91",  "0", "79", "90", "91", "77", "80", "90", "91", "91", "00", "76", "77", "78", "30", "65", "77", "78", "80", "62", "78", "64", "41", "20" };
 
   fixed_width_column_wrapper<float>   column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
-  fixed_width_column_wrapper<float>   values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>   values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
 
   fixed_width_column_wrapper<size_type>  expect   { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
 
@@ -1176,7 +1176,7 @@ TEST_F(SearchTest, table_partial_desc__find_last_string)
 
   fixed_width_column_wrapper<float>      column_1 {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
 
-  fixed_width_column_wrapper<float>      values_1 { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+  fixed_width_column_wrapper<float>      values_1 { 0.,  0.,  6.,  5.,  0.,  5.,  5.,  5.,  5.,  6.,  6.,  6.,  9.,  0., .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
 
 
   fixed_width_column_wrapper<size_type>  expect   { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
@@ -1237,7 +1237,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
   fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
                                                         {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
 
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
 
   fixed_width_column_wrapper<size_type>      expect   {  1,  0,  3 };
@@ -1298,7 +1298,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
   fixed_width_column_wrapper<float>          column_1 { {  .5, 6.0, 5.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7 },
                                                         {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
 
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
 
   fixed_width_column_wrapper<size_type>      expect   {  2,  1,  5 };
@@ -1360,7 +1360,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
   fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
                                                         {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
 
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
 
   fixed_width_column_wrapper<size_type>      expect   {  1, 10,  4 };
@@ -1422,7 +1422,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
   fixed_width_column_wrapper<float>          column_1 { { 5.0, 6.0,  .5,  .5,  .5,  .5,  .7,  .7,  .7,  .7,  .5 },
                                                         {   1,   0,   1,   1,   1,   1,   1,   1,   1,   1,   1 } };
 
-  fixed_width_column_wrapper<float>          values_1 { {  6, .5, .5 },
+  fixed_width_column_wrapper<float>          values_1 { {  6., .5, .5 },
                                                         {  0,  1,  1 } };
 
   fixed_width_column_wrapper<size_type>      expect   {  2, 11,  6 };

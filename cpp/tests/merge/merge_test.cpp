@@ -47,7 +47,7 @@ class MergeTest_ : public cudf::test::BaseFixture {};
 TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
     columnFactoryT leftColWrap1{1,2,3,4,5};
     columnFactoryT rightColWrap1{};
@@ -72,7 +72,7 @@ TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero) {
 }
 
 TYPED_TEST(MergeTest_, MismatchedNumColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap1{{0,1,2,3}};
@@ -113,7 +113,7 @@ TYPED_TEST(MergeTest_, MismatchedColumnDypes) {
 
 
 TYPED_TEST(MergeTest_, EmptyKeyColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap1{{0,1,2,3}};
@@ -133,7 +133,7 @@ TYPED_TEST(MergeTest_, EmptyKeyColumns) {
 
 
 TYPED_TEST(MergeTest_, TooManyKeyColumns) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap1{{0,1,2,3}};
@@ -153,7 +153,7 @@ TYPED_TEST(MergeTest_, TooManyKeyColumns) {
 
 
 TYPED_TEST(MergeTest_, EmptyOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap1{{0,1,2,3}};
@@ -173,7 +173,7 @@ TYPED_TEST(MergeTest_, EmptyOrderTypes) {
 
 
 TYPED_TEST(MergeTest_, TooManyOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT rightColWrap1{{0,1,2,3}};
@@ -192,7 +192,7 @@ TYPED_TEST(MergeTest_, TooManyOrderTypes) {
 }
 
 TYPED_TEST(MergeTest_, MismatchedKeyColumnsAndOrderTypes) {
-    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+    using columnFactoryT = cudf::test::fixed_width_column_wrapper<TypeParam>;
     
     columnFactoryT leftColWrap1{{0,1,2,3}};
     columnFactoryT leftColWrap2{{0,1,2,3}};
@@ -704,7 +704,8 @@ TYPED_TEST(MergeTest_, NMerge1KeyColumns) {
   std::vector<std::pair<columnFactoryT, columnFactoryT>> facts{};
   std::vector<cudf::table_view> tables{};
   for (int i = 0; i < num_tables; ++i){
-    facts.emplace_back(std::pair<columnFactoryT, columnFactoryT>{columnFactoryT{sequence0, sequence0 + inputRows}, columnFactoryT{sequence1, sequence1 + inputRows}});
+    facts.emplace_back(std::pair<columnFactoryT, columnFactoryT>{columnFactoryT(sequence0, sequence0 + inputRows), 
+                                                                 columnFactoryT(sequence1, sequence1 + inputRows)});
     tables.push_back(cudf::table_view{{facts.back().first, facts.back().second}});
   }
   std::vector<cudf::size_type> key_cols{0};

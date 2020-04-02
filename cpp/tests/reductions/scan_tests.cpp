@@ -136,8 +136,8 @@ TYPED_TEST(ScanTest, Min)
         exact.begin(),
         [] (auto a, auto b) { return std::min(a, b); });
 
-    this->scan_test({v.begin(), v.end()},
-                    {exact.begin(), exact.end()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end()),
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end()),
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 
     zip_scan(
@@ -148,8 +148,8 @@ TYPED_TEST(ScanTest, Min)
         value_or<TypeParam>{std::numeric_limits<TypeParam>::max()},
         [] (auto a, auto b) { return std::min(a, b); });
 
-    this->scan_test({v.begin(), v.end(), b.begin()},
-                    {exact.begin(), exact.end(), b.begin()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end(), b.begin()),
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end(), b.begin()),
                     cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 }
 
@@ -165,8 +165,8 @@ TYPED_TEST(ScanTest, Max)
         exact.begin(),
         [] (auto a, auto b) { return std::max(a, b); });
 
-    this->scan_test({v.begin(), v.end()}, 
-                    {exact.begin(), exact.end()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end()),
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end()),
                     cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 
     zip_scan(
@@ -177,8 +177,8 @@ TYPED_TEST(ScanTest, Max)
         value_or<TypeParam>{std::numeric_limits<TypeParam>::lowest()},
         [] (auto a, auto b) { return std::max(a, b); });
 
-    this->scan_test({v.begin(), v.end(), b.begin()}, 
-                    {exact.begin(), exact.end(), b.begin()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end(), b.begin()), 
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end(), b.begin()),
                     cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 }
 
@@ -195,8 +195,8 @@ TYPED_TEST(ScanTest, Product)
         exact.begin(),
         std::multiplies<TypeParam>{});
 
-    this->scan_test({v.begin(), v.end()}, 
-                    {exact.begin(), exact.end()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end()),
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end()),
                     cudf::experimental::make_product_aggregation(), scan_type::INCLUSIVE);
 
     zip_scan(
@@ -207,8 +207,8 @@ TYPED_TEST(ScanTest, Product)
         value_or<TypeParam>{1},
         std::multiplies<TypeParam>{});
 
-    this->scan_test({v.begin(), v.end(), b.begin()}, 
-                    {exact.begin(), exact.end(), b.begin()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end(), b.begin()), 
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end(), b.begin()),
                     cudf::experimental::make_product_aggregation(), scan_type::INCLUSIVE);
 }
 
@@ -224,8 +224,8 @@ TYPED_TEST(ScanTest, Sum)
         exact.begin(),
         std::plus<TypeParam>{});
 
-    this->scan_test({v.begin(), v.end()}, 
-                    {exact.begin(), exact.end()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end()),
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end()),
                     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE);
 
     zip_scan(
@@ -236,8 +236,8 @@ TYPED_TEST(ScanTest, Sum)
         value_or<TypeParam>{0},
         std::plus<TypeParam>{});
 
-    this->scan_test({v.begin(), v.end(), b.begin()}, 
-                    {exact.begin(), exact.end(), b.begin()},
+    this->scan_test(cudf::test::fixed_width_column_wrapper<TypeParam>(v.begin(), v.end(), b.begin()), 
+                    cudf::test::fixed_width_column_wrapper<TypeParam>(exact.begin(), exact.end(), b.begin()),
                     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE);
 }
 
@@ -340,7 +340,7 @@ TYPED_TEST(ScanTest, skip_nulls)
     bool do_print=false;
     auto const v = cudf::test::make_type_param_vector<TypeParam>({1,2,3,4,5,6,7,8,1,1});
     auto const b = std::vector<bool>{1,1,1,1,1,0,1,0,1,1};
-    cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(), b.begin()};
+    cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
     const column_view input_view = col_in;
     std::unique_ptr<cudf::column> col_out;
 
@@ -365,8 +365,8 @@ TYPED_TEST(ScanTest, skip_nulls)
     //skipna=true (default)
     CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view,
                         cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
-        out_v.begin(), out_v.end(), b.cbegin()};
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1(
+        out_v.begin(), out_v.end(), b.cbegin());
     cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
     cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
     if(do_print) {
@@ -377,8 +377,8 @@ TYPED_TEST(ScanTest, skip_nulls)
     //skipna=false
     CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(input_view,
                         cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
-    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
-        out_v.begin(), out_v.end(), out_b.begin()};
+    cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2(
+        out_v.begin(), out_v.end(), out_b.begin());
     if(do_print) {
         print_view(expected_col_out2, "expect = ");
         print_view(col_out->view(),   "result = ");
@@ -441,8 +441,7 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   bool do_print=false;
   std::vector<TypeParam> v{};
   std::vector<bool>      b{};
-  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in{v.begin(), v.end(),
-                                                            b.begin()};
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
   std::unique_ptr<cudf::column> col_out;
   
   //test output calculation
@@ -452,8 +451,8 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   //skipna=true (default)
   CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, 
     cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1{
-      out_v.begin(), out_v.end(), b.cbegin()};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out1(
+      out_v.begin(), out_v.end(), b.cbegin());
   cudf::test::expect_column_properties_equal(expected_col_out1, col_out->view());
   cudf::test::expect_columns_equal(expected_col_out1, col_out->view());
   if(do_print) {
@@ -464,8 +463,8 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
   //skipna=false
   CUDF_EXPECT_NO_THROW(col_out = cudf::experimental::scan(col_in, 
   cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::YES));
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2{
-      out_v.begin(), out_v.end(), out_b.begin()};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected_col_out2(
+      out_v.begin(), out_v.end(), out_b.begin());
   if(do_print) {
     print_view(expected_col_out2, "expect = ");
     print_view(col_out->view(),   "result = ");

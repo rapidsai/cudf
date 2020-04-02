@@ -317,22 +317,22 @@ void test_replace(std::vector<T> const &input_column,
                      std::vector<cudf::valid_type>{},
                   bool print = false) {
 
-    cudf::test::fixed_width_column_wrapper<T> gdf_input_column{input_column.begin(),
-                                                               input_column.end()};
+    cudf::test::fixed_width_column_wrapper<T> gdf_input_column(input_column.begin(),
+                                                               input_column.end());
     if (input_column_valid.size() > 0) {
-      gdf_input_column = cudf::test::fixed_width_column_wrapper<T>{input_column.begin(),
+      gdf_input_column = cudf::test::fixed_width_column_wrapper<T>(input_column.begin(),
                                                                    input_column.end(),
-                                                                   input_column_valid.begin()};
+                                                                   input_column_valid.begin());
     }
 
-    cudf::test::fixed_width_column_wrapper<T> gdf_values_to_replace_column{values_to_replace_column.begin(),
-                                                                           values_to_replace_column.end()};
-    cudf::test::fixed_width_column_wrapper<T> gdf_replacement_values_column{replacement_values_column.begin(),
-                                                                            replacement_values_column.end()};
+    cudf::test::fixed_width_column_wrapper<T> gdf_values_to_replace_column(values_to_replace_column.begin(),
+                                                                           values_to_replace_column.end());
+    cudf::test::fixed_width_column_wrapper<T> gdf_replacement_values_column(replacement_values_column.begin(),
+                                                                            replacement_values_column.end());
     if (replacement_values_valid.size() > 0) {
-      gdf_replacement_values_column = cudf::test::fixed_width_column_wrapper<T>{replacement_values_column.begin(),
+      gdf_replacement_values_column = cudf::test::fixed_width_column_wrapper<T>(replacement_values_column.begin(),
                                                                                 replacement_values_column.end(),
-                                                                                replacement_values_valid.begin()};
+                                                                                replacement_values_valid.begin());
     }
 
     /* getting the actual result*/
@@ -378,12 +378,12 @@ void test_replace(std::vector<T> const &input_column,
                       pred, replacement_values_column[i]);
     }
 
-    cudf::test::fixed_width_column_wrapper<T> expected{reference_result.begin(),
-                                                       reference_result.end()};
+    cudf::test::fixed_width_column_wrapper<T> expected(reference_result.begin(),
+                                                       reference_result.end());
     if (expected_valid.size() > 0)
-      expected = cudf::test::fixed_width_column_wrapper<T>{reference_result.begin(),
+      expected = cudf::test::fixed_width_column_wrapper<T>(reference_result.begin(),
                                                            reference_result.end(),
-                                                           expected_valid.begin()};
+                                                           expected_valid.begin());
 
     expect_columns_equal(expected, *actual_result);
 }
@@ -518,11 +518,11 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
       }
     }
   }
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_input_column{ input_column.begin(), input_column.end()};
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_values_to_replace_column{ values_to_replace_column.begin(),
-                                                                                  values_to_replace_column.end()};
-  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_replacement_values_column{replacement_values_column.begin(),
-                                                                                  replacement_values_column.end()};
+  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_input_column( input_column.begin(), input_column.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_values_to_replace_column( values_to_replace_column.begin(),
+                                                                                  values_to_replace_column.end());
+  cudf::test::fixed_width_column_wrapper<TypeParam> gdf_replacement_values_column(replacement_values_column.begin(),
+                                                                                  replacement_values_column.end());
 
   std::unique_ptr<cudf::column> actual_result;
   ASSERT_NO_THROW( actual_result = cudf::experimental::find_and_replace_all(gdf_input_column,
@@ -530,7 +530,7 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
                                                                             gdf_replacement_values_column));
 
   std::for_each(input_column.begin(), input_column.end(), [](TypeParam& d) { d += 1; });
-  cudf::test::fixed_width_column_wrapper<TypeParam> expected{input_column.begin(), input_column.end()};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expected(input_column.begin(), input_column.end());
   expect_columns_equal(expected, *actual_result);
 }
 

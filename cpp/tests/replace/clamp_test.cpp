@@ -188,7 +188,7 @@ TYPED_TEST (ClampTestNumeric, WithNoNull){
 
     auto got = this->run_clamp(input, {}, lo, true, hi, true, lo, true, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -202,7 +202,7 @@ TYPED_TEST (ClampTestNumeric, LowerNull){
 
     auto got = this->run_clamp(input, {}, lo, false, hi, true, lo, false, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T, int32_t> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
+    cudf::test::fixed_width_column_wrapper<T> expected({0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 8});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -216,7 +216,7 @@ TYPED_TEST (ClampTestNumeric, UpperNull){
 
     auto got = this->run_clamp(input, {}, lo, true, hi, false, lo, true, hi, false);
 
-    cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -231,7 +231,7 @@ TYPED_TEST (ClampTestNumeric, InputNull){
 
     auto got = this->run_clamp(input, input_validity, lo, true, hi, true, lo, true, hi, true);
 
-    cudf::test::fixed_width_column_wrapper<T, int32_t> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T> expected({2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -248,7 +248,7 @@ TYPED_TEST (ClampTestNumeric, InputNulliWithReplace){
 
     auto got = this->run_clamp(input, input_validity, lo, true, hi, true, lo_replace, true, hi_replace, true);
 
-    cudf::test::fixed_width_column_wrapper<T, int32_t> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
+    cudf::test::fixed_width_column_wrapper<T> expected({16, 16, 2, 3, 4, 5, 6, 7, 8, 32, 32}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -262,7 +262,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull) {
     using T = TypeParam;
     using ScalarType = cudf::experimental::scalar_type_t<T>;
 
-    cudf::test::fixed_width_column_wrapper<T> input({8.0, 6.0, NAN, 3.0, 4.0, 5.0, 1.0, NAN, 2.0, 9.0});
+    cudf::test::fixed_width_column_wrapper<T> input({T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)});
     auto lo_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
     auto hi_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
 
@@ -272,7 +272,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull) {
     static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
 
     auto got = cudf::experimental::clamp(input, *lo_scalar, *hi_scalar);
-    cudf::test::fixed_width_column_wrapper<T> expected({6.0, 6.0, NAN, 3.0, 4.0, 5.0, 2.0, NAN, 2.0, 6.0});
+    cudf::test::fixed_width_column_wrapper<T> expected({T(6.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(2.0), T(NAN), T(2.0), T(6.0)});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -281,7 +281,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNull) {
     using T = TypeParam;
     using ScalarType = cudf::experimental::scalar_type_t<T>;
 
-    cudf::test::fixed_width_column_wrapper<T> input({8.0, 6.0, NAN, 3.0, 4.0, 5.0, 1.0, NAN, 2.0, 9.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<T> input({T(8.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(1.0), T(NAN), T(2.0), T(9.0)}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
     auto lo_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
     auto hi_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
 
@@ -291,7 +291,7 @@ TYPED_TEST(ClampFloatTest, WithNANandNull) {
     static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
 
     auto got = cudf::experimental::clamp(input, *lo_scalar, *hi_scalar);
-    cudf::test::fixed_width_column_wrapper<T> expected({6.0, 6.0, NAN, 3.0, 4.0, 5.0, 2.0, NAN, 2.0, 6.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<T> expected({T(6.0), T(6.0), T(NAN), T(3.0), T(4.0), T(5.0), T(2.0), T(NAN), T(2.0), T(6.0)}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }
@@ -300,7 +300,7 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat) {
     using T = TypeParam;
     using ScalarType = cudf::experimental::scalar_type_t<T>;
 
-    cudf::test::fixed_width_column_wrapper<T> input({2.0, 0.0, NAN, 4.0, -0.5, -1.0, 1.0, NAN, 0.5, 9.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<T> input({T(2.0), T(0.0), T(NAN), T(4.0), T(-0.5), T(-1.0), T(1.0), T(NAN), T(0.5), T(9.0)}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
     auto lo_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
     auto lo_replace_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
     auto hi_scalar = cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::experimental::type_to_id<T>()}));
@@ -316,7 +316,7 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat) {
     static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid(true);
 
     auto got = cudf::experimental::clamp(input, *lo_scalar, *lo_replace_scalar, *hi_scalar, *hi_replace_scalar);
-    cudf::test::fixed_width_column_wrapper<T> expected({1.0, 0.0, NAN, 4.0, -1.0, -1.0, 1.0, NAN, 1.0, 1.0}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
+    cudf::test::fixed_width_column_wrapper<T> expected({T(1.0), T(0.0), T(NAN), T(4.0), T(-1.0), T(-1.0), T(1.0), T(NAN), T(1.0), T(1.0)}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
 
     cudf::test::expect_columns_equal(expected, got->view());
 }

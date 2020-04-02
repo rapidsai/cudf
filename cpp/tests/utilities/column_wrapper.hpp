@@ -199,7 +199,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
  *
  * @tparam Element The fixed-width element type
  *---------------------------------------------------------------------------**/
-template <typename ElementTo, typename ElementFrom = ElementTo>
+template <typename ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**---------------------------------------------------------------------------*
@@ -279,6 +279,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param element_list The list of elements
    *---------------------------------------------------------------------------**/
+  template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
       : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
   }
@@ -300,6 +301,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
    *---------------------------------------------------------------------------**/
+  template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
                              std::initializer_list<bool> validity)
       : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
@@ -322,7 +324,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
-  template <typename ValidityIterator>
+  template <typename ValidityIterator, typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list,
                              ValidityIterator v)
       : fixed_width_column_wrapper(std::cbegin(element_list),

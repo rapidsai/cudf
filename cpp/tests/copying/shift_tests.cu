@@ -66,8 +66,11 @@ TYPED_TEST(ShiftTest, OneColumnEmpty)
 {
     using T =  TypeParam;
 
+    std::vector<T>    vals{};
+    std::vector<bool> mask{};
+
     auto input = fixed_width_column_wrapper<T> {};
-    auto expected = fixed_width_column_wrapper<T> ({}, {});
+    auto expected = fixed_width_column_wrapper<T>(vals.begin(), vals.end(), mask.begin());
 
     auto fill = make_scalar<T>();
     auto actual = cudf::experimental::shift(input, 5, *fill);
@@ -79,8 +82,11 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty)
 {
     using T =  TypeParam;
 
-    auto input = fixed_width_column_wrapper<T> ({}, {});
-    auto expected = fixed_width_column_wrapper<T> ({}, {});
+    std::vector<T>    vals{};
+    std::vector<bool> mask{};
+
+    auto input = fixed_width_column_wrapper<T>    (vals.begin(), vals.end(), mask.begin());
+    auto expected = fixed_width_column_wrapper<T> (vals.begin(), vals.end(), mask.begin());
 
     auto fill = make_scalar<T>();
     auto actual = cudf::experimental::shift(input, 5, *fill);
@@ -132,8 +138,8 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
 {
     using T =  TypeParam;
 
-    auto input    = fixed_width_column_wrapper<T, int>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
-    auto expected = fixed_width_column_wrapper<T, int>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
+    auto input    = fixed_width_column_wrapper<T>({ 1, 2, 3, 4, 5 }, { 0, 1, 1, 1, 0});
+    auto expected = fixed_width_column_wrapper<T>({ 7, 7, 1, 2, 3 }, { 1, 1, 0, 1, 1});
 
     auto fill = make_scalar<T>(7);
     auto actual = cudf::experimental::shift(input, 2, *fill);

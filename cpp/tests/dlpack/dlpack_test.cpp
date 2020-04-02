@@ -231,7 +231,7 @@ TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {
   // Test nullable column with no nulls
-  fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4}, {1, 1, 1, 1});
+  fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4}, {1, 1, 1, 1});
   auto const col_view = static_cast<cudf::column_view>(col);
   EXPECT_FALSE(col_view.has_nulls());
   EXPECT_TRUE(col_view.nullable());
@@ -298,7 +298,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 TYPED_TEST(DLPackNumericTests, FromDlpack1D)
 {
   // Use to_dlpack to generate an input tensor
-  fixed_width_column_wrapper<TypeParam, int32_t> col({1, 2, 3, 4});
+  fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
@@ -349,8 +349,8 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   thrust::host_vector<T> host_vector(data.begin(), data.end());
   tensor.dl_tensor.data            = host_vector.data();
 
-  fixed_width_column_wrapper<TypeParam, int32_t> col1({1, 2, 3, 4});
-  fixed_width_column_wrapper<TypeParam, int32_t> col2({5, 6, 7, 8});
+  fixed_width_column_wrapper<TypeParam> col1({1, 2, 3, 4});
+  fixed_width_column_wrapper<TypeParam> col2({5, 6, 7, 8});
   cudf::table_view expected({col1, col2});
 
   auto result = cudf::from_dlpack(&tensor);

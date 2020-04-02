@@ -175,7 +175,7 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> cudf_col({1, 2, 3, 4, 5});
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   auto to_string = [] (auto e) { return std::to_string(e); };
@@ -187,7 +187,7 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> cudf_col{ {1, 2, 3, 4, 5},
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
                                                                        {1, 0, 1, 0, 1} };
   auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 

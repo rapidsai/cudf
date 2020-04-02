@@ -40,20 +40,20 @@ namespace testdata {
 template<typename T>
 auto ascending() {
     return fixed_width_column_wrapper<T>({ std::numeric_limits<T>::lowest(),
-                                           -100, -10, -1, 0, 1, 10, 100,
+                                           T(-100), T(-10), T(-1), T(0), T(1), T(10), T(100),
                                            std::numeric_limits<T>::max() });
 }
 
 template<typename T>
 auto descending() {
     return fixed_width_column_wrapper<T>({ std::numeric_limits<T>::max(),
-                                           100, 10, 1, 0, -1, -10, -100,
+                                           T(100), T(10), T(1), T(0), T(-1), T(-10), T(-100),
                                            std::numeric_limits<T>::lowest() });
 }
 
 template<typename T>
 auto empty() {
-    return fixed_width_column_wrapper<T>({ });
+    return fixed_width_column_wrapper<T>();
 }
 
 template<typename T>

@@ -212,9 +212,9 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
   std::vector<TypeParam> replacementColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
 
   ReplaceNullsColumn<TypeParam>(
-    cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
-    cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()},
-    cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()});
+    cudf::test::fixed_width_column_wrapper<TypeParam> (inputColumn.begin(), inputColumn.end(), inputValid.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam> (replacementColumn.begin(), replacementColumn.end()),
+    cudf::test::fixed_width_column_wrapper<TypeParam> (replacementColumn.begin(), replacementColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty) {
@@ -232,9 +232,9 @@ TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
-    cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
+    cudf::test::fixed_width_column_wrapper<TypeParam> (inputColumn.begin(), inputColumn.end(), inputValid.begin()),
     replacement,
-    cudf::test::fixed_width_column_wrapper<TypeParam> {expectedColumn.begin(), expectedColumn.end()});
+    cudf::test::fixed_width_column_wrapper<TypeParam> (expectedColumn.begin(), expectedColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls) {
@@ -249,9 +249,9 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls) {
   std::vector<cudf::valid_type> replace_valid {1, 0, 1, 1, 1, 1, 1, 1};
   std::vector<cudf::valid_type> result_valid  {1, 0, 1, 1, 1, 1, 1, 1};
 
-  ReplaceNullsColumn<T> (cudf::test::fixed_width_column_wrapper<T>{input_column.begin(),   input_column.end(),   input_valid.begin()   },
-                         cudf::test::fixed_width_column_wrapper<T>{replace_column.begin(), replace_column.end(), replace_valid.begin() },
-                         cudf::test::fixed_width_column_wrapper<T>{result_column.begin(),  result_column.end(),  result_valid.begin()  });
+  ReplaceNullsColumn<T> (cudf::test::fixed_width_column_wrapper<T>(input_column.begin(),   input_column.end(),   input_valid.begin()),
+                         cudf::test::fixed_width_column_wrapper<T>(replace_column.begin(), replace_column.end(), replace_valid.begin()),
+                         cudf::test::fixed_width_column_wrapper<T>(result_column.begin(),  result_column.end(),  result_valid.begin()));
 }
 
 TYPED_TEST(ReplaceNullsTest, LargeScale) {
@@ -266,9 +266,9 @@ TYPED_TEST(ReplaceNullsTest, LargeScale) {
     expectedColumn[i] = 1;
 
   ReplaceNullsColumn<TypeParam>(
-      cudf::test::fixed_width_column_wrapper<TypeParam>{inputColumn.begin(), inputColumn.end(), inputValid.begin()},
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()},
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()});
+      cudf::test::fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()),
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, LargeScaleScalar) {
@@ -284,9 +284,9 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar) {
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
-      cudf::test::fixed_width_column_wrapper<TypeParam>{inputColumn.begin(), inputColumn.end(), inputValid.begin()},
+      cudf::test::fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
       replacement,
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()});
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

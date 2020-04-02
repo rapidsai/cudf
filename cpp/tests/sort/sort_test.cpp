@@ -60,9 +60,9 @@ TYPED_TEST(Sort, WithNullMax)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k", "d"}, {1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
     table_view input {{col1, col2, col3}};
 
     fixed_width_column_wrapper<int32_t> expected{{1, 0, 5, 3, 4, 2}};
@@ -104,9 +104,9 @@ TYPED_TEST(Sort, WithNullMin)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {1, 1, 0, 1, 1});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 1, 0, 1, 1}};
     table_view input {{col1, col2, col3}};
 
     fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
@@ -144,9 +144,9 @@ TYPED_TEST(Sort, WithMixedNullOrder)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8},    {0, 0, 1, 1, 0}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8},    {0, 0, 1, 1, 0}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k"}, {0, 1, 0, 0, 1});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}, {1, 0, 1, 0, 1}};
     table_view input {{col1, col2, col3}};
 
     fixed_width_column_wrapper<int32_t> expected{{2, 3, 0, 1, 4}};
@@ -180,9 +180,9 @@ TYPED_TEST(Sort, WithAllValid)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
     table_view input {{col1, col2, col3}};
 
     fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
@@ -228,9 +228,9 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
     table_view input {{col1, col2, col3}};
 
     std::vector<order> column_order {order::ASCENDING, order::DESCENDING};
@@ -245,9 +245,9 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
 {
     using T = TypeParam;
 
-    fixed_width_column_wrapper<T, int32_t> col1{{5, 4, 3, 5, 8}};
+    fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
     strings_column_wrapper col2({"d", "e", "a", "d", "k"});
-    fixed_width_column_wrapper<T, int32_t> col3{{10, 40, 70, 5, 2}};
+    fixed_width_column_wrapper<T> col3{{10, 40, 70, 5, 2}};
     table_view input {{col1, col2, col3}};
 
     std::vector<order> column_order {order::ASCENDING, order::DESCENDING, order::DESCENDING};

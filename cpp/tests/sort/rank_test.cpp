@@ -73,8 +73,8 @@ using test_case_t = std::tuple<table_view, table_view>;
 template <typename T>
     struct Rank : public BaseFixture {
     
-    fixed_width_column_wrapper<T, int32_t>   col1{{  5,   4,   3,   5,   8,   5}};
-    fixed_width_column_wrapper<T, int32_t>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
+    fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+    fixed_width_column_wrapper<T>   col2{{  5,   4,   3,   5,   8,   5}, {1, 1, 0, 1, 1, 1}};
     strings_column_wrapper          col3{{"d", "e", "a", "d", "k", "d"}, {1, 1, 1, 1, 1, 1}};
 
     void run_all_tests(rank_method method, input_arg_t input_arg,
@@ -355,49 +355,49 @@ TYPED_TEST(Rank, average_desc_bottom)
 // percentage==true (dense, not-dense)
 TYPED_TEST(Rank, dense_asce_keep_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1, 0.75} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{2.0/3.0, 1.0/3.0, -1, 2.0/3.0, 1, 2.0/3.0} , {1, 1, 0, 1, 1, 1} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1, 0.5} , {1, 1, 1, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1., 0.75} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{2.0/3.0, 1.0/3.0, -1., 2.0/3.0, 1., 2.0/3.0} , {1, 1, 0, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1., 0.5} , {1, 1, 1, 1, 1, 1} };
     this->run_all_tests(rank_method::DENSE, asce_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
 TYPED_TEST(Rank, dense_asce_top_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1, 0.75} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.75, 0.5, 0.25, 0.75, 1, 0.75} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1., 0.75} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.75, 0.5, 0.25, 0.75, 1., 0.75} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1., 0.5} };
     this->run_all_tests(rank_method::DENSE, asce_top, col1_rank, col2_rank, col3_rank, true);
 }
 
 TYPED_TEST(Rank, dense_asce_bottom_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1, 0.75} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.5, 0.25, 1, 0.5, 0.75, 0.5} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{0.75, 0.5, 0.25, 0.75, 1., 0.75} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.5, 0.25, 1., 0.5, 0.75, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 0.75, 0.25, 0.5, 1., 0.5} };
     this->run_all_tests(rank_method::DENSE, asce_bottom, col1_rank, col2_rank, col3_rank, true);
 }
 
 TYPED_TEST(Rank, min_desc_keep_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1, 1.0/3.0, 1.0/6.0, 1.0/3.0} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.4, 1, -1, 0.4, 0.2, 0.4} , {1, 1, 0, 1, 1, 1} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1, 0.5, 1.0/6.0, 0.5} , {1, 1, 1, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1., 1.0/3.0, 1.0/6.0, 1.0/3.0} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.4, 1., -1., 0.4, 0.2, 0.4} , {1, 1, 0, 1, 1, 1} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1., 0.5, 1.0/6.0, 0.5} , {1, 1, 1, 1, 1, 1} };
     this->run_all_tests(rank_method::MIN, desc_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
 TYPED_TEST(Rank, min_desc_top_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1, 1.0/3.0, 1.0/6.0, 1.0/3.0} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.5, 1, 1.0/6.0, 0.5, 1.0/3.0, 0.5} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1, 0.5, 1.0/6.0, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1., 1.0/3.0, 1.0/6.0, 1.0/3.0} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{0.5, 1., 1.0/6.0, 0.5, 1.0/3.0, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1., 0.5, 1.0/6.0, 0.5} };
     this->run_all_tests(rank_method::MIN, desc_top, col1_rank, col2_rank, col3_rank, true);
 }
 
 TYPED_TEST(Rank, min_desc_bottom_pct)
 {
-    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1, 1.0/3.0, 1.0/6.0, 1.0/3.0} };
-    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{1.0/3.0, 5.0/6.0, 1, 1.0/3.0, 1.0/6.0, 1.0/3.0} };
-    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1, 0.5, 1.0/6.0, 0.5} };
+    cudf::test::fixed_width_column_wrapper<double> col1_rank  {{1.0/3.0, 5.0/6.0, 1., 1.0/3.0, 1.0/6.0, 1.0/3.0} };
+    cudf::test::fixed_width_column_wrapper<double> col2_rank  {{1.0/3.0, 5.0/6.0, 1., 1.0/3.0, 1.0/6.0, 1.0/3.0} };
+    cudf::test::fixed_width_column_wrapper<double> col3_rank  {{0.5, 1.0/3.0, 1., 0.5, 1.0/6.0, 0.5} };
     this->run_all_tests(rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank, true);
 }
 

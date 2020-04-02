@@ -43,9 +43,9 @@ TYPED_TEST(CopyTest, CopyIfElseTestShort)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 0, 0, 0 };
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 1 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }, { 1, 1, 1, 1 }};
-   wrapper<T, int32_t> expected_w{ 5, 6, 6, 6 };
+   wrapper<T> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 1 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6 }, { 1, 1, 1, 1 }};
+   wrapper<T> expected_w{ 5, 6, 6, 6 };
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -57,9 +57,9 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{{ 1, 0, 0, 0, 0, 0, 1 }, { 1, 1, 1, 1, 1, 1, 0 }};
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5, 5, 5, 5 }, { 1, 1, 1, 1, 1, 1, 1 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6, 6, 6, 6 }, { 1, 0, 0, 0, 0, 0, 1 }};
-   wrapper<T, int32_t> expected_w{{ 5, 6, 6, 6, 6, 6, 6 }, { 1, 0, 0, 0, 0, 0, 1 }};
+   wrapper<T> lhs_w{{ 5, 5, 5, 5, 5, 5, 5 }, { 1, 1, 1, 1, 1, 1, 1 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6, 6, 6, 6 }, { 1, 0, 0, 0, 0, 0, 1 }};
+   wrapper<T> expected_w{{ 5, 6, 6, 6, 6, 6, 6 }, { 1, 0, 0, 0, 0, 0, 1 }};
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -194,9 +194,9 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 0, 1, 1 };
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 0 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }, { 1, 0, 1, 1 }};
-   wrapper<T, int32_t> expected_w{{ 5, 6, 5, 5 }, { 1, 0, 1, 0 }};
+   wrapper<T> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 0 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6 }, { 1, 0, 1, 1 }};
+   wrapper<T> expected_w{{ 5, 6, 5, 5 }, { 1, 0, 1, 0 }};
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -208,9 +208,9 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 0, 1, 1 };
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 0 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }};
-   wrapper<T, int32_t> expected_w{{ 5, 6, 5, 5 }, { 1, 1, 1, 0 }};
+   wrapper<T> lhs_w{{ 5, 5, 5, 5 }, { 1, 1, 1, 0 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6 }};
+   wrapper<T> expected_w{{ 5, 6, 5, 5 }, { 1, 1, 1, 0 }};
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -222,9 +222,9 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 0, 1, 1 };
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }, { 1, 0, 1, 1 }};
-   wrapper<T, int32_t> expected_w{{ 5, 6, 5, 5 }, { 1, 0, 1, 1 }};
+   wrapper<T> lhs_w{{ 5, 5, 5, 5 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6 }, { 1, 0, 1, 1 }};
+   wrapper<T> expected_w{{ 5, 6, 5, 5 }, { 1, 0, 1, 1 }};
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -236,9 +236,9 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
 
    cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 0, 1, 1 };
 
-   wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }};
-   wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }};
-   wrapper<T, int32_t> expected_w{{ 5, 6, 5, 5 }};
+   wrapper<T> lhs_w{{ 5, 5, 5, 5 }};
+   wrapper<T> rhs_w{{ 6, 6, 6, 6 }};
+   wrapper<T> expected_w{{ 5, 6, 5, 5 }};
 
    auto out = cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w);
    cudf::test::expect_columns_equal(out->view(), expected_w);
@@ -253,8 +253,8 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
 
       cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 1, 1 };
 
-      wrapper<T, int32_t> lhs_w{{ 5, 5, 5, 5 }};
-      wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }};
+      wrapper<T> lhs_w{{ 5, 5, 5, 5 }};
+      wrapper<T> rhs_w{{ 6, 6, 6, 6 }};
 
       EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w),
                      cudf::logic_error);
@@ -264,8 +264,8 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
    {
       cudf::test::fixed_width_column_wrapper<bool> mask_w{ 1, 1, 1, 1 };
 
-      wrapper<T, int32_t> lhs_w{{ 5, 5, 5 }};
-      wrapper<T, int32_t> rhs_w{{ 6, 6, 6, 6 }};
+      wrapper<T> lhs_w{{ 5, 5, 5 }};
+      wrapper<T> rhs_w{{ 6, 6, 6, 6 }};
 
       EXPECT_THROW(  cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w),
                      cudf::logic_error);
