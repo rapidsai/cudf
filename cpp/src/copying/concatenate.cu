@@ -576,15 +576,7 @@ struct concatenate_dispatch {
     sviews.reserve(views.size());
     for (auto &v : views) { sviews.emplace_back(v); }
 
-    auto col = cudf::strings::detail::concatenate(sviews, mr, stream);
-
-    //If concatenated string column is nullable, proceed to calculate it
-    if (col->nullable()) {
-      cudf::detail::concatenate_masks(views,
-          (col->mutable_view()).null_mask(), stream);
-    }
-
-    return col;
+    return cudf::strings::detail::concatenate(sviews, mr, stream);
   }
 };
 

@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/detail/concatenate.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.hpp>
 
@@ -47,9 +48,11 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     std::vector<std::unique_ptr<column_device_view,std::function<void(column_device_view*)> > > 
         device_cols(strings_columns.size());
     thrust::host_vector<column_device_view> h_device_views;
+    std::vector<column_view> columns;
     for( auto&& scv : strings_columns )
     {
-        device_cols.emplace_back(column_device_view::create(scv.parent(),stream));
+        columns.emplace_back(scv.parent());
+        device_cols.emplace_back(column_device_view::create(columns.back(), stream));
         h_device_views.push_back(*(device_cols.back()));
     }
     rmm::device_vector<column_device_view> device_views(h_device_views);
@@ -110,10 +113,12 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     }
     CUDA_TRY(cudaMemsetAsync( offsets_view.data<int32_t>(), 0, sizeof(int32_t), stream));
 
-    // create blank null mask -- caller will be setting this
     rmm::device_buffer null_mask;
-    if( null_count > 0 )
+    if( null_count > 0 ) {
         null_mask = create_null_mask( strings_count, mask_state::UNINITIALIZED, stream,mr );
+        auto mask_data = reinterpret_cast<bitmask_type*>(null_mask.data());
+        cudf::detail::concatenate_masks(columns, mask_data, stream);
+    }
     offsets_column->set_null_count(0);  // reset the null counts
     chars_column->set_null_count(0);    // for children columns
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
