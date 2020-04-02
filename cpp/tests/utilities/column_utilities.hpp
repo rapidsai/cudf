@@ -94,7 +94,7 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
  *
  * @param col The column view
  *---------------------------------------------------------------------------**/
-thrust::host_vector<std::string> to_strings(cudf::column_view const& col);
+std::vector<std::string> to_strings(cudf::column_view const& col);
 
 /**---------------------------------------------------------------------------*
  * @brief Print a column view to an ostream

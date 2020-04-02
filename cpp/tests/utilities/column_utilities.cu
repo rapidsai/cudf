@@ -213,8 +213,8 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       //
       //  Need to pull back the differences
       //
-      thrust::host_vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
-      thrust::host_vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
+      std::vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
+      std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
       for (size_t i = 0 ; i < differences.size() ; ++i) {
           buffer << "lhs[" << differences[i] << "] = " << h_left_strings[i]
@@ -231,8 +231,8 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index+1);
       auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index+1);
 
-      thrust::host_vector<std::string> h_left_strings  = to_strings(diff_lhs);
-      thrust::host_vector<std::string> h_right_strings = to_strings(diff_rhs);
+      std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
+      std::vector<std::string> h_right_strings = to_strings(diff_rhs);
 
       EXPECT_EQ(differences.size(), size_t{0}) << "first difference: "
                                                << "lhs[" << index << "] = "
@@ -295,7 +295,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, thrust::host_vector<std::string> & out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     auto h_data = cudf::test::to_host<Element>(col);
 
     out.resize(col.size());
@@ -318,7 +318,7 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, thrust::host_vector<std::string> & out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
@@ -329,32 +329,28 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, thrust::host_vector<std::string> & out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     //
     //  Implementation for strings, call special to_host variant
     //
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
-                     });
-    } else {
-      out = std::move(h_data.first);
-    }
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&h_data](auto idx) {
+                     return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                   });
   }
 
   template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, thrust::host_vector<std::string> & out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
     cudf::dictionary_column_view dictionary(col);
     if( col.size()==0 )
       return;
-    thrust::host_vector<std::string> keys = to_strings(dictionary.keys());
-    thrust::host_vector<std::string> indices = to_strings(
+    std::vector<std::string> keys    = to_strings(dictionary.keys());
+    std::vector<std::string> indices = to_strings(
         { cudf::data_type{cudf::INT32}, dictionary.size(), 
                          dictionary.indices().head<int32_t>(),
                          dictionary.null_mask(), dictionary.null_count(),
@@ -369,8 +365,8 @@ struct column_view_printer {
   }
 };
 
-thrust::host_vector<std::string> to_strings(cudf::column_view const& col) {
-  thrust::host_vector<std::string> reply;
+std::vector<std::string> to_strings(cudf::column_view const& col) {
+  std::vector<std::string> reply;
   cudf::experimental::type_dispatcher(col.type(),
                                       column_view_printer{}, 
                                       col,
@@ -381,7 +377,7 @@ thrust::host_vector<std::string> to_strings(cudf::column_view const& col) {
 std::string to_string(cudf::column_view const& col, std::string const& delimiter) {
 
   std::ostringstream buffer;
-  thrust::host_vector<std::string> h_data = to_strings(col);
+  std::vector<std::string> h_data = to_strings(col);
 
   std::copy(h_data.begin(), h_data.end() - (!h_data.empty()), std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
   if (!h_data.empty())
