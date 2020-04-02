@@ -327,8 +327,9 @@ class GroupBy(object):
         if not callable(function):
             raise TypeError("type {!r} is not callable", type(function))
         _, offsets, grouped_values = self._grouped()
-        ends = itertools.chain(offsets[1:], [None])
-        chunks = [grouped_values[s:e] for s, e in zip(offsets, ends)]
+        chunks = [
+            grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
+        ]
         result = cudf.concat([function(chk) for chk in chunks])
         if self._sort:
             result = result.sort_index()
