@@ -226,7 +226,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
    *       with parentheses `()` and not braces `{}`. The latter should only
-   *       be used for the the `initializer_list` constructors
+   *       be used for the `initializer_list` constructors
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
@@ -257,7 +257,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
    *       with parentheses `()` and not braces `{}`. The latter should only
-   *       be used for the the `initializer_list` constructors
+   *       be used for the `initializer_list` constructors
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
