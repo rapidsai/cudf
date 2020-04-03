@@ -28,7 +28,9 @@ namespace strings
  * These types can be or'd to check for any combination of types.
  *
  * This cannot be turned into an enum class because or'd entries can
- * result in values that are not in the class.
+ * result in values that are not in the class. For example,
+ * combining NUMERIC|SPACE is a valid, reasonable combination but
+ * does not match to any explicitly named enumerator.
  */
 enum string_character_types : uint32_t {
     DECIMAL  = 1 << 0,                            // binary 00000001
@@ -47,16 +49,16 @@ enum string_character_types : uint32_t {
 string_character_types operator|(string_character_types lhs, string_character_types rhs)
 {
     return static_cast<string_character_types>(
-        static_cast<std::underlying_type<string_character_types>::type>(lhs) |
-        static_cast<std::underlying_type<string_character_types>::type>(rhs)
+        static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+        static_cast<std::underlying_type_t<string_character_types>>(rhs)
     );
 }
 
 string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
 {
     lhs = static_cast<string_character_types>(
-        static_cast<std::underlying_type<string_character_types>::type>(lhs) |
-        static_cast<std::underlying_type<string_character_types>::type>(rhs)
+        static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+        static_cast<std::underlying_type_t<string_character_types>>(rhs)
     );
     return lhs;
 }
