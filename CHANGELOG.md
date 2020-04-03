@@ -40,6 +40,7 @@
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
 - PR #4660 Port `cudf::partition` api to python/cython
+- PR #4799 Remove null_count() and has_nulls() from column_device_view
 
 ## Bug Fixes
 
