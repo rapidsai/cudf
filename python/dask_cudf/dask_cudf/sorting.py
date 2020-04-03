@@ -19,12 +19,12 @@ from cudf.utils.dtypes import is_categorical_dtype
 
 
 def set_partitions_hash(df, columns, npartitions):
-    c = hash_object_dispatch(df[columns], index=False)
+    c = hash_object_dispatch(df[columns], index=False).values
     return np.mod(c, npartitions)
 
 
 def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
-    c = hash_object_dispatch(df[columns], index=False)
+    c = hash_object_dispatch(df[columns], index=False).values
     typ = np.min_scalar_type(npartitions * 2)
     c = np.mod(c, npartitions).astype(typ, copy=False)
     if stage > 0:
