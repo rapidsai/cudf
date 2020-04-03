@@ -254,10 +254,11 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
     mask_data = reinterpret_cast<bitmask_type*>(null_mask.data());
   }
 
-  // Select fused kernel optimization where it may perform better
+  // From benchmark data, the fused kernel appears to perform better when the
+  // number of chars/col is below a certain threshold
   bool const use_fused_kernels = has_nulls
-      ? strings_count < columns.size() * 16384
-      : strings_count < columns.size() * 4096;
+      ? total_bytes < columns.size() * 2097152
+      : total_bytes < columns.size() * 1048576;
 
   if (use_fused_kernels) {
     { // Launch offsets kernel
