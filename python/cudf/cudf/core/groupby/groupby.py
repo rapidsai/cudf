@@ -2,7 +2,6 @@
 
 import collections
 import functools
-import itertools
 import pickle
 
 import pandas as pd
