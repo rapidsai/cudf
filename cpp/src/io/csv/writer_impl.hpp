@@ -49,12 +49,6 @@ using namespace cudf::io;
  * @brief Implementation for CSV writer
  **/
 class writer::impl {
-  // CSV datasets are divided into fixed-size, independent stripes
-  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024; // <- TODO: find right size!
-
-  // CSV rows are divided into groups and assigned indexes for faster seeking
-  static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 10000; // <- TODO: find the righ value
-
  public:
   /**
    * @brief Constructor with writer options.
@@ -65,10 +59,7 @@ class writer::impl {
    **/
   impl(std::unique_ptr<data_sink> sink,
        writer_options const& options,
-       rmm::mr::device_memory_resource* mr)
-  {
-    //TODO!
-  }
+       rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Write an entire dataset to CSV format.
@@ -80,6 +71,10 @@ class writer::impl {
   void write(table_view const& table,
              const table_metadata *metadata = nullptr,
              cudaStream_t stream = nullptr);
+
+private:
+  std::unique_ptr<data_sink> out_sink_;
+  rmm::mr::device_memory_resource* mr_ = nullptr;
 };
 
 }  // namespace csv

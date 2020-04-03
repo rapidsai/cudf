@@ -335,7 +335,7 @@ class writer {
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
-  ~writer() = default;
+  ~writer();
 
   /**
    * @brief Writes the entire dataset.

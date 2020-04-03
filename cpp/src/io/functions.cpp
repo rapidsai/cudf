@@ -153,9 +153,7 @@ void write_csv(write_csv_args const& args,
   using namespace cudf::experimental::io::detail;
   
   csv::writer_options options{args.get_options()};
-  ///auto writer = make_writer<csv::writer>(args.sink(), options, mr); // <- TODO: fix
-  
-  csv::writer* writer;// <- TODO: remove
+  auto writer = make_writer<csv::writer>(args.sink(), options, mr);
   
   writer->write_all(args.table());
 }
