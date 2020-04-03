@@ -56,11 +56,13 @@ static reclass ccls_d(4);  // digits [0-9]
 static reclass ccls_D(32); // not ccls_d plus '\n'
 
 // Tables for analyzing quantifiers
-const std::array<int,5> valid_preceding_inst_types{ {CHAR, CCLASS, NCCLASS, ANY, ANYNL} };
+const std::array<int,6> valid_preceding_inst_types{ {CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA} };
 const std::array<char,5> quantifiers{ {'*','?','+','{','|'} };
 // Valid regex characters that can be escaping to be used as literals
-const std::array<char,14> escapable_chars{ {'.', '-', '+', '*', '\\', '?', '^', '$',
-                                            '{', '}', '(', ')', '[', ']'  } };
+const std::array<char,33> escapable_chars{ {'.', '-', '+', '*', '\\', '?', '^', '$', '|',
+                                            '{', '}', '(', ')', '[', ']', '<', '>',
+                                            '"', '~',  '\'', '`', '_', '@', '=', ';', ':',
+                                            '!', '#', '%', '&', ',', '/', ' ' } };
 
 } // namespace
 

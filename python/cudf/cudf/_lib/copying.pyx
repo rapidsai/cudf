@@ -127,11 +127,15 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(Table source_table, Column gather_map):
+def gather(Table source_table, Column gather_map, bool keep_index=True):
     assert pd.api.types.is_integer_dtype(gather_map.dtype)
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view
+    if keep_index is True:
+        source_table_view = source_table.view()
+    else:
+        source_table_view = source_table.data_view()
     cdef column_view gather_map_view = gather_map.view()
     cdef bool c_bounds_check = True
 
@@ -149,7 +153,9 @@ def gather(Table source_table, Column gather_map):
         column_names=source_table._column_names,
         index_names=(
             None if (
-                source_table._index is None) else source_table._index_names
+                source_table._index is None)
+            or keep_index is False
+            else source_table._index_names
         )
     )
 
@@ -243,41 +249,6 @@ def scatter(object input, object scatter_map, Table target,
         return _scatter_table(input, scatter_map, target, bounds_check)
     else:
         return _scatter_scalar(input, scatter_map, target, bounds_check)
-
-
-def scatter_to_tables(Table source_table, Column partition_map,
-                      bool keep_index=True):
-    """
-    Scatter the source_table to a set of tables as per the partition_map
-    """
-
-    cdef table_view source_table_view
-
-    if keep_index is True:
-        source_table_view = source_table.view()
-    else:
-        source_table_view = source_table.data_view()
-    cdef column_view partition_map_view = partition_map.view()
-
-    cdef vector[unique_ptr[table]] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.scatter_to_tables(
-            source_table_view,
-            partition_map_view
-        ))
-
-    result = [
-        Table.from_unique_ptr(
-            move(c_result[i]),
-            column_names=source_table._column_names,
-            index_names=(
-                source_table._index._column_names if (
-                    keep_index is True and source_table._index is not None)
-                else None)
-        ) for i in range(c_result.size())]
-
-    return result
 
 
 def column_empty_like(Column input_column):
