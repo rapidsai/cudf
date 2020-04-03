@@ -75,6 +75,7 @@
 - PR #4743 Fix loc issue with Multiindex on DataFrame and Series
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
+- PR #4748 Fix strings::all_characters_of_type to allow verify-types mask
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 - PR #4761 Fix issues with `nan_as_null` in certain case
