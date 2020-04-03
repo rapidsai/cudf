@@ -1,143 +1,97 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.scalar cimport Scalar
+from cudf._lib.column cimport Column
+from cudf._lib.types import np_to_cudf_types
+from cudf._lib.move cimport move
+from cudf._lib.aggregation cimport make_aggregation, aggregation
+from libcpp.memory cimport unique_ptr
 import numpy as np
-import pandas as pd
-import pyarrow as pa
-
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
-from libcpp.map cimport map as cmap
-from libcpp.string  cimport string as cstring
-from libcpp.utility cimport pair
-
-import rmm
-
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._libxx.column cimport Column
-from cudf._lib.utils cimport *
-cimport cudf._lib.includes.reduce as cpp_reduce
-
-pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
-
-_REDUCTION_OP = {
-    'max': cpp_reduce.MAX,
-    'min': cpp_reduce.MIN,
-    'any': cpp_reduce.ANY,
-    'all': cpp_reduce.ALL,
-    'sum': cpp_reduce.SUM,
-    'product': cpp_reduce.PRODUCT,
-    'sum_of_squares': cpp_reduce.SUMOFSQUARES,
-    'mean': cpp_reduce.MEAN,
-    'var': cpp_reduce.VAR,
-    'std': cpp_reduce.STD,
-}
-
-_SCAN_OP = {
-    'sum': cpp_reduce.GDF_SCAN_SUM,
-    'min': cpp_reduce.GDF_SCAN_MIN,
-    'max': cpp_reduce.GDF_SCAN_MAX,
-    'product': cpp_reduce.GDF_SCAN_PRODUCT,
-}
 
 
-def reduce(reduction_op, Column col, dtype=None, ddof=1):
+def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
-      Call gdf reductions.
+    Top level Cython reduce function wrapping libcudf++ reductions.
 
-    Args:
-        reduction_op: reduction operator as string. It should be one of
-        'min', 'max', 'sum', 'product', 'sum_of_squares', 'mean', 'var', 'std'
-        col: input column to apply reduction operation on
-        dtype: output dtype
-        ddof: This parameter is used only for 'std' and 'var'.
-        Delta Degrees of Freedom. The divisor used in calculations is N - ddof,
-        where N represents the number of elements.
-
-    Returns:
-        dtype scalar value of reduction operation on column
+    Parameters
+    ----------
+    reduction_op : string
+        A string specifying the operation, e.g. sum, prod
+    incol : Column
+        A cuDF Column object
+    dtype: numpy.dtype, optional
+        A numpy data type to use for the output, defaults
+        to the same type as the input column
     """
-    # check empty case
-    if len(col) <= col.null_count:
-        if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
-            return col.dtype.type(0)
-        if reduction_op == 'product' and pandas_version >= (0, 22):
-            return col.dtype.type(1)
-        return np.nan
 
-    col_dtype = col.dtype
+    col_dtype = incol.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
         col_dtype = np.find_common_type([col_dtype], [np.int64])
     col_dtype = col_dtype if dtype is None else dtype
 
-    cdef gdf_column* c_col = column_view_from_column(col)
-    cdef gdf_dtype c_out_dtype = gdf_dtype_from_dtype(col_dtype)
-    cdef gdf_scalar c_result
-    cdef size_type c_ddof = ddof
-    cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]
+    cdef column_view c_incol_view = incol.view()
+    cdef unique_ptr[scalar] c_result
+    cdef unique_ptr[aggregation] c_agg = move(make_aggregation(
+        reduction_op, kwargs
+    ))
+    cdef type_id tid = np_to_cudf_types[np.dtype(col_dtype)]
+    cdef data_type c_out_dtype = data_type(tid)
+
+    # check empty case
+    if len(incol) <= incol.null_count:
+        if reduction_op == 'sum' or reduction_op == 'sum_of_squares':
+            return incol.dtype.type(0)
+        if reduction_op == 'product':
+            return incol.dtype.type(1)
+        return np.nan
 
     with nogil:
-        c_result = cpp_reduce.reduce(
-            <gdf_column*>c_col,
-            c_op,
-            c_out_dtype,
-            c_ddof
-        )
+        c_result = move(cpp_reduce(
+            c_incol_view,
+            c_agg,
+            c_out_dtype
+        ))
 
-    free_column(c_col)
-    result = get_scalar_value(c_result, col_dtype)
-
-    return result
+    py_result = Scalar.from_unique_ptr(move(c_result))
+    return py_result.value
 
 
-def scan(col_inp, col_out, scan_op, inclusive):
+def scan(scan_op, Column incol, inclusive, **kwargs):
     """
-      Call gdf scan.
+    Top level Cython scan function wrapping libcudf++ scans.
+
+    Parameters
+    ----------
+    incol : Column
+        A cuDF Column object
+    scan_op : string
+        A string specifying the operation, e.g. cumprod
+    inclusive: bool
+        Flag for including nulls in relevant scan
     """
+    cdef column_view c_incol_view = incol.view()
+    cdef unique_ptr[column] c_result
+    cdef unique_ptr[aggregation] c_agg = move(
+        make_aggregation(scan_op, kwargs)
+    )
 
-    check_gdf_compatibility(col_inp)
-    check_gdf_compatibility(col_out)
-
-    cdef gdf_column* c_col_inp = column_view_from_column(col_inp)
-    cdef gdf_column* c_col_out = column_view_from_column(col_out)
-    cdef cpp_reduce.gdf_scan_op c_op = _SCAN_OP[scan_op]
-    cdef bool b_inclusive = <bool>inclusive
+    cdef scan_type c_inclusive
+    if inclusive is True:
+        c_inclusive = scan_type.INCLUSIVE
+    elif inclusive is False:
+        c_inclusive = scan_type.EXCLUSIVE
 
     with nogil:
-        cpp_reduce.scan(
-            <gdf_column*>c_col_inp,
-            <gdf_column*>c_col_out,
-            c_op,
-            b_inclusive
-        )
+        c_result = move(cpp_scan(
+            c_incol_view,
+            c_agg,
+            c_inclusive
+        ))
 
-    free_column(c_col_inp)
-    free_column(c_col_out)
-
-    return
-
-
-def group_std(key_columns, value_columns, ddof=1):
-    """ Calculate the group wise `quant` quantile for the value_columns
-    Returns column of group wise quantile specified by quant
-    """
-
-    cdef cudf_table *c_t = table_from_columns(key_columns)
-    cdef cudf_table *c_val = table_from_columns(value_columns)
-    cdef size_type c_ddof = ddof
-
-    cdef pair[cudf_table, cudf_table] c_result
-    with nogil:
-        c_result = cpp_reduce.group_std(
-            c_t[0],
-            c_val[0],
-            c_ddof
-        )
-
-    result_key_cols = columns_from_table(&c_result.first)
-    result_val_cols = columns_from_table(&c_result.second)
-
-    free(c_t)
-    free(c_val)
-
-    return (result_key_cols, result_val_cols)
+    py_result = Column.from_unique_ptr(move(c_result))
+    return py_result

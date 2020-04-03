@@ -1,4 +1,8 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
+from cudf.utils.gpu_utils import validate_setup  # isort:skip
+
+validate_setup()
 
 import cupy
 
