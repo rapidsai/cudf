@@ -13,6 +13,7 @@ import cudf._lib as libcudf
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    as_column,
     column,
     column_empty_like,
 )
@@ -478,10 +479,15 @@ class Series(Frame):
 
         self._column[key] = value
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.
         """
-        return self[indices]
+        if keep_index is True or is_scalar(indices):
+            return self[indices]
+        else:
+            col_inds = as_column(indices)
+            data = self._column.take(col_inds, keep_index=False)
+            return self._copy_construct(data=data)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series

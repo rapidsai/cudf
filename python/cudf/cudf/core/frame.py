@@ -254,11 +254,13 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map):
+    def _gather(self, gather_map, keep_index=True):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudf.copying.gather(self, as_column(gather_map))
+            libcudf.copying.gather(
+                self, as_column(gather_map), keep_index=keep_index
+            )
         )
         result._copy_categories(self)
         return result
@@ -1323,46 +1325,16 @@ class Frame(libcudf.table.Table):
 
         result = []
         cat_codes = []
-        if sort:
-            # Pandas lexicographically sort is NOT a sort of all columns.
-            # Instead, it sorts columns in lhs, then in "on", and then rhs.
-            left_of_on = []
-            for name in lhs._data.keys():
-                if name not in left_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            left_of_on.append(gdf_data.pop(i))
-                            break
-            in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
-                if name in left_on or name in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            in_on.append(gdf_data.pop(i))
-                            break
-            right_of_on = []
-            for name in rhs._data.keys():
-                if name not in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            right_of_on.append(gdf_data.pop(i))
-                            break
-            result = (
-                sorted(left_of_on, key=lambda x: str(x[0]))
-                + sorted(in_on, key=lambda x: str(x[0]))
-                + sorted(right_of_on, key=lambda x: str(x[0]))
-            )
-        else:
-            for org_name in org_names:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == org_name:
-                        result.append(gdf_data.pop(i))
-                        break
-            for cat_name in to_categorical:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == cat_name + "_codes":
-                        cat_codes.append(gdf_data.pop(i))
-            assert len(gdf_data) == 0
+        for org_name in org_names:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == org_name:
+                    result.append(gdf_data.pop(i))
+                    break
+        for cat_name in to_categorical:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == cat_name + "_codes":
+                    cat_codes.append(gdf_data.pop(i))
+        assert len(gdf_data) == 0
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
@@ -1392,7 +1364,36 @@ class Frame(libcudf.table.Table):
                 )
         gdf_result._data = to_frame_data
 
-        return self.__class__._from_table(gdf_result)
+        to_return = self.__class__._from_table(gdf_result)
+
+        # If sort=True, Pandas would sort on the key columns in the
+        # same order as given in 'on'. If the indices are used as
+        # keys, the index will be sorted. If one index is specified,
+        # the key column on the other side will be used to sort.
+        # If no index is specified, return a new RangeIndex
+        if sort:
+            to_sort = self.__class__()
+            if left_index and right_index:
+                by = list(to_return._index._data.columns)
+                if left_on and right_on:
+                    by += list(to_return[left_on]._data.columns)
+            elif left_index:
+                by = list(to_return[right_on]._data.columns)
+            elif right_index:
+                by = list(to_return[left_on]._data.columns)
+            else:
+                # left_on == right_on, or different names but same columns
+                # in both cases we can sort by either
+                by = list(to_return[left_on]._data.columns)
+            for i, col in enumerate(by):
+                to_sort[i] = col
+            inds = to_sort.argsort()
+            to_return = to_return.take(
+                inds, keep_index=(left_index or right_index)
+            )
+            return to_return
+        else:
+            return to_return
 
     def _typecast_before_merge(
         self, lhs, rhs, left_on, right_on, left_index, right_index, how
