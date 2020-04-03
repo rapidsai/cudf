@@ -37,10 +37,18 @@ namespace io {
 namespace detail {
 namespace csv {
 
+// Forward to implementation
+writer::writer(std::unique_ptr<data_sink> sink,
+               writer_options const& options,
+               rmm::mr::device_memory_resource* mr)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mr)) {}
+
+
 void writer::impl::write(table_view const &table,
                          const table_metadata *metadata,
                          cudaStream_t stream) {
   //TODO!
+  //chunked behavior(?)
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
