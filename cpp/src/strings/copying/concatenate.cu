@@ -51,7 +51,7 @@ struct chars_size_transform {
 };
 
 auto create_strings_device_views(
-    std::vector<strings_column_view> const& views, cudaStream_t stream) {
+    std::vector<column_view> const& views, cudaStream_t stream) {
 
   // Create device views for each input view
   using CDViewPtr = decltype(column_device_view::create(
@@ -60,7 +60,7 @@ auto create_strings_device_views(
   std::transform(views.cbegin(), views.cend(),
       device_view_owners.begin(),
       [stream](auto const& col) {
-        return column_device_view::create(col.parent(), stream);
+        return column_device_view::create(col, stream);
       });
 
   // Assemble contiguous array of device views
@@ -213,7 +213,7 @@ fused_concatenate_string_chars_kernel(column_device_view const* input_views,
 }
 
 std::unique_ptr<column> fused_concatenate(
-    std::vector<strings_column_view> const& views,
+    std::vector<column_view> const& views,
     bool const has_nulls,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream) {
@@ -283,13 +283,13 @@ std::unique_ptr<column> fused_concatenate(
       null_count, std::move(null_mask), stream, mr);
 }
 
-std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& strings_columns,
+std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream )
 {
     // calculate the size of the output column
-    size_t strings_count = thrust::transform_reduce( strings_columns.begin(), strings_columns.end(),
-        [] (auto scv) { return scv.size(); }, static_cast<size_t>(0), thrust::plus<size_t>());
+    size_t strings_count = thrust::transform_reduce( columns.begin(), columns.end(),
+        [] (auto col) { return col.size(); }, static_cast<size_t>(0), thrust::plus<size_t>());
     CUDF_EXPECTS( strings_count < std::numeric_limits<size_type>::max(), 
         "total number of strings is too large for cudf column" );
     if( strings_count == 0 )
@@ -297,13 +297,11 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
 
     // build vector of column_device_views
     std::vector<std::unique_ptr<column_device_view,std::function<void(column_device_view*)> > > 
-        device_cols(strings_columns.size());
+        device_cols(columns.size());
     thrust::host_vector<column_device_view> h_device_views;
-    std::vector<column_view> columns;
-    for( auto&& scv : strings_columns )
+    for( auto&& col : columns )
     {
-        columns.emplace_back(scv.parent());
-        device_cols.emplace_back(column_device_view::create(columns.back(), stream));
+        device_cols.emplace_back(column_device_view::create(col, stream));
         h_device_views.push_back(*(device_cols.back()));
     }
     rmm::device_vector<column_device_view> device_views(h_device_views);
@@ -322,17 +320,17 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     CUDF_EXPECTS( total_bytes < std::numeric_limits<size_type>::max(), "total size of strings is too large for cudf column" );
 
     bool const has_nulls = std::any_of(
-        strings_columns.begin(), strings_columns.end(),
+        columns.begin(), columns.end(),
         [](auto const& col) { return col.has_nulls(); });
 
     // TODO refactor the column_device_view creation and offset/size
     // computation above with create_strings_device_views
     // Select fused kernel optimization where it may perform better
     bool const use_fused_kernels = has_nulls
-        ? strings_count < strings_columns.size() * 16384
-        : strings_count < strings_columns.size() * 4096;
+        ? strings_count < columns.size() * 16384
+        : strings_count < columns.size() * 4096;
     if (use_fused_kernels) {
-      return fused_concatenate(strings_columns, has_nulls, mr, stream);
+      return fused_concatenate(columns, has_nulls, mr, stream);
     }
 
     // create chars column
@@ -348,14 +346,14 @@ std::unique_ptr<column> concatenate( std::vector<strings_column_view> const& str
     ++d_new_offsets; // skip the first element which will be set to 0 after the for-loop
     int32_t offset_adjust = 0; // each section of offsets must be adjusted
     size_type null_count = 0;  // add up the null counts
-    for( auto column = strings_columns.begin(); column != strings_columns.end(); ++column )
+    for( auto column = columns.begin(); column != columns.end(); ++column )
     {
         size_type column_size = column->size();
         if( column_size==0 ) // nothing to do
             continue; // empty column may not have children
         size_type column_offset = column->offset();
-        column_view offsets_child = column->offsets();
-        column_view chars_child = column->chars();
+        column_view offsets_child = column->child(strings_column_view::offsets_column_index);
+        column_view chars_child = column->child(strings_column_view::chars_column_index);
 
         // copy the offsets column
         auto d_offsets = offsets_child.data<int32_t>() + column_offset;

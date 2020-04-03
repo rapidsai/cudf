@@ -317,11 +317,7 @@ struct concatenate_dispatch {
   template <typename T,
       std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
-    std::vector<cudf::strings_column_view> sviews;
-    sviews.reserve(views.size());
-    for (auto &v : views) { sviews.emplace_back(v); }
-
-    return cudf::strings::detail::concatenate(sviews, mr, stream);
+    return cudf::strings::detail::concatenate(views, mr, stream);
   }
 };
 
