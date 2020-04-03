@@ -44,6 +44,7 @@
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4793 Add `cudf._cuda` to setup.py
 
 ## Bug Fixes
 
@@ -86,6 +87,7 @@
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 - PR #4800 Fix dataframe slicing with strides
+- PR #4796 Fix groupby apply for operations that fail on empty groups
 
 
 # cuDF 0.13.0 (31 Mar 2020)
