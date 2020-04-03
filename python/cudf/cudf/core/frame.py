@@ -321,11 +321,6 @@ class Frame(libcudf.table.Table):
             return self
         start, stop, stride = arg.indices(num_rows)
 
-        if stride is not None and stride != 1:
-            raise ValueError(
-                """Step size is not supported other than None and 1"""
-            )
-
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
@@ -337,23 +332,30 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop:
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
-            result = self._from_table(
-                libcudf.copying.table_slice(self, [start, stop], keep_index)[0]
-            )
+            if stride is not None and stride != 1:
+                return self._gather(
+                    cupy.arange(start, stop=stop, step=stride, dtype=np.int64)
+                )
+            else:
+                result = self._from_table(
+                    libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
 
-            result._copy_categories(self, include_index=keep_index)
-            # Adding index of type RangeIndex back to
-            # result
-            if keep_index is False and self.index is not None:
-                result.index = self.index[start:stop]
-            result.columns = self.columns
-            return result
+                result._copy_categories(self, include_index=keep_index)
+                # Adding index of type RangeIndex back to
+                # result
+                if keep_index is False and self.index is not None:
+                    result.index = self.index[start:stop]
+                result.columns = self.columns
+                return result
 
     def _normalize_scalars(self, other):
         """
