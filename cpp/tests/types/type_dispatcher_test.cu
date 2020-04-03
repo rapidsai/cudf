@@ -82,3 +82,5 @@ TEST_P(IdDispatcherTest, IdToType) {
   EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t},
                                          verify_dispatched_type{}, t));
 }
+
+CUDF_TEST_PROGRAM_MAIN()

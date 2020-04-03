@@ -193,3 +193,5 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm) {
   EXPECT_FALSE(column->has_nulls());
   EXPECT_EQ(0, column->num_children());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
