@@ -718,10 +718,10 @@ class ColumnBase(Column):
         rhs = None
 
         try:
+            # We need to convert values to same type as self,
+            # hence passing dtype=self.dtype
             rhs = as_column(values, dtype=self.dtype)
-            # if necessary, convert values via typecast
-            rhs = rhs.astype(self.dtype)
-        except Exception:
+        except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
             return as_column(cupy.zeros(len(self), dtype="bool"))
@@ -1382,11 +1382,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 pa.array(arbitrary, from_pandas=nan_as_null),
                 dtype=arbitrary.dtype,
             )
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif isinstance(arbitrary, pd.Timestamp):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
@@ -1448,6 +1452,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
+            # There is no cast operation available for pa.Array from int to
+            # str, Hence instead of handling in pa.Array block, we
+            # will have to type-cast here.
+            if dtype is not None:
+                data = data.astype(dtype)
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
@@ -1499,6 +1508,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                             arbitrary,
                             dtype=dtype if dtype is None else np.dtype(dtype),
                         ),
+                        dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
     return data
