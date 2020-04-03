@@ -244,13 +244,13 @@ def infer_format(element):
     if len(element_parts) != 2:
         raise ValueError("Improper timestamp")
 
-    # There is possibility that element is of following format
+    # There is possibility that the element is of following format
     # '00:00:03.333333 2016-01-01'
     second_part = re.split(r'(\D+)', element_parts[1], maxsplit=1)
     subsecond_fmt = ".%"+str(len(second_part[0]))+"f"
 
     first_part = pd.core.tools.datetimes._guess_datetime_format(element_parts[0])
-    # For case where first_part is '00:00:03'
+    # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 "+element_parts[0]
         first_part = pd.core.tools.datetimes._guess_datetime_format(tmp).split(" ", 1)[1]
