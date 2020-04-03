@@ -57,6 +57,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp) {
   EXPECT_THROW(extract_minute(col), cudf::logic_error);
   EXPECT_THROW(extract_second(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
+  EXPECT_THROW(day_of_year(col), cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
@@ -341,6 +342,47 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate) {
                           111,    // Random nullable field
                          },
                          { false, true, true, true, false, true, true, false },
+                       },
+                       true);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate) {
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Day number in the year
+  // Dates converted using epochconverter.com
+  // Make some nullable fields as well
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{
+      {
+       999,          // Random nullable field
+       0,            // This is the UNIX epoch - 1970-01-01
+       1577865600,   // 2020-01-01 00:00:00 GMT
+       1581667200,   // 2020-02-14 00:00:00 GMT
+       3,            // Random nullable field
+       1609401600,   // 2020-12-31 00:00:00 GMT
+       4133923200,   // 2100-12-31 00:00:00 GMT
+       111,          // Random nullable field
+       -2180188800   // 1900-11-30 00:00:00 GMT
+      },
+      { false, true, true, true, false, true, true, false, true },
+  };
+
+  expect_columns_equal(*day_of_year(timestamps_d),
+                       fixed_width_column_wrapper<int16_t>{
+                         {
+                          999,  // Random nullable field
+                          1,    // Number of year days until UNIX epoch time
+                          1,    // Number of year days until 2020-01-01
+                          45,   // Number of year days until 2020-02-14
+                          3,    // Random nullable field
+                          366,  // Number of year days until 2020-12-31
+                          365,  // Number of year days until 2100-12-31
+                          111,  // Random nullable field
+                          334   // Number of year days until 1900-11-30
+                         },
+                         { false, true, true, true, false, true, true, false, true },
                        },
                        true);
 }

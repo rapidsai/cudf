@@ -67,31 +67,31 @@ struct extract_component_operator {
   }
 };
 
+CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
+                                        bool is_leap_year) -> uint8_t {
+  using namespace simt::std::chrono;
+  // The expression in switch has to be integral/enumerated type.
+  // The constexpr in case has to match the switch type
+  switch (unsigned{mon}) {
+    case unsigned{January}   : return 31;
+    case unsigned{February}  : return is_leap_year ? 29 : 28;
+    case unsigned{March}     : return 31;
+    case unsigned{April}     : return 30;
+    case unsigned{May}       : return 31;
+    case unsigned{June}      : return 30;
+    case unsigned{July}      : return 31;
+    case unsigned{August}    : return 31;
+    case unsigned{September} : return 30;
+    case unsigned{October}   : return 31;
+    case unsigned{November}  : return 30;
+    case unsigned{December}  : return 31;
+    default                  : return 0;
+  }
+}
+
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day_of_month {
-  CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
-                                          bool is_leap_year) const -> uint8_t {
-    using namespace simt::std::chrono;
-    // The expression in switch has to be integral/enumerated type.
-    // The constexpr in case has to match the switch type
-    switch (unsigned{mon}) {
-      case unsigned{January}   : return 31;
-      case unsigned{February}  : return is_leap_year ? 29 : 28;
-      case unsigned{March}     : return 31;
-      case unsigned{April}     : return 30;
-      case unsigned{May}       : return 31;
-      case unsigned{June}      : return 30;
-      case unsigned{July}      : return 31;
-      case unsigned{August}    : return 31;
-      case unsigned{September} : return 30;
-      case unsigned{October}   : return 31;
-      case unsigned{November}  : return 30;
-      case unsigned{December}  : return 31;
-      default                  : return 0;
-    }
-  }
-
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const {
     using namespace simt::std::chrono;
@@ -107,6 +107,27 @@ struct extract_last_day_of_month {
     auto const last_day         = days_in_month(date.month(), date.year().is_leap());
 
     return timestamp_D(days_since_epoch + days(last_day - static_cast<unsigned>(date.day())));
+  }
+};
+
+// Extract the day number of the year present in the timestamp
+struct extract_day_num_of_year {
+  CUDA_DEVICE_CALLABLE auto days_until_month(simt::std::chrono::month mon,
+                                             bool is_leap_year) const -> int16_t {
+    int16_t ndays{0};
+    while (unsigned{--mon}) ndays += days_in_month(mon, is_leap_year);
+    return ndays;
+  }
+
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const {
+    using namespace simt::std::chrono;
+
+    // Only has the days - time component is chopped off, which is what we want
+    auto const days_since_epoch = floor<days>(ts);
+    auto const date             = year_month_day(days_since_epoch);
+
+    return days_until_month(date.month(), date.year().is_leap()) + unsigned{date.day()};
   }
 };
 
@@ -220,6 +241,13 @@ std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>
+      (column, 0, mr);
+}
+
+std::unique_ptr<column> day_of_year(column_view const& column,
+                                    rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
+  return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::INT16>
       (column, 0, mr);
 }
 
