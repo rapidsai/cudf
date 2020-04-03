@@ -146,7 +146,7 @@ std::unique_ptr<experimental::table>
  */
 
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const& ignore_nulls,
+                             include_nulls const& _include_nulls,
                              bool const& nan_as_null,
                              cudaStream_t stream = 0);
 

@@ -34,5 +34,5 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf::experimental" \
                                            bool nulls_are_equal) except +
 
     cdef size_type unique_count(column_view source_table,
-                                include_nulls ignore_nulls,
+                                include_nulls _include_nulls,
                                 bool nan_as_null) except +
