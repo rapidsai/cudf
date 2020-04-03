@@ -40,16 +40,34 @@ R"***(
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_integral_v<TypeOut> ||
+                               !is_timestamp_t_v<TypeLhs> ||
+                               !is_timestamp_t_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
+            // Note: difference of time_point's should be convertible to TypeOut. The period
+            // from the difference should be divisible by period from the TypeOut. Typically,
+            // lower precision timestamps should be convertible to higher precision ones
             return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_integral_v<TypeOut> &&
+                               is_timestamp_t_v<TypeLhs> &&
+                               is_timestamp_t_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            // Note: difference of time_point's should be convertible to TypeOut. The period
+            // from the difference should be divisible by period from the TypeOut. Typically,
+            // lower precision timestamps should be convertible to higher precision ones
+            auto diff = x - y;
+            return diff.count();  // Returns higher precision duration ticks
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            return Sub::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
