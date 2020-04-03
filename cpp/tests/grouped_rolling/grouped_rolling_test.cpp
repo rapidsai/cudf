@@ -171,6 +171,19 @@ protected:
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
+    
+    // >>> test UDFs <<<
+    if (input.type() == cudf::data_type{cudf::INT32} && !input.has_nulls()) {
+      auto cuda_udf_agg = cudf::experimental::make_udf_aggregation(cudf::experimental::udf_type::CUDA,
+                                                                   cuda_func, 
+                                                                   cudf::data_type{cudf::INT64});
+      run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cuda_udf_agg);
+      
+      auto ptx_udf_agg = cudf::experimental::make_udf_aggregation(cudf::experimental::udf_type::PTX,
+                                                                  ptx_func,
+                                                                  cudf::data_type{cudf::INT64});
+      run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, ptx_udf_agg);
+    }
 
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_sum_aggregation());
@@ -323,6 +336,15 @@ protected:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(input, group_offsets, preceding_window,
                                                             following_window, min_periods);
+    // >>> UDFs <<<
+    case cudf::experimental::aggregation::CUDA:
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
+             cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(input, group_offsets, preceding_window,
+                                                             following_window, min_periods);
+    case cudf::experimental::aggregation::PTX:
+      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
+             cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(input, group_offsets, preceding_window,
+                                                             following_window, min_periods);
     default:
       return fixed_width_column_wrapper<T>({}).release();
     }
@@ -744,19 +766,15 @@ protected:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(timestamp_column, input, group_offsets, preceding_window,
                                                             following_window, min_periods);
-    // >>> UDFs <<<      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
+    // >>> UDFs <<<
     case cudf::experimental::aggregation::CUDA:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(timestamp_column, input, group_offsets, preceding_window,
                                                              following_window, min_periods);
-      // return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM,
-      //        cudf::INT64, false>(timestamp_column, input, group_offsets, preceding_window, following_window, min_periods);
     case cudf::experimental::aggregation::PTX:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(timestamp_column, input, group_offsets, preceding_window,
                                                              following_window, min_periods);
-      // return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM,
-      //        cudf::INT64, false>(timestamp_column, input, group_offsets, preceding_window, following_window, min_periods);
     default:
       return fixed_width_column_wrapper<T>({}).release();
     }
