@@ -30,6 +30,7 @@
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
 - PR #4627 Remove legacy Cython
 - PR #4688 Add Java count aggregation to include null values
@@ -47,6 +48,7 @@
 ## Bug Fixes
 
 - PR #4386 Update Java package to 0.14
+- PR #4466 Fix merge key column sorting
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
 - PR #4610 Fix validity bug in string scalar factory
 - PR #4570 Fixing loc ordering issue in dataframe
@@ -80,7 +82,9 @@
 - PR #4650 Fix type mismatch & result format issue in `searchsorted`
 - PR #4755 Fix Java build to deal with new quantiles API 
 - PR #4720 Fix issue related to `dtype` param not being adhered incase of cuda arrays
+- PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
+- PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
