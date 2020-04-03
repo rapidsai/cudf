@@ -3497,7 +3497,7 @@ class DataFrame(Frame):
 
         if q_is_number:
             result = result.to_pandas().transpose()
-            return Series(result, name=q[0])
+            return Series(result.iloc[0], index=result.index, name=q[0])
         else:
             result.index = as_index(q)
             return result
