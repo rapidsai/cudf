@@ -58,6 +58,8 @@ BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
 
+BREAK_EVERYTHING=1
+
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
 #         CONDA_PREFIX, but there is no fallback from there!
