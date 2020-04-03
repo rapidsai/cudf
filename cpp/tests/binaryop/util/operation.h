@@ -30,37 +30,28 @@ namespace operation {
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Add {
-        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename OutT = TypeOut,
+                  typename std::enable_if<
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
+                      !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
+        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
             using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-            return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
+            return (static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
         }
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Sub {
+        // Disallow difference of timestamps with any other type (including itself)
         template <typename OutT = TypeOut,
                   typename std::enable_if<
-                      !std::is_integral<OutT>::value ||
-                      !cudf::is_timestamp_t<TypeLhs>::value ||
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
                       !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
         OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
-            // Note: difference of time_point's should be convertible to TypeOut. The period
-            // from the difference should be divisible by period from the TypeOut. Typically,
-            // lower precision timestamps should be convertible to higher precision ones
             return (static_cast<OutT>(lhs) - static_cast<OutT>(rhs));
-        }
-
-        template <typename OutT = TypeOut,
-                  typename std::enable_if<
-                      std::is_integral<OutT>::value &&
-                      cudf::is_timestamp_t<TypeLhs>::value &&
-                      cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
-        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
-            // Note: difference of time_point's should be convertible to TypeOut. The period
-            // from the difference should be divisible by period from the TypeOut. Typically,
-            // lower precision timestamps should be convertible to higher precision ones
-            auto diff = lhs - rhs;
-            return diff.count();  // Returns higher precision duration ticks
         }
     };
 
