@@ -86,7 +86,6 @@ test:
     - test -f $PREFIX/include/cudf/legacy/search.hpp
     - test -f $PREFIX/include/cudf/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/legacy/stream_compaction.hpp
-    - test -f $PREFIX/include/cudf/transpose.hpp
     - test -f $PREFIX/include/cudf/legacy/transform.hpp
     - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/include/cudf/types.hpp
