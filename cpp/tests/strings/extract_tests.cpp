@@ -16,13 +16,13 @@
 
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/extract.hpp>
+#include <cudf/table/table_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/strings/utilities.h>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 
@@ -54,6 +54,80 @@ TEST_F(StringsExtractTests, ExtractTest)
     cudf::test::expect_tables_equal(*results,expected);
 }
 
+TEST_F(StringsExtractTests, ExtractDomainTest)
+{
+    cudf::test::strings_column_wrapper strings( {
+        "http://www.google.com",
+        "gmail.com",
+        "github.com",
+        "https://pandas.pydata.org",
+        "http://www.worldbank.org.kg/",
+        "waiterrant.blogspot.com",
+        "http://forums.news.cnn.com.ac/",
+        "http://forums.news.cnn.ac/",
+        "ftp://b.cnn.com/",
+        "a.news.uk",
+        "a.news.co.uk",
+        "https://a.news.co.uk",
+        "107-193-100-2.lightspeed.cicril.sbcglobal.net",
+        "a23-44-13-2.deploy.static.akamaitechnologies.com" } );
+    auto strings_view = cudf::strings_column_view(strings);
+
+    std::string pattern = "([\\w]+[\\.].*[^/]|[\\-\\w]+[\\.].*[^/])";
+    auto results = cudf::strings::extract(strings_view,pattern);
+
+    cudf::test::strings_column_wrapper expected1( { 
+        "www.google.com",
+        "gmail.com",
+        "github.com",
+        "pandas.pydata.org",
+        "www.worldbank.org.kg",
+        "waiterrant.blogspot.com",
+        "forums.news.cnn.com.ac",
+        "forums.news.cnn.ac",
+        "b.cnn.com",
+        "a.news.uk",
+        "a.news.co.uk",
+        "a.news.co.uk",
+        "107-193-100-2.lightspeed.cicril.sbcglobal.net",
+        "a23-44-13-2.deploy.static.akamaitechnologies.com",
+    });
+    cudf::table_view expected{ {expected1} };
+    cudf::test::expect_tables_equal(*results,expected);
+}
+
+TEST_F(StringsExtractTests, ExtractEventTest)
+{
+    std::vector<std::string> patterns( {
+        "(^[0-9]+\\.?[0-9]*),",
+        "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",
+        "message.ip=\"([\\w\\.]+)",
+        "message.hostname=\"([\\w\\.]+)",
+        "message.user_name=\"([\\w\\.\\@]+)",
+        "message\\.description=\"([\\w\\.\\s]+)" });
+
+    cudf::test::strings_column_wrapper strings( {"15162388.26, search_name=\"Test Search Name\", orig_time=\"1516238826\", "
+                                                 "info_max_time=\"1566346500.000000000\", info_min_time=\"1566345300.000000000\", "
+                                                 "info_search_time=\"1566305689.361160000\", message.description=\"Test Message Description\", "
+                                                 "message.hostname=\"msg.test.hostname\", message.ip=\"100.100.100.123\", "
+                                                 "message.user_name=\"user@test.com\", severity=\"info\", urgency=\"medium\"'" });
+    auto strings_view = cudf::strings_column_view(strings);
+
+    std::vector<std::string> expecteds( {
+        "15162388.26",
+        "Test Search Name",
+        "100.100.100.123",
+        "msg.test.hostname",
+        "user@test.com",
+        "Test Message Description" });
+
+    for( auto idx=0; idx < patterns.size(); ++idx )
+    {
+        auto results = cudf::strings::extract(strings_view, patterns[idx]);
+        cudf::test::strings_column_wrapper expected( {expecteds[idx]} );
+        cudf::test::expect_columns_equal(results->view().column(0),expected);
+    }
+}
 
 TEST_F(StringsExtractTests, MediumRegex)
 {
