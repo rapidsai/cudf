@@ -552,6 +552,28 @@ def test_dataframe_take(ntake):
     np.testing.assert_array_equal(out.index, take_indices)
 
 
+@pytest.mark.parametrize("keep_index", [True, False])
+@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
+def test_series_take(ntake, keep_index):
+    np.random.seed(0)
+    nelem = 123
+
+    data = np.random.randint(0, 20, nelem)
+    sr = Series(data)
+
+    take_indices = np.random.randint(0, len(sr), ntake)
+
+    if keep_index is True:
+        out = sr.take(take_indices)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+    elif keep_index is False:
+        out = sr.take(take_indices, keep_index=False)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+        np.testing.assert_array_equal(
+            out.index.to_array(), sr.index.to_array()
+        )
+
+
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
 @pytest.mark.parametrize("slice_start", [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize("slice_end", [None, 0, 1, 30, 50, -1])
