@@ -340,7 +340,7 @@ class Frame(libcudf.table.Table):
 
             if stride is not None and stride != 1:
                 return self._gather(
-                    cupy.arange(start, stop=stop, step=stride, dtype=np.int64)
+                    cupy.arange(start, stop=stop, step=stride, dtype=np.int32)
                 )
             else:
                 result = self._from_table(
