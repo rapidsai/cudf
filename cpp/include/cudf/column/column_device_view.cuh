@@ -100,24 +100,6 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the count of null elements
-   *---------------------------------------------------------------------------**/
-  __host__ __device__ size_type null_count() const noexcept {
-    return _null_count;
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Indicates whether the column contains null elements,
-   * i.e., `null_count() > 0`
-   *
-   * @return true The column contains null elements
-   * @return false All elements are valid
-   *---------------------------------------------------------------------------**/
-  __host__ __device__ bool has_nulls() const noexcept {
-    return null_count() > 0;
-  }
-
-  /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
    *
    * @note This function does *not* account for the `offset()`.
@@ -219,19 +201,16 @@ class alignas(16) column_device_view_base {
   void const* _data{};      ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
-                                     ///< Optional if `null_count() == 0`
-  size_type _null_count{};           ///< The number of null elements
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
   column_device_view_base(data_type type, size_type size, void const* data,
-                          bitmask_type const* null_mask, size_type null_count,
+                          bitmask_type const* null_mask,
                           size_type offset)
       : _type{type},
         _size{size},
         _data{data},
         _null_mask{null_mask},
-        _null_count{null_count},
         _offset{offset} {}
 };
 
@@ -293,25 +272,29 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   using const_iterator =
       thrust::transform_iterator<detail::value_accessor<T>, count_it>;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return an iterator to the first element of the column.
    * 
-   * This iterator only supports columns where `has_nulls() == false`. 
-   * For columns with null elements, use `make_null_replacement_iterator`.
-   * @throws `cudf::logic_error` if `has_nulls() == true`
-   *---------------------------------------------------------------------------**/
+   * This iterator only supports columns where `has_nulls() == false`. Using it 
+   * with columns where `has_nulls() == true` will result in undefined behavior
+   * when accessing null elements.
+   * 
+   * For columns with null elements, use `make_null_replacement_iterator`.   
+   */
   template <typename T>
   const_iterator<T> begin() const {
     return const_iterator<T>{count_it{0}, detail::value_accessor<T>{*this}};
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return an iterator to the element following the last element of the column. 
    *
-   * This iterator only supports columns where `has_nulls() == false`.
-   * For columns with null elements, use `make_null_replacement_iterator`.
-   * @throws `cudf::logic_error` if `has_nulls() == true`
-   *---------------------------------------------------------------------------**/
+   * This iterator only supports columns where `has_nulls() == false`. Using it 
+   * with columns where `has_nulls() == true` will result in undefined behavior
+   * when accessing null elements.
+   * 
+   * For columns with null elements, use `make_null_replacement_iterator`.   
+   */
   template<typename T>
   const_iterator<T> end() const {
     return const_iterator<T>{count_it{size()}, detail::value_accessor<T>{*this}};
@@ -746,7 +729,6 @@ struct value_accessor {
   value_accessor(column_device_view const& _col) : col{_col} {
     CUDF_EXPECTS(data_type(experimental::type_to_id<T>()) == col.type(),
                  "the data type mismatch");
-    CUDF_EXPECTS(!_col.has_nulls(), "Unexpected column with nulls.");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }

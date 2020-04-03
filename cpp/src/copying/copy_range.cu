@@ -44,7 +44,7 @@ void in_place_copy_range(
     cudaStream_t stream = 0) {
   auto p_source_device_view =
     cudf::column_device_view::create(source, stream);
-  if (p_source_device_view->has_nulls()) {
+  if (source.has_nulls()) {
     cudf::experimental::detail::copy_range(
       cudf::experimental::detail::make_null_replacement_iterator<T>(
         *p_source_device_view, T()) + source_begin,

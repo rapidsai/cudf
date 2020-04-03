@@ -87,9 +87,7 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
   auto column = cudf::column_device_view::create(parent->view());
   auto d_column = *column;
 
-  EXPECT_FALSE(d_column.nullable());
-  EXPECT_FALSE(d_column.has_nulls());
-  EXPECT_EQ(0, d_column.null_count());
+  EXPECT_FALSE(d_column.nullable());  
 
   bool check = thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
         thrust::make_counting_iterator<int32_t>(100), checker_for_level1{d_column} );
@@ -141,9 +139,7 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
   auto column = cudf::column_device_view::create(parent->view());
   auto d_column = *column;
 
-  EXPECT_FALSE(d_column.nullable());
-  EXPECT_FALSE(d_column.has_nulls());
-  EXPECT_EQ(0, d_column.null_count());
+  EXPECT_FALSE(d_column.nullable());  
 
   bool check = thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
         thrust::make_counting_iterator<int32_t>(100), checker_for_level2{d_column} );
