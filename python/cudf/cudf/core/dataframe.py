@@ -2129,6 +2129,16 @@ class DataFrame(Frame):
                 df[k] = self[k].reset_index(drop=True).take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
+    def transpose(self):
+        raise NotImplementedError(
+            "transpose() is not supported on cudf.DataFrame. "
+            "Consider using DataFrame.to_pandas().transpose()"
+        )
+
+    @property
+    def T(self):
+        return self.transpose()
+
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,
         optionally leaving identifier variables set.
