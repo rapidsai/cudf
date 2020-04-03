@@ -2129,36 +2129,6 @@ class DataFrame(Frame):
                 df[k] = self[k].reset_index(drop=True).take(new_positions)
         return df.set_index(self.index.take(new_positions))
 
-    def transpose(self):
-        """Transpose index and columns.
-
-        Returns
-        -------
-        a new (ncol x nrow) dataframe. self is (nrow x ncol)
-
-        Notes
-        -----
-        Difference from pandas:
-        Not supporting *copy* because default and only behaviour is copy=True
-        """
-        # Never transpose a MultiIndex - remove the existing columns and
-        # replace with a RangeIndex. Afterward, reassign.
-        columns = self.index.copy(deep=False)
-        index = self.columns.copy(deep=False)
-        if self._num_columns == 0 or self._num_rows == 0:
-            return DataFrame(index=index, columns=columns)
-        # Cython renames the columns to the range [0...ncols]
-        result = self.__class__._from_table(libcudf.transpose.transpose(self))
-        # Set the old column names as the new index
-        result._index = as_index(index)
-        # Set the old index as the new column names
-        result.columns = columns
-        return result
-
-    @property
-    def T(self):
-        return self.transpose()
-
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,
         optionally leaving identifier variables set.
@@ -3516,10 +3486,8 @@ class DataFrame(Frame):
         result = self._quantiles(q, interpolation.upper())
 
         if q_is_number:
-            result = result.transpose()
-            return Series(
-                data=result._columns[0], index=result.index, name=q[0]
-            )
+            result = result.to_pandas().transpose()
+            return Series(result, name=q[0])
         else:
             result.index = as_index(q)
             return result

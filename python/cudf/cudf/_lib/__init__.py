@@ -29,7 +29,6 @@ from . import (
     stream_compaction,
     strings,
     table,
-    transpose,
     unary,
 )
 

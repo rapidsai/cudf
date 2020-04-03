@@ -491,7 +491,6 @@ add_library(cudf
             src/replace/clamp.cu
             src/reshape/legacy/stack.cu
             src/reshape/interleave_columns.cu
-            src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
             src/unary/cast_ops.cu
