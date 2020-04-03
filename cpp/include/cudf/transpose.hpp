@@ -29,7 +29,8 @@ namespace cudf {
  * @param[in] input Input table of (ncols) number of columns each of size (nrows)
  * @return Newly allocated output table with (nrows) columns each of size (ncols)
  */
-std::unique_ptr<experimental::table> transpose(table_view const& input,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::pair<std::unique_ptr<column>, table_view> transpose(
+    table_view const& input,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

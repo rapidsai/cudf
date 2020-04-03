@@ -145,7 +145,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto expected_view = make_table_view(expected_cols);
 
   auto result = transpose(input_view);
-  auto result_view = result->view();
+  auto result_view = std::get<1>(result);
 
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(), "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
