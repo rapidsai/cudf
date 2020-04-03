@@ -21,7 +21,6 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/strings/utilities.h>
 
-#include <gmock/gmock.h>
 #include <vector>
 
 
@@ -152,6 +151,42 @@ TEST_F(StringsContainsTests, MatchesTest)
         cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected, h_expected+h_strings.size(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
         cudf::test::expect_columns_equal(*results,expected);
+    }
+}
+
+TEST_F(StringsContainsTests, MatchesIPV4Test)
+{
+    cudf::test::strings_column_wrapper strings( {"5.79.97.178", "1.2.3.4", "5", "5.79", "5.79.97", "5.79.97.178.100",
+                                                 "224.0.0.0", "239.255.255.255", "5.79.97.178",
+                                                 "127.0.0.1"} );
+    auto strings_view = cudf::strings_column_view(strings);
+    {   // is_ip
+        std::string pattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+        auto results = cudf::strings::matches_re(strings_view,pattern);
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {true, true, false, false, false, false,
+                                                                                     true, true, true,
+                                                                                     true} );
+        cudf::test::expect_columns_equal(results->view(),expected);
+    }
+    {   // is_loopback
+        std::string pattern = "^127\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
+                              "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
+                              "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))$";
+        auto results = cudf::strings::matches_re(strings_view,pattern);
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {false, false, false, false, false, false,
+                                                                                     false, false, false,
+                                                                                     true} );
+        cudf::test::expect_columns_equal(results->view(),expected);
+    }
+    {   // is_multicast
+        std::string pattern = "^(2(2[4-9]|3[0-9]))\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
+                              "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))"
+                              "\\.([0-9]|[1-9][0-9]|1([0-9][0-9])|2([0-4][0-9]|5[0-5]))$";
+        auto results = cudf::strings::matches_re(strings_view,pattern);
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {false, false, false, false, false, false,
+                                                                                     true, true, false,
+                                                                                     false} );
+        cudf::test::expect_columns_equal(results->view(),expected);
     }
 }
 

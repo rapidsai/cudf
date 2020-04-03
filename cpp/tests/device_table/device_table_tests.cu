@@ -18,10 +18,9 @@
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
+#include <tests/utilities/base_fixture.hpp>
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
 
@@ -32,7 +31,7 @@
 #include <numeric>
 #include <random>
 
-struct DeviceTableTest : GdfTest {
+struct DeviceTableTest : cudf::test::BaseFixture {
   cudf::size_type const size{2000};
 };
 
@@ -565,3 +564,5 @@ TEST_F(DeviceTableTest, CopyRowsSourceNoBitmaskTargetNull) {
       thrust::make_counting_iterator(target_host_table.num_rows()),
       verify_bitmask{row_bitmask.data().get()}));
 }
+
+CUDF_TEST_PROGRAM_MAIN()

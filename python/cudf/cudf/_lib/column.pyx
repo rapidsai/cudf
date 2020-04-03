@@ -96,7 +96,10 @@ cdef class Column:
                 self._data = self.base_data
             else:
                 buf = Buffer(self.base_data)
-                buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
+                if self.size == 0:
+                    buf.ptr = 0
+                else:
+                    buf.ptr = buf.ptr + (self.offset * self.dtype.itemsize)
                 buf.size = self.size * self.dtype.itemsize
                 self._data = buf
         return self._data

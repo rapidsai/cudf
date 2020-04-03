@@ -664,14 +664,18 @@ class ColumnBase(Column):
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
         try:
-            return self.as_frame()._gather(indices)._as_column()
+            return (
+                self.as_frame()
+                ._gather(indices, keep_index=keep_index)
+                ._as_column()
+            )
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(
@@ -824,7 +828,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data_ptr, True),
+            "data": (self.data_ptr, False),
             "version": 1,
         }
 
@@ -1317,6 +1321,15 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
+        if (
+            (nan_as_null is True)
+            and isinstance(arbitrary, (np.floating, float))
+            and np.isnan(arbitrary)
+        ):
+            arbitrary = None
+            if dtype is None:
+                dtype = np.dtype("float64")
+
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
