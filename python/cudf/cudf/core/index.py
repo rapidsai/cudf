@@ -454,15 +454,28 @@ class Index(Frame):
 
         """
 
-        if isinstance(values, Index):
-            values = column.as_column(values)
-
         if isinstance(self, cudf.MultiIndex):
             if level is None:
-                if (not is_list_like(values)) or (
-                    is_list_like(values)
-                    and len(values) > 0
-                    and not isinstance(values[0], tuple)
+                if isinstance(values, cudf.MultiIndex):
+                    values_idx = values
+                elif (
+                    (
+                        isinstance(
+                            values,
+                            (
+                                cudf.Series,
+                                cudf.Index,
+                                cudf.DataFrame,
+                                column.ColumnBase,
+                            ),
+                        )
+                    )
+                    or (not is_list_like(values))
+                    or (
+                        is_list_like(values)
+                        and len(values) > 0
+                        and not isinstance(values[0], tuple)
+                    )
                 ):
                     raise TypeError(
                         "values need to be a list of tuple squences."
@@ -472,17 +485,17 @@ class Index(Frame):
                         values, names=self.names
                     )
 
-                    res = []
-                    for name in self.names:
-                        level_idx = self.get_level_values(name)
-                        value_idx = values_idx.get_level_values(name)
+                res = []
+                for name in self.names:
+                    level_idx = self.get_level_values(name)
+                    value_idx = values_idx.get_level_values(name)
 
-                        existence = level_idx.isin(value_idx)
-                        res.append(existence)
+                    existence = level_idx.isin(value_idx)
+                    res.append(existence)
 
-                    result = res[0]
-                    for i in res[1:]:
-                        result = result & i
+                result = res[0]
+                for i in res[1:]:
+                    result = result & i
             else:
                 level_series = self.get_level_values(level)
                 result = level_series.isin(values)
