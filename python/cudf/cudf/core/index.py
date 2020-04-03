@@ -22,12 +22,7 @@ from cudf.core.column import (
 from cudf.core.frame import Frame
 from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_list_like,
-    is_scalar,
-    min_signed_type,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
 
 
@@ -433,7 +428,7 @@ class Index(Frame):
         else:
             return NotImplemented
 
-    def isin(self, values, level=None):
+    def isin(self, values):
         """Return a boolean array where the index values are in values.
 
         Compute boolean array of whether each index value is found in
@@ -442,11 +437,9 @@ class Index(Frame):
 
         Parameters
         ----------
-        values : set, list-like, Index or Multi-Index
+        values : set, list-like, Index
             Sought values.
-        level : str or int, optional
-            Name or position of the index level to use (if the index
-            is a MultiIndex).
+
         Returns
         -------
         is_contained : cupy array
@@ -454,53 +447,7 @@ class Index(Frame):
 
         """
 
-        if isinstance(self, cudf.MultiIndex):
-            if level is None:
-                if isinstance(values, cudf.MultiIndex):
-                    values_idx = values
-                elif (
-                    (
-                        isinstance(
-                            values,
-                            (
-                                cudf.Series,
-                                cudf.Index,
-                                cudf.DataFrame,
-                                column.ColumnBase,
-                            ),
-                        )
-                    )
-                    or (not is_list_like(values))
-                    or (
-                        is_list_like(values)
-                        and len(values) > 0
-                        and not isinstance(values[0], tuple)
-                    )
-                ):
-                    raise TypeError(
-                        "values need to be a list of tuple squences."
-                    )
-                else:
-                    values_idx = cudf.MultiIndex.from_tuples(
-                        values, names=self.names
-                    )
-
-                res = []
-                for name in self.names:
-                    level_idx = self.get_level_values(name)
-                    value_idx = values_idx.get_level_values(name)
-
-                    existence = level_idx.isin(value_idx)
-                    res.append(existence)
-
-                result = res[0]
-                for i in res[1:]:
-                    result = result & i
-            else:
-                level_series = self.get_level_values(level)
-                result = level_series.isin(values)
-        else:
-            result = self.to_series().isin(values).values
+        result = self.to_series().isin(values).values
 
         return result
 
