@@ -35,6 +35,15 @@ namespace cudf {
 
 namespace detail {
 
+// From benchmark data, the fused kernel optimization appears to perform better
+// when there are more than a trivial number of columns, or when the null mask
+// can also be computed at the same time
+constexpr bool use_fused_kernel_heuristic(
+    bool const has_nulls,
+    size_t const num_columns) {
+  return has_nulls || num_columns > 4;
+}
+
 auto create_device_views(
     std::vector<column_view> const& views, cudaStream_t stream) {
 
@@ -276,8 +285,8 @@ struct concatenate_dispatch {
         views.begin(), views.end(),
         [](auto const& col) { return col.has_nulls(); });
 
-    // Select fused kernel when it can improve performance
-    if (has_nulls || views.size() > 4) {
+    // Use a heuristic to guess when the fused kernel will be faster
+    if (use_fused_kernel_heuristic(has_nulls, views.size())) {
       return fused_concatenate<T>(views, has_nulls, mr, stream);
     }
 

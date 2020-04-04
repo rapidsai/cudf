@@ -35,6 +35,18 @@ namespace strings
 namespace detail
 {
 
+// From benchmark data, the fused kernel optimization appears to perform better
+// only when the number of chars/col is below a certain threshold (which changes
+// depending on if nulls are being handled as well)
+constexpr bool use_fused_kernel_heuristic(
+    bool const has_nulls,
+    size_t const total_bytes,
+    size_t const num_columns) {
+  return has_nulls
+      ? total_bytes < num_columns * 2097152
+      : total_bytes < num_columns * 1048576;
+}
+
 // Using a functor instead of a lambda as a workaround for:
 // error: The enclosing parent function ("create_strings_device_views") for an
 // extended __device__ lambda must not have deduced return type
@@ -254,13 +266,8 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
     mask_data = reinterpret_cast<bitmask_type*>(null_mask.data());
   }
 
-  // From benchmark data, the fused kernel appears to perform better when the
-  // number of chars/col is below a certain threshold
-  bool const use_fused_kernels = has_nulls
-      ? total_bytes < columns.size() * 2097152
-      : total_bytes < columns.size() * 1048576;
-
-  if (use_fused_kernels) {
+  // Use a heuristic to guess when the fused kernel will be faster
+  if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
     { // Launch offsets kernel
       rmm::device_scalar<size_type> d_valid_count(0);
 
