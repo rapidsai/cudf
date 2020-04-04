@@ -87,6 +87,7 @@
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
 - PR #4796 Fix groupby apply for operations that fail on empty groups
+- PR #4804 Fix issue related `repartition` during hash based repartition
 
 
 # cuDF 0.13.0 (31 Mar 2020)
