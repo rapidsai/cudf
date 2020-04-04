@@ -1354,15 +1354,6 @@ class Series(Frame):
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
-        if errors == "ignore" and pd.api.types.is_integer_dtype(dtype):
-            if not pd.api.types.is_signed_integer_dtype(dtype):
-                if pd.api.types.is_dtype_equal(dtype, np.uint8):
-                    dtype = np.int16
-                elif pd.api.types.is_dtype_equal(dtype, np.uint16):
-                    dtype = np.int32
-                else:
-                    dtype = np.int64
-
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
         try:
