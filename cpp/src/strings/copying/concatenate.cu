@@ -283,7 +283,7 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
         null_count = strings_count - d_valid_count.value(stream);
       }
     }
-    { // Launch chars kernel
+    if (total_bytes > 0) { // Launch chars kernel
       constexpr size_type block_size{256};
       cudf::experimental::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
