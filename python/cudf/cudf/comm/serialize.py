@@ -1,4 +1,7 @@
+import itertools
 import pickle
+
+import cupy
 
 import cudf
 import cudf.core.groupby.groupby
@@ -32,6 +35,12 @@ try:
             header["compression"] = (False,) * len(frames)
             header["lengths"] = [f.nbytes for f in frames]
 
+            frames = [
+                cupy.concatenate(
+                    [cupy.asarray(f) for f in frames]
+                ).data.mem._owner
+            ]
+
             return header, frames
 
     # all (de-)serializtion are attached to cudf Objects:
@@ -42,7 +51,7 @@ try:
         with log_errors():
             header["serializer"] = "dask"
             header["compression"] = (None,) * len(frames)
-            frames = [f.to_host_array().data for f in frames]
+            frames = [cupy.asnumpy(cupy.asarray(f)).data for f in frames]
             return header, frames
 
     @cuda_deserialize.register(serializable_classes)
@@ -56,6 +65,15 @@ try:
                         assert hasattr(f, "__cuda_array_interface__")
             elif header["serializer"] == "dask":
                 frames = [memoryview(f) for f in frames]
+
+            assert len(frames) == 1
+            frames = [
+                e.copy().data.mem._owner
+                for e in cupy.split(
+                    cupy.asarray(frames[0]),
+                    itertools.accumulate(header["lengths"][:-1]),
+                )
+            ]
 
             cudf_typ = pickle.loads(header["type-serialized"])
             cudf_obj = cudf_typ.deserialize(header, frames)
