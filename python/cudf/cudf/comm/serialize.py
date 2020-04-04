@@ -29,6 +29,7 @@ try:
 
             assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
             header["serializer"] = "cuda"
+            header["compression"] = (False,) * len(frames)
             header["lengths"] = [f.nbytes for f in frames]
 
             return header, frames
@@ -40,6 +41,7 @@ try:
         header, frames = cuda_serialize_cudf_object(x)
         with log_errors():
             header["serializer"] = "dask"
+            header["compression"] = (None,) * len(frames)
             frames = [f.to_host_array().data for f in frames]
             return header, frames
 
