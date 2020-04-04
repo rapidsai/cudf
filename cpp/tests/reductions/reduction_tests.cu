@@ -833,8 +833,8 @@ TYPED_TEST(ReductionTest, Quantile)
 TYPED_TEST(ReductionTest, UniqueCount)
 {
   using T = TypeParam;
-  std::vector<int>  int_values({1,-1, 1, 2, 0, 2,-2, 45}); //6
-  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});  //6
+  std::vector<int>  int_values({1,-1, 1, 2, 0, 2,-2, 45}); //6 unique values
+  std::vector<bool> host_bools({1, 1, 1, 0, 1, 1, 1, 1});
   std::vector<T> v = convert_values<T>(int_values);
 
   // test without nulls
