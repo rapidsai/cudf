@@ -86,6 +86,7 @@
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
+- PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
 - PR #4801 gitignore `_cuda/*.cpp` files
 
