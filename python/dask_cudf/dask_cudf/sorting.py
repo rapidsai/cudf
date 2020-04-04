@@ -20,17 +20,17 @@ from cudf.utils.dtypes import is_categorical_dtype
 
 def set_partitions_hash(df, columns, npartitions):
     c = hash_object_dispatch(df[columns], index=False)
-    return np.mod(c, npartitions)
+    return cupy.mod(c, npartitions)
 
 
 def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     c = hash_object_dispatch(df[columns], index=False)
     typ = np.min_scalar_type(npartitions * 2)
-    c = np.mod(c, npartitions).astype(typ, copy=False)
+    c = cupy.mod(c, npartitions).astype(typ, copy=False)
     if stage > 0:
-        np.floor_divide(c, k ** stage, out=c)
+        cupy.floor_divide(c, k ** stage, out=c)
     if k < int(npartitions / (k ** stage)):
-        np.mod(c, k, out=c)
+        cupy.mod(c, k, out=c)
     return group_split_dispatch(
         df, c.astype(np.int32), k, ignore_index=ignore_index
     )
@@ -42,7 +42,7 @@ def rearrange_by_hash(
     if npartitions and npartitions != df.npartitions:
         # Use main-line dask for new npartitions
         meta = df._meta._constructor_sliced([0])
-        partitions = df[columns].map_partitions(
+        partitions = df.map_partitions(
             set_partitions_hash, columns, npartitions, meta=meta
         )
         # Note: Dask will use a shallow copy for assign
