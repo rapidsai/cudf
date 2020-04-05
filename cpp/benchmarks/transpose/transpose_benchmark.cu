@@ -1,29 +1,53 @@
-#include <benchmark/benchmark.h>
-#include <thrust/transform.h>
-#include <thrust/functional.h>
-#include <thrust/execution_policy.h>
-#include <thrust/sequence.h>
-#include <thrust/device_vector.h>
-#include <cudf/types.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <cudf/transpose.hpp>
+/*
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <memory>
-#include <cudf/utilities/error.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+#include <thrust/transform.h>
+#include <cudf/transpose.hpp>
+#include <cudf/types.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+
+using cudf::test::fixed_width_column_wrapper;
 
 template<bool use_validity, int shift_factor>
 static void BM_transpose(benchmark::State& state)
 {
-    auto data = std::vector<int>(state.range(0), 0);
-    auto validity = std::vector<bool>(state.range(0), 1);
-    auto input_column = cudf::test::fixed_width_column_wrapper<int>(data.begin(),
-                                                                    data.end(),
-                                                                    validity.begin());
-    
-    cudf::column_view input_column_view = input_column;
-    // auto input_column_views = std::vector<cudf::column_view>(state.range(1), input_column_view);
-    auto input = cudf::table_view({ input_column_view, input_column_view });
+    auto count = state.range(0);
+
+    auto data = std::vector<int>(count, 0);
+    auto validity = std::vector<bool>(count, 1);
+
+    auto fwcw_iter = thrust::make_transform_iterator(
+        thrust::make_counting_iterator(0),
+        [&data, &validity](auto idx) {
+            return fixed_width_column_wrapper<int>(
+                data.begin(),
+                data.end(),
+                validity.begin());
+        });
+
+    auto input_columns = std::vector<fixed_width_column_wrapper<int>>(fwcw_iter,
+                                                                      fwcw_iter + count);
+
+    auto input_column_views = std::vector<cudf::column_view>(input_columns.begin(),
+                                                             input_columns.end());
+
+    auto input = cudf::table_view(input_column_views);
 
     for (auto _ : state)
     {
@@ -40,8 +64,8 @@ class Transpose : public cudf::benchmark {};
         BM_transpose<use_validity, transpose_factor>(state); \
     } \
     BENCHMARK_REGISTER_F(Transpose, name) \
-        ->RangeMultiplier(2) \
-        ->Range(2, 2<<16) \
+        ->RangeMultiplier(4) \
+        ->Range(4, 4<<13) \
         ->UseManualTime() \
         ->Unit(benchmark::kMillisecond);
 
