@@ -176,3 +176,14 @@ class CategoricalAccessor(Accessor):
             raise AttributeError(
                 "Can only use .cat accessor with categorical values"
             )
+
+    @property
+    def categories(self):
+        """
+        The categories of this categorical.
+        """
+
+        meta = self._delegate_property(
+            self._series._meta, self._accessor_name, "categories"
+        )
+        return meta
