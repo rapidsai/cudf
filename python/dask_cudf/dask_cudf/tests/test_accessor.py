@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-from cudf import Series
+from cudf import DataFrame, Series
 
 import dask_cudf as dgd
 
@@ -196,3 +196,22 @@ def test_string_slicing(data):
     base = pdsr.str.slice(0, 4)
     test = dsr.str.slice(0, 4).compute().to_pandas()
     assert_series_equal(base, test)
+
+
+def test_categorical_categories():
+    import dask.dataframe as dd
+
+    df = DataFrame(
+        {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
+    )
+    df["a"] = df["a"].astype("category")
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, 2)
+    dpdf = dd.from_pandas(pdf, 2)
+
+    dd.assert_eq(
+        ddf.a.cat.categories.to_series(),
+        dpdf.a.cat.categories.to_series(),
+        check_index=False,
+    )
