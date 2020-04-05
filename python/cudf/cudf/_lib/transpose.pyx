@@ -64,7 +64,7 @@ def transpose(Table source):
         result = Table(index=result._index, data=[
             (name, cudf.core.column.column.build_categorical_column(
                 codes=cudf.core.column.column.as_column(
-                    col.base_data, dtype=col.dtype),
+                    col.data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,
                 categories=cats
