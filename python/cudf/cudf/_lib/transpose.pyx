@@ -64,10 +64,11 @@ def transpose(Table source):
         result = Table(index=result._index, data=[
             (name, cudf.core.column.column.build_categorical_column(
                 codes=cudf.core.column.column.as_column(
-                    col.data, dtype=col.dtype),
+                    col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,
-                categories=cats
+                categories=cats,
+                offset=col.offset,
             ))
             for name, col in result._data.items()
         ])
