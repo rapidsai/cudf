@@ -77,4 +77,3 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef pair[unique_ptr[column], table_view] move(
         pair[unique_ptr[column], table_view]
     )
-    
