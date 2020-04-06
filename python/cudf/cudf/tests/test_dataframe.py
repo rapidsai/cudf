@@ -3782,7 +3782,10 @@ def test_isin_index(data, values):
         ([0, 1, 2, 10, 11, 15], None, TypeError),
         (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
         (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
+        (pd.Index(["red", "white", "yellow"]), "color", None),
         ([(1, "red"), (3, "red")], None, None),
+        (((1, "red"), (3, "red")), None, None),
         (
             pd.MultiIndex.from_arrays(
                 [[1, 2, 3], ["red", "blue", "green"]],
