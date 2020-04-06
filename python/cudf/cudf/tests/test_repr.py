@@ -230,11 +230,14 @@ numerical_categories = [
     "float32",
     "float64",
 ]
+
+
 @pytest.mark.parametrize("dtype", numerical_categories)
 @pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
 def test_generic_index(length, dtype):
     psr = pd.Series(
-        range(length), index=np.random.randint(0, high=100, size=length).astype(dtype)
+        range(length),
+        index=np.random.randint(0, high=100, size=length).astype(dtype),
     )
     gsr = cudf.Series.from_pandas(psr)
 
