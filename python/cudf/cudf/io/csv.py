@@ -96,6 +96,10 @@ def to_csv(
     chunksize=None,
 ):
     """{docstring}"""
+
+    if path is None:
+        raise ValueError("path/filename not provided")
+
     if index:
         from cudf import MultiIndex
 
