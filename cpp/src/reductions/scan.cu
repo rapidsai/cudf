@@ -35,7 +35,7 @@ struct ScanDispatcher {
      (std::is_same<Op, cudf::DeviceMin>::value ||
       std::is_same<Op, cudf::DeviceMax>::value);
   }
-  // return true if T is arithmetic type (including cudf::experimental::bool8)
+  // return true if T is arithmetic type (including bool)
   template <typename T>
   static constexpr bool is_supported() {
     return std::is_arithmetic<T>::value || is_string_supported<T>();

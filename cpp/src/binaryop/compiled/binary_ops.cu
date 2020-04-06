@@ -152,7 +152,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs, column_view const& r
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, cudf::experimental::bool8>{}(rhs, lhs, op, output_type, true, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(rhs, lhs, op, output_type, true, mr, stream);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs, scalar const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
@@ -160,7 +160,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs, scalar const& r
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, cudf::experimental::bool8>{}(lhs, rhs, op, output_type, false, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, false, mr, stream);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs, column_view const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
@@ -168,7 +168,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs, column_view con
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, cudf::experimental::bool8>{}(lhs, rhs, op, output_type, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, mr, stream);
 }
 
 }  // namespace compiled

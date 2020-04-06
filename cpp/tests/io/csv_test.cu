@@ -206,10 +206,10 @@ TEST_F(CsvReaderTest, Booleans) {
   expect_column_data_equal(std::vector<int32_t>{1, 0, 0, 0, 1}, view.column(0));
   expect_column_data_equal(std::vector<int16_t>{0, 1, 1, 0, 1}, view.column(2));
   expect_column_data_equal(
-      std::vector<cudf::experimental::bool8>{
-          cudf::experimental::true_v, cudf::experimental::true_v,
-          cudf::experimental::false_v, cudf::experimental::true_v,
-          cudf::experimental::false_v},
+      std::vector<bool>{
+          true, true,
+          false, true,
+          false},
       view.column(3));
 }
 

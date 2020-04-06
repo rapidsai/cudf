@@ -161,13 +161,13 @@ struct target_type_impl<Source, aggregation::COUNT_ALL> {
 // Computing ANY of any type, use bool accumulator
 template <typename Source>
 struct target_type_impl<Source, aggregation::ANY> {
-  using type = bool8;
+  using type = bool;
 };
 
 // Computing ALL of any type, use bool accumulator
 template <typename Source>
 struct target_type_impl<Source, aggregation::ALL> {
-  using type = bool8;
+  using type = bool;
 };
 
 // Always use `double` for MEAN

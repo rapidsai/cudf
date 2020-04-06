@@ -36,14 +36,14 @@
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
-using float_wrapper = wrapper<float>;
-using float64_wrapper = wrapper<double>;
-using int_wrapper = wrapper<int>;
-using int8_wrapper = wrapper<int8_t>;
-using int16_wrapper = wrapper<int16_t>;
-using int64_wrapper = wrapper<int64_t>;
+using float_wrapper        = wrapper<float>;
+using float64_wrapper      = wrapper<double>;
+using int_wrapper          = wrapper<int>;
+using int8_wrapper         = wrapper<int8_t>;
+using int16_wrapper        = wrapper<int16_t>;
+using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms>;
-using bool_wrapper = wrapper<cudf::experimental::bool8>;
+using bool_wrapper         = wrapper<bool>;
 
 namespace cudf_io = cudf::experimental::io;
 
@@ -133,7 +133,7 @@ TEST_F(JsonReaderTest, FloatingPoint) {
       0, [](auto i) { return true; });
 
   cudf::test::expect_columns_equal(result.tbl->get_column(0), 
-              float_wrapper{{5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31, -73.98007199999998}, validity});
+              float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998}, validity});
     
   const auto bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
   ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
@@ -274,7 +274,7 @@ TEST_F(JsonReaderTest, Dates) {
       0, [](auto i) { return true; });
 
   cudf::test::expect_columns_equal(result.tbl->get_column(0), 
-                timestamp_ms_wrapper{{983750400000, 1288483200000, 782611200000, 656208000000, 0,
+                timestamp_ms_wrapper{{983750400000, 1288483200000, 782611200000, 656208000000, 0L,
           798163200000, 774144000000, 1149679230400, 1126875750400, 2764800000}, validity});  
 }
 
