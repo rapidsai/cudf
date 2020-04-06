@@ -113,7 +113,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
   
   auto strings_column = column_device_view::create(strings.parent(),stream);
   auto d_column = *strings_column;
-  size_type null_count = strings.parent().null_count();
+  size_type null_count = strings.null_count();
 
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);

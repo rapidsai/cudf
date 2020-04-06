@@ -242,7 +242,7 @@ struct dispatch_substring_from_fn
 
         // copy the null mask
         rmm::device_buffer null_mask;
-        size_type null_count = strings.parent().null_count();
+        size_type null_count = strings.null_count();
         if( d_column.nullable() )
             null_mask = rmm::device_buffer( d_column.null_mask(),
                                             cudf::bitmask_allocation_size_bytes(strings_count),
