@@ -79,7 +79,7 @@ private:
       // the available combination of input and output dtypes are
       //  - same dtypes (including cudf::wrappers)
       //  - any arithmetic dtype to any arithmetic dtype
-      //  - cudf::experimental::bool8 to/from any arithmetic dtype
+      //  - bool to/from any arithmetic dtype
       return std::is_convertible<ElementType, ResultType>::value &&
              (std::is_arithmetic<ResultType>::value ||
               std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
@@ -106,7 +106,7 @@ public:
 template <typename Op>
 struct element_type_dispatcher {
 private:
-    // return true if ElementType is arithmetic type or bool8, or
+    // return true if ElementType is arithmetic type or bool, or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
     template <typename ElementType>
     static constexpr bool is_supported_v()

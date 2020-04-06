@@ -27,9 +27,11 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #3581 Remove `bool8`
 - PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
 - PR #4627 Remove legacy Cython
@@ -44,6 +46,11 @@
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
+- PR #4793 Add `cudf._cuda` to setup.py
+- PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
+- PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 
 ## Bug Fixes
 
@@ -85,6 +92,10 @@
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
+- PR #4800 Fix dataframe slicing with strides
+- PR #4796 Fix groupby apply for operations that fail on empty groups
+- PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4804 Fix issue related `repartition` during hash based repartition
 
 
 # cuDF 0.13.0 (31 Mar 2020)
