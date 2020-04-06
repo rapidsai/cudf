@@ -195,8 +195,11 @@ TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
 TEST_F(StringsDatetimeTest, Errors)
 {
     cudf::test::strings_column_wrapper strings{ "this column intentionally left blank" };
-    EXPECT_THROW( cudf::strings::to_timestamps(cudf::strings_column_view(strings), cudf::data_type{cudf::INT64}, "%Y"), cudf::logic_error );
-    EXPECT_THROW( cudf::strings::to_timestamps(cudf::strings_column_view(strings), cudf::data_type{cudf::TIMESTAMP_SECONDS}, ""), cudf::logic_error );
+    cudf::strings_column_view view(strings);
+    EXPECT_THROW( cudf::strings::to_timestamps(view, cudf::data_type{cudf::INT64}, "%Y"), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::to_timestamps(view, cudf::data_type{cudf::TIMESTAMP_SECONDS}, ""), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::to_timestamps(view, cudf::data_type{cudf::TIMESTAMP_SECONDS}, "%2Y"), cudf::logic_error );
+    EXPECT_THROW( cudf::strings::to_timestamps(view, cudf::data_type{cudf::TIMESTAMP_SECONDS}, "%g"), cudf::logic_error );
 
     cudf::test::fixed_width_column_wrapper<int64_t> invalid_timestamps{ 1530705600 };
     EXPECT_THROW( cudf::strings::from_timestamps(invalid_timestamps), cudf::logic_error );

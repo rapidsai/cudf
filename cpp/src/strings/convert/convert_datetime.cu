@@ -150,7 +150,8 @@ struct format_compiler
             }
             if( ch >='0' && ch <= '9' )
             {
-                specifier_lengths['f'] = static_cast<int8_t>(ch-'0');
+                CUDF_EXPECTS( *str=='f', "precision not supported for specifier: " + std::string(1,*str) );
+                specifier_lengths[*str] = static_cast<int8_t>(ch-'0');
                 ch = *str++;
                 length--;
             }
