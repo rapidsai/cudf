@@ -20,6 +20,7 @@
 #include <iostream>
 #include <limits>
 
+//! Fixed-point and supporting types
 namespace numeric {
 
 // This is a wrapper struct that enforces "strong typing"
@@ -61,6 +62,7 @@ constexpr inline auto is_supported_construction_value_type() {
       || std::is_floating_point<T>::value;
 }
 
+//! Helper functions for `fixed_point` type
 namespace detail {
     /**
     * @brief A function for integer exponentiation by squaring
