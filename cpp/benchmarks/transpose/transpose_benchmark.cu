@@ -24,7 +24,6 @@
 
 using cudf::test::fixed_width_column_wrapper;
 
-template<bool use_validity, int shift_factor>
 static void BM_transpose(benchmark::State& state)
 {
     auto count = state.range(0);
@@ -59,9 +58,9 @@ static void BM_transpose(benchmark::State& state)
 
 class Transpose : public cudf::benchmark {};
 
-#define TRANSPOSE_BM_BENCHMARK_DEFINE(name, use_validity, transpose_factor) \
+#define TRANSPOSE_BM_BENCHMARK_DEFINE(name) \
     BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { \
-        BM_transpose<use_validity, transpose_factor>(state); \
+        BM_transpose(state); \
     } \
     BENCHMARK_REGISTER_F(Transpose, name) \
         ->RangeMultiplier(4) \
@@ -69,4 +68,4 @@ class Transpose : public cudf::benchmark {};
         ->UseManualTime() \
         ->Unit(benchmark::kMillisecond);
 
-TRANSPOSE_BM_BENCHMARK_DEFINE(transpose_simple, false, 0);
+TRANSPOSE_BM_BENCHMARK_DEFINE(transpose_simple);
