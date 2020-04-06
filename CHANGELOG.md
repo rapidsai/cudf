@@ -47,6 +47,7 @@
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
 - PR #4793 Add `cudf._cuda` to setup.py
 - PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4809 Improve libcudf doc rendering and add a new main page
 
 ## Bug Fixes
 
