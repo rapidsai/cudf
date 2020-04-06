@@ -126,26 +126,6 @@ __inline__ __device__ T decode_value(const char *data, long start, long end,
   return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
-
-/**
- * @brief Decodes a cudf::bool8 value
- * 
- * @param data The character string for parse
- * @param start The index within data to start parsing from
- * @param end The end index within data to end parsing
- * @param opts The global parsing behavior options
- * 
- * @return The parsed cudf::bool8 value
- **/
-template <>
-__inline__ __device__ cudf::experimental::bool8 decode_value(
-    const char *data, long start, long end, ParseOptions const &opts) {
-  using value_type = typename cudf::experimental::bool8::value_type;
-  return (cudf::experimental::io::gpu::parse_numeric<value_type>(data, start, end, opts) != 0)
-             ? cudf::experimental::true_v
-             : cudf::experimental::false_v;
-}
-
 /**
  * @brief Decodes a timestamp_D
  * 

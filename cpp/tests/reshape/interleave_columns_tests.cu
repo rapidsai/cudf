@@ -163,8 +163,8 @@ TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
 
     if (not std::is_same<int, T>::value) {
 
-        fixed_width_column_wrapper<int> input_a({ 1, 4, 7 }, { 1, 0, 1 });
-        fixed_width_column_wrapper<T>   input_b({ 2, 5, 8 }, { 0, 1, 0 });
+        fixed_width_column_wrapper<int32_t>    input_a({ 1, 4, 7 }, { 1, 0, 1 });
+        fixed_width_column_wrapper<T> input_b({ 2, 5, 8 }, { 0, 1, 0 });
 
         cudf::table_view input (std::vector<cudf::column_view>{ input_a, input_b });
 
