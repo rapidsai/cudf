@@ -54,7 +54,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<experimental::bool8>();
+    auto d_results = results_view.data<bool>();
 
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
@@ -111,7 +111,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
             if( d_column.is_null(idx) )
                 return 0;
             size_type bytes = 0;
-            if( d_column.element<experimental::bool8>(idx) )
+            if( d_column.element<bool>(idx) )
                 bytes = d_true.size_bytes();
             else
                 bytes = d_false.size_bytes();
@@ -132,7 +132,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
         [d_column, d_true, d_false, d_offsets, d_chars] __device__ (size_type idx) {
             if( d_column.is_null(idx) )
                 return;
-            string_view result = ( d_column.element<experimental::bool8>(idx) ? d_true : d_false );
+            string_view result = ( d_column.element<bool>(idx) ? d_true : d_false );
             memcpy( d_chars + d_offsets[idx], result.data(), result.size_bytes() );
         });
     //

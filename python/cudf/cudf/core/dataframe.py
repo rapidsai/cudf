@@ -2807,7 +2807,7 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2832,11 +2832,13 @@ class DataFrame(Frame):
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
                   replaced with replacement*.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
+        inplace : bool, default False
+            If True, in place.
 
         Returns
         -------
@@ -2859,17 +2861,10 @@ class DataFrame(Frame):
         5  null
         6     6
         """
-        outdf = self.copy()
 
-        if not is_dict_like(to_replace):
-            to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(replacement):
-            replacement = dict.fromkeys(self.columns, replacement)
+        outdf = super().replace(to_replace=to_replace, replacement=value)
 
-        for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], replacement[k])
-
-        return outdf
+        return self._mimic_inplace(outdf, inplace=inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.

@@ -22,7 +22,7 @@
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 using cudf::test::expect_columns_equal;
-using cudf::experimental::bool8;
+using cudf::test::expect_column_properties_equal;
 
 class HashTest : public cudf::test::BaseFixture {};
 
@@ -40,12 +40,16 @@ TEST_F(HashTest, MultiValue)
     {0, 100, -100, limits::min(), limits::max()});
 
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool8> const bools_col1({0, 1, 1, 1, 0});
-  fixed_width_column_wrapper<bool8> const bools_col2({0, 1, 2, 255, 0});
+  fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
   using ts = cudf::timestamp_s;
   fixed_width_column_wrapper<ts> const secs_col(
-    {ts::duration::zero(), 100, -100, ts::duration::min(), ts::duration::max()});
+    {ts::duration::zero(), 
+     static_cast<ts::duration>(100), 
+     static_cast<ts::duration>(-100), 
+     ts::duration::min(), 
+     ts::duration::max()});
 
   auto const input1 = cudf::table_view(
     {strings_col, ints_col, bools_col1, secs_col});
@@ -86,18 +90,26 @@ TEST_F(HashTest, MultiValueNulls)
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
-  fixed_width_column_wrapper<bool8> const bools_col1(
+  fixed_width_column_wrapper<bool> const bools_col1(
     {0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool8> const bools_col2(
+  fixed_width_column_wrapper<bool> const bools_col2(
     {0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
   // Nulls with different values should be equal
   using ts = cudf::timestamp_s;
   fixed_width_column_wrapper<ts> const secs_col1(
-    {ts::duration::zero(), 100, -100, ts::duration::min(), ts::duration::max()},
+    {ts::duration::zero(), 
+     static_cast<ts::duration>(100), 
+     static_cast<ts::duration>(-100), 
+     ts::duration::min(), 
+     ts::duration::max()},
     {1, 0, 0, 1, 1});
   fixed_width_column_wrapper<ts> const secs_col2(
-    {ts::duration::zero(), -200, 200, ts::duration::min(), ts::duration::max()},
+    {ts::duration::zero(), 
+     static_cast<ts::duration>(-200), 
+     static_cast<ts::duration>(200), 
+     ts::duration::min(), 
+     ts::duration::max()},
     {1, 0, 0, 1, 1});
 
   auto const input1 = cudf::table_view(
@@ -119,8 +131,7 @@ TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
-  fixed_width_column_wrapper<TypeParam> const col(
-    {0, 127, 1, 2, 8});
+  fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
   // Hash of same input should be equal
@@ -133,11 +144,11 @@ TYPED_TEST(HashTestTyped, Equality)
 
 TYPED_TEST(HashTestTyped, EqualityNulls)
 {
+  using T = TypeParam;
+
   // Nulls with different values should be equal
-  fixed_width_column_wrapper<TypeParam> const col1(
-    {0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<TypeParam> const col2(
-    {1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});
@@ -156,13 +167,14 @@ TYPED_TEST_CASE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(HashTestFloatTyped, TestExtremes)
 {
-  TypeParam min = std::numeric_limits<TypeParam>::min();
-  TypeParam max = std::numeric_limits<TypeParam>::max();
-  TypeParam nan = std::numeric_limits<TypeParam>::quiet_NaN();
-  TypeParam inf = std::numeric_limits<TypeParam>::infinity();
+  using T = TypeParam;
+  T min = std::numeric_limits<T>::min();
+  T max = std::numeric_limits<T>::max();
+  T nan = std::numeric_limits<T>::quiet_NaN();
+  T inf = std::numeric_limits<T>::infinity();
   
-  fixed_width_column_wrapper<TypeParam> const col1( {  0.0, 100.0, -100.0, min, max,  nan, inf, -inf } );
-  fixed_width_column_wrapper<TypeParam> const col2( { -0.0, 100.0, -100.0, min, max, -nan, inf, -inf } );
+  fixed_width_column_wrapper<T> const col1( {  T(0.0), T(100.0), T(-100.0), min, max,  nan, inf, -inf } );
+  fixed_width_column_wrapper<T> const col2( { T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf } );
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});

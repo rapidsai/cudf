@@ -95,7 +95,7 @@ gpu_init_statistics_buffersize(statistics_merge_group *groups, const statistics_
       const stats_column_desc *col = groups[idx].col;
       statistics_dtype dtype = col->stats_dtype;
       switch(dtype) {
-      case dtype_bool8:
+      case dtype_bool:
         stats_len = pb_fldlen_common + pb_fld_hdrlen + pb_fldlen_bucket1;
         break;
       case dtype_int8:
@@ -327,7 +327,7 @@ gpu_encode_statistics(uint8_t *blob_bfr, statistics_merge_group *groups, const s
         cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
       }
       break;
-    case dtype_bool8:
+    case dtype_bool:
       // bucketStatistics = 5
       // message BucketStatistics {
       //  repeated uint64 count = 1 [packed=true];

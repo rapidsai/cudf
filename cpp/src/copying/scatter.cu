@@ -42,7 +42,7 @@ namespace {
 
 struct dispatch_map_type {
     template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value
-     and not std::is_same<MapType, bool8>::value>* = nullptr>
+     and not std::is_same<MapType, bool>::value>* = nullptr>
     std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
@@ -54,7 +54,7 @@ struct dispatch_map_type {
   }
 
   template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value
-      or std::is_same<MapType, bool8>::value>* = nullptr>
+      or std::is_same<MapType, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
@@ -180,7 +180,7 @@ struct column_scalar_scatterer
 
 struct scatter_scalar_impl {
   template <typename T, std::enable_if_t<std::is_integral<T>::value
-      and not std::is_same<T, bool8>::value>* = nullptr>
+      and not std::is_same<T, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
@@ -216,7 +216,7 @@ struct scatter_scalar_impl {
   }
 
   template <typename T, std::enable_if_t<not std::is_integral<T>::value
-      or std::is_same<T, bool8>::value>* = nullptr>
+      or std::is_same<T, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,

@@ -112,8 +112,8 @@ protected:
                                 size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<cudf::size_type> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool>            ref_valid(num_rows);
 
     // input data and mask
   
@@ -160,11 +160,11 @@ protected:
                           size_type min_periods)
   {
     size_type num_rows = input.size();
-    std::vector<OutputType> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<OutputType> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
-    std::vector<T> in_col;
+    thrust::host_vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
     bitmask_type* valid_mask = in_valid.data();
@@ -301,7 +301,7 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
   std::vector<size_type> grouping_keys_vec(size, 0); // `size` elements, each == 0.
   const cudf::table_view grouping_keys{
     std::vector<cudf::column_view>{
-      fixed_width_column_wrapper<size_type>{ grouping_keys_vec.begin(), grouping_keys_vec.end() }
+      fixed_width_column_wrapper<size_type>( grouping_keys_vec.begin(), grouping_keys_vec.end() )
     }
   };
 
@@ -321,7 +321,7 @@ TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, true);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -333,8 +333,8 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
   std::vector<TypeParam> key_1_vec;
   int i{0};
   std::generate_n(std::back_inserter(key_1_vec), DATA_SIZE, [&i](){return i++/4;}); // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0 {key_0_vec.begin(), key_0_vec.end()};
-  const fixed_width_column_wrapper<TypeParam> key_1 {key_1_vec.begin(), key_1_vec.end()};
+  const fixed_width_column_wrapper<TypeParam> key_0 (key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam> key_1 (key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys {std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 2;
@@ -347,7 +347,7 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 // all rows are invalid
 TYPED_TEST(GroupedRollingTest, AllInvalid)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, false);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -359,8 +359,8 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
   std::vector<TypeParam> key_1_vec;
   int i{0};
   std::generate_n(std::back_inserter(key_1_vec), DATA_SIZE, [&i](){return i++/4;}); // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0 {key_0_vec.begin(), key_0_vec.end()};
-  const fixed_width_column_wrapper<TypeParam> key_1 {key_1_vec.begin(), key_1_vec.end()};
+  const fixed_width_column_wrapper<TypeParam> key_0 (key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam> key_1 (key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys {std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 2;
@@ -373,7 +373,7 @@ TYPED_TEST(GroupedRollingTest, AllInvalid)
 // window = following_window = 0
 TYPED_TEST(GroupedRollingTest, ZeroWindow)
 {
-  const std::vector<TypeParam> col_data {0, 10, 20, 30, 40, 50, 60, 70, 80, 90};
+  const auto col_data = cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE {static_cast<size_type>(col_data.size())};
   const std::vector<bool>      col_mask (DATA_SIZE, true);
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
@@ -385,8 +385,8 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
   std::vector<TypeParam> key_1_vec;
   int i{0};
   std::generate_n(std::back_inserter(key_1_vec), DATA_SIZE, [&i](){return i++/4;}); // Groups of 4.
-  const fixed_width_column_wrapper<TypeParam> key_0 {key_0_vec.begin(), key_0_vec.end()};
-  const fixed_width_column_wrapper<TypeParam> key_1 {key_1_vec.begin(), key_1_vec.end()};
+  const fixed_width_column_wrapper<TypeParam> key_0 (key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam> key_1 (key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys {std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window = 0;
@@ -501,8 +501,8 @@ protected:
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
     size_type num_rows = input.size();
-    std::vector<cudf::size_type> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
 
     // input data and mask
   
@@ -560,11 +560,11 @@ protected:
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
 
     size_type num_rows = input.size();
-    std::vector<OutputType> ref_data(num_rows);
-    std::vector<bool> ref_valid(num_rows);
+    thrust::host_vector<OutputType> ref_data(num_rows);
+    thrust::host_vector<bool>       ref_valid(num_rows);
 
     // input data and mask
-    std::vector<T> in_col;
+    thrust::host_vector<T> in_col;
     std::vector<bitmask_type> in_valid; 
     std::tie(in_col, in_valid) = cudf::test::to_host<T>(input); 
     bitmask_type* valid_mask = in_valid.data();
@@ -674,8 +674,8 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithGroupK
   std::vector<TypeParam> key_1_vec;
   int i{0};
   std::generate_n(std::back_inserter(key_1_vec), DATA_SIZE, [&i](){return i++/6;}); // Groups of 6.
-  const fixed_width_column_wrapper<TypeParam> key_0 {key_0_vec.begin(), key_0_vec.end()};
-  const fixed_width_column_wrapper<TypeParam> key_1 {key_1_vec.begin(), key_1_vec.end()};
+  const fixed_width_column_wrapper<TypeParam> key_0 (key_0_vec.begin(), key_0_vec.end());
+  const fixed_width_column_wrapper<TypeParam> key_1 (key_1_vec.begin(), key_1_vec.end());
   const cudf::table_view grouping_keys {std::vector<cudf::column_view>{key_0, key_1}};
 
   size_type preceding_window_in_days = 1;
