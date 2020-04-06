@@ -57,12 +57,30 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 {
 }
 
+void writer::impl::write_chunked_begin(table_view const& table,
+                                       const table_metadata *metadata,
+                                       cudaStream_t stream)
+{
+}
+
+
+void writer::impl::write_chunked(table_view const& table,
+                                 const table_metadata *metadata,
+                                 cudaStream_t stream)
+{
+}
+
   
 void writer::impl::write(table_view const &table,
                          const table_metadata *metadata,
                          cudaStream_t stream) {
-  //TODO!
-  //chunked behavior(?)
+  //TODO: chunked behavior / decision making (?)
+
+  CUDF_EXPECTS( table.num_columns() > 0 && table.num_rows() > 0, "Empty table." );
+
+  //no need to check same-size columns constraint; auto-enforced by table_view
+
+  
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {

@@ -72,6 +72,42 @@ class writer::impl {
              const table_metadata *metadata = nullptr,
              cudaStream_t stream = nullptr);
 
+
+  /**
+   * @brief Write the header of a CSV format.
+   *
+   * @param table The set of columns
+   * @param metadata The metadata associated with the table
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void write_chunked_begin(table_view const& table,
+                           const table_metadata *metadata = nullptr,
+                           cudaStream_t stream = nullptr);
+
+  /**
+   * @brief Write dataset to CSV format without header.
+   *
+   * @param table The set of columns
+   * @param metadata The metadata associated with the table
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void write_chunked(table_view const& table,
+                     const table_metadata *metadata = nullptr,
+                     cudaStream_t stream = nullptr);
+
+  /**
+   * @brief Write footer of CSV format (typically, empty).
+   *
+   * @param table The set of columns
+   * @param metadata The metadata associated with the table
+   * @param stream Stream to use for memory allocation and kernels
+   **/
+  void write_chunked_end(table_view const& table,
+                         const table_metadata *metadata = nullptr,
+                         cudaStream_t stream = nullptr)
+  {
+  }
+
 private:
   std::unique_ptr<data_sink> out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
