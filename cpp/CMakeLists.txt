@@ -603,6 +603,7 @@ add_library(cudf
             src/strings/wrap.cu
             src/strings/capitalize.cu
             src/strings/char_types/char_types.cu
+            src/strings/char_types/char_cases.cu
             src/strings/combine.cu
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu

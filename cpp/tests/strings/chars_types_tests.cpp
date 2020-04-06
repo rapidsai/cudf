@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,17 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
-#include "./utilities.h"
+#include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
 
 
 struct StringsCharsTest : public cudf::test::BaseFixture {};
 
-class StringsCharsTypesTest : public StringsCharsTest,
+class StringsCharsTestTypes : public StringsCharsTest,
                        public testing::WithParamInterface<cudf::strings::string_character_types> {};
 
-TEST_P(StringsCharsTypesTest, AllTypes)
+TEST_P(StringsCharsTestTypes, AllTypes)
 {
     std::vector<const char*> h_strings{ "Héllo", "thesé", nullptr, "HERE", "tést strings", "",
         "1.75", "-34", "+9.8", "17¼", "x³", "2³", " 12⅝",
@@ -66,7 +65,7 @@ TEST_P(StringsCharsTypesTest, AllTypes)
     cudf::test::expect_columns_equal(*results,expected);
 }
 
-INSTANTIATE_TEST_CASE_P(StringsAllCharsTypes, StringsCharsTypesTest,
+INSTANTIATE_TEST_CASE_P(StringsCharsTestAllTypes, StringsCharsTestTypes,
     testing::ValuesIn(std::array<cudf::strings::string_character_types,7>
     { cudf::strings::string_character_types::DECIMAL,
       cudf::strings::string_character_types::NUMERIC,
@@ -74,8 +73,27 @@ INSTANTIATE_TEST_CASE_P(StringsAllCharsTypes, StringsCharsTypesTest,
       cudf::strings::string_character_types::ALPHA,
       cudf::strings::string_character_types::SPACE,
       cudf::strings::string_character_types::UPPER,
-      cudf::strings::string_character_types::LOWER}));
+      cudf::strings::string_character_types::LOWER }));
 
+
+TEST_F(StringsCharsTest, LowerUpper)
+{
+    cudf::test::strings_column_wrapper strings( {"a1","A1","a!","A!","!1","aA"} );
+    auto strings_view = cudf::strings_column_view(strings);
+    auto verify_types = cudf::strings::string_character_types::LOWER | cudf::strings::string_character_types::UPPER;
+    {
+        auto results = cudf::strings::all_characters_of_type(strings_view,
+            cudf::strings::string_character_types::LOWER, verify_types);
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {1,0,1,0,0,0} );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+    {
+        auto results = cudf::strings::all_characters_of_type(strings_view,
+            cudf::strings::string_character_types::UPPER, verify_types);
+        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,1,0,0} );
+        cudf::test::expect_columns_equal(*results,expected);
+    }
+}
 
 TEST_F(StringsCharsTest, Alphanumeric)
 {
@@ -89,7 +107,7 @@ TEST_F(StringsCharsTest, Alphanumeric)
 
     auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
 
-    std::vector<cudf::experimental::bool8> h_expected{ 1,1,0,1,0,0,0,0,0,1,1,1,0,1,1,0 };
+    std::vector<cudf::experimental::bool8> h_expected{ 1,1,0,1,0,0, 0,0,0,1,1,1,0, 1,1,0 };
     cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( h_expected.begin(), h_expected.end(),
             thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
