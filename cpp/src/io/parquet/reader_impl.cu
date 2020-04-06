@@ -663,9 +663,14 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
                                   ? std::min(col_meta.data_page_offset,
                                              col_meta.dictionary_page_offset)
                                   : col_meta.data_page_offset;
+          CUDF_EXPECTS(_source != nullptr, "Unexpected NULL data source\n");
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+          CUDF_EXPECTS(buffer.get() != nullptr, "NULL buffer from data source!");
+          rmm::device_buffer devbfr(buffer->data(), buffer->size(), stream);
+          CUDF_EXPECTS(devbfr.data() != nullptr);
+          page_data[chunks.size()] = std::move(devbfr);
+          CUDA_TRY(cudaStreamSynchronize(stream));
           d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
         }
         chunks.insert(gpu::ColumnChunkDesc(
