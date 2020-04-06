@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from timeit import default_timer as timer
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,14 +12,14 @@ from cudf.tests.utils import assert_eq
 def make_params():
     np.random.seed(0)
 
-    hows = "left,inner,outer,right".split(",")
+    hows = "left,inner,outer,right,leftanti,leftsemi".split(",")
     methods = "hash,sort".split(",")
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -31,7 +29,7 @@ def make_params():
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -41,7 +39,7 @@ def make_params():
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
@@ -51,11 +49,18 @@ def make_params():
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
-        if how in ["left", "inner", "right"]:
+        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
             for method in methods:
                 yield (aa, bb, how, method)
         else:
             yield (aa, bb, how, "sort")
+
+
+def pd_odd_joins(left, right, join_type):
+    if join_type == "leftanti":
+        return left[~left.index.isin(right.index)][left.columns]
+    elif join_type == "leftsemi":
+        return left[left.index.isin(right.index)][left.columns]
 
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
@@ -64,49 +69,37 @@ def test_dataframe_join_how(aa, bb, how, method):
     df["a"] = aa
     df["b"] = bb
 
-    def work_pandas(df):
-        ts = timer()
+    def work_pandas(df, how):
         df1 = df.set_index("a")
         df2 = df.set_index("b")
-        joined = df1.join(df2, how=how, sort=True)
-        te = timer()
-        print("timing", type(df), te - ts)
+        if how == "leftanti":
+            joined = pd_odd_joins(df1, df2, "leftanti")
+        elif how == "leftsemi":
+            joined = pd_odd_joins(df1, df2, "leftsemi")
+        else:
+            joined = df1.join(df2, how=how, sort=True)
         return joined
 
     def work_gdf(df):
-        ts = timer()
         df1 = df.set_index("a")
         df2 = df.set_index("b")
         joined = df1.join(df2, how=how, sort=True, method=method)
-        te = timer()
-        print("timing", type(df), te - ts)
         return joined
 
-    expect = work_pandas(df.to_pandas())
+    expect = work_pandas(df.to_pandas(), how)
     got = work_gdf(df)
     expecto = expect.copy()
     goto = got.copy()
 
-    # Type conversion to handle NoneType
-    expectb = expect.b
-    expecta = expect.a
-    gotb = got.b
-    gota = got.a
-    del got["b"]
-    got.insert(len(got._data), "b", gotb.astype(np.float64).fillna(np.nan))
-    del got["a"]
-    got.insert(len(got._data), "a", gota.astype(np.float64).fillna(np.nan))
-    expect.drop(["b"], axis=1)
-    expect["b"] = expectb.astype(np.float64).fillna(np.nan)
-    expect.drop(["a"], axis=1)
-    expect["a"] = expecta.astype(np.float64).fillna(np.nan)
+    expect = expect.astype(np.float64).fillna(np.nan)[expect.columns]
+    got = got.astype(np.float64).fillna(np.nan)[expect.columns]
 
     assert got.index.name is None
 
     assert list(expect.columns) == list(got.columns)
     # test disabled until libgdf sort join gets updated with new api
     if method == "hash":
-        assert np.all(expect.index.values == got.index.values)
+        assert_eq(sorted(expect.index.values), sorted(got.index.values))
         if how != "outer":
             # Newly introduced ambiguous ValueError thrown when
             # an index and column have the same name. Rename the
@@ -115,8 +108,12 @@ def test_dataframe_join_how(aa, bb, how, method):
             expect.index.name = "bob"
             got.index.name = "mary"
             pd.util.testing.assert_frame_equal(
-                got.to_pandas().sort_values(["b", "a"]).reset_index(drop=True),
-                expect.sort_values(["b", "a"]).reset_index(drop=True),
+                got.to_pandas()
+                .sort_values(got.columns.to_list())
+                .reset_index(drop=True),
+                expect.sort_values(expect.columns.to_list()).reset_index(
+                    drop=True
+                ),
             )
         # if(how=='right'):
         #     _sorted_check_series(expect['a'], expect['b'],
@@ -125,8 +122,8 @@ def test_dataframe_join_how(aa, bb, how, method):
         #     _sorted_check_series(expect['b'], expect['a'], got['b'],
         #                          got['a'])
         else:
-            _check_series(expecto["b"].fillna(-1), goto["b"].fillna(-1))
-            _check_series(expecto["a"].fillna(-1), goto["a"].fillna(-1))
+            for c in expecto.columns:
+                _check_series(expecto[c].fillna(-1), goto[c].fillna(-1))
 
 
 def _check_series(expect, got):
@@ -167,7 +164,7 @@ def test_dataframe_join_suffix():
     )
     # Check
     assert list(expect.columns) == list(got.columns)
-    assert np.all(expect.index.values == got.index.values)
+    assert_eq(expect.index.values, got.index.values)
     for k in expect.columns:
         _check_series(expect[k].fillna(-1), got[k].fillna(-1))
 
@@ -198,7 +195,7 @@ def test_dataframe_join_cats():
     # Just do some rough checking here.
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
-    assert set(got.index.values) & set("abc")
+    assert set(got.index.to_pandas()) & set("abc")
     assert set(got["b"]) & set(bb)
     assert set(got["c"]) & set(cc)
 
@@ -667,21 +664,89 @@ def test_merge_left_right_index_left_right_on_kwargs2(kwargs):
     "hows", [{"how": "inner"}, {"how": "left"}, {"how": "outer"}]
 )
 @pytest.mark.parametrize(
-    "kwargs",
-    [{"on": "k1"}, {"on": "k2"}, {"on": "k3"}, {"on": "k4"}, {"on": "k5"}],
+    "ons",
+    [
+        {"on": "a"},
+        {"on": ["a", "b"]},
+        {"on": ["b", "a"]},
+        {"on": ["a", "aa", "b"]},
+        {"on": ["b", "a", "aa"]},
+    ],
 )
-def test_merge_sort(kwargs, hows):
+def test_merge_sort(ons, hows):
+    kwargs = {}
     kwargs.update(hows)
+    kwargs.update(ons)
     kwargs["sort"] = True
-    d = range(3)
-    left = pd.DataFrame({"k2": d, "k1": d, "k4": d, "k3": d, "k5": d})
-    right = pd.DataFrame({"k1": d, "k4": d, "k2": d, "k3": d, "k5": d})
+    a = [4, 6, 9, 5, 2, 4, 1, 8, 1]
+    b = [9, 8, 7, 8, 3, 9, 7, 9, 2]
+    aa = [8, 9, 2, 9, 3, 1, 2, 3, 4]
+    left = pd.DataFrame({"a": a, "b": b, "aa": aa})
+    right = left.copy(deep=True)
+
+    left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
+    right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
+
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     gd_merge = gleft.merge(gright, **kwargs)
+
     pd_merge = left.merge(right, **kwargs)
-    if pd_merge.empty:
-        assert gd_merge.empty
+    # require the join keys themselves to be sorted correctly
+    # the non-key columns will NOT match pandas ordering
+    assert_eq(pd_merge[kwargs["on"]], gd_merge[kwargs["on"]])
+    pd_merge = pd_merge.drop(kwargs["on"], axis=1)
+    gd_merge = gd_merge.drop(kwargs["on"])
+    if not pd_merge.empty:
+        # check to make sure the non join key columns are the same
+        pd_merge = pd_merge.sort_values(list(pd_merge.columns)).reset_index(
+            drop=True
+        )
+        gd_merge = gd_merge.sort_values(list(gd_merge.columns)).reset_index(
+            drop=True
+        )
+
+    assert_eq(pd_merge, gd_merge)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"left_on": ["a"], "left_index": False, "right_index": True},
+        {"right_on": ["b"], "left_index": True, "right_index": False},
+        {
+            "left_on": ["a"],
+            "right_on": ["b"],
+            "left_index": True,
+            "right_index": True,
+        },
+    ],
+)
+def test_merge_sort_on_indexes(kwargs):
+    left_index = kwargs["left_index"]
+    right_index = kwargs["right_index"]
+    kwargs["sort"] = True
+    a = [4, 6, 9, 5, 2, 4, 1, 8, 1]
+    left = pd.DataFrame({"a": a})
+    right = pd.DataFrame({"b": a})
+
+    left.index = [6, 5, 4, 7, 5, 5, 5, 4, 4]
+    right.index = [5, 4, 1, 9, 4, 3, 5, 4, 4]
+
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    gd_merge = gleft.merge(gright, **kwargs)
+
+    if left_index and right_index:
+        check_if_sorted = gd_merge[["a", "b"]].to_pandas()
+        check_if_sorted.index.name = "index"
+        definitely_sorted = check_if_sorted.sort_values(["index", "a", "b"])
+        definitely_sorted.index.name = None
+        assert_eq(gd_merge, definitely_sorted)
+    elif left_index:
+        assert gd_merge["b"].is_monotonic
+    elif right_index:
+        assert gd_merge["a"].is_monotonic
 
 
 @pytest.mark.parametrize(

@@ -27,7 +27,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -57,7 +57,7 @@ struct count_accessor {
     auto p_count = static_cast<ScalarType const*>(this->p_scalar);
 #endif
     auto count = p_count->value();
-    // static_cast is necessary due to bool8
+    // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <=
                    std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed size_type's limit.");
@@ -78,7 +78,7 @@ struct compute_offsets {
   std::enable_if_t<std::is_integral<T>::value,
     rmm::device_vector<cudf::size_type>>
   operator()(bool check_count, cudaStream_t stream = 0) {
-    // static_cast is necessary due to bool8
+    // static_cast is necessary due to bool
     if (check_count &&
         static_cast<int64_t>(std::numeric_limits<T>::max()) >
           std::numeric_limits<cudf::size_type>::max()) {
@@ -143,7 +143,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       indices.begin());
 
   return gather(input_table, indices.begin(), indices.end(),
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -171,7 +171,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto map_end = map_begin + output_size;
 
   return gather(input_table, map_begin, map_end,
-                false, false, false, mr, stream);
+                false, mr, stream);
 }
 
 }  // namespace detail
@@ -180,12 +180,14 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, check_count, mr, 0);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
                               rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, mr, 0);
 }
 

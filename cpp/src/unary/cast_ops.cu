@@ -19,6 +19,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -137,6 +138,7 @@ std::unique_ptr<column> cast(column_view const& input,
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
                              rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::cast(input, type, mr);
 }
 

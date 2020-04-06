@@ -364,6 +364,79 @@ def test_series_with_nulls_where(fill_value):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("fill_value", [[888, 999]])
+def test_dataframe_with_nulls_where_with_scalars(fill_value):
+    pdf = pd.DataFrame(
+        {
+            "A": [-1, 2, -3, None, 5, 6, -7, 0],
+            "B": [4, -2, 3, None, 7, 6, 8, 0],
+        }
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.where(pdf % 3 == 0, fill_value)
+    got = gdf.where(gdf % 3 == 0, fill_value)
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_with_different_types():
+
+    # Testing for int and float
+    pdf = pd.DataFrame(
+        {"A": [111, 22, 31, 410, 56], "B": [-10.12, 121.2, 45.7, 98.4, 87.6]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+    expect = pdf.where(pdf > 50, -pdf)
+    got = gdf.where(gdf > 50, -gdf)
+
+    assert_eq(expect, got)
+
+    # Testing for string
+    pdf = pd.DataFrame({"A": ["a", "bc", "cde", "fghi"]})
+    gdf = DataFrame.from_pandas(pdf)
+    pdf_mask = pd.DataFrame({"A": [True, False, True, False]})
+    gdf_mask = DataFrame.from_pandas(pdf_mask)
+    expect = pdf.where(pdf_mask, ["cudf"])
+    got = gdf.where(gdf_mask, ["cudf"])
+
+    assert_eq(expect, got)
+
+    # Testing for categoriacal
+    pdf = pd.DataFrame({"A": ["a", "b", "b", "c"]})
+    pdf["A"] = pdf["A"].astype("category")
+    gdf = DataFrame.from_pandas(pdf)
+    expect = pdf.where(pdf_mask, "c")
+    got = gdf.where(gdf_mask, ["c"])
+
+    assert_eq(expect, got)
+
+
+def test_dataframe_where_with_different_options():
+    pdf = pd.DataFrame({"A": [1, 2, 3], "B": [3, 4, 5]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    # numpy array
+    boolean_mask = np.array([[False, True], [True, False], [False, True]])
+
+    expect = pdf.where(boolean_mask, -pdf)
+    got = gdf.where(boolean_mask, -gdf)
+
+    assert_eq(expect, got)
+
+    # with single scalar
+    expect = pdf.where(boolean_mask, 8)
+    got = gdf.where(boolean_mask, 8)
+
+    assert_eq(expect, got)
+
+    # with multi scalar
+    expect = pdf.where(boolean_mask, [8, 9])
+    got = gdf.where(boolean_mask, [8, 9])
+
+    assert_eq(expect, got)
+
+
 def test_series_multiple_times_with_nulls():
     sr = Series([1, 2, 3, None])
     expected = Series([None, None, None, None], dtype=np.int64)
@@ -429,3 +502,60 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
         )
         got = sr.replace([-1, 1], [replacement, replacement])
         assert_eq(expect, got)
+
+
+def test_replace_inplace():
+    data = np.array([5, 1, 2, 3, 4])
+    sr = Series(data)
+    psr = pd.Series(data)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace(5, 0, inplace=True)
+    psr.replace(5, 0, inplace=True)
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+
+    sr = Series(data)
+    psr = pd.Series(data)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace({5: 0, 3: -5})
+    psr.replace({5: 0, 3: -5})
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    srr = sr.replace()
+    psrr = psr.replace()
+    assert_eq(srr, psrr)
+
+    psr = pd.Series(["one", "two", "three"], dtype="category")
+    sr = Series.from_pandas(psr)
+
+    sr_copy = sr.copy()
+    psr_copy = psr.copy()
+
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+    sr.replace("one", "two", inplace=True)
+    psr.replace("one", "two", inplace=True)
+    assert_eq(sr, psr)
+    assert_eq(sr_copy, psr_copy)
+
+    pdf = pd.DataFrame({"A": [0, 1, 2, 3, 4], "B": [5, 6, 7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf_copy = pdf.copy()
+    gdf_copy = gdf.copy()
+    assert_eq(pdf, gdf)
+    assert_eq(pdf_copy, gdf_copy)
+    pdf.replace(5, 0, inplace=True)
+    gdf.replace(5, 0, inplace=True)
+    assert_eq(pdf, gdf)
+    assert_eq(pdf_copy, gdf_copy)

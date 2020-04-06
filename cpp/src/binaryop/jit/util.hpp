@@ -83,6 +83,14 @@ namespace jit {
         operator_name = "LogicalOr"; break;
       case binary_operator::GENERIC_BINARY:
         operator_name = "UserDefinedOp"; break;
+      case binary_operator::SHIFT_LEFT:
+        operator_name = "ShiftLeft"; break;
+      case binary_operator::SHIFT_RIGHT:
+        operator_name = "ShiftRight"; break;        
+      case binary_operator::SHIFT_RIGHT_UNSIGNED:
+        operator_name = "ShiftRightUnsigned"; break;
+      case binary_operator::LOG_BASE:
+        operator_name = "LogBase"; break;
       default:
         operator_name = "None"; break;
     }

@@ -172,8 +172,10 @@ struct ParquetMetadata : public parquet::FileMetaData {
 
   std::vector<std::string> get_column_names() {
     std::vector<std::string> all_names;
-    for (const auto &chunk : row_groups[0].columns) {
-      all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+    if (row_groups.size() != 0) {
+      for (const auto &chunk : row_groups[0].columns) {
+        all_names.emplace_back(get_column_name(chunk.meta_data.path_in_schema));
+      }
     }
     return all_names;
   }
@@ -306,7 +308,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
 };
 
 size_t reader::Impl::count_page_headers(
-    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
+    hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
   size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
@@ -336,8 +338,8 @@ size_t reader::Impl::count_page_headers(
 }
 
 void reader::Impl::decode_page_headers(
-    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
+    hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<parquet::gpu::PageInfo> &pages) {
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info = pages.device_ptr(page_count);
@@ -366,8 +368,8 @@ void reader::Impl::decode_page_headers(
 }
 
 rmm::device_buffer reader::Impl::decompress_page_data(
-    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
+    hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<parquet::gpu::PageInfo> &pages) {
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -483,8 +485,8 @@ rmm::device_buffer reader::Impl::decompress_page_data(
 }
 
 void reader::Impl::decode_page_data(
-    const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<parquet::gpu::PageInfo> &pages,
+    hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t min_row,
     size_t total_rows) {
   auto is_dict_chunk = [](const parquet::gpu::ColumnChunkDesc &chunk) {

@@ -177,6 +177,34 @@ namespace operation {
         }
     };
 
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftLeft {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs << rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftRight {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs >> rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct ShiftRightUnsigned {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(static_cast<std::make_unsigned_t<TypeLhs>>(lhs) >> rhs);
+        }
+    };
+
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogBase {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(std::log(static_cast<double>(lhs)) / std::log(static_cast<double>(rhs)));
+        }
+    };
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf

@@ -7,6 +7,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/copying.hpp>
 #include <utilities/legacy/error_utils.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>
@@ -21,7 +22,7 @@ namespace detail {
 
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value
-    and not std::is_same<map_type, cudf::experimental::bool8>::value>* = nullptr>
+    and not std::is_same<map_type, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source_table,
 				    column_view const& gather_map,
 				    size_type num_destination_rows, bool check_bounds,
@@ -52,9 +53,7 @@ struct dispatch_map_type {
 	       thrust::make_transform_iterator(
 					       gather_map.end<map_type>(),
 					       index_converter<map_type>{source_table.num_rows()}),
-	       check_bounds,
 	       ignore_out_of_bounds,
-	       allow_negative_indices,
 	       mr,
 	       stream
 	     );
@@ -64,9 +63,7 @@ struct dispatch_map_type {
 	gather(source_table,
 	       gather_map.begin<map_type>(),
 	       gather_map.end<map_type>(),
-	       check_bounds,
 	       ignore_out_of_bounds,
-	       allow_negative_indices,
 	       mr,
 	       stream
 	       );
@@ -76,7 +73,7 @@ struct dispatch_map_type {
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value
-    or std::is_same<map_type, cudf::experimental::bool8>::value>* = nullptr>
+    or std::is_same<map_type, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source_table, column_view const& gather_map,
 				    size_type num_destination_rows, bool check_bounds,
 				    bool ignore_out_of_bounds, bool allow_negative_indices = false,
@@ -111,6 +108,7 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
 
 std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
 			      bool check_bounds, rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::gather(source_table, gather_map, check_bounds, false, true, mr);
 }
 

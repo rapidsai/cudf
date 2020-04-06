@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,8 +30,12 @@ public final class Aggregate {
     this.index = index;
   }
 
-  static Aggregate count(int index) {
-    return new Aggregate(AggregateOp.COUNT, index);
+  // Include null in count if include_nulls = true
+  static Aggregate count(int index, boolean include_nulls) {
+    return new Aggregate(include_nulls ?
+            AggregateOp.COUNT_ALL :
+            AggregateOp.COUNT_VALID,
+            index);
   }
 
   static Aggregate max(int index) {
@@ -50,11 +54,21 @@ public final class Aggregate {
     return new Aggregate(AggregateOp.SUM, index);
   }
 
+  static Aggregate median(int index) {
+    return new Aggregate(AggregateOp.MEDIAN, index);
+  }
+
+  // TODO add in quantile
+
   int getIndex() {
     return index;
   }
 
   int getNativeId() {
     return type.nativeId;
+  }
+
+  AggregateOp getOp() {
+    return type;
   }
 }

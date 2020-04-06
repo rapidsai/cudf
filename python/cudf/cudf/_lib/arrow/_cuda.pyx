@@ -17,18 +17,13 @@
 
 # flake8: noqa
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 
 from __future__ import absolute_import
 
 from pyarrow.compat import tobytes
 from pyarrow.lib cimport *
 #from pyarrow.includes.libarrow_cuda cimport *
-from cudf._lib.arrow.libarrow_cuda cimport *
+from cudf._lib.cpp.arrow.libarrow_cuda cimport *
 from pyarrow.lib import py_buffer, allocate_buffer, as_buffer, ArrowTypeError
 from pyarrow.util import get_contiguous_span
 cimport cpython as cp

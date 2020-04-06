@@ -304,7 +304,7 @@ TEST_F(BinaryOperationIntegrationTest,
 }
 
 TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = int16_t;
   using TypeRhs = int64_t;
 
@@ -320,7 +320,7 @@ TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_SI64) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_s;
   using TypeRhs = cudf::timestamp_s;
 
@@ -336,7 +336,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_TSS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_ms;
   using TypeRhs = cudf::timestamp_s;
 
@@ -352,7 +352,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Scalar_Vector_B8_TSMS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_s;
   using TypeRhs = cudf::timestamp_s;
 
@@ -368,7 +368,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_TSS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = cudf::timestamp_ms;
   using TypeRhs = cudf::timestamp_s;
 
@@ -389,7 +389,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -405,7 +405,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Scalar_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -421,7 +421,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Scalar_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -437,7 +437,7 @@ TEST_F(BinaryOperationIntegrationTest, Less_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -453,7 +453,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -468,8 +468,24 @@ TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Vector_B8_STR_STR) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Equal_Vector_Scalar_B8_STR_STR) {
+  using TypeOut = bool;
+  using TypeLhs = std::string;
+  using TypeRhs = std::string;
+
+  using EQUAL = cudf::library::operation::Equal<TypeOut, TypeLhs, TypeRhs>;
+
+  auto rhs = cudf::test::strings_column_wrapper( {"eee", "bb", "<null>", "", "aa", "bbb", "ééé"} );
+  auto lhs = cudf::string_scalar("");
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
+}
+
 TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -485,7 +501,7 @@ TEST_F(BinaryOperationIntegrationTest, LessEqual_Vector_Vector_B8_STR_STR) {
 }
 
 TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR) {
-  using TypeOut = cudf::experimental::bool8;
+  using TypeOut = bool;
   using TypeLhs = std::string;
   using TypeRhs = std::string;
 
@@ -500,7 +516,279 @@ TEST_F(BinaryOperationIntegrationTest, GreaterEqual_Vector_Vector_B8_STR_STR) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
 }
 
+TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_LEFT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Vector_SI32_SI16_SI64) {
+  using TypeOut = int;
+  using TypeLhs = int16_t;
+  using TypeRhs = int64_t;
+
+  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_LEFT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Scalar_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_LEFT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftLeft_Vector_Scalar_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_LEFT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Vector_SI32_SI16_SI64) {
+  using TypeOut = int;
+  using TypeLhs = int16_t;
+  using TypeRhs = int64_t;
+
+  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRight_Scalar_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRight_Vector_Scalar_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT_UNSIGNED = cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  int num_els = 4;
+
+  TypeLhs lhs[]   = { -8, 78, -93, 0, -INT_MAX };  
+  cudf::test::fixed_width_column_wrapper<TypeLhs> lhs_w(lhs, lhs + num_els);
+
+  TypeRhs shift[]   = { 1, 1, 3, 2, 16 };  
+  cudf::test::fixed_width_column_wrapper<TypeRhs> shift_w(shift, shift + num_els);
+  
+  TypeOut expected[]   = { 2147483644, 39, 536870900, 0, 32768 };  
+  cudf::test::fixed_width_column_wrapper<TypeOut> expected_w(expected, expected + num_els);
+  
+  auto out = cudf::experimental::binary_operation(
+      lhs_w, shift_w, cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  cudf::test::expect_columns_equal(*out, expected_w);
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Vector_SI32_SI16_SI64) {
+  using TypeOut = int;
+  using TypeLhs = int16_t;
+  using TypeRhs = int64_t;
+
+  using SHIFT_RIGHT_UNSIGNED = cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT_UNSIGNED = cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Vector_Scalar_SI32) {
+  using TypeOut = int;
+  using TypeLhs = int;
+  using TypeRhs = int;
+
+  using SHIFT_RIGHT_UNSIGNED = cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
+TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Scalar_SI32_SI32_float) {
+  using TypeOut = int;  // Cast the result value to int for easy comparison
+  using TypeLhs = int32_t;  // All input types get converted into doubles
+  using TypeRhs = float;
+
+  using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
+
+  // Make sure there are no zeros. The log value is purposefully cast to int for easy comparison
+  auto elements = make_counting_transform_iterator(1, [](auto i){return i + 10;});
+  fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 100);
+  // Find log to the base 10
+  auto rhs = numeric_scalar<TypeRhs>(10);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LOG_BASE,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
+}
+
+TEST_F(BinaryOperationIntegrationTest, LogBase_Scalar_Vector_float_SI32) {
+  using TypeOut = float;
+  using TypeLhs = int;
+  using TypeRhs = int;  // Integral types promoted to double
+
+  using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
+
+  // Make sure there are no zeros
+  auto elements = make_counting_transform_iterator(1, [](auto i){return i + 30;});
+  fixed_width_column_wrapper<TypeRhs> rhs(elements, elements + 100);
+  // Find log to the base 2
+  auto lhs = numeric_scalar<TypeLhs>(2);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LOG_BASE,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
+}
+
+TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32) {
+  using TypeOut = double;
+  using TypeLhs = int64_t;
+  using TypeRhs = int32_t;  // Integral types promoted to double
+
+  using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
+
+  // Make sure there are no zeros
+  auto elements = make_counting_transform_iterator(1, [](auto i){return std::pow(2, i);});
+  fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 50);
+
+  // Find log to the base 7
+  auto rhs_elements = make_counting_transform_iterator(0, [](auto){return 7;});
+  fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::LOG_BASE,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
+}
 
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

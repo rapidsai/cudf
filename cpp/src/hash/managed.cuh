@@ -32,4 +32,12 @@ struct managed {
     }
 };
 
+inline bool isPtrManaged(cudaPointerAttributes attr) {
+#if CUDART_VERSION >= 10000
+    return (attr.type == cudaMemoryTypeManaged);
+#else
+    return attr.isManaged;
+#endif
+}
+
 #endif //MANAGED_CUH

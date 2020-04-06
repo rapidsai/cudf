@@ -1,78 +1,104 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+from libcpp cimport bool
+from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-
-import cudf.utils.utils as utils
-from cudf._lib.utils cimport (
-    columns_from_table,
-    table_from_columns,
-    table_to_dataframe
+from cudf._lib.column cimport Column
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
 )
-from cudf._lib.includes.filling cimport (
-    fill as cpp_fill,
-    repeat as cpp_repeat,
-    tile as cpp_tile,
-)
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.move cimport move
+from cudf._lib.scalar cimport Scalar
+from cudf._lib.table cimport Table
 
-import numpy as np
-
-from libc.stdint cimport uintptr_t
-from libc.stdlib cimport free
-
-
-def repeat(input, repeats):
-    from cudf.core.column import as_column
-
-    cdef gdf_scalar* c_repeats_scalar = NULL
-    cdef gdf_column* c_repeats_col = NULL
-
-    cdef cudf_table* c_input_table = table_from_columns(input)
-    cdef cudf_table c_result_table
-
-    if np.isscalar(repeats):
-        repeats = np.dtype("int32").type(repeats)
-        c_repeats_scalar = gdf_scalar_from_scalar(repeats)
-        with nogil:
-            c_result_table = cpp_repeat(
-                c_input_table[0],
-                c_repeats_scalar[0])
-    else:
-        repeats = as_column(repeats).astype("int32")
-        c_repeats_col = column_view_from_column(repeats)
-        with nogil:
-            c_result_table = cpp_repeat(
-                c_input_table[0],
-                c_repeats_col[0])
-
-    free(c_repeats_scalar)
-    del c_input_table
-    free_column(c_repeats_col)
-
-    return columns_from_table(&c_result_table)
+cimport cudf._lib.cpp.filling as cpp_filling
 
 
-def tile(input, count):
-    from cudf.core.column import as_column
+def fill_in_place(Column destination, int begin, int end, Scalar value):
+    cdef mutable_column_view c_destination = destination.mutable_view()
+    cdef size_type c_begin = <size_type> begin
+    cdef size_type c_end = <size_type> end
+    cdef scalar* c_value = value.c_value.get()
 
-    cdef cudf_table* c_input_table = table_from_columns(input)
-    cdef cudf_table c_result_table
+    cpp_filling.fill_in_place(
+        c_destination,
+        c_begin,
+        c_end,
+        c_value[0]
+    )
 
-    cdef size_type c_count = count
 
-    if np.isscalar(count):
-        with nogil:
-            c_result_table = cpp_tile(
-                c_input_table[0],
-                c_count)
-    else:
-        raise ValueError("Count has to be numerical scalar")
+def fill(Column destination, int begin, int end, Scalar value):
+    cdef column_view c_destination = destination.view()
+    cdef size_type c_begin = <size_type> begin
+    cdef size_type c_end = <size_type> end
+    cdef scalar* c_value = value.c_value.get()
+    cdef unique_ptr[column] c_result
 
-    del c_input_table
+    with nogil:
+        c_result = move(cpp_filling.fill(
+            c_destination,
+            c_begin,
+            c_end,
+            c_value[0]
+        ))
 
-    return columns_from_table(&c_result_table)
+    return Column.from_unique_ptr(move(c_result))
+
+
+def repeat(Table input, object count, bool check_count=False):
+    if isinstance(count, Column):
+        return _repeat_via_column(input, count, check_count)
+
+    if isinstance(count, Scalar):
+        return _repeat_via_scalar(input, count)
+
+    raise TypeError(
+        "Expected `count` to be Column or Scalar but got {}"
+        .format(type(count))
+    )
+
+
+def _repeat_via_column(Table input, Column count, bool check_count):
+    cdef table_view c_input = input.view()
+    cdef column_view c_count = count.view()
+    cdef bool c_check_count = check_count
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(cpp_filling.repeat(
+            c_input,
+            c_count,
+            c_check_count
+        ))
+
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=input._column_names,
+        index_names=input._index_names
+    )
+
+
+def _repeat_via_scalar(Table input, Scalar count):
+    cdef table_view c_input = input.view()
+    cdef scalar* c_count = count.c_value.get()
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(cpp_filling.repeat(
+            c_input,
+            c_count[0]
+        ))
+
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=input._column_names,
+        index_names=input._index_names
+    )

@@ -5,14 +5,13 @@ import pickle
 import warnings
 from collections.abc import Sequence
 
+import cupy
 import numpy as np
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
-from cudf.utils import cudautils
 
 
 class MultiIndex(Index):
@@ -31,10 +30,12 @@ class MultiIndex(Index):
         self, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
         from cudf.core.series import Series
+        from cudf import DataFrame
 
-        self.name = None
-        self.names = names
-        self._source_data = None
+        super().__init__()
+
+        self._name = None
+
         column_names = []
         if labels:
             warnings.warn(
@@ -46,7 +47,17 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
-            self._source_data = kwargs["source_data"].reset_index(drop=True)
+            source_data = kwargs["source_data"].reset_index(drop=True)
+
+            if isinstance(source_data, pd.DataFrame):
+                source_data = DataFrame.from_pandas(source_data)
+            names = names if names is not None else source_data._data.names
+            # if names are unique
+            # try using those as the source_data column names:
+            if len(dict.fromkeys(names)) == len(names):
+                source_data.columns = names
+            self._data = source_data._data
+            self.names = names
             self._codes = codes
             self._levels = levels
             return
@@ -72,8 +83,6 @@ class MultiIndex(Index):
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
 
-        from cudf import DataFrame
-
         if not isinstance(codes, DataFrame) and not isinstance(
             codes[0], (Sequence, pd.core.indexes.frozen.FrozenNDArray)
         ):
@@ -96,7 +105,7 @@ class MultiIndex(Index):
         self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
-        self._source_data = DataFrame()
+        source_data = DataFrame()
         for i, name in enumerate(self._codes.columns):
             codes = as_index(self._codes[name]._column)
             if -1 in self._codes[name].values:
@@ -107,10 +116,49 @@ class MultiIndex(Index):
                 )
             else:
                 level = DataFrame({name: self._levels[i]})
-            level = DataFrame(index=codes).join(level)
-            self._source_data[name] = level[name].reset_index(drop=True)
 
-        self.names = [None] * len(self._levels) if names is None else names
+            import cudf._lib as libcudf
+
+            source_data[name] = libcudf.copying.gather(
+                level, codes._data.columns[0]
+            )._data[name]
+
+        self._data = source_data._data
+        self.names = names
+
+    @property
+    def names(self):
+        return self._names
+
+    @names.setter
+    def names(self, value):
+        value = [None] * self.nlevels if value is None else value
+        assert len(value) == self.nlevels
+        self._names = pd.core.indexes.frozen.FrozenList(value)
+
+    @classmethod
+    def _from_table(cls, table, names=None):
+        df = cudf.DataFrame(table._data)
+        if names is None:
+            names = df.columns
+        return MultiIndex.from_frame(df, names=names)
+
+    @property
+    def _source_data(self):
+        return cudf.DataFrame(self._data)
+
+    @_source_data.setter
+    def _source_data(self, value):
+        self._data = value._data
+        self._compute_levels_and_codes()
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -154,12 +202,7 @@ class MultiIndex(Index):
         Removes n names, labels, and codes in order to build a new index
         for results.
         """
-        from cudf import DataFrame
-
-        codes = DataFrame()
-        for idx in self.codes.columns[n:]:
-            codes.add_column(idx, self.codes[idx])
-        result = MultiIndex(self.levels[n:], codes)
+        result = MultiIndex(source_data=self._source_data.iloc[:, n:])
         if self.names is not None:
             result.names = self.names[n:]
         return result
@@ -178,6 +221,10 @@ class MultiIndex(Index):
         if self._codes is None:
             self._compute_levels_and_codes()
         return self._codes
+
+    @property
+    def nlevels(self):
+        return self._source_data.shape[1]
 
     @property
     def levels(self):
@@ -215,17 +262,18 @@ class MultiIndex(Index):
         from cudf import DataFrame
         from cudf import Series
         from cudf import concat
-        from cudf.utils.cudautils import arange
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
-            if row == slice(None):
+            if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[index._source_data.columns[idx]] = Series(row)
         data_table = concat(
             [
                 index._source_data,
-                DataFrame({"idx": Series(arange(len(index._source_data)))}),
+                DataFrame(
+                    {"idx": Series(cupy.arange(len(index._source_data)))}
+                ),
             ],
             axis=1,
         )
@@ -241,7 +289,6 @@ class MultiIndex(Index):
         return result
 
     def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
-        from cudf.utils.cudautils import arange
         from cudf import Series
 
         # Instructions for Slicing
@@ -258,14 +305,16 @@ class MultiIndex(Index):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return arange(start, stop, step)
+                return cupy.arange(start, stop, step)
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return Series(arange(start_values.min(), stop_values.max() + 1))
+            return Series(
+                cupy.arange(start_values.min(), stop_values.max() + 1)
+            )
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(index, row_tuple, max_length)
@@ -295,15 +344,17 @@ class MultiIndex(Index):
                 name = k
             else:
                 name = index.names[k]
-            out_index.add_column(
-                name, index._source_data[index._source_data.columns[k]]
+            out_index.insert(
+                len(out_index.columns),
+                name,
+                index._source_data[index._source_data.columns[k]],
             )
 
         if len(result) == 1 and size == 0 and slice_access is False:
             # If the final result is one row and it was not mapped into
             # directly, return a Series with a tuple as name.
             result = result.T
-            result = result[result.columns[0]]
+            result = result[result._data.names[0]]
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
@@ -333,6 +384,9 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
 
+        if pd.api.types.is_bool_dtype(row_tuple):
+            return df[row_tuple]
+
         valid_indices = self._get_valid_indices_by_tuple(
             df.index, row_tuple, len(df.index)
         )
@@ -340,46 +394,6 @@ class MultiIndex(Index):
         result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
-
-    def _get_column_major(self, df, column_tuple):
-        from cudf import Series
-        from cudf import DataFrame
-
-        valid_indices = self._get_valid_indices_by_tuple(
-            df.columns, column_tuple, len(df._data)
-        )
-        result = df._take_columns(valid_indices)
-        if isinstance(column_tuple, (numbers.Number, slice)):
-            column_tuple = [column_tuple]
-        if len(result) == 0 and len(result.columns) == 0:
-            result_columns = df.columns.copy(deep=False)
-            clear_codes = DataFrame()
-            for name in df.columns.names:
-                clear_codes[name] = Series([])
-            result_columns._codes = clear_codes
-            result_columns._source_data = clear_codes
-            result.columns = result_columns
-        elif len(column_tuple) < len(self.levels) and (
-            not slice(None) in column_tuple
-            and not isinstance(column_tuple[0], (slice, numbers.Number))
-        ):
-            columns = self._popn(len(column_tuple))
-            result.columns = columns.take(valid_indices)
-        else:
-            result.columns = self.take(valid_indices)
-        if len(result.columns.levels) == 1:
-            columns = []
-            for code in result.columns.codes[result.columns.codes.columns[0]]:
-                columns.append(result.columns.levels[0][code])
-            name = result.columns.names[0]
-            result.columns = as_index(columns, name=name)
-        if len(column_tuple) == len(self.levels) and len(result.columns) == 1:
-            result = cudf.Series(
-                next(iter(result._data.values())),
-                name=column_tuple,
-                index=result.index,
-            )
-        return result
 
     def _split_tuples(self, tuples):
         if len(tuples) == 1:
@@ -397,7 +411,7 @@ class MultiIndex(Index):
             return tuples, slice(None)
 
     def __len__(self):
-        return len(self._source_data)
+        return len(next(iter(self._data.columns)))
 
     def equals(self, other):
         if self is other:
@@ -411,7 +425,13 @@ class MultiIndex(Index):
             return False
         # Lazy comparison
         if isinstance(other, MultiIndex) or hasattr(other, "_source_data"):
-            return self._source_data.equals(other._source_data)
+            for self_col, other_col in zip(
+                self._source_data._data.values(),
+                other._source_data._data.values(),
+            ):
+                if not self_col.equals(other_col):
+                    return False
+            return self.names == other.names
         else:
             # Lazy comparison isn't possible - MI was created manually.
             # Actually compare the MI, not its source data (it doesn't have
@@ -446,7 +466,7 @@ class MultiIndex(Index):
             indices = indices
         elif isinstance(indices, slice):
             start, stop, step = indices.indices(len(self))
-            indices = cudautils.arange(start, stop, step)
+            indices = cupy.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         if self._codes is not None:
             result._codes = self._codes.take(indices)
@@ -460,7 +480,7 @@ class MultiIndex(Index):
         transmission.
         """
         header = {}
-        header["type"] = pickle.dumps(type(self))
+        header["type-serialized"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
 
         header["source_data"], frames = self._source_data.serialize()
@@ -473,7 +493,9 @@ class MultiIndex(Index):
         """
         names = pickle.loads(header["names"])
 
-        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data_typ = pickle.loads(
+            header["source_data"]["type-serialized"]
+        )
         source_data = source_data_typ.deserialize(
             header["source_data"], frames
         )
@@ -507,7 +529,7 @@ class MultiIndex(Index):
         df = self._source_data
         if index:
             df = df.set_index(self)
-        if name:
+        if name is not None:
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have th same length as "
@@ -517,6 +539,17 @@ class MultiIndex(Index):
         return df
 
     def get_level_values(self, level):
+        """
+        Return the values at the requested level
+
+        Parameters
+        ----------
+        level : int or label
+
+        Returns
+        -------
+        An Index containing the values at the requested level.
+        """
         colnames = list(self._source_data.columns)
         if level not in colnames:
             if isinstance(level, int):
@@ -526,9 +559,16 @@ class MultiIndex(Index):
                     raise IndexError(f"Invalid level number: '{level}'")
                 level_idx = level
                 level = colnames[level_idx]
+            elif level in self.names:
+                level_idx = list(self.names).index(level)
+                level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        level_values = self._source_data[level]
+        else:
+            level_idx = colnames.index(level)
+        level_values = as_index(
+            self._source_data._data[level], name=self.names[level_idx]
+        )
         return level_values
 
     def _to_frame(self):
@@ -542,9 +582,7 @@ class MultiIndex(Index):
             level = DataFrame(
                 {
                     "idx": Series(
-                        cudautils.arange(
-                            len(self.levels[idx]), dtype=df[col].dtype
-                        )
+                        cupy.arange(len(self.levels[idx]), dtype=df[col].dtype)
                     ),
                     "level": self.levels[idx],
                 }
@@ -589,6 +627,11 @@ class MultiIndex(Index):
         return result
 
     def to_pandas(self):
+        if hasattr(self, "_source_data"):
+            result = self._source_data.to_pandas()
+            result.columns = self.names
+            return pd.MultiIndex.from_frame(result)
+
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
@@ -635,15 +678,11 @@ class MultiIndex(Index):
 
         if hasattr(multiindex, "codes"):
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.codes,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         else:
             mi = cls(
-                levels=multiindex.levels,
-                codes=multiindex.labels,
-                names=multiindex.names,
+                names=multiindex.names, source_data=multiindex.to_frame(),
             )
         return mi
 
@@ -658,27 +697,24 @@ class MultiIndex(Index):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = libcudf.issorted.issorted(
-                self._source_data._columns
+            self._is_monotonic_increasing = self._is_sorted(
+                ascending=None, null_position=None
             )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = libcudf.issorted.issorted(
-                self._source_data._columns, [1] * len(self.levels)
+            self._is_monotonic_decreasing = self._is_sorted(
+                ascending=[False] * len(self.levels), null_position=None
             )
         return self._is_monotonic_decreasing
 
+    def argsort(self, ascending=True):
+        return self._source_data.argsort(ascending=ascending)
+
     def unique(self):
         return MultiIndex.from_frame(self._source_data.drop_duplicates())
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return MultiIndex.from_frame(
-            self._source_data.repeat(repeats), names=self.names
-        )
 
     def memory_usage(self, deep=False):
         n = 0
@@ -691,3 +727,46 @@ class MultiIndex(Index):
             for col in self._codes._columns:
                 n += col._memory_usage(deep=deep)
         return n
+
+    def difference(self, other, sort=None):
+        temp_self = self
+        temp_other = other
+        if hasattr(self, "to_pandas"):
+            temp_self = self.to_pandas()
+        if hasattr(other, "to_pandas"):
+            temp_other = self.to_pandas()
+        return temp_self.difference(temp_other, sort)
+
+    def nan_to_num(*args, **kwargs):
+        return args[0]
+
+    def array_equal(*args, **kwargs):
+        return args[0] == args[1]
+
+    def __array_function__(self, func, types, args, kwargs):
+        cudf_df_module = MultiIndex
+
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_df_module, submodule):
+                cudf_df_module = getattr(cudf_df_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_df_module, np.ndarray]
+
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_df_module, fname):
+            cudf_func = getattr(cudf_df_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+        else:
+            return NotImplemented

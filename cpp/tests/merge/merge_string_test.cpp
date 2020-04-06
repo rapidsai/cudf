@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <cudf/table/table.hpp>
@@ -57,8 +73,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns) {
   std::vector<cudf::null_order> null_precedence{};
 
   std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
-                                                            right_view,
+  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({left_view, right_view},
                                                             key_cols,
                                                             column_order,
                                                             null_precedence));
@@ -130,8 +145,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
   std::vector<cudf::null_order> null_precedence{};
 
   std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
-                                                            right_view,
+  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({left_view, right_view},
                                                             key_cols,
                                                             column_order,
                                                             null_precedence));
@@ -144,7 +158,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row % 2 == 0);
+            bool ret = (row % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -193,8 +207,7 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns) {
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
 
   std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW( p_outputTable = cudf::experimental::merge(left_view,
-                                                             right_view,
+  EXPECT_NO_THROW( p_outputTable = cudf::experimental::merge({left_view, right_view},
                                                              key_cols,
                                                              column_order,
                                                              null_precedence));
@@ -266,8 +279,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns) {
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER, cudf::null_order::BEFORE};
 
   std::unique_ptr<cudf::experimental::table> p_outputTable;
-  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge(left_view,
-                                                            right_view,
+  EXPECT_NO_THROW(p_outputTable = cudf::experimental::merge({left_view, right_view},
                                                             key_cols,
                                                             column_order,
                                                             null_precedence));
@@ -280,7 +292,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns) {
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row % 2 == 0);
+            bool ret = (row % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else

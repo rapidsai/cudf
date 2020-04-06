@@ -10,8 +10,6 @@ from pandas.util.testing import (
     assert_series_equal,
 )
 
-import rmm
-
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
@@ -349,10 +347,7 @@ def test_datetime_to_arrow(dtype):
     [
         [],
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
-        pytest.param(
-            pd.Series([None, None], dtype="datetime64[ns]"),
-            marks=pytest.mark.xfail,
-        ),
+        pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
 @pytest.mark.parametrize(
@@ -425,10 +420,8 @@ testdata = [
     ),
     (
         Series(
-            rmm.to_device(
-                np.array(
-                    ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
-                )
+            np.array(
+                ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
             )
         ),
         True,
@@ -460,3 +453,29 @@ def test_datetime_has_null_test_pyarrow():
 
     assert_eq(expected, data.has_nulls)
     assert_eq(expected_count, data.null_count)
+
+
+def test_datetime_dataframe():
+    data = {
+        "timearray": np.array(
+            [0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]"
+        )
+    }
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+    assert_eq(pdf.dropna(), gdf.dropna())
+
+    assert_eq(pdf.isnull(), gdf.isnull())
+
+    data = np.array([0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]")
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps, gs)
+
+    assert_eq(ps.dropna(), gs.dropna())
+
+    assert_eq(ps.isnull(), gs.isnull())

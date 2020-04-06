@@ -15,24 +15,33 @@
  */
 #pragma once
 
+#include <cudf/types.hpp>
+
+#include <vector>
+
 namespace cudf {
 
 namespace detail {
 
-/**---------------------------------------------------------------------------*
- * @brief Concatenates `views[i]`'s bitmask from the bits
- * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
- * views[i] in views into an array
+/**
+ * @copydoc cudf::segmented_count_set_bits
  *
- * @param views Vector of column views whose bitmask needs to be copied
- * @param dest_mask Pointer to array that contains the combined bitmask
- * of the column views
- * @param stream stream on which all memory allocations and copies
- * will be performed
- *---------------------------------------------------------------------------**/
-void concatenate_masks(std::vector<column_view> const &views,
-    bitmask_type * dest_mask,
-    cudaStream_t stream);
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type>
+segmented_count_set_bits(bitmask_type const* bitmask,
+                         std::vector<size_type> const& indices,
+                         cudaStream_t stream = 0);
+
+/**
+ * @copydoc cudf::segmented_count_unset_bits
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type>
+segmented_count_unset_bits(bitmask_type const* bitmask,
+                           std::vector<size_type> const& indices,
+                           cudaStream_t stream = 0);
 
 }  // namespace detail
 

@@ -212,7 +212,105 @@ std::unique_ptr<cudf::experimental::table> full_join(
                          std::vector<cudf::size_type> const& right_on,
                          std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+/** 
+ * @brief  Performs a left semi join on the specified columns of two 
+ * tables (left, right)
+ *
+ * A left semi join only returns data from the left table, and only 
+ * returns rows that exist in the right table.
+ *
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, a: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {1}
+ *          return_columns: { 0 }
+ * Result: { a: {1, 2} }
+ *
+ * @example TableA a: {0, 1, 2}, c: {1, 2, 5}
+ *          TableB b: {1, 2, 3}
+ *          left_on: {0}
+ *          right_on: {0}
+ *          return_columns: { 1 }
+ * Result: { c: {1, 2} }
+ *
+ * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
+ * @throws cudf::logic_error if number of returned columns is 0
+ * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
+ *
+ * @param[in] left             The left table
+ * @param[in] right            The right table
+ * @param[in] left_on          The column indices from `left` to join on.
+ *                             The column from `left` indicated by `left_on[i]`
+ *                             will be compared against the column from `right`
+ *                             indicated by `right_on[i]`.
+ * @param[in] right_on         The column indices from `right` to join on.
+ *                             The column from `right` indicated by `right_on[i]`
+ *                             will be compared against the column from `left`
+ *                             indicated by `left_on[i]`.
+ * @param[in] return_columns   A vector of column indices from `left` to
+ *                             include in the returned table.
+ * @param[in] mr               Device memory resource to use for device memory allocation
+ *
+ * @returns                    Result of joining `left` and `right` tables on the columns
+ *                             specified by `left_on` and `right_on`. The resulting table
+ *                             will contain `return_columns` from `left` that match in right.
+ */
+std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const& left,
+                                                          cudf::table_view const& right,
+                                                          std::vector<cudf::size_type> const& left_on,
+                                                          std::vector<cudf::size_type> const& right_on,
+                                                          std::vector<cudf::size_type> const& return_columns,
+                                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** 
+ * @brief  Performs a left anti join on the specified columns of two 
+ * tables (left, right)
+ *
+ * A left anti join only returns data from the left table, and only 
+ * returns rows that do not exist in the right table.
+ *
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, a: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {1}
+ *          return_columns: { 0 }
+ * Result: { a: {0} }
+ *
+ * @example TableA a: {0, 1, 2}, c: {1, 2, 5}
+ *          TableB b: {1, 2, 3}
+ *          left_on: {0}
+ *          right_on: {0}
+ *          return_columns: { 1 }
+ * Result: { c: {1} }
+ *
+ * @throws cudf::logic_error if number of columns in either `left` or `right` table is 0
+ * @throws cudf::logic_error if number of returned columns is 0
+ * @throws cudf::logic_error if number of elements in `right_on` and `left_on` are not equal
+ *
+ * @param[in] left             The left table
+ * @param[in] right            The right table
+ * @param[in] left_on          The column indices from `left` to join on.
+ *                             The column from `left` indicated by `left_on[i]`
+ *                             will be compared against the column from `right`
+ *                             indicated by `right_on[i]`.
+ * @param[in] right_on         The column indices from `right` to join on.
+ *                             The column from `right` indicated by `right_on[i]`
+ *                             will be compared against the column from `left`
+ *                             indicated by `left_on[i]`.
+ * @param[in] return_columns   A vector of column indices from `left` to
+ *                             include in the returned table.
+ * @param[in] mr               Device memory resource to use for device memory allocation
+ *
+ * @returns                    Result of joining `left` and `right` tables on the columns
+ *                             specified by `left_on` and `right_on`. The resulting table
+ *                             will contain `return_columns` from `left` that match in right.
+ */
+std::unique_ptr<cudf::experimental::table> left_anti_join(cudf::table_view const& left,
+                                                          cudf::table_view const& right,
+                                                          std::vector<cudf::size_type> const& left_on,
+                                                          std::vector<cudf::size_type> const& right_on,
+                                                          std::vector<cudf::size_type> const& return_columns,
+                                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 } //namespace experimental
 
 } //namespace cudf

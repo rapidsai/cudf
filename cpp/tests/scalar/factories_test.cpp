@@ -20,9 +20,6 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <rmm/mr/default_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-
 #include <gmock/gmock.h>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
@@ -96,6 +93,7 @@ TYPED_TEST(TimestampScalarFactory, TypeCast) {
   EXPECT_TRUE(s->is_valid());
 }
 
+
 template <typename T>
 struct DefaultScalarFactory : public cudf::test::BaseFixture {
   static constexpr auto factory = cudf::make_default_constructed_scalar;
@@ -123,3 +121,26 @@ TYPED_TEST(DefaultScalarFactory, TypeCast) {
   EXPECT_FALSE(numeric_s->is_valid());
   EXPECT_FALSE(s->is_valid());
 }
+
+template <typename T>
+struct FixedWidthScalarFactory : public ScalarFactoryTest {};
+
+TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(FixedWidthScalarFactory, ValueProvided) {
+  TypeParam value(54);
+
+  std::unique_ptr<cudf::scalar> s = cudf::make_fixed_width_scalar<TypeParam>(
+    value,
+    this->stream(), this->mr());
+
+  auto numeric_s = 
+    static_cast< cudf::experimental::scalar_type_t<TypeParam>* >(s.get());
+
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::experimental::type_to_id<TypeParam>()});
+  EXPECT_EQ(numeric_s->value(), value);
+  EXPECT_TRUE(numeric_s->is_valid());
+  EXPECT_TRUE(s->is_valid());
+}
+
+CUDF_TEST_PROGRAM_MAIN()

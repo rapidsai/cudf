@@ -30,7 +30,7 @@
 #include <rolling/legacy/rolling_detail.hpp>
 
 // allocate column
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <jit/launcher.h>
 #include <jit/legacy/type.h>
@@ -366,7 +366,7 @@ gdf_column rolling_window(gdf_column const& input,
     default:
       CUDF_FAIL("Unsupported UDF type.");
   }
-  
+
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,

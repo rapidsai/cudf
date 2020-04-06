@@ -6,6 +6,7 @@ import warnings
 from io import BytesIO, TextIOWrapper
 
 import fsspec
+import fsspec.implementations.local
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -174,6 +175,27 @@ cudf.io.parquet.read_parquet
 cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
+
+_docstring_merge_parquet_filemetadata = """
+Merge multiple parquet metadata blobs
+
+Parameters
+----------
+metadata_list : list
+    List of buffers returned by to_parquet
+
+Returns
+-------
+Combined parquet metadata blob
+
+See Also
+--------
+cudf.io.parquet.to_parquet
+"""
+doc_merge_parquet_filemetadata = docfmt_partial(
+    docstring=_docstring_merge_parquet_filemetadata
+)
+
 
 _docstring_read_orc_metadata = """
 Read an ORC file's metadata and schema
@@ -781,6 +803,7 @@ cudf.io.csv.to_csv
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
 _docstring_to_csv = """
+
 Write a dataframe to csv file format.
 
 Parameters
@@ -873,13 +896,7 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    local_filesystem_protocols = ["file"]
-
-    if hasattr(fs, "protocol"):
-        if fs.protocol in local_filesystem_protocols:
-            return True
-    else:
-        return False
+    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
 def get_filepath_or_buffer(

@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/findall.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
@@ -161,7 +160,7 @@ std::unique_ptr<experimental::table> findall_re( strings_column_view const& stri
     if( columns==0 )
         results.push_back(std::make_unique<column>( data_type{STRING}, strings_count,
                           rmm::device_buffer{0,stream,mr}, // no data
-                          create_null_mask(strings_count,ALL_NULL,stream,mr), strings_count ));
+                          create_null_mask(strings_count,mask_state::ALL_NULL,stream,mr), strings_count ));
 
     for( int32_t column_index=0; column_index < columns; ++column_index )
     {

@@ -7,6 +7,21 @@ if(NOT CMAKE_CUDA_COMPILER)
 endif()
 
 ###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif(DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
 # - common test utils -----------------------------------------------------------------------------
 
 add_library(cudftestutil STATIC
@@ -29,15 +44,23 @@ install(TARGETS cudftestutil
 
 set(CUDF_TEST_LIST CACHE INTERNAL "CUDF_TEST_LIST")
 
+option(BUILD_LEGACY_TESTS "Build cuDF legacy tests" ON)
+
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
-    add_executable(${CMAKE_TEST_NAME}
-                   ${CMAKE_TEST_SRC})
-    set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf cudftestutil)
-    set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
-                            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
-    add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
-    set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
+    string(REGEX MATCH "LEGACY_(.*)?_TEST" is_legacy_test "${CMAKE_TEST_NAME}")
+    if(BUILD_LEGACY_TESTS OR (NOT is_legacy_test))
+        add_executable(${CMAKE_TEST_NAME}
+                       ${CMAKE_TEST_SRC})
+        set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread cudf cudftestutil)
+        if (is_legacy_test)
+            target_link_libraries(${CMAKE_TEST_NAME} gmock_main gtest_main)
+        endif (is_legacy_test)
+        set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
+                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
+        add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+        set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
+    endif(BUILD_LEGACY_TESTS OR (NOT is_legacy_test))
 endfunction(ConfigureTest)
 
 option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
@@ -87,6 +110,10 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
+if(CONDA_LINK_DIRS)
+    link_directories("${CONDA_LINK_DIRS}")
+endif(CONDA_LINK_DIRS)
+
 ###################################################################################################
 ### test sources ##################################################################################
 ###################################################################################################
@@ -105,7 +132,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_device_view_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/compound_test.cu")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -117,14 +145,6 @@ set(SCALAR_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/scalar/scalar_device_view_test.cu")
 
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
-
-# - bool8 wrapper tests ---------------------------------------------------------------------------
-
-set(BOOLS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
-
-ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
-
 
 ###################################################################################################
 # - timestamps tests ----------------------------------------------------------------------------------
@@ -143,9 +163,9 @@ set(ERROR_TEST_SRC
 ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
-# - groupby tests ---------------------------------------------------------------------------------
+# - legacy groupby tests ---------------------------------------------------------------------------------
 
-set(LEGACY_HASH_GROUPBY_TEST_SRC 
+set(LEGACY_HASH_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_count.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_sum.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/legacy/single_column_avg.cu"
@@ -155,7 +175,7 @@ set(LEGACY_HASH_GROUPBY_TEST_SRC
 
 ConfigureTest(LEGACY_HASH_GROUPBY_TEST "${LEGACY_HASH_GROUPBY_TEST_SRC}")
 
-set(LEGACY_SORT_GROUPBY_TEST_SRC 
+set(LEGACY_SORT_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_avg.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_sum.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/legacy/single_column_count.cu"
@@ -171,7 +191,7 @@ set(LEGACY_SORT_GROUPBY_TEST_SRC
 
 ConfigureTest(LEGACY_SORT_GROUPBY_TEST "${LEGACY_SORT_GROUPBY_TEST_SRC}")
 
-set(LEGACY_GROUPBY_WO_AGG_TEST_SRC 
+set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/legacy/groupby_wo_agg_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/legacy/single_column_groupby.cu"
     )
@@ -179,9 +199,31 @@ set(LEGACY_GROUPBY_WO_AGG_TEST_SRC
 ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 
 ###################################################################################################
+# - groupby tests ---------------------------------------------------------------------------------
+
+set(GROUPBY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cu")
+
+ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
+
+###################################################################################################
 # - legacy join tests ------------------------------------------------------------------------------------
 
-set(LEGACY_JOIN_TEST_SRC 
+set(LEGACY_JOIN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_tests.cu")
 
 ConfigureTest(LEGACY_JOIN_TEST "${LEGACY_JOIN_TEST_SRC}")
@@ -189,15 +231,16 @@ ConfigureTest(LEGACY_JOIN_TEST "${LEGACY_JOIN_TEST_SRC}")
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
 
-set(JOIN_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu")
+set(JOIN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/join_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/join/semi_join_tests.cpp")
 
 ConfigureTest(JOIN_TEST "${JOIN_TEST_SRC}")
 
 ###################################################################################################
 # - orderby tests ---------------------------------------------------------------------------------
 
-set(LEGACY_ORDERBY_TEST_SRC 
+set(LEGACY_ORDERBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/legacy/orderby_tests.cu")
 
 ConfigureTest(LEGACY_ORDERBY_TEST "${LEGACY_ORDERBY_TEST_SRC}")
@@ -257,10 +300,19 @@ ConfigureTest(DATETIME_OPS_TEST "${DATETIME_OPS_TEST_SRC}")
 # - hashing tests ---------------------------------------------------------------------------------
 
 set(HASHING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_partition_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/hashing/hash_test.cpp")
 
 ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
+
+###################################################################################################
+# - partitioning tests ---------------------------------------------------------------------------------
+
+set(PARTITIONING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/round_robin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/partition_test.cpp")
+
+ConfigureTest(PARTITIONING_TEST "${PARTITIONING_TEST_SRC}")
 
 ###################################################################################################
 # - legacy hashing tests ---------------------------------------------------------------------------------
@@ -274,7 +326,7 @@ ConfigureTest(LEGACY_HASHING_TEST "${LEGACY_HASHING_TEST_SRC}")
 ###################################################################################################
 # - hash_map tests --------------------------------------------------------------------------------
 
-set(HASH_MAP_TEST_SRC 
+set(HASH_MAP_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/map_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/hash_map/multimap_test.cu")
 
@@ -284,12 +336,12 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 # - quantiles tests -------------------------------------------------------------------------------
 
 set(LEGACY_QUANTILES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/quantiles_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/legacy/group_quantiles_test.cu")
 
 ConfigureTest(LEGACY_QUANTILES_TEST "${LEGACY_QUANTILES_TEST_SRC}")
 
 set(QUANTILES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantile_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -297,7 +349,7 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 ###################################################################################################
 # - reduction tests -------------------------------------------------------------------------------
 
-set(LEGACY_REDUCTION_TEST_SRC 
+set(LEGACY_REDUCTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_std_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/group_var_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/legacy/reduction_tests.cu"
@@ -305,21 +357,21 @@ set(LEGACY_REDUCTION_TEST_SRC
 
 ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
 
-set(REDUCTION_TEST_SRC 
+set(REDUCTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cpp")
 
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
 # - legacy replace tests --------------------------------------------------------------------------
 
-set(LEGACY_REPLACE_TEST_SRC 
+set(LEGACY_REPLACE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace_tests.cu")
 
 ConfigureTest(LEGACY_REPLACE_TEST "${LEGACY_REPLACE_TEST_SRC}")
 
-set(LEGACY_REPLACE_NULLS_TEST_SRC 
+set(LEGACY_REPLACE_NULLS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace-nulls_tests.cu")
 
 ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
@@ -327,20 +379,32 @@ ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 ###################################################################################################
 # - replace tests --------------------------------------------------------------------------
 
-set(REPLACE_TEST_SRC 
+set(REPLACE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
 
 ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
 
-set(REPLACE_NULLS_TEST_SRC 
+set(REPLACE_NULLS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
 
 ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
 
 set(NORMALIZE_REPLACE_TEST_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
-	
+
 ConfigureTest(NORMALIZE_REPLACE_TEST "${NORMALIZE_REPLACE_TEST_SRC}")
+
+set(CLAMP_TEST_SRC
+	"${CMAKE_CURRENT_SOURCE_DIR}/replace/clamp_test.cpp")
+
+ConfigureTest(CLAMP_TEST "${CLAMP_TEST_SRC}")
+###################################################################################################
+# - fixed_point tests -----------------------------------------------------------------------------
+
+set(FIXED_POINT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/fixed_point/fixed_point_tests.cu")
+
+ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
@@ -351,9 +415,9 @@ set(UNARY_TEST_SRC
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
 ###################################################################################################
-# - legacy unary tests -----------------------------------------------------------------------------------
+# - legacy unary tests ----------------------------------------------------------------------------
 
-set(LEGACY_UNARY_TEST_SRC 
+set(LEGACY_UNARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/legacy/unary_ops_test.cu")
 
 ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
@@ -361,7 +425,7 @@ ConfigureTest(LEGACY_UNARY_TEST "${LEGACY_UNARY_TEST_SRC}")
 ###################################################################################################
 # - legacy binary tests ---------------------------------------------------------------------------
 
-set(LEGACY_BINARY_TEST_SRC 
+set(LEGACY_BINARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/binop-verify-input-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/integration/binary-operation-operands-null-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/integration/binary-operation-integration-test.cpp"
@@ -372,7 +436,7 @@ ConfigureTest(LEGACY_BINARY_TEST "${LEGACY_BINARY_TEST_SRC}")
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
 
-set(BINARY_TEST_SRC 
+set(BINARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-verify-input-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-null-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/binop-integration-test.cpp"
@@ -383,7 +447,7 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 ###################################################################################################
 # - legacy unary transform tests ------------------------------------------------------------------
 
-set(LEGACY_TRANSFORM_TEST_SRC 
+set(LEGACY_TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/legacy/unary-operation-integration-test.cu")
 
 ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
@@ -391,7 +455,7 @@ ConfigureTest(LEGACY_TRANSFORM_TEST "${LEGACY_TRANSFORM_TEST_SRC}")
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
 
-set(TRANSFORM_TEST_SRC 
+set(TRANSFORM_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-transform-test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/nans_to_null_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/bools_to_mask.cpp")
@@ -401,13 +465,13 @@ ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 ###################################################################################################
 # - legacy jit cache tests ------------------------------------------------------------------------
 
-set(LEGACY_JITCACHE_TEST_SRC 
+set(LEGACY_JITCACHE_TEST_SRC
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-test.cu")
 
 ConfigureTest(LEGACY_JITCACHE_TEST "${LEGACY_JITCACHE_TEST_SRC}")
 
-set(LEGACY_JITCACHE_MULTI_TEST_SRC 
+set(LEGACY_JITCACHE_MULTI_TEST_SRC
     "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/legacy/unit/jit-cache-multiprocess-test.cpp")
 
@@ -443,16 +507,20 @@ set(ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
 set(PARQUET_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
+set(JSON_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cu")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
+ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
 set(SORT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/sort_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sort/rank_test.cpp")
 
 ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 
@@ -479,7 +547,7 @@ ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 set(NVCATEGORY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
 
-ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
+ConfigureTest(LEGACY_NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests ----------------------------------------------------------------------------------
@@ -503,12 +571,13 @@ ConfigureTest(LEGACY_DLPACK_TEST "${LEGACY_DLPACK_TEST_SRC}")
 set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
@@ -623,7 +692,7 @@ ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 set(DEVICE_TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
 
-ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - sorted-merge tests ----------------------------------------------------------------------------
@@ -637,18 +706,10 @@ ConfigureTest(LEGACY_MERGE_TEST "${LEGACY_MERGE_TEST_SRC}")
 # - sorted-merge new tests ----------------------------------------------------------------------------
 
 set(MERGE_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
-
-###################################################################################################
-# - round-robin new tests ----------------------------------------------------------------------------
-
-set(ROUND_ROBIN_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/round_robin/round_robin_test.cpp")
-
-ConfigureTest(ROUND_ROBIN_TEST "${ROUND_ROBIN_TEST_SRC}")
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
@@ -687,11 +748,20 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
+# - grouped rolling tests ---------------------------------------------------------------------------------
+
+set(GROUPED_ROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
+
+ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
+
+###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/fill_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeat_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/sequence_tests.cpp")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
@@ -723,6 +793,12 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
+
+set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cu")
+
+ConfigureTest(RESHAPE_TEST "${RESHAPE_TEST_SRC}")
 
 set(LEGACY_RESHAPE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/legacy/stack_test.cu")
@@ -763,7 +839,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
@@ -789,31 +865,45 @@ set(STRINGS_TEST_SRC
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 
 ###################################################################################################
+# - nvtext test ----------------------------------------------------------------------------------
+
+set(TEXT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/ngrams_tokenize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/normalize_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/text/tokenize_tests.cpp")
+
+ConfigureTest(TEXT_TEST "${TEXT_TEST_SRC}")
+
+###################################################################################################
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/valid_if_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/set_nullmask_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_tests.cu")
 
 
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
+# - dictionary tests ---------------------------------------------------------------------------------
+
+set(DICTIONARY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/add_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
+
+ConfigureTest(DICTIONARY_TEST "${DICTIONARY_TEST_SRC}")
+
+###################################################################################################
 ### enable testing ################################################################################
 ###################################################################################################
 
 enable_testing()
-
-###################################################################################################
-### benchmarks ####################################################################################
-###################################################################################################
-
-# only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - iterator benchmarks----------------------------------------------------------------------------
-
-set(LEGACY_ITERATOR_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
-
-  ConfigureBench(LEGACY_ITERATOR_BENCH "${LEGACY_ITERATOR_BENCH_SRC}")

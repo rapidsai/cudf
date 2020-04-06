@@ -15,6 +15,8 @@ def read_avro(
 ):
     """{docstring}"""
 
+    from cudf import DataFrame
+
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, None, **kwargs
     )
@@ -22,8 +24,10 @@ def read_avro(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        return libcudf.avro.read_avro(
-            filepath_or_buffer, columns, skip_rows, num_rows
+        return DataFrame._from_table(
+            libcudf.avro.read_avro(
+                filepath_or_buffer, columns, skip_rows, num_rows
+            )
         )
     else:
         raise NotImplementedError("read_avro currently only supports cudf")

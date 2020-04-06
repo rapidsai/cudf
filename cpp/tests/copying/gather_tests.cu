@@ -26,14 +26,14 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data+source_size);
 
   cudf::table_view source_table ({source_column});
 
   // test with device vector iterators
   {
     std::unique_ptr<cudf::experimental::table> result =
-      cudf::experimental::detail::gather(source_table, gather_map.begin(), gather_map.end(), true);
+      cudf::experimental::detail::gather(source_table, gather_map.begin(), gather_map.end());
 
     for (auto i=0; i<source_table.num_columns(); ++i) {
       cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
@@ -46,8 +46,7 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   {
     std::unique_ptr<cudf::experimental::table> result =
       cudf::experimental::detail::gather(source_table, gather_map.data().get(),
-                                         gather_map.data().get() + gather_map.size(),
-                                         true);
+                                         gather_map.data().get() + gather_map.size());
 
     for (auto i=0; i<source_table.num_columns(); ++i) {
       cudf::test::expect_columns_equal(source_table.column(i), result->view().column(i));
@@ -61,9 +60,9 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
   constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data+source_size);
   auto gather_map_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? -1:i;});
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{gather_map_data, gather_map_data+(source_size*2)};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(gather_map_data, gather_map_data+(source_size*2));
 
   cudf::table_view source_table ({source_column});
   std::unique_ptr<cudf::experimental::table> result =
@@ -75,8 +74,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
 
   auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2)? 0:i;});
   auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i%2) || (i >= source_size)? 0:1;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
-    expect_data, expect_data+(source_size*2), expect_valid};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
+    expect_data, expect_data+(source_size*2), expect_valid);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -87,8 +86,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{data, data+source_size};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data+source_size);
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(data, data+source_size);
 
   cudf::table_view source_table ({source_column});
 
@@ -113,10 +112,10 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   auto reversed_data =
     cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{data, data+source_size};
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(data, data+source_size);
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(
     reversed_data,
-    reversed_data+source_size};
+    reversed_data+source_size);
 
   cudf::table_view source_table ({source_column});
 
@@ -125,9 +124,9 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
            source_table,
            gather_map
            ));
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
     reversed_data,
-    reversed_data+source_size};
+    reversed_data+source_size);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -142,15 +141,15 @@ TYPED_TEST(GatherTest, EveryOtherNullOdds) {
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
-    data, data+source_size, validity};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(
+    data, data+source_size, validity);
 
   // Gather odd-valued indices
   auto map_data =
     cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2;});
 
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
-    map_data, map_data + (source_size/2)};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(
+    map_data, map_data + (source_size/2));
 
   cudf::table_view source_table ({source_column});
 
@@ -162,8 +161,8 @@ TYPED_TEST(GatherTest, EveryOtherNullOdds) {
 
   auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return 0;});
   auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return 0;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
-    expect_data, expect_data+source_size/2, expect_valid};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
+    expect_data, expect_data+source_size/2, expect_valid);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -179,15 +178,15 @@ TYPED_TEST(GatherTest, EveryOtherNullEvens) {
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i){return i%2;});
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
-    data, data+source_size, validity};
+  cudf::test::fixed_width_column_wrapper<TypeParam> source_column(
+    data, data+source_size, validity);
 
   // Gather even-valued indices
   auto map_data =
     cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2 + 1;});
 
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
-    map_data, map_data + (source_size/2)};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(
+    map_data, map_data + (source_size/2));
 
   cudf::table_view source_table ({source_column});
 
@@ -199,8 +198,8 @@ TYPED_TEST(GatherTest, EveryOtherNullEvens) {
 
   auto expect_data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i*2 + 1;});
   auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return 1;});
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
-    expect_data, expect_data+source_size/2, expect_valid};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
+    expect_data, expect_data+source_size/2, expect_valid);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -224,8 +223,8 @@ TYPED_TEST(GatherTest, AllNull) {
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_column{
     data, data+source_size, validity};
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{map_data.begin(),
-      map_data.end()};
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(map_data.begin(),
+      map_data.end());
 
   cudf::table_view source_table ({source_column});
 
@@ -259,9 +258,9 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
     source_columns.push_back(source_column_wrappers[i]);
   }
 
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(
     reversed_data,
-    reversed_data+source_size};
+    reversed_data+source_size);
 
   cudf::table_view source_table {source_columns};
 
@@ -271,9 +270,9 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
            gather_map
            ));
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
       reversed_data,
-      reversed_data+source_size};
+      reversed_data+source_size);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -306,9 +305,9 @@ TYPED_TEST(GatherTest, MultiColNulls) {
   auto reversed_data =
     cudf::test::make_counting_transform_iterator (0, [](auto i){return source_size-1-i;});
 
-  cudf::test::fixed_width_column_wrapper<int32_t> gather_map{
+  cudf::test::fixed_width_column_wrapper<int32_t> gather_map(
     reversed_data,
-    reversed_data+source_size};
+    reversed_data+source_size);
 
   cudf::table_view source_table {source_columns};
 
@@ -323,8 +322,8 @@ TYPED_TEST(GatherTest, MultiColNulls) {
       return source_size - i - 1;});
   auto expect_valid = cudf::test::make_counting_transform_iterator(0, [](auto i){return (i+1)%2;});
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column{
-    expect_data, expect_data+source_size, expect_valid};
+  cudf::test::fixed_width_column_wrapper<TypeParam> expect_column(
+    expect_data, expect_data+source_size, expect_valid);
 
   for (auto i=0; i<source_table.num_columns(); ++i) {
     cudf::test::expect_columns_equal(expect_column, result->view().column(i));
@@ -357,7 +356,7 @@ TEST_F(GatherTestStr, Gather)
     cudf::table_view source_table ({strings});
 
     std::vector<int32_t> h_map{ 4,1,5,2,7 };
-    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
     auto results = cudf::experimental::detail::gather(
            source_table,
            gather_map,
@@ -390,7 +389,7 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
     cudf::table_view source_table ({strings});
 
     std::vector<int32_t> h_map{ 3,4,0,0 };
-    cudf::test::fixed_width_column_wrapper<int32_t> gather_map{h_map.begin(), h_map.end()};
+    cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
     auto results = cudf::experimental::detail::gather(
            source_table,
            gather_map,
@@ -412,6 +411,6 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
     rmm::device_vector<cudf::size_type> gather_map{};
-    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), false, true);
+    auto results = cudf::experimental::detail::gather(cudf::table_view({zero_size_strings_column}), gather_map.begin(), gather_map.end(), true);
     cudf::test::expect_strings_empty(results->get_column(0).view());
 }

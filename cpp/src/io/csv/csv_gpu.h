@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
 namespace io {
@@ -39,7 +40,7 @@ namespace gpu {
  **/
 cudaError_t DetectColumnTypes(const char *data, const uint64_t *row_starts,
                               size_t num_rows, size_t num_columns,
-                              const ParseOptions &options,
+                              const cudf::experimental::io::ParseOptions &options,
                               column_parse::flags *flags,
                               column_parse::stats *stats,
                               cudaStream_t stream = (cudaStream_t)0);
@@ -63,7 +64,7 @@ cudaError_t DetectColumnTypes(const char *data, const uint64_t *row_starts,
  **/
 cudaError_t DecodeRowColumnData(const char *data, const uint64_t *row_starts,
                                 size_t num_rows, size_t num_columns,
-                                const ParseOptions &options,
+                                const cudf::experimental::io::ParseOptions &options,
                                 const column_parse::flags *flags,
                                 cudf::data_type *dtypes, void **columns,
                                 cudf::bitmask_type **valids,

@@ -188,6 +188,7 @@ estimate_join_output_size(
  * @returns Join output indices vector pair
  */
 /* ----------------------------------------------------------------------------*/
+inline
 std::pair<rmm::device_vector<size_type>,
 rmm::device_vector<size_type>>
 get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {

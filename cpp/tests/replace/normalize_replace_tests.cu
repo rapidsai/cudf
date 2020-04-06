@@ -68,9 +68,11 @@ TEST_F(ReplaceTest, NormalizeNansAndZerosFloat)
 TEST_F(ReplaceTest, NormalizeNansAndZerosDouble)
 {
    // bad data
-   cudf::test::fixed_width_column_wrapper<double> d_test_data{ 32.5, -0.0, 111.0, -NAN, NAN, 1.0, 0.0, 54.3 };
+   cudf::test::fixed_width_column_wrapper<double> d_test_data{ 32.5, -0.0, 111.0, double(-NAN), double(NAN), 1.0, 0.0, 54.3 };
    // good data
-   cudf::test::fixed_width_column_wrapper<double> d_test_data_comp{ 32.5, 0.0, 111.0, NAN, NAN, 1.0, 0.0, 54.3 };
+   cudf::test::fixed_width_column_wrapper<double> d_test_data_comp{ 32.5, 0.0, 111.0, double(NAN), double(NAN), 1.0, 0.0, 54.3 };
    //
    normalize_nans_and_zeros_test_internal<double>(d_test_data, d_test_data_comp);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

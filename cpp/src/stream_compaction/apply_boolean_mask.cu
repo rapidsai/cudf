@@ -23,6 +23,9 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+
+
 #include <algorithm>
 
 namespace {
@@ -40,12 +43,12 @@ struct boolean_mask_filter
   bool operator()(cudf::size_type i)
   {
     if(true == has_nulls) {
-        bool valid = boolean_mask.is_valid(i);
-        bool is_true = (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+        bool valid   = boolean_mask.is_valid(i);
+        bool is_true = boolean_mask.data<bool>()[i];
     
         return is_true && valid;
     } else {
-        return (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+        return boolean_mask.data<bool>()[i];
     }
   }
 
@@ -102,7 +105,8 @@ std::unique_ptr<experimental::table>
     apply_boolean_mask(table_view const& input,
                        column_view const& boolean_mask,
                        rmm::mr::device_memory_resource *mr) {
-    return detail::apply_boolean_mask(input, boolean_mask, mr);
+  CUDF_FUNC_RANGE();
+  return detail::apply_boolean_mask(input, boolean_mask, mr);
 }
 } // namespace experimental
 }  // namespace cudf

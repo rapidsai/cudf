@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,8 +25,19 @@ enum AggregateOp {
   SUM(0),
   MIN(1),
   MAX(2),
-  COUNT(3),
-  MEAN(4);
+  COUNT_VALID(3),
+  COUNT_ALL(4),
+  MEAN(5),
+  MEDIAN(6),
+  // TODO Quantile
+  ARGMAX(8),
+  ARGMIN(9),
+  PRODUCT(10),
+  SUMOFSQUARES(11),
+  VAR(12), // This can take a delta degrees of freedom
+  STD(13), // This can take a delta degrees of freedom
+  ANY(14),
+  ALL(15);
 
   final int nativeId;
 

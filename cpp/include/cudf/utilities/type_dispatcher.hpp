@@ -19,7 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
-#include <cudf/wrappers/bool.hpp>
+#include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
@@ -100,7 +100,7 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
  *---------------------------------------------------------------------------**/
-CUDF_TYPE_MAPPING(cudf::experimental::bool8, type_id::BOOL8);
+CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
 CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
@@ -113,7 +113,7 @@ CUDF_TYPE_MAPPING(cudf::timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
 CUDF_TYPE_MAPPING(cudf::timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
-
+CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -135,7 +135,7 @@ MAP_NUMERIC_SCALAR(int32_t)
 MAP_NUMERIC_SCALAR(int64_t)
 MAP_NUMERIC_SCALAR(float)
 MAP_NUMERIC_SCALAR(double)
-MAP_NUMERIC_SCALAR(cudf::experimental::bool8)
+MAP_NUMERIC_SCALAR(bool);
 
 template <>
 struct type_to_scalar_type_impl<std::string> {
@@ -147,6 +147,12 @@ template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
   using ScalarType = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
+};
+
+template <> // TODO: this is a temporary solution for make_pair_iterator
+struct type_to_scalar_type_impl<cudf::dictionary32> {
+  using ScalarType = cudf::numeric_scalar<int32_t>;
+  using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
@@ -313,6 +319,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
           std::forward<Ts>(args)...);
     case TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case DICTIONARY32:
+      return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

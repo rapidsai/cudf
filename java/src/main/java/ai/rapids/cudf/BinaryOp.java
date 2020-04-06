@@ -40,8 +40,14 @@ public enum BinaryOp {
   BITWISE_OR(16),
   BITWISE_XOR(17),
   LOGICAL_AND(18),
-  LOGICAL_OR(19);
+  LOGICAL_OR(19),
   //NOT IMPLEMENTED YET COALESCE(20); // x == null ? y : x
+  //NOT IMPLEMENTED YET GENERIC_BINARY(21);
+  SHIFT_LEFT(22), // bitwise shift left (<<)
+  SHIFT_RIGHT(23), // bitwise shift right (>>)
+  SHIFT_RIGHT_UNSIGNED(24), // bitwise shift right (>>>)
+  LOG_BASE(25); // logarithm to the base
+
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
       EQUAL, NOT_EQUAL, LESS, GREATER, LESS_EQUAL, GREATER_EQUAL);

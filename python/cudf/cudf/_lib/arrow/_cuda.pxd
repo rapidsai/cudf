@@ -17,18 +17,13 @@
 
 # flake8: noqa
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
-
 from __future__ import absolute_import
 
 from pyarrow.lib cimport *
 from pyarrow.includes.common cimport *
 from pyarrow.includes.libarrow cimport *
 # from pyarrow.includes.libarrow_cuda cimport *
-from cudf._lib.arrow.libarrow_cuda cimport *
+from cudf._lib.cpp.arrow.libarrow_cuda cimport *
 
 
 cdef class Context:

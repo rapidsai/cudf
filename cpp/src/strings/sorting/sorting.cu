@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/copying.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/strings/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -45,7 +45,7 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
 
     // sort the indices of the strings
     size_type num_strings = strings.size();
-    thrust::device_vector<size_type> indices(num_strings);
+    rmm::device_vector<size_type> indices(num_strings);
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
     thrust::sort( execpol->on(stream), indices.begin(), indices.end(),
         [d_column, stype, order, null_order] __device__ (size_type lhs, size_type rhs) {
@@ -66,7 +66,8 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
     // create a column_view as a wrapper of these indices
     column_view indices_view( data_type{INT32}, num_strings, indices.data().get(), nullptr, 0 );
     // now build a new strings column from the indices
-    return gather( strings, indices_view, stream, mr );
+    auto table_sorted = experimental::detail::gather( table_view{{strings.parent()}}, indices_view, stream, mr )->release();
+    return std::move(table_sorted.front());
 }
 
 } // namespace detail

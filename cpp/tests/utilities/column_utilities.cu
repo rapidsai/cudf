@@ -17,6 +17,7 @@
 #include "column_utilities.hpp"
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -27,52 +28,170 @@
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/logical.h>
 
 #include <gmock/gmock.h>
+#include <numeric>
 
 namespace cudf {
 namespace test {
 
-// Property equality
-void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_view const& rhs) {
+// Property comparison
+template <bool check_exact_equality>
+void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  if (lhs.size() > 0) {
-     EXPECT_EQ(lhs.nullable(), rhs.nullable());
+  if (lhs.size() > 0 and check_exact_equality) {
+    EXPECT_EQ(lhs.nullable(), rhs.nullable());
   }
-  EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
-  EXPECT_EQ(lhs.num_children(), rhs.num_children());
+  EXPECT_EQ(lhs.num_children(), rhs.num_children()); 
+
+  // TODO: compare children properties?
+}
+
+void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
+  column_property_comparison<true>(lhs, rhs);
+}
+
+void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs) {
+  column_property_comparison<false>(lhs, rhs);
 }
 
 class corresponding_rows_unequal {
+  table_device_view d_lhs; 
+  table_device_view d_rhs;
 public:
-  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs): comp(d_lhs, d_rhs) {
+  corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs)
+  : d_lhs(d_lhs),
+    d_rhs(d_rhs),
+    comp(d_lhs, d_rhs)
+  {
+    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
+                 "Unsupported number of columns");
   }
+  
+  struct typed_element_unequal {
+    template <typename T>
+    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool>
+    operator()(column_device_view const& lhs,
+               column_device_view const& rhs,
+               size_type index)
+    {
+      if (lhs.is_valid(index) and rhs.is_valid(index)) {
+        int ulp = 4; // value taken from google test
+        T x = lhs.element<T>(index);
+        T y = rhs.element<T>(index);
+        return std::abs(x-y) > std::numeric_limits<T>::epsilon() * std::abs(x+y) * ulp
+            && std::abs(x-y) >= std::numeric_limits<T>::min();
+      } else {
+        // if either is null, then the inequality was checked already
+        return true;
+      }
+    }
+
+    template <typename T, typename... Args>
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool>
+    operator()(Args... args) {
+      // Non-floating point inequality is checked already
+      return true;
+  }
+  };
   
   cudf::experimental::row_equality_comparator<true> comp;
     
   __device__ bool operator()(size_type index) {
-    return !comp(index, index);
+    if (not comp(index, index)) {
+      return thrust::any_of(thrust::seq,
+        thrust::make_counting_iterator(0),
+        thrust::make_counting_iterator(d_lhs.num_columns()),
+        [this, index] (auto i) {
+          auto lhs_col = this->d_lhs.column(i);
+          auto rhs_col = this->d_rhs.column(i);
+          return experimental::type_dispatcher(lhs_col.type(), 
+                                               typed_element_unequal{},
+                                               lhs_col, rhs_col, index);
+        });
+    }
+    return false;
   }
 };
 
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
-                          bool print_all_differences) {
-  expect_column_properties_equal(lhs, rhs);
+class corresponding_rows_not_equivalent {
+  table_device_view d_lhs; 
+  table_device_view d_rhs;
+public:
+  corresponding_rows_not_equivalent(table_device_view d_lhs, table_device_view d_rhs)
+  : d_lhs(d_lhs),
+    d_rhs(d_rhs),
+    comp(d_lhs, d_rhs)
+  {
+    CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
+                 "Unsupported number of columns");
+  }
+  
+  struct typed_element_not_equivalent {
+    template <typename T>
+    __device__ std::enable_if_t<std::is_floating_point<T>::value, bool>
+    operator()(column_device_view const& lhs,
+               column_device_view const& rhs,
+               size_type index)
+    {
+      if (lhs.is_valid(index) and rhs.is_valid(index)) {
+        int ulp = 4; // value taken from google test
+        T x = lhs.element<T>(index);
+        T y = rhs.element<T>(index);
+        return std::abs(x-y) > std::numeric_limits<T>::epsilon() * std::abs(x+y) * ulp
+            && std::abs(x-y) >= std::numeric_limits<T>::min();
+      } else {
+        // if either is null, then the inequality was checked already
+        return true;
+      }
+    }
+
+    template <typename T, typename... Args>
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool>
+    operator()(Args... args) {
+      // Non-floating point inequality is checked already
+      return true;
+    }
+  };
+  
+  cudf::experimental::row_equality_comparator<true> comp;
+    
+  __device__ bool operator()(size_type index) {
+    if (not comp(index, index)) {
+      auto lhs_col = this->d_lhs.column(0);
+      auto rhs_col = this->d_rhs.column(0);
+      return experimental::type_dispatcher(lhs_col.type(), 
+                                           typed_element_not_equivalent{},
+                                           lhs_col, rhs_col, index);
+    }
+    return false;
+  }
+};
+
+namespace {
+
+template <bool check_exact_equality>
+void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                       bool print_all_differences) {
+  column_property_comparison<check_exact_equality>(lhs, rhs);
+
+  using ComparatorType = std::conditional_t<check_exact_equality, 
+                                            corresponding_rows_unequal,
+                                            corresponding_rows_not_equivalent>;
 
   auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
   auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
 
+  // TODO (dm): handle floating point equality
   thrust::device_vector<int> differences(lhs.size());
 
   auto diff_iter = thrust::copy_if(thrust::device,
                                    thrust::make_counting_iterator(0),
                                    thrust::make_counting_iterator(lhs.size()),
                                    differences.begin(),
-                                   corresponding_rows_unequal(*d_lhs, *d_rhs));
-
-  CUDA_TRY(cudaDeviceSynchronize());
+                                   ComparatorType(*d_lhs, *d_rhs));
 
   differences.resize(thrust::distance(differences.begin(), diff_iter));
 
@@ -94,7 +213,7 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
       //
       //  Need to pull back the differences
       //
-      std::vector<std::string> h_left_strings = to_strings(diff_table->get_column(0));
+      std::vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
       std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
       for (size_t i = 0 ; i < differences.size() ; ++i) {
@@ -112,7 +231,7 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
       auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index+1);
       auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index+1);
 
-      std::vector<std::string> h_left_strings = to_strings(diff_lhs);
+      std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);
 
       EXPECT_EQ(differences.size(), size_t{0}) << "first difference: "
@@ -122,6 +241,21 @@ void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const&
                                                << to_string(diff_rhs, "");
     }
   }
+}
+
+} // namespace anonymous
+
+void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+                          bool print_all_differences) 
+{
+  column_comparison<true>(lhs, rhs, print_all_differences);
+}
+
+void expect_columns_equivalent(cudf::column_view const& lhs,
+                               cudf::column_view const& rhs,
+                               bool print_all_differences) 
+{
+  column_comparison<false>(lhs, rhs, print_all_differences);
 }
 
 // Bitwise equality
@@ -167,16 +301,19 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL");
-                     });
+
+      std::transform(
+        thrust::make_counting_iterator(size_type{0}),
+        thrust::make_counting_iterator(col.size()),
+        out.begin(),
+        [&h_data](auto idx) {
+          return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL"); });
+
     } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-          return std::to_string(el);
-        });
+
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(),
+        [] (Element el) { return std::to_string(el); });
+
     }
   }
 
@@ -199,27 +336,41 @@ struct column_view_printer {
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
-                     });
-    } else {
-      out = std::move(h_data.first);
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&h_data](auto idx) {
+                     return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                   });
+  }
+
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+    cudf::dictionary_column_view dictionary(col);
+    if( col.size()==0 )
+      return;
+    std::vector<std::string> keys    = to_strings(dictionary.keys());
+    std::vector<std::string> indices = to_strings(
+        { cudf::data_type{cudf::INT32}, dictionary.size(), 
+                         dictionary.indices().head<int32_t>(),
+                         dictionary.null_mask(), dictionary.null_count(),
+                         dictionary.offset() } );
+    out.insert(out.end(),keys.begin(),keys.end());
+    if( !indices.empty() )
+    {
+      std::string first = "\x08 : " + indices.front(); // use : as delimiter
+      out.push_back(first);                            // between keys and indices
+      out.insert(out.end(),indices.begin()+1,indices.end());
     }
   }
 };
 
 std::vector<std::string> to_strings(cudf::column_view const& col) {
   std::vector<std::string> reply;
-
   cudf::experimental::type_dispatcher(col.type(),
                                       column_view_printer{}, 
                                       col,
                                       reply);
-
   return reply;
 }
 
@@ -228,14 +379,25 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col);
 
-  std::copy(h_data.begin(), h_data.end() - 1, std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  buffer << h_data.back();
+  std::copy(h_data.begin(), h_data.end() - (!h_data.empty()), std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
+  if (!h_data.empty())
+    buffer << h_data.back();
 
   return buffer.str();
 }
 
 void print(cudf::column_view const& col, std::ostream &os, std::string const& delimiter) {
-  os << to_string(col, delimiter);
+  os << to_string(col, delimiter) << std::endl;
+}
+
+bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
+                         std::vector<bitmask_type> const& got_mask,
+                         size_type number_of_elements) {
+
+    return std::all_of(thrust::make_counting_iterator(0), thrust::make_counting_iterator(number_of_elements),
+            [&expected_mask, &got_mask](auto index){
+                return cudf::bit_is_set(expected_mask.data(), index) == cudf::bit_is_set(got_mask.data(), index);
+            });
 }
 
 }  // namespace test

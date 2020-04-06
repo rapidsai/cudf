@@ -405,8 +405,8 @@ int NVStrings::create_offsets( char* strs, int* offsets, unsigned char* nullbitm
     unsigned int count = size();
     if( count==0 )
         return 0;
-    if( strs==0 || offsets==0 )
-        return 0;
+    if( offsets==nullptr )
+        throw std::runtime_error("offsets parameter must not be nullptr");
 
     auto execpol = rmm::exec_policy(0);
     // first compute offsets/nullbitmask

@@ -53,6 +53,7 @@ enum type_kind_e
     type_enum,
     type_record,
     type_union,
+    type_array,
 };
 
 

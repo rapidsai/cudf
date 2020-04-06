@@ -21,7 +21,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
-
 #include <thrust/iterator/constant_iterator.h>
 
 template <typename T>
@@ -100,7 +99,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
 
   auto masks = cudf::test::detail::make_null_mask_vector(valid + split, valid + size);
 
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, expected_data.size()));
 }
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
@@ -122,6 +121,24 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+}
+
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
+
+TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest) {
+  cudf::test::fixed_width_column_wrapper<double> col1 { 10./3, 22./7 };
+  cudf::test::fixed_width_column_wrapper<double> col2 { 31./3 - 21./3, 19./7 + 3./7 };
+
+  cudf::test::expect_columns_equivalent(col1, col2);
+}
+
+TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest) {
+  auto all_valid = cudf::test::make_counting_transform_iterator(
+                                  0, [](auto i) { return true; });
+  cudf::test::fixed_width_column_wrapper<double> col1 { 1, 2, 3 };
+  cudf::test::fixed_width_column_wrapper<double> col2({ 1, 2, 3 }, all_valid);
+
+  cudf::test::expect_columns_equivalent(col1, col2);
 }
 
 struct ColumnUtilitiesStringsTest: public cudf::test::BaseFixture {};
@@ -147,23 +164,27 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
   cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
   auto host_data = cudf::test::to_host<std::string>(strings);
-  EXPECT_TRUE( host_data.first.empty() );
+  auto results = host_data.first;
+  EXPECT_EQ( 3, host_data.first.size() );
+  EXPECT_TRUE( std::all_of( results.begin(), results.end(), [] (auto s) { return s.empty();} ));
 }
 
 TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
-  std::ostringstream tmp;
+  std::stringstream tmp;
+  auto string_iter = thrust::make_transform_iterator(
+    std::begin(std_col), [] (auto e) { return std::to_string(e); });
 
-  int index = 0;
-  for (auto x : std_col) {
-    tmp << ((index == 0) ? "" : delimiter);
-    tmp << std::to_string(x);
-    ++index;
-  }
+  std::copy(
+    string_iter,
+    string_iter + std_col.size() - 1,
+    std::ostream_iterator<std::string>(tmp, delimiter));
+
+  tmp << std::to_string(std_col.back());
 
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
@@ -173,7 +194,7 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
                                                               {1, 0, 1, 0, 1} };
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
   tmp << std::to_string(std_col[0])
@@ -204,3 +225,5 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
   
   EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

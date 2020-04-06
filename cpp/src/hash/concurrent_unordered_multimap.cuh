@@ -21,6 +21,7 @@
 #include <hash/hash_allocator.cuh>
 #include <hash/helper_functions.cuh>
 #include <utilities/legacy/device_atomics.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -97,6 +98,7 @@ class concurrent_unordered_multimap {
                      const Equality& equal = key_equal(),
                      const allocator_type& allocator = allocator_type(),
                      cudaStream_t stream = 0) {
+    CUDF_FUNC_RANGE();
     using Self =
         concurrent_unordered_multimap<Key, Element, size_type, unused_key,
                                       unused_element, Hasher, Equality,

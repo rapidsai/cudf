@@ -72,12 +72,13 @@ class reader::impl {
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows Number of rows to read
    * @param stripe Stripe index to select
+   * @param max_stripe_count Max number of consecutive stripes if greater than 0
    * @param stream Stream to use for memory allocation and kernels
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int skip_rows, int num_rows, int stripe,
-                           cudaStream_t stream);
+                           int max_stripe_count, cudaStream_t stream);
 
  private:
   /**
@@ -95,7 +96,7 @@ class reader::impl {
    * @return Device buffer to decompressed page data
    */
   rmm::device_buffer decompress_stripe_data(
-      const hostdevice_vector<gpu::ColumnDesc> &chunks,
+      hostdevice_vector<gpu::ColumnDesc> &chunks,
       const std::vector<rmm::device_buffer> &stripe_data,
       const OrcDecompressor *decompressor,
       std::vector<orc_stream_info> &stream_info, size_t num_stripes,
@@ -115,7 +116,7 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream Stream to use for memory allocation and kernels
    */
-  void decode_stream_data(const hostdevice_vector<gpu::ColumnDesc> &chunks,
+  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
                           size_t num_dicts, size_t skip_rows, size_t num_rows,
                           const std::vector<int64_t> &timezone_table,
                           const rmm::device_vector<gpu::RowGroup> &row_groups,

@@ -19,40 +19,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/aggregation.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
-/**
- * @brief Base class for specifying the desired aggregation in an
- * `aggregation_request`.
- *
- * This type is meant to be opaque in the public interface.
- *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
- */
-class aggregation {
- public:
-  /**
-   * @brief Possible aggregation operations
-   */
-  enum Kind {
-    SUM,       ///< sum reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT,     ///< count number of elements
-    MEAN,      ///< arithmetic mean reduction
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN     ///< Index of min element
-  };
-
-  aggregation(aggregation::Kind a) : kind{a} {}
-  Kind kind;  ///< The aggregation to perform
-};
 namespace detail {
+
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
@@ -62,6 +35,76 @@ struct quantile_aggregation : aggregation {
       : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
+
+  bool operator==(quantile_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _interpolation == other._interpolation 
+       and std::equal(_quantiles.begin(), _quantiles.end(),
+                      other._quantiles.begin());
+  }
+};
+
+/**
+ * @brief Derived class for specifying a standard deviation/variance aggregation
+ */
+struct std_var_aggregation : aggregation {
+  std_var_aggregation(aggregation::Kind k, size_type ddof)
+      : aggregation{k}, _ddof{ddof} {}
+  size_type _ddof;              ///< Delta degrees of freedom
+
+  bool operator==(std_var_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _ddof == other._ddof;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nunique aggregation
+ */
+struct nunique_aggregation : aggregation {
+  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
+      : aggregation{k}, _include_nulls{_include_nulls} {}
+include_nulls _include_nulls;    ///< include or exclude nulls
+
+  bool operator==(nunique_aggregation const& other) const {
+    return aggregation::operator==(other)
+       and _include_nulls == other._include_nulls;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a nth element aggregation
+ */
+struct nth_element_aggregation : aggregation {
+  nth_element_aggregation(aggregation::Kind k, size_type n,
+                          include_nulls _include_nulls)
+      : aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
+  size_type n;                  ///< nth index to return
+  include_nulls _include_nulls; ///< include or exclude nulls
+
+  bool operator==(nth_element_aggregation const &other) const {
+    return aggregation::operator==(other) and n == other.n and
+           _include_nulls == other._include_nulls;
+  }
+};
+
+/**
+ * @brief Derived class for specifying a custom aggregation
+ * specified in udf
+ */
+struct udf_aggregation : aggregation {
+  udf_aggregation(aggregation::Kind type,
+          std::string const& user_defined_aggregator,
+          data_type output_type): aggregation{type},
+                                  _source{user_defined_aggregator}, 
+                                  _operator_name{(type == aggregation::PTX) ? 
+                                                 "rolling_udf_ptx" : "rolling_udf_cuda"},
+                                  _function_name{"rolling_udf"},
+                                  _output_type{output_type} {}
+  std::string const _source;
+  std::string const _operator_name;
+  std::string const _function_name;
+  data_type _output_type;
 };
 
 /**
@@ -103,38 +146,82 @@ struct target_type_impl<Source, aggregation::MAX> {
   using type = Source;
 };
 
-// Always use size_type accumulator for COUNT
+// Always use size_type accumulator for COUNT_VALID
 template <typename Source>
-struct target_type_impl<Source, aggregation::COUNT> {
+struct target_type_impl<Source, aggregation::COUNT_VALID> {
   using type = cudf::size_type;
 };
 
-// Always use `double` for MEAN
+// Always use size_type accumulator for COUNT_ALL
 template <typename Source>
-struct target_type_impl<Source, aggregation::MEAN> {
+struct target_type_impl<Source, aggregation::COUNT_ALL> {
+  using type = cudf::size_type;
+};
+
+// Computing ANY of any type, use bool accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::ANY> {
+  using type = bool;
+};
+
+// Computing ALL of any type, use bool accumulator
+template <typename Source>
+struct target_type_impl<Source, aggregation::ALL> {
+  using type = bool;
+};
+
+// Always use `double` for MEAN
+// Except for timestamp where result is timestamp. (Use FloorDiv)
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<!is_timestamp<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
 };
 
-// Summing integers of any type, always use int64_t accumulator
-template <typename Source>
-struct target_type_impl<Source, aggregation::SUM,
-                        std::enable_if_t<std::is_integral<Source>::value>> {
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && (k == aggregation::MEAN)>> {
+  using type = Source;
+};
+
+constexpr bool is_sum_product_agg(aggregation::Kind k) {
+  return (k == aggregation::SUM) ||
+         (k == aggregation::PRODUCT) ||
+         (k == aggregation::SUM_OF_SQUARES);
+}
+
+// Summing/Multiplying integers of any type, always use int64_t accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<std::is_integral<Source>::value && is_sum_product_agg(k)>> {
   using type = int64_t;
 };
 
-// Summing float/doubles, use same type accumulator
-template <typename Source>
+// Summing/Multiplying float/doubles, use same type accumulator
+template <typename Source, aggregation::Kind k>
 struct target_type_impl<
-    Source, aggregation::SUM,
-    std::enable_if_t<std::is_floating_point<Source>::value>> {
+    Source, k,
+    std::enable_if_t<std::is_floating_point<Source>::value && is_sum_product_agg(k)>> {
   using type = Source;
 };
 
-// Summing timestamps, use same type accumulator
-template <typename Source>
-struct target_type_impl<Source, aggregation::SUM,
-                        std::enable_if_t<is_timestamp<Source>()>> {
+// Summing/Multiplying timestamps, use same type accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<Source, k,
+                        std::enable_if_t<is_timestamp<Source>() && is_sum_product_agg(k)>> {
   using type = Source;
+};
+
+// Always use `double` for VARIANCE
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::VARIANCE> {
+  using type = double;
+};
+
+// Always use `double` for STD
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::STD> {
+  using type = double;
 };
 
 // Always use `double` for quantile
@@ -146,7 +233,7 @@ struct target_type_impl<Source, aggregation::QUANTILE> {
 // MEDIAN is a special case of a QUANTILE
 template <typename Source>
 struct target_type_impl<Source, aggregation::MEDIAN> {
-  using type = target_type_impl<Source, aggregation::QUANTILE>;
+  using type = typename target_type_impl<Source, aggregation::QUANTILE>::type;
 };
 
 // Always use `size_type` for ARGMAX index
@@ -161,6 +248,18 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
   using type = size_type;
 };
 
+// Always use size_type accumulator for NUNIQUE
+template <typename Source>
+struct target_type_impl<Source, aggregation::NUNIQUE> {
+  using type = cudf::size_type;
+};
+
+// Always use Source for NTH_ELEMENT
+template <typename Source>
+struct target_type_impl<Source, aggregation::NTH_ELEMENT> {
+  using type = Source;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -170,6 +269,26 @@ struct target_type_impl<Source, aggregation::ARGMIN> {
  */
 template <typename Source, aggregation::Kind k>
 using target_type_t = typename target_type_impl<Source, k>::type;
+
+template <aggregation::Kind k>
+struct kind_to_type_impl {
+  using type = aggregation;
+};
+
+template <aggregation::Kind k>
+using kind_to_type = typename kind_to_type_impl<k>::type;
+
+#ifndef AGG_KIND_MAPPING
+#define AGG_KIND_MAPPING(k, Type)               \
+  template <>                                   \
+  struct kind_to_type_impl<k> {                 \
+    using type = Type;                          \
+  }
+#endif
+
+AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
+AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
+AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.
@@ -188,15 +307,32 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
+    case aggregation::PRODUCT:
+      return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:
       return f.template operator()<aggregation::MIN>(std::forward<Ts>(args)...);
     case aggregation::MAX:
       return f.template operator()<aggregation::MAX>(std::forward<Ts>(args)...);
-    case aggregation::COUNT:
-      return f.template operator()<aggregation::COUNT>(
+    case aggregation::COUNT_VALID:
+      return f.template operator()<aggregation::COUNT_VALID>(
           std::forward<Ts>(args)...);
+    case aggregation::COUNT_ALL:
+      return f.template operator()<aggregation::COUNT_ALL>(
+          std::forward<Ts>(args)...);
+    case aggregation::ANY:
+      return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
+    case aggregation::ALL:
+      return f.template operator()<aggregation::ALL>(std::forward<Ts>(args)...);
+    case aggregation::SUM_OF_SQUARES:
+      return f.template operator()<aggregation::SUM_OF_SQUARES>(std::forward<Ts>(args)...);
     case aggregation::MEAN:
       return f.template operator()<aggregation::MEAN>(
+          std::forward<Ts>(args)...);
+    case aggregation::VARIANCE:
+      return f.template operator()<aggregation::VARIANCE>(
+          std::forward<Ts>(args)...);
+    case aggregation::STD:
+      return f.template operator()<aggregation::STD>(
           std::forward<Ts>(args)...);
     case aggregation::MEDIAN:
       return f.template operator()<aggregation::MEDIAN>(
@@ -209,6 +345,12 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(
           std::forward<Ts>(args)...);
     case aggregation::ARGMIN:
       return f.template operator()<aggregation::ARGMIN>(
+          std::forward<Ts>(args)...);
+    case aggregation::NUNIQUE:
+      return f.template operator()<aggregation::NUNIQUE>(
+          std::forward<Ts>(args)...);
+    case aggregation::NTH_ELEMENT:
+      return f.template operator()<aggregation::NTH_ELEMENT>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__

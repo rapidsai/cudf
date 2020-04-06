@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.12.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.14.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -48,7 +48,7 @@ set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
 
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
@@ -100,17 +100,23 @@ endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
 foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
 endforeach()
 
 list(GET GPU_ARCHS -1 ptx)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${ptx},code=compute_${ptx}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
 # set warnings as errors
 # TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xcompiler -Wall,-Werror")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
+
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+if(DISABLE_DEPRECATION_WARNING)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif(DISABLE_DEPRECATION_WARNING)
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
@@ -132,6 +138,19 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" OFF)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -385,10 +404,11 @@ add_library(cudf
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
             src/merge/merge.cu
-            src/round_robin/round_robin.cu
+            src/partitioning/round_robin.cu
             src/strings/nvcategory_util.cpp
             src/join/legacy/joining.cu
             src/join/join.cu
+            src/join/semi_join.cu
             src/orderby/legacy/orderby.cu
             src/predicates/legacy/is_sorted.cu
             src/sort/is_sorted.cu
@@ -436,8 +456,9 @@ add_library(cudf
             src/datetime/datetime_ops.cu
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
+            src/partitioning/partitioning.cu
             src/hash/legacy/hashing.cu
-            src/quantiles/legacy/quantiles.cu
+            src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/quantiles/legacy/group_quantiles.cu
             src/reductions/legacy/reductions.cu
@@ -467,7 +488,9 @@ add_library(cudf
             src/reductions/scan.cu
             src/replace/legacy/replace.cu
             src/replace/replace.cu
+            src/replace/clamp.cu
             src/reshape/legacy/stack.cu
+            src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/transpose/legacy/transpose.cu
             src/merge/legacy/merge.cu
@@ -494,6 +517,8 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
             src/io/json/legacy/json_reader_impl.cu
+            src/io/json/reader_impl.cu
+            src/io/json/json_gpu.cu
             src/io/orc/legacy/orc_reader_impl.cu
             src/io/orc/legacy/orc_writer_impl.cu
             src/io/orc/orc.cpp
@@ -502,6 +527,7 @@ add_library(cudf
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
             src/io/orc/dict_enc.cu
+            src/io/orc/stats_enc.cu
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
@@ -522,6 +548,9 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
+            src/io/utilities/type_conversion.cu
+            src/io/utilities/data_sink.cpp
             src/io/utilities/legacy/parsing_utils.cu
             src/utilities/legacy/cuda_utils.cu
             src/copying/gather.cu
@@ -531,7 +560,9 @@ add_library(cudf
             src/utilities/nvtx/legacy/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/scatter.cu
+            src/copying/shift.cu
             src/copying/copy.cu
+            src/copying/concatenate.cu
             src/copying/slice.cpp
             src/copying/split.cpp
             src/copying/contiguous_split.cu
@@ -548,6 +579,8 @@ add_library(cudf
             src/filling/legacy/repeat.cu
             src/filling/repeat.cu
             src/filling/legacy/tile.cu
+            src/filling/sequence.cu
+            src/reshape/tile.cu
             src/search/legacy/search.cu
             src/search/search.cu
             src/column/column.cu
@@ -559,11 +592,18 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cu
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
             src/sort/sort.cu
+            src/sort/stable_sort.cu
+            src/sort/rank.cu
             src/column/legacy/interop.cpp
             src/strings/attributes.cu
             src/strings/case.cu
+            src/strings/wrap.cu
+            src/strings/capitalize.cu
             src/strings/char_types/char_types.cu
+            src/strings/char_types/char_cases.cu
             src/strings/combine.cu
             src/strings/contains.cu
             src/strings/convert/convert_booleans.cu
@@ -597,12 +637,36 @@ add_library(cudf
             src/strings/substring.cu
             src/strings/translate.cu
             src/strings/utilities.cu
+            src/text/generate_ngrams.cu
+            src/text/normalize.cu
+            src/text/tokenize.cu
+            src/text/ngrams_tokenize.cu
             src/scalar/scalar.cpp
             src/scalar/scalar_factories.cpp
+            src/dictionary/add_keys.cu
+            src/dictionary/dictionary_column_view.cpp
+            src/dictionary/dictionary_factories.cu
+            src/dictionary/decode.cu
+            src/dictionary/encode.cu
+            src/dictionary/remove_keys.cu
+            src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
             src/groupby/sort/groupby.cu
+            src/groupby/sort/sort_helper.cu
+            src/groupby/sort/group_sum.cu
+            src/groupby/sort/group_min.cu
+            src/groupby/sort/group_max.cu
+            src/groupby/sort/group_argmax.cu
+            src/groupby/sort/group_argmin.cu
+            src/groupby/sort/group_count.cu
+            src/groupby/sort/group_nunique.cu
+            src/groupby/sort/group_nth_element.cu
+            src/groupby/sort/group_std.cu
+            src/groupby/sort/group_quantiles.cu
             src/aggregation/aggregation.cpp
+            src/aggregation/aggregation.cu
+            src/aggregation/result_cache.cpp
 )
 
 # Rename installation to proper names for later finding
@@ -635,6 +699,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    DEPENDS stringify
                    OUTPUT ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                           ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -654,6 +719,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                           ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
                                    ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/details/__config
                                    ${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include/simt/limits
@@ -675,6 +741,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    # stringified headers are placed underneath the bin include jit directory and end in ".jit"
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -697,6 +764,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                   ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                   ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -723,15 +791,17 @@ add_dependencies(cudf stringify_run)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-    find_library(NVTX_LIBRARY nvToolsExt PATH ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
-    target_link_libraries(cudf ${NVTX_LIBRARY})
+    # The `USE_NVTX` macro is deprecated
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
+else()
+    # Makes NVTX APIs no-ops
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_NVTX")
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_DEFAULT_ALLOCATOR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
@@ -741,12 +811,12 @@ endif(HT_DEFAULT_ALLOCATOR)
 set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
 # link targets for NVStrings
-target_link_libraries(libNVStrings rmm cudart cuda)
-target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
-target_link_libraries(libNVText libNVStrings rmm cudart cuda)
+target_link_libraries(libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVCategory libNVStrings rmm ${CUDART_LIBRARY} cuda)
+target_link_libraries(libNVText libNVStrings rmm ${CUDART_LIBRARY} cuda)
 
 # link targets for cuDF
-target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

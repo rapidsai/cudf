@@ -1,29 +1,149 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-# cython: profile=False
-# distutils: language = c++
-# cython: embedsignature = True
-# cython: language_level = 3
+# cython: boundscheck = False
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
-from cudf._lib.includes.parquet cimport (
-    reader as parquet_reader,
-    reader_options as parquet_reader_options
-)
-from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-
+import cudf
 import errno
 import os
+import pyarrow as pa
+import json
 
+from cython.operator import dereference
+import numpy as np
+
+from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from libc.stdlib cimport free
+from libc.stdint cimport uint8_t
+from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.string cimport string
+from libcpp.map cimport map
+from libcpp.vector cimport vector
+
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.table cimport Table
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport (
+    table_view
+)
+from cudf._lib.move cimport move
+from cudf._lib.cpp.io.functions cimport (
+    write_parquet_args,
+    write_parquet as parquet_writer,
+    merge_rowgroup_metadata as parquet_merge_metadata,
+    read_parquet_args,
+    read_parquet as parquet_reader
+)
+from cudf._lib.io.utils cimport (
+    make_source_info
+)
+
+cimport cudf._lib.cpp.types as cudf_types
+cimport cudf._lib.cpp.io.types as cudf_io_types
+
+cdef class BufferArrayFromVector:
+    cdef Py_ssize_t length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+
+    # these two things declare part of the buffer interface
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
+
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = self.length
+        self.strides[0] = 1
+
+        buffer.buf = dereference(self.in_vec).data()
+
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
+
+cpdef generate_pandas_metadata(Table table, index):
+    col_names = []
+    types = []
+    index_levels = []
+    index_descriptors = []
+
+    # Columns
+    for name, col in table._data.items():
+        col_names.append(name)
+        if is_categorical_dtype(col):
+            raise ValueError(
+                "'category' column dtypes are currently not "
+                + "supported by the gpu accelerated parquet writer"
+            )
+        else:
+            types.append(np_to_pa_dtype(col.dtype))
+
+    # Indexes
+    if index is not False:
+        for name in table._index.names:
+            if name is not None:
+                if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+                    idx = table.index.get_level_values(name)
+                else:
+                    idx = table.index
+
+                if isinstance(idx, cudf.core.index.RangeIndex):
+                    descr = {
+                        "kind": "range",
+                        "name": table.index.name,
+                        "start": table.index._start,
+                        "stop": table.index._stop,
+                        "step": 1,
+                    }
+                else:
+                    descr = name
+                    col_names.append(name)
+                    if is_categorical_dtype(idx):
+                        raise ValueError(
+                            "'category' column dtypes are currently not "
+                            + "supported by the gpu accelerated parquet writer"
+                        )
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
+                    index_levels.append(idx)
+                index_descriptors.append(descr)
+            else:
+                col_names.append(name)
+
+    metadata = pa.pandas_compat.construct_metadata(
+        table,
+        col_names,
+        index_levels,
+        index_descriptors,
+        index,
+        types,
+    )
+
+    md = metadata[b'pandas']
+    json_str = md.decode("utf-8")
+    return json_str
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
-                   skip_rows=None, num_rows=None,
-                   strings_to_categorical=False, use_pandas_metadata=False):
+                   row_group_count=None, skip_rows=None, num_rows=None,
+                   strings_to_categorical=False, use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -33,57 +153,172 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     cudf.io.parquet.to_parquet
     """
 
-    # Setup reader options
-    cdef parquet_reader_options options = parquet_reader_options()
-    for col in columns or []:
-        options.columns.push_back(str(col).encode())
-    options.strings_to_categorical = strings_to_categorical
-    options.use_pandas_metadata = use_pandas_metadata
+    cdef cudf_io_types.source_info source = make_source_info(
+        filepath_or_buffer)
 
-    # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-        filepath = <string>str(filepath_or_buffer).encode()
+    # Setup parquet reader arguments
+    cdef read_parquet_args args = read_parquet_args(source)
 
-    cdef unique_ptr[parquet_reader] reader
+    if columns is not None:
+        args.columns.reserve(len(columns))
+        for col in columns or []:
+            args.columns.push_back(str(col).encode())
+    args.strings_to_categorical = strings_to_categorical
+    args.use_pandas_metadata = use_pandas_metadata
+
+    args.skip_rows = skip_rows if skip_rows is not None else 0
+    args.num_rows = num_rows if num_rows is not None else -1
+    args.row_group = row_group if row_group is not None else -1
+    args.row_group_count = row_group_count \
+        if row_group_count is not None else -1
+    args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
+
+    # Read Parquet
+    cdef cudf_io_types.table_with_metadata c_out_table
+
     with nogil:
-        if buffer is None:
-            reader = unique_ptr[parquet_reader](
-                new parquet_reader(filepath, options)
+        c_out_table = move(parquet_reader(args))
+
+    column_names = [x.decode() for x in c_out_table.metadata.column_names]
+
+    # Access the Parquet user_data json to find the index
+    index_col = ''
+    cdef map[string, string] user_data = c_out_table.metadata.user_data
+    json_str = user_data[b'pandas'].decode('utf-8')
+    if json_str != "":
+        meta = json.loads(json_str)
+        if 'index_columns' in meta and len(meta['index_columns']) > 0:
+            index_col = meta['index_columns'][0]
+
+    df = cudf.DataFrame._from_table(
+        Table.from_unique_ptr(move(c_out_table.tbl),
+                              column_names=column_names)
+    )
+
+    # Set the index column
+    if index_col is not '' and isinstance(index_col, str):
+        if index_col in column_names:
+            df = df.set_index(index_col)
+            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
+                df.index.name, df.index.name
             )
+            df.index.name = new_index_name
         else:
-            reader = unique_ptr[parquet_reader](
-                new parquet_reader(<char*>&buffer[0], buffer.shape[0], options)
-            )
-
-    # Read data into columns
-    cdef cudf_table c_out_table
-    cdef size_type c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef size_type c_num_rows = num_rows if num_rows is not None else -1
-    cdef size_type c_row_group = row_group if row_group is not None else -1
-    with nogil:
-        if c_skip_rows != 0 or c_num_rows != -1:
-            c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
-        elif c_row_group != -1:
-            c_out_table = reader.get().read_row_group(c_row_group)
-        else:
-            c_out_table = reader.get().read_all()
-
-    # Construct dataframe from columns
-    df = table_to_dataframe(&c_out_table)
-
-    # Set column to use as row indexes if available
-    index_col = reader.get().get_index_column().decode("UTF-8")
-    if index_col is not '' and index_col in df.columns:
-        df = df.set_index(index_col)
-        new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-            df.index.name, df.index.name
-        )
-        df.index.name = new_index_name
+            if use_pandas_metadata:
+                df.index.name = index_col
 
     return df
+
+cpdef write_parquet(
+        Table table,
+        path,
+        index=None,
+        compression=None,
+        statistics="ROWGROUP",
+        metadata_file_path=None):
+    """
+    Cython function to call into libcudf API, see `write_parquet`.
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+
+    # Create the write options
+    cdef string filepath = <string>str(path).encode()
+    cdef cudf_io_types.sink_info sink = cudf_io_types.sink_info(filepath)
+    cdef unique_ptr[cudf_io_types.table_metadata] tbl_meta = \
+        make_unique[cudf_io_types.table_metadata]()
+
+    cdef vector[string] column_names
+    cdef map[string, string] user_data
+    cdef table_view tv = table.data_view()
+
+    if index is not False:
+        tv = table.view()
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in table._index.names:
+                column_names.push_back(str.encode(idx_name))
+        else:
+            if table._index.name is not None:
+                column_names.push_back(str.encode(table._index.name))
+            else:
+                # No named index exists so just write out columns
+                tv = table.data_view()
+
+    for col_name in table._column_names:
+        column_names.push_back(str.encode(col_name))
+
+    pandas_metadata = generate_pandas_metadata(table, index)
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+
+    # Set the table_metadata
+    tbl_meta.get().column_names = column_names
+    tbl_meta.get().user_data = user_data
+
+    cdef cudf_io_types.compression_type comp_type
+    if compression is None:
+        comp_type = cudf_io_types.compression_type.NONE
+    elif compression == "snappy":
+        comp_type = cudf_io_types.compression_type.SNAPPY
+    else:
+        raise ValueError("Unsupported `compression` type")
+
+    cdef cudf_io_types.statistics_freq stat_freq
+    statistics = statistics.upper()
+    if statistics == "NONE":
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_NONE
+    elif statistics == "ROWGROUP":
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
+    elif statistics == "PAGE":
+        stat_freq = cudf_io_types.statistics_freq.STATISTICS_PAGE
+    else:
+        raise ValueError("Unsupported `statistics_freq` type")
+
+    cdef write_parquet_args args
+    cdef unique_ptr[vector[uint8_t]] out_metadata_c
+
+    # Perform write
+    with nogil:
+        args = write_parquet_args(sink,
+                                  tv,
+                                  tbl_meta.get(),
+                                  comp_type,
+                                  stat_freq)
+
+    if metadata_file_path is not None:
+        args.metadata_out_file_path = str.encode(metadata_file_path)
+        args.return_filemetadata = True
+
+    with nogil:
+        out_metadata_c = move(parquet_writer(args))
+
+    if metadata_file_path is not None:
+        out_metadata_py = BufferArrayFromVector.from_unique_ptr(
+            move(out_metadata_c)
+        )
+        return np.asarray(out_metadata_py)
+    else:
+        return None
+
+cpdef merge_filemetadata(filemetadata_list):
+    """
+    Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
+
+    See Also
+    --------
+    cudf.io.parquet.merge_rowgroup_metadata
+    """
+    cdef vector[unique_ptr[vector[uint8_t]]] list_c
+    cdef vector[uint8_t] blob_c
+    cdef unique_ptr[vector[uint8_t]] output_c
+
+    for blob_py in filemetadata_list:
+        blob_c = blob_py
+        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
+
+    with nogil:
+        output_c = move(parquet_merge_metadata(list_c))
+
+    out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
+    return np.asarray(out_metadata_py)

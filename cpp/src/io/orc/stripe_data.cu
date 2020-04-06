@@ -131,6 +131,7 @@ struct orcdec_state_s
     ColumnDesc chunk;
     orc_bytestream_s bs;
     orc_bytestream_s bs2;
+    int is_string;
     union {
         orc_strdict_state_s dict;
         orc_nulldec_state_s nulls;
@@ -1692,6 +1693,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             s->chunk.start_row += rowgroup_rowofs;
             s->chunk.num_rows -= rowgroup_rowofs;
         }
+        s->is_string = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
         s->top.data.cur_row = max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
         s->top.data.end_row = s->chunk.start_row + s->chunk.num_rows;
         s->top.data.buffered_count = 0;
@@ -1741,18 +1743,22 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
         __syncthreads();
         if (t == 0)
         {
+            uint32_t max_vals = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
+            if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP))
+            {
+                max_vals += s->top.data.index.run_pos[IS_DICTIONARY(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
+            }
             s->bs.fill_count = 0;
             s->bs2.fill_count = 0;
             s->top.data.nrows = 0;
-            s->top.data.max_vals = min(s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row, (s->chunk.type_kind == BOOLEAN) ? NTHREADS*2 : NTHREADS);
+            s->top.data.max_vals = min(max_vals, (s->chunk.type_kind == BOOLEAN) ? NTHREADS*2 : NTHREADS);
         }
         __syncthreads();
         // Decode data streams
         {
             uint32_t numvals = s->top.data.max_vals, secondary_val;
             uint32_t vals_skipped = 0;
-            if (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
-             || s->chunk.type_kind == TIMESTAMP)
+            if (s->is_string || s->chunk.type_kind == TIMESTAMP)
             {
                 // For these data types, we have a secondary unsigned 32-bit data stream
                 orc_bytestream_s *bs = (IS_DICTIONARY(s->chunk.encoding_kind)) ? &s->bs : &s->bs2;
@@ -1833,6 +1839,12 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 }
             }
             __syncthreads();
+            // Account for skipped values
+            if (num_rowgroups > 0 && !s->is_string)
+            {
+                uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+                numvals = min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? NTHREADS*2 : NTHREADS);
+            }
             // Decode the primary data stream
             if (s->chunk.type_kind == INT || s->chunk.type_kind == DATE || s->chunk.type_kind == SHORT)
             {
@@ -1946,18 +1958,27 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 __syncthreads();
             }
             __syncthreads();
-            vals_skipped = 0;
-            if (num_rowgroups > 0)
+            if (numvals == 0 && vals_skipped != 0 && num_rowgroups > 0)
             {
-                uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
-                if (run_pos)
+                // Special case if the secondary streams produced fewer values than the primary stream's RLE run,
+                // as a result of initial RLE run offset: keep vals_skipped as non-zero to ensure proper
+                // buffered_count/max_vals update below.
+            }
+            else
+            {
+                vals_skipped = 0;
+                if (num_rowgroups > 0)
                 {
-                    vals_skipped = min(numvals, run_pos);
-                    numvals -= vals_skipped;
-                    __syncthreads();
-                    if (t == 0)
+                    uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+                    if (run_pos)
                     {
-                        s->top.data.index.run_pos[CI_DATA] = 0;
+                        vals_skipped = min(numvals, run_pos);
+                        numvals -= vals_skipped;
+                        __syncthreads();
+                        if (t == 0)
+                        {
+                            s->top.data.index.run_pos[CI_DATA] = 0;
+                        }
                     }
                 }
             }
@@ -2095,8 +2116,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
         if (t == 0)
         {
             s->top.data.cur_row += s->top.data.nrows;
-            if ((s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR)
-             && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
+            if (s->is_string && !IS_DICTIONARY(s->chunk.encoding_kind) && s->top.data.max_vals > 0)
             {
                 s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
             }

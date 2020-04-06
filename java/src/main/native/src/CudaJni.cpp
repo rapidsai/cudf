@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,11 +48,17 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freePinned(JNIEnv *env, jclass, 
   JNI_CUDA_TRY(env, , cudaFreeHost(reinterpret_cast<void *>(ptr)));
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpy(JNIEnv *env, jclass, jlong dst, jlong src,
-                                                       jlong count, jint kind) {
-  JNI_NULL_CHECK(env, dst, "dst memory pointer is null", );
-  JNI_NULL_CHECK(env, src, "src memory pointer is null", );
-  JNI_CUDA_TRY(env, , cudaMemcpy((void *)dst, (const void *)src, count, (cudaMemcpyKind)kind));
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpy(JNIEnv *env, jclass, jlong jdst, jlong jsrc,
+                                                       jlong count, jint jkind) {
+  if (count == 0) {
+    return;
+  }
+  JNI_ARG_CHECK(env, jdst != 0, "dst memory pointer is null", );
+  JNI_ARG_CHECK(env, jsrc != 0, "src memory pointer is null", );
+  auto dst = reinterpret_cast<void*>(jdst);
+  auto src = reinterpret_cast<void*>(jsrc);
+  auto kind = static_cast<cudaMemcpyKind>(jkind);
+  JNI_CUDA_TRY(env, , cudaMemcpy(dst, src, count, kind));
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memset(JNIEnv *env, jclass, jlong dst, jbyte value,
@@ -67,12 +73,119 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   return dev;
 }
 
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDeviceCount(JNIEnv *env, jclass) {
+  jint count;
+  JNI_CUDA_TRY(env, -2, cudaGetDeviceCount(&count));
+  return count;
+}
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_setDevice(JNIEnv *env, jclass, jint dev) {
   JNI_CUDA_TRY(env, , cudaSetDevice(dev));
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
   JNI_CUDA_TRY(env, , cudaFree(0));
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cuda_createStream(JNIEnv* env, jclass,
+    jboolean isNonBlocking) {
+  cudaStream_t stream = nullptr;
+  auto flags = isNonBlocking ? cudaStreamNonBlocking : cudaStreamDefault;
+  JNI_CUDA_TRY(env, 0, cudaStreamCreateWithFlags(&stream, flags));
+  return reinterpret_cast<jlong>(stream);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_destroyStream(JNIEnv* env, jclass,
+    jlong jstream) {
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  JNI_CUDA_TRY(env, , cudaStreamDestroy(stream));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_streamWaitEvent(JNIEnv* env, jclass,
+    jlong jstream, jlong jevent) {
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  auto event = reinterpret_cast<cudaEvent_t>(jevent);
+  JNI_CUDA_TRY(env, , cudaStreamWaitEvent(stream, event, 0));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_streamSynchronize(JNIEnv* env, jclass,
+    jlong jstream) {
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  JNI_CUDA_TRY(env, , cudaStreamSynchronize(stream));
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cuda_createEvent(JNIEnv* env, jclass,
+    jboolean enableTiming, jboolean blockingSync) {
+  cudaEvent_t event = nullptr;
+  unsigned int flags = 0;
+  if (!enableTiming) {
+    flags = flags | cudaEventDisableTiming;
+  }
+  if (blockingSync) {
+    flags = flags | cudaEventBlockingSync;
+  }
+  JNI_CUDA_TRY(env, 0, cudaEventCreateWithFlags(&event, flags));
+  return reinterpret_cast<jlong>(event);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_destroyEvent(JNIEnv* env, jclass,
+    jlong jevent) {
+  auto event = reinterpret_cast<cudaEvent_t>(jevent);
+  JNI_CUDA_TRY(env, , cudaEventDestroy(event));
+}
+
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_eventQuery(JNIEnv* env, jclass,
+    jlong jevent) {
+  auto event = reinterpret_cast<cudaEvent_t>(jevent);
+  auto result = cudaEventQuery(event);
+  if (result == cudaSuccess) {
+     return true;
+  } else if (result == cudaErrorNotReady) {
+     return false;
+  } // else
+  JNI_CUDA_TRY(env, false, result);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_eventRecord(JNIEnv* env, jclass,
+    jlong jevent, jlong jstream) {
+  auto event = reinterpret_cast<cudaEvent_t>(jevent);
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  JNI_CUDA_TRY(env, , cudaEventRecord(event, stream));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_eventSynchronize(JNIEnv* env, jclass,
+    jlong jevent) {
+  auto event = reinterpret_cast<cudaEvent_t>(jevent);
+  JNI_CUDA_TRY(env, , cudaEventSynchronize(event));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpyOnStream(JNIEnv* env, jclass,
+    jlong jdst, jlong jsrc, jlong count, jint jkind, jlong jstream) {
+  if (count == 0) {
+    return;
+  }
+  JNI_ARG_CHECK(env, jdst != 0, "dst memory pointer is null", );
+  JNI_ARG_CHECK(env, jsrc != 0, "src memory pointer is null", );
+  auto dst = reinterpret_cast<void*>(jdst);
+  auto src = reinterpret_cast<void*>(jsrc);
+  auto kind = static_cast<cudaMemcpyKind>(jkind);
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  JNI_CUDA_TRY(env, , cudaMemcpyAsync(dst, src, count, kind, stream));
+  JNI_CUDA_TRY(env, , cudaStreamSynchronize(stream));
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_asyncMemcpyOnStream(JNIEnv* env, jclass,
+    jlong jdst, jlong jsrc, jlong count, jint jkind, jlong jstream) {
+  if (count == 0) {
+    return;
+  }
+  JNI_ARG_CHECK(env, jdst != 0, "dst memory pointer is null", );
+  JNI_ARG_CHECK(env, jsrc != 0, "src memory pointer is null", );
+  auto dst = reinterpret_cast<void*>(jdst);
+  auto src = reinterpret_cast<void*>(jsrc);
+  auto kind = static_cast<cudaMemcpyKind>(jkind);
+  auto stream = reinterpret_cast<cudaStream_t>(jstream);
+  JNI_CUDA_TRY(env, , cudaMemcpyAsync(dst, src, count, kind, stream));
 }
 
 } // extern "C"

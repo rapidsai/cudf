@@ -90,7 +90,7 @@ class CategoricalDtype(ExtensionDtype):
         ordered = header["ordered"]
         categories_header = header["categories"]
         categories_frames = frames
-        categories_type = pickle.loads(categories_header["type"])
+        categories_type = pickle.loads(categories_header["type-serialized"])
         categories = categories_type.deserialize(
             categories_header, categories_frames
         )

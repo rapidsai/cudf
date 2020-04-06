@@ -19,10 +19,12 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <binaryop/jit/code/code.h>
 #include <jit/launcher.h>
@@ -86,6 +88,8 @@ const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
     "-std=c++14",
+    // Have jitify prune unused global variables
+    "-remove-unused-globals",
     // suppress all NVRTC warnings
     "-w",
     // force libcudacxx to not include system headers
@@ -318,7 +322,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
                                      cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -353,7 +357,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = bitmask_and(lhs, rhs, stream, mr);
+  auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
   auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
                                      cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -374,6 +378,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -382,6 +387,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -390,6 +396,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, op, output_type, mr);
 }
 
@@ -398,6 +405,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          std::string const& ptx,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
 }
 

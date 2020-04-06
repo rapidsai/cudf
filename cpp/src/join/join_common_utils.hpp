@@ -60,8 +60,42 @@ using row_equality = cudf::experimental::row_equality_comparator<true>;
 enum class join_kind {
   INNER_JOIN,
   LEFT_JOIN,
-  FULL_JOIN
+  FULL_JOIN,
+  LEFT_SEMI_JOIN,
+  LEFT_ANTI_JOIN
 };
+
+inline bool is_trivial_join(table_view const& left,
+                            table_view const& right,
+                            std::vector<size_type> const& left_on,
+                            std::vector<size_type> const& right_on,
+                            join_kind join_type) {
+
+  // If there is nothing to join, then send empty table with all columns
+  if (left_on.empty() || right_on.empty()) {
+      return true;
+  }
+
+  // If left join and the left table is empty, return immediately
+  if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) {
+      return true;
+  }
+
+  // If Inner Join and either table is empty, return immediately
+  if ((join_kind::INNER_JOIN == join_type) &&
+      ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+      return true;
+  }
+
+  // If left semi join (contains) and right table is empty,
+  // return immediately
+  if ((join_kind::LEFT_SEMI_JOIN == join_type) &&
+      (0 == right.num_rows())) {
+    return true;
+  }
+
+  return false;
+}
 
 
 }//namespace detail

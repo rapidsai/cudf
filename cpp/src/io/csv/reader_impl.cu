@@ -38,7 +38,8 @@
 #include <nvstrings/NVStrings.h>
 
 #include <io/comp/io_uncomp.h>
-#include <io/utilities/legacy/parsing_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/type_conversion.cuh>
 
 using std::string;
 using std::vector;
@@ -76,81 +77,6 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-namespace {
-
-std::string infer_compression_type(
-    const compression_type &compression_arg, const std::string &filename,
-    const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map) {
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  if (compression_arg != compression_type::AUTO) {
-    switch (compression_arg) {
-      case compression_type::GZIP:
-        return "gzip";
-      case compression_type::BZIP2:
-        return "bz2";
-      case compression_type::ZIP:
-        return "zip";
-      case compression_type::XZ:
-        return "xz";
-      default:
-        break;
-    }
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    for (const auto &mapping : ext_to_comp_map) {
-      if (mapping.first == ext) {
-        return mapping.second;
-      }
-    }
-  }
-
-  return "none";
-}
-
-data_type convertStringToDtype(const std::string &dtype) {
-  if (dtype == "str") return data_type(cudf::type_id::STRING);
-  if (dtype == "timestamp[s]")
-    return data_type(cudf::type_id::TIMESTAMP_SECONDS);
-  // backwards compat: "timestamp" defaults to milliseconds
-  if (dtype == "timestamp[ms]" || dtype == "timestamp")
-    return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
-  if (dtype == "timestamp[us]")
-    return data_type(cudf::type_id::TIMESTAMP_MICROSECONDS);
-  if (dtype == "timestamp[ns]")
-    return data_type(cudf::type_id::TIMESTAMP_NANOSECONDS);
-  if (dtype == "category") return data_type(cudf::type_id::INT32);
-  if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
-  if (dtype == "bool" || dtype == "boolean")
-    return data_type(cudf::type_id::BOOL8);
-  if (dtype == "date" || dtype == "date64")
-    return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
-  if (dtype == "float" || dtype == "float32")
-    return data_type(cudf::type_id::FLOAT32);
-  if (dtype == "double" || dtype == "float64")
-    return data_type(cudf::type_id::FLOAT64);
-  if (dtype == "byte" || dtype == "int8") return data_type(cudf::type_id::INT8);
-  if (dtype == "short" || dtype == "int16")
-    return data_type(cudf::type_id::INT16);
-  if (dtype == "int" || dtype == "int32")
-    return data_type(cudf::type_id::INT32);
-  if (dtype == "long" || dtype == "int64")
-    return data_type(cudf::type_id::INT64);
-
-  return data_type(cudf::type_id::EMPTY);
-}
-
-}  // namespace
-
 /**
  * @brief Translates a dtype string and returns its dtype enumeration and any
  * extended dtype flags that are supported by cuIO. Often, this is a column
@@ -172,7 +98,7 @@ std::tuple<data_type, column_parse::flags> get_dtype_info(
                            column_parse::as_hexadecimal);
   }
 
-  return std::make_tuple(convertStringToDtype(dtype), column_parse::as_default);
+  return std::make_tuple(convert_string_to_dtype(dtype), column_parse::as_default);
 }
 
 /**
@@ -315,8 +241,18 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
+    // None of the parameters for row selection is used, we are parsing the entire file
+    const bool load_whole_file = range_offset == 0 && range_size == 0 && 
+                                 skip_rows == 0 && skip_end_rows == 0 && 
+                                 num_rows == -1;
+    
+    // Preload the intput data to device
+    if (load_whole_file)
+      data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
+    
+    // Pass nullptr for the device data is the data is not preloaded (will cause additional copies)
+    gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset, stream, (load_whole_file ? &data_ : nullptr));
 
-    gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset, stream);
     auto row_range = select_rows(h_uncomp_data, h_uncomp_size, range_size,
                                  skip_rows, skip_end_rows, num_rows, stream);
 
@@ -324,7 +260,15 @@ table_with_metadata reader::impl::read(size_t range_offset,
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
 
     num_bits = (data_size + 63) / 64;
-    data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
+    if (load_whole_file){
+      // Loaded the whole file, add the start offset (e.g. empty rows) to the pointer 
+      data_ptr = static_cast<char *>(data_.data()) + row_range.first;
+    }
+    else{
+      // The start offset is applied to the device data buffer
+      data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
+      data_ptr = static_cast<char *>(data_.data());
+    }
   }
 
   // Check if the user gave us a list of column names
@@ -414,8 +358,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
   std::vector<column_buffer> out_buffers;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
-      out_buffers.emplace_back(column_types[active_col], num_records, stream,
-                               mr_);
+      out_buffers.emplace_back(column_types[active_col], num_records, true,
+                               stream, mr_);
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
@@ -452,7 +396,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
 void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
                                       size_t range_offset,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream, const rmm::device_buffer* d_data) {
   // Account for the start and end of row region offsets
   const bool require_first_line_start = (range_offset == 0);
   const bool require_last_line_end = (h_data[h_size - 1] != opts.terminator);
@@ -460,8 +404,15 @@ void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
   auto symbols = (opts.quotechar != '\0')
                      ? std::vector<char>{opts.terminator, opts.quotechar}
                      : std::vector<char>{opts.terminator};
-  const auto num_rows = countAllFromSet(h_data, h_size, symbols) +
-                        (require_first_line_start ? 1 : 0);
+  
+  cudf::size_type num_rows = (require_first_line_start ? 1 : 0);
+  if (d_data){
+    // preloaded to device memory
+    num_rows += count_all_from_set(*d_data, symbols);
+  }
+  else{
+    num_rows += count_all_from_set(h_data, h_size, symbols);
+  }
   const auto num_offsets = num_rows + (require_last_line_end ? 1 : 0);
   row_offsets.resize(num_offsets);
 
@@ -478,7 +429,12 @@ void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
   }
 
   // Passing offset = 1 to return positions AFTER the found character
-  findAllFromSet(h_data, h_size, symbols, 1, ptr_first);
+  if (d_data){
+    find_all_from_set(*d_data, symbols, 1, ptr_first);
+  }
+  else{
+    find_all_from_set(h_data, h_size, symbols, 1, ptr_first);
+  }
 
   // Sort the row info according to ascending start offset
   // Subsequent processing (filtering, etc.) may require row order
@@ -603,8 +559,8 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream) {
       hostdevice_vector<column_parse::stats> column_stats(num_active_cols);
       CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0,
                                column_stats.memory_size(), stream));
-      CUDA_TRY(gpu::DetectColumnTypes(
-          static_cast<const char *>(data_.data()), row_offsets.data().get(),
+      CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(
+          data_ptr, row_offsets.data().get(),
           num_records, num_actual_cols, opts, d_column_flags.data().get(),
           column_stats.device_ptr(), stream));
       CUDA_TRY(cudaMemcpyAsync(
@@ -728,8 +684,8 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags = h_column_flags;
 
-  CUDA_TRY(gpu::DecodeRowColumnData(
-      static_cast<const char *>(data_.data()), row_offsets.data().get(),
+  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(
+      data_ptr, row_offsets.data().get(),
       num_records, num_actual_cols, opts, d_column_flags.data().get(),
       d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(),
       stream));

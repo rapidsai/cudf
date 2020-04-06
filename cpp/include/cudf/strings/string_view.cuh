@@ -79,11 +79,6 @@ class string_view
    * @brief Return true if string has no characters
    */
   __host__ __device__ bool empty() const;
-  /**
-   * @brief Return true if string is NULL.
-   * That is, `data()==nullptr` for this instance.
-   */
-  __host__ __device__ bool is_null() const;
 
   /**
    * @brief Handy iterator for navigating through encoded characters.
@@ -112,12 +107,17 @@ class string_view
       __device__ bool operator==(const const_iterator&) const;
       __device__ bool operator!=(const const_iterator&) const;
       __device__ bool operator<(const const_iterator&) const;
+      __device__ bool operator<=(const const_iterator&) const;
+      __device__ bool operator>(const const_iterator&) const;
+      __device__ bool operator>=(const const_iterator&) const;
       __device__ char_utf8 operator*() const;
       __device__ size_type position() const;
       __device__ size_type byte_offset() const;
     private:
       const char* p{};
-      size_type cpos{}, offset{};
+      size_type bytes{};
+      size_type char_pos{};
+      size_type byte_pos{};
   };
 
   /**

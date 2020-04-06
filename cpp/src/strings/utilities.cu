@@ -45,15 +45,14 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
         return nullptr;
     auto length = std::strlen(str);
 
-    char* d_str{};
-    RMM_TRY(RMM_ALLOC( &d_str, length, stream ));
-    CUDA_TRY(cudaMemcpyAsync( d_str, str, length,
-                              cudaMemcpyHostToDevice, stream ));
+    auto* d_str = new rmm::device_buffer(length, stream);
+    CUDA_TRY(cudaMemcpyAsync(d_str->data(), str, length,
+                              cudaMemcpyHostToDevice, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    auto deleter = [](string_view* sv) { RMM_FREE(const_cast<char*>(sv->data()),0); };
+    auto deleter = [d_str](string_view* sv) { delete d_str; };
     return std::unique_ptr<string_view,
-        decltype(deleter)>{ new string_view(d_str,length), deleter};
+        decltype(deleter)>{ new string_view(reinterpret_cast<char*>(d_str->data()), length), deleter};
 }
 
 // build a vector of string_view objects from a strings column
@@ -99,8 +98,6 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
     auto d_strings = strings.data().get();
     auto execpol = rmm::exec_policy(stream);
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
-    if( (bytes==0) && (null_count < count) )
-        bytes = 1; // all entries are empty strings
 
     // create column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes,
@@ -111,9 +108,8 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
     thrust::for_each_n(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_offsets, d_chars] __device__(size_type idx){
-            string_view d_str = d_strings[idx];
-            if( !d_str.is_null() )
-                memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
+            string_view const d_str = d_strings[idx];
+            memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
     return chars_column;
@@ -126,12 +122,6 @@ std::unique_ptr<column> create_chars_child_column( cudf::size_type strings_count
     cudaStream_t stream)
 {
     CUDF_EXPECTS(null_count <= strings_count, "Invalid null count");
-    // If we have all nulls, a null chars column is allowed.
-    // If all non-null strings are empty strings, we need a non-null chars column.
-    // In this case we set the bytes to 1 to create a minimal one-byte chars column.
-    if( (total_bytes==0) && (null_count < strings_count) )
-        total_bytes = 1; // all entries are empty strings (not nulls)
-    // return chars column
     return make_numeric_column( data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr );
 }
 
@@ -150,34 +140,59 @@ namespace
 // with RMM initialize/finalize. See PR #3159 for details on this approach.
 __device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
 __device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
-std::mutex g_flags_table_mutex, g_cases_table_mutex;
+__device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
+
+// initialization mutexes
+std::mutex g_flags_table_mutex;
+std::mutex g_cases_table_mutex; 
+std::mutex g_special_case_mappings_mutex;
+
 character_flags_table_type* d_character_codepoint_flags = nullptr;
 character_cases_table_type* d_character_cases_table = nullptr;
+special_case_mapping* d_special_case_mappings = nullptr;
 
 } // namespace
 
-// Return the flags table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_flags_table 
+ */
 const character_flags_table_type* get_character_flags_table()
 {
     std::lock_guard<std::mutex> guard(g_flags_table_mutex);
     if( !d_character_codepoint_flags )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags, character_codepoint_flags));
     }
     return d_character_codepoint_flags;
 }
 
-// Return the cases table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_cases_table 
+ */
 const character_cases_table_type* get_character_cases_table()
 {
     std::lock_guard<std::mutex> guard(g_cases_table_mutex);
     if( !d_character_cases_table )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table,character_cases_table));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table, character_cases_table));
     }
     return d_character_cases_table;
+}
+
+/**
+ * @copydoc cudf::strings::detail::get_special_case_mapping_table 
+ */
+const special_case_mapping* get_special_case_mapping_table()
+{        
+    std::lock_guard<std::mutex> guard(g_special_case_mappings_mutex);
+    if( !d_special_case_mappings )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_special_case_mappings, character_special_case_mappings));
+    }
+    return d_special_case_mappings;       
 }
 
 } // namespace detail
