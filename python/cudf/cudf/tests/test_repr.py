@@ -220,3 +220,13 @@ def test_groupby_MI(nrows, ncols):
     pd.options.display.max_columns = ncols
     assert gdg.__repr__() == pdg.__repr__()
     assert gdg.T.__repr__() == pdg.T.__repr__()
+
+
+@pytest.mark.parametrize("length", [1, 10, 100, 1000])
+def test_generic_index(length):
+    psr = pd.Series(
+        range(length), index=np.random.randint(0, high=100, size=length)
+    )
+    gsr = cudf.Series.from_pandas(psr)
+
+    assert psr.index.__repr__() == gsr.index.__repr__()
