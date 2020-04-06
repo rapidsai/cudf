@@ -59,30 +59,27 @@ void BM_scatter(benchmark::State& state){
     host_map_data.begin(), host_map_data.end()};
  
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
-  std::vector<cudf::column_view> source_columns;
+  std::vector<cudf::column_view> source_columns(n_cols);
   
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> target_column_wrappers;
-  std::vector<cudf::column_view> target_columns;
-
-  for (int i=0; i<n_cols; ++i) {
-    source_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
-             <TypeParam>(data, data+source_size));
-    source_columns.push_back(source_column_wrappers[i]);
-  }
+  std::vector<cudf::column_view> target_columns(n_cols);
   
-  for (int i=0; i<n_cols; ++i) {
-    target_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
-             <TypeParam>(data, data+source_size));
-    target_columns.push_back(target_column_wrappers[i]);
-  }
+  std::generate_n(std::back_inserter(source_column_wrappers), n_cols, [=]() {
+    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data+source_size); });
+  std::transform(source_column_wrappers.begin(), source_column_wrappers.end(),
+    source_columns.begin(), [](auto const& col) { return static_cast<cudf::column_view>(col); });
+
+  std::generate_n(std::back_inserter(target_column_wrappers), n_cols, [=]() {
+    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data+source_size); });
+  std::transform(target_column_wrappers.begin(), target_column_wrappers.end(),
+    target_columns.begin(), [](auto const& col) { return static_cast<cudf::column_view>(col); });
 
   cudf::table_view source_table {source_columns};
   cudf::table_view target_table {target_columns};
 
   for(auto _ : state){
     cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
-    std::unique_ptr<cudf::experimental::table> result =
-      std::move(cudf::experimental::scatter(source_table, scatter_map, target_table));
+      cudf::experimental::scatter(source_table, scatter_map, target_table);
   }
   
   state.SetBytesProcessed(

@@ -20,7 +20,6 @@
 
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
-// #include <tests/utilities/type_lists.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/table_utilities.hpp>
@@ -59,23 +58,22 @@ void BM_gather(benchmark::State& state){
     host_map_data.begin(), host_map_data.end()};
  
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
-  std::vector<cudf::column_view> source_columns;
+  std::vector<cudf::column_view> source_columns(n_cols);
 
-  for (int i=0; i<n_cols; ++i) {
-    source_column_wrappers.push_back(cudf::test::fixed_width_column_wrapper
-             <TypeParam>(data, data+source_size));
-    source_columns.push_back(source_column_wrappers[i]);
-  }
+  std::generate_n(std::back_inserter(source_column_wrappers), n_cols, [=]() {
+    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data+source_size); });
+  std::transform(source_column_wrappers.begin(), source_column_wrappers.end(),
+    source_columns.begin(), [](auto const& col) { return static_cast<cudf::column_view>(col); });
+
   cudf::table_view source_table {source_columns};
 
   for(auto _ : state){
     cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
-    std::unique_ptr<cudf::experimental::table> result =
-      std::move(cudf::experimental::gather(source_table, gather_map));
+      cudf::experimental::gather(source_table, gather_map);
   }
   
   state.SetBytesProcessed(
-    static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
+    state.iterations()*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
 #define GBM_BENCHMARK_DEFINE(name, type, coalesce)                      \

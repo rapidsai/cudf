@@ -153,10 +153,10 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread){
       cudf::experimental::type_dispatcher(d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
     }
   }else if(dispatching_type == DEVICE_DISPATCHING){
-    auto d_talbe_view = mutable_table_device_view::create(input);
+    auto d_table_view = mutable_table_device_view::create(input);
     auto f = device_dispatching_kernel<functor_type>;
     // Launch the kernel
-    f<<<grid_size, block_size>>>(*d_talbe_view);
+    f<<<grid_size, block_size>>>(*d_table_view);
   }else if(dispatching_type == NO_DISPATCHING){
     auto f = no_dispatching_kernel<functor_type, T>;
     // Launch the kernel
