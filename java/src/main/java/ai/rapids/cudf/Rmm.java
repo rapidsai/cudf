@@ -70,6 +70,9 @@ public class Rmm {
     }
   }
 
+  /** Return the amount of RMM memory allocated in bytes. */
+  public static native long getTotalMemoryAllocated();
+
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
    * @param handler event handler to invoke on RMM events or null to clear an existing handler

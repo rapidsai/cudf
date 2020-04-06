@@ -49,6 +49,20 @@ public class RmmTest {
 
   @ParameterizedTest
   @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  public void testTotalAllocated(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024);
+    assertEquals(0, Rmm.getTotalMemoryAllocated());
+    long addr = Rmm.alloc(1024, 0);
+    try {
+      assertEquals(1024, Rmm.getTotalMemoryAllocated());
+    } finally {
+      Rmm.free(addr, 0);
+    }
+    assertEquals(0, Rmm.getTotalMemoryAllocated());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
   public void testEventHandler(int rmmAllocMode) {
     AtomicInteger invokedCount = new AtomicInteger();
     AtomicLong amountRequested = new AtomicLong();
