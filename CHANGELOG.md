@@ -94,6 +94,7 @@
 - PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
 - PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4804 Fix issue related `repartition` during hash based repartition
 
 
 # cuDF 0.13.0 (31 Mar 2020)

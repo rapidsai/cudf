@@ -415,7 +415,7 @@ class Series(Frame):
 
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
-            return func(self)
+            return func(*inputs)
         else:
             return NotImplemented
 
@@ -953,6 +953,10 @@ class Series(Frame):
     def logical_and(self, other):
         ser = self._binaryop(other, "l_and")
         return ser.astype(np.bool_)
+
+    def remainder(self, other):
+        ser = self._binaryop(other, "mod")
+        return ser
 
     def logical_or(self, other):
         ser = self._binaryop(other, "l_or")
