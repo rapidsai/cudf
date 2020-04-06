@@ -222,10 +222,19 @@ def test_groupby_MI(nrows, ncols):
     assert gdg.T.__repr__() == pdg.T.__repr__()
 
 
-@pytest.mark.parametrize("length", [1, 10, 100, 1000])
-def test_generic_index(length):
+numerical_categories = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+]
+@pytest.mark.parametrize("dtype", numerical_categories)
+@pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
+def test_generic_index(length, dtype):
     psr = pd.Series(
-        range(length), index=np.random.randint(0, high=100, size=length)
+        range(length), index=np.random.randint(0, high=100, size=length).astype(dtype)
     )
     gsr = cudf.Series.from_pandas(psr)
 
