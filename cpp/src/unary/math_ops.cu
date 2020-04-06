@@ -29,20 +29,10 @@ namespace detail {
 
 // trig functions
 
-template<typename T,
-         typename Op,
-         typename std::enable_if_t<!std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
+template<typename T,typename Op>
 __device__
 T normalized_unary_op(T data, Op op) {
     return op(data);
-}
-
-template<typename T,
-         typename Op,
-         typename std::enable_if_t<std::is_same<T, cudf::experimental::bool8>::value>* = nullptr>
-__device__
-T normalized_unary_op(T data, Op op) {
-    return static_cast<T>(op(static_cast<float>(data)));
 }
 
 struct DeviceSin {
@@ -222,7 +212,6 @@ struct DeviceRInt {
 // bitwise op
 
 struct DeviceInvert {
-    // TODO: maybe sfinae overload this for cudf::experimental::bool8
     template<typename T>
     __device__
     T operator()(T data) {
@@ -235,8 +224,8 @@ struct DeviceInvert {
 struct DeviceNot {
     template<typename T>
     __device__
-    cudf::experimental::bool8 operator()(T data) {
-        return static_cast<cudf::experimental::bool8>( !data );
+    bool operator()(T data) {
+        return !data;
     }
 };
 
@@ -305,7 +294,7 @@ private:
     template <typename T>
     static constexpr bool is_supported() {
         return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::experimental::bool8>::value;
+               std::is_same<T, bool>::value;
 
         // TODO: try using member detector
         // std::is_member_function_pointer<decltype(&T::operator!)>::value;
@@ -319,7 +308,7 @@ public:
                cudf::experimental::unary_op op,
                rmm::mr::device_memory_resource* mr,
                cudaStream_t stream) {
-        return cudf::experimental::unary::launcher<T, cudf::experimental::bool8, F>::launch(input, op, mr, stream);
+        return cudf::experimental::unary::launcher<T, bool, F>::launch(input, op, mr, stream);
     }
 
     template <typename T,
