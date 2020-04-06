@@ -259,7 +259,12 @@ class MultiIndex(Index):
         -------
         is_contained : cupy array
             CuPy array of boolean values.
-
+        Notes
+        -------
+        When `level` is None, `values` can only be MultiIndex, or a
+        set/list-like tuples.
+        When `level` is provided, `values` can be Index or MultiIndex,
+        or a set/list-like tuples.
         """
         from cudf.utils.dtypes import is_list_like
 
