@@ -230,18 +230,18 @@ class ReductionTest extends CudfTestBase {
   }
 
   private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
-      Double delta) {
+      Double percentage) {
     if (FLOAT_REDUCTIONS.contains(op)) {
-      assertEquals(expected.getDouble(), result.getDouble(), delta);
+      assertEqualsWithinPercentage(expected.getDouble(), result.getDouble(), percentage);
     } else {
       assertEquals(expected, result);
     }
   }
 
   private static void assertEqualsDelta(AggregateOp op, Scalar expected, Scalar result,
-      Float delta) {
+      Float percentage) {
     if (FLOAT_REDUCTIONS.contains(op)) {
-      assertEquals(expected.getFloat(), result.getFloat(), delta);
+      assertEqualsWithinPercentage(expected.getFloat(), result.getFloat(), percentage);
     } else {
       assertEquals(expected, result);
     }
