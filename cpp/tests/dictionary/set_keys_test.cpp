@@ -48,7 +48,7 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
     cudf::test::fixed_width_column_wrapper<float> new_keys{ 0.5, 1.0, 4.25, 7.125 };
     auto result = cudf::dictionary::set_keys( dictionary->view(), new_keys );
 
-    cudf::test::fixed_width_column_wrapper<float> expected{ { 4.25, 7.125, 0.5, 0, 7.125, 0.5 }, {1,1,1,0,1,1}};
+    cudf::test::fixed_width_column_wrapper<float> expected{ { 4.25, 7.125, 0.5, 0., 7.125, 0.5 }, {1,1,1,0,1,1}};
     auto decoded = cudf::dictionary::decode(result->view());
     cudf::test::expect_columns_equal(*decoded,expected);
 }

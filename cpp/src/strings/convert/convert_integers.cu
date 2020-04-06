@@ -114,7 +114,7 @@ struct dispatch_to_integers_fn
 };
 
 template <>
-void dispatch_to_integers_fn::operator()<experimental::bool8>(column_device_view const&, mutable_column_view&, cudaStream_t) const
+void dispatch_to_integers_fn::operator()<bool>(column_device_view const&, mutable_column_view&, cudaStream_t) const
 {
     CUDF_FAIL("Output for to_integers must not be a boolean type.");
 }
@@ -296,7 +296,7 @@ struct dispatch_from_integers_fn
 };
 
 template <>
-std::unique_ptr<column> dispatch_from_integers_fn::operator()<experimental::bool8>(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
+std::unique_ptr<column> dispatch_from_integers_fn::operator()<bool>(column_view const&, rmm::mr::device_memory_resource*, cudaStream_t) const
 {
     CUDF_FAIL("Input for from_integers must not be a boolean type.");
 }
