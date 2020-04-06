@@ -31,9 +31,9 @@ def test_dataframe_setitem_scaler_bool_inconsistency():
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
-@pytest.mark.parametrize("arg", [["a"], "a"])
+@pytest.mark.parametrize("arg", [["a"], "a", "b"])
 @pytest.mark.parametrize("value", [-10, pd.DataFrame({"a": [-1, -2, -3]})])
-def test_dataframe_setitem_existing_columns(df, arg, value):
+def test_dataframe_setitem_columns(df, arg, value):
     gdf = DataFrame.from_pandas(df)
     cudf_replace_value = value
 

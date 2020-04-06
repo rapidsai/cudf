@@ -23,7 +23,7 @@ from pyarrow.lib cimport *
 from pyarrow.includes.common cimport *
 from pyarrow.includes.libarrow cimport *
 # from pyarrow.includes.libarrow_cuda cimport *
-from cudf._lib.arrow.libarrow_cuda cimport *
+from cudf._lib.cpp.arrow.libarrow_cuda cimport *
 
 
 cdef class Context:

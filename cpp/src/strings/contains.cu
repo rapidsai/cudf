@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/wrappers/bool.hpp>
 #include <strings/utilities.hpp>
@@ -63,7 +62,8 @@ struct contains_fn
         prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         int32_t begin = 0;
-        int32_t end = bmatch ? 1 : d_str.length(); // 1=match only the beginning of the string
+        int32_t end = bmatch ? 1    // match only the beginning of the string;
+                             : -1;  // this handles empty strings too
         return static_cast<experimental::bool8>(prog.find(idx,d_str,begin,end));
     }
 };

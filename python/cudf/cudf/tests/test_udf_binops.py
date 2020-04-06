@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.core import Series
 
 supported_types = ["int16", "int32", "int64", "float32", "float64"]
@@ -41,7 +41,7 @@ def test_generic_ptx(dtype):
 
     output_type = numba.numpy_support.as_dtype(result.signature.return_type)
 
-    out_col = libcudfxx.binaryop.binaryop_udf(
+    out_col = libcudf.binaryop.binaryop_udf(
         lhs_col, rhs_col, ptx_code, output_type.type
     )
 
