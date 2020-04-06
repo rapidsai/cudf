@@ -43,12 +43,12 @@ struct boolean_mask_filter
   bool operator()(cudf::size_type i)
   {
     if(true == has_nulls) {
-        bool valid = boolean_mask.is_valid(i);
-        bool is_true = (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+        bool valid   = boolean_mask.is_valid(i);
+        bool is_true = boolean_mask.data<bool>()[i];
     
         return is_true && valid;
     } else {
-        return (cudf::experimental::true_v == boolean_mask.data<cudf::experimental::bool8>()[i]);
+        return boolean_mask.data<bool>()[i];
     }
   }
 

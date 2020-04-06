@@ -63,7 +63,7 @@ TEST_F(DictionaryRemoveKeysTest, FloatColumn)
     {
         auto const result = cudf::dictionary::remove_keys( cudf::dictionary_column_view(dictionary->view()), del_keys );
         auto const decoded = cudf::dictionary::decode( result->view() );
-        cudf::test::fixed_width_column_wrapper<float> expected{ {0,7.125,0.5,0,7.125,0.5}, {0,1,1,0,1,1} };
+        cudf::test::fixed_width_column_wrapper<float> expected{ {0.,7.125,0.5,0.,7.125,0.5}, {0,1,1,0,1,1} };
         cudf::test::expect_columns_equal( decoded->view(), expected);
     }
     {
