@@ -50,6 +50,7 @@
 - PR #4793 Add `cudf._cuda` to setup.py
 - PR #4790 Replace the use of deprecated rmm APIs in the test environment
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
+- PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 
 ## Bug Fixes
 
@@ -94,6 +95,7 @@
 - PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
 - PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4804 Fix issue related `repartition` during hash based repartition
 
 
 # cuDF 0.13.0 (31 Mar 2020)
