@@ -31,7 +31,6 @@
 using namespace cudf::test;
 
 using std::vector;
-using cudf::experimental::bool8;
 using cudf::null_order;
 using cudf::order;
 
@@ -100,15 +99,15 @@ interpolate_center() {
 }
 
 template<>
-test_case<bool8>
+test_case<bool>
 interpolate_center() {
-    auto low = std::numeric_limits<bool8>::lowest();
-    auto max = std::numeric_limits<bool8>::max();
+    auto low = std::numeric_limits<bool>::lowest();
+    auto max = std::numeric_limits<bool>::max();
     auto mid_d = 0.5;
     auto low_d = static_cast<double>(low);
     auto max_d = static_cast<double>(max);
-    return test_case<bool8> {
-        fixed_width_column_wrapper<bool8> ({ low, max }),
+    return test_case<bool> {
+        fixed_width_column_wrapper<bool> ({ low, max }),
         {
             q_expect{ 0.5, max_d, low_d, mid_d, mid_d, low_d }
         }
@@ -134,9 +133,9 @@ interpolate_extrema_high() {
 }
 
 template<>
-test_case<bool8>
-interpolate_extrema_high<bool8>() {
-    return interpolate_center<bool8>();
+test_case<bool>
+interpolate_extrema_high<bool>() {
+    return interpolate_center<bool>();
 }
 
 // interpolate_extrema_low
@@ -159,9 +158,9 @@ interpolate_extrema_low() {
 }
 
 template<>
-test_case<bool8>
-interpolate_extrema_low<bool8>() {
-    return interpolate_center<bool8>();
+test_case<bool>
+interpolate_extrema_low<bool>() {
+    return interpolate_center<bool>();
 }
 
 // single
@@ -274,7 +273,7 @@ some_invalid() {
     double mid = -0.43200002610683441;
     double lin = -0.43200002610683441;
     return test_case<T> {
-        fixed_width_column_wrapper<T> ({ 6.8, high, 3.4, 4.17, 2.13, 1.11, low, 0.8, 5.7 },
+        fixed_width_column_wrapper<T> ({ T(6.8), high, T(3.4), T(4.17), T(2.13), T(1.11), low, T(0.8), T(5.7) },
                                        { 0,      1,   0,    0,    0,    0,   1,   0,   0 }),
         {
             q_expect{ -1.0, low,  low,  low,  low,  low },

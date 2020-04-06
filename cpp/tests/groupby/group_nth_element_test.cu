@@ -38,10 +38,10 @@ TYPED_TEST(groupby_nth_element_test, basic)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    //keys                                    { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    //vals                                    { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+    fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    //keys                            { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    //vals                            { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
@@ -81,8 +81,8 @@ TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals{ 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
@@ -97,10 +97,10 @@ TYPED_TEST(groupby_nth_element_test, negative)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    //keys                                    { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    //vals                                    { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+    fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    //keys                            { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+    //vals                            { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
@@ -124,8 +124,8 @@ TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
 
@@ -140,8 +140,8 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals        { 3, 4, 5};
+    fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
+    fixed_width_column_wrapper<V> vals  { 3, 4, 5};
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -156,8 +156,8 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<K> keys  { 1, 1, 1};
+    fixed_width_column_wrapper<V> vals( { 3, 4, 5}, all_null() );
 
     fixed_width_column_wrapper<K> expect_keys { 1};
     fixed_width_column_wrapper<R> expect_vals { {3}, all_null()};
@@ -172,16 +172,16 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                       { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                       { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1, 1   2,2,2,2    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { -,3,6,    1,4,-,9,  2,8,      -}
     fixed_width_column_wrapper<R> expect_vals({-1,        1,         2,      -1}, 
-                                               {0,        1,         1,       0});
+                                                       {0,        1,         1,       0});
 
 
     auto agg = cudf::experimental::make_nth_element_aggregation(0);
@@ -194,10 +194,10 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                       { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                       { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
                                          //  { 1, 1, 1     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { -,3,6,    1,4,-, 9,  2,8,     -}
@@ -215,10 +215,10 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                              { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                       { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                       { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1, 1     2, 2, 2,        3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,          2,              3,       4}, all_valid());

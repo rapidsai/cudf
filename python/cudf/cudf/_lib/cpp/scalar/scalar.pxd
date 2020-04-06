@@ -8,9 +8,6 @@ from libcpp.string cimport string
 
 from cudf._lib.cpp.types cimport data_type
 
-from cudf._lib.cpp.wrappers.bool cimport bool8
-
-
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
         scalar() except +
