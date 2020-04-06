@@ -121,8 +121,6 @@ struct format_compiler
     format_compiler( const char* format, timestamp_units units )
     : format(format), units(units) {}
 
-    int8_t subsecond_precision() { return specifier_lengths['f']; }
-
     format_item const* compile_to_device()
     {
         std::vector<format_item> items;
@@ -169,8 +167,9 @@ struct format_compiler
     }
 
     // these calls are only valid after compile_to_device is called
-    size_type template_bytes() const { return static_cast<size_type>(template_string.size()); }
-    size_type items_count() const    { return static_cast<size_type>(d_items.size()); }
+    size_type template_bytes() const   { return static_cast<size_type>(template_string.size()); }
+    size_type items_count() const      { return static_cast<size_type>(d_items.size()); }
+    int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
 };
 
 
@@ -631,7 +630,7 @@ struct datetime_formatter
         return str;
     }
 
-    __device__ char* format_from_parts( int32_t* timeparts, char* ptr )
+    __device__ char* format_from_parts( int32_t const* timeparts, char* ptr )
     {
         for( size_t idx=0; idx < items_count; ++idx )
         {
