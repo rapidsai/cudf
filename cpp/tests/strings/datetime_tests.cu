@@ -52,28 +52,30 @@ TEST_F(StringsDatetimeTest, ToTimestampAmPm)
     cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, ToTimestampMillisecond)
+TEST_F(StringsDatetimeTest, ToTimestampMicrosecond)
 {
     cudf::test::strings_column_wrapper strings{ "1974-02-28 01:23:45.987000", "2019-07-17 02:34:56.001234",
                                                 "2019-03-20 12:34:56.100100", "2020-02-29 00:00:00.555777" };
     auto strings_view = cudf::strings_column_view(strings);
-    {
-        auto results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS}, "%Y-%m-%d %H:%M:%S.%f" );
-        cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> expected{ 131246625987, 1563330896001, 1553085296100, 1582934400555 };
-        cudf::test::expect_columns_equal(*results, expected);
-    }
-    {
-        auto results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS}, "%Y-%m-%d %H:%M:%S.%f" );
-        cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns> expected{ 131246625987000000, 1563330896001234000,
-                                                                             1553085296100100000, 1582934400555777000 };
-        cudf::test::expect_columns_equal(*results, expected);
-    }
-    {
-        auto results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS}, "%Y-%m-%d %H:%M:%S.%3f" );
-        cudf::test::fixed_width_column_wrapper<cudf::timestamp_us> expected{ 131246625987000, 1563330896001000,
-                                                                             1553085296100000, 1582934400555000 };
-        cudf::test::expect_columns_equal(*results, expected);
-    }
+    auto results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_MILLISECONDS}, "%Y-%m-%d %H:%M:%S.%f" );
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> expected_ms{ 131246625987, 1563330896001, 1553085296100, 1582934400555 };
+    cudf::test::expect_columns_equal(*results, expected_ms);
+    results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS}, "%Y-%m-%d %H:%M:%S.%f" );
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns> expected_ns{ 131246625987000000, 1563330896001234000,
+                                                                            1553085296100100000, 1582934400555777000 };
+    cudf::test::expect_columns_equal(*results, expected_ns);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampMillisecond)
+{
+    cudf::test::strings_column_wrapper strings{ "2018-07-04 12:00:00.123", "2020-04-06 13:09:00.555" };
+    auto strings_view = cudf::strings_column_view(strings);
+    auto results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_MICROSECONDS}, "%Y-%m-%d %H:%M:%S.%3f" );
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_us> expected_us{ 1530705600123000, 1586178540555000 };
+    cudf::test::expect_columns_equal(*results, expected_us);
+    results = cudf::strings::to_timestamps(strings_view, cudf::data_type{cudf::TIMESTAMP_NANOSECONDS}, "%Y-%m-%d %H:%M:%S.%3f" );
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns> expected_ns{ 1530705600123000000, 1586178540555000000 };
+    cudf::test::expect_columns_equal(*results, expected_ns);
 }
 
 TEST_F(StringsDatetimeTest, ToTimestampTimezone)
