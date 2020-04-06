@@ -27,6 +27,7 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
@@ -45,6 +46,7 @@
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
 - PR #4793 Add `cudf._cuda` to setup.py
+- PR #4790 Replace the use of deprecated rmm APIs in the test environment
 - PR #4806 Modify doc and correct cupy array conversions in `10min-cudf-cupy.ipynb`
 
 ## Bug Fixes
