@@ -1,28 +1,43 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
+from libcpp.memory cimport unique_ptr
+from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
 
-import cudf.utils.utils as utils
-from cudf._lib.utils cimport (
-    columns_from_table,
-    table_from_columns,
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+
+from cudf._lib.cpp.reshape cimport (
+    interleave_columns as cpp_interleave_columns,
+    tile as cpp_tile
 )
-from cudf._lib.includes.reshape cimport (
-    stack as cpp_stack,
-)
 
 
-def stack(input):
-    from cudf.core.column import as_column
-
-    cdef cudf_table* c_input_table = table_from_columns(input)
-    cdef gdf_column c_result_column
+def interleave_columns(Table source_table):
+    cdef table_view c_view = source_table.data_view()
+    cdef unique_ptr[column] c_result
 
     with nogil:
-        c_result_column = cpp_stack(
-            c_input_table[0])
+        c_result = move(cpp_interleave_columns(c_view))
 
-    del c_input_table
+    return Column.from_unique_ptr(
+        move(c_result)
+    )
 
-    return gdf_column_to_column(&c_result_column)
+
+def tile(Table source_table, size_type count):
+    cdef size_type c_count = count
+    cdef table_view c_view = source_table.view()
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(cpp_tile(c_view, c_count))
+
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=source_table._column_names,
+        index_names=source_table._index_names
+    )

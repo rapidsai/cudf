@@ -314,3 +314,5 @@ TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps) {
     this->atomic_test(input_array);
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

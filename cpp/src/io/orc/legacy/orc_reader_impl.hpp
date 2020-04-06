@@ -25,7 +25,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
@@ -100,7 +100,7 @@ class reader::Impl {
    * @return rmm::device_buffer Device buffer to decompressed page data
    **/
   rmm::device_buffer decompress_stripe_data(
-      const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+      hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
       const std::vector<rmm::device_buffer> &stripe_data,
       const orc::OrcDecompressor *decompressor,
       std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
@@ -118,7 +118,7 @@ class reader::Impl {
    * @param[in] row_index_stride Distance between each row index
    * @param[in,out] columns List of gdf_columns
    **/
-  void decode_stream_data(const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+  void decode_stream_data(hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                           size_t num_dicts, size_t skip_rows,
                           const std::vector<int64_t> &timezone_table,
                           rmm::device_vector<orc::gpu::RowGroup> &row_groups,

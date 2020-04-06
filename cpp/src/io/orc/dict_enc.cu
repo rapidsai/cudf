@@ -383,7 +383,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
  **/
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, uint32_t num_columns)
+gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk const* chunks, uint32_t num_columns)
 {
     __shared__ __align__(16) StripeDictionary stripe_g;
     __shared__ __align__(16) DictionaryChunk chunk_g;
@@ -582,7 +582,7 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary *stripes_host, DictionaryChunk *chunks,
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary *stripes_host, DictionaryChunk const* chunks,
                                     uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream)
 {
     dim3 dim_block(1024, 1); // 1024 threads per chunk

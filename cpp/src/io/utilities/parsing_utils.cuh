@@ -211,6 +211,22 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
+ *  
+ * @param[in] d_data Input character array in device memory
+ * @param[in] keys Vector containing the keys to count in the buffer
+ * @param[in] result_offset Offset to add to the output positions
+ * @param[out] positions Array containing the output positions
+ * 
+ * @return cudf::size_type total number of occurrences
+ **/
+template<class T>
+cudf::size_type find_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys, uint64_t result_offset,
+	T *positions);
+
+/**
+ * @brief Searches the input character array for each of characters in a set.
+ * Sums up the number of occurrences. If the 'positions' parameter is not void*,
+ * positions of all occurrences are stored in the output device array.
  * 
  * Does not load the entire file into the GPU memory at any time, so it can 
  * be used to parse large files. Output array needs to be preallocated.
@@ -226,6 +242,17 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
 template<class T>
 cudf::size_type find_all_from_set(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
+
+/**
+ * @brief Searches the input character array for each of characters in a set
+ * and sums up the number of occurrences.
+ *
+ * @param[in] d_data Input data buffer in device memory
+ * @param[in] keys Vector containing the keys to count in the buffer
+ *
+ * @return cudf::size_type total number of occurrences
+ **/
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys);
 
 /**
  * @brief Searches the input character array for each of characters in a set

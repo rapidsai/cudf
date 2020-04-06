@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
@@ -83,7 +82,7 @@ struct replace_regex_fn
         // copy input to output replacing strings as we go
         while( mxn-- > 0 ) // maximum number of replaces
         {
-            if( prog.find(idx,d_str,begin,end) <= 0 )
+            if( prog.is_empty() || prog.find(idx,d_str,begin,end) <= 0 )
                 break; // no more matches
             auto spos = d_str.byte_offset(begin); // get offset for these
             auto epos = d_str.byte_offset(end);   // character position values

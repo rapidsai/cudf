@@ -387,6 +387,46 @@ def test_series_loc_categorical():
     )
 
 
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3, 4]},
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+        pd.Series(
+            [1, 2, 3, 4],
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+    ],
+)
+def test_dataframe_series_loc_multiindex(obj):
+    pindex = pd.MultiIndex.from_frame(
+        pd.DataFrame({"A": [3, 2], "B": ["high", "low"]})
+    )
+
+    gobj = cudf.from_pandas(obj)
+    gindex = cudf.MultiIndex.from_pandas(pindex)
+
+    # cudf MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[gindex]
+    assert_eq(expected, got)
+
+    # pandas MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[pindex]
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
 
@@ -510,6 +550,28 @@ def test_dataframe_take(ntake):
     np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
     np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
     np.testing.assert_array_equal(out.index, take_indices)
+
+
+@pytest.mark.parametrize("keep_index", [True, False])
+@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
+def test_series_take(ntake, keep_index):
+    np.random.seed(0)
+    nelem = 123
+
+    data = np.random.randint(0, 20, nelem)
+    sr = Series(data)
+
+    take_indices = np.random.randint(0, len(sr), ntake)
+
+    if keep_index is True:
+        out = sr.take(take_indices)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+    elif keep_index is False:
+        out = sr.take(take_indices, keep_index=False)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+        np.testing.assert_array_equal(
+            out.index.to_array(), sr.index.to_array()
+        )
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])

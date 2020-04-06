@@ -73,7 +73,7 @@ void setElement(void* array, cudf::size_type idx, const T& t, const V& v) {
  **/
 template<class T>
  __global__ 
- void count_and_set_positions(char *data, uint64_t size, uint64_t offset, const char key, cudf::size_type* count,
+ void count_and_set_positions(const char *data, uint64_t size, uint64_t offset, const char key, cudf::size_type* count,
 	T* positions) {
 
 	// thread IDs range per block, so also need the block id
@@ -97,9 +97,24 @@ template<class T>
 
 }  // namespace anonymous
 
-/** 
- * @copydoc cudf::io::find_all_from_set
- **/
+template<class T>
+cudf::size_type find_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys, uint64_t result_offset,
+	T *positions) {
+	int block_size = 0;		// suggested thread count to use
+	int min_grid_size = 0;	// minimum block count required
+	CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, count_and_set_positions<T>) );
+	const int grid_size = divCeil(d_data.size(), (size_t)block_size);
+
+	rmm::device_vector<cudf::size_type> d_count(1, 0);
+	for (char key: keys) {
+		count_and_set_positions<T> <<< grid_size, block_size >>> (
+			static_cast<const char*>(d_data.data()), d_data.size(),
+			result_offset, key, d_count.data().get(), positions);
+	}
+
+	return d_count[0];
+}
+
 template<class T>
 cudf::size_type find_all_from_set(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions) {
@@ -132,15 +147,22 @@ cudf::size_type find_all_from_set(const char *h_data, size_t h_size, const std::
 	return d_count[0];
 }
 
+template cudf::size_type find_all_from_set<uint64_t>(const rmm::device_buffer& d_data, const std::vector<char>& keys, uint64_t result_offset,
+	uint64_t *positions);
+
+template cudf::size_type find_all_from_set<pos_key_pair>(const rmm::device_buffer& d_data, const std::vector<char>& keys, uint64_t result_offset,
+	pos_key_pair *positions);
+
 template cudf::size_type find_all_from_set<uint64_t>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	uint64_t *positions);
 
 template cudf::size_type find_all_from_set<pos_key_pair>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	pos_key_pair *positions);
 
-/** 
-  * @copydoc cudf::io::count_all_from_set
-  **/
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys) {
+	return find_all_from_set<void>(d_data, keys, 0, nullptr);
+}
+
 cudf::size_type count_all_from_set(const char *h_data, size_t h_size, const std::vector<char>& keys) {
 	return find_all_from_set<void>(h_data, h_size, keys, 0, nullptr);
 }
