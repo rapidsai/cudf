@@ -70,7 +70,12 @@ public class Rmm {
     }
   }
 
-  /** Return the amount of RMM memory allocated in bytes. */
+  /**
+   * Return the amount of RMM memory allocated in bytes. Note that the result
+   * may be less than the actual amount of allocated memory if underlying RMM
+   * allocator decides to return more memory than what was requested. However
+   * the result will always be a lower bound on the amount allocated.
+   */
   public static native long getTotalMemoryAllocated();
 
   /**
