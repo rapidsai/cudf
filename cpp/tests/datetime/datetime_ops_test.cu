@@ -356,15 +356,15 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate) {
   // Make some nullable fields as well
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{
       {
-       999,          // Random nullable field
-       0,            // This is the UNIX epoch - 1970-01-01
-       1577865600,   // 2020-01-01 00:00:00 GMT
-       1581667200,   // 2020-02-14 00:00:00 GMT
-       3,            // Random nullable field
-       1609401600,   // 2020-12-31 00:00:00 GMT
-       4133923200,   // 2100-12-31 00:00:00 GMT
-       111,          // Random nullable field
-       -2180188800   // 1900-11-30 00:00:00 GMT
+       999L,          // Random nullable field
+       0L,            // This is the UNIX epoch - 1970-01-01
+       1577865600L,   // 2020-01-01 00:00:00 GMT
+       1581667200L,   // 2020-02-14 00:00:00 GMT
+       3L,            // Random nullable field
+       1609401600L,   // 2020-12-31 00:00:00 GMT
+       4133923200L,   // 2100-12-31 00:00:00 GMT
+       111L,          // Random nullable field
+       -2180188800L   // 1900-11-30 00:00:00 GMT
       },
       { false, true, true, true, false, true, true, false, true },
   };
