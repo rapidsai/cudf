@@ -601,6 +601,24 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   expect_tables_equal(*result.tbl, *full_table);
 }
 
+TEST_F(OrcChunkedWriterTest, ReadStripesError)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedStripesError.orc");
+  cudf_io::write_orc_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_orc_chunked_begin(args);
+  cudf_io::write_orc_chunked(*table1, state);
+  cudf_io::write_orc_chunked_end(state);
+
+  cudf_io::read_orc_args read_args{cudf_io::source_info{filepath}};
+  read_args.stripe_list = {0, 1};
+  EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
+  read_args.stripe_list = {-1};
+  EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
+}
+
 TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
