@@ -85,11 +85,11 @@ def test_string_export(ps_gs):
 
     expect = ps
     got = gs.to_pandas()
-    pd.testing.assert_series_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = np.array(ps)
     got = gs.to_array()
-    np.testing.assert_array_equal(expect, got)
+    assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
     got = gs.to_arrow()
