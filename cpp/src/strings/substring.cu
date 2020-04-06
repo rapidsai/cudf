@@ -280,7 +280,7 @@ struct dispatch_substring_from_fn
 };
 
 template <>
-std::unique_ptr<column> dispatch_substring_from_fn::operator()<experimental::bool8>(strings_column_view const&,
+std::unique_ptr<column> dispatch_substring_from_fn::operator()<bool>(strings_column_view const&,
                                    column_view const&, column_view const&,
                                    rmm::mr::device_memory_resource*,
                                    cudaStream_t ) const

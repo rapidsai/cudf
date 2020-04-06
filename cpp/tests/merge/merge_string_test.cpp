@@ -158,7 +158,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row % 2 == 0);
+            bool ret = (row % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
@@ -292,7 +292,7 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns) {
   auto seq_out2 = cudf::test::make_counting_transform_iterator(0, [outputRows](auto row) {
         if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8)
           {
-            cudf::experimental::bool8 ret = (row % 2 == 0);
+            bool ret = (row % 2 == 0);
             return static_cast<TypeParam>(ret);
           }
         else
