@@ -666,9 +666,9 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
           CUDF_EXPECTS(_source != nullptr, "Unexpected NULL data source\n");
           auto buffer =
               _source->get_buffer(offset, col_meta.total_compressed_size);
-          CUDF_EXPECTS(buffer.get() != nullptr, "NULL buffer from data source!");
+          CUDF_EXPECTS(reinterpret_cast<uintptr_t>(buffer.get()) > 0xfffu, "bad buffer from data source!");
           rmm::device_buffer devbfr(buffer->data(), buffer->size(), stream);
-          CUDF_EXPECTS(devbfr.data() != nullptr);
+          CUDF_EXPECTS(reinterpret_cast<uintptr_t>(devbfr.data()) > 0xfffu, "invalid data bfr");
           page_data[chunks.size()] = std::move(devbfr);
           CUDA_TRY(cudaStreamSynchronize(stream));
           d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
