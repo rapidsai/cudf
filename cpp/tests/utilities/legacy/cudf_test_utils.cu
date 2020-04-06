@@ -126,11 +126,11 @@ struct column_printer {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor for comparing whether two elements from two gdf_columns are
  * equal.
  *
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 struct elements_equal {
   gdf_column lhs_col;
@@ -139,14 +139,14 @@ struct elements_equal {
 
   using bit_mask_t = bit_mask::bit_mask_t;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructs functor for comparing elements between two gdf_column's
    *
    * @param lhs The left column for comparison
    * @param rhs The right column for comparison
    * @param nulls_are_equal Desired behavior for whether or not nulls are
    * treated as equal to other nulls. Defaults to true.
-   *---------------------------------------------------------------------------**/
+   **/
   __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs,
                                      bool nulls_are_equal = true)
       : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}

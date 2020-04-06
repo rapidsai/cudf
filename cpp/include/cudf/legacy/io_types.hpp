@@ -30,9 +30,9 @@ namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input source info for `xxx_read_arg` arguments
- *---------------------------------------------------------------------------**/
+ **/
 struct source_info {
   gdf_input_type type = FILE_PATH;
   std::string filepath;
@@ -48,9 +48,9 @@ struct source_info {
       : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Output sink info for `xxx_write_arg` arguments
- *---------------------------------------------------------------------------**/
+ **/
 struct sink_info {
   gdf_input_type type = FILE_PATH;
   std::string filepath;
@@ -66,9 +66,9 @@ struct sink_info {
       : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_avro` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct avro_read_arg {
   source_info source;                       ///< Info on source of data
 
@@ -80,7 +80,7 @@ struct avro_read_arg {
   explicit avro_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_csv` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_csv` API.
@@ -109,7 +109,7 @@ struct avro_read_arg {
  *  `low_memory`            - use `byte_range_xxx` for chunking instead
  *  `memory_map`            - files are always memory-mapped
  *  `float_precision`       - there is only one converter
- *---------------------------------------------------------------------------**/
+ **/
 struct csv_read_arg {
   enum quote_style {
     QUOTE_MINIMAL = 0,  ///< Only quote those fields which contain special characters
@@ -168,7 +168,7 @@ struct csv_read_arg {
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_json` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
@@ -187,7 +187,7 @@ struct csv_read_arg {
  *  `date_unit`             - only millisecond units are supported
  *  `encoding`              - only ASCII-encoded data is supported
  *  `chunksize`             - use `byte_range_xxx` for chunking instead
- *---------------------------------------------------------------------------**/
+ **/
 struct json_read_arg {
   source_info source;                       ///< Info on source of data
 
@@ -202,9 +202,9 @@ struct json_read_arg {
   explicit json_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_orc` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct orc_read_arg {
   source_info source;                       ///< Info on source of data
 
@@ -223,9 +223,9 @@ struct orc_read_arg {
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `write_orc` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct orc_write_arg {
   sink_info sink;                           ///< Info on sink of data
 
@@ -234,9 +234,9 @@ struct orc_write_arg {
   explicit orc_write_arg(const sink_info& snk) : sink(snk) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_parquet` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct parquet_read_arg {
   source_info source;                       ///< Info on source of data
 

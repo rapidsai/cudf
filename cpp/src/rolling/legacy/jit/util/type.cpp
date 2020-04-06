@@ -23,12 +23,12 @@ namespace cudf {
 namespace rolling {
 namespace jit {
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get the Operator Name
      * 
      * @param ope (enum) The aggregation operator as enum of type gdf_agg_op
      * @return std::string The name of the operator as string
-     *---------------------------------------------------------------------------**/
+     **/
     std::string get_operator_name(gdf_agg_op ope) {
         switch (ope) {
             case GDF_CUDA_GENERIC_AGG_OPS:
@@ -40,12 +40,12 @@ namespace jit {
         }
     }
    
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get the Function Name
      * 
      * @param ope (enum) The aggregation funtion as enum of type gdf_agg_op
      * @return std::string The name of the operator as string
-     *---------------------------------------------------------------------------**/
+     **/
     std::string get_function_name(gdf_agg_op ope) {
         switch (ope) {
             case GDF_CUDA_GENERIC_AGG_OPS:

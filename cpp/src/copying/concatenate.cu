@@ -83,7 +83,7 @@ auto create_device_views(
       output_size);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
@@ -93,7 +93,7 @@ auto create_device_views(
  * @param dest_mask The output buffer to copy null masks into
  * @param number_of_mask_bits The total number of null masks bits that are being
  * copied
- *---------------------------------------------------------------------------**/
+ **/
 __global__
 void
 concatenate_masks_kernel(

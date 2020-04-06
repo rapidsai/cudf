@@ -25,11 +25,11 @@
 #include <iosfwd>
 #include <type_traits>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file bools.hpp
  * @brief Concrete type definition for uint8_t values !0 and 0 representing
  * boolean true and false respectively.
- *---------------------------------------------------------------------------**/
+ **/
 namespace cudf {
 namespace experimental {
 

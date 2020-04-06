@@ -20,7 +20,7 @@
 
 
 #if defined(JITIFY_USE_CACHE)
-/**---------------------------------------------------------------------------*
+/**
  * @brief This test runs two processes that try to access the same kernel
  * 
  * This is a stress test.
@@ -36,7 +36,7 @@
  * the public API of JitCache doesn't return the serialized string of the
  * cached kernel, the way to test its validity is to run it on test data.
  * 
- *---------------------------------------------------------------------------**/
+ **/
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
 
     int num_tests = 20;

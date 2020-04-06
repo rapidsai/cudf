@@ -46,11 +46,11 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object to check if an index is within the bounds [begin,
  * end).
  *
- *---------------------------------------------------------------------------**/
+ **/
 template <typename map_type>
 struct bounds_checker {
   size_type begin;
@@ -97,18 +97,18 @@ struct gather_bitmask_functor {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object for gathering a type-erased
  * column. To be used with column_gatherer to provide specialization to handle
  * fixed-width, string and other types.
  *
  * @tparam Element Dispatched type for the column being gathered
  * @tparam MapIterator Iterator type for the gather map
- *---------------------------------------------------------------------------**/
+ **/
 template<typename Element, typename MapIterator>
 struct column_gatherer_impl
 {
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Type-dispatched function to gather from one column to another based
      * on a `gather_map`. This handles fixed width type column_views only.
      *
@@ -118,7 +118,7 @@ struct column_gatherer_impl
      * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
      * @param mr Memory resource to use for all allocations
      * @param stream CUDA stream on which to execute kernels
-     *---------------------------------------------------------------------------**/
+     **/
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
                                        MapIterator gather_map_end,
@@ -151,18 +151,18 @@ struct column_gatherer_impl
     }
   };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object for gathering a type-erased
  * column. To be used with column_gatherer to provide specialization for
  * string_view.
  *
  * @tparam MapIterator Iterator type for the gather map
- *---------------------------------------------------------------------------**/
+ **/
 
 template<typename MapItType>
 struct column_gatherer_impl<string_view, MapItType>
 {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`. This handles string_view type column_views only.
    *
@@ -172,7 +172,7 @@ struct column_gatherer_impl<string_view, MapItType>
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
-   *---------------------------------------------------------------------------**/
+   **/
   std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
@@ -253,14 +253,14 @@ struct column_gatherer_impl<dictionary32, MapItType>
 };
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.
  *
- *---------------------------------------------------------------------------**/
+ **/
 struct column_gatherer
 {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`.
    *
@@ -272,7 +272,7 @@ struct column_gatherer
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
    * @param stream CUDA stream on which to execute kernels
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename Element, typename MapIterator>
     std::unique_ptr<column> operator()(column_view const& source_column,
                                        MapIterator gather_map_begin,
@@ -288,7 +288,7 @@ struct column_gatherer
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object for applying a transformation on the gathermap
  * that converts negative indices to positive indices
  *
@@ -299,7 +299,7 @@ struct column_gatherer
  * is transformed to `9` (i.e., the last element), `-2` is transformed
  * to `8` (the second-to-last element) and so on.
  * Positive indices are unchanged by this transformation.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename map_type>
 struct index_converter : public thrust::unary_function<map_type,map_type>
 {

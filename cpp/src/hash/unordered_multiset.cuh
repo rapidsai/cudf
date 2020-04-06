@@ -61,9 +61,9 @@ template <typename Element, typename Hasher = default_hash<Element>,
           typename Equality = equal_to<Element>>
 class unordered_multiset {
 public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Factory to construct a new unordered_multiset
-   *---------------------------------------------------------------------------**/
+   **/
   static unordered_multiset<Element> create(column_view const& col,
                                             cudaStream_t stream) {
 

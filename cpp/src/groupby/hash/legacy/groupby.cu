@@ -170,7 +170,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the groupby operation for a set of keys, values, and
  * operators using a hash-based implementation.
  *
@@ -207,7 +207,7 @@ auto extract_results(table const& input_keys, table const& input_values,
  * @param stream CUDA stream on which all memory allocations and kernels will be
  * executed
  * @return A pair of the output keys table and output values table
- *---------------------------------------------------------------------------**/
+ **/
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                           std::vector<operators> const& ops, Options options,
@@ -275,14 +275,14 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   return std::make_pair(std::move(output_keys), std::move(final_output_values));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns appropriate callable instantiation of `compute_hash_groupby`
  * based on presence of null values in keys and values.
  *
  * @param keys The groupby key columns
  * @param values The groupby value columns
  * @return Instantiated callable of compute_hash_groupby
- *---------------------------------------------------------------------------**/
+ **/
 auto groupby_null_specialization(table const& keys, table const& values) {
   if (cudf::has_nulls(keys)) {
     if (cudf::has_nulls(values)) {

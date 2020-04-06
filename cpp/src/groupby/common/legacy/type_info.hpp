@@ -19,10 +19,10 @@
 
 #include <cudf/legacy/groupby.hpp>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file type_info.hpp
  * @brief Type info traits used in hash-based groupby.
-*---------------------------------------------------------------------------**/
+**/
 namespace cudf {
 // forward decls
 struct DeviceMin;
@@ -30,12 +30,12 @@ struct DeviceMax;
 struct DeviceSum;
 
 namespace groupby {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
  *
  * @tparam op The enum to map to its corresponding functor
- *---------------------------------------------------------------------------**/
+ **/
 template <operators op> struct corresponding_functor { using type = void; };
 template <> struct corresponding_functor<MIN> { using type = DeviceMin; };
 template <> struct corresponding_functor<MAX> { using type = DeviceMax; };
@@ -44,13 +44,13 @@ template <> struct corresponding_functor<COUNT> { using type = DeviceSum; };
 template <operators op>
 using corresponding_functor_t = typename corresponding_functor<op>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and operation.
  *
  * @tparam InputType The type of the input to the aggregation operation
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, operators op, typename dummy = void>
 struct target_type { using type = void; };
 
@@ -98,10 +98,10 @@ struct target_type<
 template <typename SourceType, operators op>
 using target_type_t = typename target_type<SourceType, op>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor that uses the target_type trait to map the combination of a
  * dispatched SourceType and aggregation operation to required target gdf_dtype.
- *---------------------------------------------------------------------------**/
+ **/
 struct target_type_mapper {
   template <typename SourceType>
   gdf_dtype operator()(operators op) const noexcept {

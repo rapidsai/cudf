@@ -24,7 +24,7 @@
 namespace cudf {
 namespace jit {
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Functor to get type name in string
      * 
      * This functor uses the unofficial compiler macro __PRETTY_FUNCTION__
@@ -42,7 +42,7 @@ namespace jit {
      * In case the type is wrapped using `wrapper`, the extra string "wrapper<" is
      * also skipped to get the underlying wrapped type.
      * 
-     *---------------------------------------------------------------------------**/
+     **/
     struct type_name {
         template <class T>
         CUDA_HOST_DEVICE_CALLABLE
@@ -63,12 +63,12 @@ namespace jit {
         }
     };
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get the Type Name
      * 
      * @param type The data type
      * @return std::string Name of the data type in string
-     *---------------------------------------------------------------------------**/
+     **/
     std::string getTypeName(gdf_dtype type) {
         return type_dispatcher(type, type_name());
     }

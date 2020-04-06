@@ -30,11 +30,11 @@ using bit_mask::bit_mask_t;
 namespace cudf {
 namespace detail {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object to check if an index is within the bounds [begin,
  * end).
  *
- *---------------------------------------------------------------------------**/
+ **/
 template <typename map_type>
 struct bounds_checker {
   cudf::size_type begin;
@@ -121,13 +121,13 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
 }
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Function object for gathering a type-erased
  * gdf_column. To be used with the cudf::type_dispatcher.
  *
- *---------------------------------------------------------------------------**/
+ **/
 struct column_gatherer {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`.
    *
@@ -138,7 +138,7 @@ struct column_gatherer {
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are
    * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename column_type, typename iterator_type>
   void operator()(gdf_column const *source_column,
 		  iterator_type gather_map,
@@ -217,7 +217,7 @@ enum index_conversion {
     NONE
 };
 
-/**---------------------------------------------------------------------------*
+/**
 * @brief Function object for applying a transformation on the gathermap
 * that converts negative indices to positive indices
 *
@@ -228,7 +228,7 @@ enum index_conversion {
 * is transformed to `9` (i.e., the last element), `-2` is transformed
 * to `8` (the second-to-last element) and so on.
 * Positive indices are unchanged by this transformation.
-*---------------------------------------------------------------------------**/
+**/
 template <typename map_type, index_conversion ic=index_conversion::NONE>
 struct index_converter : public thrust::unary_function<map_type,map_type>{};
 

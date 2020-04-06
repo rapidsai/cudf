@@ -35,10 +35,10 @@ struct DeviceTableTest : GdfTest {
   cudf::size_type const size{2000};
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Compares if a row in one table is equal to all rows in another table.
  *
- *---------------------------------------------------------------------------**/
+ **/
 template <bool nullable>
 struct all_rows_equal {
   device_table lhs;
@@ -49,11 +49,11 @@ struct all_rows_equal {
                  bool _nulls_are_equal = false)
       : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns true if row `lhs_index` in the `lhs` table is equal to every
    * row in the `rhs` table.
    *
-   *---------------------------------------------------------------------------**/
+   **/
   __device__ bool operator()(int lhs_index) {
     auto row_equality = [this, lhs_index](cudf::size_type rhs_index) {
       return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index,

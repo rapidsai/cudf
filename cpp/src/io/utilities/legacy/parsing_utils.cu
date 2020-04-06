@@ -45,35 +45,35 @@ using pos_key_pair = thrust::pair<uint64_t,char>;
 template <typename T>
 constexpr T divCeil(T dividend, T divisor) noexcept { return (dividend + divisor - 1) / divisor; }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified element of the array to the passed value
- *---------------------------------------------------------------------------**/
+ **/
 template<class T, class V>
 __device__ __forceinline__
 void setElement(T* array, cudf::size_type idx, const T& t, const V& v){
 	array[idx] = t;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets the specified element of the array of pairs using the two passed
  * parameters.
- *---------------------------------------------------------------------------**/
+ **/
 template<class T, class V>
 __device__ __forceinline__
 void setElement(thrust::pair<T, V>* array, cudf::size_type idx, const T& t, const V& v) {
 	array[idx] = {t, v};
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Overloads the setElement() functions for void* arrays.
  * Does not do anything, indexing is not allowed with void* arrays.
- *---------------------------------------------------------------------------**/
+ **/
 template<class T, class V>
 __device__ __forceinline__
 void setElement(void* array, cudf::size_type idx, const T& t, const V& v) {
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that finds all occurrences of a character in the given 
  * character array. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output array.
@@ -86,7 +86,7 @@ void setElement(void* array, cudf::size_type idx, const T& t, const V& v) {
  * @param[out] positions Array containing the output positions
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 template<class T>
  __global__ 
  void countAndSetPositions(char *data, uint64_t size, uint64_t offset, const char key, cudf::size_type* count,
@@ -111,7 +111,7 @@ template<class T>
 	}
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
@@ -126,7 +126,7 @@ template<class T>
  * @param[out] positions Array containing the output positions
  * 
  * @return cudf::size_type total number of occurrences
- *---------------------------------------------------------------------------**/
+ **/
 template<class T>
 cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions) {
@@ -159,7 +159,7 @@ cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vec
 	return d_count[0];
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Searches the input character array for each of characters in a set
  * and sums up the number of occurrences.
  *
@@ -171,7 +171,7 @@ cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vec
  * @param[in] keys Vector containing the keys to count in the buffer
  *
  * @return cudf::size_type total number of occurrences
- *---------------------------------------------------------------------------**/
+ **/
 cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys) {
 	return findAllFromSet<void>(h_data, h_size, keys, 0, nullptr);
 }
@@ -244,7 +244,7 @@ public:
 	}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that aggregates bracket nesting levels for each block
  * in the input array.
  *
@@ -261,7 +261,7 @@ public:
  * @param[in, out] sum_array Array of partial sums
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 __global__
 void sumBracketsKernel(
 	pos_key_pair* brackets, int bracket_count,
@@ -289,7 +289,7 @@ void sumBracketsKernel(
 	sum_array.d_sums[sum_idx] = sum;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Wrapper around sumBracketsKernel
  *
  * @param[in] brackets Array of brackets, in (offset, char) format
@@ -300,7 +300,7 @@ void sumBracketsKernel(
  * @param[in, out] sum_array Array of partial sums
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 void sumBrackets(
 	pos_key_pair* brackets, int bracket_count,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
@@ -319,14 +319,14 @@ void sumBrackets(
 	CUDA_TRY(cudaGetLastError());
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that computes partial sums of the input elements
  * 
  * @param[in] elements Array of input elements to sum
  * @param[in, out] aggregate Array of partial sums
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 __global__
 void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate){
 	const uint64_t aggregate_idx = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -344,14 +344,14 @@ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate){
 	aggregate.d_sums[aggregate_idx] = sum;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Wrapper around aggregateSumKernel
  * 
  * @param[in] elements Array of input elements to sum
  * @param[in, out] aggregate Array of partial sums
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate){
 	int block_size = 0;
 	int min_grid_size = 0;
@@ -364,7 +364,7 @@ void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
 	CUDA_TRY(cudaGetLastError());
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that assigns levels to each bracket,
  * with 1 being the top level
  *
@@ -382,7 +382,7 @@ void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
  * @param[out] levels Array of output levels, one per bracket
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 __global__
 void assignLevelsKernel(
 	const pos_key_pair* brackets, uint64_t count,
@@ -434,7 +434,7 @@ void assignLevelsKernel(
 	}
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Wrapper around assignLevelsKernel
  * 
  * @param[in] brackets Array of brackets, in (offset, char) format
@@ -448,7 +448,7 @@ void assignLevelsKernel(
  * @param[out] levels Array of outout levels
  * 
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 void assignLevels(pos_key_pair* brackets, uint64_t count,
 	const BlockSumPyramid& sum_pyramid,
 	char* open_chars, char* close_chars, int bracket_char_cnt,
@@ -469,7 +469,7 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
 	CUDA_TRY(cudaGetLastError());
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes nested levels for each of the brackets in the input array
  * 
  * The input array of brackets is sorted before levels are computed.
@@ -483,7 +483,7 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
  * @param[in] close_chars string of characters to treat as close brackets
  * 
  * @return rmm::device_vector<int16_t> Device vector containing bracket levels
- *---------------------------------------------------------------------------**/
+ **/
 rmm::device_vector<int16_t> getBracketLevels(
 	pos_key_pair* brackets, int count,
 	const std::string& open_chars, const std::string& close_chars){

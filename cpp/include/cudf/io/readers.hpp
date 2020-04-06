@@ -158,13 +158,13 @@ namespace json {
     reader_options() = default;
     reader_options(reader_options const &) = default;
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Constructor to populate reader options.
      *
      * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
      * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
      * @param[in] dtype Ordered list of data types; deduced from dataset if empty
-     *---------------------------------------------------------------------------**/
+     **/
     reader_options(bool lines, compression_type compression,
                     std::vector<std::string> dtype, bool dayfirst)
         : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst) {}
@@ -219,14 +219,14 @@ namespace json {
      */
     ~reader();
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Reads and returns the entire data set.
      *
      * @return cudf::table object that contains the array of gdf_columns.
-     *---------------------------------------------------------------------------**/
+     **/
     table_with_metadata read_all(cudaStream_t stream = 0);
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Reads and returns all the rows within a byte range.
      *
      * The returned data includes the row that straddles the end of the range.
@@ -237,7 +237,7 @@ namespace json {
      * @param[in] size Number of bytes from the offset; set to 0 for all remaining
      *
      * @return cudf::table object that contains the array of gdf_columns
-     *---------------------------------------------------------------------------**/
+     **/
     table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
   };
 

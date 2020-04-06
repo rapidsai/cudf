@@ -90,7 +90,7 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
  * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param mr The resource to use for all allocations
  * @return Result of scattering values from source to target
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> scatter(
     table_view const& source, column_view const& scatter_map,
     table_view const& target, bool check_bounds = false,
@@ -126,7 +126,7 @@ std::unique_ptr<table> scatter(
  * `scatter_map` and throw an error if any of its values are out of bounds.
  * @param mr The resource to use for all allocations
  * @return Result of scattering values from source to target
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> scatter(
     std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
     table_view const& target, bool check_bounds = false,

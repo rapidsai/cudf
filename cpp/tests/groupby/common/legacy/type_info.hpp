@@ -28,12 +28,12 @@ struct DeviceSum;
 namespace test {
 using namespace cudf::groupby;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
  *
  * @tparam op The enum to map to its corresponding functor
- *---------------------------------------------------------------------------**/
+ **/
 template <operators op> struct corresponding_functor { using type = void; };
 template <> struct corresponding_functor<MIN> { using type = DeviceMin; };
 template <> struct corresponding_functor<MAX> { using type = DeviceMax; };
@@ -42,13 +42,13 @@ template <> struct corresponding_functor<COUNT> { using type = DeviceSum; };
 template <operators op>
 using corresponding_functor_t = typename corresponding_functor<op>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and operation.
  *
  * @tparam InputType The type of the input to the aggregation operation
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, operators op,
           typename dummy = void>
 struct expected_result_type {

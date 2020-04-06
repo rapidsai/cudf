@@ -32,22 +32,22 @@
 namespace cudf {
 namespace test {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
  * Example:
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- *---------------------------------------------------------------------------**/
+ **/
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource* _mr{rmm::mr::get_default_resource()};
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheritng from this fixture
-   *---------------------------------------------------------------------------**/
+   **/
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
 
@@ -77,7 +77,7 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > >
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides uniform random number generation.
  *
  * It is often useful in testing to have a convenient source of random numbers.
@@ -92,7 +92,7 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
@@ -101,18 +101,18 @@ class UniformRandomGenerator {
 
   UniformRandomGenerator() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
    * random numbers in the range `[upper,lower]`
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
-   *---------------------------------------------------------------------------**/
+   **/
   UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the next random number.
-   *---------------------------------------------------------------------------**/
+   **/
   T generate() { return T{dist(rng)}; }
 
  private:
@@ -120,7 +120,7 @@ class UniformRandomGenerator {
   Engine rng{std::random_device{}()};  ///< Random generator
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides temporary directory for temporary test files.
  *
  * Example:
@@ -128,7 +128,7 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- *---------------------------------------------------------------------------**/
+ **/
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
@@ -167,19 +167,19 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Test environment that initializes the default rmm memory resource.
  * 
  * Required for tests programs that use rmm. It is recommended to include
  * `CUDF_TEST_PROGRAM_MAIN()` in a code file instead of directly instantiating 
  * an object of this type.
- *---------------------------------------------------------------------------**/
+ **/
 class RmmTestEnvironment : public ::testing::Environment {
-/**---------------------------------------------------------------------------*
+/**
  * @brief String representing which RMM allocation mode is to be used.
  *
  * 
- *---------------------------------------------------------------------------**/
+ **/
   std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
 public:
   /**

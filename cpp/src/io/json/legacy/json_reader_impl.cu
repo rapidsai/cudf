@@ -54,7 +54,7 @@ reader::Impl::Impl(std::unique_ptr<datasource> source, std::string filepath,
   opts_.naValuesTrie = d_na_trie_.data().get();
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
  *
@@ -64,7 +64,7 @@ reader::Impl::Impl(std::unique_ptr<datasource> source, std::string filepath,
  * @param[in] num_columns Number of columns in the JSON file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- *---------------------------------------------------------------------------**/
+ **/
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   constexpr size_t max_row_bytes = 16 * 1024; // 16KB
   constexpr size_t column_bytes = 64;
@@ -246,14 +246,14 @@ void reader::Impl::uploadDataToDevice() {
   data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Extract value names from a JSON object
  *
  * @param[in] json_obj Host vector containing the JSON object
  * @param[in] opts Parsing options (e.g. delimiter and quotation character)
  *
  * @return std::vector<std::string> names of JSON object values
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_obj, const ParseOptions &opts) {
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
@@ -369,18 +369,18 @@ void reader::Impl::convertDataToColumns() {
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor for converting plain text data to cuDF data type value.
- *---------------------------------------------------------------------------**/
+ **/
 struct ConvertFunctor {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Template specialization for operator() for types whose values can be
    * convertible to a 0 or 1 to represent false/true. The converting is done by
    * checking against the default and user-specified true/false values list.
    *
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
                                                       long end, const ParseOptions &opts) {
@@ -398,10 +398,10 @@ struct ConvertFunctor {
     }
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *data, void *gdf_columns, long row, long start,
                                                       long end, const ParseOptions &opts) {
@@ -410,7 +410,7 @@ struct ConvertFunctor {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA Kernel that modifies the start and stop offsets to exclude
  * the sections outside of the top level brackets.
  *
@@ -423,7 +423,7 @@ struct ConvertFunctor {
  * @param[in,out] stop Offset of the first character after the range
  *
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 __device__ void limitRangeToBrackets(const char *data, long &start, long &stop) {
   while (start < stop && data[start] != '[' && data[start] != '{') {
     start++;
@@ -436,7 +436,7 @@ __device__ void limitRangeToBrackets(const char *data, long &start, long &stop) 
   stop--;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that finds the end position of the next field name,
  * including the colon that separates the name from the field value.
  *
@@ -448,7 +448,7 @@ __device__ void limitRangeToBrackets(const char *data, long &start, long &stop) 
  * @param[in] stop Offset of the first character after the range
  *
  * @return long Position of the first character after the field name.
- *---------------------------------------------------------------------------**/
+ **/
 __device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long start, long stop) {
   bool quotation = false;
   for (auto pos = start; pos < stop; ++pos) {
@@ -462,7 +462,7 @@ __device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long
   return stop;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts plain text data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -479,7 +479,7 @@ __device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long
  * @param[out] num_valid_fields The numbers of valid fields in columns
  *
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint64_t *rec_starts,
                                  cudf::size_type num_records, const gdf_dtype *dtypes, ParseOptions opts,
                                  void *const *gdf_columns, int num_columns, cudf::valid_type *const *valid_fields,
@@ -544,7 +544,7 @@ void reader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gd
   CUDA_TRY(cudaGetLastError());
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts data into cuDF column data.
  *
  * Data is processed in one row/record at a time, so the number of total
@@ -559,7 +559,7 @@ void reader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gd
  * @param[out] column_infos The count for each column data type
  *
  * @returns void
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void detectJsonDataTypes(const char *data, size_t data_size, const ParseOptions opts, int num_columns,
                                     const uint64_t *rec_starts, cudf::size_type num_records, ColumnInfo *column_infos) {
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);

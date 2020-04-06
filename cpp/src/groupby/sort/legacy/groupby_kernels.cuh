@@ -26,7 +26,7 @@ namespace groupby {
 namespace sort {
 
 
-/**---------------------------------------------------------------------------*
+/**
  @brief  Compute the aggregation(s) of corresponding rows in the `values` input 
  * table using the key sorted order and the group labels.
  * 
@@ -54,7 +54,7 @@ namespace sort {
  * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
  * `true` and skip_null_keys option is true.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool skip_rows_with_nulls, bool values_have_nulls>
 __global__ void aggregate_all_rows(
     device_table input_values,

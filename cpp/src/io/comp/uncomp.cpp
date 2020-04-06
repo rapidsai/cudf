@@ -479,7 +479,7 @@ gdf_error io_uncompress_single_h2d(const void *src, size_t src_size, int strm_ty
     return GDF_SUCCESS;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Uncompresses the input data and stores the allocated result into 
  * a vector.
  * 
@@ -489,7 +489,7 @@ gdf_error io_uncompress_single_h2d(const void *src, size_t src_size, int strm_ty
  * @param[out] h_uncomp_data Vector containing the output uncompressed data
  * 
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
- *---------------------------------------------------------------------------**/
+ **/
 gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes,
     const std::string& compression, std::vector<char>& h_uncomp_data) 
 {

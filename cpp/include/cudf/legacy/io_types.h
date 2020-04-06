@@ -29,9 +29,9 @@ typedef enum {
 } gdf_input_type;
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief These are the arguments to the CSV writer function.
- *---------------------------------------------------------------------------**/
+ **/
 typedef struct
 {
     const gdf_column* const* columns; // columns to output

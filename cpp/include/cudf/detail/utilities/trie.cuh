@@ -41,7 +41,7 @@ struct SerialTrieNode {
 };
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Create a serialized trie for cache-friendly string search
  *
  * The resulting trie is a compact array - children array size is equal to the
@@ -50,7 +50,7 @@ struct SerialTrieNode {
  * @param[in] keys Array of strings to insert into the trie
  *
  * @return A host vector of nodes representing the serialized trie
- *---------------------------------------------------------------------------**/
+ **/
 inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vector<std::string> &keys) {
 
 	static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
@@ -119,7 +119,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
 }
 
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Searches for a string in a serialized trie
  *
  * Can be executed on host or device, as long as the data is available
@@ -129,7 +129,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(const std::vecto
  * @param[in] key_len Length of the string to find
  *
  * @return Boolean value, true if string is found, false otherwise
- *---------------------------------------------------------------------------**/
+ **/
 __host__ __device__
 inline bool serializedTrieContains(const SerialTrieNode* trie, const char* key, size_t key_len) {
 	if (trie == nullptr) return false;

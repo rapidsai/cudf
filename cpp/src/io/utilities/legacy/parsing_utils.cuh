@@ -146,7 +146,7 @@ __device__ __inline__ bool isLikeDateTime(long letter_count, long decimal_count,
   return false;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
  * Also iterates over (one or more) delimiter characters after the field.
@@ -159,7 +159,7 @@ __device__ __inline__ bool isLikeDateTime(long letter_count, long decimal_count,
  *
  * @return long position of the last character in the field, including the
  *  delimiter(s) following the field data
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ long seekFieldEnd(const char *data, const ParseOptions opts, long pos, long stop) {
   bool quotation = false;
   while (true) {

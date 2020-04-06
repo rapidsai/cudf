@@ -478,7 +478,7 @@ struct decode_op {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -493,7 +493,7 @@ struct decode_op {
  * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
                                 size_t num_records, size_t num_columns,
                                 const column_parse::flags *flags,

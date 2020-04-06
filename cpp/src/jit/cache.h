@@ -49,10 +49,10 @@ class cudfJitCache
 {
 public:
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get a process wide singleton cache object
      * 
-     *---------------------------------------------------------------------------**/
+     **/
     static cudfJitCache& Instance() {
         // Meyers' singleton is thread safe in C++11
         // Link: https://stackoverflow.com/a/1661564
@@ -63,7 +63,7 @@ public:
     cudfJitCache();
     ~cudfJitCache();
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get the Kernel Instantiation object
      * 
      * Searches an internal in-memory cache and file based cache for the kernel
@@ -73,13 +73,13 @@ public:
      * @param program   [in] Jitify preprocessed program to get the kernel from
      * @param arguments [in] template arguments for kernel in vector of strings
      * @return  Pair of string kernel identifier and compiled kernel object
-     *---------------------------------------------------------------------------**/
+     **/
     named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
         std::string const& kern_name,
         named_prog<jitify::experimental::Program> const& program,
         std::vector<std::string> const& arguments);
 
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Get the Jitify preprocessed Program object
      * 
      * Searches an internal in-memory cache and file based cache for the Jitify
@@ -93,7 +93,7 @@ public:
      * @param file_callback  [in] pointer to callback function to call whenever a
      *  header needs to be loaded
      * @return named_prog<jitify::experimental::Program> 
-     *---------------------------------------------------------------------------**/
+     **/
     named_prog<jitify::experimental::Program> getProgram(
         std::string const& prog_file_name, 
         std::string const& cuda_source = "",
@@ -120,10 +120,10 @@ private:
     static std::mutex _program_cache_mutex;
 
 private:
-    /**---------------------------------------------------------------------------*
+    /**
      * @brief Class to allow process wise exclusive access to cache files
      * 
-     *---------------------------------------------------------------------------**/
+     **/
     class cacheFile
     {
     private:
@@ -134,32 +134,32 @@ private:
         cacheFile(std::string file_name);
         ~cacheFile();
 
-        /**---------------------------------------------------------------------------*
+        /**
          * @brief Read this file and return the contents as a std::string
          * 
-         *---------------------------------------------------------------------------**/
+         **/
         std::string read();
 
-        /**---------------------------------------------------------------------------*
+        /**
          * @brief Write the passed string to this file
          * 
-         *---------------------------------------------------------------------------**/
+         **/
         void write(std::string);
 
-        /**---------------------------------------------------------------------------*
+        /**
          * @brief Check whether the read() operation on the file completed successfully
          * 
          * @return true Read was successful. String returned by `read()` is valid
          * @return false Read was unsuccessful. String returned by `read()` is empty
-         *---------------------------------------------------------------------------**/
+         **/
         bool is_read_successful() { return successful_read; }
 
-        /**---------------------------------------------------------------------------*
+        /**
          * @brief Check whether the write() operation on the file completed successfully
          * 
          * @return true Write was successful.
          * @return false Write was unsuccessful. File state is undefined
-         *---------------------------------------------------------------------------**/
+         **/
         bool is_write_successful() { return successful_write; }
     };
 
