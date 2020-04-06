@@ -91,6 +91,7 @@
 - PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
 - PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4813 Fix `GenericIndex` printing
 
 
 # cuDF 0.13.0 (31 Mar 2020)
