@@ -161,7 +161,7 @@ std::unique_ptr<cudf::column> last_day_of_month(
  *
  * @param[in] cudf::column_view of the input datetime values
  *
- * @returns cudf::column containing the day number since the start of the year as int16_t
+ * @returns cudf::column of datatype INT16 containing the day number since the start of the year.
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  */
 std::unique_ptr<cudf::column> day_of_year(
