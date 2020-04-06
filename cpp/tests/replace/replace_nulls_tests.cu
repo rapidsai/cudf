@@ -207,14 +207,14 @@ void ReplaceNullsScalar(cudf::test::fixed_width_column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  std::vector<TypeParam> inputColumn{0,1,2,3,4,5,6,7,8,9};
+  std::vector<TypeParam> inputColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
   std::vector<cudf::valid_type> inputValid{0,0,0,0,0,1,1,1,1,1};
-  std::vector<TypeParam> replacementColumn{0,1,2,3,4,5,6,7,8,9};
+  std::vector<TypeParam> replacementColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
 
   ReplaceNullsColumn<TypeParam>(
-    cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
-    cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()},
-    cudf::test::fixed_width_column_wrapper<TypeParam> {replacementColumn.begin(), replacementColumn.end()});
+    cudf::test::fixed_width_column_wrapper<TypeParam> (inputColumn.begin(), inputColumn.end(), inputValid.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam> (replacementColumn.begin(), replacementColumn.end()),
+    cudf::test::fixed_width_column_wrapper<TypeParam> (replacementColumn.begin(), replacementColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty) {
@@ -226,30 +226,32 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty) {
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  std::vector<TypeParam> inputColumn {0,1,2,3,4,5,6,7,8,9};
+  std::vector<TypeParam> inputColumn = cudf::test::make_type_param_vector<TypeParam>({0,1,2,3,4,5,6,7,8,9});
   std::vector<cudf::valid_type> inputValid {0,0,0,0,0,1,1,1,1,1};
-  std::vector<TypeParam> expectedColumn{1,1,1,1,1,5,6,7,8,9};
+  std::vector<TypeParam> expectedColumn = cudf::test::make_type_param_vector<TypeParam>({1,1,1,1,1,5,6,7,8,9});
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
-    cudf::test::fixed_width_column_wrapper<TypeParam> {inputColumn.begin(), inputColumn.end(), inputValid.begin()},
+    cudf::test::fixed_width_column_wrapper<TypeParam> (inputColumn.begin(), inputColumn.end(), inputValid.begin()),
     replacement,
-    cudf::test::fixed_width_column_wrapper<TypeParam> {expectedColumn.begin(), expectedColumn.end()});
+    cudf::test::fixed_width_column_wrapper<TypeParam> (expectedColumn.begin(), expectedColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls) {
-  std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
-  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
 
-  std::vector<TypeParam> replace_column{4, 5, 6, 7, 8, 9, 0, 1};
-  std::vector<cudf::valid_type> replace_valid{1, 0, 1, 1, 1, 1, 1, 1};
+  using T = TypeParam;
 
-  std::vector<TypeParam> result_column{4, 5, 6, 3, 1, 2, 8, 4};
-  std::vector<cudf::valid_type> result_valid{1, 0, 1, 1, 1, 1, 1, 1};
+  std::vector<T> input_column   = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
+  std::vector<T> replace_column = cudf::test::make_type_param_vector<T>({4, 5, 6, 7, 8, 9, 0, 1});
+  std::vector<T> result_column  = cudf::test::make_type_param_vector<T>({4, 5, 6, 3, 1, 2, 8, 4});
 
-  ReplaceNullsColumn<TypeParam> (cudf::test::fixed_width_column_wrapper<TypeParam>{input_column.begin(), input_column.end(), input_valid.begin()},
-                                 cudf::test::fixed_width_column_wrapper<TypeParam>{replace_column.begin(), replace_column.end(), replace_valid.begin()},
-                                 cudf::test::fixed_width_column_wrapper<TypeParam>{result_column.begin(), result_column.end(), result_valid.begin()});
+  std::vector<cudf::valid_type> input_valid   {0, 0, 1, 1, 1, 1, 1, 1};
+  std::vector<cudf::valid_type> replace_valid {1, 0, 1, 1, 1, 1, 1, 1};
+  std::vector<cudf::valid_type> result_valid  {1, 0, 1, 1, 1, 1, 1, 1};
+
+  ReplaceNullsColumn<T> (cudf::test::fixed_width_column_wrapper<T>(input_column.begin(),   input_column.end(),   input_valid.begin()),
+                         cudf::test::fixed_width_column_wrapper<T>(replace_column.begin(), replace_column.end(), replace_valid.begin()),
+                         cudf::test::fixed_width_column_wrapper<T>(result_column.begin(),  result_column.end(),  result_valid.begin()));
 }
 
 TYPED_TEST(ReplaceNullsTest, LargeScale) {
@@ -264,9 +266,9 @@ TYPED_TEST(ReplaceNullsTest, LargeScale) {
     expectedColumn[i] = 1;
 
   ReplaceNullsColumn<TypeParam>(
-      cudf::test::fixed_width_column_wrapper<TypeParam>{inputColumn.begin(), inputColumn.end(), inputValid.begin()},
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()},
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()});
+      cudf::test::fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()),
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()));
 }
 
 TYPED_TEST(ReplaceNullsTest, LargeScaleScalar) {
@@ -282,9 +284,9 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar) {
   cudf::numeric_scalar<TypeParam> replacement(1);
 
   ReplaceNullsScalar<TypeParam>(
-      cudf::test::fixed_width_column_wrapper<TypeParam>{inputColumn.begin(), inputColumn.end(), inputValid.begin()},
+      cudf::test::fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
       replacement,
-      cudf::test::fixed_width_column_wrapper<TypeParam>{expectedColumn.begin(), expectedColumn.end()});
+      cudf::test::fixed_width_column_wrapper<TypeParam>(expectedColumn.begin(), expectedColumn.end()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

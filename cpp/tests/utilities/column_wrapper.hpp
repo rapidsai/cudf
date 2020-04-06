@@ -110,9 +110,9 @@ class column_wrapper {
  *---------------------------------------------------------------------------**/
 template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
-  static_assert(cudf::is_fixed_width<Element>(),
-                "Unexpected non-fixed width type.");
-  std::vector<Element> elements(begin, end);
+    static_assert(cudf::is_fixed_width<Element>(),
+                  "Unexpected non-fixed width type.");
+  thrust::host_vector<Element> elements(begin, end);
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
 
@@ -137,7 +137,7 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
       cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
   std::vector<bitmask_type> null_mask(num_words, 0);
   for (auto i = 0; i < size; ++i) {
-    if (begin[i] == true) {
+    if (*(begin + i)) {
       set_bit_unsafe(null_mask.data(), i);
     }
   }
@@ -199,21 +199,18 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
  *
  * @tparam Element The fixed-width element type
  *---------------------------------------------------------------------------**/
-template <typename Element>
+template <typename ElementTo>
 class fixed_width_column_wrapper : public detail::column_wrapper {
-  static_assert(cudf::is_fixed_width<Element>(),
-                "Unexpected non-fixed width type.");
-
  public:
   /**---------------------------------------------------------------------------*
    * @brief Default constructor initializes an empty column with proper dtype
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper() : column_wrapper{} {
-    std::vector<Element> empty;
+    std::vector<ElementTo> empty;
     wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<Element>()},
+        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
         0,
-        detail::make_elements<Element>(empty.begin(), empty.end())});
+        detail::make_elements<ElementTo>(empty.begin(), empty.end())});
   }
 
   /**---------------------------------------------------------------------------*
@@ -227,6 +224,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w(elements, elements + 5);
    * ```
    *
+   * Note: similar to `std::vector`, this "range" constructor should be used
+   *       with parentheses `()` and not braces `{}`. The latter should only
+   *       be used for the `initializer_list` constructors
+   *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    *---------------------------------------------------------------------------**/
@@ -235,8 +236,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
       : column_wrapper{} {
     cudf::size_type size = std::distance(begin, end);
     wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<Element>()}, size,
-        detail::make_elements<Element>(begin, end)});
+        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()}, size,
+        detail::make_elements<ElementTo>(begin, end)});
   }
 
   /**---------------------------------------------------------------------------*
@@ -254,6 +255,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w(elements, elements + 5, validity);
    * ```
    *
+   * Note: similar to `std::vector`, this "range" constructor should be used
+   *       with parentheses `()` and not braces `{}`. The latter should only
+   *       be used for the `initializer_list` constructors
+   *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
@@ -265,8 +270,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     cudf::size_type size = std::distance(begin, end);
 
     wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<Element>()}, size,
-        detail::make_elements<Element>(begin, end),
+        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()}, size,
+        detail::make_elements<ElementTo>(begin, end),
         detail::make_null_mask(v, v + size), cudf::UNKNOWN_NULL_COUNT});
   }
 
@@ -282,7 +287,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param element_list The list of elements
    *---------------------------------------------------------------------------**/
-  fixed_width_column_wrapper(std::initializer_list<Element> elements)
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
       : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
   }
 
@@ -303,7 +309,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
    *---------------------------------------------------------------------------**/
-  fixed_width_column_wrapper(std::initializer_list<Element> elements,
+  template <typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
                              std::initializer_list<bool> validity)
       : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
                                    std::cbegin(validity)) {}
@@ -325,8 +332,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
-  template <typename ValidityIterator>
-  fixed_width_column_wrapper(std::initializer_list<Element> element_list,
+  template <typename ValidityIterator, typename ElementFrom>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list,
                              ValidityIterator v)
       : fixed_width_column_wrapper(std::cbegin(element_list),
                                    std::cend(element_list), v) {}
