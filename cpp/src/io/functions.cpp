@@ -161,7 +161,7 @@ void write_csv(write_csv_args const& args,
   csv::writer_options options{args.get_options()};
   auto writer = make_writer<csv::writer>(args.sink(), options, mr);
   
-  writer->write_all(args.table());
+  writer->write_all(args.table(), args.metadata());
 }
 
 namespace orc = cudf::experimental::io::detail::orc;

@@ -262,7 +262,8 @@ struct write_csv_args: private detail::csv::writer_options {
                  std::string line_term = std::string{"\n"},
                  char delim = ',',
                  std::string true_v = std::string{"true"},
-                 std::string false_v = std::string{"false"})
+                 std::string false_v = std::string{"false"},
+                 table_metadata const* metadata = nullptr)
     : writer_options(na,
                      include_header,
                      rows_per_chunk,
@@ -271,7 +272,8 @@ struct write_csv_args: private detail::csv::writer_options {
                      true_v,
                      false_v),
       sink_(snk),
-      table_(table)
+      table_(table),
+      metadata_(metadata)
   {}
 
   detail::csv::writer_options const& get_options(void) const
@@ -289,6 +291,11 @@ struct write_csv_args: private detail::csv::writer_options {
     return table_;
   }
 
+  table_metadata const* metadata(void) const
+  {
+    return metadata_;
+  }
+
 private:
   // Specify the sink to use for writer output:
   //
@@ -297,6 +304,11 @@ private:
   // Set of columns to output:
   //
   table_view const& table_;
+
+  // Optional associated metadata
+  //
+  table_metadata const* metadata_;
+
 };
 
 /**
