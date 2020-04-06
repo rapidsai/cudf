@@ -140,34 +140,59 @@ namespace
 // with RMM initialize/finalize. See PR #3159 for details on this approach.
 __device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
 __device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
-std::mutex g_flags_table_mutex, g_cases_table_mutex;
+__device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
+
+// initialization mutexes
+std::mutex g_flags_table_mutex;
+std::mutex g_cases_table_mutex; 
+std::mutex g_special_case_mappings_mutex;
+
 character_flags_table_type* d_character_codepoint_flags = nullptr;
 character_cases_table_type* d_character_cases_table = nullptr;
+special_case_mapping* d_special_case_mappings = nullptr;
 
 } // namespace
 
-// Return the flags table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_flags_table 
+ */
 const character_flags_table_type* get_character_flags_table()
 {
     std::lock_guard<std::mutex> guard(g_flags_table_mutex);
     if( !d_character_codepoint_flags )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags, character_codepoint_flags));
     }
     return d_character_codepoint_flags;
 }
 
-// Return the cases table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_cases_table 
+ */
 const character_cases_table_type* get_character_cases_table()
 {
     std::lock_guard<std::mutex> guard(g_cases_table_mutex);
     if( !d_character_cases_table )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table,character_cases_table));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table, character_cases_table));
     }
     return d_character_cases_table;
+}
+
+/**
+ * @copydoc cudf::strings::detail::get_special_case_mapping_table 
+ */
+const special_case_mapping* get_special_case_mapping_table()
+{        
+    std::lock_guard<std::mutex> guard(g_special_case_mappings_mutex);
+    if( !d_special_case_mappings )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_special_case_mappings, character_special_case_mappings));
+    }
+    return d_special_case_mappings;       
 }
 
 } // namespace detail
