@@ -176,6 +176,27 @@ cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
 
+_docstring_merge_parquet_filemetadata = """
+Merge multiple parquet metadata blobs
+
+Parameters
+----------
+metadata_list : list
+    List of buffers returned by to_parquet
+
+Returns
+-------
+Combined parquet metadata blob
+
+See Also
+--------
+cudf.io.parquet.to_parquet
+"""
+doc_merge_parquet_filemetadata = docfmt_partial(
+    docstring=_docstring_merge_parquet_filemetadata
+)
+
+
 _docstring_read_orc_metadata = """
 Read an ORC file's metadata and schema
 

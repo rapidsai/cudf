@@ -29,8 +29,6 @@
 
 using namespace cudf::test;
 
-using bool8 = cudf::experimental::bool8;
-
 // =============================================================================
 // ---- test data --------------------------------------------------------------
 
@@ -42,20 +40,20 @@ namespace testdata {
 template<typename T>
 auto ascending() {
     return fixed_width_column_wrapper<T>({ std::numeric_limits<T>::lowest(),
-                                           -100, -10, -1, 0, 1, 10, 100,
+                                           T(-100), T(-10), T(-1), T(0), T(1), T(10), T(100),
                                            std::numeric_limits<T>::max() });
 }
 
 template<typename T>
 auto descending() {
     return fixed_width_column_wrapper<T>({ std::numeric_limits<T>::max(),
-                                           100, 10, 1, 0, -1, -10, -100,
+                                           T(100), T(10), T(1), T(0), T(-1), T(-10), T(-100),
                                            std::numeric_limits<T>::lowest() });
 }
 
 template<typename T>
 auto empty() {
-    return fixed_width_column_wrapper<T>({ });
+    return fixed_width_column_wrapper<T>();
 }
 
 template<typename T>
@@ -68,16 +66,16 @@ auto nulls_before() {
     return fixed_width_column_wrapper<T>({ 0, 0 }, { 0, 1 });
 }
 
-// ----- bool8
+// ----- bool
 
 template<>
-auto ascending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ false, false, true, true });
+auto ascending<bool>() {
+    return fixed_width_column_wrapper<bool>({ false, false, true, true });
 }
 
 template<>
-auto descending<bool8>() {
-    return fixed_width_column_wrapper<bool8>({ true, true, false, false });
+auto descending<bool>() {
+    return fixed_width_column_wrapper<bool>({ true, true, false, false });
 }
 
 // ----- timestamp
@@ -368,3 +366,4 @@ struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 
+CUDF_TEST_PROGRAM_MAIN()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,19 @@
 #include <vector>
 
 namespace cudf {
+
+/**
+ * @brief Tie-breaker method to use for ranking the column.
+ * 
+ */
+enum class rank_method {
+  FIRST,   ///< stable sort order ranking (no ties)
+  AVERAGE, ///< mean of first in the group
+  MIN,     ///< min of first in the group
+  MAX,     ///< max of first in the group
+  DENSE    ///< rank always increases by 1 between groups
+};
+
 namespace experimental {
 
 /**---------------------------------------------------------------------------*
@@ -46,7 +59,8 @@ std::unique_ptr<column> sorted_order(
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
- *
+ * The order of equivalent elements is guaranteed to be preserved.
+ * 
  * @copydetails cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
@@ -121,5 +135,41 @@ std::unique_ptr<table> sort_by_key(
     std::vector<null_order> const& null_precedence = {},
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**---------------------------------------------------------------------------*
+ * @brief Computes the ranks of input column in sorted order.
+ * Rank indicate the position of each element in the sorted column and rank
+ * value starts from 1.
+ *
+ * @example input = { 3, 4, 5, 4, 1, 2}
+ * Result for different rank_method are
+ * FIRST    = {3, 4, 6, 5, 1, 2}
+ * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
+ * MIN      = {3, 4, 6, 4, 1, 2}
+ * MAX      = {3, 5, 6, 5, 1, 2}
+ * DENSE    = {3, 4, 5, 4, 1, 2}
+ *
+ * @param input The column to rank
+ * @param method The ranking method used for tie breaking (same values).
+ * @param column_order The desired sort order for ranking
+ * @param _include_nulls  flag to include nulls during ranking. If nulls are not
+ * included, corresponding rank will be null.
+ * @param null_precedence The desired order of null compared to other elements
+ * for column
+ * @param percentage flag to convert ranks to percentage in range (0,1}
+ * @param mr The device memory resource used to allocate the returned column
+ * @return std::unique_ptr<column> A column of containing the rank of the each
+ * element of the column of `input`. The output column type will be `size_type`
+ * column by default or else `double` when `method=rank_method::AVERAGE` or
+ *`percentage=True`
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<column> rank(
+    column_view const &input,
+    rank_method method,
+    order column_order,
+    include_nulls _include_nulls,
+    null_order null_precedence,
+    bool percentage,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+ 
 }  // namespace experimental
 }  // namespace cudf

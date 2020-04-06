@@ -110,7 +110,7 @@ std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
  *         
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if lhs and rhs are not of the same length
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand column_view
@@ -132,7 +132,7 @@ std::unique_ptr<column> copy_if_else( column_view const& lhs, column_view const&
  *          output[i] = (boolean_mask[i]) ? lhs : rhs[i]
  *         
  * @throws cudf::logic_error if lhs and rhs are not of the same type 
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs  
  * @param[in] left-hand scalar
  * @param[in] right-hand column_view
@@ -154,7 +154,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, 
  *          output[i] = (boolean_mask[i]) ? lhs[i] : rhs
  *         
  * @throws cudf::logic_error if lhs and rhs are not of the same type 
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand scalar
@@ -175,7 +175,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, 
  * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
  *          output[i] = (boolean_mask[i]) ? lhs : rhs
  *          
- * @throws cudf::logic_error if boolean mask is not of type bool8 
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @param[in] left-hand scalar
  * @param[in] right-hand scalar
  * @param[in] column_view representing "left (true) / right (false)" boolean for each element

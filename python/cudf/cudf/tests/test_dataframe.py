@@ -840,6 +840,28 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             assert expected_value == got_value
 
 
+@pytest.mark.parametrize("keep_index", [True, False])
+def test_dataframe_hash_partition_keep_index(keep_index):
+
+    gdf = DataFrame(
+        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+    )
+
+    expected_df1 = DataFrame(
+        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+    )
+    expected_df2 = DataFrame(
+        {"val": [2, 3, 4], "key": [2, 1, 4]},
+        index=[3, 2, 1] if keep_index else range(1, 4),
+    )
+    expected = [expected_df1, expected_df2]
+
+    parts = gdf.partition_by_hash(["key"], nparts=2, keep_index=keep_index)
+
+    for exp, got in zip(expected, parts):
+        assert_eq(exp, got)
+
+
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
@@ -1889,6 +1911,13 @@ def test_dataframe_rename():
 
     rename_mapper = {"a": "z", "b": "y", "c": "x"}
     expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    rename_mapper = {"a": "z", "b": "z", "c": "z"}
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)
@@ -4428,7 +4457,7 @@ def test_change_column_dtype_in_empty():
 
 
 def test_dataframe_from_table_empty_index():
-    from cudf._libxx.table import Table
+    from cudf._lib.table import Table
 
     df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     odict = df._data
@@ -4458,3 +4487,25 @@ def test_dataframe_from_dictionary_series_same_name_index(dtype):
 
     assert_eq(expect, got)
     assert expect.index.names == got.index.names
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 8, 3), slice(1, 20, 4), slice(-2, -6, -2)]
+)
+def test_dataframe_strided_slice(arg):
+    mul = pd.DataFrame(
+        {
+            "Index": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "AlphaIndex": ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+        }
+    )
+    pdf = pd.DataFrame(
+        {"Val": [10, 9, 8, 7, 6, 5, 4, 3, 2]},
+        index=pd.MultiIndex.from_frame(mul),
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
+
+    expect = pdf[arg]
+    got = gdf[arg]
+
+    assert_eq(expect, got)

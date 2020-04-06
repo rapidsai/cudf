@@ -82,7 +82,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
   }
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
-  using hash_table_type = concurrent_unordered_map<cudf::size_type, bool8, row_hash, row_equality>;
+  using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;
 
   // Create hash table containing all keys found in right table
   auto right_rows_d = table_device_view::create(right.select(right_on), stream);
@@ -96,7 +96,7 @@ std::unique_ptr<cudf::experimental::table> left_semi_anti_join(cudf::table_view 
   row_equality equality_probe{*left_rows_d, *right_rows_d};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
-                                                std::numeric_limits<bool8>::max(),
+                                                std::numeric_limits<bool>::max(),
                                                 std::numeric_limits<cudf::size_type>::max(),
                                                 hash_build,
                                                 equality_build);

@@ -6,13 +6,13 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dict_like
 
 import cudf
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
+    as_column,
     column,
     column_empty_like,
 )
@@ -180,9 +180,7 @@ class Series(Frame):
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
-            return np.array(
-                self._column.data_array_view.to_host(), dtype="object"
-            )
+            return self._column.to_array()
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -417,7 +415,7 @@ class Series(Frame):
 
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
-            return func(self)
+            return func(*inputs)
         else:
             return NotImplemented
 
@@ -480,10 +478,15 @@ class Series(Frame):
 
         self._column[key] = value
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.
         """
-        return self[indices]
+        if keep_index is True or is_scalar(indices):
+            return self[indices]
+        else:
+            col_inds = as_column(indices)
+            data = self._column.take(col_inds, keep_index=False)
+            return self._copy_construct(data=data)
 
     def __bool__(self):
         """Always raise TypeError when converting a Series
@@ -613,7 +616,7 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
+        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -648,7 +651,7 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudfxx.nvtx.range_pop()
+        libcudf.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
@@ -951,6 +954,10 @@ class Series(Frame):
         ser = self._binaryop(other, "l_and")
         return ser.astype(np.bool_)
 
+    def remainder(self, other):
+        ser = self._binaryop(other, "mod")
+        return ser
+
     def logical_or(self, other):
         ser = self._binaryop(other, "l_or")
         return ser.astype(np.bool_)
@@ -1238,7 +1245,7 @@ class Series(Frame):
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudfxx.transform.nans_to_nulls(sr._column)
+            newmask = libcudf.transform.nans_to_nulls(sr._column)
             return self.set_mask(newmask)
         else:
             return self
@@ -1462,7 +1469,7 @@ class Series(Frame):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -1475,8 +1482,10 @@ class Series(Frame):
             * list of numeric or str:
                 - If *replacement* is also list-like, *to_replace* and
                   *replacement* must be of same length.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
+        inplace : bool, default False
+            If True, in place.
 
         See also
         --------
@@ -1487,54 +1496,10 @@ class Series(Frame):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
-        # if all the elements of replacement column are None then propagate the
-        # same dtype as self.dtype in column._values for replacement
-        all_nan = False
-        if not is_scalar(to_replace):
-            if is_scalar(replacement):
-                all_nan = replacement is None
-                if all_nan:
-                    replacement = [replacement] * len(to_replace)
-                # Do not broadcast numeric dtypes
-                elif pd.api.types.is_numeric_dtype(self.dtype):
-                    replacement = [replacement]
-                else:
-                    replacement = utils.scalar_broadcast_to(
-                        replacement,
-                        (len(to_replace),),
-                        np.dtype(type(replacement)),
-                    )
-            else:
-                # If both are non-scalar
-                if len(to_replace) != len(replacement):
-                    raise ValueError(
-                        "Replacement lists must be "
-                        "of same length."
-                        "Expected {}, got {}.".format(
-                            len(to_replace), len(replacement)
-                        )
-                    )
-        else:
-            if not is_scalar(replacement):
-                raise TypeError(
-                    "Incompatible types '{}' and '{}' "
-                    "for *to_replace* and *replacement*.".format(
-                        type(to_replace).__name__, type(replacement).__name__
-                    )
-                )
-            to_replace = [to_replace]
-            replacement = [replacement]
 
-        if is_dict_like(to_replace) or is_dict_like(replacement):
-            raise TypeError("Dict-like args not supported in Series.replace()")
+        result = super().replace(to_replace=to_replace, replacement=value)
 
-        if isinstance(replacement, list):
-            all_nan = replacement.count(None) == len(replacement)
-        result = self._column.find_and_replace(
-            to_replace, replacement, all_nan
-        )
-
-        return self._copy_construct(data=result)
+        return self._mimic_inplace(result, inplace=inplace)
 
     def reverse(self):
         """Reverse the Series
@@ -1885,15 +1850,26 @@ class Series(Frame):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def kurtosis(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
         """Calculates Fisher's unbiased kurtosis of a sample.
         """
-        assert (
-            axis in (None, 0)
-            and skipna in (None, True)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if skipna not in (None, True):
+            raise NotImplementedError(
+                "skipna parameter is not implemented yet"
+            )
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if self.empty:
             return np.nan
@@ -1916,6 +1892,9 @@ class Series(Frame):
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
+
+    # Alias for kurtosis.
+    kurt = kurtosis
 
     def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
         """Calculates the unbiased Fisher-Pearson skew of a sample.
@@ -2078,7 +2057,7 @@ class Series(Frame):
         return self._column.unique_count(method, dropna)
 
     def value_counts(self, sort=True):
-        """Returns unique values of this Series.
+        """Return a Series containing counts of unique values.
         """
 
         if self.null_count == len(self):
@@ -2201,11 +2180,8 @@ class Series(Frame):
 
         if isinstance(q, Number):
             res = self._column.quantile(q, interpolation, exact)
-            if len(res) == 0:
-                return np.nan
-            else:
-                # if q is an int/float, we shouldn't be constructing series
-                return res.pop()
+            res = res[0]
+            return np.nan if res is None else res
 
         if not quant_index:
             return Series(
@@ -2483,6 +2459,8 @@ class Series(Frame):
         """
         Align to the given Index. See _align_indices below.
         """
+        from uuid import uuid4
+
         index = as_index(index)
         if self.index.equals(index):
             return self
@@ -2493,7 +2471,18 @@ class Series(Frame):
                 raise ValueError("Cannot align indices with non-unique values")
         lhs = self.to_frame(0)
         rhs = cudf.DataFrame(index=as_index(index))
-        result = lhs.join(rhs, how=how, sort=sort)[0]
+        if how == "left":
+            tmp_col_id = str(uuid4())
+            lhs[tmp_col_id] = cupy.arange(len(lhs))
+        elif how == "right":
+            tmp_col_id = str(uuid4())
+            rhs[tmp_col_id] = cupy.arange(len(rhs))
+        result = lhs.join(rhs, how=how, sort=sort)
+        if how == "left" or how == "right":
+            result = result.sort_values(tmp_col_id)[0]
+        else:
+            result = result[0]
+
         result.name = self.name
         result.index.names = index.names
         return result
@@ -2557,33 +2546,33 @@ class DatetimeProperties(object):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        return self._get_dt_field("weekday")
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(
             data=out_column, index=self.series._index, name=self.series.name

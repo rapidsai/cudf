@@ -40,21 +40,17 @@ template <typename T> T random_int(T min, T max) {
 template <typename InputIterator, typename OutputIterator, typename T>
 inline auto reduce_by_cub(OutputIterator result, InputIterator d_in,
                           int num_items, T init) {
-  void *d_temp_storage = NULL;
   size_t temp_storage_bytes = 0;
 
-  cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, result,
+  cub::DeviceReduce::Reduce(nullptr, temp_storage_bytes, d_in, result,
                             num_items, cudf::DeviceSum{}, init);
 
   // Allocate temporary storage
-  RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, 0));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes);
 
   // Run reduction
-  cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, result,
-                            num_items, cudf::DeviceSum{}, init);
-
-  // Free temporary storage
-  RMM_TRY(RMM_FREE(d_temp_storage, 0));
+  cub::DeviceReduce::Reduce(d_temp_storage.data(), temp_storage_bytes, d_in, 
+                            result, num_items, cudf::DeviceSum{}, init);
 
   return temp_storage_bytes;
 }
