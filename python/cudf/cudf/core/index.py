@@ -787,8 +787,8 @@ class GenericIndex(Index):
             mr = max_seq_items + 1
 
         if len(self) > mr and mr != 0:
-            top = self[0 : (mr + 1)]
-            bottom = self[-1 * (mr + 1) :]
+            top = self[0:mr]
+            bottom = self[-1 * mr :]
             from cudf import concat
 
             preprocess = concat([top, bottom])
@@ -806,9 +806,9 @@ class GenericIndex(Index):
         lines = output.split("\n")
         if len(lines) > 1:
             tmp_meta = lines[-1]
-            prior_dtype = lines[-1].split("dtype")[0]
+            prior_to_dtype = lines[-1].split("dtype")[0]
             lines = lines[:-1]
-            lines.append(prior_dtype + "dtype='%s'" % self.dtype)
+            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
             if self.name is not None:
                 lines[-1] = lines[-1] + ", name='%s'" % self.name
             if "length" in tmp_meta:
