@@ -30,19 +30,20 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
   private static final Logger log = LoggerFactory.getLogger(DeviceMemoryBuffer.class);
 
   private static final class DeviceBufferCleaner extends MemoryBufferCleaner {
-    private long address;
+    private Rmm.RmmBuff buff;
 
-    DeviceBufferCleaner(long address) {
-      this.address = address;
+    DeviceBufferCleaner(Rmm.RmmBuff buff) {
+      this.buff = buff;
     }
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
-      long origAddress = address;
-      if (address != 0) {
-        Rmm.free(address, 0);
-        address = 0;
+      long origAddress = 0L;
+      if (buff != null) {
+        origAddress = buff.ptr;
+        buff.close();
+        buff = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -54,7 +55,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
 
     @Override
     public boolean isClean() {
-      return address == 0;
+      return buff == null;
     }
   }
 
@@ -95,8 +96,8 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     super(address, lengthInBytes, new RmmDeviceBufferCleaner(rmmBufferAddress));
   }
 
-  DeviceMemoryBuffer(long address, long lengthInBytes) {
-    super(address, lengthInBytes, new DeviceBufferCleaner(address));
+  DeviceMemoryBuffer(Rmm.RmmBuff buff) {
+    super(buff.ptr, buff.length, new DeviceBufferCleaner(buff));
   }
 
   private DeviceMemoryBuffer(long address, long lengthInBytes, DeviceMemoryBuffer parent) {
@@ -109,7 +110,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @return the buffer
    */
   public static DeviceMemoryBuffer allocate(long bytes) {
-    return new DeviceMemoryBuffer(Rmm.alloc(bytes, 0), bytes);
+    return new DeviceMemoryBuffer(Rmm.alloc(bytes));
   }
 
   /**

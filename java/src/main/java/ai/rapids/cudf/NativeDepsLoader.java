@@ -51,7 +51,6 @@ public class NativeDepsLoader {
           loadDep(os, arch, toLoad);
         }
         loaded = true;
-        Rmm.defaultInitialize();
       } catch (Throwable t) {
         log.error("Could not load cudf jni library...", t);
       }
