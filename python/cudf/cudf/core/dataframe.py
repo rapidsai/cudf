@@ -2861,23 +2861,10 @@ class DataFrame(Frame):
         5  null
         6     6
         """
-        if not inplace:
-            outdf = self.copy()
 
-        result_cols = super().replace(
-            to_replace=to_replace, replacement=value, inplace=False
-        )
+        outdf = super().replace(to_replace=to_replace, replacement=value)
 
-        for index, col in enumerate(self.columns):
-            if inplace:
-                self[col]._column._mimic_inplace(
-                    result_cols[index], inplace=True
-                )
-            else:
-                outdf[col] = result_cols[index]
-
-        if not inplace:
-            return outdf
+        return self._mimic_inplace(outdf, inplace=inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.

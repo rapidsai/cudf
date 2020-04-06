@@ -1493,14 +1493,9 @@ class Series(Frame):
             Series after replacement. The mask and index are preserved.
         """
 
-        result_cols = super().replace(
-            to_replace=to_replace, replacement=value, inplace=False
-        )
+        result = super().replace(to_replace=to_replace, replacement=value)
 
-        if inplace:
-            self._column._mimic_inplace(result_cols[0], inplace=True)
-        else:
-            return self._copy_construct(data=result_cols[0])
+        return self._mimic_inplace(result, inplace=inplace)
 
     def reverse(self):
         """Reverse the Series

@@ -901,28 +901,29 @@ class Frame(libcudf.table.Table):
         result._copy_categories(self)
         return result
 
-    def replace(self, to_replace, replacement, inplace=False):
-        result_cols = []
-        for col in self._data.items():
-            if to_replace is None and replacement is None:
-                result_cols.append(col[1])
-            else:
+    def replace(self, to_replace, replacement):
+        copy_data = self._data.copy()
+
+        for name, col in copy_data.items():
+            if not (to_replace is None and replacement is None):
                 try:
                     (
                         col_all_nan,
                         col_replacement,
                         col_to_replace,
-                    ) = _get_replacement_values(replacement, col, to_replace)
+                    ) = _get_replacement_values(
+                        replacement, name, col, to_replace
+                    )
 
-                    result_cols.append(
-                        col[1].find_and_replace(
-                            col_to_replace, col_replacement, col_all_nan
-                        )
+                    copy_data[name] = col.find_and_replace(
+                        col_to_replace, col_replacement, col_all_nan
                     )
                 except KeyError:
-                    result_cols.append(col[1])
+                    # Donot change the copy_data[name]
+                    pass
 
-        return result_cols
+        result = self._from_table(Frame(copy_data, self.index))
+        return result
 
     def _copy_categories(self, other, include_index=True):
         """
@@ -1547,7 +1548,7 @@ class Frame(libcudf.table.Table):
         )
 
 
-def _get_replacement_values(replacement, col, to_replace):
+def _get_replacement_values(replacement, col_name, column, to_replace):
     from cudf.utils import utils
     from pandas.api.types import is_dict_like
 
@@ -1562,7 +1563,7 @@ def _get_replacement_values(replacement, col, to_replace):
             if all_nan:
                 replacement = [replacement] * len(to_replace)
             # Do not broadcast numeric dtypes
-            elif pd.api.types.is_numeric_dtype(col[1].dtype):
+            elif pd.api.types.is_numeric_dtype(column.dtype):
                 replacement = [replacement]
             else:
                 replacement = utils.scalar_broadcast_to(
@@ -1592,8 +1593,8 @@ def _get_replacement_values(replacement, col, to_replace):
         replacement = [replacement]
 
     if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = [replacement[col[0]]]
-        to_replace = [to_replace[col[0]]]
+        replacement = [replacement[col_name]]
+        to_replace = [to_replace[col_name]]
 
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)
