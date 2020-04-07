@@ -277,24 +277,19 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  * @copydoc cudf::experimental::io::write_parquet_chunked_begin
  *
  **/
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
+std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(write_parquet_chunked_args const& args,
+                                                              rmm::mr::device_memory_resource*  mr){
   parquet::writer_options options{args.compression, args.stats_level};
 
-  auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<parquet::writer>(args.sink, options, mr);
+  auto       writer            = make_writer<parquet::writer>(args.sink, options, mr);
+  auto const curr_chunk_offset = writer->write_chunked_begin();
 
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (args.metadata != nullptr) {
-    state->user_metadata_with_nullability = *args.metadata;
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->stream = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  return std::make_shared<pq_chunked_state>(
+    std::move(writer),
+    curr_chunk_offset,
+    SetMetadata::WITH_NULLABILITY,
+    nullptr,
+    args.metadata);
 }
 
 /**

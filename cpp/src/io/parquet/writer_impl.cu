@@ -437,30 +437,30 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 {
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &table,
-                                                          const table_metadata *metadata,
-                                                          bool return_filemetadata,
-                                                          const std::string &metadata_out_file_path,
-                                                          cudaStream_t stream)
-{
-  pq_chunked_state state;
-  state.user_metadata     = metadata;
-  state.stream            = stream;
-  state.single_write_mode = true;
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
+                         table_view const &table, const table_metadata *metadata,
+                         bool return_filemetadata, const std::string& metadata_out_file_path,
+                         cudaStream_t stream) {    
 
-  write_chunked_begin(state);
+  pq_chunked_state state{
+    nullptr,
+    write_chunked_begin(),
+    SetMetadata::WITHOUT_NULLABILITY,
+    metadata,
+    nullptr,
+    SingleWriteMode::YES,
+    stream};
+
   write_chunked(table, state);
   return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
 }
 
-void writer::impl::write_chunked_begin(pq_chunked_state &state)
-{
+std::size_t writer::impl::write_chunked_begin() {
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
-
-  state.current_chunk_offset = sizeof(file_header_s);
+  return sizeof(file_header_s);
 }
 
 void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state)
@@ -935,7 +935,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
 }
 
 // Forward to implementation
-void writer::write_chunked_begin(pq_chunked_state &state) { _impl->write_chunked_begin(state); }
+std::size_t writer::write_chunked_begin() {
+  return _impl->write_chunked_begin();
+}
 
 // Forward to implementation
 void writer::write_chunked(table_view const &table, pq_chunked_state &state)
