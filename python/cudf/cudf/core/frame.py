@@ -254,11 +254,13 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map):
+    def _gather(self, gather_map, keep_index=True):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
-            libcudf.copying.gather(self, as_column(gather_map))
+            libcudf.copying.gather(
+                self, as_column(gather_map), keep_index=keep_index
+            )
         )
         result._copy_categories(self)
         return result
@@ -319,11 +321,6 @@ class Frame(libcudf.table.Table):
             return self
         start, stop, stride = arg.indices(num_rows)
 
-        if stride is not None and stride != 1:
-            raise ValueError(
-                """Step size is not supported other than None and 1"""
-            )
-
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
@@ -335,23 +332,30 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop:
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
-            result = self._from_table(
-                libcudf.copying.table_slice(self, [start, stop], keep_index)[0]
-            )
+            if stride is not None and stride != 1:
+                return self._gather(
+                    cupy.arange(start, stop=stop, step=stride, dtype=np.int32)
+                )
+            else:
+                result = self._from_table(
+                    libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
 
-            result._copy_categories(self, include_index=keep_index)
-            # Adding index of type RangeIndex back to
-            # result
-            if keep_index is False and self.index is not None:
-                result.index = self.index[start:stop]
-            result.columns = self.columns
-            return result
+                result._copy_categories(self, include_index=keep_index)
+                # Adding index of type RangeIndex back to
+                # result
+                if keep_index is False and self.index is not None:
+                    result.index = self.index[start:stop]
+                result.columns = self.columns
+                return result
 
     def _normalize_scalars(self, other):
         """
@@ -579,24 +583,6 @@ class Frame(libcudf.table.Table):
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
-
-        return result
-
-    def _scatter_to_tables(self, scatter_map, keep_index=True):
-        """
-       scatter the dataframe/table to a list of dataframes/tables
-       as per scatter_map
-
-       """
-
-        result = libcudf.copying.scatter_to_tables(
-            self, scatter_map, keep_index
-        )
-        result = [self._from_table(tbl) for tbl in result]
-        [
-            frame._copy_categories(self, include_index=keep_index)
-            for frame in result
-        ]
 
         return result
 
@@ -913,6 +899,30 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_categories(self)
+        return result
+
+    def replace(self, to_replace, replacement):
+        copy_data = self._data.copy()
+
+        for name, col in copy_data.items():
+            if not (to_replace is None and replacement is None):
+                try:
+                    (
+                        col_all_nan,
+                        col_replacement,
+                        col_to_replace,
+                    ) = _get_replacement_values(
+                        replacement, name, col, to_replace
+                    )
+
+                    copy_data[name] = col.find_and_replace(
+                        col_to_replace, col_replacement, col_all_nan
+                    )
+                except KeyError:
+                    # Donot change the copy_data[name]
+                    pass
+
+        result = self._from_table(Frame(copy_data, self.index))
         return result
 
     def _copy_categories(self, other, include_index=True):
@@ -1341,46 +1351,16 @@ class Frame(libcudf.table.Table):
 
         result = []
         cat_codes = []
-        if sort:
-            # Pandas lexicographically sort is NOT a sort of all columns.
-            # Instead, it sorts columns in lhs, then in "on", and then rhs.
-            left_of_on = []
-            for name in lhs._data.keys():
-                if name not in left_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            left_of_on.append(gdf_data.pop(i))
-                            break
-            in_on = []
-            for name in itertools.chain(lhs._data.keys(), rhs._data.keys()):
-                if name in left_on or name in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            in_on.append(gdf_data.pop(i))
-                            break
-            right_of_on = []
-            for name in rhs._data.keys():
-                if name not in right_on:
-                    for i in range(len(gdf_data)):
-                        if gdf_data[i][0] == name:
-                            right_of_on.append(gdf_data.pop(i))
-                            break
-            result = (
-                sorted(left_of_on, key=lambda x: str(x[0]))
-                + sorted(in_on, key=lambda x: str(x[0]))
-                + sorted(right_of_on, key=lambda x: str(x[0]))
-            )
-        else:
-            for org_name in org_names:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == org_name:
-                        result.append(gdf_data.pop(i))
-                        break
-            for cat_name in to_categorical:
-                for i in range(len(gdf_data)):
-                    if gdf_data[i][0] == cat_name + "_codes":
-                        cat_codes.append(gdf_data.pop(i))
-            assert len(gdf_data) == 0
+        for org_name in org_names:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == org_name:
+                    result.append(gdf_data.pop(i))
+                    break
+        for cat_name in to_categorical:
+            for i in range(len(gdf_data)):
+                if gdf_data[i][0] == cat_name + "_codes":
+                    cat_codes.append(gdf_data.pop(i))
+        assert len(gdf_data) == 0
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
@@ -1393,7 +1373,7 @@ class Frame(libcudf.table.Table):
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
+                    codes=cat_codes.get(str(name) + "_codes", col),
                     mask=col.base_mask,
                     size=col.size,
                     offset=col.offset,
@@ -1410,7 +1390,36 @@ class Frame(libcudf.table.Table):
                 )
         gdf_result._data = to_frame_data
 
-        return self.__class__._from_table(gdf_result)
+        to_return = self.__class__._from_table(gdf_result)
+
+        # If sort=True, Pandas would sort on the key columns in the
+        # same order as given in 'on'. If the indices are used as
+        # keys, the index will be sorted. If one index is specified,
+        # the key column on the other side will be used to sort.
+        # If no index is specified, return a new RangeIndex
+        if sort:
+            to_sort = self.__class__()
+            if left_index and right_index:
+                by = list(to_return._index._data.columns)
+                if left_on and right_on:
+                    by += list(to_return[left_on]._data.columns)
+            elif left_index:
+                by = list(to_return[right_on]._data.columns)
+            elif right_index:
+                by = list(to_return[left_on]._data.columns)
+            else:
+                # left_on == right_on, or different names but same columns
+                # in both cases we can sort by either
+                by = list(to_return[left_on]._data.columns)
+            for i, col in enumerate(by):
+                to_sort[i] = col
+            inds = to_sort.argsort()
+            to_return = to_return.take(
+                inds, keep_index=(left_index or right_index)
+            )
+            return to_return
+        else:
+            return to_return
 
     def _typecast_before_merge(
         self, lhs, rhs, left_on, right_on, left_index, right_index, how
@@ -1537,3 +1546,56 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+
+def _get_replacement_values(replacement, col_name, column, to_replace):
+    from cudf.utils import utils
+    from pandas.api.types import is_dict_like
+
+    all_nan = False
+
+    if is_dict_like(to_replace) and replacement is None:
+        replacement = list(to_replace.values())
+        to_replace = list(to_replace.keys())
+    elif not is_scalar(to_replace):
+        if is_scalar(replacement):
+            all_nan = replacement is None
+            if all_nan:
+                replacement = [replacement] * len(to_replace)
+            # Do not broadcast numeric dtypes
+            elif pd.api.types.is_numeric_dtype(column.dtype):
+                replacement = [replacement]
+            else:
+                replacement = utils.scalar_broadcast_to(
+                    replacement,
+                    (len(to_replace),),
+                    np.dtype(type(replacement)),
+                )
+        else:
+            # If both are non-scalar
+            if len(to_replace) != len(replacement):
+                raise ValueError(
+                    "Replacement lists must be "
+                    "of same length."
+                    "Expected {}, got {}.".format(
+                        len(to_replace), len(replacement)
+                    )
+                )
+    else:
+        if not is_scalar(replacement):
+            raise TypeError(
+                "Incompatible types '{}' and '{}' "
+                "for *to_replace* and *replacement*.".format(
+                    type(to_replace).__name__, type(replacement).__name__
+                )
+            )
+        to_replace = [to_replace]
+        replacement = [replacement]
+
+    if is_dict_like(to_replace) and is_dict_like(replacement):
+        replacement = [replacement[col_name]]
+        to_replace = [to_replace[col_name]]
+
+    if isinstance(replacement, list):
+        all_nan = replacement.count(None) == len(replacement)
+    return all_nan, replacement, to_replace

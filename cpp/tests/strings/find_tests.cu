@@ -19,7 +19,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/wrappers/bool.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
@@ -50,32 +49,32 @@ TEST_F(StringsFindTest, Find)
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,1,0,0}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {0,1,0,1,0,0}, {1,1,0,1,1,1} );
         auto results = cudf::strings::contains(strings_view, cudf::string_scalar("e"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,1,0}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {0,1,0,0,1,0}, {1,1,0,1,1,1} );
         auto results = cudf::strings::starts_with(strings_view, cudf::string_scalar("t"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,0,0,1,0,0}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {0,0,0,1,0,0}, {1,1,0,1,1,1} );
         auto results = cudf::strings::ends_with(strings_view, cudf::string_scalar("se"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
         auto results = cudf::strings::starts_with(strings_view, cudf::string_scalar("thesé"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {0,1,0,0,0,0}, {1,1,0,1,1,1} );
         auto results = cudf::strings::ends_with(strings_view, cudf::string_scalar("thesé"));
         cudf::test::expect_columns_equal(*results, expected);
     }
     {
-        cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected( {1,1,1,1,1,1}, {1,1,0,1,1,1} );
+        cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,1,1,1,1}, {1,1,0,1,1,1} );
         auto results = cudf::strings::contains(strings_view, cudf::string_scalar(""));
         cudf::test::expect_columns_equal(*results, expected);
         results = cudf::strings::starts_with(strings_view, cudf::string_scalar(""));
@@ -119,8 +118,8 @@ TEST_F(StringsFindTest, AllEmpty)
     std::vector<int32_t> h_expected32(h_strings.size(),-1);
     cudf::test::fixed_width_column_wrapper<int32_t> expected32( h_expected32.begin(), h_expected32.end() );
 
-    std::vector<cudf::experimental::bool8> h_expected8(h_strings.size(),0);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected8( h_expected8.begin(), h_expected8.end() );
+    std::vector<bool> h_expected8(h_strings.size(),0);
+    cudf::test::fixed_width_column_wrapper<bool> expected8( h_expected8.begin(), h_expected8.end() );
 
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::find(strings_view,cudf::string_scalar("e"));
@@ -145,8 +144,8 @@ TEST_F(StringsFindTest, AllNull)
     cudf::test::fixed_width_column_wrapper<int32_t> expected32( h_expected32.begin(), h_expected32.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
-    std::vector<cudf::experimental::bool8> h_expected8(h_strings.size(),-1);
-    cudf::test::fixed_width_column_wrapper<cudf::experimental::bool8> expected8( h_expected8.begin(), h_expected8.end(),
+    std::vector<bool> h_expected8(h_strings.size(),-1);
+    cudf::test::fixed_width_column_wrapper<bool> expected8( h_expected8.begin(), h_expected8.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto strings_view = cudf::strings_column_view(strings);
