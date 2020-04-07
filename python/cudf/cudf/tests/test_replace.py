@@ -580,3 +580,9 @@ def test_replace_inplace():
         pdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
         gdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
     )
+
+    with pytest.raises(TypeError):
+        pdf.replace(-1, [])
+
+    with pytest.raises(TypeError):
+        gdf.replace(-1, [])
