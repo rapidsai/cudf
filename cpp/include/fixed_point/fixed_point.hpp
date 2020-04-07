@@ -20,7 +20,7 @@
 #include <iostream>
 #include <limits>
 
-//! Fixed-point and supporting types
+//! `fixed_point` and supporting types
 namespace numeric {
 
 // This is a wrapper struct that enforces "strong typing"
@@ -347,7 +347,7 @@ public:
     /**
     * @brief operator + (for adding two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are added
+    * If `_scale`s are equal, `_value`s are added <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are added
     *
@@ -363,7 +363,7 @@ public:
     /**
     * @brief operator - (for subtracting two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are substracted
+    * If `_scale`s are equal, `_value`s are substracted <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are substracted
     *
@@ -407,7 +407,7 @@ public:
     /**
     * @brief operator == (for comparing two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are compared
+    * If `_scale`s are equal, `_value`s are compared <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are compared
     *
