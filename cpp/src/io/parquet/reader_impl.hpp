@@ -75,8 +75,8 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int skip_rows, int num_rows, int row_group,
-                           int max_rowgroup_count,
+  table_with_metadata read(size_type skip_rows, size_type num_rows,
+                           size_type row_group, size_type max_rowgroup_count,
                            const size_type *row_group_indices,
                            cudaStream_t stream);
 

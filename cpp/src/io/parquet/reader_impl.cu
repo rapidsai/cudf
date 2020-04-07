@@ -284,14 +284,14 @@ struct metadata : public FileMetaData {
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(int row_group, int max_rowgroup_count,
+  auto select_row_groups(size_type row_group, size_type max_rowgroup_count,
                          const size_type *row_group_indices,
-                         int &row_start, int &row_count) {
-    std::vector<std::pair<int, int>> selection;
+                         size_type &row_start, size_type &row_count) {
+    std::vector<std::pair<size_type, size_type>> selection;
 
     if (row_group_indices) {
       row_count = 0;
-      for (int i = 0; i < max_rowgroup_count; i++) {
+      for (size_type i = 0; i < max_rowgroup_count; i++) {
         auto rowgroup_idx = row_group_indices[i];
         CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(), "Invalid rowgroup index");
         selection.emplace_back(rowgroup_idx, row_count);
@@ -300,7 +300,7 @@ struct metadata : public FileMetaData {
     }
     else if (row_group != -1) {
       CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
-      for (int i = 0; i < row_group; ++i) {
+      for (size_type i = 0; i < row_group; ++i) {
         row_start += row_groups[i].num_rows;
       }
       row_count = 0;
@@ -316,7 +316,7 @@ struct metadata : public FileMetaData {
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
-      for (int i = 0, count = 0; i < (int)row_groups.size(); ++i) {
+      for (size_type i = 0, count = 0; i < (size_type)row_groups.size(); ++i) {
         count += row_groups[i].num_rows;
         if (count > row_start || count == 0) {
           selection.emplace_back(i, count - row_groups[i].num_rows);
@@ -601,8 +601,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _strings_to_categorical = options.strings_to_categorical;
 }
 
-table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
-                                       int max_rowgroup_count, const size_type *row_group_indices,
+table_with_metadata reader::impl::read(size_type skip_rows, size_type num_rows, size_type row_group,
+                                       size_type max_rowgroup_count, const size_type *row_group_indices,
                                        cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
@@ -794,7 +794,7 @@ table_with_metadata reader::read_row_group(size_type row_group, size_type row_gr
 // Forward to implementation
 table_with_metadata reader::read_row_groups(const std::vector<size_type>& row_group_list,
                                          cudaStream_t stream) {
-  return _impl->read(0, -1, -1, static_cast<int>(row_group_list.size()),
+  return _impl->read(0, -1, -1, static_cast<size_type>(row_group_list.size()),
                                 row_group_list.data(), stream);
 }
 
