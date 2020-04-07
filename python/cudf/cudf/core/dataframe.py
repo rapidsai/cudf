@@ -682,11 +682,32 @@ class DataFrame(Frame):
 
     @property
     def empty(self):
+        """
+        Indicator whether DataFrame is empty.
+
+        True if DataFrame is entirely empty (no items), meaning any
+        of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame is empty, return True, if not return False.
+        """
         return not len(self)
 
     @property
     def values(self):
+        """
+        Return a CuPy representation of the DataFrame.
 
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the DataFrame.
+        """
         return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
@@ -2157,6 +2178,19 @@ class DataFrame(Frame):
 
     @property
     def T(self):
+        """
+        Transpose index and columns.
+
+        Reflect the DataFrame over its main diagonal by writing rows
+        as columns and vice-versa. The property T is an accessor to
+        the method transpose().
+
+        Returns
+        -------
+        out : DataFrame
+            The transposed DataFrame.
+        """
+
         return self.transpose()
 
     def melt(self, **kwargs):
