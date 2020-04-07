@@ -901,6 +901,30 @@ class Frame(libcudf.table.Table):
         result._copy_categories(self)
         return result
 
+    def replace(self, to_replace, replacement):
+        copy_data = self._data.copy()
+
+        for name, col in copy_data.items():
+            if not (to_replace is None and replacement is None):
+                try:
+                    (
+                        col_all_nan,
+                        col_replacement,
+                        col_to_replace,
+                    ) = _get_replacement_values(
+                        replacement, name, col, to_replace
+                    )
+
+                    copy_data[name] = col.find_and_replace(
+                        col_to_replace, col_replacement, col_all_nan
+                    )
+                except KeyError:
+                    # Donot change the copy_data[name]
+                    pass
+
+        result = self._from_table(Frame(copy_data, self.index))
+        return result
+
     def _copy_categories(self, other, include_index=True):
         """
         Utility that copies category information from `other`
@@ -1349,7 +1373,7 @@ class Frame(libcudf.table.Table):
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
+                    codes=cat_codes.get(str(name) + "_codes", col),
                     mask=col.base_mask,
                     size=col.size,
                     offset=col.offset,
@@ -1522,3 +1546,56 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+
+def _get_replacement_values(replacement, col_name, column, to_replace):
+    from cudf.utils import utils
+    from pandas.api.types import is_dict_like
+
+    all_nan = False
+
+    if is_dict_like(to_replace) and replacement is None:
+        replacement = list(to_replace.values())
+        to_replace = list(to_replace.keys())
+    elif not is_scalar(to_replace):
+        if is_scalar(replacement):
+            all_nan = replacement is None
+            if all_nan:
+                replacement = [replacement] * len(to_replace)
+            # Do not broadcast numeric dtypes
+            elif pd.api.types.is_numeric_dtype(column.dtype):
+                replacement = [replacement]
+            else:
+                replacement = utils.scalar_broadcast_to(
+                    replacement,
+                    (len(to_replace),),
+                    np.dtype(type(replacement)),
+                )
+        else:
+            # If both are non-scalar
+            if len(to_replace) != len(replacement):
+                raise ValueError(
+                    "Replacement lists must be "
+                    "of same length."
+                    "Expected {}, got {}.".format(
+                        len(to_replace), len(replacement)
+                    )
+                )
+    else:
+        if not is_scalar(replacement):
+            raise TypeError(
+                "Incompatible types '{}' and '{}' "
+                "for *to_replace* and *replacement*.".format(
+                    type(to_replace).__name__, type(replacement).__name__
+                )
+            )
+        to_replace = [to_replace]
+        replacement = [replacement]
+
+    if is_dict_like(to_replace) and is_dict_like(replacement):
+        replacement = [replacement[col_name]]
+        to_replace = [to_replace[col_name]]
+
+    if isinstance(replacement, list):
+        all_nan = replacement.count(None) == len(replacement)
+    return all_nan, replacement, to_replace

@@ -46,7 +46,7 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
                            cudaStream_t stream = 0) {
     auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
     auto output_mutable_view = output->mutable_view();
-    auto output_data = output_mutable_view.data<cudf::experimental::bool8>();
+    auto output_data = output_mutable_view.data<bool>();
 
     thrust::transform(rmm::exec_policy(stream)->on(stream), begin, end, output_data, p);
 

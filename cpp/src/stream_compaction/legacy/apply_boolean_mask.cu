@@ -27,7 +27,7 @@ template <bool has_data, bool has_nulls>
 struct boolean_mask_filter
 {
   boolean_mask_filter(gdf_column const & boolean_mask) :
-    data{static_cast<cudf::bool8 *>(boolean_mask.data)},
+    data{static_cast<bool *>(boolean_mask.data)},
     bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)}
     {}
 
@@ -35,11 +35,11 @@ struct boolean_mask_filter
   bool operator()(cudf::size_type i)
   {
     bool valid = !has_nulls || bit_mask::is_valid(bitmask, i);
-    bool is_true = !has_data || (cudf::true_v == data[i]);
+    bool is_true = !has_data || data[i];
     return is_true && valid;
   }
 
-  cudf::bool8 const * __restrict__ data;
+  bool const * __restrict__ data;
   bit_mask_t const  * __restrict__ bitmask;
 };
 
