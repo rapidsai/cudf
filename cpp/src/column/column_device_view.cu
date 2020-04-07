@@ -39,7 +39,30 @@ void column_device_view::destroy() {
 namespace
 {
 
-// helper function for use by column_device_view and mutable_column_device_view constructors
+/**
+ * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
+ * to build device_views from views.
+ * 
+ * It is used to build the array of child columns in device memory. Since child columns can
+ * also have child columns, this uses recursion to build up the flat device buffer to contain
+ * all the children and set the member pointers appropriately.
+ * 
+ * This is accomplished by laying out all the children and grand-children into a flat host
+ * buffer first but also keep a running device pointer to but used when setting the 
+ * d_children array result.
+ * 
+ * This function is provided both the host pointer in which to insert its children (and
+ * by recursion its grand-children) and the device pointer to be used when calculating
+ * ultimate device pointer for the d_children member.
+ * 
+ * @tparam ColumnView is either column_view or mutable_column_view
+ * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
+ * 
+ * @param source The column view to make into a device view
+ * @param h_ptr The host memory where to place any child data
+ * @param d_ptr The device pointer for calculating the d_children member of any child data
+ * @return The device pointer to be used for the d_children member of the given column
+ */
 template<typename ColumnView, typename ColumnDeviceView>
 ColumnDeviceView* child_columns_to_device_array( ColumnView const& source, void* h_ptr, void* d_ptr )
 {
@@ -49,17 +72,18 @@ ColumnDeviceView* child_columns_to_device_array( ColumnView const& source, void*
   {
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // struct objects in order for d_children to be used as an array.
-    // Therefore, any child data is assigned past the end of this array.
     auto h_column = reinterpret_cast<ColumnDeviceView*>(h_ptr);
     auto d_column = reinterpret_cast<ColumnDeviceView*>(d_ptr);
+    // Any child data is assigned past the end of this array: h_end and d_end.
     auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
     auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
-    d_children = d_column; // set member ptr to device memory
+    d_children = d_column; // set children pointer for return
     for( size_type idx=0; idx < num_children; ++idx )
-    { // inplace-new each child into host memory
+    {
+      // inplace-new each child into host memory
       auto child = source.child(idx);
       new (h_column) ColumnDeviceView(child, h_end, d_end);
-      h_column++; // adv to next child
+      h_column++; // advance to next child
       // update the pointers for holding this child column's child data
       auto col_child_data_size = ColumnDeviceView::extent(child) - sizeof(ColumnDeviceView);
       h_end += col_child_data_size;
