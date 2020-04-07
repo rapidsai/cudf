@@ -1600,8 +1600,13 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
         replacement = [replacement]
 
     if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = [replacement[col_name]]
-        to_replace = [to_replace[col_name]]
+        replacement = replacement[col_name]
+        to_replace = to_replace[col_name]
+
+        if is_scalar(replacement):
+            replacement = [replacement]
+        if is_scalar(to_replace):
+            to_replace = [to_replace]
 
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)

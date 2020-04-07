@@ -569,3 +569,14 @@ def test_replace_inplace():
     pds.replace(vals, 77, inplace=True)
     gds.replace(vals, 77, inplace=True)
     assert_eq(pds, gds)
+
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5, 666]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(
+        pdf.replace({"a": 2}, {"a": -33}), gdf.replace({"a": 2}, {"a": -33})
+    )
+    assert_eq(
+        pdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
+        gdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
+    )
