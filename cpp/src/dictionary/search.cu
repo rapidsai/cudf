@@ -19,7 +19,6 @@
 #include <cudf/dictionary/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 
-//#include <thrust/copy.h>
 #include <thrust/binary_search.h>
 
 namespace cudf
@@ -29,30 +28,9 @@ namespace dictionary
 namespace detail
 {
 
-template<typename Element>
-struct copy_if_fn
-{
-    column_device_view const d_keys;
-    Element const d_key;
-
-    __device__ bool operator()(size_type idx) const
-    {
-        if( d_keys.is_null(idx) )
-            return false;
-        return d_key == d_keys.element<Element>(idx);
-    }
-
-    __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const noexcept
-    {
-        Element lhs = lhs_idx >= d_keys.size() ? d_key : d_keys.element<Element>(lhs_idx);
-        Element rhs = rhs_idx >= d_keys.size() ? d_key : d_keys.element<Element>(rhs_idx);
-        return lhs < rhs;
-    }
-};
-
 /**
  * @brief Find index of a given key within a dictionary's keys column.
- * 
+ *
  * The index is the position within the keys column where the given key (scalar) is found.
  * The keys column is sorted and unique so only one value is expected.
  * The result is an integer scalar identifing the index value.
@@ -80,8 +58,7 @@ struct find_index_fn
     std::unique_ptr<numeric_scalar<int32_t>> operator()( dictionary_column_view const& input, scalar const& key,
                                                          rmm::mr::device_memory_resource* mr, cudaStream_t stream ) const
     {
-        assert("dictionary column cannot be the keys column of another dictionary");
-        return nullptr;
+        CUDF_FAIL("dictionary column cannot be the keys column of another dictionary");
     }
 };
 
