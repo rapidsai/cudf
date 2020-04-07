@@ -1442,3 +1442,12 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     expect = pd.read_csv(pdf_df_fname)
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
+
+
+def test_to_csv_empty_filename():
+    df = cudf.DataFrame({"vals": [1, 2, 3]})
+
+    exception = pytest.raises(ValueError, match="path/filename not provided")
+
+    with exception:
+        df.to_csv()

@@ -2,7 +2,7 @@
 
 from io import BytesIO, IOBase, StringIO
 
-import cudf._lib as libcudf
+import cudf._lib.legacy as libcudf_legacy
 from cudf.utils import ioutils
 
 
@@ -47,7 +47,7 @@ def read_csv(
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
-    return libcudf.csv.read_csv(
+    return libcudf_legacy.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
         quotechar=quotechar,
@@ -96,6 +96,10 @@ def to_csv(
     chunksize=None,
 ):
     """{docstring}"""
+
+    if path is None:
+        raise ValueError("path/filename not provided")
+
     if index:
         from cudf import MultiIndex
 
@@ -111,7 +115,7 @@ def to_csv(
     if isinstance(path, IOBase):
         path = path.name
 
-    return libcudf.csv.write_csv(
+    return libcudf_legacy.csv.write_csv(
         cols=df._data,
         path=path,
         sep=sep,

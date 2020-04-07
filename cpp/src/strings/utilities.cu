@@ -45,15 +45,14 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
         return nullptr;
     auto length = std::strlen(str);
 
-    char* d_str{};
-    RMM_TRY(RMM_ALLOC( &d_str, length, stream ));
-    CUDA_TRY(cudaMemcpyAsync( d_str, str, length,
-                              cudaMemcpyHostToDevice, stream ));
+    auto* d_str = new rmm::device_buffer(length, stream);
+    CUDA_TRY(cudaMemcpyAsync(d_str->data(), str, length,
+                              cudaMemcpyHostToDevice, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    auto deleter = [](string_view* sv) { RMM_FREE(const_cast<char*>(sv->data()),0); };
+    auto deleter = [d_str](string_view* sv) { delete d_str; };
     return std::unique_ptr<string_view,
-        decltype(deleter)>{ new string_view(d_str,length), deleter};
+        decltype(deleter)>{ new string_view(reinterpret_cast<char*>(d_str->data()), length), deleter};
 }
 
 // build a vector of string_view objects from a strings column
@@ -141,34 +140,59 @@ namespace
 // with RMM initialize/finalize. See PR #3159 for details on this approach.
 __device__ character_flags_table_type character_codepoint_flags[sizeof(g_character_codepoint_flags)];
 __device__ character_cases_table_type character_cases_table[sizeof(g_character_cases_table)];
-std::mutex g_flags_table_mutex, g_cases_table_mutex;
+__device__ special_case_mapping character_special_case_mappings[sizeof(g_special_case_mappings)];
+
+// initialization mutexes
+std::mutex g_flags_table_mutex;
+std::mutex g_cases_table_mutex; 
+std::mutex g_special_case_mappings_mutex;
+
 character_flags_table_type* d_character_codepoint_flags = nullptr;
 character_cases_table_type* d_character_cases_table = nullptr;
+special_case_mapping* d_special_case_mappings = nullptr;
 
 } // namespace
 
-// Return the flags table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_flags_table 
+ */
 const character_flags_table_type* get_character_flags_table()
 {
     std::lock_guard<std::mutex> guard(g_flags_table_mutex);
     if( !d_character_codepoint_flags )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_codepoint_flags, g_character_codepoint_flags, sizeof(g_character_codepoint_flags)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags,character_codepoint_flags));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_codepoint_flags, character_codepoint_flags));
     }
     return d_character_codepoint_flags;
 }
 
-// Return the cases table device pointer
+/**
+ * @copydoc cudf::strings::detail::get_character_cases_table 
+ */
 const character_cases_table_type* get_character_cases_table()
 {
     std::lock_guard<std::mutex> guard(g_cases_table_mutex);
     if( !d_character_cases_table )
     {
         CUDA_TRY(cudaMemcpyToSymbol(character_cases_table, g_character_cases_table, sizeof(g_character_cases_table)));
-        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table,character_cases_table));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_character_cases_table, character_cases_table));
     }
     return d_character_cases_table;
+}
+
+/**
+ * @copydoc cudf::strings::detail::get_special_case_mapping_table 
+ */
+const special_case_mapping* get_special_case_mapping_table()
+{        
+    std::lock_guard<std::mutex> guard(g_special_case_mappings_mutex);
+    if( !d_special_case_mappings )
+    {
+        CUDA_TRY(cudaMemcpyToSymbol(character_special_case_mappings, g_special_case_mappings, sizeof(g_special_case_mappings)));
+        CUDA_TRY(cudaGetSymbolAddress((void**)&d_special_case_mappings, character_special_case_mappings));
+    }
+    return d_special_case_mappings;       
 }
 
 } // namespace detail

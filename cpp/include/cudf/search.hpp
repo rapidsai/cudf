@@ -130,7 +130,7 @@ bool contains(column_view const& col, scalar const& value,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief  Returns a new column of type bool8 identifying for each element of @p haystack column,
+ * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
  *         if that element is contained in @p needles column.
  *
  * The new column will have the same dimension and null status as the @p haystack column.  That is,
@@ -150,7 +150,7 @@ bool contains(column_view const& col, scalar const& value,
  * @param needles   A column of values to search for in `col`
  * @param mr         Device memory resource to use for device memory allocation
  *
- * @return std::unique_ptr<column> A column of bool8 elements containing
+ * @return std::unique_ptr<column> A column of bool elements containing
  * true if the corresponding entry in haystack is contained in needles and false
  * if it is not.
  */
