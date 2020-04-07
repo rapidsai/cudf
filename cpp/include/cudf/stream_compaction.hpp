@@ -18,6 +18,9 @@
 
 #include <cudf/types.hpp>
 
+#include <memory>
+#include <vector>
+
 namespace cudf {
 namespace experimental {
 
