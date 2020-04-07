@@ -61,12 +61,21 @@ public class ColumnVectorTest extends CudfTestBase {
       "  }" +
       ")***";
 
+  static String cuda = "__device__ inline void f(" +
+      "int* output," +
+      "int input" +
+      "){" +
+      "*output = input*input - input;" +
+      "}";
+
   @Test
   void testTransformVector() {
     try (ColumnVector cv = ColumnVector.fromBoxedInts(2,3,null,4);
          ColumnVector cv1 = cv.transform(ptx, true);
+         ColumnVector cv2 = cv.transform(cuda, false);
          ColumnVector expected = ColumnVector.fromBoxedInts(2*2-2, 3*3-3, null, 4*4-4)) {
       TableTest.assertColumnsAreEqual(expected, cv1);
+      TableTest.assertColumnsAreEqual(expected, cv2);
     }
   }
 
