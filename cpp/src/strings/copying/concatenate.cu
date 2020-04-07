@@ -266,31 +266,33 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
     mask_data = reinterpret_cast<bitmask_type*>(null_mask.data());
   }
 
-  // Use a heuristic to guess when the fused kernel will be faster
-  if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
-    { // Launch offsets kernel
-      rmm::device_scalar<size_type> d_valid_count(0);
+  { // Copy offsets columns with single kernel launch
+    rmm::device_scalar<size_type> d_valid_count(0);
 
-      constexpr size_type block_size{256};
-      cudf::experimental::detail::grid_1d config(offsets_count, block_size);
-      auto const kernel = has_nulls
-          ? fused_concatenate_string_offset_kernel<block_size, true>
-          : fused_concatenate_string_offset_kernel<block_size, false>;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-          d_views.data().get(),
-          d_input_offsets.data().get(),
-          d_partition_offsets.data().get(),
-          static_cast<size_type>(d_views.size()),
-          strings_count,
-          d_new_offsets,
-          mask_data,
-          d_valid_count.data());
+    constexpr size_type block_size{256};
+    cudf::experimental::detail::grid_1d config(offsets_count, block_size);
+    auto const kernel = has_nulls
+        ? fused_concatenate_string_offset_kernel<block_size, true>
+        : fused_concatenate_string_offset_kernel<block_size, false>;
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+        d_views.data().get(),
+        d_input_offsets.data().get(),
+        d_partition_offsets.data().get(),
+        static_cast<size_type>(d_views.size()),
+        strings_count,
+        d_new_offsets,
+        mask_data,
+        d_valid_count.data());
 
-      if (has_nulls) {
-        null_count = strings_count - d_valid_count.value(stream);
-      }
+    if (has_nulls) {
+      null_count = strings_count - d_valid_count.value(stream);
     }
-    if (total_bytes > 0) { // Launch chars kernel
+  }
+
+  if (total_bytes > 0) {
+    // Use a heuristic to guess when the fused kernel will be faster than memcpy
+    if (use_fused_kernel_heuristic(has_nulls, total_bytes, columns.size())) {
+      // Use single kernel launch to copy chars columns
       constexpr size_type block_size{256};
       cudf::experimental::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
@@ -300,43 +302,27 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
           static_cast<size_type>(d_views.size()),
           total_bytes,
           d_new_chars);
-    }
-  } else { // not using fused kernel
-    // copy over the data for all the columns
-    ++d_new_offsets; // skip the first element which will be set to 0 after the for-loop
-    int32_t offset_adjust = 0; // each section of offsets must be adjusted
-    for( auto column = columns.begin(); column != columns.end(); ++column )
-    {
-      size_type column_size = column->size();
-      if( column_size==0 ) // nothing to do
-          continue; // empty column may not have children
-      size_type column_offset = column->offset();
-      column_view offsets_child = column->child(strings_column_view::offsets_column_index);
-      column_view chars_child = column->child(strings_column_view::chars_column_index);
+    } else {
+      // Memcpy each input chars column (more efficient for very large strings)
+      for( auto column = columns.begin(); column != columns.end(); ++column ) {
+        size_type column_size = column->size();
+        if( column_size==0 ) // nothing to do
+            continue; // empty column may not have children
+        size_type column_offset = column->offset();
+        column_view offsets_child = column->child(strings_column_view::offsets_column_index);
+        column_view chars_child = column->child(strings_column_view::chars_column_index);
 
-      // copy the offsets column
-      auto d_offsets = offsets_child.data<int32_t>() + column_offset;
-      int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[0];
-      
-      thrust::transform( rmm::exec_policy(stream)->on(stream), d_offsets + 1, d_offsets + column_size + 1, d_new_offsets,
-          [offset_adjust, bytes_offset] __device__ (int32_t old_offset) {
-              return old_offset - bytes_offset + offset_adjust;
-          } );
+        auto d_offsets = offsets_child.data<int32_t>() + column_offset;
+        int32_t bytes_offset = thrust::device_pointer_cast(d_offsets)[0];
 
-      // copy the chars column data
-      auto d_chars = chars_child.data<char>() + bytes_offset;
-      size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
-      CUDA_TRY(cudaMemcpyAsync( d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream ));
-      // get ready for the next column
-      offset_adjust += bytes;
-      d_new_chars += bytes;
-      d_new_offsets += column_size;
-      null_count += column->null_count();
-    }
-    CUDA_TRY(cudaMemsetAsync( offsets_view.data<int32_t>(), 0, sizeof(int32_t), stream));
+        // copy the chars column data
+        auto d_chars = chars_child.data<char>() + bytes_offset;
+        size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
+        CUDA_TRY(cudaMemcpyAsync( d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream ));
 
-    if( has_nulls ) {
-      cudf::detail::concatenate_masks(d_views, d_input_offsets, mask_data, strings_count, stream);
+        // get ready for the next column
+        d_new_chars += bytes;
+      }
     }
   }
 
