@@ -152,10 +152,6 @@ void write_csv(write_csv_args const& args,
                rmm::mr::device_memory_resource* mr) {
   using namespace cudf::experimental::io::detail;
   
-  //not sure if filepath could, actually, be empty (??? <-TODO: check)
-  //
-  CUDF_EXPECTS( !args.sink().filepath.empty(), "Filepath must be non-empty." );
-
   csv::writer_options options{args.get_options()};
   auto writer = make_writer<csv::writer>(args.sink(), options, mr);
   

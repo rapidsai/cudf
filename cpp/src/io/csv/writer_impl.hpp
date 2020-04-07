@@ -111,6 +111,7 @@ class writer::impl {
 private:
   std::unique_ptr<data_sink> out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
+  writer_options const& options_;
 };
 
 }  // namespace csv

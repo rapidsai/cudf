@@ -53,7 +53,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    writer_options const &options,
                    rmm::mr::device_memory_resource *mr):
   out_sink_(std::move(sink)),
-  mr_(mr)
+  mr_(mr),
+  options_(options)
 {
 }
 
@@ -79,7 +80,7 @@ void writer::impl::write(table_view const &table,
   CUDF_EXPECTS( table.num_columns() > 0 && table.num_rows() > 0, "Empty table." );
 
   //no need to check same-size columns constraint; auto-enforced by table_view
-
+  auto rows_chunk = options_.rows_per_chunk();
   
 }
 
