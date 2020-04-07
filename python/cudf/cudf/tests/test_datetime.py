@@ -33,6 +33,36 @@ def timeseries_us_data():
     )
 
 
+def timestamp_ms_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333",
+            "2019-07-16 00:00:00.666",
+            "2019-07-16 00:00:00.888",
+        ]
+    )
+
+
+def timestamp_us_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333",
+            "2019-07-16 00:00:00.666666",
+            "2019-07-16 00:00:00.888888",
+        ]
+    )
+
+
+def timestamp_ns_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333333",
+            "2019-07-16 00:00:00.666666666",
+            "2019-07-16 00:00:00.888888888",
+        ]
+    )
+
+
 def numerical_data():
     return np.arange(1, 10)
 
@@ -251,6 +281,25 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     np_data = np.array(pd_data).astype(dtype)
     gdf_series = Series(pd_data).astype(dtype)
     np.testing.assert_equal(np_data, np.array(gdf_series))
+
+
+@pytest.mark.parametrize(
+    "data", [timestamp_ms_data(), timestamp_us_data(), timestamp_ns_data()]
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, dtype
+):
+    pd_sr = data
+    gdf_sr = cudf.Series.from_pandas(pd_sr)
+
+    expect = np.array(pd_sr.astype(dtype))
+    got = np.array(gdf_sr.astype(dtype))
+
+    np.testing.assert_equal(expect, got)
 
 
 @pytest.mark.parametrize("data", [numerical_data()])

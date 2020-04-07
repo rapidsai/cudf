@@ -113,7 +113,7 @@ from cudf._lib.strings.substring import (
 from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, column_empty
+from cudf.core.column import column, column_empty, datetime
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -2028,9 +2028,7 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = pd.core.tools.datetimes._guess_datetime_format(
-                        self[self.notna()][0]
-                    )
+                    fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
 
