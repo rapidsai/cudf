@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,10 +29,18 @@ namespace cudf {
 
 namespace detail {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
- *---------------------------------------------------------------------------**/
+ *
+ * column_device_view_base and derived classes do not support has_nulls() or
+ * null_count().  The primary reason for this is that creation of column_device_views
+ * from column_views that have UNKNOWN null counts would require an on-the-spot, and
+ * not-obvious computation of null count, which could lead to undesirable performance issues.
+ * This information is also generally not needed in device code, and on the host-side
+ * is easily accessible from the associated column_view.
+ *   
+ */
 class alignas(16) column_device_view_base {
  public:
   column_device_view_base() = delete;
@@ -196,13 +204,13 @@ class alignas(16) column_device_view_base {
   }
 
  protected:
-  data_type _type{EMPTY};   ///< Element type
-  cudf::size_type _size{};  ///< Number of elements
-  void const* _data{};      ///< Pointer to device memory containing elements
+  data_type _type{EMPTY};            ///< Element type
+  cudf::size_type _size{};           ///< Number of elements
+  void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
   size_type _offset{};               ///< Index position of the first element.
-                                     ///< Enables zero-copy slicing
+                                     ///< Enables zero-copy slicing  
 
   column_device_view_base(data_type type, size_type size, void const* data,
                           bitmask_type const* null_mask,
@@ -320,7 +328,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * undefined and `p.second == false`.
    *
    * @throws `cudf::logic_error` if tparam `has_nulls == true` and 
-   * `has_nulls() == false`
+   * `nullable() == false`
    * @throws `cudf::logic_error` if column datatype and Element type mismatch.
    *---------------------------------------------------------------------------**/
   template <typename T, bool has_nulls>
@@ -334,7 +342,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * the column.
    *
    * @throws `cudf::logic_error` if tparam `has_nulls == true` and 
-   * `has_nulls() == false`
+   * `nullable() == false`
    * @throws `cudf::logic_error` if column datatype and Element type mismatch.
    *---------------------------------------------------------------------------**/
   template<typename T, bool has_nulls>
