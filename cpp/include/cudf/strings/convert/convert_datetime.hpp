@@ -54,9 +54,10 @@ namespace strings
  * Any null string entry will result in a corresponding null row in the output column.
  *
  * The resulting time units are specified by the `timestamp_type` parameter.
- * The time units influence the number of digits parsed by the "%f" specifier.
- * For milliseconds, only 3 digits are read. For nanoseconds, 9 digits are read.
- * All other time units expect 6 digits to be available for read.
+ * The time units are independent of the number of digits parsed by the "%f" specifier.
+ * The "%f" supports a precision value to read the numeric digits. Specify the
+ * precision with a single integer value (1-9) as follows:
+ * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
  *
  * @throw cudf::logic_error if timestamp_type is not a timestamp type.
  *
@@ -100,10 +101,14 @@ std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
  *
  * Any null input entry will result in a corresponding null entry in the output column.
  *
- * The time units of the input column influence the number of digits written by
- * the "%f" specifier. For milliseconds, only 3 digits are written.
- * For nanoseconds, 9 digits are written.
- * All other time units write 6 digits to the output string.
+ * The time units of the input column do not influence the number of digits written by
+ * the "%f" specifier.
+ * The "%f" supports a precision value to write out numeric digits for the subsecond value.
+ * Specify the precision with a single integer value (1-9) between the "%" and the "f" as follows:
+ * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
+ * If the precision is higher than the units, then zeroes are padded to the right of
+ * the subsecond value.
+ * If the precision is lower than the units, the subsecond value may be truncated.
  *
  * @throw cudf::logic_error if `timestamps` column parameter is not a timestamp type.
  *
