@@ -273,6 +273,43 @@ std::unique_ptr<column> fused_concatenate(
   return out_col;
 }
 
+template <typename T>
+std::unique_ptr<column> for_each_concatenate(
+    std::vector<column_view> const& views,
+    bool const has_nulls,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+
+  size_type const total_element_count =
+    std::accumulate(views.begin(), views.end(), 0,
+        [](auto accumulator, auto const& v) { return accumulator + v.size(); });
+
+  using mask_policy = cudf::experimental::mask_allocation_policy;
+  auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
+  auto col = cudf::experimental::allocate_like(views.front(),
+      total_element_count, policy, mr);
+
+  col->set_null_count(0); // prevent null count from being materialized...
+  auto m_view = col->mutable_view(); // ...when we take a mutable view
+
+  auto count = 0;
+  for (auto &v : views) {
+    thrust::copy(rmm::exec_policy()->on(stream),
+        v.begin<T>(),
+        v.end<T>(),
+        m_view.begin<T>() + count);
+    count += v.size();
+  }
+
+  //If concatenated column is nullable, proceed to calculate it
+  if (has_nulls) {
+    cudf::detail::concatenate_masks(views,
+        (col->mutable_view()).null_mask(), stream);
+  }
+
+  return col;
+}
+
 struct concatenate_dispatch {
   std::vector<column_view> const& views;
   rmm::mr::device_memory_resource* mr;
@@ -288,36 +325,9 @@ struct concatenate_dispatch {
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {
       return fused_concatenate<T>(views, has_nulls, mr, stream);
+    } else {
+      return for_each_concatenate<T>(views, has_nulls, mr, stream);
     }
-
-    size_type const total_element_count =
-      std::accumulate(views.begin(), views.end(), 0,
-          [](auto accumulator, auto const& v) { return accumulator + v.size(); });
-
-    using mask_policy = cudf::experimental::mask_allocation_policy;
-    auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-    auto col = cudf::experimental::allocate_like(views.front(),
-        total_element_count, policy, mr);
-    col->set_null_count(0); // prevent null count from being materialized
-
-    auto m_view = col->mutable_view();
-    auto count = 0;
-    // NOTE fused_concatenate is more efficient for multiple views
-    for (auto &v : views) {
-      thrust::copy(rmm::exec_policy()->on(stream),
-          v.begin<T>(),
-          v.end<T>(),
-          m_view.begin<T>() + count);
-      count += v.size();
-    }
-
-    //If concatenated column is nullable, proceed to calculate it
-    if (col->nullable()) {
-      cudf::detail::concatenate_masks(views,
-          (col->mutable_view()).null_mask(), stream);
-    }
-
-    return col;
   }
 
   template <typename T,
