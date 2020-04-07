@@ -559,3 +559,13 @@ def test_replace_inplace():
     gdf.replace(5, 0, inplace=True)
     assert_eq(pdf, gdf)
     assert_eq(pdf_copy, gdf_copy)
+
+    pds = pd.Series([1, 2, 3, 45])
+    gds = Series.from_pandas(pds)
+    vals = np.array([]).astype(int)
+
+    assert_eq(pds.replace(vals, -1), gds.replace(vals, -1))
+
+    pds.replace(vals, 77, inplace=True)
+    gds.replace(vals, 77, inplace=True)
+    assert_eq(pds, gds)
