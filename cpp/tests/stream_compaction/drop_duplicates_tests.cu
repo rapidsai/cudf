@@ -37,9 +37,10 @@ TYPED_TEST(UniqueCountCommon, NoNull)
 {
     using T = TypeParam;
 
-    std::vector<T> input = {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4};
+    std::vector<T> input = cudf::test::make_type_param_vector<T>(
+        {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
 
-    cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end()};
+    cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
 
     cudf::size_type expected = std::set<double>( input.begin(), input.end() ).size();
     EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
@@ -55,7 +56,7 @@ TEST_F(UniqueCount, WithNull)
     std::vector<T> input =               {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 1, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
     std::vector<cudf::size_type> valid = {1, 1, 1,  0,  1, 1, 1, 1, 1,  0, 1,  0,  1,  1,  1,  1, 1,  1, 1, 1,  0};
 
-    cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
+    cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
     cudf::size_type expected = std::set<double>( input.begin(), input.end() ).size();
     EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, false, false));
@@ -70,7 +71,7 @@ TEST_F(UniqueCount, IgnoringNull)
     std::vector<T> input =               {1, 3, 3, 70, 31, 1, 8, 2, 0, 70, 1, 70, 10, 40, 31, 42, 0, 42, 8, 5, 70};
     std::vector<cudf::size_type> valid = {1, 0, 0,  0,  1, 1, 1, 1, 1,  0, 1,  0,  1,  1,  1,  1, 1,  1, 1, 1,  0};
 
-    cudf::test::fixed_width_column_wrapper<T> input_col{input.begin(), input.end(), valid.begin()};
+    cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end(), valid.begin());
 
     cudf::size_type expected = std::set<T>( input.begin(), input.end() ).size();
     // Removing 2 from expected to remove count for 70 and 3
@@ -146,7 +147,7 @@ TEST_F(UniqueCount, EmptyColumn)
 {
     using T = float;
 
-    cudf::test::fixed_width_column_wrapper<T> input_col{std::initializer_list<T>{}};
+    cudf::test::fixed_width_column_wrapper<T> input_col{};
 
     cudf::size_type expected = 0;
     EXPECT_EQ(expected, cudf::experimental::unique_count(input_col, true, true));
@@ -257,7 +258,7 @@ TEST_F(DropDuplicate, StringKeyColumn)
 
 TEST_F(DropDuplicate, EmptyInputTable)
 {
-    cudf::test::fixed_width_column_wrapper<int32_t> col{std::initializer_list<int32_t>{}};
+    cudf::test::fixed_width_column_wrapper<int32_t> col(std::initializer_list<int32_t>{});
     cudf::table_view input {{col}};
     std::vector<cudf::size_type> keys{1,2};
 
@@ -279,7 +280,7 @@ TEST_F(DropDuplicate, NoColumnInputTable)
 TEST_F(DropDuplicate, EmptyKeys)
 {
     cudf::test::fixed_width_column_wrapper<int32_t> col{{5, 4, 3, 5, 8, 1}, {1, 0, 1, 1, 1, 1}};
-    cudf::test::fixed_width_column_wrapper<int32_t> empty_col{std::initializer_list<int32_t>{}};
+    cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
     cudf::table_view input {{col}};
     std::vector<cudf::size_type> keys{};
 

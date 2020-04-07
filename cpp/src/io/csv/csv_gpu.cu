@@ -327,15 +327,6 @@ __inline__ __device__ T decode_value(const char *data, long start, long end,
 }
 
 template <>
-__inline__ __device__ cudf::experimental::bool8 decode_value(
-    const char *data, long start, long end, ParseOptions const &opts) {
-  using value_type = typename cudf::experimental::bool8::value_type;
-  return (cudf::experimental::io::gpu::parse_numeric<value_type>(data, start, end, opts) != 0)
-             ? cudf::experimental::true_v
-             : cudf::experimental::false_v;
-}
-
-template <>
 __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      long start, long end,
                                                      ParseOptions const &opts) {
@@ -399,7 +390,7 @@ struct decode_op {
   template <typename T,
             typename std::enable_if_t<
                 std::is_integral<T>::value and
-                !std::is_same<T, cudf::experimental::bool8>::value> * = nullptr>
+                !std::is_same<T, bool>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(
       const char *data, void *out_buffer, size_t row, long start, long end,
       ParseOptions const &opts, column_parse::flags flags) {
@@ -427,7 +418,7 @@ struct decode_op {
    * @brief Dispatch for boolean type types.
    */
   template <typename T, typename std::enable_if_t<std::is_same<
-                            T, cudf::experimental::bool8>::value> * = nullptr>
+                            T, bool>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(
       const char *data, void *out_buffer, size_t row, long start, long end,
       ParseOptions const &opts, column_parse::flags flags) {

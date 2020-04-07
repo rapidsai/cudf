@@ -602,16 +602,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "isupper currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
@@ -623,16 +614,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "islower currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
     def lower(self, **kwargs):
@@ -2158,7 +2140,7 @@ class StringColumn(column.ColumnBase):
     def fillna(self, fill_value):
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value)
+        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
