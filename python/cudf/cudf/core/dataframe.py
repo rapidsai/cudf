@@ -1230,9 +1230,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = cudf.DataFrame([('a', range(20)),
-        ...                      ('b', range(20)),
-        ...                      ('c', range(20))])
+        >>> df = cudf.DataFrame({'a': range(20),
+        ...                      'b': range(20),
+        ...                      'c': range(20)})
 
         Select a single row using an integer index.
 
