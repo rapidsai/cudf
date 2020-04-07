@@ -47,6 +47,7 @@
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4802 Refactor `cudf::transpose` to increase performance.
 - PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
 - PR #4793 Add `cudf._cuda` to setup.py
 - PR #4790 Replace the use of deprecated rmm APIs in the test environment
