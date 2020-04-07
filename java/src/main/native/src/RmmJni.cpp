@@ -290,11 +290,11 @@ class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
   * @return pointer to the upstream resource.
   */
  device_memory_resource* get_wrapped_resource() {
-  return upstream;
+   return upstream;
  }
 
  const device_memory_resource* get_wrapped_resource() const {
-  return upstream;
+   return upstream;
  }
 
  /**
@@ -315,10 +315,10 @@ class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
  bool supports_get_mem_info() const noexcept override { return upstream->supports_streams(); }
 
  virtual ~logging_resource_adaptor() {
-  if (close_at_end) {
-    delete out;
-    out = nullptr;
-  }
+   if (close_at_end) {
+     delete out;
+   }
+   out = nullptr;
  }
 
  private:
@@ -385,8 +385,8 @@ class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
 };
 
 // Need to keep both separate so we can shut them down appropriately
-std::unique_ptr<logging_resource_adaptor> logging_memory_resource{};
-std::unique_ptr<rmm::mr::device_memory_resource> initialized_resource{};
+std::unique_ptr<logging_resource_adaptor> Logging_memory_resource{};
+std::unique_ptr<rmm::mr::device_memory_resource> Initialized_resource{};
 } // anonymous namespace
 
 extern "C" {
@@ -402,18 +402,18 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     if (use_pool_alloc) {
         std::vector<int> devices; // Just do default devices for now...
         if (use_managed_mem) {
-            initialized_resource.reset(
+            Initialized_resource.reset(
                     new rmm::mr::cnmem_managed_memory_resource(pool_size, devices));
         } else {
-            initialized_resource.reset(
+            Initialized_resource.reset(
                     new rmm::mr::cnmem_memory_resource(pool_size, devices));
         }
     } else if (rmm::Manager::useManagedMemory()) {
-        initialized_resource.reset(new rmm::mr::managed_memory_resource());
+        Initialized_resource.reset(new rmm::mr::managed_memory_resource());
     } else {
-        initialized_resource.reset(new rmm::mr::cuda_memory_resource());
+        Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
     }
-    auto resource = initialized_resource.get();
+    auto resource = Initialized_resource.get();
     rmm::mr::set_default_resource(resource);
 
     std::unique_ptr<logging_resource_adaptor> log_result;
@@ -434,15 +434,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     }
 
     if (log_result) {
-      if (logging_memory_resource) {
+      if (Logging_memory_resource) {
         JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS, "Internal Error logging is double enabled", )
       }
 
-      logging_memory_resource = std::move(log_result);
-      auto replaced_resource = rmm::mr::set_default_resource(logging_memory_resource.get());
+      Logging_memory_resource = std::move(log_result);
+      auto replaced_resource = rmm::mr::set_default_resource(Logging_memory_resource.get());
       if (resource != replaced_resource) {
         rmm::mr::set_default_resource(replaced_resource);
-        logging_memory_resource.reset(nullptr);
+        Logging_memory_resource.reset(nullptr);
         JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
             "Concurrent modification detected while installing memory resource", );
       }
@@ -453,18 +453,18 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
-    if (logging_memory_resource) {
-      auto logging_resource = logging_memory_resource.get();
-      auto old_resource = rmm::mr::set_default_resource(logging_memory_resource->get_wrapped_resource());
-      logging_memory_resource.reset(nullptr);
+    if (Logging_memory_resource) {
+      auto logging_resource = Logging_memory_resource.get();
+      auto old_resource = rmm::mr::set_default_resource(Logging_memory_resource->get_wrapped_resource());
+      Logging_memory_resource.reset(nullptr);
       if (old_resource != logging_resource) {
         rmm::mr::set_default_resource(old_resource);
         JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
             "Concurrent modification detected while removing memory resource", );
       }
     }
-    initialized_resource.reset(new rmm::mr::cuda_memory_resource());
-    rmm::mr::set_default_resource(initialized_resource.get());
+    Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
+    rmm::mr::set_default_resource(Initialized_resource.get());
   } CATCH_STD(env, )
 }
 

@@ -28,18 +28,29 @@ public class Rmm {
     NativeDepsLoader.loadNativeDeps();
   }
 
+  private enum LogLoc {
+    NONE(0),
+    FILE(1),
+    STDOUT(2),
+    STDERR(3);
+
+    final int internalId;
+
+    LogLoc(int internalId) {
+      this.internalId = internalId;
+    }
+  }
+
   /**
    * What to send RMM alloc and free logs to.
    */
   public static class LogConf {
-    private final File location;
-    private final boolean stdout;
-    private final boolean stderr;
+    private final File file;
+    private final LogLoc loc;
 
-    private LogConf(File location, boolean stdout, boolean stderr) {
-      this.location = location;
-      this.stdout = stdout;
-      this.stderr = stderr;
+    private LogConf(File file, LogLoc loc) {
+      this.file = file;
+      this.loc = loc;
     }
   }
 
@@ -47,21 +58,21 @@ public class Rmm {
    * Create a config that will write alloc/free logs to a file.
    */
   public static LogConf logTo(File location) {
-    return new LogConf(location, false, false);
+    return new LogConf(location, LogLoc.FILE);
   }
 
   /**
    * Create a config that will write alloc/free logs to stdout.
    */
   public static LogConf logToStdout() {
-    return new LogConf(null, true, false);
+    return new LogConf(null, LogLoc.STDOUT);
   }
 
   /**
    * Create a config that will write alloc/free logs to stderr.
    */
   public static LogConf logToStderr() {
-    return new LogConf(null, false, true);
+    return new LogConf(null, LogLoc.STDERR);
   }
 
   /**
@@ -125,20 +136,16 @@ public class Rmm {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
     }
-    int logTo = 0; // NONE
+    LogLoc loc = LogLoc.NONE;
     String path = null;
     if (logConf != null) {
-      if (logConf.location != null) {
-        logTo = 1;
-        path = logConf.location.getAbsolutePath();
-      } else if (logConf.stdout) {
-        logTo = 2;
-      } else if (logConf.stderr) {
-        logTo = 3;
+      if (logConf.file != null) {
+        path = logConf.file.getAbsolutePath();
       }
+      loc = logConf.loc;
     }
 
-    initializeInternal(allocationMode, logTo, path, poolSize);
+    initializeInternal(allocationMode, loc.internalId, path, poolSize);
     if (gpuId < 0) {
       gpuId = Cuda.getDevice();
     }
@@ -250,8 +257,11 @@ public class Rmm {
    * in the future when we have better stream support, and the stream you
    * allocate something on is not always the one you want to synchronize against
    * when you free it.
+   *
+   * This is not intended to be an API that others outside of CUDF consume.  It is
+   * not like to other more user facing APIs like MemoryBuffer.
    */
-  public static class RmmBuff implements AutoCloseable {
+  static class RmmBuff implements AutoCloseable {
     /**
      * The address of the allocation.
      */
@@ -287,7 +297,7 @@ public class Rmm {
    * @param size   The size in bytes of the allocated memory region
    * @return Returned pointer to the allocated memory
    */
-  public static RmmBuff alloc(long size) {
+  static RmmBuff alloc(long size) {
     return alloc(size, 0);
   }
 
@@ -297,7 +307,7 @@ public class Rmm {
    * @param stream The stream in which to synchronize this command
    * @return Returned pointer to the allocated memory
    */
-  public static RmmBuff alloc(long size, long stream) {
+  static RmmBuff alloc(long size, long stream) {
     return new RmmBuff(allocInternal(size, stream), size, stream);
   }
 
