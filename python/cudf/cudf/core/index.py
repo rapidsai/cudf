@@ -799,18 +799,44 @@ class GenericIndex(Index):
         return len(self._values)
 
     def __repr__(self):
-        vals = [self._values[i] for i in range(min(len(self), 10))]
-        return (
-            "{}({}, dtype={}".format(
-                self.__class__.__name__, vals, self._values.dtype
+        from pandas._config import get_option
+
+        max_seq_items = get_option("max_seq_items") or len(self)
+        mr = 0
+        if 2 * max_seq_items < len(self):
+            mr = max_seq_items + 1
+
+        if len(self) > mr and mr != 0:
+            top = self[0:mr]
+            bottom = self[-1 * mr :]
+            from cudf import concat
+
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        if preprocess._values.nullable:
+            output = (
+                self.__class__(preprocess._values.astype("O").fillna("null"))
+                .to_pandas()
+                .__repr__()
             )
-            + (
-                ", name='{}'".format(self.name)
-                if self.name is not None
-                else ""
-            )
-            + ")"
-        )
+        else:
+            output = preprocess.to_pandas().__repr__()
+
+        lines = output.split("\n")
+        if len(lines) > 1:
+            tmp_meta = lines[-1]
+            prior_to_dtype = lines[-1].split("dtype")[0]
+            lines = lines[:-1]
+            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
+            if self.name is not None:
+                lines[-1] = lines[-1] + ", name='%s'" % self.name
+            if "length" in tmp_meta:
+                lines[-1] = lines[-1] + ", length=%d)" % len(self)
+            else:
+                lines[-1] = lines[-1] + ")"
+
+        return "\n".join(lines)
 
     def __getitem__(self, index):
         res = self._values[index]
