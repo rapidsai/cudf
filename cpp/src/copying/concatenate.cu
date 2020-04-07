@@ -295,10 +295,7 @@ struct concatenate_dispatch {
           [](auto accumulator, auto const& v) { return accumulator + v.size(); });
 
     using mask_policy = cudf::experimental::mask_allocation_policy;
-
-    mask_policy policy{mask_policy::NEVER};
-    if (has_nulls) { policy = mask_policy::ALWAYS; }
-
+    auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
     auto col = cudf::experimental::allocate_like(views.front(),
         total_element_count, policy, mr);
     col->set_null_count(0); // prevent null count from being materialized
