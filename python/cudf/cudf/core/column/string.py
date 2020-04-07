@@ -2140,7 +2140,7 @@ class StringColumn(column.ColumnBase):
     def fillna(self, fill_value):
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value)
+        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
