@@ -55,7 +55,7 @@ TEST_F(DictionaryFillTest, FillWithNull)
     cudf::numeric_scalar<double> fv(0,false);
     auto results = cudf::experimental::fill( dictionary->view(), 1,3, fv );
     auto decoded = cudf::dictionary::decode( results->view() );
-    cudf::test::fixed_width_column_wrapper<double> expected( {1.2,0,0,0,4.125}, {1,0,0,0,1} );
+    cudf::test::fixed_width_column_wrapper<double> expected( {1.2,0.0,0.0,0.0,4.125}, {1,0,0,0,1} );
     cudf::test::expect_columns_equal(decoded->view(),expected);
 }
 

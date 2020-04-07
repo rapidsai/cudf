@@ -19,7 +19,8 @@
 #include <cudf/dictionary/search.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 
-#include <thrust/copy.h>
+//#include <thrust/copy.h>
+#include <thrust/binary_search.h>
 
 namespace cudf
 {
@@ -39,6 +40,13 @@ struct copy_if_fn
         if( d_keys.is_null(idx) )
             return false;
         return d_key == d_keys.element<Element>(idx);
+    }
+
+    __device__ bool operator()(size_type lhs_idx, size_type rhs_idx) const noexcept
+    {
+        Element lhs = lhs_idx >= d_keys.size() ? d_key : d_keys.element<Element>(lhs_idx);
+        Element rhs = rhs_idx >= d_keys.size() ? d_key : d_keys.element<Element>(rhs_idx);
+        return lhs < rhs;
     }
 };
 
@@ -61,13 +69,11 @@ struct find_index_fn
             return result;
         CUDF_EXPECTS( input.keys().type()==key.type(), "search key type must match dictionary keys type" );
         auto keys_view = column_device_view::create(input.keys(),stream);
-        auto find_key = static_cast<experimental::scalar_type_t<Element> const&>(key);
-        auto iter = thrust::copy_if( rmm::exec_policy(stream)->on(stream), 
-            thrust::make_counting_iterator<size_type>(0),
-            thrust::make_counting_iterator<size_type>(input.keys_size()),
-            result->data(), copy_if_fn<Element>{*keys_view,find_key.value(stream)});
-        if( iter != result->data() )
-            result->set_valid(true,stream);
+        auto find_key = static_cast<experimental::scalar_type_t<Element> const&>(key).value(stream);
+        auto iter = thrust::equal_range( thrust::device, // causes segfault: rmm::exec_policy(stream)->on(stream)
+            keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
+        if( thrust::distance(iter.first,iter.second) > 0 )
+            result->set_value(thrust::distance(keys_view->begin<Element>(), iter.first), stream);
         return result;
     }
     template<typename Element, std::enable_if_t<std::is_same<Element, dictionary32>::value>* = nullptr>
