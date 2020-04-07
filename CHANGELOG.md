@@ -99,6 +99,7 @@
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4209 Port apply_boolean_mask_benchmark to new cudf::column types
 
 
 # cuDF 0.13.0 (31 Mar 2020)
