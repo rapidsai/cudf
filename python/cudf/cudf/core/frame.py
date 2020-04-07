@@ -912,7 +912,10 @@ class Frame(libcudf.table.Table):
                         col_replacement,
                         col_to_replace,
                     ) = _get_replacement_values(
-                        replacement, name, col, to_replace
+                        to_replace=to_replace,
+                        replacement=replacement,
+                        col_name=name,
+                        column=col,
                     )
 
                     copy_data[name] = col.find_and_replace(
@@ -1548,7 +1551,7 @@ class Frame(libcudf.table.Table):
         )
 
 
-def _get_replacement_values(replacement, col_name, column, to_replace):
+def _get_replacement_values(to_replace, replacement, col_name, column):
     from cudf.utils import utils
     from pandas.api.types import is_dict_like
 
@@ -1564,7 +1567,11 @@ def _get_replacement_values(replacement, col_name, column, to_replace):
                 replacement = [replacement] * len(to_replace)
             # Do not broadcast numeric dtypes
             elif pd.api.types.is_numeric_dtype(column.dtype):
-                replacement = [replacement]
+                if len(to_replace) > 0:
+                    replacement = [replacement]
+                else:
+                    # If to_replace is empty, replacement has to be empty.
+                    replacement = []
             else:
                 replacement = utils.scalar_broadcast_to(
                     replacement,
