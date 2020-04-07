@@ -55,6 +55,7 @@
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
+- PR #4840 Add docs for `T`, `empty` & `values`
 
 ## Bug Fixes
 
