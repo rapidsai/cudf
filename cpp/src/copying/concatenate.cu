@@ -241,7 +241,7 @@ std::unique_ptr<column> fused_concatenate(
   auto const output_size = std::get<3>(device_views);
 
   CUDF_EXPECTS(output_size < std::numeric_limits<size_type>::max(), 
-      "total number of concatenated rows exceeds size_typeS");
+      "Total number of concatenated rows exceeds size_type range");
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
@@ -282,7 +282,7 @@ struct concatenate_dispatch {
       std::enable_if_t<is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()() {
     bool const has_nulls = std::any_of(
-        views.begin(), views.end(),
+        views.cbegin(), views.cend(),
         [](auto const& col) { return col.has_nulls(); });
 
     // Use a heuristic to guess when the fused kernel will be faster
