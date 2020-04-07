@@ -81,7 +81,17 @@ void writer::impl::write(table_view const &table,
 
   //no need to check same-size columns constraint; auto-enforced by table_view
   auto rows_chunk = options_.rows_per_chunk();
-  
+  //
+  // This outputs the CSV in row chunks to save memory.
+  // Maybe we can use the total_rows*count calculation and a memory threshold
+  // instead of an arbitrary chunk count.
+  // The entire CSV chunk must fit in CPU memory before writing it out.
+  //
+  if( rows_chunk % 8 ) // must be divisible by 8
+    rows_chunk += 8 - (rows_chunk % 8);
+  CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
+
+  auto exec = rmm::exec_policy(stream);
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
