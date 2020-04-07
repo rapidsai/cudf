@@ -169,7 +169,7 @@ class TempDirTestEnvironment : public ::testing::Environment {
  * @brief Creates and sets the default memory resource for the
  * unit test environment.
  * 
- * The resource instance must be kept alive for the duration of
+ * The returned resource instance must be kept alive for the duration of
  * the tests. Attaching the resource to a TestEnvironment causes
  * issues since the environment objects are not destroyed until
  * after the runtime is shutdown.
