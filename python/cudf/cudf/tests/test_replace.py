@@ -576,9 +576,14 @@ def test_replace_inplace():
     assert_eq(
         pdf.replace({"a": 2}, {"a": -33}), gdf.replace({"a": 2}, {"a": -33})
     )
+
     assert_eq(
         pdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
         gdf.replace({"a": [2, 5]}, {"a": [9, 10]}),
+    )
+
+    assert_eq(
+        pdf.replace([], []), gdf.replace([], []),
     )
 
     with pytest.raises(TypeError):

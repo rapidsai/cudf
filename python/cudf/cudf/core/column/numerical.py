@@ -453,7 +453,10 @@ def _safe_cast_to_int(col, dtype):
 
 
 def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
-    normalized_column = column.as_column(col_to_normalize)
+    normalized_column = column.as_column(
+        col_to_normalize,
+        dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
+    )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
         col_to_normalize_dtype = min_numeric_column_type(normalized_column)
