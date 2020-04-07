@@ -29,7 +29,7 @@ def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
     c = np.mod(c, npartitions).astype(typ, copy=False)
     if stage > 0:
         np.floor_divide(c, k ** stage, out=c)
-    elif k < npartitions:
+    if k < int(npartitions / (k ** stage)):
         np.mod(c, k, out=c)
     return group_split_dispatch(
         df, c.astype(np.int32), k, ignore_index=ignore_index
@@ -42,7 +42,7 @@ def rearrange_by_hash(
     if npartitions and npartitions != df.npartitions:
         # Use main-line dask for new npartitions
         meta = df._meta._constructor_sliced([0])
-        partitions = df[columns].map_partitions(
+        partitions = df.map_partitions(
             set_partitions_hash, columns, npartitions, meta=meta
         )
         # Note: Dask will use a shallow copy for assign
@@ -144,7 +144,7 @@ def rearrange_by_hash(
     graph = HighLevelGraph.from_collections(
         "shuffle-" + token, dsk, dependencies=[df]
     )
-    df2 = DataFrame(graph, "shuffle-" + token, df, df.divisions)
+    df2 = df.__class__(graph, "shuffle-" + token, df, df.divisions)
     df2.divisions = (None,) * (df.npartitions + 1)
 
     return df2
@@ -258,7 +258,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantile(q=q)
+    meta = df._meta_nonempty.quantiles(q=q)
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):

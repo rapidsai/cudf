@@ -168,17 +168,18 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
+    from cudf.tests import utils
+
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
-    approx_results = [-1.01, 0.8, 0.8, 2.13, 6.8]
 
     gdf_series = Series(arr)
+    pdf_series = pd.Series(arr)
 
     q1 = gdf_series.quantile(quant_values, exact=False)
+    q2 = pdf_series.quantile(quant_values)
 
-    np.testing.assert_allclose(
-        q1.to_pandas().values, approx_results, rtol=1e-10
-    )
+    utils.assert_eq(q1, q2)
 
 
 def test_approx_quantiles_int():
@@ -235,6 +236,10 @@ def test_kurtosis(data, null_flag):
 
     got = data.kurtosis()
     expected = pdata.kurtosis()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt()
+    expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
 

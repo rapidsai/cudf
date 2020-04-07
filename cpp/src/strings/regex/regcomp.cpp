@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+* Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
 * limitations under the License.
 */
 
+#include <cudf/utilities/error.hpp>
 #include <strings/regex/regcomp.h>
 
 #include <string.h>
-
+#include <array>
+#include <algorithm>
 
 namespace cudf
 {
@@ -52,6 +54,15 @@ static reclass ccls_s(2);  // all spaces or ctrl characters
 static reclass ccls_S(16); // not ccls_s
 static reclass ccls_d(4);  // digits [0-9]
 static reclass ccls_D(32); // not ccls_d plus '\n'
+
+// Tables for analyzing quantifiers
+const std::array<int,6> valid_preceding_inst_types{ {CHAR, CCLASS, NCCLASS, ANY, ANYNL, RBRA} };
+const std::array<char,5> quantifiers{ {'*','?','+','{','|'} };
+// Valid regex characters that can be escaping to be used as literals
+const std::array<char,33> escapable_chars{ {'.', '-', '+', '*', '\\', '?', '^', '$', '|',
+                                            '{', '}', '(', ')', '[', ']', '<', '>',
+                                            '"', '~',  '\'', '`', '_', '@', '=', ';', ':',
+                                            '!', '#', '%', '&', ',', '/', ' ' } };
 
 } // namespace
 
@@ -135,7 +146,7 @@ int32_t reprog::starts_count() const
 class regex_parser
 {
     reprog& m_prog;
-
+    const char32_t* pattern;
     const char32_t* exprp;
     bool lexdone;
 
@@ -316,8 +327,6 @@ class regex_parser
         int quoted = nextc(yy);
         if(quoted)
         {
-            if (yy == 0)
-                return END;
             // treating all quoted numbers as Octal, since we are not supporting backreferences
             if (yy >= '0' && yy <= '7')
             {
@@ -439,15 +448,66 @@ class regex_parser
                     return BOL;
                 case 'Z':
                     return EOL;
+                default:
+                {
+                    // let valid escapable chars fall through as literal CHAR
+                    if( yy &&
+                        (std::find( escapable_chars.begin(), escapable_chars.end(), static_cast<char>(yy))
+                         != escapable_chars.end()) )
+                        break;
+                    // anything else is a bad escape so throw an error
+                    CUDF_FAIL("invalid regex pattern: bad escape character at position "
+                              + std::to_string(exprp-pattern-1));
                 }
+                } // end-switch
                 return CHAR;
             }
         }
 
+        // handle regex characters
         switch(yy)
         {
         case 0:
             return END;
+        case '(':
+            if (*exprp == '?' && *(exprp + 1) == ':')  // non-capturing group
+            {
+                exprp += 2;
+                return LBRA_NC;
+            }
+            return LBRA;
+        case ')':
+            return RBRA;
+        case '^':
+            return BOL;
+        case '$':
+            return EOL;
+        case '[':
+            return bldcclass();
+        case '.':
+            return dot_type;
+        }
+
+        if( std::find(quantifiers.begin(), quantifiers.end(), static_cast<char>(yy)) == quantifiers.end() )
+            return CHAR;
+
+        // The quantifiers require at least one "real" previous item.
+        // We are throwing an error in these two if-checks for invalid quantifiers.
+        // Another option is to just return CHAR silently here which effectively
+        // treats the yy character as a literal instead as a quantifier.
+        // This could lead to confusion where sometimes unescaped quantifier characters
+        // are treated as regex expressions and sometimes they are not.
+        if( m_items.empty() )
+            CUDF_FAIL("invalid regex pattern: nothing to repeat at position 0");
+
+        if( std::find(valid_preceding_inst_types.begin(), valid_preceding_inst_types.end(), m_items.back().t)
+            == valid_preceding_inst_types.end() )
+            CUDF_FAIL("invalid regex pattern: nothing to repeat at position " 
+                      + std::to_string(exprp-pattern-1));
+
+        // handle quantifiers
+        switch(yy)
+        {
         case '*':
             if (*exprp == '?')
             {
@@ -515,23 +575,6 @@ class regex_parser
         }
         case '|':
             return OR;
-        case '.':
-            return dot_type;
-        case '(':
-            if (*exprp == '?' && *(exprp + 1) == ':')  // non-capturing group
-            {
-                exprp += 2;
-                return LBRA_NC;
-            }
-            return LBRA;
-        case ')':
-            return RBRA;
-        case '^':
-            return BOL;
-        case '$':
-            return EOL;
-        case '[':
-            return bldcclass();
         }
         return CHAR;
     }
@@ -555,7 +598,7 @@ public:
     bool m_has_counted;
 
     regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), exprp(pattern), lexdone(false), m_has_counted(false)
+    : m_prog(prog), pattern(pattern), exprp(pattern), lexdone(false), m_has_counted(false)
     {
         int token = 0;
         while((token = lex(dot_type)) != END)
@@ -1041,8 +1084,10 @@ void reprog::optimize2()
         const reinst& inst = _insts[id];
         if(inst.type == OR)
         {
-            stack.push_back(inst.u2.left_id);
-            stack.push_back(inst.u1.right_id);
+            if( inst.u2.left_id!=id ) // prevents infinite while-loop here
+                stack.push_back(inst.u2.left_id);
+            if( inst.u1.right_id!=id ) // prevents infinite while-loop here
+                stack.push_back(inst.u1.right_id);
         }
         else
         {

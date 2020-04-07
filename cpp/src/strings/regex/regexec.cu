@@ -14,11 +14,11 @@
 * limitations under the License.
 */
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <rmm/device_buffer.hpp>
-#include "./regex.cuh"
-#include "./regcomp.h"
+#include <strings/regex/regex.cuh>
+#include <strings/regex/regcomp.h>
 
-#include <memory.h>
 #include <rmm/rmm.hpp>
 #include <rmm/rmm_api.h>
 
@@ -86,9 +86,10 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     auto insts_count = h_prog.insts_count();
     auto classes_count = h_prog.classes_count();
     auto starts_count = h_prog.starts_count();
-    auto insts_size = insts_count * sizeof(_insts[0]);
-    auto startids_size = starts_count * sizeof(_startinst_ids[0]);
-    auto classes_size = classes_count * sizeof(_classes[0]);
+    // compute size of each section; make sure each is aligned appropriately
+    auto insts_size = cudf::util::round_up_safe<size_t>(insts_count * sizeof(_insts[0]),sizeof(size_t));
+    auto startids_size = cudf::util::round_up_safe<size_t>(starts_count * sizeof(_startinst_ids[0]),sizeof(size_t));
+    auto classes_size = cudf::util::round_up_safe<size_t>(classes_count * sizeof(_classes[0]),sizeof(size_t));
     for( int32_t idx=0; idx < classes_count; ++idx )
         classes_size += static_cast<int32_t>((h_prog.class_at(idx).literals.size())*sizeof(char32_t));
     size_t memsize = insts_size + startids_size + classes_size;
@@ -97,7 +98,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     if( insts_count > MAX_STACK_INSTS )
     {
         auto relist_alloc_size = relist::alloc_size(insts_count);
-        size_t rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 relist ptrs
+        rlm_size = relist_alloc_size*2L*strings_count; // reljunk has 2 relist ptrs
         size_t freeSize = 0;
         size_t totalSize = 0;
         rmmGetInfo(&freeSize,&totalSize,stream);
@@ -115,9 +116,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     // allocate memory to store prog data
     std::vector<u_char> h_buffer(memsize);
     u_char* h_ptr = h_buffer.data(); // running pointer
-    u_char* d_buffer = 0;
-    RMM_TRY(RMM_ALLOC(&d_buffer,memsize,stream));
-    u_char* d_ptr = d_buffer;        // running device pointer
+    auto* d_buffer = new rmm::device_buffer(memsize, stream);
+    u_char* d_ptr = reinterpret_cast<u_char*>(d_buffer->data()); // running device pointer
     // put everything into a flat host buffer first
     reprog_device* d_prog = new reprog_device(h_prog);
     // copy the instructions array first (fixed-size structs)
@@ -157,23 +157,26 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>
     d_prog->_classes_count = classes_count;
     d_prog->_codepoint_flags = codepoint_flags;
     // allocate execute memory if needed
+    rmm::device_buffer* d_relists{};
     if( rlm_size > 0 )
     {
-        RMM_TRY(RMM_ALLOC(&(d_prog->_relists_mem),rlm_size,stream));
+        d_relists = new rmm::device_buffer(rlm_size, stream);
+        d_prog->_relists_mem = d_relists->data();
     }
 
     // copy flat prog to device memory
-    CUDA_TRY(cudaMemcpy(d_buffer,h_buffer.data(),memsize,cudaMemcpyHostToDevice));
+    CUDA_TRY(cudaMemcpy(d_buffer->data(),h_buffer.data(),memsize,cudaMemcpyHostToDevice));
     //
-    auto deleter = [](reprog_device*t) {t->destroy();};
+    auto deleter = [d_buffer, d_relists](reprog_device*t) {
+        t->destroy(); 
+        delete d_buffer;
+        delete d_relists;
+    };
     return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog,deleter);
 }
 
 void reprog_device::destroy()
 {
-    if( _relists_mem )
-        RMM_FREE(_relists_mem,0);
-    RMM_FREE(_insts,0);
     delete this;
 }
 

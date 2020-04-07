@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@
 #pragma once
 
 #include <tests/utilities/cudf_gtest.hpp>
-#include <cudf/wrappers/bool.hpp>
+#include "cxxopts.hpp"
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/default_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -46,10 +48,6 @@ class BaseFixture : public ::testing::Test {
    * all tests inheritng from this fixture
    *---------------------------------------------------------------------------**/
   rmm::mr::device_memory_resource* mr() { return _mr; }
-
-  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
-
-  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
 
 template <typename T, typename Enable = void>
@@ -167,5 +165,85 @@ class TempDirTestEnvironment : public ::testing::Environment {
   }
 };
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Test environment that initializes the default rmm memory resource.
+ * 
+ * Required for tests programs that use rmm. It is recommended to include
+ * `CUDF_TEST_PROGRAM_MAIN()` in a code file instead of directly instantiating 
+ * an object of this type.
+ *---------------------------------------------------------------------------**/
+class RmmTestEnvironment : public ::testing::Environment {
+/**---------------------------------------------------------------------------*
+ * @brief String representing which RMM allocation mode is to be used.
+ *
+ * 
+ *---------------------------------------------------------------------------**/
+  std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
+public:
+  /**
+   * @brief Sets the default RMM memory resource based on the input string.
+   * 
+   * @param allocation_mode Represents the type of the memory resource to be 
+   * used as a default resource. Valid values are 'cuda', 'pool' and 'managed'.
+   * 
+   * @throws cudf::logic_error if passed mode value is invalid.
+   */
+  RmmTestEnvironment(std::string const& allocation_mode) {
+    if (allocation_mode == "cuda")
+      rmm_resource.reset(new rmm::mr::cuda_memory_resource());
+    else if (allocation_mode == "pool")
+      rmm_resource.reset(new rmm::mr::cnmem_memory_resource());
+    else if (allocation_mode == "managed")
+      rmm_resource.reset(new rmm::mr::managed_memory_resource());
+    else 
+      CUDF_FAIL("Invalid RMM allocation mode");
+
+    rmm::mr::set_default_resource(rmm_resource.get());
+    }
+};
+
 }  // namespace test
 }  // namespace cudf
+
+/**
+ * @brief Parses the cuDF test command line options.
+ *
+ * Currently only supports 'rmm_mode' string paramater, which set the rmm
+ * allocation mode. The default value of the parameter is 'pool'.
+ * 
+ * @return Parsing results in the form of unordered map
+ */
+inline auto parse_cudf_test_opts(int argc, char **argv) {
+  try {
+    cxxopts::Options options(argv[0], " - cuDF tests command line options");
+    options
+      .allow_unrecognised_options()
+      .add_options()
+      ("rmm_mode", "RMM allocation mode",
+        cxxopts::value<std::string>()->default_value("pool"));
+
+    return options.parse(argc, argv);
+  }
+  catch (const cxxopts::OptionException& e) {
+    CUDF_FAIL("Error parsing command line options");
+  }
+}
+
+/**
+ * @brief Macro that defines main function for gtest programs that use rmm
+ * 
+ * Should be included in every test program that uses rmm allocators.The `main`
+ * function is a wrapper around the google test generated `main`, mantaining
+ * the original functionality. In addition, the custom `main` function parses
+ * the command line to customize test behavior, like allocation mode.
+ *
+ */
+#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {  \
+  ::testing::InitGoogleTest(&argc, argv);                           \
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
+  auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
+  auto const rmm_env = ::testing::AddGlobalTestEnvironment(         \
+    new cudf::test::RmmTestEnvironment(rmm_mode));                  \
+  return RUN_ALL_TESTS();                                           \
+}

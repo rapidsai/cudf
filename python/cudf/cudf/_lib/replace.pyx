@@ -1,83 +1,200 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libc.stdlib cimport free
+from libcpp.memory cimport unique_ptr
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._libxx.column cimport Column
 from cudf.utils.dtypes import is_scalar
 
-cimport cudf._lib.includes.replace as cpp_replace
+from cudf._lib.column cimport Column
+from cudf._lib.scalar cimport Scalar
+from cudf._lib.move cimport move
+
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
+from cudf._lib.cpp.replace cimport (
+    find_and_replace_all as cpp_find_and_replace_all,
+    replace_nulls as cpp_replace_nulls,
+    clamp as cpp_clamp,
+    normalize_nans_and_zeros as cpp_normalize_nans_and_zeros
+)
 
 
-cpdef replace(Column input_col, Column values_to_replace,
-              Column replacement_values):
+def replace(Column input_col, Column values_to_replace,
+            Column replacement_values):
     """
-        Call cudf::find_and_replace_all
+    Replaces values from values_to_replace with corresponding value from
+    replacement_values in input_col
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    values_to_replace : Column with values which needs to be replaced
+    replacement_values : Column with values which will replace
     """
-    cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column* c_values_to_replace = column_view_from_column(
-        values_to_replace
-    )
-    cdef gdf_column* c_replacement_values = column_view_from_column(
-        replacement_values
-    )
 
-    cdef gdf_column c_out_col
+    cdef column_view input_col_view = input_col.view()
+    cdef column_view values_to_replace_view = values_to_replace.view()
+    cdef column_view replacement_values_view = replacement_values.view()
 
+    cdef unique_ptr[column] c_result
     with nogil:
-        c_out_col = cpp_replace.find_and_replace_all(
-            c_input_col[0],
-            c_values_to_replace[0],
-            c_replacement_values[0]
-        )
+        c_result = move(cpp_find_and_replace_all(input_col_view,
+                                                 values_to_replace_view,
+                                                 replacement_values_view))
 
-    free_column(c_values_to_replace)
-    free_column(c_replacement_values)
-    free_column(c_input_col)
-
-    return gdf_column_to_column(&c_out_col)
+    return Column.from_unique_ptr(move(c_result))
 
 
-cdef replace_nulls_column(Column inp, Column replacement):
-    cdef gdf_column* c_input_col = column_view_from_column(inp)
-    cdef gdf_column* replacement_col = column_view_from_column(replacement)
-    cdef gdf_column c_out_col
-
-    with nogil:
-        c_out_col = cpp_replace.replace_nulls(
-            c_input_col[0],
-            replacement_col[0]
-        )
-
-    free_column(replacement_col)
-    free_column(c_input_col)
-
-    return gdf_column_to_column(&c_out_col)
-
-cdef replace_nulls_scalar(Column inp, replacement):
-    cdef gdf_column* c_input_col = column_view_from_column(inp)
-    cdef gdf_scalar* replacement_scalar = gdf_scalar_from_scalar(replacement)
-    cdef gdf_column c_out_col
-
-    with nogil:
-        c_out_col = cpp_replace.replace_nulls(
-            c_input_col[0],
-            replacement_scalar[0]
-        )
-
-    free(replacement_scalar)
-    free_column(c_input_col)
-
-    return gdf_column_to_column(&c_out_col)
-
-
-cpdef replace_nulls(inp, replacement):
+def replace_nulls_column(Column input_col, Column replacement_values):
     """
-    Call replace_nulls
+    Replaces null values in input_col with corresponding vlaues from
+    replacement_values
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    replacement_values : Column with values which will replace nulls
+    """
+
+    cdef column_view input_col_view = input_col.view()
+    cdef column_view replacement_values_view = replacement_values.view()
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_replace_nulls(input_col_view,
+                                          replacement_values_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace_nulls_scalar(Column input_col, Scalar replacement_value):
+    """
+    Replaces null values in input_col with replacement_value
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    replacement_value : Scalar with value which will replace nulls
+    """
+
+    cdef column_view input_col_view = input_col.view()
+    cdef scalar* replacement_value_scalar = replacement_value.c_value.get()
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_replace_nulls(input_col_view,
+                                          replacement_value_scalar[0]))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace_nulls(Column input_col, object replacement, object dtype=None):
+    """
+    Calls one of the version of replace_nulls depedning on type
+    of replacement
     """
 
     if is_scalar(replacement):
-        return replace_nulls_scalar(inp, replacement)
+        return replace_nulls_scalar(
+            input_col,
+            Scalar(replacement, dtype=dtype)
+        )
     else:
-        return replace_nulls_column(inp, replacement)
+        return replace_nulls_column(input_col, replacement)
+
+
+def clamp(Column input_col, Scalar lo, Scalar lo_replace,
+          Scalar hi, Scalar hi_replace):
+    """
+    Clip the input_col such that values < lo will be replaced by lo_replace
+    and > hi will be replaced by hi_replace
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    lo : Scalar value for clipping lower values
+    lo_replace : Scalar value which will replace clipped with lo
+    hi : Scalar value for clipping upper values
+    lo_replace : Scalar value which will replace clipped with hi
+    """
+
+    cdef column_view input_col_view = input_col.view()
+    cdef scalar* lo_value = lo.c_value.get()
+    cdef scalar* lo_replace_value = lo_replace.c_value.get()
+    cdef scalar* hi_value = hi.c_value.get()
+    cdef scalar* hi_replace_value = hi_replace.c_value.get()
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_clamp(
+            input_col_view, lo_value[0],
+            lo_replace_value[0], hi_value[0], hi_replace_value[0]))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def clamp(Column input_col, Scalar lo, Scalar hi):
+    """
+    Clip the input_col such that values < lo will be replaced by lo
+    and > hi will be replaced by hi
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    lo : Scalar value for clipping lower values
+    hi : Scalar value for clipping upper values
+    """
+
+    cdef column_view input_col_view = input_col.view()
+    cdef scalar* lo_value = lo.c_value.get()
+    cdef scalar* hi_value = hi.c_value.get()
+
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_clamp(input_col_view, lo_value[0], hi_value[0]))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def normalize_nans_and_zeros_inplace(Column input_col):
+    """
+    Inplace normalizing
+    """
+
+    cdef mutable_column_view input_col_view = input_col.mutable_view()
+    with nogil:
+        cpp_normalize_nans_and_zeros(input_col_view)
+
+
+def normalize_nans_and_zeros_column(Column input_col):
+    """
+    Returns a new  normalized Column
+    """
+
+    cdef column_view input_col_view = input_col.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(cpp_normalize_nans_and_zeros(input_col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def normalize_nans_and_zeros(Column input_col, in_place=False):
+    """
+    Normalize the NaN and zeros in input_col
+    Convert  -NaN  -> NaN
+    Convert  -0.0  -> 0.0
+
+    Parameters
+    ----------
+    input_col : Column that needs to be normalized
+    in_place : boolean whether to normalize in place or return new column
+    """
+
+    if in_place is True:
+        normalize_nans_and_zeros_inplace(input_col)
+    else:
+        return normalize_nans_and_zeros_column(input_col)

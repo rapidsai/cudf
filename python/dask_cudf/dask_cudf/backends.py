@@ -56,7 +56,9 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        categories = s._column.categories
+        categories = (
+            s._column.categories if len(s._column.categories) else ["a"]
+        )
         codes = [0, 0]
         ordered = s._column.ordered
         data = column.build_categorical_column(
@@ -117,10 +119,7 @@ try:
 
     def _handle_string(s):
         if isinstance(s._column, StringColumn):
-            out_col = column.column_empty(len(s), dtype="int32", masked=False)
-            ptr = out_col.data_ptr
-            s._column.data_array_view.hash(devptr=ptr)
-            s = out_col
+            s = s._hash()
         return s
 
     def safe_hash(df):

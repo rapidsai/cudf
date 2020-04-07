@@ -1,29 +1,29 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-
-
-_GDF_COLORS = {
-    'green': GDF_GREEN,
-    'blue': GDF_BLUE,
-    'yellow': GDF_YELLOW,
-    'purple': GDF_PURPLE,
-    'cyan': GDF_CYAN,
-    'red': GDF_RED,
-    'white': GDF_WHITE,
-    'darkgreen': GDF_DARK_GREEN,
-    'orange': GDF_ORANGE,
-}
+from enum import IntEnum
+from libcpp.string cimport string
+from cudf._lib.cpp.utilities.nvtx_utils cimport (
+    range_push as cpp_range_push,
+    range_push_hex as cpp_range_push_hex,
+    range_pop as cpp_range_pop,
+    color as color_types,
+)
+from cudf._lib.nvtx cimport underlying_type_t_color
 
 
-def str_to_gdf_color(s):
-    """Util to convert str to gdf_color type.
-    """
-    return _GDF_COLORS[s.lower()]
+class Color(IntEnum):
+    GREEN = <underlying_type_t_color> color_types.GREEN
+    BLUE = <underlying_type_t_color> color_types.BLUE
+    YELLOW = <underlying_type_t_color> color_types.YELLOW
+    PURPLE = <underlying_type_t_color> color_types.PURPLE
+    CYAN = <underlying_type_t_color> color_types.CYAN
+    RED = <underlying_type_t_color> color_types.RED
+    WHITE = <underlying_type_t_color> color_types.WHITE
+    DARK_GREEN = <underlying_type_t_color> color_types.DARK_GREEN
+    ORANGE = <underlying_type_t_color> color_types.ORANGE
 
 
-def nvtx_range_push(name, color='green'):
+def range_push(object name, object color='GREEN'):
     """
     Demarcate the beginning of a user-defined NVTX range.
 
@@ -35,19 +35,24 @@ def nvtx_range_push(name, color='green'):
         The color to use for the range.
         Can be named color or hex RGB string.
     """
-    name = name.encode('ascii')
     try:
         color = int(color, 16)
-        result = gdf_nvtx_range_push_hex(name, color)
     except ValueError:
-        color = _GDF_COLORS[color]
-        result = gdf_nvtx_range_push(name, color)
-    check_gdf_error(result)
+        color = int(Color[color.upper()].value)
+
+    cdef const char *_name
+    name = name.encode()
+    _name = name
+
+    cdef underlying_type_t_color _color = color
+
+    with nogil:
+        cpp_range_push_hex(_name, _color)
 
 
-def nvtx_range_pop():
+def range_pop():
     """
     Demarcate the end of a user-defined NVTX range.
     """
-    result = gdf_nvtx_range_pop()
-    check_gdf_error(result)
+    with nogil:
+        cpp_range_pop()

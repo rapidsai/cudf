@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
@@ -82,7 +81,7 @@ struct replace_multi_regex_fn
                 reprog_device prog = progs[ptn_idx];
                 prog.set_stack_mem(data1,data2);
                 size_type begin = ch_pos, end = ch_pos+1;
-                if( prog.find(idx,d_str,begin,end) > 0 )
+                if( !prog.is_empty() && prog.find(idx,d_str,begin,end) > 0 )
                 {
                     string_view d_repl = d_repls.size() > 1 ?
                                          d_repls.element<string_view>(ptn_idx) :

@@ -77,8 +77,11 @@ def test_full_series(nrows, dtype):
 @pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
 def test_full_dataframe_20(dtype, nrows, ncols):
     size = 20
-    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    pdf = pd.DataFrame(
+        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+    ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+
     ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
@@ -93,8 +96,11 @@ def test_full_dataframe_20(dtype, nrows, ncols):
 @pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
 def test_full_dataframe_21(dtype, nrows, ncols):
     size = 21
-    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    pdf = pd.DataFrame(
+        {idx: np.random.randint(0, 100, size) for idx in range(size)}
+    ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
+
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
     assert pdf.__repr__() == gdf.__repr__()
@@ -214,3 +220,25 @@ def test_groupby_MI(nrows, ncols):
     pd.options.display.max_columns = ncols
     assert gdg.__repr__() == pdg.__repr__()
     assert gdg.T.__repr__() == pdg.T.__repr__()
+
+
+numerical_categories = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+]
+
+
+@pytest.mark.parametrize("dtype", numerical_categories)
+@pytest.mark.parametrize("length", [0, 1, 10, 100, 1000])
+def test_generic_index(length, dtype):
+    psr = pd.Series(
+        range(length),
+        index=np.random.randint(0, high=100, size=length).astype(dtype),
+    )
+    gsr = cudf.Series.from_pandas(psr)
+
+    assert psr.index.__repr__() == gsr.index.__repr__()

@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -86,9 +85,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def get_dt_field(self, field):
-        out = column.column_empty_like_same_mask(self, dtype=np.int16)
-        libcudf.unaryops.apply_dt_extract_op(self, out, field)
-        return out
+        return libcudf.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other):
         if isinstance(other, dt.datetime):
@@ -125,7 +122,7 @@ class DatetimeColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudfxx.unary.cast(self, dtype=dtype)
+        return libcudf.unary.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -187,7 +184,7 @@ class DatetimeColumn(column.ColumnBase):
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
         result = column.build_column(
             result.base_data,
             result.dtype,
@@ -226,7 +223,7 @@ class DatetimeColumn(column.ColumnBase):
 
 
 def binop(lhs, rhs, op, out_dtype):
-    libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
-    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    libcudfxx.nvtx.range_pop()
+    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
+    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+    libcudf.nvtx.range_pop()
     return out

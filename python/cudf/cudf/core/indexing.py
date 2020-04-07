@@ -12,18 +12,19 @@ from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 def indices_from_labels(obj, labels):
     from cudf.core.column import column
 
-    labels = column.as_column(labels)
+    if not isinstance(labels, cudf.MultiIndex):
+        labels = column.as_column(labels)
 
-    if is_categorical_dtype(obj.index):
-        labels = labels.astype("category")
-        codes = labels.codes.astype(obj.index._values.codes.dtype)
-        labels = column.build_categorical_column(
-            categories=labels.dtype.categories,
-            codes=codes,
-            ordered=labels.dtype.ordered,
-        )
-    else:
-        labels = labels.astype(obj.index.dtype)
+        if is_categorical_dtype(obj.index):
+            labels = labels.astype("category")
+            codes = labels.codes.astype(obj.index._values.codes.dtype)
+            labels = column.build_categorical_column(
+                categories=labels.dtype.categories,
+                codes=codes,
+                ordered=labels.dtype.ordered,
+            )
+        else:
+            labels = labels.astype(obj.index.dtype)
 
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
@@ -71,6 +72,12 @@ class _SeriesLocIndexer(object):
     def _loc_to_iloc(self, arg):
         from cudf.core.series import Series
         from cudf.core.index import Index
+
+        if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+            if isinstance(arg, pd.MultiIndex):
+                arg = cudf.MultiIndex.from_pandas(arg)
+
+            return indices_from_labels(self._sr, arg)
 
         if isinstance(
             arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
@@ -210,12 +217,23 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf import MultiIndex
 
         # Step 1: Gather columns
-        columns_df = self._get_column_selection(arg[1])
-        columns_df._index = self._df._index
+        if isinstance(arg, tuple):
+            columns_df = self._get_column_selection(arg[1])
+            columns_df._index = self._df._index
+        else:
+            columns_df = self._df
 
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
-            return columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(arg, (MultiIndex, pd.MultiIndex)):
+                if isinstance(arg, pd.MultiIndex):
+                    arg = MultiIndex.from_pandas(arg)
+
+                indices = indices_from_labels(columns_df, arg)
+                return columns_df.take(indices)
+
+            else:
+                return columns_df.index._get_row_major(columns_df, arg[0])
         else:
             df = DataFrame()
             for col in columns_df.columns:
@@ -280,7 +298,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
-            df = columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
             if (len(df) == 1 and len(columns_df) >= 1) and not (
                 isinstance(arg[0], slice) or isinstance(arg[1], slice)
             ):

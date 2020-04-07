@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class CudfTestBase {
@@ -107,5 +108,45 @@ class CudfTestBase {
       Rmm.shutdown();
     }
     LISTENER.checkOutstanding();
+  }
+
+  private static boolean doublesAreEqualWithinPercentage(double expected, double actual, double percentage) {
+    // doubleToLongBits will take care of returning true when both operands have same long value
+    // including +ve infinity, -ve infinity or NaNs
+    if (Double.doubleToLongBits(expected) != Double.doubleToLongBits(actual)) {
+      if (expected != 0) {
+        return Math.abs((expected - actual) / expected) <= percentage;
+      } else {
+        return Math.abs(expected - actual) <= percentage;
+      }
+    } else {
+      return true;
+    }
+  }
+
+  /**
+   * Fails if the absolute difference between expected and actual values as a percentage of the expected
+   * value is greater than the threshold
+   * i.e. Math.abs((expected - actual) / expected) > percentage, if expected != 0
+   * else Math.abs(expected - actual) > percentage
+   */
+  static void assertEqualsWithinPercentage(double expected, double actual, double percentage) {
+     assertEqualsWithinPercentage(expected, actual, percentage, "");
+  }
+
+  /**
+   * Fails if the absolute difference between expected and actual values as a percentage of the expected
+   * value is greater than the threshold
+   * i.e. Math.abs((expected - actual) / expected) > percentage, if expected != 0
+   * else Math.abs(expected - actual) > percentage
+   */
+  static void assertEqualsWithinPercentage(double expected, double actual, double percentage, String message) {
+    if (!doublesAreEqualWithinPercentage(expected, actual, percentage)) {
+      String msg = message + " Math.abs(expected - actual)";
+      String eq = (expected != 0 ?
+                      " / Math.abs(expected) = " + Math.abs((expected - actual) / expected)
+                    : " = " + Math.abs(expected - actual));
+      fail(msg + eq + " is not <= " + percentage + " expected(" + expected + ") actual(" + actual + ")");
+    }
   }
 }

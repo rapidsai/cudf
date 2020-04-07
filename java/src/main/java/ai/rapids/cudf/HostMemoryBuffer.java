@@ -72,17 +72,23 @@ public class HostMemoryBuffer extends MemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
-        MemoryListener.hostDeallocation(length, getId());
+        MemoryListener.hostDeallocation(length, id);
         address = 0;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A HOST BUFFER WAS LEAKED!!!!");
+        log.error("A HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked host buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -108,6 +114,11 @@ public class HostMemoryBuffer extends MemoryBuffer {
         logRefCountDebug("Leaked mmap buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -220,7 +231,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length     number of bytes to copy
    */
   public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer srcData, long srcOffset,
-      long length) {
+                                       long length) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy from dest");
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
@@ -536,10 +547,24 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer,
-      Cuda.Stream stream) {
+                                         Cuda.Stream stream) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
+  }
+
+  /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy is async and may not have completed when this returns.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBufferAsync(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+                                              Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.asyncMemcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
         CudaMemcpyKind.DEVICE_TO_HOST, stream);
   }
 
@@ -549,6 +574,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
+  @Override
   public final synchronized HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;

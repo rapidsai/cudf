@@ -1078,3 +1078,18 @@ def test_groupby_agg_combinations(agg):
     assert_eq(
         pdf.groupby("a").agg(agg), gdf.groupby("a").agg(agg), check_dtype=False
     )
+
+
+def test_groupby_apply_noempty_group():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2], "b": [1, 2, 1, 2], "c": [1, 2, 3, 4]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby("a")
+        .apply(lambda x: x.iloc[[0, 1]])
+        .reset_index(drop=True),
+        gdf.groupby("a")
+        .apply(lambda x: x.iloc[[0, 1]])
+        .reset_index(drop=True),
+    )

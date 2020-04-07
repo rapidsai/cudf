@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/findall.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>

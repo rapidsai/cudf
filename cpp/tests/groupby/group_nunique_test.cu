@@ -37,15 +37,15 @@ TYPED_TEST(groupby_nunique_test, basic)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 3, 4, 3 };
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 1, 1 };
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -73,15 +73,15 @@ TYPED_TEST(groupby_nunique_test, basic_duplicates)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
+    fixed_width_column_wrapper<K> keys { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    fixed_width_column_wrapper<V> vals { 0, 1, 2, 3, 4, 5, 3, 2, 2, 9};
 
     fixed_width_column_wrapper<K> expect_keys { 1, 2, 3 };
     fixed_width_column_wrapper<R> expect_vals { 2, 4, 1 };
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 1, 1 };
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -93,8 +93,8 @@ TYPED_TEST(groupby_nunique_test, zero_valid_keys)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals        { 3, 4, 5};
+    fixed_width_column_wrapper<K> keys( { 1, 2, 3}, all_null() );
+    fixed_width_column_wrapper<V> vals  { 3, 4, 5};
 
     fixed_width_column_wrapper<K> expect_keys { };
     fixed_width_column_wrapper<R> expect_vals { };
@@ -109,8 +109,8 @@ TYPED_TEST(groupby_nunique_test, zero_valid_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
+    fixed_width_column_wrapper<K> keys  { 1, 1, 1};
+    fixed_width_column_wrapper<V> vals( { 3, 4, 5}, all_null() );
 
     fixed_width_column_wrapper<K> expect_keys { 1 };
     fixed_width_column_wrapper<R> expect_vals { 0 };
@@ -125,10 +125,10 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                       { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
+                                                { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
@@ -138,7 +138,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -150,10 +150,10 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                              { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                       { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                       { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1,     2, 2, 2,    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());
@@ -164,7 +164,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation();
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -177,10 +177,10 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
     using V = TypeParam;
     using R = experimental::detail::target_type_t<V, experimental::aggregation::NUNIQUE>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
-                                              { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
-                                              { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+    fixed_width_column_wrapper<K> keys({ 1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                       { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+    fixed_width_column_wrapper<V> vals({ 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                       { 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           //  { 1, 1,     2, 2, 2,    3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,          3,       4}, all_valid());
@@ -191,7 +191,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 
 
     auto agg = cudf::experimental::make_nunique_aggregation(include_nulls::YES);
-    if(std::is_same<V, cudf::experimental::bool8>())
+    if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));

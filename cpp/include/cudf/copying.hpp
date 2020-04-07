@@ -132,43 +132,6 @@ std::unique_ptr<table> scatter(
     table_view const& target, bool check_bounds = false,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**
- * @brief Scatters the rows of a table to `n` tables according to a partition map
- *
- * Copies the rows from the input table to new tables according to the table
- * indices given by partition_map. The number of output tables is one more than
- * the maximum value in `partition_map`.
- * 
- * Output table `i` in [0, n] is empty if `i` does not appear in partition_map.
- * output table will be empty.
- *
- * @throw cudf::logic_error when partition_map is a non-integer type
- * @throw cudf::logic_error when partition_map is larger than input
- * @throw cudf::logic_error when partition_map has nulls
- *
- * Example:
- * input:         [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
- *                 { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * partition_map: {3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
- * output:     {[{22}, {2}], 
- *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
- *              [{}, {}],
- *              [{10, 14}, {1, 3}],
- *              [{12, 18, 20}, {2, null, 0}]}
- *
- * @param input Table of rows to be partitioned into a set of tables
- * tables according to `partition_map`
- * @param partition_map  Non-null column of integer values that map
- * each row in `input` table into one of the output tables
- * @param mr The resource to use for all allocations
- *
- * @return A vector of tables containing the scattered rows of `input`.
- * `table` `i` contains all rows `j` from `input` where `partition_map[j] == i`.
- */
-std::vector<std::unique_ptr<table>> scatter_to_tables(
-    table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
@@ -490,7 +453,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  *          
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if lhs and rhs are not of the same length 
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand column_view
@@ -547,7 +510,7 @@ std::unique_ptr<column> shift(column_view const& input,
  *          output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs[i]
  *         
  * @throws cudf::logic_error if lhs and rhs are not of the same type 
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs  
  * @param[in] left-hand scalar
  * @param[in] right-hand column_view
@@ -568,7 +531,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, 
  *          output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs[i] : rhs
  *         
  * @throws cudf::logic_error if lhs and rhs are not of the same type 
- * @throws cudf::logic_error if boolean mask is not of type bool8
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs  
  * @param[in] left-hand column_view
  * @param[in] right-hand scalar
@@ -588,7 +551,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, 
  * Selects each element i in the output column from either @p rhs or @p lhs using the following rule:
  *          output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs
  *          
- * @throws cudf::logic_error if boolean mask is not of type bool8 
+ * @throws cudf::logic_error if boolean mask is not of type bool
  * @param[in] left-hand scalar
  * @param[in] right-hand scalar
  * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element and
