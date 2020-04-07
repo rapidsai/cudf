@@ -34,7 +34,6 @@
 
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
@@ -515,17 +514,6 @@ genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     auto update_value_rep = update_value.time_since_epoch().count();
     auto fun = cudf::detail::genericAtomicOperationImpl<R, BinaryOp>{};
     return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
-}
-
-// specialization for cudf::experimental::bool8 types
-template <typename BinaryOp>
-__forceinline__  __device__
-cudf::experimental::bool8 genericAtomicOperation(cudf::experimental::bool8* address, cudf::experimental::bool8 const & update_value, BinaryOp op)
-{
-    using T = cudf::experimental::bool8;
-    // don't use underlying type to apply operation for cudf::experimental::bool8
-    auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
-    return T(fun(address, update_value, op));
 }
 
 } // namespace cudf

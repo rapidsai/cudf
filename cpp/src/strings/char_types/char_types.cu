@@ -20,7 +20,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include "../utilities.hpp"
 #include "../utilities.cuh"
 
@@ -46,7 +45,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<experimental::bool8>();
+    auto d_results = results_view.data<bool>();
     // get the static character types table
     auto d_flags = detail::get_character_flags_table();
     // set the output values by checking the character types for each string

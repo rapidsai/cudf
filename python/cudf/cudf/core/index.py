@@ -429,7 +429,27 @@ class Index(Frame):
             return NotImplemented
 
     def isin(self, values):
-        return self.to_series().isin(values)
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        """
+
+        result = self.to_series().isin(values).values
+
+        return result
 
     @property
     def __cuda_array_interface__(self):
