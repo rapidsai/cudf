@@ -20,6 +20,7 @@
 #include <cudf/dictionary/detail/search.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
 
 namespace cudf
 {
@@ -48,7 +49,7 @@ struct find_index_fn
         CUDF_EXPECTS( input.keys().type()==key.type(), "search key type must match dictionary keys type" );
         auto keys_view = column_device_view::create(input.keys(),stream);
         auto find_key = static_cast<experimental::scalar_type_t<Element> const&>(key).value(stream);
-        auto iter = thrust::equal_range( thrust::device, // causes segfault: rmm::exec_policy(stream)->on(stream)
+        auto iter = thrust::equal_range( thrust::device, // segfaults: rmm::exec_policy(stream)->on(stream) and thrust::cuda::par.on(stream)
             keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
         if( thrust::distance(iter.first,iter.second) > 0 )
             result->set_value(thrust::distance(keys_view->begin<Element>(), iter.first), stream);
