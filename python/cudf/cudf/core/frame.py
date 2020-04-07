@@ -1373,7 +1373,7 @@ class Frame(libcudf.table.Table):
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
+                    codes=cat_codes.get(str(name) + "_codes", col),
                     mask=col.base_mask,
                     size=col.size,
                     offset=col.offset,
