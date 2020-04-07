@@ -41,12 +41,12 @@ bools_to_mask(column_view const& input,
 
     auto input_device_view_ptr = column_device_view::create(input, stream);
     auto input_device_view = *input_device_view_ptr;
-    auto pred = [] __device__ (experimental::bool8 element) {
-        return element == true_v;
+    auto pred = [] __device__ (bool element) {
+        return element;
     };
     if(input.nullable()) {
         // Nulls are considered false
-        auto input_begin = make_null_replacement_iterator<experimental::bool8>(input_device_view, false_v);
+        auto input_begin = make_null_replacement_iterator<bool>(input_device_view, false);
 
         auto mask = detail::valid_if(input_begin,
                                      input_begin + input.size(),
@@ -54,8 +54,8 @@ bools_to_mask(column_view const& input,
 
         return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);
     } else {
-        auto mask = detail::valid_if(input_device_view.begin<experimental::bool8>(),
-                                     input_device_view.end<experimental::bool8>(),
+        auto mask = detail::valid_if(input_device_view.begin<bool>(),
+                                     input_device_view.end<bool>(),
                                      pred, stream, mr);
 
         return std::make_pair(std::make_unique<rmm::device_buffer>(std::move(mask.first)), mask.second);

@@ -118,3 +118,26 @@ TEST_F(StringsCaseTest, Title)
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
     cudf::test::expect_columns_equal(*results,expected);
 }
+
+TEST_F(StringsCaseTest, MultiCharUpper)
+{    
+    cudf::test::strings_column_wrapper strings{ "\u1f52", "\u1f83", "\u1e98", "\ufb05", "\u0149" };
+    cudf::test::strings_column_wrapper expected{ "\u03a5\u0313\u0300", "\u1f0b\u0399", "\u0057\u030a", "\u0053\u0054", "\u02bc\u004e" };
+    auto strings_view = cudf::strings_column_view(strings);
+
+    auto results = cudf::strings::to_upper(strings_view);
+        
+    cudf::test::expect_columns_equal(*results,expected);
+}
+
+TEST_F(StringsCaseTest, MultiCharLower)
+{
+    // there's only one of these
+    cudf::test::strings_column_wrapper strings{ "\u0130" };
+    cudf::test::strings_column_wrapper expected{ "\u0069\u0307" };
+    auto strings_view = cudf::strings_column_view(strings);
+
+    auto results = cudf::strings::to_lower(strings_view);
+    
+    cudf::test::expect_columns_equal(*results,expected);
+}
