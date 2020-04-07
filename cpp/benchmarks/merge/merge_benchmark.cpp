@@ -65,8 +65,8 @@ void BM_merge(benchmark::State& state) {
          return prev_key; });
 
       columns.emplace_back(std::pair<IntColWrap, IntColWrap>{
-         IntColWrap{key_sequence, key_sequence + clamped_rows}, 
-         IntColWrap{data_sequence, data_sequence + clamped_rows}
+         IntColWrap(key_sequence, key_sequence + clamped_rows),
+         IntColWrap(data_sequence, data_sequence + clamped_rows)
       });
       tables.push_back(cudf::table_view{{columns.back().first, columns.back().second}});
       total_rows += clamped_rows;
