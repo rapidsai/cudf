@@ -166,8 +166,8 @@ class TempDirTestEnvironment : public ::testing::Environment {
 };
 
 /**
- * @brief Creates and sets the default memory resource for the
- * unit test environment.
+ * @brief Creates a memory resource for the unit test environment
+ * given the name of the allocation mode.
  * 
  * The returned resource instance must be kept alive for the duration of
  * the tests. Attaching the resource to a TestEnvironment causes
@@ -180,19 +180,16 @@ class TempDirTestEnvironment : public ::testing::Environment {
  *        Accepted types are "pool", "cuda", and "managed" only.
  * @return Memory resource instance
  */
-inline auto create_memory_resource(std::string const& allocation_mode)
+inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& allocation_mode)
 {
     std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
-    if (allocation_mode == "cuda")
-      rmm_resource.reset(new rmm::mr::cuda_memory_resource());
-    else if (allocation_mode == "pool")
-      rmm_resource.reset(new rmm::mr::cnmem_memory_resource());
-    else if (allocation_mode == "managed")
-      rmm_resource.reset(new rmm::mr::managed_memory_resource());
-    else
-      CUDF_FAIL("Invalid RMM allocation mode");
-
-    rmm::mr::set_default_resource(rmm_resource.get());
+    if( allocation_mode == "cuda" )
+        return std::make_unique<rmm::mr::cuda_memory_resource>();
+    if( allocation_mode == "pool" )
+        return std::make_unique<rmm::mr::cnmem_memory_resource>();
+    if( allocation_mode == "managed" )
+        return std::make_unique<rmm::mr::managed_memory_resource>();
+    CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
     return rmm_resource;
 }
 
@@ -239,5 +236,6 @@ inline auto parse_cudf_test_opts(int argc, char **argv) {
   auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
   auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
   auto resource = cudf::test::create_memory_resource(rmm_mode);     \
+  rmm::mr::set_default_resource(resource.get());                    \
   return RUN_ALL_TESTS();                                           \
 }
