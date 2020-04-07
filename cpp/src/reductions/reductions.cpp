@@ -86,7 +86,7 @@ struct reduce_dispatch_functor {
       auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr);
       auto valid_sorted_indices = split(*sorted_indices, {col.size()-col.null_count()})[0];
       auto col_ptr = quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, mr);
-      return reduction::nth_element(*col_ptr, col_ptr->type(), 0, mr, stream);
+      return get_element(*col_ptr, 0, mr);
       } break;
     case aggregation::QUANTILE: {
       auto quantile_agg = static_cast<quantile_aggregation const*>(agg.get());
@@ -95,17 +95,11 @@ struct reduce_dispatch_functor {
       auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr);
       auto valid_sorted_indices = split(*sorted_indices, {col.size()-col.null_count()})[0];
       auto col_ptr = quantile(col, quantile_agg->_quantiles, quantile_agg->_interpolation, valid_sorted_indices, true, mr);
-      return reduction::nth_element(*col_ptr, col_ptr->type(), 0, mr, stream);
+      return get_element(*col_ptr, 0, mr);
       } break;
     case aggregation::NUNIQUE: {
       auto nunique_agg = static_cast<nunique_aggregation const*>(agg.get());
       return make_fixed_width_scalar(detail::unique_count(col, nunique_agg->_include_nulls, false), stream, mr);
-      } break;
-    case aggregation::NTH_ELEMENT: {
-      auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
-      CUDF_EXPECTS(nth_agg->_include_nulls == include_nulls::YES,
-                    "Series nth is supported with nulls included only");
-      return reduction::nth_element(col, col.type(), nth_agg->n, mr, stream);
       } break;
     default:
       CUDF_FAIL("Unsupported reduction operator");
