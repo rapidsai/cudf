@@ -128,7 +128,7 @@ std::unique_ptr<tracking_resource_adaptor<device_memory_resource>> Tracking_memo
 /**
  * @brief Return the total amount of device memory allocated via RMM
  */
-std::size_t get_total_memory_allocated() {
+std::size_t get_total_bytes_allocated() {
   if (Tracking_memory_resource) {
     return Tracking_memory_resource->get_total_allocated();
   }
@@ -265,7 +265,7 @@ private:
     void* result;
     while (true) {
       try {
-        total_before = get_total_memory_allocated();
+        total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (std::bad_alloc const& e) {
@@ -274,7 +274,7 @@ private:
         }
       }
     }
-    auto total_after = get_total_memory_allocated();
+    auto total_after = get_total_bytes_allocated();
 
     try {
       check_for_threshold_callback(total_before, total_after, alloc_thresholds,
@@ -289,9 +289,9 @@ private:
   }
 
   void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
-    auto total_before = get_total_memory_allocated();
+    auto total_before = get_total_bytes_allocated();
     resource->deallocate(p, size, stream);
-    auto total_after = get_total_memory_allocated();
+    auto total_after = get_total_bytes_allocated();
     check_for_threshold_callback(total_after, total_before, dealloc_thresholds,
         on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
@@ -396,8 +396,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jcl
   } CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalMemoryAllocated(JNIEnv* env, jclass) {
-  return get_total_memory_allocated();
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv* env, jclass) {
+  return get_total_bytes_allocated();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz, jlong size,

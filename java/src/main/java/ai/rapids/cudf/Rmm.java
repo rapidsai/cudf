@@ -76,7 +76,7 @@ public class Rmm {
    * allocator decides to return more memory than what was requested. However
    * the result will always be a lower bound on the amount allocated.
    */
-  public static native long getTotalMemoryAllocated();
+  public static native long getTotalBytesAllocated();
 
   /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
