@@ -296,7 +296,7 @@ def test_string_timstamp_typecast_to_different_datetime_resolutions(
     pd_sr = data
     gdf_sr = cudf.Series.from_pandas(pd_sr)
 
-    expect = np.array(pd_sr.astype(dtype))
+    expect = np.array(pd_sr).astype(dtype)
     got = np.array(gdf_sr.astype(dtype))
 
     np.testing.assert_equal(expect, got)

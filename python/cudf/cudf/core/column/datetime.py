@@ -242,7 +242,7 @@ def infer_format(element):
 
     element_parts = element.split(".")
     if len(element_parts) != 2:
-        raise ValueError("Improper timestamp")
+        raise ValueError("Unable to infer the timestamp format from the data")
 
     # There is possibility that the element is of following format
     # '00:00:03.333333 2016-01-01'
@@ -259,7 +259,7 @@ def infer_format(element):
             " ", 1
         )[1]
     if first_part is None:
-        raise ValueError("Improper timestamp")
+        raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_part) > 1:
         second_part = pd.core.tools.datetimes._guess_datetime_format(
@@ -271,6 +271,6 @@ def infer_format(element):
     try:
         fmt = first_part + subsecond_fmt + second_part
     except Exception:
-        raise ValueError("Improper timestamp")
+        raise ValueError("Unable to infer the timestamp format from the data")
 
     return fmt
