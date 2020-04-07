@@ -86,17 +86,11 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
 
   {
       auto column = cudf::column_device_view::create(parent->view());
-      EXPECT_FALSE(column->nullable());
-      EXPECT_FALSE(column->has_nulls());
-      EXPECT_EQ(0, column->null_count());
       EXPECT_TRUE(thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
                   thrust::make_counting_iterator<int32_t>(100), checker_for_level1<cudf::column_device_view>{*column} ));
   }
   {
       auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-      EXPECT_FALSE(column->nullable());
-      EXPECT_FALSE(column->has_nulls());
-      EXPECT_EQ(0, column->null_count());
       EXPECT_TRUE(thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
                   thrust::make_counting_iterator<int32_t>(100), checker_for_level1<cudf::mutable_column_device_view>{*column} ));
   }
@@ -146,17 +140,11 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
 
   {
       auto column = cudf::column_device_view::create(parent->view());
-      EXPECT_FALSE(column->nullable());
-      EXPECT_FALSE(column->has_nulls());
-      EXPECT_EQ(0, column->null_count());
       EXPECT_TRUE(thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
                   thrust::make_counting_iterator<int32_t>(100), checker_for_level2<cudf::column_device_view>{*column} ));
   }
   {
       auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
-      EXPECT_FALSE(column->nullable());
-      EXPECT_FALSE(column->has_nulls());
-      EXPECT_EQ(0, column->null_count());
       EXPECT_TRUE(thrust::any_of( thrust::device, thrust::make_counting_iterator<int32_t>(0),
                   thrust::make_counting_iterator<int32_t>(100), checker_for_level2<cudf::mutable_column_device_view>{*column} ));
   }
