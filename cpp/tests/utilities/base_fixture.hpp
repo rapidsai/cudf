@@ -18,7 +18,6 @@
 
 #include <tests/utilities/cudf_gtest.hpp>
 #include "cxxopts.hpp"
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/default_memory_resource.hpp>
