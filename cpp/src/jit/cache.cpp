@@ -181,8 +181,10 @@ std::string cudfJitCache::cacheFile::read()
 
 void cudfJitCache::cacheFile::write(std::string content)
 {
-    // Open file and create if it doesn't exist, with access 0600
-    int fd = open ( _file_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
+    // Open file and create if it doesn't exist, with access 0666
+    int fd = open ( _file_name.c_str(), O_RDWR | O_CREAT, 
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH );
+
     if ( fd == -1 ) {
         successful_write = false;
         return;
