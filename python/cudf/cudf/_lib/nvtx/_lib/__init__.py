@@ -1,9 +1,9 @@
 from nvtx._lib.lib import (
-    EventAttributes,
     DomainHandle,
+    EventAttributes,
     initialize,
+    range_end,
     range_pop,
     range_push,
     range_start,
-    range_end,
 )

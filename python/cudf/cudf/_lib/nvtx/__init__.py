@@ -1,1 +1,1 @@
-from nvtx.nvtx import Range, Domain, annotate
+from nvtx.nvtx import Domain, Range, annotate
