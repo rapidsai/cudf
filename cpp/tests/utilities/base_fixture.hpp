@@ -75,6 +75,28 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > >
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
+namespace detail {
+  
+  /**
+   * @brief Returns an incrementing seed value for use with UniformRandomGenerator.
+   *  
+   *  The intent behind this is to handle the following case:
+   * 
+   * auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+   * auto rhs = make_random_wrapped_column<TypeRhs>(10000);  
+   * 
+   * Previously, the binops test framework had a persistent UniformRandomGenerator
+   * that would produce unique values across two calls to make_random_wrapped_column()
+   * like this.  However that code has been changed and each call to make_random_wrapped_column()
+   * now uses a local UniformRandomGenerator object.  If we didn't generate an incrementing seed
+   * for each one, every call to make_random_wrapped_column() would return the same values. This
+   * fixes that case and also leaves results across multiple test runs deterministic. 
+   * 
+   */
+  uint64_t random_generator_incrementing_seed();
+
+} // namespace detail
+
 /**---------------------------------------------------------------------------*
  * @brief Provides uniform random number generation.
  *
@@ -91,9 +113,6 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  *
  * @tparam T The type of values that will be generated.
  *---------------------------------------------------------------------------**/
-
-uint64_t uniform_random_generator_incrementing_seed();
-
 template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
@@ -119,7 +138,7 @@ class UniformRandomGenerator {
  private:
   uniform_distribution dist{};         ///< Distribution
   
-  Engine rng{std::mt19937_64{uniform_random_generator_incrementing_seed()}()};    ///< Random generator
+  Engine rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()};    ///< Random generator
 };
 
 /**---------------------------------------------------------------------------*

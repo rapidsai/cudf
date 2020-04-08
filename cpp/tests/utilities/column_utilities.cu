@@ -36,12 +36,6 @@
 namespace cudf {
 namespace test {
 
-uint64_t uniform_random_generator_incrementing_seed()
-{
-  static uint64_t seed = 0;
-  return ++seed;
-}
-
 // Property comparison
 template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
