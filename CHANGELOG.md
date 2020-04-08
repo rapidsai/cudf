@@ -111,6 +111,7 @@
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4857 Add read-write permissions to all for jit cache
 
 
