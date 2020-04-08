@@ -1582,19 +1582,8 @@ class DataFrame(Frame):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
-        data = OrderedDict()
-
-        if deep:
-            index = self._index.copy(deep)
-            for k in self._data:
-                data[k] = self._data[k].copy(deep)
-        else:
-            index = self._index
-            for k in self._data:
-                data[k] = self._data[k]
-
-        out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-        out.index = index
+        out = DataFrame(data=self._data.copy(deep=deep))
+        out.index = self.index.copy(deep=deep)
         return out
 
     def __copy__(self):
