@@ -30,21 +30,27 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
   private static final Logger log = LoggerFactory.getLogger(DeviceMemoryBuffer.class);
 
   private static final class DeviceBufferCleaner extends MemoryBufferCleaner {
-    private Rmm.RmmBuff buff;
+    private long address;
+    private long lengthInBytes;
+    private Cuda.Stream stream;
 
-    DeviceBufferCleaner(Rmm.RmmBuff buff) {
-      this.buff = buff;
+    DeviceBufferCleaner(long address, long lengthInBytes, Cuda.Stream stream) {
+      this.address = address;
+      this.lengthInBytes = lengthInBytes;
+      this.stream = stream;
     }
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
-      long origAddress = 0L;
-      if (buff != null) {
-        origAddress = buff.ptr;
-        buff.close();
-        buff = null;
+      long origAddress = address;
+      if (address != 0) {
+        long s = stream == null ? 0 : stream.getStream();
+        Rmm.free(address, lengthInBytes, s);
+        address = 0;
+        lengthInBytes = 0;
         neededCleanup = true;
+        stream = null;
       }
       if (neededCleanup && logErrorIfNotClean) {
         log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
@@ -55,7 +61,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
 
     @Override
     public boolean isClean() {
-      return buff == null;
+      return address == 0;
     }
   }
 
@@ -96,8 +102,8 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     super(address, lengthInBytes, new RmmDeviceBufferCleaner(rmmBufferAddress));
   }
 
-  DeviceMemoryBuffer(Rmm.RmmBuff buff) {
-    super(buff.ptr, buff.length, new DeviceBufferCleaner(buff));
+  DeviceMemoryBuffer(long address, long lengthInBytes, Cuda.Stream stream) {
+    super(address, lengthInBytes, new DeviceBufferCleaner(address, lengthInBytes, stream));
   }
 
   private DeviceMemoryBuffer(long address, long lengthInBytes, DeviceMemoryBuffer parent) {
@@ -110,7 +116,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @return the buffer
    */
   public static DeviceMemoryBuffer allocate(long bytes) {
-    return new DeviceMemoryBuffer(Rmm.alloc(bytes));
+    return Rmm.alloc(bytes);
   }
 
   /**

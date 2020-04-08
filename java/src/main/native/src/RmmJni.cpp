@@ -560,7 +560,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jcl
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
     // Instead of trying to undo all of the adaptors that we added in reverse order
     // we just reset the base adaptor so the others will not be called any more
-    // and then clean them up in really any order.  There shoudl be no interaction with
+    // and then clean them up in really any order.  There should be no interaction with
     // RMM during this time anyways.
     Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
     rmm::mr::set_default_resource(Initialized_resource.get());

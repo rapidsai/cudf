@@ -259,70 +259,29 @@ public class Rmm {
   private static native void shutdownInternal() throws RmmException;
 
   /**
-   * Small class used to ensure that we follow the rules of RMM allocation
-   * and keep the size of the allocation around so we can free it without
-   * any issues.  This keeps the stream around too, but that may change
-   * in the future when we have better stream support, and the stream you
-   * allocate something on is not always the one you want to synchronize against
-   * when you free it.
-   *
-   * This is not intended to be an API that others outside of CUDF consume.  It is
-   * not like to other more user facing APIs like MemoryBuffer.
-   */
-  static class RmmBuff implements AutoCloseable {
-    /**
-     * The address of the allocation.
-     */
-    public final long ptr;
-    /**
-     * The length of the allocation.
-     */
-    public final long length;
-    /**
-     * The stream it was allocated on. This may change in the future once we have
-     * better stream support.
-     */
-    public final long stream;
-    private boolean closed = false;
-
-    private RmmBuff(long ptr, long length, long stream) {
-      this.ptr = ptr;
-      this.length = length;
-      this.stream = stream;
-    }
-
-    @Override
-    public void close() {
-      if (!closed) {
-        free(ptr, length, stream);
-        closed = true;
-      }
-    }
-  }
-
-  /**
    * Allocate device memory and return a pointer to device memory, using stream 0.
    * @param size   The size in bytes of the allocated memory region
    * @return Returned pointer to the allocated memory
    */
-  static RmmBuff alloc(long size) {
-    return alloc(size, 0);
+  public static DeviceMemoryBuffer alloc(long size) {
+    return alloc(size, null);
   }
 
   /**
    * Allocate device memory and return a pointer to device memory.
    * @param size   The size in bytes of the allocated memory region
-   * @param stream The stream in which to synchronize this command
+   * @param stream The stream in which to synchronize this command.
    * @return Returned pointer to the allocated memory
    */
-  static RmmBuff alloc(long size, long stream) {
-    return new RmmBuff(allocInternal(size, stream), size, stream);
+  static DeviceMemoryBuffer alloc(long size, Cuda.Stream stream) {
+    long s = stream == null ? 0 : stream.getStream();
+    return new DeviceMemoryBuffer(allocInternal(size, s), size, stream);
   }
 
   private static native long allocInternal(long size, long stream) throws RmmException;
 
 
-  private static native void free(long ptr, long length, long stream) throws RmmException;
+  static native void free(long ptr, long length, long stream) throws RmmException;
 
   /**
    * Delete an rmm::device_buffer.
