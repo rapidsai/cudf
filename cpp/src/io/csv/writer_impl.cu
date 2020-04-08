@@ -37,6 +37,35 @@ namespace io {
 namespace detail {
 namespace csv {
 
+namespace {//unnammed:
+//helpers:
+
+/**
+ * @brief Helper function for write_csv.
+ *
+ * @param column The column to be converted.
+ * @param row_offset Number entries from the beginning to skip; must be multiple of 8.
+ * @param rows Number of rows from the offset that should be converted for this column.
+ * @param delimiter Separator to append to the column strings
+ * @param null_representation String to use for null entries
+ * @param true_string String to use for 'true' values in boolean columns
+ * @param false_string String to use for 'false' values in boolean columns
+ * @return strings_column_view  instance formated for CSV column output.
+**/
+strings_column_view column_to_strings_csv(column_view const& column,
+                                          cudf::size_type row_offset,
+                                          cudf::size_type rows,
+                                          char const delimiter,
+                                          std::string const& null_representation,
+                                          std::string const& true_string,
+                                          std::string const& false_string) {
+  //TODO;
+  //
+  return strings_column_view{column}; // for now
+}
+
+} // unnamed namespace
+
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                writer_options const& options,
