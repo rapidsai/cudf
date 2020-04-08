@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/strings/capitalize.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/quantiles.hpp>
@@ -1175,4 +1176,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamper(JNIEnv *env, jo
     CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_title(JNIEnv *env, jobject j_object, jlong handle) {
+
+    JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+    try {
+        cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+        std::unique_ptr<cudf::column> result = cudf::strings::title(*view);
+        return reinterpret_cast<jlong>(result.release());
+    }
+    CATCH_STD(env, 0);
+}
 } // extern "C"

@@ -1903,4 +1903,13 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = testStrings.stringReplace(target,replace)){}
     });
   }
+
+  @Test
+  void testStringTitlize() {
+    try (ColumnVector cv = ColumnVector.fromStrings("sPark", "sqL", "lowercase", null, "", "UPPERCASE");
+         ColumnVector result = cv.toTitle();
+         ColumnVector expected = ColumnVector.fromStrings("Spark", "Sql", "Lowercase", null, "", "Uppercase")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
 }
