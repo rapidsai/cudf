@@ -214,8 +214,7 @@ class metadata {
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
-        size_t max_rows = (static_cast<size_t>(1) << (sizeof(size_type) * 8 - 1)) - 1;
-        row_count = static_cast<size_type>(std::min(get_total_rows(), max_rows));
+        row_count = static_cast<size_type>(std::min<size_t>(get_total_rows(), INT32_MAX));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(static_cast<size_t>(row_start) <= get_total_rows(), "Invalid row start");

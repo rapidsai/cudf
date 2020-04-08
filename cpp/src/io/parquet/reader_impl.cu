@@ -192,7 +192,7 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   }
 
-  inline int get_total_rows() const { return num_rows; }
+  inline int64_t get_total_rows() const { return num_rows; }
   inline int get_num_row_groups() const { return row_groups.size(); }
   inline int get_num_columns() const { return row_groups[0].columns.size(); }
 
@@ -287,7 +287,7 @@ struct metadata : public FileMetaData {
   auto select_row_groups(size_type row_group, size_type max_rowgroup_count,
                          const size_type *row_group_indices,
                          size_type &row_start, size_type &row_count) {
-    std::vector<std::pair<size_type, size_type>> selection;
+    std::vector<std::pair<size_type, size_t>> selection;
 
     if (row_group_indices) {
       row_count = 0;
@@ -300,9 +300,6 @@ struct metadata : public FileMetaData {
     }
     else if (row_group != -1) {
       CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
-      for (size_type i = 0; i < row_group; ++i) {
-        row_start += row_groups[i].num_rows;
-      }
       row_count = 0;
       do {
         selection.emplace_back(row_group, row_start + row_count);
@@ -310,18 +307,19 @@ struct metadata : public FileMetaData {
       } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
       row_start = std::max(row_start, 0);
-      if (row_count == -1) {
-        row_count = get_total_rows();
+      if (row_count < 0) {
+        row_count = static_cast<size_type>(std::min<int64_t>(get_total_rows(), INT32_MAX));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
-      for (size_type i = 0, count = 0; i < (size_type)row_groups.size(); ++i) {
+      for (size_t i = 0, count = 0; i < row_groups.size(); ++i) {
+        size_t chunk_start_row = count;
         count += row_groups[i].num_rows;
-        if (count > row_start || count == 0) {
-          selection.emplace_back(i, count - row_groups[i].num_rows);
+        if (count > static_cast<size_t>(row_start) || count == 0) {
+          selection.emplace_back(i, chunk_start_row);
         }
-        if (count >= (row_start + row_count)) {
+        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) {
           break;
         }
       }
