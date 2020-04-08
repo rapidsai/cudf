@@ -3955,7 +3955,9 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -4002,9 +4004,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if map_size is None:
-            map_size = map_index.unique_count()
-        else:
+        if "debug" in kwargs and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
