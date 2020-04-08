@@ -56,6 +56,7 @@
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
+- PR #4844 Change Doxyen color to RAPIDS purple and documentation improvement
 
 ## Bug Fixes
 
