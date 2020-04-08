@@ -182,7 +182,6 @@ class TempDirTestEnvironment : public ::testing::Environment {
  */
 inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& allocation_mode)
 {
-    std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
     if( allocation_mode == "cuda" )
         return std::make_unique<rmm::mr::cuda_memory_resource>();
     if( allocation_mode == "pool" )
@@ -190,7 +189,6 @@ inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(s
     if( allocation_mode == "managed" )
         return std::make_unique<rmm::mr::managed_memory_resource>();
     CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
-    return rmm_resource;
 }
 
 }  // namespace test
@@ -224,9 +222,9 @@ inline auto parse_cudf_test_opts(int argc, char **argv) {
  * @brief Macro that defines main function for gtest programs that use rmm
  * 
  * Should be included in every test program that uses rmm allocators since
- * it maintains the lifespane of the rmm default memory resource.
+ * it maintains the lifespan of the rmm default memory resource.
  * This `main` function is a wrapper around the google test generated `main`,
- * mantaining the original functionality. In addition, this custom `main`
+ * maintaining the original functionality. In addition, this custom `main`
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
  * 
