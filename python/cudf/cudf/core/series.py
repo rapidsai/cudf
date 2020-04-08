@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     to_cudf_compatible_scalar,
 )
+from cudf.utils.utils import annotate
 
 
 class Series(Frame):
@@ -601,6 +602,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
+    @annotate("CUDF_BINARY_OP", color="orange")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
@@ -616,7 +618,6 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.Range("CUDF_BINARY_OP", "orange").push()
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -651,7 +652,6 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.Range.pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):

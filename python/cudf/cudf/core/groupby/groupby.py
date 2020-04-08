@@ -7,8 +7,8 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
 import cudf._lib.groupby as libgroupby
+from cudf.utils.utils import annotate
 
 
 class GroupBy(object):
@@ -83,6 +83,7 @@ class GroupBy(object):
             .agg("size")
         )
 
+    @annotate("GROUPBY_AGG")
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.
@@ -135,8 +136,6 @@ class GroupBy(object):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        libcudf.nvtx.Range("CUDF_GROUPBY", "purple").push()
-
         normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
@@ -175,7 +174,6 @@ class GroupBy(object):
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 
-        libcudf.nvtx.Range.pop()
         return result
 
     aggregate = agg

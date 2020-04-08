@@ -9,6 +9,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.utils import annotate
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -222,10 +223,9 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.is_unique
 
 
+@annotate("CUDF_BINARY_OP", color="orange")
 def binop(lhs, rhs, op, out_dtype):
-    libcudf.nvtx.Range("CUDF_BINARY_OP", "orange").push()
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    libcudf.nvtx.Range.pop()
     return out
 
 

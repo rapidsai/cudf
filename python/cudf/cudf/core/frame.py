@@ -46,8 +46,6 @@ class Frame(libcudf.table.Table):
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
 
-        libcudf.nvtx.Range("CUDF_CONCAT", "orange").push()
-
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
         from cudf.core.column.column import build_categorical_column
@@ -219,8 +217,6 @@ class Frame(libcudf.table.Table):
 
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
-
-        libcudf.nvtx.Range.pop()
 
         return out
 

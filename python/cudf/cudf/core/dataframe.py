@@ -47,7 +47,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
 )
-from cudf.utils.utils import OrderedColumnDict
+from cudf.utils.utils import OrderedColumnDict, annotate
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -2188,6 +2188,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
+    @annotate("CUDF_JOIN", color="blue")
     def merge(
         self,
         right,
@@ -2271,7 +2272,6 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.Range("CUDF_JOIN", "blue").push()
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2313,9 +2313,9 @@ class DataFrame(Frame):
             method,
             sort=sort,
         )
-        libcudf.nvtx.Range.pop()
         return gdf_result
 
+    @annotate("CUDF_JOIN", color="blue")
     def join(
         self,
         other,
@@ -2351,9 +2351,6 @@ class DataFrame(Frame):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        libcudf.nvtx.Range("CUDF_JOIN", "blue").push()
-
         # Outer joins still use the old implementation
         if type != "":
             warnings.warn(
@@ -2492,7 +2489,6 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudf.nvtx.Range.pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2537,6 +2533,7 @@ class DataFrame(Frame):
             win_type=win_type,
         )
 
+    @annotate("CUDF_QUERY", color="purple")
     def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
@@ -2609,7 +2606,6 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.Range("CUDF_QUERY", "purple").push()
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2626,7 +2622,6 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.Range.pop()
         return result
 
     @applyutils.doc_apply()
