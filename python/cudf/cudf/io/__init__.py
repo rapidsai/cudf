@@ -8,6 +8,7 @@ from cudf.io.hdf import read_hdf
 from cudf.io.json import read_json
 from cudf.io.orc import read_orc, read_orc_metadata, to_orc
 from cudf.io.parquet import (
+    merge_parquet_filemetadata,
     read_parquet,
     read_parquet_metadata,
     write_to_dataset,
