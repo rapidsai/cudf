@@ -197,7 +197,7 @@ class metadata {
         selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
       }
-      row_count = static_cast<int>(stripe_rows);
+      row_count = static_cast<size_type>(stripe_rows);
     }
     else if (stripe != -1) {
       CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
@@ -210,25 +210,26 @@ class metadata {
         stripe_rows += ff.stripes[stripe].numberOfRows;
       } while (--max_stripe_count > 0 && ++stripe < get_num_stripes());
       row_count = (row_count < 0) ? static_cast<size_type>(stripe_rows)
-                                  : std::min(row_count, (size_type)stripe_rows);
+                                  : std::min(row_count, static_cast<size_type>(stripe_rows));
     } else {
       row_start = std::max(row_start, 0);
-      if (row_count == -1) {
-        row_count = get_total_rows();
+      if (row_count < 0) {
+        size_t max_rows = (static_cast<size_t>(1) << (sizeof(size_type) * 8 - 1)) - 1;
+        row_count = static_cast<size_type>(std::min(get_total_rows(), max_rows));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-      CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
+      CUDF_EXPECTS(static_cast<size_t>(row_start) <= get_total_rows(), "Invalid row start");
 
-      size_type stripe_skip_rows = 0, count = 0;
-      for (size_t i = 0; i < ff.stripes.size(); ++i) {
+      size_type stripe_skip_rows = 0;
+      for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
-        if (count > row_start) {
+        if (count > static_cast<size_t>(row_start)) {
           if (selection.size() == 0) {
-            stripe_skip_rows = row_start - (count - ff.stripes[i].numberOfRows);
+            stripe_skip_rows = static_cast<size_type>(row_start - (count - ff.stripes[i].numberOfRows));
           }
           selection.emplace_back(&ff.stripes[i], nullptr);
         }
-        if (count >= (row_start + row_count)) {
+        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) {
           break;
         }
       }
@@ -307,7 +308,7 @@ class metadata {
     return selection;
   }
 
-  inline int get_total_rows() const { return ff.numberOfRows; }
+  inline size_t get_total_rows() const { return ff.numberOfRows; }
   inline int get_num_stripes() const { return ff.stripes.size(); }
   inline int get_num_columns() const { return ff.types.size(); }
   inline int get_row_index_stride() const { return ff.rowIndexStride; }
