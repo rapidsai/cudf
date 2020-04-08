@@ -267,14 +267,16 @@ class DataFrame(Frame):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data):
+            self._data.multiindex = True
+            for (i, col_name) in enumerate(data):
+                self._data.multiindex = (
+                    self._data.multiindex and isinstance(col_name, tuple)
+                )
+                self.insert(i, col_name, data[col_name])
 
         if columns is not None:
             self.columns = columns
-
-        if len(data) and all(isinstance(x, tuple) for x in data):
-            self._data.multiindex = True
 
     @classmethod
     def _from_table(cls, table, index=None):
