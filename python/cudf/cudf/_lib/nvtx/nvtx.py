@@ -95,11 +95,11 @@ def annotate(*args, **kwargs):
     ...
     """
     rng = Range(*args, **kwargs)
-    rng.start()
+    rng.push()
     try:
         yield
     finally:
-        rng.end()
+        Range.pop()
 
 
 _annotate = annotate
