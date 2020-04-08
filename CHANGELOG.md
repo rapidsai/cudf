@@ -58,6 +58,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4852 Add NVTX range calls to strings and nvtext APIs
 
 ## Bug Fixes
 
