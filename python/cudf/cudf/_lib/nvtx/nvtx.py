@@ -12,6 +12,41 @@ class Domain(metaclass=CachedInstanceMeta):
 
 
 class Range:
+    """
+    Specifies an NVTX code range via start/end or push/pop.
+
+    Parameters
+    ----------
+    message : str
+        Message associated with the code range.
+    color : str
+        Color associated with the code range.
+    domain : str
+        The name of the domain under which the code range is scoped.
+
+    Examples
+    --------
+    >>> import nvtx
+    >>> import time
+
+    Using start/end API to define a code range:
+
+    >>> rng = nvtx.Range("my_code_range")
+    >>> rng.start()
+    >>> print("code range starts")
+    >>> time.sleep(10)
+    >>> print("code range ends")
+    >>> rng.end()
+
+    Using push/pop API to define nested code ranges conveniently:
+
+    >>> nvtx.Range("my_code_range").push()
+    >>> time.sleep(1)
+    >>> nvtx.Range("my_inner_code_range").push()
+    >>> time.sleep(2)
+    >>> nvtx.Range.pop()  # pops inner
+    >>> nvtx.Range.pop()  # pops outer
+    """
     def __init__(self, message=None, color="blue", domain=None):
         self._attributes = libnvtx.EventAttributes(
             message,
