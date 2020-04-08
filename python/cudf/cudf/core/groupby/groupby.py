@@ -7,8 +7,8 @@ import pickle
 import pandas as pd
 
 import cudf
-import cudf._lib.groupby as libgroupby
 import cudf._lib as libcudf
+import cudf._lib.groupby as libgroupby
 
 
 class GroupBy(object):

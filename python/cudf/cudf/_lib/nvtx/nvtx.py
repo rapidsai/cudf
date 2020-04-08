@@ -1,8 +1,8 @@
 from contextlib import contextmanager
-from nvtx.utils.cached import CachedInstanceMeta
 
 import nvtx._lib as libnvtx
 from nvtx.colors import color_to_hex
+from nvtx.utils.cached import CachedInstanceMeta
 
 
 class Domain(metaclass=CachedInstanceMeta):

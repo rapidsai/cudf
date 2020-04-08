@@ -1,6 +1,5 @@
 import functools
 
-
 _NVTX_COLORS = {
     "green": 0x008000,
     "blue": 0x0000FF,
