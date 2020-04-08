@@ -957,7 +957,7 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 @pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
 def test_csv_reader_byte_range_strings(segment_bytes):
     names = ["strings"]
-    buffer = '\n'.join('\"' + str(x) + '\"' for x in range(1, 100))
+    buffer = "\n".join('"' + str(x) + '"' for x in range(1, 100))
     file_size = len(buffer)
 
     ref_df = read_csv(StringIO(buffer), names=names).to_pandas()
