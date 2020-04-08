@@ -60,6 +60,8 @@
 - PR #4816 Remove java API use of deprecated RMM APIs
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4849 Update Java bindings to use new NVTX API
+- PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 
 ## Bug Fixes
 
