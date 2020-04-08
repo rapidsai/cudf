@@ -18,11 +18,12 @@
 
 #include <tests/utilities/cudf_gtest.hpp>
 #include "cxxopts.hpp"
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/default_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -199,50 +200,30 @@ class RmmTestEnvironment : public ::testing::Environment {
 /**---------------------------------------------------------------------------*
  * @brief String representing which RMM allocation mode is to be used.
  *
- * Valid values are 'cuda', 'pool' and 'managed'. 
+ * 
  *---------------------------------------------------------------------------**/
-  std::string mode;
+  std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
 public:
   /**
-   * @brief Constructor where the only argument is a string `mode`.
-   *
-   * Mode repesents the rmm allocation mode, @ref mode.
-   */
-  RmmTestEnvironment(std::string const& mode):mode(mode){}
-
-  /**
-   * @brief Initializes the default RMM memory resource.
-   *
-   * Sets different allocation mode based on the value passed to the constructor.
+   * @brief Sets the default RMM memory resource based on the input string.
    * 
-   * @throws cudf::logic_error if mode value is invalid.
+   * @param allocation_mode Represents the type of the memory resource to be 
+   * used as a default resource. Valid values are 'cuda', 'pool' and 'managed'.
    * 
-   * @return void
+   * @throws cudf::logic_error if passed mode value is invalid.
    */
-  void SetUp() {
-    rmmOptions_t opts{};
-    if (mode == "cuda")
-      opts.allocation_mode = CudaDefaultAllocation;
-    else if (mode == "pool")
-      opts.allocation_mode = PoolAllocation;
-    else if (mode == "managed")
-      opts.allocation_mode = CudaManagedMemory;
+  RmmTestEnvironment(std::string const& allocation_mode) {
+    if (allocation_mode == "cuda")
+      rmm_resource.reset(new rmm::mr::cuda_memory_resource());
+    else if (allocation_mode == "pool")
+      rmm_resource.reset(new rmm::mr::cnmem_memory_resource());
+    else if (allocation_mode == "managed")
+      rmm_resource.reset(new rmm::mr::managed_memory_resource());
     else 
       CUDF_FAIL("Invalid RMM allocation mode");
 
-    ASSERT_EQ(rmmInitialize(&opts), RMM_SUCCESS);
-  }
-
-  /**
-   * @brief Shuts down the rmm memory manager.
-   * 
-   * @throws cudf::logic_error if rmmFinalize is unsuccessful 
-   * 
-   * @return void
-   */
-  void TearDown() {
-    ASSERT_EQ(rmmFinalize(), RMM_SUCCESS);
-  }
+    rmm::mr::set_default_resource(rmm_resource.get());
+    }
 };
 
 }  // namespace test

@@ -10,7 +10,6 @@ from libcpp cimport bool
 from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.wrappers.bool cimport bool8
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_ms,
@@ -136,7 +135,7 @@ cdef _set_numeric_from_np_scalar(unique_ptr[scalar]& s,
     elif dtype == "float64":
         s.reset(new numeric_scalar[double](value, valid))
     elif dtype == "bool":
-        s.reset(new numeric_scalar[bool8](<bool>value, valid))
+        s.reset(new numeric_scalar[bool](<bool>value, valid))
     else:
         raise ValueError("dtype not supported: {}".format(dtype))
 
@@ -192,7 +191,7 @@ cdef _get_np_scalar_from_numeric(unique_ptr[scalar]& s):
     elif cdtype.id() == libcudf_types.FLOAT64:
         return np.float64((<numeric_scalar[double]*>s_ptr)[0].value())
     elif cdtype.id() == libcudf_types.BOOL8:
-        return np.bool((<numeric_scalar[bool8]*>s_ptr)[0].value())
+        return np.bool((<numeric_scalar[bool]*>s_ptr)[0].value())
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 

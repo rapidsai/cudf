@@ -20,6 +20,7 @@
 #include <iostream>
 #include <limits>
 
+//! `fixed_point` and supporting types
 namespace numeric {
 
 // This is a wrapper struct that enforces "strong typing"
@@ -38,8 +39,11 @@ using scale_type = strong_typedef<int32_t>;
 /**
  * @brief Scoped enumerator to use when constructing `fixed_point`
  *
- * example: using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
- * example: using binary64  = fixed_point<int64_t, Radix::BASE_2>;
+ * Examples:
+ * ```cpp
+ * using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+ * using binary64  = fixed_point<int64_t, Radix::BASE_2>;
+ * ```
  */
 enum class Radix : int32_t {
     BASE_2  = 2,
@@ -58,14 +62,15 @@ constexpr inline auto is_supported_construction_value_type() {
       || std::is_floating_point<T>::value;
 }
 
+//! Helper functions for `fixed_point` type
 namespace detail {
     /**
     * @brief A function for integer exponentiation by squaring
     *
-    * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
-    * Note: this is the iterative equivalent of the recursive definition (faster)
-    * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
-    * `exponent` comes from using scale_type = strong_typedef<int32_t>
+    * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
+    * Note: this is the iterative equivalent of the recursive definition (faster) <br>
+    * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
+    * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
     *
     * @tparam Rep Representation type for return type
     * @tparam Base The base to be exponentiated
@@ -159,8 +164,8 @@ namespace detail {
     /** @brief Function that performs precise shift to avoid "lossiness"
      * inherent in floating point values
     *
-    * Example: auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}
-    *    will construct n to have a value of 1 without the precise shift
+    * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
+    * will construct n to have a value of 1 without the precise shift
     *
     * @tparam Rep Representation type needed for integer exponentiation
     * @tparam Rad The radix which will act as the base in the exponentiation
@@ -185,8 +190,11 @@ namespace detail {
 /**
  * @brief Helper struct for constructing `fixed_point` when value is already shifted
  *
- * example: using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
- *          auto n = decimal32{scaled_integer{1001, 3}}; // n = 1.001
+ * Example:
+ * ```cpp
+ * using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+ * auto n = decimal32{scaled_integer{1001, 3}}; // n = 1.001
+ * ```
  *
  * @tparam Rep The representation type (either `int32_t` or `int64_t`)
  */
@@ -339,7 +347,7 @@ public:
     /**
     * @brief operator + (for adding two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are added
+    * If `_scale`s are equal, `_value`s are added <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are added
     *
@@ -355,7 +363,7 @@ public:
     /**
     * @brief operator - (for subtracting two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are substracted
+    * If `_scale`s are equal, `_value`s are substracted <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are substracted
     *
@@ -399,7 +407,7 @@ public:
     /**
     * @brief operator == (for comparing two `fixed_point` numbers)
     *
-    * If `_scale`s are equal, `_value`s are compared
+    * If `_scale`s are equal, `_value`s are compared <br>
     * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
     * greater `_scale`, and then `_value`s are compared
     *

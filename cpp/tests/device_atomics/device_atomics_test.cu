@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cudf/detail/utilities/device_atomics.cuh>

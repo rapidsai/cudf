@@ -6,6 +6,8 @@ import dask.dataframe as dd
 
 import cudf
 
+import dask_cudf
+
 
 @pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("nelem", [10, 500])
@@ -37,3 +39,13 @@ def test_sort_values_single_partition(by):
         got = ddf.sort_values(by=by)
     expect = df.sort_values(by=by)
     dd.assert_eq(got, expect)
+
+
+def test_sort_repartition():
+    ddf = dask_cudf.from_cudf(
+        cudf.DataFrame({"a": [0, 0, 1, 2, 3, 4, 2]}), npartitions=2
+    )
+
+    new_ddf = ddf.repartition(columns="a", npartitions=3)
+
+    dd.assert_eq(len(new_ddf), len(ddf))

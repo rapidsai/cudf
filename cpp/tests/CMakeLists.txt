@@ -147,14 +147,6 @@ set(SCALAR_TEST_SRC
 
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
-# - bool8 wrapper tests ---------------------------------------------------------------------------
-
-set(BOOLS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
-
-ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
-
-
 ###################################################################################################
 # - timestamps tests ----------------------------------------------------------------------------------
 
@@ -556,7 +548,7 @@ ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 set(NVCATEGORY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
 
-ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
+ConfigureTest(LEGACY_NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests ----------------------------------------------------------------------------------
@@ -701,7 +693,7 @@ ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 set(DEVICE_TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
 
-ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - sorted-merge tests ----------------------------------------------------------------------------
@@ -848,7 +840,7 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"

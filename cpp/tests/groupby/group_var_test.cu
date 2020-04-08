@@ -45,7 +45,7 @@ TYPED_TEST(groupby_var_test, basic)
                                           //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
     fixed_width_column_wrapper<K> expect_keys { 1,        2,           3      };
                                           //  { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-    fixed_width_column_wrapper<R> expect_vals({    9,      131./12,     31./3 }, all_valid());
+    fixed_width_column_wrapper<R> expect_vals({   9.,      131./12,     31./3 }, all_valid());
 
     auto agg = cudf::experimental::make_variance_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -113,7 +113,7 @@ TYPED_TEST(groupby_var_test, null_keys_and_values)
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { 3, 6,     1, 4, 9,   2, 8,    3}
-    fixed_width_column_wrapper<R> expect_vals({ 4.5,      49./3,     18,      0},
+    fixed_width_column_wrapper<R> expect_vals({ 4.5,      49./3,    18.,     0.},
                                               { 1,        1,         1,       0});
 
     auto agg = cudf::experimental::make_variance_aggregation();
@@ -134,7 +134,7 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
                                           //  { 1, 1,     2, 2, 2,   3, 3,    4}
     fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
                                           //  { 3, 6,     1, 4, 9,   2, 8,    3}
-    fixed_width_column_wrapper<R> expect_vals({ 0,        98./3,     0,       0},
+    fixed_width_column_wrapper<R> expect_vals({ 0.,       98./3,    0.,      0.},
                                               { 0,        1,         0,       0});
 
     auto agg = cudf::experimental::make_variance_aggregation(2);

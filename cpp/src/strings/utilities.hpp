@@ -69,6 +69,18 @@ using character_cases_table_type = uint16_t;
 const character_cases_table_type* get_character_cases_table();
 
 
+/**
+ * @brief Returns pointer to device memory that contains the special
+ * case mapping table. On first call, this will copy the table into
+ * device memory and is guaranteed to be thread-safe.
+ *
+ * This table is used to handle special case character mappings that
+ * don't trivially work with the normal character cases table.
+ *
+ * @return Device memory pointer to the special case mapping table
+ */
+const struct special_case_mapping* get_special_case_mapping_table();
+
 } // namespace detail
 } // namespace strings
 } // namespace cudf
