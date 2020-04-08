@@ -161,6 +161,14 @@ public class Rmm {
   }
 
   /**
+   * Return the amount of RMM memory allocated in bytes. Note that the result
+   * may be less than the actual amount of allocated memory if underlying RMM
+   * allocator decides to return more memory than what was requested. However
+   * the result will always be a lower bound on the amount allocated.
+   */
+  public static native long getTotalBytesAllocated();
+
+  /**
    * Sets the event handler to be called on RMM events (e.g.: allocation failure).
    * @param handler event handler to invoke on RMM events or null to clear an existing handler
    * @throws RmmException if an active handler is already set
