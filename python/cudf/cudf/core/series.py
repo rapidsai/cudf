@@ -616,7 +616,7 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
+        libcudf.nvtx.Range("CUDF_BINARY_OP", "orange").push()
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -651,7 +651,7 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.range_pop()
+        libcudf.nvtx.Range.pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):

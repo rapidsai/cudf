@@ -2271,7 +2271,7 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
+        libcudf.nvtx.Range("CUDF_JOIN", "blue").push()
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2313,7 +2313,7 @@ class DataFrame(Frame):
             method,
             sort=sort,
         )
-        libcudf.nvtx.range_pop()
+        libcudf.nvtx.Range.pop()
         return gdf_result
 
     def join(
@@ -2352,7 +2352,7 @@ class DataFrame(Frame):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
+        libcudf.nvtx.Range("CUDF_JOIN", "blue").push()
 
         # Outer joins still use the old implementation
         if type != "":
@@ -2492,7 +2492,7 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudf.nvtx.range_pop()
+        libcudf.nvtx.Range.pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2609,7 +2609,7 @@ class DataFrame(Frame):
                 )
             )
 
-        libcudf.nvtx.range_push("CUDF_QUERY", "purple")
+        libcudf.nvtx.Range("CUDF_QUERY", "purple").push()
         # Get calling environment
         callframe = inspect.currentframe().f_back
         callenv = {
@@ -2626,7 +2626,7 @@ class DataFrame(Frame):
             newseries = self[col][selected]
             newdf[col] = newseries
         result = newdf
-        libcudf.nvtx.range_pop()
+        libcudf.nvtx.Range.pop()
         return result
 
     @applyutils.doc_apply()
