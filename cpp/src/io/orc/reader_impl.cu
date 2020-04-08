@@ -209,11 +209,8 @@ class metadata {
         selection.emplace_back(&ff.stripes[stripe], nullptr);
         stripe_rows += ff.stripes[stripe].numberOfRows;
       } while (--max_stripe_count > 0 && ++stripe < get_num_stripes());
-      if (row_count < 0) {
-        row_count = (size_type)stripe_rows;
-      } else {
-        row_count = std::min(row_count, (size_type)stripe_rows);
-      }
+      row_count = (row_count < 0) ? static_cast<size_type>(stripe_rows)
+                                  : std::min(row_count, (size_type)stripe_rows);
     } else {
       row_start = std::max(row_start, 0);
       if (row_count == -1) {
@@ -222,8 +219,8 @@ class metadata {
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
-      size_type stripe_skip_rows = 0;
-      for (size_type i = 0, count = 0; i < (size_type)ff.stripes.size(); ++i) {
+      size_type stripe_skip_rows = 0, count = 0;
+      for (size_t i = 0; i < ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
         if (count > row_start) {
           if (selection.size() == 0) {
