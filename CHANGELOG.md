@@ -55,6 +55,7 @@
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 
 ## Bug Fixes
 
