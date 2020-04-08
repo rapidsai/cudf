@@ -40,6 +40,15 @@ constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 512;
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 
 /**
+ * @brief Base class so we can template tracking_resource_adaptor but
+ * still hold all instances of it without issues.
+ */
+class base_tracking_resource_adaptor : public device_memory_resource {
+public:
+  virtual std::size_t get_total_allocated() = 0;
+};
+
+/**
  * @brief An RMM device memory resource that delegates to another resource
  * while tracking the amount of memory allocated.
  *
@@ -48,7 +57,7 @@ constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
  * aligned. Must be a value >= 1.
  */
 template <typename Upstream>
-class tracking_resource_adaptor final : public device_memory_resource {
+class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
 public:
   /**
    * @brief Constructs a new tracking resource adaptor that delegates to
@@ -66,7 +75,7 @@ public:
     return resource;
   }
 
-  std::size_t get_total_allocated() {
+  std::size_t get_total_allocated() override {
     std::lock_guard<std::mutex> lock(size_map_mutex);
     return total_allocated;
   }
@@ -129,9 +138,13 @@ private:
   }
 };
 
+template <typename Upstream>
+tracking_resource_adaptor<Upstream> * make_tracking_adaptor(Upstream * upstream,
+        std::size_t size_alignment) {
+    return new tracking_resource_adaptor<Upstream>{upstream, size_alignment};
+}
 
-std::unique_ptr<tracking_resource_adaptor<device_memory_resource>> Tracking_memory_resource{};
-
+std::unique_ptr<base_tracking_resource_adaptor> Tracking_memory_resource{};
 
 /**
  * @brief Return the total amount of device memory allocated via RMM
@@ -468,7 +481,7 @@ class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
 
 // Need to keep both separate so we can shut them down appropriately
 std::unique_ptr<logging_resource_adaptor> Logging_memory_resource{};
-std::unique_ptr<rmm::mr::device_memory_resource> Initialized_resource{};
+std::unique_ptr<device_memory_resource> Initialized_resource{};
 } // anonymous namespace
 
 extern "C" {
@@ -484,32 +497,29 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     if (use_pool_alloc) {
         std::vector<int> devices; // Just do default devices for now...
         if (use_managed_mem) {
-            Initialized_resource.reset(
-                    new rmm::mr::cnmem_managed_memory_resource(pool_size, devices));
+            auto tmp =  new rmm::mr::cnmem_managed_memory_resource(pool_size, devices);
+            Initialized_resource.reset(tmp);
+            auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+            Tracking_memory_resource.reset(wrapped);
         } else {
-            Initialized_resource.reset(
-                    new rmm::mr::cnmem_memory_resource(pool_size, devices));
+            auto tmp =  new rmm::mr::cnmem_memory_resource(pool_size, devices);
+            Initialized_resource.reset(tmp);
+            auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+            Tracking_memory_resource.reset(wrapped);
         }
     } else if (rmm::Manager::useManagedMemory()) {
-        Initialized_resource.reset(new rmm::mr::managed_memory_resource());
+        auto tmp =  new rmm::mr::managed_memory_resource();
+        Initialized_resource.reset(tmp);
+        auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
     } else {
-        Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
+        auto tmp =  new rmm::mr::cuda_memory_resource();
+        Initialized_resource.reset(tmp);
+        auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
     }
-    auto resource = Initialized_resource.get();
+    auto resource = Tracking_memory_resource.get();
     rmm::mr::set_default_resource(resource);
-
-    Tracking_memory_resource.reset(
-        new tracking_resource_adaptor<device_memory_resource>(resource, RMM_ALLOC_SIZE_ALIGNMENT));
-
-    auto replaced_resource = rmm::mr::set_default_resource(Tracking_memory_resource.get());
-    if (resource != replaced_resource) {
-      rmm::mr::set_default_resource(replaced_resource);
-      Tracking_memory_resource.reset(nullptr);
-      JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
-          "Concurrent modification detected while installing memory resource", );
-    }
-
-    resource = Tracking_memory_resource.get();
 
     std::unique_ptr<logging_resource_adaptor> log_result;
     switch (log_to) {
@@ -548,25 +558,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
-    if (Logging_memory_resource) {
-      auto logging_resource = Logging_memory_resource.get();
-      auto old_resource = rmm::mr::set_default_resource(Logging_memory_resource->get_wrapped_resource());
-      Logging_memory_resource.reset(nullptr);
-      if (old_resource != logging_resource) {
-        rmm::mr::set_default_resource(old_resource);
-        JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
-            "Concurrent modification detected while removing memory resource", );
-      }
-    }
+    // Instead of trying to undo all of the adaptors that we added in reverse order
+    // we just reset the base adaptor so the others will not be called any more
+    // and then clean them up in really any order.  There shoudl be no interaction with
+    // RMM during this time anyways.
     Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
     rmm::mr::set_default_resource(Initialized_resource.get());
+    Logging_memory_resource.reset(nullptr);
+    Tracking_memory_resource.reset(nullptr);
   } CATCH_STD(env, )
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv* env, jclass) {
   return get_total_bytes_allocated();
 }
-
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,
                                                       jlong stream) {
