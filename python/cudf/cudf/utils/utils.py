@@ -10,9 +10,8 @@ from numba import njit
 
 import rmm
 
-from cudf.core.buffer import Buffer
 from cudf._lib.nvtx import Range, annotate
-
+from cudf.core.buffer import Buffer
 
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
