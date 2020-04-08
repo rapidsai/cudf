@@ -61,6 +61,7 @@
 - PR #4842 Added Java bindings for titlizing a String column
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 
 ## Bug Fixes
 
