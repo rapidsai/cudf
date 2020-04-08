@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,12 @@
 
 namespace cudf {
 namespace test {
+
+uint64_t uniform_random_generator_incrementing_seed()
+{
+  static uint64_t seed = 0;
+  return ++seed;
+}
 
 // Property comparison
 template <bool check_exact_equality>

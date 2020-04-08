@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -29,7 +29,9 @@ namespace binop {
 struct BinaryOperationNullTest : public BinaryOperationTest {
     template <typename T>
     auto make_random_wrapped_column(size_type size, mask_state state) {
-        auto data_iter = make_data_iter();
+        cudf::test::UniformRandomGenerator<T> rand_gen(1, 10);
+        auto data_iter = make_data_iter(rand_gen);
+
         switch (state) {
         case mask_state::ALL_NULL : {
             auto validity_iter = cudf::test::make_counting_transform_iterator(0,

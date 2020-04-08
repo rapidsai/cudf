@@ -91,6 +91,9 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  *
  * @tparam T The type of values that will be generated.
  *---------------------------------------------------------------------------**/
+
+uint64_t uniform_random_generator_incrementing_seed();
+
 template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
@@ -115,7 +118,8 @@ class UniformRandomGenerator {
 
  private:
   uniform_distribution dist{};         ///< Distribution
-  Engine rng{std::random_device{}()};  ///< Random generator
+  
+  Engine rng{std::mt19937_64{uniform_random_generator_incrementing_seed()}()};    ///< Random generator
 };
 
 /**---------------------------------------------------------------------------*

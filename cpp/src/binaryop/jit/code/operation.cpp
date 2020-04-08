@@ -28,12 +28,14 @@ R"***(
     #pragma once
     #include "traits.h"
     #include <cmath>
+    #include <type_traits>
     using namespace simt::std;
 
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) + static_cast<TypeCommon>(y));
         }
     };
 
@@ -42,21 +44,24 @@ R"***(
     struct Sub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) - static_cast<TypeCommon>(y));
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(y) - static_cast<TypeCommon>(x));
         }
     };
 
     struct Mul {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) * static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) * static_cast<TypeCommon>(y));
         }
     };
 
@@ -65,14 +70,16 @@ R"***(
     struct Div {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) / static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) / static_cast<TypeCommon>(y));
         }
     };
 
     struct RDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) / static_cast<TypeOut>(x));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(y) / static_cast<TypeCommon>(x));
         }
     };
 
@@ -108,25 +115,26 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+                  enable_if_t<(is_integral_v<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) % static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) % static_cast<TypeCommon>(y));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
+                  enable_if_t<(isFloat<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(fmodf(static_cast<float>(x), static_cast<float>(y)));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
+                  enable_if_t<(isDouble<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(fmod(static_cast<double>(x), static_cast<double>(y)));
         }
     };
 
@@ -134,25 +142,26 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+                  enable_if_t<(is_integral_v<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) % static_cast<TypeOut>(x));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(y) % static_cast<TypeCommon>(x));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
+                  enable_if_t<(isFloat<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
+            return static_cast<TypeOut>(fmodf(static_cast<float>(y), static_cast<float>(x)));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
+                  enable_if_t<(isDouble<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
+            return static_cast<TypeOut>(fmod(static_cast<double>(y), static_cast<double>(x)));
         }
     };
 
@@ -333,7 +342,8 @@ R"***(
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             TypeOut output;
-            GENERIC_BINARY_OP(&output, x, y);
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            GENERIC_BINARY_OP(&output, static_cast<TypeCommon>(x), static_cast<TypeCommon>(y));
             return output;
         }
     };    

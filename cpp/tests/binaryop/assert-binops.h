@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -31,6 +31,25 @@ namespace cudf {
 namespace test {
 namespace binop {
 
+namespace {
+
+template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+bool test_equality(T lhs, T rhs)
+{
+    constexpr int ulp = 4; // value taken from google test
+    return !(std::abs(lhs-rhs) > std::numeric_limits<T>::epsilon() * std::abs(lhs+rhs) * ulp
+            && std::abs(lhs-rhs) >= std::numeric_limits<T>::min());
+}
+
+template <typename T, std::enable_if_t<!std::is_floating_point<T>::value>* = nullptr>
+bool test_equality(T lhs, T rhs)
+{
+    return lhs == rhs;
+}
+
+}   // namespace anonymous
+
+
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOp,
           typename ScalarType = cudf::experimental::scalar_type_t<TypeLhs>>
 void ASSERT_BINOP(column_view const& out,
@@ -45,7 +64,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (size_t i = 0; i < out_data.size(); ++i) {
-        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_h, rhs_data[i])));
+        ASSERT_TRUE(test_equality(out_data[i], static_cast<TypeOut>(op(lhs_h, rhs_data[i]))));
     }
 
     if (rhs.nullable()) {
@@ -87,7 +106,7 @@ void ASSERT_BINOP(column_view const& out,
 
     ASSERT_EQ(out_data.size(), lhs_data.size());
     for (size_t i = 0; i < out_data.size(); ++i) {
-        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_data[i], rhs_h)));
+        ASSERT_TRUE(test_equality(out_data[i], static_cast<TypeOut>(op(lhs_data[i], rhs_h))));
     }
 
     if (lhs.nullable()) {
@@ -130,7 +149,7 @@ void ASSERT_BINOP(column_view const& out,
     ASSERT_EQ(out_data.size(), lhs_data.size());
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (size_t i = 0; i < out_data.size(); ++i) {
-        ASSERT_EQ(out_data[i], (TypeOut)(op(lhs_data[i], rhs_data[i])));
+        ASSERT_TRUE(test_equality(out_data[i], static_cast<TypeOut>(op(lhs_data[i], rhs_data[i]))));
     }
 
     if (lhs.nullable() and rhs.nullable()) {
@@ -191,7 +210,7 @@ void ASSERT_BINOP(column_view const& out,
     ASSERT_EQ(out_data.size(), lhs_data.size());
     ASSERT_EQ(out_data.size(), rhs_data.size());
     for (decltype(out_data.size()) index = 0; index < out_data.size(); ++index) {
-        ASSERT_TRUE(abs(out_data[index] - (TypeOut)(op(lhs_data[index], rhs_data[index]))) < ULP);
+        ASSERT_TRUE(abs(out_data[index] - static_cast<TypeOut>(op(lhs_data[index], rhs_data[index]))) < ULP);
     }
 
     auto lhs_valid = lhs_h.second;
