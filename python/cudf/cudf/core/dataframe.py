@@ -4014,18 +4014,6 @@ class DataFrame(Frame):
 
         tables = self._partition(map_index, map_size, keep_index)
 
-        if map_size:
-            # Make sure map_size is >= the number of uniques in map_index
-            if len(tables) > map_size:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (len(tables), map_size)
-                )
-
-            # Append empty dataframes if map_size > len(tables)
-
-            for i in range(map_size - len(tables)):
-                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):
