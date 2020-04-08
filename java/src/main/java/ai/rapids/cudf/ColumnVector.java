@@ -1585,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }
