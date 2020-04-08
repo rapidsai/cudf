@@ -74,7 +74,7 @@ cdef extern from "nvtx3/nvToolsExt.h" nogil:
         nvtxDomainHandle_t domain,
         const nvtxEventAttributes_t* eventAttrib
     )
-    cdef int nvtxRangePop()
+    cdef int nvtxDomainRangePop(nvtxDomainHandle_t domain);
 
     cdef nvtxRangeId_t nvtxDomainRangeStartEx(
         nvtxDomainHandle_t domain,

@@ -44,8 +44,8 @@ class Range:
     >>> time.sleep(1)
     >>> nvtx.Range("my_inner_code_range").push()
     >>> time.sleep(2)
-    >>> nvtx.Range.pop()  # pops inner
-    >>> nvtx.Range.pop()  # pops outer
+    >>> nvtx.Range().pop()  # pops inner
+    >>> nvtx.Range().pop()  # pops outer
     """
 
     def __init__(self, message=None, color="blue", domain=None):
@@ -67,9 +67,8 @@ class Range:
     def push(self):
         libnvtx.range_push(self._attributes, self._domain.handle)
 
-    @classmethod
     def pop(self):
-        libnvtx.range_pop()
+        libnvtx.range_pop(self._domain.handle)
 
 
 @contextmanager
@@ -99,7 +98,7 @@ def annotate(*args, **kwargs):
     try:
         yield
     finally:
-        Range.pop()
+        rng.pop()
 
 
 _annotate = annotate

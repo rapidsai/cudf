@@ -10,6 +10,8 @@ cdef class EventAttributes:
     cdef nvtxEventAttributes_t c_obj
 
     def __init__(self, message=None, color=None):
+        if message is None:
+            message = ""
         self._message = message.encode("ascii")
         self._color = color
         self.c_obj = nvtxEventAttributes_t(0)
@@ -52,8 +54,8 @@ def range_push(EventAttributes attributes, DomainHandle domain):
     nvtxDomainRangePushEx(domain.c_obj, &attributes.c_obj)
 
 
-def range_pop():
-    nvtxRangePop()
+def range_pop(DomainHandle domain):
+    nvtxDomainRangePop(domain.c_obj)
 
 
 def range_start(EventAttributes attributes, DomainHandle domain):
