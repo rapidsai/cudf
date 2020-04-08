@@ -1,7 +1,7 @@
 from libc.stdint cimport uint16_t, uint32_t, uint64_t, int32_t, int64_t
 from libc.stddef cimport wchar_t
 
-cdef extern from "nvToolsExt.h" nogil:
+cdef extern from "nvtx3/nvToolsExt.h" nogil:
 
     cdef int NVTX_VERSION
     cdef int NVTX_EVENT_ATTRIB_STRUCT_SIZE
