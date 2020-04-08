@@ -58,6 +58,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 
 ## Bug Fixes
