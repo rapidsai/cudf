@@ -91,8 +91,7 @@ class writer::impl {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @return Size of current chunk offset
    */
   std::size_t write_chunked_begin();
 
