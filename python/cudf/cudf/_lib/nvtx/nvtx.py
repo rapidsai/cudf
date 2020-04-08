@@ -74,6 +74,26 @@ class Range:
 
 @contextmanager
 def annotate(*args, **kwargs):
+    """
+    Annotate a function or a code range.
+
+    Examples
+    --------
+    >>> import nvtx
+    >>> import time
+
+    Using a decorator:
+
+    >>> @nvtx.annotate("my_func", color="red", domain="cudf")
+    ... def func():
+    ...     time.sleep(0.1)
+
+    Using a context manager:
+
+    >>> with nvtx.annotate("my_code_range", color="blue"):
+    ...    time.sleep(10)
+    ...
+    """
     rng = Range(*args, **kwargs)
     rng.start()
     try:
