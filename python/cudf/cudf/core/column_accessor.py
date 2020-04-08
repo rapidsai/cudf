@@ -183,9 +183,9 @@ class ColumnAccessor(MutableMapping):
         """
         if deep:
             return self.__class__(
-                {k:v.copy(deep=True) for k,v in self._data.items()},
+                {k: v.copy(deep=True) for k, v in self._data.items()},
                 multiindex=self.multiindex,
-                level_names=self.level_names
+                level_names=self.level_names,
             )
         return self.__class__(
             self._data.copy(),
