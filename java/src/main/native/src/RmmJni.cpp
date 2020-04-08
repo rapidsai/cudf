@@ -284,6 +284,11 @@ class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
  logging_resource_adaptor(device_memory_resource* upstream, std::ostream * out, bool close_at_end): 
      upstream(upstream), out(out), close_at_end(close_at_end) {}
 
+ logging_resource_adaptor(logging_resource_adaptor const &) = delete;
+ logging_resource_adaptor(logging_resource_adaptor const &&) = delete;
+ void operator=(logging_resource_adaptor const &) = delete;
+ void operator=(logging_resource_adaptor &&) = delete;
+
  /**
   * @brief Return pointer to the upstream resource.
   *
