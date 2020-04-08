@@ -1,4 +1,4 @@
-from nvtx._lib.lib cimport *
+from cudf._lib.nvtx._lib.lib cimport *
 
 
 def initialize():

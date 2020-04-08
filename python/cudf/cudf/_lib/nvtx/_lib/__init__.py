@@ -1,4 +1,4 @@
-from nvtx._lib.lib import (
+from cudf._lib.nvtx._lib.lib import (
     DomainHandle,
     EventAttributes,
     initialize,
