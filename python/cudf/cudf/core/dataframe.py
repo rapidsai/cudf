@@ -250,8 +250,6 @@ class DataFrame(Frame):
                 # in `columns` that don't exist in `keys`:
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
-        else:
-            columns = pd.Index(data.keys(), tupleize_cols=True)
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -272,7 +270,11 @@ class DataFrame(Frame):
         for (i, col_name) in enumerate(data):
             self.insert(i, col_name, data[col_name])
 
-        self.columns = columns
+        if columns is not None:
+            self.columns = columns
+
+        if len(data) and all(isinstance(x, tuple) for x in data):
+            self._data.multiindex = True
 
     @classmethod
     def _from_table(cls, table, index=None):
