@@ -145,7 +145,7 @@ class parquet_column_view {
         break;
       case cudf::type_id::BOOL8:
         _physical_type = Type::BOOLEAN;
-        _stats_dtype = statistics_dtype::dtype_bool8;
+        _stats_dtype = statistics_dtype::dtype_bool;
         break;
       case cudf::type_id::TIMESTAMP_DAYS:
         _physical_type = Type::INT32;

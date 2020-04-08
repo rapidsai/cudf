@@ -119,7 +119,7 @@ struct dispatch_hex_to_integers_fn
 };
 
 template <>
-void dispatch_hex_to_integers_fn::operator()<experimental::bool8>(column_device_view const&, mutable_column_view&, cudaStream_t) const
+void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&, mutable_column_view&, cudaStream_t) const
 {
     CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
 }

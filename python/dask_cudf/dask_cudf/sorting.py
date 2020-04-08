@@ -42,7 +42,7 @@ def rearrange_by_hash(
     if npartitions and npartitions != df.npartitions:
         # Use main-line dask for new npartitions
         meta = df._meta._constructor_sliced([0])
-        partitions = df[columns].map_partitions(
+        partitions = df.map_partitions(
             set_partitions_hash, columns, npartitions, meta=meta
         )
         # Note: Dask will use a shallow copy for assign

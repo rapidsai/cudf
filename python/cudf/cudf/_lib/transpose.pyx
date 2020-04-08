@@ -4,14 +4,19 @@ import cudf
 from cudf.utils.dtypes import is_categorical_dtype
 
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
 
+from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-cimport cudf._lib.cpp.transpose as cpp_transpose
+from cudf._lib.cpp.transpose cimport (
+    transpose as cpp_transpose
+)
 
 
 def transpose(Table source):
@@ -42,15 +47,17 @@ def transpose(Table source):
     elif any(c.dtype != dtype for c in source._columns):
         raise ValueError('Columns must all have the same dtype')
 
-    cdef unique_ptr[table] c_result
+    cdef pair[unique_ptr[column], table_view] c_result
     cdef table_view c_input = source.data_view()
 
     with nogil:
-        c_result = move(cpp_transpose.transpose(c_input))
+        c_result = move(cpp_transpose(c_input))
 
-    result = Table.from_unique_ptr(
-        move(c_result),
-        column_names=cudf.core.index.RangeIndex(0, source._num_rows)
+    result_owner = Column.from_unique_ptr(move(c_result.first))
+    result = Table.from_table_view(
+        c_result.second,
+        owner=result_owner,
+        column_names=range(source._num_rows)
     )
 
     if cats is not None:
@@ -60,7 +67,8 @@ def transpose(Table source):
                     col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,
-                categories=cats
+                categories=cats,
+                offset=col.offset,
             ))
             for name, col in result._data.items()
         ])
