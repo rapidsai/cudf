@@ -389,17 +389,14 @@ def test_df_corr():
     utils.assert_eq(got, expected)
 
 
-def test_nans_stats():
+@pytest.mark.parametrize(
+    "ops", ["mean", "min", "max", "sum", "product", "var", "std"]
+)
+def test_nans_stats(ops):
     from cudf.tests import utils
 
     data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, 5, 2, 3, -100]
     psr = pd.Series(data)
     gsr = Series(data, nan_as_null=False)
 
-    utils.assert_eq(psr.mean(), gsr.mean())
-    utils.assert_eq(psr.min(), gsr.min())
-    utils.assert_eq(psr.max(), gsr.max())
-    utils.assert_eq(psr.sum(), gsr.sum())
-    utils.assert_eq(psr.product(), gsr.product())
-    utils.assert_eq(psr.var(), gsr.var())
-    utils.assert_eq(psr.std(), gsr.std())
+    utils.assert_eq(getattr(psr, ops)(), getattr(gsr, ops)())
