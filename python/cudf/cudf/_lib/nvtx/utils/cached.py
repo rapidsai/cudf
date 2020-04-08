@@ -1,4 +1,3 @@
-
 class CachedInstanceMeta(type):
     __instances = {}
 

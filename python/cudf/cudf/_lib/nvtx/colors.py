@@ -24,8 +24,10 @@ def color_to_hex(color):
     try:
         import matplotlib.colors
     except ImportError as e:
-        raise TypeError(f"Invalid color {color}. Please install matplotlib "
-                        "for additional colors support") from e
+        raise TypeError(
+            f"Invalid color {color}. Please install matplotlib "
+            "for additional colors support"
+        ) from e
     rgba = matplotlib.colors.to_rgba(color)
     argb = (rgba[-1], rgba[0], rgba[1], rgba[2])
     return int(matplotlib.colors.to_hex(argb, keep_alpha=True)[1:], 16)

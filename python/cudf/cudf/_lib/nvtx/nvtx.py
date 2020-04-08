@@ -47,10 +47,10 @@ class Range:
     >>> nvtx.Range.pop()  # pops inner
     >>> nvtx.Range.pop()  # pops outer
     """
+
     def __init__(self, message=None, color="blue", domain=None):
         self._attributes = libnvtx.EventAttributes(
-            message,
-            color_to_hex(color)
+            message, color_to_hex(color)
         )
         self._domain = Domain(domain)
 

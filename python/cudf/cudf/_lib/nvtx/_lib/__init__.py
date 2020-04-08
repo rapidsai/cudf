@@ -5,5 +5,5 @@ from nvtx._lib.lib import (
     range_pop,
     range_push,
     range_start,
-    range_end
+    range_end,
 )
