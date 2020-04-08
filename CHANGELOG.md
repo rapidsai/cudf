@@ -61,6 +61,7 @@
 - PR #4842 Added Java bindings for titlizing a String column
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 
 ## Bug Fixes
 
@@ -110,6 +111,7 @@
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4838 Fix to support empty inputs to `replace` method
 
 
