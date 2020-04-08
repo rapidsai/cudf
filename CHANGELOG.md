@@ -49,6 +49,7 @@
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4783 Add support for child columns to mutable_column_device_view
 - PR #4802 Refactor `cudf::transpose` to increase performance.
 - PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
 - PR #4793 Add `cudf._cuda` to setup.py
@@ -57,6 +58,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 
 ## Bug Fixes
 
