@@ -74,8 +74,10 @@ namespace parquet {
          stream{str}
       {
          if (set_metadata == SetMetadata::WITH_NULLABILITY) {
-            user_metadata_with_nullability = *metadata_with_nullability;
-            user_metadata                  = &(this->user_metadata_with_nullability);
+            if (metadata_with_nullability != nullptr) {
+               user_metadata_with_nullability = *metadata_with_nullability;
+               user_metadata                  = &(this->user_metadata_with_nullability);
+            }
          } else {
             user_metadata = metadata;
          }
