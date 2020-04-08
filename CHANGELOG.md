@@ -107,6 +107,7 @@
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4846 Fix CSV parsing with byte_range parameter and string columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)
