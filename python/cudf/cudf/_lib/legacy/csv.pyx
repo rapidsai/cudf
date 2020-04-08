@@ -6,14 +6,12 @@ from cudf._lib.legacy.cudf cimport *
 from cudf._lib.legacy.cudf import *
 from cudf._lib.legacy.utils cimport *
 from cudf._lib.legacy.utils import *
-from cudf._lib.nvtx import (
-    range_push as nvtx_range_push,
-    range_pop as nvtx_range_pop
-)
 from cudf._lib.legacy.includes.csv cimport (
     reader as csv_reader,
     reader_options as csv_reader_options
 )
+import cudf._lib as libcudf
+
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -90,7 +88,7 @@ cpdef read_csv(
     if delimiter is None:
         delimiter = sep
 
-    nvtx_range_push("CUDF_READ_CSV", "PURPLE")
+    libcudf.nvtx.Range("CUDF_READ_CSV", "PURPLE").push()
 
     # Setup reader options
     cdef csv_reader_options args = csv_reader_options()
@@ -243,7 +241,7 @@ cpdef read_csv(
         else:
             df = df.set_index(index_col)
 
-    nvtx_range_pop()
+    libcudf.nvtx.Range.pop()
 
     return df
 
@@ -328,6 +326,6 @@ cpdef write_csv(
     for c_col in list_cols:
         free_column(c_col)
 
-    nvtx_range_pop()
+    libcudf.nvtx.Range.pop()
 
     return None

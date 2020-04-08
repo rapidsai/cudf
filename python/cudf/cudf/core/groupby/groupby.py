@@ -8,7 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib.groupby as libgroupby
-from cudf._lib.nvtx import range_pop, range_push
+import cudf._lib as libcudf
 
 
 class GroupBy(object):
@@ -135,7 +135,7 @@ class GroupBy(object):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        range_push("CUDF_GROUPBY", "purple")
+        libcudf.nvtx.Range("CUDF_GROUPBY", "purple").push()
 
         normalized_aggs = self._normalize_aggs(func)
 
@@ -175,7 +175,7 @@ class GroupBy(object):
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 
-        range_pop()
+        libcudf.nvtx.Range.pop()
         return result
 
     aggregate = agg

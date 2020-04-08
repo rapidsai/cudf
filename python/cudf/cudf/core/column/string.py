@@ -2209,9 +2209,9 @@ class StringColumn(column.ColumnBase):
 
 
 def _string_column_binop(lhs, rhs, op, out_dtype):
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
+    libcudf.nvtx.Range("CUDF_BINARY_OP", "orange").push()
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    libcudf.nvtx.range_pop()
+    libcudf.nvtx.Range.pop()
     return out
 
 
