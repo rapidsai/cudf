@@ -4004,7 +4004,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if "debug" in kwargs and map_size is not None:
+        if kwargs.get("debug", False) == True and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
