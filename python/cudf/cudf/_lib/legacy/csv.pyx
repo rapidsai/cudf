@@ -263,7 +263,7 @@ cpdef write_csv(
     cudf.io.csv.write_csv
     """
 
-    nvtx_range_push("CUDF_WRITE_CSV", "PURPLE")
+    nvtx.Range("CUDF_WRITE_CSV", "PURPLE").push()
 
     from cudf.core.series import Series
 
