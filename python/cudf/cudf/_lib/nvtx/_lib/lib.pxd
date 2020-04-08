@@ -5,7 +5,7 @@ cdef extern from "nvToolsExt.h" nogil:
 
     cdef int NVTX_VERSION
     cdef int NVTX_EVENT_ATTRIB_STRUCT_SIZE
-    
+
     cdef void nvtxInitialize(const void* reserved)
 
     cdef struct nvtxDomainRegistration_st:
@@ -14,18 +14,18 @@ cdef extern from "nvToolsExt.h" nogil:
         pass
     ctypedef nvtxDomainRegistration_st nvtxDomainRegistration
     ctypedef nvtxDomainRegistration* nvtxDomainHandle_t
-    
+
     cdef struct nvtxStringRegistration_st:
         pass
     ctypedef nvtxStringRegistration_st nvtxStringRegistration
     ctypedef nvtxStringRegistration* nvtxStringHandle_t
-    
-    ctypedef uint64_t nvtxRangeId_t;
+
+    ctypedef uint64_t nvtxRangeId_t
 
     ctypedef enum nvtxColorType_t:
         NVTX_COLOR_UNKNOWN = 0
         NVTX_COLOR_ARGB = 1
-        
+
     ctypedef enum nvtxMessageType_t:
         NVTX_MESSAGE_UNKNOWN = 0
         NVTX_MESSAGE_TYPE_ASCII = 1
@@ -36,7 +36,7 @@ cdef extern from "nvToolsExt.h" nogil:
         const char* ascii
         const wchar_t* unicode
         nvtxStringHandle_t registered
-        
+
     ctypedef enum nvtxPayloadType_t:
         NVTX_PAYLOAD_UNKNOWN = 0
         NVTX_PAYLOAD_TYPE_UNSIGNED_INT64 = 1
@@ -53,7 +53,7 @@ cdef extern from "nvToolsExt.h" nogil:
         uint32_t uiValue
         int32_t iValue
         float fValue
-        
+
     ctypedef struct nvtxEventAttributes_v2:
         uint16_t version
         uint16_t size
@@ -67,15 +67,15 @@ cdef extern from "nvToolsExt.h" nogil:
 
     ctypedef nvtxEventAttributes_v2 nvtxEventAttributes_t
 
-    cdef nvtxDomainHandle_t nvtxDomainCreateA(const char* name);
+    cdef nvtxDomainHandle_t nvtxDomainCreateA(const char* name)
     cdef void nvtxDomainDestroy(nvtxDomainHandle_t domain)
-    
+
     cdef int nvtxDomainRangePushEx(
         nvtxDomainHandle_t domain,
         const nvtxEventAttributes_t* eventAttrib
     )
     cdef int nvtxRangePop()
-    
+
     cdef nvtxRangeId_t nvtxDomainRangeStartEx(
         nvtxDomainHandle_t domain,
         const nvtxEventAttributes_t* eventAttrib

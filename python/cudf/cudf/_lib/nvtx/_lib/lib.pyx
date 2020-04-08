@@ -40,20 +40,25 @@ cdef class DomainHandle:
     def __dealloc__(self):
         nvtxDomainDestroy(self.c_obj)
 
+
 cdef class RangeId:
     cdef nvtxRangeId_t c_obj
 
     def __cinit__(self, uint64_t range_id):
         self.c_obj = range_id
-        
+
+
 def range_push(EventAttributes attributes, DomainHandle domain):
     nvtxDomainRangePushEx(domain.c_obj, &attributes.c_obj)
+
 
 def range_pop():
     nvtxRangePop()
 
+
 def range_start(EventAttributes attributes, DomainHandle domain):
     return RangeId(nvtxDomainRangeStartEx(domain.c_obj, &attributes.c_obj))
+
 
 def range_end(RangeId r_id, DomainHandle domain):
     nvtxDomainRangeEnd(domain.c_obj, r_id.c_obj)
