@@ -298,7 +298,7 @@ cudf::size_type get_output_size(cudf::size_type * block_counts,
   if (num_blocks > 1)
     cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
                     sizeof(cudf::size_type), cudaMemcpyDefault, stream);
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaStreamSynchronize(stream));
   return last_block_count + last_block_offset;
 }
 

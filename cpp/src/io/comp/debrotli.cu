@@ -2158,7 +2158,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs, gpu_inflate_statu
     while (cur < fb_heap_size && !(cur & 3))
     {
         cudaMemcpyAsync(&dump[0], scratch_u8 + cur, 2*sizeof(uint32_t), cudaMemcpyDeviceToHost, stream);
-        cudaStreamSynchronize(stream);
+        CUDA_TRY(cudaStreamSynchronize(stream));
         printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
         cur = (dump[0] > cur) ? dump[0] : 0xffffffffu;
     }

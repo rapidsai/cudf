@@ -172,7 +172,7 @@ std::pair<bit_container*, size_type> valid_if(
         sizeof(size_type), cudaMemcpyDeviceToHost, stream));
   
   // Synchronize the stream before null_count is updated on the host.
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaStreamSynchronize(stream));
   size_type null_count = num_bits - valid_count_host;
 
   CHECK_CUDA(stream);

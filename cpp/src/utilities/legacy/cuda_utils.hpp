@@ -79,8 +79,9 @@ struct scoped_stream {
     ~scoped_stream() {
         if (not std::uncaught_exception()) {
             auto synch_result = cudaStreamSynchronize(stream_);
+            assert(synch_result == cudaSuccess);
             if (synch_result == cudaSuccess) {
-                 cudaStreamDestroy(stream_);
+                 assert(cudaStreamDestroy(stream_) == cudaSuccess);
             }
         }
     }
