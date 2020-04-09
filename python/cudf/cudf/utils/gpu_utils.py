@@ -1,4 +1,12 @@
 def validate_setup():
+    import os
+
+    # TODO: Remove the following check once we arrive at a solution for #4827
+    # This is a temporary workaround to unblock internal testing
+    # related issue: https://github.com/rapidsai/cudf/issues/4827
+    if "DASK_PARENT" in os.environ:
+        return
+
     from cudf._cuda.gpu import (
         getDeviceCount,
         driverGetVersion,
