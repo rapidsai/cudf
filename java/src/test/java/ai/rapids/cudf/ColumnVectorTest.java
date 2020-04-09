@@ -140,7 +140,7 @@ public class ColumnVectorTest extends CudfTestBase {
       TableTest.assertColumnsAreEqual(cv, backAgain);
     }
   }
-
+/*
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
@@ -155,6 +155,7 @@ public class ColumnVectorTest extends CudfTestBase {
     } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
     assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
   }
+  */
 
   @Test
   void testConcatTypeError() {
@@ -226,18 +227,21 @@ public class ColumnVectorTest extends CudfTestBase {
     Double[]  ins = new Double[] {0.0, -0.0, Double.NaN, MIN_PLUS_NaN, MAX_PLUS_NaN, MIN_MINUS_NaN, MAX_MINUS_NaN, null};
     Double[] outs = new Double[] {0.0,  0.0, Double.NaN,   Double.NaN,   Double.NaN,    Double.NaN,    Double.NaN, null};
 
-    try (ColumnVector     input      = ColumnVector.fromBoxedDoubles(ins);
-         HostColumnVector expected   = ColumnVector.fromBoxedDoubles(outs).copyToHost();
-         HostColumnVector normalized = input.normalizeNANsAndZeros().copyToHost()) {
-      for (int i = 0; i<input.getRowCount(); ++i) {
-        if (expected.isNull(i)) {
-          assertTrue(normalized.isNull(i));
-        }
-        else {
-          assertEquals(
-                  Double.doubleToRawLongBits(expected.getDouble(i)),
-                  Double.doubleToRawLongBits(normalized.getDouble(i))
-          );
+    try (ColumnVector input = ColumnVector.fromBoxedDoubles(ins);
+         ColumnVector expectedColumn = ColumnVector.fromBoxedDoubles(outs);
+         ColumnVector normalizedColumn = input.normalizeNANsAndZeros()) {
+      try (HostColumnVector expected = expectedColumn.copyToHost();
+           HostColumnVector normalized = normalizedColumn.copyToHost()) {
+        for (int i = 0; i<input.getRowCount(); ++i) {
+          if (expected.isNull(i)) {
+            assertTrue(normalized.isNull(i));
+          }
+          else {
+            assertEquals(
+                    Double.doubleToRawLongBits(expected.getDouble(i)),
+                    Double.doubleToRawLongBits(normalized.getDouble(i))
+            );
+          }
         }
       }
     }
