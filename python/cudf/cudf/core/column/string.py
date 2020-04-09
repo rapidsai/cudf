@@ -114,7 +114,7 @@ from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty
-from cudf.utils import utils
+from cudf.utils import utils, cudautils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
 _str_to_numeric_typecast_functions = {
