@@ -179,7 +179,7 @@ class ColumnAccessor(MutableMapping):
 
     def copy(self, deep=False):
         """
-        Make a (shallow) copy of this ColumnAccessor.
+        Make a copy of this ColumnAccessor.
         """
         if deep:
             return self.__class__(
