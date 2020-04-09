@@ -96,12 +96,5 @@ def test_series_dataframe__array__(data, dtype):
         assert_eq(
             ps.__array__(dtype=dtype).astype(dtype), gs.__array__(dtype=dtype)
         )
-        assert (
-            ps.__array__(dtype=dtype).astype(dtype).dtype
-            == gs.__array__(dtype=dtype).dtype
-        )
     else:
         assert_eq(ps.__array__(dtype=dtype), gs.__array__(dtype=dtype))
-        assert (
-            ps.__array__(dtype=dtype).dtype == gs.__array__(dtype=dtype).dtype
-        )
