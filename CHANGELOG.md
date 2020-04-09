@@ -121,6 +121,7 @@
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
+- PR #4868 Temporary fix to skip validation on Dask related runs
 
 
 # cuDF 0.13.0 (31 Mar 2020)
