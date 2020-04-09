@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/padding.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 
@@ -197,6 +198,7 @@ std::unique_ptr<column> pad( strings_column_view const& strings,
                              std::string const& fill_char,
                              rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::pad(strings,width,side,fill_char,mr);
 }
 
@@ -204,6 +206,7 @@ std::unique_ptr<column> zfill( strings_column_view const& strings,
                                size_type width,
                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::zfill(strings,width,mr);
 }
 

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -334,9 +334,9 @@ public class TimestampColumnVectorTest extends CudfTestBase {
          ColumnVector us_expected = applyAndClose(mulThouAndClose(ColumnVector.fromLongs(TIMES_US), 1), cv -> cv.asTimestampNanoseconds());
          ColumnVector ns_expected = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
          ColumnVector s_result = s_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S");
-         ColumnVector ms_result = ms_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f");
-         ColumnVector us_result = us_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f");
-         ColumnVector ns_result = ns_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f")) {
+         ColumnVector ms_result = ms_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%9f");
+         ColumnVector us_result = us_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%9f");
+         ColumnVector ns_result = ns_string_times.asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%d %H:%M:%S.%9f")) {
       assertColumnsAreEqual(s_expected, s_result);
       assertColumnsAreEqual(ms_expected, ms_result);
       assertColumnsAreEqual(us_expected, us_result);
