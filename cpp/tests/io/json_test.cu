@@ -492,4 +492,14 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint) {
   ASSERT_EQ(0u, col_data.second[0]);
 }
 
+TEST_F(JsonReaderTest, StringInference) {
+  std::string buffer = "[\"-1\"]";
+  cudf_io::read_json_args in_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};  
+  in_args.lines = true; 
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);  
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  
+}
+
 CUDF_TEST_PROGRAM_MAIN()
