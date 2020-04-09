@@ -327,7 +327,7 @@ class ColumnBase(Column):
             The values in the series converted to a :class:`numpy.ndarary`
             with the specified `dtype`.
         """
-        array = self.to_array()
+        array = self.to_array(fillna=np.nan)
         if dtype is not None:
             array = array.astype(dtype)
         return array
