@@ -1,8 +1,13 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
+import os  # isort:skip
 
-from cudf.utils.gpu_utils import validate_setup  # isort:skip
+# TODO: Remove the following check once we arrive at a solution for #4827
+# This is a temporary workaround to unblock internal testing
+# related issue: https://github.com/rapidsai/cudf/issues/4827
+if "DASK_PARENT" not in os.environ:
+    from cudf.utils.gpu_utils import validate_setup
 
-validate_setup()
+    validate_setup()
 
 import cupy
 
