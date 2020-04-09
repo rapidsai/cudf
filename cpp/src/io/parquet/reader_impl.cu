@@ -678,7 +678,6 @@ table_with_metadata reader::impl::read(size_type skip_rows, size_type num_rows, 
               _source->get_buffer(offset, col_meta.total_compressed_size);
           page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
           d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
-          CUDA_TRY(cudaStreamSynchronize(stream));
         }
         chunks.insert(gpu::ColumnChunkDesc(
             col_meta.total_compressed_size, d_compdata, col_meta.num_values,
