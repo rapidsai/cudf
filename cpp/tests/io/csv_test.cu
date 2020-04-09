@@ -632,4 +632,14 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint) {
   ASSERT_EQ(0u, col_data.second[0]);
 }
 
+TEST_F(CsvReaderTest, StringInference) {
+  std::string buffer = "\"-1\"\n";
+  cudf_io::read_csv_args in_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};
+  in_args.header = -1;
+  const auto result = cudf_io::read_csv(in_args);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);  
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  
+}
+
 CUDF_TEST_PROGRAM_MAIN()
