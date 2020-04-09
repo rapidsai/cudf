@@ -53,7 +53,7 @@ def push_range(message=None, color=None, domain=None):
         A message associated with the annotated code range.
     color : str, color
         A color associated with the annotated code range.
-        Supports 
+        Supports
     domain : str
         Name of a domain under which the code range is scoped.
         The default domain is called "NVTX".
