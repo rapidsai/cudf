@@ -498,7 +498,6 @@ TEST_F(JsonReaderTest, StringInference) {
   in_args.lines = true; 
   cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
 
-  // Booleans are the same (integer) data type, but valued at 0 or 1
   const auto view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);  
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  

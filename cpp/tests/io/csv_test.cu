@@ -638,7 +638,6 @@ TEST_F(CsvReaderTest, StringInference) {
   in_args.header = -1;
   const auto result = cudf_io::read_csv(in_args);
 
-  // Booleans are the same (integer) data type, but valued at 0 or 1
   const auto view = result.tbl->view();
   EXPECT_EQ(result.tbl->num_columns(), 1);  
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  
