@@ -155,7 +155,6 @@ public class ColumnVectorTest extends CudfTestBase {
     } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
     assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
   }
- 
 
   @Test
   void testConcatTypeError() {
