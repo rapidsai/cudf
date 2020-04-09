@@ -361,29 +361,45 @@ def test_string_len(ps_gs):
         ["f", "g", "h", "i", "j"],
         ("f", "g", "h", "i", "j"),
         pd.Series(["f", "g", "h", "i", "j"]),
-        pd.Index(["f", "g", "h", "i", "j"]),
-        (["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]),
-        [["f", "g", "h", "i", "j"], ["f", "g", "h", "i", "j"]],
-        (
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["1", "2", "3", "4", "5"]),
-            ["f", "a", "b", "f", "a"],
+        # xref pandas-dev/#33436
+        pytest.param(
             pd.Index(["f", "g", "h", "i", "j"]),
+            marks=pytest.mark.xfail(reason="Pandas bug"),
+        ),
+        (
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ),
         [
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Series(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
-            ["f", "a", "b", "f", "a"],
-            pd.Index(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
+            np.array(["f", "g", "h", "i", "j"]),
         ],
+        pytest.param(
+            (
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["1", "2", "3", "4", "5"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ),
+            marks=pytest.mark.xfail(reason="Pandas bug"),
+        ),
+        pytest.param(
+            [
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Series(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+                np.array(["f", "a", "b", "f", "a"]),
+                pd.Index(["f", "g", "h", "i", "j"]),
+            ],
+            marks=pytest.mark.xfail(reason="Pandas bug"),
+        ),
     ],
 )
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
@@ -1832,13 +1848,14 @@ def test_string_str_decode_url(data):
     expected = pd.Series([urllib.parse.unquote(url) for url in data])
     assert_eq(expected, got)
 
+
 def test_to_pandas_nullable_string():
-    gsr_not_null = Series(['a','b','c'])
-    gsr_has_null = Series(['a','b', None])
+    gsr_not_null = Series(["a", "b", "c"])
+    gsr_has_null = Series(["a", "b", None])
 
     # pandas initally casts to object for backwards compatibility
-    psr_not_null = pd.Series(['a', 'b', 'c'], dtype=pd.StringDtype())
-    psr_has_null = pd.Series(['a', 'b', None], dtype=pd.StringDtype())
+    psr_not_null = pd.Series(["a", "b", "c"], dtype=pd.StringDtype())
+    psr_has_null = pd.Series(["a", "b", None], dtype=pd.StringDtype())
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
     assert_eq(gsr_has_null.to_pandas(), psr_has_null)
