@@ -479,7 +479,7 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
       start = seek_field_name_end(data, opts, start, stop);
     }
     auto field_start = start;
-    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, start, stop);
+    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
     trim_field_start_end(data, &field_start, &field_data_last);
     const int field_len = field_data_last - field_start + 1;
@@ -491,7 +491,7 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
       atomicAdd(&column_infos[col].null_count, 1);
       continue;
     }
-    // Don't need counts detect strings, skip the rest of parsing if the field is in quotes
+    // Don't need counts to detect strings, any field in quotes is deduced to be a string
     if (data[field_start] == opts.quotechar && data[field_data_last] == opts.quotechar){
       atomicAdd(&column_infos[col].string_count, 1);
       continue;
