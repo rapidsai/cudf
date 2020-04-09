@@ -250,8 +250,6 @@ class DataFrame(Frame):
                 # in `columns` that don't exist in `keys`:
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
-        else:
-            columns = pd.Index(data.keys(), tupleize_cols=True)
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -269,10 +267,16 @@ class DataFrame(Frame):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data):
+            self._data.multiindex = True
+            for (i, col_name) in enumerate(data):
+                self._data.multiindex = self._data.multiindex and isinstance(
+                    col_name, tuple
+                )
+                self.insert(i, col_name, data[col_name])
 
-        self.columns = columns
+        if columns is not None:
+            self.columns = columns
 
     @classmethod
     def _from_table(cls, table, index=None):
@@ -1580,19 +1584,8 @@ class DataFrame(Frame):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
-        data = OrderedDict()
-
-        if deep:
-            index = self._index.copy(deep)
-            for k in self._data:
-                data[k] = self._data[k].copy(deep)
-        else:
-            index = self._index
-            for k in self._data:
-                data[k] = self._data[k]
-
-        out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-        out.index = index
+        out = DataFrame(data=self._data.copy(deep=deep))
+        out.index = self.index.copy(deep=deep)
         return out
 
     def __copy__(self):

@@ -60,6 +60,7 @@
 - PR #4817 Fix `fixed_point` documentation
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4851 Performance improvements relating to `concat` 
 - PR #4852 Add NVTX range calls to strings and nvtext APIs
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
