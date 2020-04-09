@@ -143,6 +143,7 @@
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
         <cxx11.abi.value>ON</cxx11.abi.value>
+        <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
     </properties>
 
     <profiles>
@@ -326,6 +327,7 @@
                                       failonerror="true"
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
+                                    <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
@@ -377,12 +379,18 @@
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
                             def cm = libcudart.matcher(sout)
                             if (cm.find()) {
+                                if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
+                                    println(pom.properties['CUDA_STATIC_RUNTIME'])
+                                    fail("found libcudart when we expect to be statically linked to it")
+                                }
                                 def classifier = 'cuda' + cm.group(1)
                                   .replaceFirst(/\\./, '-') // First . becomes a -
                                   .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
                                   .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
                                 pom.properties['cuda.classifier'] = classifier
                                 println 'WARNING FOUND libcudart this means your jar will only work against a single version of the cuda runtime ' + classifier
+                            } else if (pom.properties['CUDA_STATIC_RUNTIME'] == 'OFF') {
+                                fail('could not find libcudart when we expect to be dynamically linked to it')
                             } else {
                                 pom.properties['cuda.classifier'] = ''
                             }

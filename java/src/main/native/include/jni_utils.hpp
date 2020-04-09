@@ -738,6 +738,10 @@ JNIEnv* get_jni_env(JavaVM* jvm);
 
 #define CATCH_STD(env, ret_val)                                                                    \
   catch (const std::bad_alloc &e) {                                                                \
+    /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
+    if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
+         cudaGetLastError();                                                                       \
+    }                                                                                              \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \
