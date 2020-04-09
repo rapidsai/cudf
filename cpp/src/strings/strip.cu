@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 
@@ -163,6 +164,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
                                string_scalar const& to_strip,
                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::strip(strings, stype, to_strip, mr);
 }
 
