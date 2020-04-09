@@ -26,12 +26,120 @@ using rmm::mr::device_memory_resource;
 
 namespace {
 
+// Alignment to which the RMM memory resource will round allocation sizes
+constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 512;
+
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
+
+/**
+ * @brief An RMM device memory resource that delegates to another resource
+ * while tracking the amount of memory allocated.
+ *
+ * @tparam Upstream Type of memory resource that will be wrapped.
+ * @tparam size_align The size to which all allocation requests are
+ * aligned. Must be a value >= 1.
+ */
+template <typename Upstream>
+class tracking_resource_adaptor final : public device_memory_resource {
+public:
+  /**
+   * @brief Constructs a new tracking resource adaptor that delegates to
+   * `mr` for all allocation operations while tracking the amount of memory
+   * allocated.
+   *
+   * @param mr The resource to use for memory allocation operations.
+   * @param size_alignment The alignment to which the `mr` resource will
+   * round up all memory allocation size requests.
+   */
+  tracking_resource_adaptor(Upstream* mr, std::size_t size_alignment)
+      : resource{mr}, size_align{size_alignment} {}
+
+  Upstream* get_wrapped_resource() {
+    return resource;
+  }
+
+  std::size_t get_total_allocated() {
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+    return total_allocated;
+  }
+
+private:
+  Upstream* const resource;
+  std::size_t const size_align;
+  std::size_t total_allocated{0};
+
+  // map and associated lock to track memory sizes by address
+  // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
+  //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
+  //       should be updated to be atomic.
+  std::unordered_map<void*, std::size_t> size_map{};
+  std::mutex size_map_mutex{};
+
+
+  void* do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+    // adjust size of allocation based on specified size alignment
+    num_bytes = (num_bytes + size_align - 1) / size_align * size_align;
+
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+
+    auto result = resource->allocate(num_bytes, stream);
+    if (result) {
+      total_allocated += num_bytes;
+      size_map[result] = num_bytes;
+    }
+    return result;
+  }
+
+  void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+
+    resource->deallocate(p, size, stream);
+
+    if (p) {
+      // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
+      //       see https://github.com/rapidsai/rmm/issues/302
+      auto it = size_map.find(p);
+      if (it != size_map.end()) {
+        total_allocated -= it->second;
+        size_map.erase(it);
+      } else {
+        // Untracked size, may be an allocation from before resource was installed.
+      }
+    }
+  }
+
+  bool supports_get_mem_info() const noexcept override {
+    return resource->supports_get_mem_info();
+  }
+
+  std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
+    return resource->get_mem_info(stream);
+  }
+
+  bool supports_streams() const noexcept override {
+    return resource->supports_streams();
+  }
+};
+
+
+std::unique_ptr<tracking_resource_adaptor<device_memory_resource>> Tracking_memory_resource{};
+
+
+/**
+ * @brief Return the total amount of device memory allocated via RMM
+ */
+std::size_t get_total_bytes_allocated() {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->get_total_allocated();
+  }
+  return 0;
+}
+
 
 /**
  * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
  * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
- **/
+ */
 class java_event_handler_memory_resource final : public device_memory_resource {
 public:
   java_event_handler_memory_resource(
@@ -97,15 +205,6 @@ private:
   std::vector<std::size_t> alloc_thresholds{};
   std::vector<std::size_t> dealloc_thresholds{};
 
-  std::size_t total_allocated{0};
-
-  // map and associated lock to track memory sizes by address
-  // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
-  //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
-  //       should be updated to be atomic.
-  std::unordered_map<void*, std::size_t> size_map{};
-  std::mutex size_map_mutex{};
-
 
   static void update_thresholds(JNIEnv* env, std::vector<std::size_t>& thresholds, jlongArray from_java) {
     thresholds.clear();
@@ -162,9 +261,11 @@ private:
   }
 
   void* do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+    std::size_t total_before;
     void* result;
     while (true) {
       try {
+        total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (std::bad_alloc const& e) {
@@ -173,16 +274,8 @@ private:
         }
       }
     }
+    auto total_after = get_total_bytes_allocated();
 
-    std::size_t total_before;
-    std::size_t total_after;
-    {
-      std::lock_guard<std::mutex> lock(size_map_mutex);
-      total_before = total_allocated;
-      total_allocated += num_bytes;
-      total_after = total_allocated;
-      size_map[result] = num_bytes;
-    }
     try {
       check_for_threshold_callback(total_before, total_after, alloc_thresholds,
           on_alloc_threshold_method, "onAllocThreshold", total_after);
@@ -196,25 +289,9 @@ private:
   }
 
   void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
+    auto total_before = get_total_bytes_allocated();
     resource->deallocate(p, size, stream);
-
-    std::size_t total_before;
-    std::size_t total_after;
-    {
-      std::lock_guard<std::mutex> lock(size_map_mutex);
-      total_before = total_allocated;
-      // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
-      //       see https://github.com/rapidsai/rmm/issues/302
-      auto it = size_map.find(p);
-      if (it != size_map.end()) {
-        total_allocated -= it->second;
-        size_map.erase(it);
-      } else {
-        // Untracked size, may be due to allocation that occurred before handler was installed.
-      }
-      total_after = total_allocated;
-    }
-
+    auto total_after = get_total_bytes_allocated();
     check_for_threshold_callback(total_after, total_before, dealloc_thresholds,
         on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
@@ -283,6 +360,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     opts.enable_logging = enable_logging == JNI_TRUE;
     opts.initial_pool_size = pool_size;
     JNI_RMM_TRY(env, , rmmInitialize(&opts));
+    auto resource = rmm::mr::get_default_resource();
+    Tracking_memory_resource.reset(
+        new tracking_resource_adaptor<device_memory_resource>(resource, RMM_ALLOC_SIZE_ALIGNMENT));
+    auto replaced_resource = rmm::mr::set_default_resource(Tracking_memory_resource.get());
+    if (resource != replaced_resource) {
+      rmm::mr::set_default_resource(replaced_resource);
+      Tracking_memory_resource.reset(nullptr);
+      JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
+          "Concurrent modification detected while installing memory resource", );
+    }
   } CATCH_STD(env, )
 }
 
@@ -295,8 +382,22 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitializedInternal(JNIEnv 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
+
+    auto resource = Tracking_memory_resource.get();
+    auto old_resource = rmm::mr::set_default_resource(Tracking_memory_resource->get_wrapped_resource());
+    Tracking_memory_resource.reset(nullptr);
+    if (old_resource != resource) {
+      rmm::mr::set_default_resource(old_resource);
+      JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
+          "Concurrent modification detected while removing tracking memory resource", );
+    }
+
     JNI_RMM_TRY(env, , rmmFinalize());
   } CATCH_STD(env, )
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv* env, jclass) {
+  return get_total_bytes_allocated();
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz, jlong size,

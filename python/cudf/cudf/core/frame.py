@@ -159,7 +159,7 @@ class Frame(libcudf.table.Table):
         # missing a column, that list will have None in the slot instead
         columns = [
             ([] if ignore_index else list(f._index._data.columns))
-            + [f[name]._column if name in f else None for name in names]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -583,6 +583,10 @@ class Frame(libcudf.table.Table):
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
+
+        if npartitions:
+            for i in range(npartitions - len(result)):
+                result.append(self._empty_like(keep_index))
 
         return result
 
