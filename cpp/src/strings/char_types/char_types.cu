@@ -24,6 +24,8 @@
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 
+#include <thrust/logical.h>
+
 //
 namespace cudf
 {
@@ -79,6 +81,98 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
     return results;
 }
 
+std::unique_ptr<column> is_integer( strings_column_view const& strings,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                    cudaStream_t stream = 0)
+{
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_column = *strings_column;
+    // create output column
+    auto results = make_numeric_column( data_type{BOOL8}, strings.size(),
+        copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
+    auto d_results = results->mutable_view().data<bool>();
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(strings.size()),
+        d_results,
+        [d_column] __device__(size_type idx){
+            if( d_column.is_null(idx) )
+                return false;
+            auto d_str = d_column.element<string_view>(idx);
+            if( d_str.empty() )
+                return false;
+            auto begin = d_str.begin();
+            if( *begin=='+' || *begin=='-' )
+                ++begin;
+            return thrust::all_of( thrust::seq, begin, d_str.end(),
+                [] __device__ (auto chr) { return chr >='0' && chr <= '9'; });
+        });
+    //
+    results->set_null_count(strings.null_count());
+    return results;
+}
+
+std::unique_ptr<column> is_float( strings_column_view const& strings,
+                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                                  cudaStream_t stream = 0)
+{
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_column = *strings_column;
+    // create output column
+    auto results = make_numeric_column( data_type{BOOL8}, strings.size(),
+        copy_bitmask(strings.parent(),stream,mr), strings.null_count(), stream, mr);
+    auto d_results = results->mutable_view().data<bool>();
+    // check strings for valid float chars
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(strings.size()),
+        d_results,
+        [d_column] __device__(size_type idx){
+            if( d_column.is_null(idx) )
+                return false;
+            auto d_str = d_column.element<string_view>(idx);
+            size_type bytes = d_str.size_bytes();
+            if( bytes==0 )
+                return false;
+            if( d_str.compare("NaN",3)==0 )
+                return true;
+            if( d_str.compare("Inf",3)==0 )
+                return true;
+            if( d_str.compare("-Inf",4)==0 )
+                return true;
+            bool decimal = false;
+            bool exponent = false;
+            const char* data = d_str.data();
+            size_type chidx = ( *data=='-' || *data=='+' ) ? 1:0;
+            for( ; chidx < bytes; ++chidx )
+            {
+                auto chr = data[chidx];
+                if( chr >= '0' && chr <= '9' )
+                    continue;
+                if( !decimal && chr == '.' )
+                {
+                    decimal = true; // no more decimals
+                    continue;
+                }
+                if( !exponent && (chr == 'e' || chr == 'E') )
+                {
+                    if( chidx+1 < bytes )
+                        chr = data[chidx+1];
+                    if( chr == '-' || chr == '+' )
+                        ++chidx;
+                    decimal = true; // no decimal allowed in exponent
+                    exponent = true; // no more exponents
+                    continue;
+                }
+                return false;
+            }
+            return true;
+        });
+    //
+    results->set_null_count(strings.null_count());
+    return results;
+}
+
 } // namespace detail
 
 // external API
@@ -90,6 +184,20 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
 {
     CUDF_FUNC_RANGE();
     return detail::all_characters_of_type(strings, types, verify_types, mr);
+}
+
+std::unique_ptr<column> is_integer( strings_column_view const& strings,
+                                    rmm::mr::device_memory_resource* mr)
+{
+    CUDF_FUNC_RANGE();
+    return detail::is_integer(strings,mr);
+}
+
+std::unique_ptr<column> is_float( strings_column_view const& strings,
+                                  rmm::mr::device_memory_resource* mr)
+{
+    CUDF_FUNC_RANGE();
+    return detail::is_float(strings,mr);
 }
 
 } // namespace strings
