@@ -379,13 +379,15 @@ void reader::impl::read_column_chunks(
       io_size += chunks[next_chunk].compressed_size;
       next_chunk++;
     }
+    uint8_t *d_compdata = nullptr;
     if (io_size != 0) {
       auto buffer = _source->get_buffer(io_offset, io_size);
       page_data[chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-      for (uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data()); chunk != next_chunk; ++chunk) {
-        chunks[chunk].compressed_data = d_compdata;
-        d_compdata += chunks[chunk].compressed_size;
-      }
+      d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
+    }
+    for (; chunk != next_chunk; ++chunk) {
+      chunks[chunk].compressed_data = d_compdata;
+      d_compdata += chunks[chunk].compressed_size;
     }
   }
 }
