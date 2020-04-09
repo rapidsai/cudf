@@ -2089,6 +2089,26 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
+    def __array__(self, dtype=None):
+        """
+        Return the values as a NumPy array.
+
+        Parameters
+        ----------
+        dtype : str or numpy.dtype, optional
+            The dtype to use for the resulting NumPy array. By default,
+            the dtype is inferred from the data.
+        Returns
+        -------
+        numpy.ndarray
+            The values in the series converted to a :class:`numpy.ndarary`
+            with the specified `dtype`.
+        """
+        array = self.to_array()
+        if dtype is not None:
+            array = array.astype(dtype)
+        return array
+
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
