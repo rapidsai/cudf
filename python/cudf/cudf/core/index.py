@@ -389,10 +389,8 @@ class Index(Frame):
             The values in the series converted to a :class:`numpy.ndarary`
             with the specified `dtype`.
         """
-        array = self.to_array()
-        if dtype is not None:
-            array = array.astype(dtype)
-        return array
+
+        return self._values.__array__(dtype=dtype)
 
     @property
     def is_unique(self):

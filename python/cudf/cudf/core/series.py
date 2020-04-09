@@ -290,10 +290,8 @@ class Series(Frame):
             The values in the series converted to a :class:`numpy.ndarary`
             with the specified `dtype`.
         """
-        array = self.to_array()
-        if dtype is not None:
-            array = array.astype(dtype)
-        return array
+
+        return self._column.__array__(dtype=dtype)
 
     def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
