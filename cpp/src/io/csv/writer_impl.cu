@@ -42,8 +42,11 @@ namespace csv {
 namespace {//unnammed:
 //helpers:
   
-struct column_to_strings
+struct column_to_strings_fn
 {
+  //collects the same conditions used for
+  //instantiations of individual converters in strings/convert/convert_*.hpp
+  //
   template<typename column_type>
   constexpr static bool is_not_handled(void)
   {
@@ -54,7 +57,7 @@ struct column_to_strings
             (!cudf::is_timestamp<column_type>()) );
   }
   
-  column_to_strings(writer_options const& options):
+  column_to_strings_fn(writer_options const& options):
     options_(options)
   {
   }
@@ -76,7 +79,7 @@ struct column_to_strings
   operator()(column_view const& column) const
   {
     //strings...
-    return strings_column_view(column);
+    return column;//strings_column_view(column);
   }
 
   template<typename column_type>
@@ -121,7 +124,7 @@ struct column_to_strings
     //not to be called...
     //
     CUDF_FAIL("Unsupported column type.");
-    return strings_column_view(column);//silence the compiler
+    //silence the compiler: no return
   }
 private:
   writer_options const& options_;
@@ -143,12 +146,12 @@ private:
 strings_column_view column_to_strings_csv(column_view const& column,
                                           cudf::size_type row_offset,
                                           cudf::size_type rows,
-                                          char const delimiter,
-                                          std::string const& null_representation,
-                                          std::string const& true_string,
-                                          std::string const& false_string) {
+                                          writer_options const& options) {
   //TODO;
   //
+  column_to_strings_fn col2str{options};
+  //col2str.template operator()<int>(column); // check instantiation: okay
+  
   return strings_column_view{column}; // for now
 }
 
