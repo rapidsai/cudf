@@ -23,7 +23,13 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/utilities/traits.hpp> 
+#include <cudf/utilities/traits.hpp>
+
+#include <cudf/strings/convert/convert_booleans.hpp>
+#include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/convert/convert_floats.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
+
 
 #include <algorithm>
 #include <cstring>
@@ -50,15 +56,17 @@ struct column_to_strings_fn
   template<typename column_type>
   constexpr static bool is_not_handled(void)
   {
-    return( (!std::is_same<column_type, bool>::value) &&
+    return( //(!std::is_same<column_type, bool>::value) && <- case covered by is_integral
             (!std::is_same<column_type, cudf::string_view>::value) &&
             (!std::is_integral<column_type>::value) &&
             (!std::is_floating_point<column_type>::value) &&
             (!cudf::is_timestamp<column_type>()) );
   }
   
-  column_to_strings_fn(writer_options const& options):
-    options_(options)
+  explicit column_to_strings_fn(writer_options const& options,
+                                rmm::mr::device_memory_resource* mr = nullptr):
+    options_(options),
+    mr_(mr)
   {
   }
 
@@ -70,7 +78,11 @@ struct column_to_strings_fn
     //bools...
     //TODO:
     //
-    return strings_column_view(column);//for now
+    //return strings_column_view(column);//for now
+    return strings_column_view{*cudf::strings::from_booleans(column,
+                                                             options_.true_value(),
+                                                             options_.false_value(),
+                                                             mr_)};
   }
 
   template<typename column_type>
@@ -83,7 +95,7 @@ struct column_to_strings_fn
   }
 
   template<typename column_type>
-  std::enable_if_t<std::is_integral<column_type>::value,
+  std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
                    strings_column_view>
   operator()(column_view const& column) const
   {
@@ -128,6 +140,7 @@ struct column_to_strings_fn
   }
 private:
   writer_options const& options_;
+  rmm::mr::device_memory_resource* mr_;
 };
 
 
@@ -135,22 +148,17 @@ private:
  * @brief Helper function for write_csv.
  *
  * @param column The column to be converted.
- * @param row_offset Number of entries from the beginning to skip; must be multiple of 8.
- * @param rows Number of rows from the offset that should be converted for this column.
- * @param delimiter Separator to append to the column strings
- * @param null_representation String to use for null entries
- * @param true_string String to use for 'true' values in boolean columns
- * @param false_string String to use for 'false' values in boolean columns
+ * @param options ...
+ * @param mr...
  * @return strings_column_view instance formated for CSV column output.
 **/
 strings_column_view column_to_strings_csv(column_view const& column,
-                                          cudf::size_type row_offset,
-                                          cudf::size_type rows,
-                                          writer_options const& options) {
+                                          writer_options const& options,
+                                          rmm::mr::device_memory_resource* mr = nullptr) {
   //TODO;
   //
-  column_to_strings_fn col2str{options};
-  //col2str.template operator()<int>(column); // check instantiation: okay
+  column_to_strings_fn col2str{options, mr};
+  auto ret = col2str.template operator()<bool>(column); // check instantiation: okay
   
   return strings_column_view{column}; // for now
 }
@@ -212,6 +220,13 @@ void writer::impl::write(table_view const &table,
   CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
   auto exec = rmm::exec_policy(stream);
+
+  //vts = split(table_view, row_offset, nrows);
+  //loop v: vts{
+  //  loop crt_col_v: v.columns{
+  //    str_col_v = column_to_strings_csv(crt_col_v);
+  //  }
+  //}
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
