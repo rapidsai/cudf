@@ -68,6 +68,7 @@
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 - PR #4871 Add in the build information when building the java jar file
+- PR #4869 Expose contiguous table when deserializing from Java
 
 ## Bug Fixes
 
