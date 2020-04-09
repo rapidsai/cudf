@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/utilities/error.hpp>
-#include "char_types/is_flags.h"
-#include "char_types/char_cases.h"
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <strings/char_types/is_flags.h>
+#include <strings/char_types/char_cases.h>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 
 namespace cudf
@@ -224,18 +225,21 @@ std::unique_ptr<column> swapcase( strings_column_view const& strings,
 std::unique_ptr<column> to_lower( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_lower( strings, mr );
 }
 
 std::unique_ptr<column> to_upper( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_upper( strings, mr);
 }
 
 std::unique_ptr<column> swapcase( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::swapcase( strings, mr);
 }
 
