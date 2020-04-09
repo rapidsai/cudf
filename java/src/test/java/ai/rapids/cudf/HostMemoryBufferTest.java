@@ -28,12 +28,20 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Random;
 
+import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class HostMemoryBufferTest extends CudfTestBase {
+  @AfterEach
+  void teardown() {
+    if (PinnedMemoryPool.isInitialized()) {
+      PinnedMemoryPool.shutdown();
+    }
+  }
+
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
