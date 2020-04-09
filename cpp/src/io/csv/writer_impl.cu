@@ -23,10 +23,12 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/traits.hpp> 
 
 #include <algorithm>
 #include <cstring>
 #include <utility>
+#include <type_traits>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
@@ -39,18 +41,104 @@ namespace csv {
 
 namespace {//unnammed:
 //helpers:
+  
+struct column_to_strings
+{
+  template<typename column_type>
+  constexpr static bool is_not_handled(void)
+  {
+    return( (!std::is_same<column_type, bool>::value) &&
+            (!std::is_same<column_type, cudf::string_view>::value) &&
+            (!std::is_integral<column_type>::value) &&
+            (!std::is_floating_point<column_type>::value) &&
+            (!cudf::is_timestamp<column_type>()) );
+  }
+  
+  column_to_strings(writer_options const& options):
+    options_(options)
+  {
+  }
+
+  template<typename column_type>
+  std::enable_if_t<std::is_same<column_type, bool>::value,
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //bools...
+    //TODO:
+    //
+    return strings_column_view(column);//for now
+  }
+
+  template<typename column_type>
+  std::enable_if_t<std::is_same<column_type, cudf::string_view>::value,
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //strings...
+    return strings_column_view(column);
+  }
+
+  template<typename column_type>
+  std::enable_if_t<std::is_integral<column_type>::value,
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //ints...
+    //TODO:
+    //
+    return strings_column_view(column);//for now
+  }
+
+  template<typename column_type>
+  std::enable_if_t<std::is_floating_point<column_type>::value,
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //floats...
+    //TODO:
+    //
+    return strings_column_view(column);//for now
+  }
+
+  template<typename column_type>
+  std::enable_if_t<cudf::is_timestamp<column_type>(),
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //timestamps...
+    //TODO:
+    //
+    return strings_column_view(column);//for now
+  }
+
+
+  template<typename column_type>
+  std::enable_if_t<is_not_handled<column_type>(),
+                   strings_column_view>
+  operator()(column_view const& column) const
+  {
+    //not to be called...
+    //
+    CUDF_FAIL("Unsupported column type.");
+    return strings_column_view(column);//silence the compiler
+  }
+private:
+  writer_options const& options_;
+};
+
 
 /**
  * @brief Helper function for write_csv.
  *
  * @param column The column to be converted.
- * @param row_offset Number entries from the beginning to skip; must be multiple of 8.
+ * @param row_offset Number of entries from the beginning to skip; must be multiple of 8.
  * @param rows Number of rows from the offset that should be converted for this column.
  * @param delimiter Separator to append to the column strings
  * @param null_representation String to use for null entries
  * @param true_string String to use for 'true' values in boolean columns
  * @param false_string String to use for 'false' values in boolean columns
- * @return strings_column_view  instance formated for CSV column output.
+ * @return strings_column_view instance formated for CSV column output.
 **/
 strings_column_view column_to_strings_csv(column_view const& column,
                                           cudf::size_type row_offset,
