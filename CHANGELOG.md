@@ -66,6 +66,7 @@
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4863 Create is_integer/is_float functions for checking characters before calling to_integers/to_floats
 
 ## Bug Fixes
 
