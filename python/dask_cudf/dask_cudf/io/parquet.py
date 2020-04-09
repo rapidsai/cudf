@@ -1,8 +1,6 @@
 import warnings
 from functools import partial
 
-import pyarrow.parquet as pq
-
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
@@ -39,37 +37,29 @@ class CudfEngine(ArrowEngine):
             columns += index
 
         if isinstance(piece, str):
-            # `piece` is a file-path string
-            piece = pq.ParquetDatasetPiece(
-                piece, open_file_func=partial(fs.open, mode="rb")
-            )
+            path = piece
+            row_group = None
+            partition_keys = []
         else:
-            # `piece` = (path, row_group, partition_keys)
             (path, row_group, partition_keys) = piece
-            piece = pq.ParquetDatasetPiece(
-                path,
-                row_group=row_group,
-                partition_keys=partition_keys,
-                open_file_func=partial(fs.open, mode="rb"),
-            )
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):
             df = cudf.read_parquet(
-                piece.path,
+                path,
                 engine="cudf",
                 columns=columns,
-                row_group=piece.row_group,
+                row_group=row_group,
                 strings_to_categorical=strings_to_cats,
                 **kwargs.get("read", {}),
             )
         else:
-            with fs.open(piece.path, mode="rb") as f:
+            with fs.open(path, mode="rb") as f:
                 df = cudf.read_parquet(
                     f,
                     engine="cudf",
                     columns=columns,
-                    row_group=piece.row_group,
+                    row_group=row_group,
                     strings_to_categorical=strings_to_cats,
                     **kwargs.get("read", {}),
                 )
@@ -77,10 +67,10 @@ class CudfEngine(ArrowEngine):
         if index and index[0] in df.columns:
             df = df.set_index(index[0])
 
-        if len(piece.partition_keys) > 0:
+        if len(partition_keys) > 0:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
-            for i, (name, index2) in enumerate(piece.partition_keys):
+            for i, (name, index2) in enumerate(partition_keys):
                 categories = [
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
@@ -111,58 +101,45 @@ class CudfEngine(ArrowEngine):
         **kwargs,
     ):
         preserve_index = False
-
-        # Must use arrow engine if return_metadata=True
-        # (cudf does not collect/return metadata on write)
-        if return_metadata:
-            if index_cols:
-                df = df.set_index(index_cols)
-                preserve_index = True
-            md_list = []
-            t = df.to_arrow(preserve_index=preserve_index)
-            if partition_on:
-                pq.write_to_dataset(
-                    t,
-                    path,
-                    partition_cols=partition_on,
-                    filesystem=fs,
-                    metadata_collector=md_list,
-                    **kwargs,
-                )
-            else:
-                with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                    pq.write_table(
-                        t,
-                        fil,
-                        compression=compression,
-                        metadata_collector=md_list,
-                        **kwargs,
-                    )
-                if md_list:
-                    md_list[0].set_file_path(filename)
-
+        if partition_on:
+            md = write_to_dataset(
+                df,
+                path,
+                partition_cols=partition_on,
+                fs=fs,
+                preserve_index=preserve_index,
+                return_metadata=return_metadata,
+                **kwargs,
+            )
         else:
-            md_list = [None]
-            if partition_on:
-                write_to_dataset(
-                    df,
-                    path,
-                    partition_cols=partition_on,
-                    fs=fs,
-                    preserve_index=preserve_index,
-                    **kwargs,
-                )
-            else:
-                df.to_parquet(
-                    fs.sep.join([path, filename]),
-                    compression=compression,
-                    **kwargs,
-                )
+            md = df.to_parquet(
+                fs.sep.join([path, filename]),
+                compression=compression,
+                metadata_file_path=filename if return_metadata else None,
+                **kwargs,
+            )
         # Return the schema needed to write the metadata
         if return_metadata:
-            return [{"schema": t.schema, "meta": md_list[0]}]
+            return [{"meta": md}]
         else:
             return []
+
+    @staticmethod
+    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        if parts:
+            # Aggregate metadata and write to _metadata file
+            metadata_path = fs.sep.join([path, "_metadata"])
+            _meta = []
+            if append and fmd is not None:
+                _meta = [fmd]
+            _meta.extend([parts[i][0]["meta"] for i in range(len(parts))])
+            _meta = (
+                cudf.io.merge_parquet_filemetadata(_meta)
+                if len(_meta) > 1
+                else _meta[0]
+            )
+            with fs.open(metadata_path, "wb") as fil:
+                _meta.tofile(fil)
 
 
 def read_parquet(

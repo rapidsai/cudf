@@ -3989,7 +3989,9 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -4036,9 +4038,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if map_size is None:
-            map_size = map_index.unique_count()
-        else:
+        if kwargs.get("debug", False) == 1 and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
@@ -4048,18 +4048,6 @@ class DataFrame(Frame):
 
         tables = self._partition(map_index, map_size, keep_index)
 
-        if map_size:
-            # Make sure map_size is >= the number of uniques in map_index
-            if len(tables) > map_size:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (len(tables), map_size)
-                )
-
-            # Append empty dataframes if map_size > len(tables)
-
-            for i in range(map_size - len(tables)):
-                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):
