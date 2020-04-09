@@ -179,3 +179,16 @@ TEST_F(StringsCharsTest, Floats)
     cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,1,0,0,1,1,1} );
     cudf::test::expect_columns_equal(*results,expected);
 }
+
+TEST_F(StringsCharsTest, EmptyStrings)
+{
+    cudf::test::strings_column_wrapper strings({"","",""});
+    auto strings_view = cudf::strings_column_view(strings);
+    cudf::test::fixed_width_column_wrapper<bool> expected( {0,0,0} );
+    auto results = cudf::strings::all_characters_of_type(strings_view,cudf::strings::string_character_types::ALPHANUM);
+    cudf::test::expect_columns_equal(*results,expected);
+    results = cudf::strings::is_integer(strings_view);
+    cudf::test::expect_columns_equal(*results,expected);
+    results = cudf::strings::is_float(strings_view);
+    cudf::test::expect_columns_equal(*results,expected);
+}
