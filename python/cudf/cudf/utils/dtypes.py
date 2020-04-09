@@ -31,8 +31,9 @@ _cudf_nullable_pd_dtypes = {
     np.int16: pd.Int16Dtype(),
     np.int8: pd.Int8Dtype(),
     np.bool_: pd.BooleanDtype(),
-    np.str_: pd.StringDtype()
+    np.str_: pd.StringDtype(),
 }
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
@@ -195,6 +196,8 @@ def is_list_like(obj):
     from collections.abc import Sequence
 
     if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
+        return True
+    if isinstance(obj, np.ndarray):
         return True
     else:
         return False
