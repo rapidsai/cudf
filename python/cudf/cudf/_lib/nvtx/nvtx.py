@@ -9,7 +9,7 @@ from cudf._lib.nvtx._lib import (
 
 
 @contextmanager
-def annotate(message=None, color=None, domain=None):
+def annotate(message=None, color="blue", domain=None):
     """
     Annotate a function or a code range.
 
@@ -48,7 +48,7 @@ def annotate(message=None, color=None, domain=None):
         pop_range(domain)
 
 
-def push_range(message=None, color=None, domain=None):
+def push_range(message=None, color="blue", domain=None):
     """
     Mark the beginning of a code range.
 

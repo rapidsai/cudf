@@ -13,7 +13,7 @@ cdef class EventAttributes:
     cdef dict __dict__
     cdef nvtxEventAttributes_t c_obj
 
-    def __init__(self, message=None, color=None):
+    def __init__(self, message=None, color="blue"):
         if message is None:
             message = ""
         self._message = message.encode("ascii")
