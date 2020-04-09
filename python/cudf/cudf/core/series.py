@@ -1636,7 +1636,7 @@ class Series(Frame):
           * math.gamma()
           * math.lgamma()
 
-        * StringColumns are not supported in `applymap` method.
+        * Series with string dtypes are not supported in `applymap` method.
 
         * Global variables need to be re-defined explicitly inside
           the udf, as numba considers them to be compile-time constants
