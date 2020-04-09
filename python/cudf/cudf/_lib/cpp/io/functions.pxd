@@ -168,10 +168,12 @@ cdef extern from "cudf/io/functions.hpp" \
         const cudf_io_types.table_metadata *metadata
 
         write_parquet_chunked_args() except +
-        write_parquet_chunked_args(cudf_io_types.sink_info sink_,
-                                   cudf_io_types.table_metadata *table_metadata_,
-                                   cudf_io_types.compression_type compression_,
-                                   cudf_io_types.statistics_freq stats_lvl_) except +
+        write_parquet_chunked_args(
+            cudf_io_types.sink_info sink_,
+            cudf_io_types.table_metadata *table_metadata_,
+            cudf_io_types.compression_type compression_,
+            cudf_io_types.statistics_freq stats_lvl_
+        ) except +
 
     cdef shared_ptr[pq_chunked_state] \
         write_parquet_chunked_begin(write_parquet_chunked_args args) except +
@@ -179,7 +181,7 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef void write_parquet_chunked(cudf_table_view.table_view table_,
                                     shared_ptr[pq_chunked_state]) except +
 
-    cdef void write_parquet_chunked_end(shared_ptr[pq_chunked_state])
+    cdef void write_parquet_chunked_end(shared_ptr[pq_chunked_state]) except +
 
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list

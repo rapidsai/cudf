@@ -293,7 +293,8 @@ cpdef write_parquet(
 
 cdef class ParquetChunkedWriter:
     """
-    ParquetChunkedWriter lets you write out a series of Tables to a single Parquet file
+    ParquetChunkedWriter lets you write out a series of Tables to a single
+    Parquet file
 
     See Also
     --------
@@ -305,7 +306,8 @@ cdef class ParquetChunkedWriter:
     cdef cudf_io_types.compression_type comp_type
     cdef object index
 
-    def __cinit__(self, path, index=None, compression=None, statistics="ROWGROUP"):
+    def __cinit__(self, object path, object index=None,
+                  object compression=None, str statistics="ROWGROUP"):
         cdef string filepath = <string>str(path).encode()
         self.sink = cudf_io_types.sink_info(filepath)
         self.stat_freq = _get_stat_freq(statistics)
@@ -330,26 +332,28 @@ cdef class ParquetChunkedWriter:
         if self.state:
             with nogil:
                 write_parquet_chunked_end(self.state)
+                self.state.reset()
 
-    def __del__(self):
+    def __dealloc__(self):
         self.close()
 
     def _initialize_chunked_state(self, Table table):
         """ Wraps write_parquet_chunked_begin. This is called lazily on the first
         call to write, so that we can get metadata from the first table """
-        cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta = \
-            make_unique[cudf_io_types.table_metadata_with_nullability]()
+        cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta
+        tbl_meta = make_unique[cudf_io_types.table_metadata_with_nullability]()
 
         # Set the table_metadata
         tbl_meta.get().column_names = _get_column_names(table, self.index)
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        tbl_meta.get().user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+        tbl_meta.get().user_data[str.encode("pandas")] = \
+            str.encode(pandas_metadata)
 
         # call write_parquet_chunked_begin
         cdef write_parquet_chunked_args args
         with nogil:
-            args = write_parquet_chunked_args(self.sink, tbl_meta.get(), self.comp_type,
-                                              self.stat_freq)
+            args = write_parquet_chunked_args(self.sink, tbl_meta.get(),
+                                              self.comp_type, self.stat_freq)
             self.state = write_parquet_chunked_begin(args)
 
 
@@ -376,7 +380,7 @@ cpdef merge_filemetadata(filemetadata_list):
     return np.asarray(out_metadata_py)
 
 
-cdef cudf_io_types.statistics_freq _get_stat_freq(statistics):
+cdef cudf_io_types.statistics_freq _get_stat_freq(str statistics):
     statistics = statistics.upper()
     if statistics == "NONE":
         return cudf_io_types.statistics_freq.STATISTICS_NONE
@@ -388,7 +392,7 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(statistics):
         raise ValueError("Unsupported `statistics_freq` type")
 
 
-cdef cudf_io_types.compression_type _get_comp_type(compression):
+cdef cudf_io_types.compression_type _get_comp_type(object compression):
     if compression is None:
         return cudf_io_types.compression_type.NONE
     elif compression == "snappy":
@@ -397,7 +401,7 @@ cdef cudf_io_types.compression_type _get_comp_type(compression):
         raise ValueError("Unsupported `compression` type")
 
 
-cdef vector[string] _get_column_names(Table table, index):
+cdef vector[string] _get_column_names(Table table, object index):
     cdef vector[string] column_names
     if index is not False:
         if isinstance(table._index, cudf.core.multiindex.MultiIndex):

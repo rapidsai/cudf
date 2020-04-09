@@ -8,7 +8,6 @@ from pyarrow.compat import guid
 
 import cudf
 import cudf._lib.parquet as libparquet
-from cudf._lib.parquet import ParquetChunkedWriter  # noqa
 from cudf.utils import ioutils
 
 
@@ -260,3 +259,6 @@ def merge_parquet_filemetadata(filemetadata_list):
     """{docstring}"""
 
     return libparquet.merge_filemetadata(filemetadata_list)
+
+
+ParquetChunkedWriter = libparquet.ParquetChunkedWriter
