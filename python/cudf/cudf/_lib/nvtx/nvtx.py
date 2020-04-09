@@ -2,7 +2,10 @@
 
 from contextlib import contextmanager
 
-import cudf._lib.nvtx._lib as libnvtx
+from cudf._lib.nvtx._lib import (
+    pop_range as libnvtx_pop_range,
+    push_range as libnvtx_push_range,
+)
 
 
 @contextmanager
@@ -67,7 +70,7 @@ def push_range(message=None, color=None, domain=None):
     >>> time.sleep(1)
     >>> nvtx.pop_range(domain="cudf")
     """
-    libnvtx.push_range(message, color, domain)
+    libnvtx_push_range(message, color, domain)
 
 
 def pop_range(domain=None):
@@ -80,4 +83,4 @@ def pop_range(domain=None):
         The domain under which the code range is scoped. The default
         domain is "NVTX".
     """
-    libnvtx.pop_range(domain)
+    libnvtx_pop_range(domain)
