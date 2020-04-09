@@ -106,7 +106,10 @@ TYPED_TEST(TileTest, OneColumnZeroCount)
     fixed_width_column_wrapper<T> in_a({ -1, 0, 1 }, { 1, 0, 0 });
     cudf::table_view in (std::vector<cudf::column_view>{ in_a });
 
-    fixed_width_column_wrapper<T> expected_a({ }, { });
+    std::vector<T>    vals{};
+    std::vector<bool> mask{};
+
+    fixed_width_column_wrapper<T> expected_a(vals.begin(), vals.end(), mask.begin());
 
     cudf::table_view expected (std::vector<cudf::column_view>{ expected_a });
 

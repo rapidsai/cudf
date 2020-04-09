@@ -118,7 +118,7 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
 
     // locate keys to remove by searching the keys column
     auto const matches = experimental::detail::contains( keys_view, keys_to_remove, mr, stream);
-    auto d_matches = matches->view().data<experimental::bool8>();
+    auto d_matches = matches->view().data<bool>();
     // call common utility method to keep the keys not matched to keys_to_remove
     auto key_matcher = [d_matches] __device__ (size_type idx) { return !d_matches[idx]; };
     return remove_keys_fn( dictionary_column, key_matcher, mr, stream );
@@ -144,7 +144,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
 
     // search the indices values with key indices to look for any holes
     auto const matches = experimental::detail::contains( keys_positions_view, indices_view, mr, stream);
-    auto d_matches = matches->view().data<experimental::bool8>();
+    auto d_matches = matches->view().data<bool>();
 
     // call common utility method to keep the keys that match
     auto key_matcher = [d_matches]__device__(size_type idx) { return d_matches[idx]; };

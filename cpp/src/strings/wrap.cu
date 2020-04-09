@@ -21,6 +21,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/case.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/char_types/is_flags.h>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
@@ -143,6 +144,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
                               size_type width,
                               rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::wrap<detail::execute_wrap>(strings, width, mr);
 }
 

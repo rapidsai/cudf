@@ -1230,9 +1230,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = cudf.DataFrame([('a', range(20)),
-        ...                      ('b', range(20)),
-        ...                      ('c', range(20))])
+        >>> df = cudf.DataFrame({'a': range(20),
+        ...                      'b': range(20),
+        ...                      'c': range(20)})
 
         Select a single row using an integer index.
 
@@ -2807,7 +2807,7 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2832,11 +2832,13 @@ class DataFrame(Frame):
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
                   replaced with replacement*.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
+        inplace : bool, default False
+            If True, in place.
 
         Returns
         -------
@@ -2859,17 +2861,10 @@ class DataFrame(Frame):
         5  null
         6     6
         """
-        outdf = self.copy()
 
-        if not is_dict_like(to_replace):
-            to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(replacement):
-            replacement = dict.fromkeys(self.columns, replacement)
+        outdf = super().replace(to_replace=to_replace, replacement=value)
 
-        for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], replacement[k])
-
-        return outdf
+        return self._mimic_inplace(outdf, inplace=inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -3524,6 +3519,99 @@ class DataFrame(Frame):
             result.index = as_index(q)
             return result
 
+    def isin(self, values):
+        """
+        Whether each element in the DataFrame is contained in values.
+
+        Parameters
+        ----------
+
+        values : iterable, Series, DataFrame or dict
+            The result will only be true at a location if all
+            the labels match. If values is a Series, that’s the index.
+            If values is a dict, the keys must be the column names,
+            which must match. If values is a DataFrame, then both the
+            index and column labels must match.
+
+        Returns
+        -------
+        DataFrame:
+            DataFrame of booleans showing whether each element in
+            the DataFrame is contained in values.
+
+        """
+
+        if isinstance(values, dict):
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                if col in values:
+                    val = values[col]
+                    result_df[col] = self._data[col].isin(val)
+                else:
+                    result_df[col] = utils.scalar_broadcast_to(
+                        False, len(self)
+                    )
+
+            result_df.index = self.index
+            return result_df
+        elif isinstance(values, Series):
+            values = values.reindex(self.index)
+
+            result = DataFrame()
+            import numpy as np
+
+            for col in self.columns:
+                if is_categorical_dtype(
+                    self[col].dtype
+                ) and is_categorical_dtype(values.dtype):
+                    res = self._data[col].binary_operator("eq", values._column)
+                    result[col] = res
+                elif (
+                    is_categorical_dtype(self[col].dtype)
+                    or np.issubdtype(self[col].dtype, np.dtype("object"))
+                ) or (
+                    is_categorical_dtype(values.dtype)
+                    or np.issubdtype(values.dtype, np.dtype("object"))
+                ):
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+                else:
+                    result[col] = self._data[col].binary_operator(
+                        "eq", values._column
+                    )
+
+            result.index = self.index
+            return result
+        elif isinstance(values, DataFrame):
+            values = values.reindex(self.index)
+
+            result = DataFrame()
+            for col in self.columns:
+                if col in values.columns:
+                    result[col] = self._data[col].binary_operator(
+                        "eq", values[col]._column
+                    )
+                else:
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+            result.index = self.index
+            return result
+        else:
+            if not is_list_like(values):
+                raise TypeError(
+                    "only list-like or dict-like objects are "
+                    "allowed to be passed to DataFrame.isin(), "
+                    "you passed a "
+                    "{0!r}".format(type(values).__name__)
+                )
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                result_df[col] = self._data[col].isin(values)
+            result_df.index = self.index
+            return result_df
+
     #
     # Stats
     #
@@ -3867,7 +3955,9 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3914,9 +4004,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if map_size is None:
-            map_size = map_index.unique_count()
-        else:
+        if kwargs.get("debug", False) == 1 and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
@@ -3926,18 +4014,6 @@ class DataFrame(Frame):
 
         tables = self._partition(map_index, map_size, keep_index)
 
-        if map_size:
-            # Make sure map_size is >= the number of uniques in map_index
-            if len(tables) > map_size:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (len(tables), map_size)
-                )
-
-            # Append empty dataframes if map_size > len(tables)
-
-            for i in range(map_size - len(tables)):
-                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):

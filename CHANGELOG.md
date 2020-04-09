@@ -7,9 +7,11 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4815 Add JNI total memory allocated API
 
 ## Improvements
 
+- PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
@@ -27,9 +29,11 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #3581 Remove `bool8`
 - PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
 - PR #4627 Remove legacy Cython
@@ -41,11 +45,26 @@
 - PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
+- PR #4772 Cleanup dask_cudf to_parquet and enable "_metadata" creation
+- PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
 - PR #4799 Remove null_count() and has_nulls() from column_device_view
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4783 Add support for child columns to mutable_column_device_view
+- PR #4802 Refactor `cudf::transpose` to increase performance.
+- PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
 - PR #4793 Add `cudf._cuda` to setup.py
+- PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
+- PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
+- PR #4817 Fix `fixed_point` documentation
+- PR #4841 Remove unused `single_lane_block_popc_reduce` function
+- PR #4842 Added Java bindings for titlizing a String column
+- PR #4852 Add NVTX range calls to strings and nvtext APIs
+- PR #4849 Update Java bindings to use new NVTX API
+- PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 
 ## Bug Fixes
 
@@ -87,7 +106,17 @@
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
+- PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
+- PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4805 Fix hash_object_dispatch definitions in dask_cudf
+- PR #4813 Fix `GenericIndex` printing
+- PR #4804 Fix issue related `repartition` during hash based repartition
+- PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4839 Update Java bindings for timestamp cast formatting changes
+- PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4834 Fix bug in transform in handling single line UDFs
+- PR #4846 Fix CSV parsing with byte_range parameter and string columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)

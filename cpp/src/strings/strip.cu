@@ -20,6 +20,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 
@@ -164,6 +165,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
                                string_scalar const& to_strip,
                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::strip(strings, stype, to_strip, mr);
 }
 

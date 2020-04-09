@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -136,7 +135,7 @@ std::unique_ptr<column> copy_if_else( Left const& lhs,
    if (boolean_mask.has_nulls()) { 
        auto filter = [bool_mask_device] __device__ (cudf::size_type i) { 
            return bool_mask_device.is_valid_nocheck(i) and 
-               bool_mask_device.element<cudf::experimental::bool8>(i);};
+               bool_mask_device.element<bool>(i);};
        return cudf::experimental::type_dispatcher(lhs.type(),                                             
                                                   copy_if_else_functor{},
                                                   lhs, rhs, boolean_mask.size(),
@@ -144,7 +143,7 @@ std::unique_ptr<column> copy_if_else( Left const& lhs,
                                                   filter,
                                                   mr, stream);
    } else {
-       auto filter = [bool_mask_device] __device__ (cudf::size_type i) { return bool_mask_device.element<cudf::experimental::bool8>(i); };
+       auto filter = [bool_mask_device] __device__ (cudf::size_type i) { return bool_mask_device.element<bool>(i); };
        return cudf::experimental::type_dispatcher(lhs.type(),                                             
                                                   copy_if_else_functor{},
                                                   lhs, rhs, boolean_mask.size(),
