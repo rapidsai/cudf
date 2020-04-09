@@ -26,6 +26,7 @@
 namespace cudf {
 namespace jit {
 
+// Get the directory in home to use for storing the cache
 boost::filesystem::path get_user_home_cache_dir() {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
@@ -35,7 +36,7 @@ boost::filesystem::path get_user_home_cache_dir() {
   }
 }
 
-// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$TEMPDIR/cudf_$CUDF_VERSION`.
+// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$HOME/.cudf/$CUDF_VERSION`.
 // This definition can be overridden at compile time by specifying a
 // `-DLIBCUDF_KERNEL_CACHE_PATH=/kernel/cache/path` CMake argument.
 // Use `boost::filesystem` for cross-platform path resolution and dir
@@ -54,7 +55,9 @@ boost::filesystem::path get_user_home_cache_dir() {
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.
  *
- * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
+ * are used and if $HOME is not defined, returns an empty path and file 
+ * caching is not used.
  **/
 boost::filesystem::path getCacheDir() {
   // The environment variable always overrides the
