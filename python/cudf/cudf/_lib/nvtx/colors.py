@@ -16,7 +16,7 @@ _NVTX_COLORS = {
 
 
 @functools.lru_cache()
-def color_to_hex(color):
+def color_to_hex(color="blue"):
     """
     Convert color to ARGB hex value.
     """
