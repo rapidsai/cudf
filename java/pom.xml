@@ -271,10 +271,6 @@
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>2.22.0</version>
-                    <configuration>
-                      <!-- hourly (alphabetical on even hours, reverse alphabetical on odd hours) -->
-                      <runOrder>hourly</runOrder>
-                    </configuration>
                     <dependencies>
                         <dependency>
                             <groupId>org.junit.platform</groupId>
