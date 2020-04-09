@@ -9,6 +9,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -32,7 +33,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     to_cudf_compatible_scalar,
 )
-from cudf.utils.utils import annotate
 
 
 class Series(Frame):

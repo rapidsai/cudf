@@ -10,7 +10,6 @@ from numba import njit
 
 import rmm
 
-from cudf._lib.nvtx import Range, annotate
 from cudf.core.buffer import Buffer
 
 mask_dtype = np.dtype(np.int32)
@@ -431,7 +430,3 @@ def time_col_replace_nulls(input_col):
         null,
     )
     return out_col
-
-
-Range = functools.partial(Range, domain="cudf_python")
-annotate = functools.partial(annotate, domain="cudf_python")

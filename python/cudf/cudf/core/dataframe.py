@@ -23,6 +23,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import (
@@ -47,7 +48,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
 )
-from cudf.utils.utils import OrderedColumnDict, annotate
+from cudf.utils.utils import OrderedColumnDict
 
 
 def _unique_name(existing_names, suffix="_unique_name"):

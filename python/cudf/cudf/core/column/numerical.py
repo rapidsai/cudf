@@ -6,6 +6,7 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -15,7 +16,6 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import annotate
 
 
 class NumericalColumn(column.ColumnBase):

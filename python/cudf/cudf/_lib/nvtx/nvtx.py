@@ -1,80 +1,23 @@
 from contextlib import contextmanager
 
 import cudf._lib.nvtx._lib as libnvtx
-from cudf._lib.nvtx.colors import color_to_hex
-from cudf._lib.nvtx.utils.cached import CachedInstanceMeta
 
 
-class Domain(metaclass=CachedInstanceMeta):
-    def __init__(self, name=None):
-        self.name = name
-        self.handle = libnvtx.DomainHandle(name)
-
-
-class Range:
+@contextmanager
+def annotate(message=None, color=None, domain=None):
     """
-    Specifies an NVTX code range via start/end or push/pop.
+    Annotate a function or a code range.
 
     Parameters
     ----------
     message : str
-        Message associated with the code range.
-    color : str
-        Color associated with the code range.
+        A message associated with the annotated code range.
+    color : str, color
+        A color associated with the annotated code range.
+        Supports `matplotlib` colors if it is available.
     domain : str
-        The name of the domain under which the code range is scoped.
-
-    Examples
-    --------
-    >>> import nvtx
-    >>> import time
-
-    Using start/end API to define a code range:
-
-    >>> rng = nvtx.Range("my_code_range")
-    >>> rng.start()
-    >>> print("code range starts")
-    >>> time.sleep(10)
-    >>> print("code range ends")
-    >>> rng.end()
-
-    Using push/pop API to define nested code ranges conveniently:
-
-    >>> nvtx.Range("my_code_range").push()
-    >>> time.sleep(1)
-    >>> nvtx.Range("my_inner_code_range").push()
-    >>> time.sleep(2)
-    >>> nvtx.Range().pop()  # pops inner
-    >>> nvtx.Range().pop()  # pops outer
-    """
-
-    def __init__(self, message=None, color="blue", domain=None):
-        self._attributes = libnvtx.EventAttributes(
-            message, color_to_hex(color)
-        )
-        self._domain = Domain(domain)
-
-    @property
-    def message(self):
-        return self._attributes.message
-
-    def start(self):
-        self._id = libnvtx.range_start(self._attributes, self._domain.handle)
-
-    def end(self):
-        libnvtx.range_end(self._id, self._domain.handle)
-
-    def push(self):
-        libnvtx.range_push(self._attributes, self._domain.handle)
-
-    def pop(self):
-        libnvtx.range_pop(self._domain.handle)
-
-
-@contextmanager
-def annotate(*args, **kwargs):
-    """
-    Annotate a function or a code range.
+        Name of a domain under which the code range is scoped.
+        The default domain is called "NVTX".
 
     Examples
     --------
@@ -93,21 +36,46 @@ def annotate(*args, **kwargs):
     ...    time.sleep(10)
     ...
     """
-    rng = Range(*args, **kwargs)
-    rng.push()
+    push_range(message, color, domain)
     try:
         yield
     finally:
-        rng.pop()
+        pop_range(domain)
 
 
-_annotate = annotate
+def push_range(message=None, color=None, domain=None):
+    """
+    Mark the beginning of a code range.
+
+    Parameters
+    ----------
+    message : str
+        A message associated with the annotated code range.
+    color : str, color
+        A color associated with the annotated code range.
+        Supports 
+    domain : str
+        Name of a domain under which the code range is scoped.
+        The default domain is called "NVTX".
+
+    Examples
+    --------
+    >>> import nvtx
+    >>> nvtx.push_range("my_code_range", domain="cudf")
+    >>> time.sleep(1)
+    >>> nvtx.pop_range(domain="cudf")
+    """
+    libnvtx.push_range(message, color, domain)
 
 
-class RegisteredMessage(metaclass=CachedInstanceMeta):
-    def __init__(self, message):
-        print(f"Constructing RegisteredMessage({message})")
-        self.message = message
+def pop_range(domain=None):
+    """
+    Mark the end of a code range that was started with `push_range`.
 
-    def __repr__(self):
-        return f"RegisteredMessage({self.message})"
+    Parameters
+    ----------
+    domain : str
+        The domain under which the code range is scoped. The default
+        domain is "NVTX".
+    """
+    libnvtx.pop_range(domain)

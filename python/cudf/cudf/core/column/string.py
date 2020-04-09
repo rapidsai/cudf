@@ -24,6 +24,7 @@ from cudf._lib.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
+from cudf._lib.nvtx import annotate
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -112,7 +113,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column, column_empty, datetime
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
-from cudf.utils.utils import annotate
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,

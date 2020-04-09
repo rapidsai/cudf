@@ -8,7 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib.groupby as libgroupby
-from cudf.utils.utils import annotate
+from cudf._lib.nvtx import annotate
 
 
 class GroupBy(object):

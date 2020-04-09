@@ -1,4 +1,6 @@
 from cudf._lib.nvtx._lib.lib cimport *
+from cudf._lib.nvtx.colors import color_to_hex
+from cudf._lib.nvtx.utils.cached import CachedInstanceMeta
 
 
 def initialize():
@@ -13,12 +15,12 @@ cdef class EventAttributes:
         if message is None:
             message = ""
         self._message = message.encode("ascii")
-        self._color = color
+        self._color = color_to_hex(color)
         self.c_obj = nvtxEventAttributes_t(0)
         self.c_obj.version = NVTX_VERSION
         self.c_obj.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE
         self.c_obj.colorType = NVTX_COLOR_ARGB
-        self.c_obj.color = color
+        self.c_obj.color = self._color
         self.c_obj.messageType = NVTX_MESSAGE_TYPE_ASCII
         self.c_obj.message.ascii = <const char*> self._message
 
@@ -50,17 +52,18 @@ cdef class RangeId:
         self.c_obj = range_id
 
 
-def range_push(EventAttributes attributes, DomainHandle domain):
-    nvtxDomainRangePushEx(domain.c_obj, &attributes.c_obj)
+class Domain(metaclass=CachedInstanceMeta):
+    def __init__(self, name=None):
+        self.name = name
+        self.handle = DomainHandle(name)
 
 
-def range_pop(DomainHandle domain):
-    nvtxDomainRangePop(domain.c_obj)
+def push_range(message, color, domain):
+    cdef EventAttributes attrs = EventAttributes(message, color)
+    cdef DomainHandle dh = Domain(domain).handle
+    nvtxDomainRangePushEx(dh.c_obj, &attrs.c_obj)
 
 
-def range_start(EventAttributes attributes, DomainHandle domain):
-    return RangeId(nvtxDomainRangeStartEx(domain.c_obj, &attributes.c_obj))
-
-
-def range_end(RangeId r_id, DomainHandle domain):
-    nvtxDomainRangeEnd(domain.c_obj, r_id.c_obj)
+def pop_range(domain):
+    cdef DomainHandle dh = Domain(domain).handle
+    nvtxDomainRangePop(dh.c_obj)
