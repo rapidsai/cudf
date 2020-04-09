@@ -22,6 +22,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 
@@ -174,6 +175,7 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
                                        numeric_scalar<size_type> const& step,
                                        rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::slice_strings(strings, start, stop, step, mr );
 }
 
@@ -319,6 +321,7 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
                                        column_view const& starts_column, column_view const& stops_column,
                                        rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::slice_strings( strings, starts_column, stops_column, mr );
 }
 

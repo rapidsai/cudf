@@ -584,6 +584,10 @@ class Frame(libcudf.table.Table):
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
 
+        if npartitions:
+            for i in range(npartitions - len(result)):
+                result.append(self._empty_like(keep_index))
+
         return result
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):

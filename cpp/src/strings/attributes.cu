@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/attributes.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -183,18 +184,21 @@ std::unique_ptr<column> code_points( strings_column_view const& strings,
 std::unique_ptr<column> count_characters( strings_column_view const& strings,
                                           rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_characters(strings, mr);
 }
 
 std::unique_ptr<column> count_bytes( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_bytes( strings, mr );
 }
 
 std::unique_ptr<column> code_points( strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::code_points(strings,mr);
 }
 
