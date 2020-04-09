@@ -2189,7 +2189,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
-    @annotate("CUDF_JOIN", color="blue")
+    @annotate("CUDF_JOIN", color="blue", domain="cudf_python")
     def merge(
         self,
         right,
@@ -2316,7 +2316,7 @@ class DataFrame(Frame):
         )
         return gdf_result
 
-    @annotate("CUDF_JOIN", color="blue")
+    @annotate("CUDF_JOIN", color="blue", domain="cudf_python")
     def join(
         self,
         other,
@@ -2534,7 +2534,7 @@ class DataFrame(Frame):
             win_type=win_type,
         )
 
-    @annotate("CUDF_QUERY", color="purple")
+    @annotate("CUDF_QUERY", color="purple", domain="cudf_python")
     def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.

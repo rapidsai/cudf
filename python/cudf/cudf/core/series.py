@@ -602,7 +602,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    @annotate("CUDF_BINARY_OP", color="orange")
+    @annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*

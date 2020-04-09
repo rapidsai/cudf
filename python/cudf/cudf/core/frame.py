@@ -10,6 +10,7 @@ from pandas.api.types import is_dtype_equal
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
@@ -39,6 +40,7 @@ class Frame(libcudf.table.Table):
     def _from_table(cls, table):
         return cls(table._data, index=table._index)
 
+    @annotate("CUDF_CONCAT", color="orange", domain="cudf_python")
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
 

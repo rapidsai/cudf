@@ -83,7 +83,7 @@ class GroupBy(object):
             .agg("size")
         )
 
-    @annotate("GROUPBY_AGG")
+    @annotate("GROUPBY_AGG", domain="cudf_python")
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.

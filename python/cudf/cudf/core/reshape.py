@@ -14,7 +14,6 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-@annotate("CUDF_CONCAT", color="orange")
 def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
