@@ -106,6 +106,7 @@
 - PR #4800 Fix dataframe slicing with strides
 - PR #4796 Fix groupby apply for operations that fail on empty groups
 - PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4805 Fix hash_object_dispatch definitions in dask_cudf
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
@@ -113,6 +114,7 @@
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
 - PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4807 Fix `categories` duplication in `dask_cudf`
+- PR #4846 Fix CSV parsing with byte_range parameter and string columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)
