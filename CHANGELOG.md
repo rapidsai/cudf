@@ -7,6 +7,7 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4815 Add JNI total memory allocated API
 
 ## Improvements
 
@@ -58,6 +59,9 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4849 Update Java bindings to use new NVTX API
+- PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 
 ## Bug Fixes
 
@@ -105,7 +109,9 @@
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 
 
