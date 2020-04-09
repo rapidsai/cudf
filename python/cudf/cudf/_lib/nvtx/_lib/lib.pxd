@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from libc.stdint cimport uint16_t, uint32_t, uint64_t, int32_t, int64_t
 from libc.stddef cimport wchar_t
 

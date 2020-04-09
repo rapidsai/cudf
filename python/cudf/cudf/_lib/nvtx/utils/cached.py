@@ -1,3 +1,6 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+
 class CachedInstanceMeta(type):
     __instances = {}
 

@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from cudf._lib.nvtx._lib.lib cimport *
 from cudf._lib.nvtx.colors import color_to_hex
 from cudf._lib.nvtx.utils.cached import CachedInstanceMeta

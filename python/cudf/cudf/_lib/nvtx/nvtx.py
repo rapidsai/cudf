@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 from contextlib import contextmanager
 
 import cudf._lib.nvtx._lib as libnvtx
