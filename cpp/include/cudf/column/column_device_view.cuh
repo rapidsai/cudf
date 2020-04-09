@@ -284,17 +284,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Return an iterator to the first element of the column.
    * 
-<<<<<<< HEAD
    * This iterator only supports columns where `has_nulls() == false`. Using it 
    * with columns where `has_nulls() == true` will result in undefined behavior
    * when accessing null elements.
    * 
    * For columns with null elements, use `make_null_replacement_iterator`.   
-=======
-   * This iterator only supports columns where `has_nulls() == false`. 
-   * For columns with null elements, use `make_null_replacement_iterator`.
-   * @throws `cudf::logic_error` if `has_nulls() == true`
->>>>>>> branch-0.14
    */
   template <typename T>
   const_iterator<T> begin() const {
@@ -304,17 +298,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Return an iterator to the element following the last element of the column. 
    *
-<<<<<<< HEAD
    * This iterator only supports columns where `has_nulls() == false`. Using it 
    * with columns where `has_nulls() == true` will result in undefined behavior
    * when accessing null elements.
    * 
    * For columns with null elements, use `make_null_replacement_iterator`.   
-=======
-   * This iterator only supports columns where `has_nulls() == false`.
-   * For columns with null elements, use `make_null_replacement_iterator`.
-   * @throws `cudf::logic_error` if `has_nulls() == true`
->>>>>>> branch-0.14
    */
   template<typename T>
   const_iterator<T> end() const {
