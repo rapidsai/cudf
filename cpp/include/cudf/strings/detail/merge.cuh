@@ -21,7 +21,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/merge.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 namespace cudf
