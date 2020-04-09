@@ -270,8 +270,8 @@ class DataFrame(Frame):
         if len(data):
             self._data.multiindex = True
             for (i, col_name) in enumerate(data):
-                self._data.multiindex = (
-                    self._data.multiindex and isinstance(col_name, tuple)
+                self._data.multiindex = self._data.multiindex and isinstance(
+                    col_name, tuple
                 )
                 self.insert(i, col_name, data[col_name])
 
