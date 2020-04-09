@@ -76,13 +76,11 @@ struct column_to_strings_fn
   operator()(column_view const& column) const
   {
     //bools...
-    //TODO:
     //
-    //return strings_column_view(column);//for now
-    return strings_column_view{*cudf::strings::from_booleans(column,
-                                                             options_.true_value(),
-                                                             options_.false_value(),
-                                                             mr_)};
+    return strings_column_view{std::move(*cudf::strings::from_booleans(column,
+                                                                       options_.true_value(),
+                                                                       options_.false_value(),
+                                                                       mr_))};
   }
 
   template<typename column_type>
