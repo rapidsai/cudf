@@ -380,7 +380,6 @@
                             def cm = libcudart.matcher(sout)
                             if (cm.find()) {
                                 if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                    println(pom.properties['CUDA_STATIC_RUNTIME'])
                                     fail("found libcudart when we expect to be statically linked to it")
                                 }
                                 def classifier = 'cuda' + cm.group(1)
