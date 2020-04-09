@@ -140,7 +140,7 @@ public class ColumnVectorTest extends CudfTestBase {
       TableTest.assertColumnsAreEqual(cv, backAgain);
     }
   }
-/*
+
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
@@ -155,7 +155,7 @@ public class ColumnVectorTest extends CudfTestBase {
     } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
     assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
   }
-  */
+ 
 
   @Test
   void testConcatTypeError() {
