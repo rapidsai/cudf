@@ -518,6 +518,23 @@ TEST_F(CsvReaderTest, ByteRange) {
                            view.column(0));
 }
 
+TEST_F(CsvReaderTest, ByteRangeStrings) {
+  std::string input = "\"a\"\n\"b\"\n\"c\"";
+  cudf_io::read_csv_args in_args{cudf_io::source_info{input.c_str(), input.size()}};
+  in_args.names = {"A"};
+  in_args.dtype = {"str"};
+  in_args.header = -1;
+  in_args.byte_range_offset = 4;
+  auto result = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::STRING, view.column(0).type().id());
+
+  expect_column_data_equal(std::vector<std::string>{"c"},
+                           view.column(0));
+}
+
 TEST_F(CsvReaderTest, BlanksAndComments) {
   auto filepath = temp_env->get_temp_dir() + "BlanksAndComments.csv";
   {
