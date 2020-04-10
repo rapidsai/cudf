@@ -17,7 +17,7 @@
 #pragma once
 
 #include <tests/utilities/cudf_gtest.hpp>
-#include "cxxopts.hpp"
+#include <tests/utilities/cxxopts.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/default_memory_resource.hpp>
@@ -31,22 +31,22 @@
 namespace cudf {
 namespace test {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
  * Example:
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- *---------------------------------------------------------------------------**/
+ */
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource* _mr{rmm::mr::get_default_resource()};
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheritng from this fixture
-   *---------------------------------------------------------------------------**/
+   */
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
 
@@ -76,7 +76,7 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > >
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides uniform random number generation.
  *
  * It is often useful in testing to have a convenient source of random numbers.
@@ -91,7 +91,7 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- *---------------------------------------------------------------------------**/
+ */
 template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
@@ -100,18 +100,18 @@ class UniformRandomGenerator {
 
   UniformRandomGenerator() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
    * random numbers in the range `[upper,lower]`
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
-   *---------------------------------------------------------------------------**/
+   */
   UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the next random number.
-   *---------------------------------------------------------------------------**/
+   */
   T generate() { return T{dist(rng)}; }
 
  private:
@@ -119,7 +119,7 @@ class UniformRandomGenerator {
   Engine rng{std::random_device{}()};  ///< Random generator
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides temporary directory for temporary test files.
  *
  * Example:
@@ -127,7 +127,7 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- *---------------------------------------------------------------------------**/
+ */
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
@@ -165,43 +165,31 @@ class TempDirTestEnvironment : public ::testing::Environment {
   }
 };
 
-
-/**---------------------------------------------------------------------------*
- * @brief Test environment that initializes the default rmm memory resource.
+/**
+ * @brief Creates a memory resource for the unit test environment
+ * given the name of the allocation mode.
  * 
- * Required for tests programs that use rmm. It is recommended to include
- * `CUDF_TEST_PROGRAM_MAIN()` in a code file instead of directly instantiating 
- * an object of this type.
- *---------------------------------------------------------------------------**/
-class RmmTestEnvironment : public ::testing::Environment {
-/**---------------------------------------------------------------------------*
- * @brief String representing which RMM allocation mode is to be used.
+ * The returned resource instance must be kept alive for the duration of
+ * the tests. Attaching the resource to a TestEnvironment causes
+ * issues since the environment objects are not destroyed until
+ * after the runtime is shutdown.
+ * 
+ * @throw cudf::logic_error if the `allocation_mode` is unsupported.
  *
- * 
- *---------------------------------------------------------------------------**/
-  std::unique_ptr<rmm::mr::device_memory_resource> rmm_resource{};
-public:
-  /**
-   * @brief Sets the default RMM memory resource based on the input string.
-   * 
-   * @param allocation_mode Represents the type of the memory resource to be 
-   * used as a default resource. Valid values are 'cuda', 'pool' and 'managed'.
-   * 
-   * @throws cudf::logic_error if passed mode value is invalid.
-   */
-  RmmTestEnvironment(std::string const& allocation_mode) {
-    if (allocation_mode == "cuda")
-      rmm_resource.reset(new rmm::mr::cuda_memory_resource());
-    else if (allocation_mode == "pool")
-      rmm_resource.reset(new rmm::mr::cnmem_memory_resource());
-    else if (allocation_mode == "managed")
-      rmm_resource.reset(new rmm::mr::managed_memory_resource());
-    else 
-      CUDF_FAIL("Invalid RMM allocation mode");
-
-    rmm::mr::set_default_resource(rmm_resource.get());
-    }
-};
+ * @param allocation_mode String identifies which resource type.
+ *        Accepted types are "pool", "cuda", and "managed" only.
+ * @return Memory resource instance
+ */
+inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& allocation_mode)
+{
+    if( allocation_mode == "cuda" )
+        return std::make_unique<rmm::mr::cuda_memory_resource>();
+    if( allocation_mode == "pool" )
+        return std::make_unique<rmm::mr::cnmem_memory_resource>();
+    if( allocation_mode == "managed" )
+        return std::make_unique<rmm::mr::managed_memory_resource>();
+    CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
+}
 
 }  // namespace test
 }  // namespace cudf
@@ -233,17 +221,19 @@ inline auto parse_cudf_test_opts(int argc, char **argv) {
 /**
  * @brief Macro that defines main function for gtest programs that use rmm
  * 
- * Should be included in every test program that uses rmm allocators.The `main`
- * function is a wrapper around the google test generated `main`, mantaining
- * the original functionality. In addition, the custom `main` function parses
- * the command line to customize test behavior, like allocation mode.
- *
+ * Should be included in every test program that uses rmm allocators since
+ * it maintains the lifespan of the rmm default memory resource.
+ * This `main` function is a wrapper around the google test generated `main`,
+ * maintaining the original functionality. In addition, this custom `main`
+ * function parses the command line to customize test behavior, like the
+ * allocation mode used for creating the default memory resource.
+ * 
  */
 #define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {  \
   ::testing::InitGoogleTest(&argc, argv);                           \
   auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
   auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
-  auto const rmm_env = ::testing::AddGlobalTestEnvironment(         \
-    new cudf::test::RmmTestEnvironment(rmm_mode));                  \
+  auto resource = cudf::test::create_memory_resource(rmm_mode);     \
+  rmm::mr::set_default_resource(resource.get());                    \
   return RUN_ALL_TESTS();                                           \
 }
