@@ -126,6 +126,7 @@
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
+- PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
 
 
