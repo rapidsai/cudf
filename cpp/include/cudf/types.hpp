@@ -60,6 +60,7 @@ class column;
 class column_view;
 class mutable_column_view;
 class string_view;
+class list_view;
 
 class scalar;
 template <typename T> class numeric_scalar;
@@ -69,6 +70,8 @@ template <typename T> class timestamp_scalar;
 template <typename T> class numeric_scalar_device_view;
 class string_scalar_device_view;
 template <typename T> class timestamp_scalar_device_view;
+
+class list_scalar;
 
 
 
@@ -149,7 +152,7 @@ namespace experimental {
  *
  */
 enum class interpolation : int32_t {
-    LINEAR,  ///< Linear interpolation between i and j
+    LINEAR,      ///< Linear interpolation between i and j
     LOWER,       ///< Lower data point (i)
     HIGHER,      ///< Higher data point (j)
     MIDPOINT,    ///< (i + j)/2
@@ -162,21 +165,22 @@ enum class interpolation : int32_t {
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/
 enum type_id {
-  EMPTY = 0,  ///< Always null with no underlying data
-  INT8,       ///< 1 byte signed integer
-  INT16,      ///< 2 byte signed integer
-  INT32,      ///< 4 byte signed integer
-  INT64,      ///< 8 byte signed integer
-  FLOAT32,    ///< 4 byte floating point
-  FLOAT64,    ///< 8 byte floating point
-  BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
-  TIMESTAMP_DAYS,     ///< days since Unix Epoch in int32
-  TIMESTAMP_SECONDS,  ///< duration of seconds since Unix Epoch in int64
-  TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
-  TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
-  TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
-  DICTIONARY32, ///< Dictionary type using int32 indices
-  STRING,     ///< String elements
+  EMPTY = 0,                ///< Always null with no underlying data
+  INT8,                     ///< 1 byte signed integer
+  INT16,                    ///< 2 byte signed integer
+  INT32,                    ///< 4 byte signed integer
+  INT64,                    ///< 8 byte signed integer
+  FLOAT32,                  ///< 4 byte floating point
+  FLOAT64,                  ///< 8 byte floating point
+  BOOL8,                    ///< Boolean using one byte per value, 0 == false, else true
+  TIMESTAMP_DAYS,           ///< days since Unix Epoch in int32
+  TIMESTAMP_SECONDS,        ///< duration of seconds since Unix Epoch in int64
+  TIMESTAMP_MILLISECONDS,   ///< duration of milliseconds since Unix Epoch in int64
+  TIMESTAMP_MICROSECONDS,   ///< duration of microseconds since Unix Epoch in int64
+  TIMESTAMP_NANOSECONDS,    ///< duration of nanoseconds since Unix Epoch in int64
+  DICTIONARY32,             ///< Dictionary type using int32 indices
+  STRING,                   ///< String elements
+  LIST,                     ///< List elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };

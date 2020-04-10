@@ -54,22 +54,10 @@ struct DeviceSum {
 };
 
 /* @brief `count` operator - used in rolling windows */
-struct DeviceCount {
-  template <typename T,
-            typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
-    return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
-  }
-
-  template <typename T,
-            typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T&, const T& rhs) {
-    return rhs + T{1};
-  }
-
+struct DeviceCount {  
   template <typename T>
   static constexpr T identity() {
-    return T{0};
+    return T{};
   }
 };
 

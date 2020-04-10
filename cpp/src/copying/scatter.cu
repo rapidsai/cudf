@@ -166,6 +166,17 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator>
 };
 
 template <typename MapIterator>
+struct column_scalar_scatterer_impl<list_view, MapIterator>
+{
+  std::unique_ptr<column> operator()(std::unique_ptr<scalar> const& source,
+      MapIterator scatter_iter, size_type scatter_rows, column_view const& target,
+      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
+  {
+    CUDF_FAIL("scatter scalar to list_view not implemented");
+  }
+};
+
+template <typename MapIterator>
 struct column_scalar_scatterer
 {
   template <typename Element>

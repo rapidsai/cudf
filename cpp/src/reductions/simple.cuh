@@ -83,7 +83,8 @@ private:
       return std::is_convertible<ElementType, ResultType>::value &&
              (std::is_arithmetic<ResultType>::value ||
               std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-              std::is_same<Op, cudf::experimental::reduction::op::max>::value);
+              std::is_same<Op, cudf::experimental::reduction::op::max>::value)
+             && !std::is_same<ResultType, cudf::list_view>::value;
     }
 
 public:
@@ -111,10 +112,12 @@ private:
     template <typename ElementType>
     static constexpr bool is_supported_v()
     {
-      // disable only for string ElementType except for operators min, max
-      return  !( std::is_same<ElementType, cudf::string_view>::value &&
-              !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
-                 std::is_same<Op, cudf::experimental::reduction::op::max>::value ));
+              // disable for string ElementType except for operators min, max
+      return  !( (std::is_same<ElementType, cudf::string_view>::value &&
+                  !( std::is_same<Op, cudf::experimental::reduction::op::min>::value ||
+                  std::is_same<Op, cudf::experimental::reduction::op::max>::value ))
+              // disable for list views 
+              || std::is_same<ElementType, cudf::list_view>::value);
     }
 
 public:

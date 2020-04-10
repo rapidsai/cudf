@@ -134,6 +134,14 @@ struct column_from_scalar_dispatch
   {
     CUDF_FAIL("dictionary not supported when creating from scalar");
   }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::list_view, T>::value, std::unique_ptr<cudf::column>>
+  operator()( scalar const& value, size_type size,
+              rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
+  {
+    CUDF_FAIL("TODO");
+  }
 };
 
 std::unique_ptr<column> make_column_from_scalar(scalar const& s, size_type size,

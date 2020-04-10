@@ -192,6 +192,13 @@ struct create_column_from_view {
                                    cudf::copy_bitmask(view, stream, mr),
                                    view.null_count(), std::move(children));
  }
+
+ template <typename ColumnType,
+           std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
+ std::unique_ptr<column> operator()() { 
+   CUDF_FAIL("TODO");
+   return nullptr;
+ }
  
  template <typename ColumnType,
            std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>

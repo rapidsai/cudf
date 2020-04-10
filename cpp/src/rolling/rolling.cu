@@ -158,7 +158,7 @@ process_rolling_window(column_device_view input,
     bool output_is_valid = (count >= min_periods);
 
     // store the output value, one per thread
-    cudf::detail::store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
+    cudf::detail::rolling_store_output_functor<OutputType, op == aggregation::MEAN>{}(output.element<OutputType>(current_index),
                 val, count);
 
     return output_is_valid;
@@ -294,10 +294,10 @@ struct rolling_window_launcher
   // This launch is only for fixed width columns with valid aggregation option
   // numeric: All
   // timestamp: MIN, MAX, COUNT_VALID, COUNT_ALL
+  // string, dictionary, list : COUNT_VALID, COUNT_ALL
   template <typename T, typename agg_op, aggregation::Kind op, typename PrecedingWindowIterator, typename FollowingWindowIterator>
-  std::enable_if_t<(cudf::detail::is_supported<T, agg_op,
-                                  op, op == aggregation::MEAN>()) and
-                   !(cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, op>() and
+                   !cudf::detail::is_rolling_string_specialized<T, agg_op, op>(), std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
@@ -320,12 +320,10 @@ struct rolling_window_launcher
       return output;
   }
 
-  // This launch is only for string columns with valid aggregation option
-  // string: MIN, MAX, COUNT_VALID, COUNT_ALL
+  // This launch is only for string specializations
+  // string: MIN, MAX
   template <typename T, typename agg_op, aggregation::Kind op, typename PrecedingWindowIterator, typename FollowingWindowIterator>
-  std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
-                                  op, op == aggregation::MEAN>()) and
-                   (cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  std::enable_if_t<cudf::detail::is_rolling_string_specialized<T, agg_op, op>(), std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
@@ -350,35 +348,19 @@ struct rolling_window_launcher
           kernel_launcher<T, DeviceMax, aggregation::ARGMAX, PrecedingWindowIterator, FollowingWindowIterator>(input, output_view, preceding_window_begin,
                   following_window_begin, min_periods, agg, DeviceMax::template identity<T>(), stream);
       } else {
-          CUDF_EXPECTS(op == aggregation::COUNT_VALID || 
-                       op == aggregation::COUNT_ALL,
-                       "COUNT_VALID or COUNT_ALL aggregation only is expected");
-          size_type valid_count;
-          if (op == aggregation::COUNT_ALL)
-            valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT_ALL, PrecedingWindowIterator, FollowingWindowIterator>(input, output_view, preceding_window_begin,
-                  following_window_begin, min_periods, agg, string_view{}, stream);
-          else 
-            valid_count = kernel_launcher<T, DeviceCount, aggregation::COUNT_VALID, PrecedingWindowIterator, FollowingWindowIterator>(input, output_view, preceding_window_begin,
-                  following_window_begin, min_periods, agg, string_view{}, stream);
-          output->set_null_count(output->size() - valid_count);
+          CUDF_FAIL("MIN and MAX are the only supported aggregation types here");
       }
-
-      // If aggregation operation is MIN or MAX, then the output we got is a gather map
-      if((op == aggregation::MIN) or (op == aggregation::MAX)) {
-          // The rows that represent null elements will be having negative values in gather map,
-          // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-          auto output_table = detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
-          return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));;
-      }
-
-      return output;
+      
+      // The rows that represent null elements will be having negative values in gather map,
+      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
+      auto output_table = detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
+      return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
   }
 
   // Deals with invalid column and/or aggregation options
   template <typename T, typename agg_op, aggregation::Kind op, typename PrecedingWindowIterator, typename FollowingWindowIterator>
-  std::enable_if_t<!(cudf::detail::is_supported<T, agg_op,
-                                  op, op == aggregation::MEAN>()) and
-                   !(cudf::detail::is_string_supported<T, agg_op, op>()), std::unique_ptr<column>>
+  std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, op>() and
+                   !cudf::detail::is_rolling_string_specialized<T, agg_op, op>(), std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,

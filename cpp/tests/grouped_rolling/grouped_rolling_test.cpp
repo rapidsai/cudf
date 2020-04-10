@@ -151,7 +151,7 @@ protected:
   }
 
   template<typename agg_op, cudf::experimental::aggregation::Kind k, typename OutputType, bool is_mean,
-           std::enable_if_t<cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+           std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column>
   create_reference_output(cudf::column_view const& input,
                           std::vector<size_type> const& group_offsets,
@@ -196,7 +196,7 @@ protected:
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
+        cudf::detail::rolling_store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
       }
     }
 
@@ -205,7 +205,7 @@ protected:
   }
 
   template<typename agg_op, cudf::experimental::aggregation::Kind k, typename OutputType, bool is_mean,
-           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+           std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input, 
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_col,
@@ -546,7 +546,7 @@ protected:
   }
 
   template<typename agg_op, cudf::experimental::aggregation::Kind k, typename OutputType, bool is_mean,
-           std::enable_if_t<cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+           std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column>
   create_reference_output(cudf::column_view const& timestamp_column,
                           cudf::column_view const& input,
@@ -602,7 +602,7 @@ protected:
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
+        cudf::detail::rolling_store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
       }
     }
 
@@ -611,7 +611,7 @@ protected:
   }
 
   template<typename agg_op, cudf::experimental::aggregation::Kind k, typename OutputType, bool is_mean,
-           std::enable_if_t<!cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+           std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& timestamp_column,
                                                         cudf::column_view const& input, 
                                                         std::vector<size_type> const& group_offsets,

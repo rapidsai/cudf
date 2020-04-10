@@ -190,6 +190,12 @@ struct for_each_concatenate {
   }
 
   template <typename ColumnType,
+      std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    CUDF_FAIL("list_view not supported yet");
+  }
+
+  template <typename ColumnType,
       std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>
   std::unique_ptr<column> operator()() {
 
@@ -345,6 +351,12 @@ struct fused_concatenate {
       std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
     CUDF_FAIL("strings concatenate not yet supported");
+  }
+  
+  template <typename T,
+      std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    CUDF_FAIL("list_view concatenate not yet supported");
   }
 };
 

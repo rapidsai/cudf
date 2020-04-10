@@ -20,6 +20,7 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/lists/list_view.cuh>
 
 #include <type_traits>
 
@@ -215,7 +216,8 @@ constexpr inline bool is_fixed_width(data_type type) {
 template <typename T>
 constexpr inline bool is_compound() {
   return std::is_same<T, cudf::string_view>::value or 
-         std::is_same<T, cudf::dictionary32>::value;
+         std::is_same<T, cudf::dictionary32>::value or
+         std::is_same<T, cudf::list_view>::value;
 }
 
 struct is_compound_impl {

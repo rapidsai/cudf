@@ -148,6 +148,17 @@ struct out_of_place_copy_range_dispatch {
       cudaStream_t stream = 0) {
         CUDF_FAIL("dictionary type not supported");
   }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<cudf::list_view, T>::value,
+                   std::unique_ptr<cudf::column>>
+  operator()(
+      cudf::size_type source_begin, cudf::size_type source_end,
+      cudf::size_type target_begin,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+      cudaStream_t stream = 0) {
+        CUDF_FAIL("list_view type not supported");
+  }
 };
 
 }

@@ -314,8 +314,8 @@ struct column_view_printer {
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(),
         [] (Element el) { return std::to_string(el); });
 
-    }
-  }
+    }    
+  }  
 
   template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
@@ -362,6 +362,11 @@ struct column_view_printer {
       out.push_back(first);                            // between keys and indices
       out.insert(out.end(),indices.begin()+1,indices.end());
     }
+  }
+
+  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out) {
+    CUDF_FAIL("Not implemented!");
   }
 };
 
