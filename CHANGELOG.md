@@ -103,6 +103,7 @@
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
 - PR #4363 Grouped Rolling Window support
+- PR #4798 Add UDF support to grouped rolling window
 
 ## Improvements
 
