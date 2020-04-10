@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ TEST_F(StringsConvertTest, HexToInteger)
     for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
     {
         if( *itr==nullptr )
-            h_expected.push_back(0);
+           h_expected.push_back(0);
         else
            h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
     }
