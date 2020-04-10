@@ -9,6 +9,7 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+from cudf.core.dataframe import _align_indices
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -61,6 +62,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
         assert typs.issubset(allowed_typs)
+        objs = list(_align_indices(objs[0], objs[1]))
         df = DataFrame()
 
         sr_name = 0
@@ -77,7 +79,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 df.index = o.index
             for col in o.columns:
                 df[col] = o[col]._column
-
+        
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
