@@ -131,8 +131,7 @@ std::unique_ptr<column> is_float( strings_column_view const& strings,
             if( d_column.is_null(idx) )
                 return false;
             auto d_str = d_column.element<string_view>(idx);
-            size_type bytes = d_str.size_bytes();
-            if( bytes==0 )
+            if( d_str.empty() )
                 return false;
             if( d_str.compare("NaN",3)==0 )
                 return true;
@@ -140,8 +139,9 @@ std::unique_ptr<column> is_float( strings_column_view const& strings,
                 return true;
             if( d_str.compare("-Inf",4)==0 )
                 return true;
-            bool decimal = false;
-            bool exponent = false;
+            bool decimal_found = false;
+            bool exponent_found = false;
+            size_type bytes = d_str.size_bytes();
             const char* data = d_str.data();
             size_type chidx = ( *data=='-' || *data=='+' ) ? 1:0;
             for( ; chidx < bytes; ++chidx )
@@ -149,19 +149,19 @@ std::unique_ptr<column> is_float( strings_column_view const& strings,
                 auto chr = data[chidx];
                 if( chr >= '0' && chr <= '9' )
                     continue;
-                if( !decimal && chr == '.' )
+                if( !decimal_found && chr == '.' )
                 {
-                    decimal = true; // no more decimals
+                    decimal_found = true; // no more decimals
                     continue;
                 }
-                if( !exponent && (chr == 'e' || chr == 'E') )
+                if( !exponent_found && (chr == 'e' || chr == 'E') )
                 {
                     if( chidx+1 < bytes )
                         chr = data[chidx+1];
                     if( chr == '-' || chr == '+' )
                         ++chidx;
-                    decimal = true; // no decimal allowed in exponent
-                    exponent = true; // no more exponents
+                    decimal_found = true; // no decimal allowed in exponent
+                    exponent_found = true; // no more exponents
                     continue;
                 }
                 return false;
