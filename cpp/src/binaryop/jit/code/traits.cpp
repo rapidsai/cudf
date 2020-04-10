@@ -44,7 +44,7 @@ R"***(
     constexpr bool isFloat = false;
 
     template <typename T>
-    constexpr bool is_timestamp_t_v =
+    constexpr bool is_timestamp_v =
         simt::std::is_same<cudf::timestamp_D, T>::value ||
         simt::std::is_same<cudf::timestamp_s, T>::value ||
         simt::std::is_same<cudf::timestamp_ms, T>::value ||

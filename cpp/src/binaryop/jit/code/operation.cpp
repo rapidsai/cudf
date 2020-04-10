@@ -33,9 +33,9 @@ R"***(
     struct Add {
         // Disallow sum of timestamps with any other type (including itself)
         template <typename TypeOut, typename TypeLhs, typename TypeRhs,
-                  enable_if_t<(!is_timestamp_t_v<TypeOut> &&
-                               !is_timestamp_t_v<TypeLhs> &&
-                               !is_timestamp_t_v<TypeRhs>)>* = nullptr>
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
         }
@@ -46,9 +46,9 @@ R"***(
     struct Sub {
         // Disallow difference of timestamps with any other type (including itself)
         template <typename TypeOut, typename TypeLhs, typename TypeRhs,
-                  enable_if_t<(!is_timestamp_t_v<TypeOut> &&
-                               !is_timestamp_t_v<TypeLhs> &&
-                               !is_timestamp_t_v<TypeRhs>)>* = nullptr>
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
         }
