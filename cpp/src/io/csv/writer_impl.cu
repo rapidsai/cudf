@@ -30,6 +30,8 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 
+#include <cudf/strings/replace.hpp>
+
 
 #include <algorithm>
 #include <cstring>
@@ -50,8 +52,12 @@ namespace {//unnammed:
   
 struct column_to_strings_fn
 {
-  //collects the same conditions used for
-  //instantiations of individual converters in strings/convert/convert_*.hpp
+  //negates all conditions used for
+  //instantiations of individual converters
+  //in strings/convert/convert_*.hpp
+  //(this should have been a `variable template`,
+  // instead of a static function, but nvcc (10.0)
+  // fails to compile var-templs);
   //
   template<typename column_type>
   constexpr static bool is_not_handled(void)
@@ -70,28 +76,38 @@ struct column_to_strings_fn
   {
   }
 
+  //bools:
+  //
   template<typename column_type>
   std::enable_if_t<std::is_same<column_type, bool>::value,
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //bools...
-    //
     auto conv_col_ptr = cudf::strings::from_booleans(column,
                                                      options_.true_value(),
                                                      options_.false_value(),
                                                      mr_);
-    return strings_column_view{std::move(*conv_col_ptr)};
+
+    strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
+                                                                 options_.na_rep() ,
+                                                                 mr_);
+    
+    return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
+  //strings:
+  //
   template<typename column_type>
   std::enable_if_t<std::is_same<column_type, cudf::string_view>::value,
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //strings...
-    //
-    return column;//strings_column_view(column);
+    auto converted_nulls_replaced = cudf::strings::replace_nulls(column,
+                                                                 options_.na_rep() ,
+                                                                 mr_);
+    
+    return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
   template<typename column_type>
@@ -103,6 +119,8 @@ struct column_to_strings_fn
     //
     auto conv_col_ptr = cudf::strings::from_integers(column,
                                                      mr_);
+    //TODO: replace nulls by options.na_;
+    //
     return strings_column_view{std::move(*conv_col_ptr)};
   }
 
@@ -115,6 +133,8 @@ struct column_to_strings_fn
     //
     auto conv_col_ptr = cudf::strings::from_floats(column,
                                                    mr_);
+    //TODO: replace nulls by options.na_;
+    //
     return strings_column_view{std::move(*conv_col_ptr)};
   }
 
@@ -129,6 +149,8 @@ struct column_to_strings_fn
     auto conv_col_ptr = cudf::strings::from_timestamps(column,
                                                        format,
                                                        mr_);
+    //TODO: replace nulls by options.na_;
+    //
     return strings_column_view{std::move(*conv_col_ptr)};
   }
 
