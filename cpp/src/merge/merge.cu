@@ -118,8 +118,8 @@ void materialize_bitmask(column_view const& left_col,
   auto right_valid = *p_right_dcol;
   auto out_valid   = *p_out_dcol;
 
-  if (p_left_dcol->has_nulls()) {
-    if (p_right_dcol->has_nulls()) {
+  if (left_col.has_nulls()) {
+    if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
         (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
@@ -129,7 +129,7 @@ void materialize_bitmask(column_view const& left_col,
         (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
     }
   } else {
-    if (p_right_dcol->has_nulls()) {
+    if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
         (left_valid, right_valid, out_valid, out_col.size(), merged_indices);
