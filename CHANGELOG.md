@@ -69,6 +69,7 @@
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4873 Prevent mutable_view() from invoking null count
 
 ## Bug Fixes
 
