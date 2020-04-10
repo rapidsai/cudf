@@ -2561,7 +2561,6 @@ class DataFrame(Frame):
             win_type=win_type,
         )
 
-    @annotate("CUDF_QUERY", color="purple", domain="cudf_python")
     def query(self, expr, local_dict={}):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
@@ -2624,34 +2623,37 @@ class DataFrame(Frame):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        if self.empty:
-            return self.copy()
+        # can't use `annotate` decorator here as we inspect the calling
+        # environment.
+        with annotate("CUDF_QUERY", color="purple", domain="cudf_python"):
+            if self.empty:
+                return self.copy()
 
-        if not isinstance(local_dict, dict):
-            raise TypeError(
-                "local_dict type: expected dict but found {!r}".format(
-                    type(local_dict)
+            if not isinstance(local_dict, dict):
+                raise TypeError(
+                    "local_dict type: expected dict but found {!r}".format(
+                        type(local_dict)
+                    )
                 )
-            )
 
-        # Get calling environment
-        callframe = inspect.currentframe().f_back
-        callenv = {
-            "locals": callframe.f_locals,
-            "globals": callframe.f_globals,
-            "local_dict": local_dict,
-        }
-        # Run query
-        boolmask = queryutils.query_execute(self, expr, callenv)
+            # Get calling environment
+            callframe = inspect.currentframe().f_back
+            callenv = {
+                "locals": callframe.f_locals,
+                "globals": callframe.f_globals,
+                "local_dict": local_dict,
+            }
+            # Run query
+            boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series(boolmask)
-        newdf = DataFrame()
-        for col in self.columns:
-            newseries = self[col][selected]
-            newdf[col] = newseries
-        result = newdf
-        return result
-
+            selected = Series(boolmask)
+            newdf = DataFrame()
+            for col in self.columns:
+                newseries = self[col][selected]
+                newdf[col] = newseries
+            result = newdf
+            return result
+    
     @applyutils.doc_apply()
     def apply_rows(
         self,
