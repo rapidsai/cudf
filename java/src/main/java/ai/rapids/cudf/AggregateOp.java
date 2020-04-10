@@ -37,7 +37,8 @@ enum AggregateOp {
   VAR(12), // This can take a delta degrees of freedom
   STD(13), // This can take a delta degrees of freedom
   ANY(14),
-  ALL(15);
+  ALL(15),
+  ROW_NUMBER(16);
 
   final int nativeId;
 
