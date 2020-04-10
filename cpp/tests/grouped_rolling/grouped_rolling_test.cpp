@@ -542,7 +542,7 @@ protected:
     auto reference = create_reference_output(op, timestamp_column, input, expected_grouping, 
       preceding_window_in_days, following_window_in_days, min_periods);
 
-// #ifndef NDEBUG
+#ifndef NDEBUG
     std::cout << "input:\n";
     cudf::test::print(input, std::cout, ", ");
     std::cout << "\n";
@@ -553,7 +553,7 @@ protected:
     cudf::test::print(*reference, std::cout, ", ");
     std::cout << "\n";
     std::cout << "\n";
-// #endif
+#endif
 
     cudf::test::expect_columns_equal(*output, *reference);
   }
@@ -577,19 +577,6 @@ protected:
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_mean_aggregation());
-    
-    // >>> test UDFs <<<
-    if (input.type() == cudf::data_type{cudf::INT32}) {
-      auto cuda_udf_agg = cudf::experimental::make_udf_aggregation(cudf::experimental::udf_type::CUDA,
-                                                                   cuda_func, 
-                                                                   cudf::data_type{cudf::INT64});
-      run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cuda_udf_agg);
-      
-      auto ptx_udf_agg = cudf::experimental::make_udf_aggregation(cudf::experimental::udf_type::PTX,
-                                                                  ptx_func,
-                                                                  cudf::data_type{cudf::INT64});
-      run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, ptx_udf_agg);
-    }
     
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_sum_aggregation());
@@ -766,15 +753,6 @@ protected:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(timestamp_column, input, group_offsets, preceding_window,
                                                             following_window, min_periods);
-    // >>> UDFs <<<
-    case cudf::experimental::aggregation::CUDA:
-      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
-             cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(timestamp_column, input, group_offsets, preceding_window,
-                                                             following_window, min_periods);
-    case cudf::experimental::aggregation::PTX:
-      return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::SUM, 
-             cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::SUM>, false>(timestamp_column, input, group_offsets, preceding_window,
-                                                             following_window, min_periods);
     default:
       return fixed_width_column_wrapper<T>({}).release();
     }

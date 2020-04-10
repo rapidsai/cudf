@@ -632,6 +632,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   }
 }
 
+// This is the struct to wrap the capturing lambda in order to pass the lambda to jitify.
 struct window_wrapper {
 
   const cudf::size_type *d_group_offsets;
@@ -728,7 +729,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return cudf::experimental::detail::rolling_window_udf(input,
                                                           grouped_preceding_window, "preceding_window_wrapper",
                                                           grouped_following_window, "following_window_wrapper",
-                                                          min_periods, aggr, mr, 0); // XXX: What stream should be set here?
+                                                          min_periods, aggr, mr, 0);
   } else {
     return cudf::experimental::detail::rolling_window(input,
                                                       thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
@@ -761,31 +762,6 @@ namespace
         return 24L*60*60*1000*1000*1000;
     }
   }
-
-  template<class T>
-  struct timestamp_window_wrapper {
-    
-    const cudf::size_type *d_group_offsets;
-    const cudf::size_type *d_group_labels;
-    const T *d_timestamps;
-    cudf::size_type window_in_days;
-    T mult_factor;
-  
-    timestamp_window_wrapper(
-      const cudf::size_type *d_group_offsets_, 
-      const cudf::size_type *d_group_labels_,
-      const T *d_timestamps_,
-      cudf::size_type window_in_days_,
-      T mult_factor_
-    ):
-      d_group_offsets(d_group_offsets_),
-      d_group_labels(d_group_labels_),
-      d_timestamps(d_timestamps_),
-      window_in_days(window_in_days_),
-      mult_factor(mult_factor_)
-    {}
-  
-  };
  
   template <typename TimestampImpl_t>
   std::unique_ptr<column> grouped_time_range_rolling_window_impl( column_view const& input,
@@ -834,31 +810,8 @@ namespace
                - 1;
       };
     
-    timestamp_window_wrapper<TimestampImpl_t> grouped_preceding_window(
-      group_offsets.data().get(), 
-      group_labels.data().get(), 
-      timestamp_column.data<TimestampImpl_t>(), 
-      preceding_window_in_days,
-      mult_factor
-    );
-    
-    timestamp_window_wrapper<TimestampImpl_t> grouped_following_window(
-      group_offsets.data().get(), 
-      group_labels.data().get(), 
-      timestamp_column.data<TimestampImpl_t>(), 
-      following_window_in_days,
-      mult_factor
-    );
-
     if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
-      const std::string preceding_window_str = sizeof(TimestampImpl_t) == 4 ?
-          "timestamp_preceding_window_wrapper<int32_t>" : "timestamp_preceding_window_wrapper<int64_t>";
-      const std::string following_window_str = sizeof(TimestampImpl_t) == 4 ?
-          "timestamp_following_window_wrapper<int32_t>" : "timestamp_following_window_wrapper<int64_t>";
-      return cudf::experimental::detail::rolling_window_udf(input,
-                                                            grouped_preceding_window, preceding_window_str,
-                                                            grouped_following_window, following_window_str,
-                                                            min_periods, aggr, mr, 0);
+      CUDF_FAIL("Time ranged rolling window does NOT (yet) support UDF.");
     } else {
       return cudf::experimental::detail::rolling_window(input,
                                                         thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),

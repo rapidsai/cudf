@@ -34,7 +34,7 @@ R"***(
 
 template<class T>
 T minimum(T a, T b){
-  return a < b ? a : b;
+  return b < a ? b : a;
 }
 
 struct preceding_window_wrapper {
@@ -63,85 +63,6 @@ struct following_window_wrapper {
     return minimum(window, (group_end - 1) - idx);
   }
 
-};
-
-template<class Iter, class T>
-cudf::size_type __device__ upper_bound(Iter iter, cudf::size_type first, cudf::size_type last, const T& value)
-{
-    cudf::size_type current;
-    cudf::size_type count, step;
-    count = last - first;
-
-    while (count > 0) {
-      current = first;
-      step = count / 2;
-      current += step;
-      if (!(value < iter[current])) {
-        first = ++current;
-        count -= step + 1;
-      }
-      else
-        count = step;
-    }
-    return first;
-}
-
-template<class Iter, class T>
-cudf::size_type __device__ lower_bound(Iter iter, cudf::size_type first, cudf::size_type last, const T& value)
-{
-    cudf::size_type current;
-    cudf::size_type count, step;
-    count = last - first;
-
-    while (count > 0) {
-      current = first;
-      step = count / 2;
-      current += step;
-      if (iter[current] < value) {
-        first = ++current;
-        count -= step + 1;
-      }
-      else
-        count = step;
-    }
-    return first;
-}
-
-template<class T>
-struct timestamp_preceding_window_wrapper {
-  
-  const cudf::size_type *d_group_offsets;
-  const cudf::size_type *d_group_labels;
-  const T *d_timestamps;
-  cudf::size_type window_in_days;
-  T mult_factor;
-
-  cudf::size_type __device__ operator[](cudf::size_type idx) {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
-    auto lower_bound_ = d_timestamps[idx] - window_in_days*mult_factor;
-    
-    return idx - lower_bound(d_timestamps, group_start, idx, lower_bound_) + 1;
-    // Add 1, for `preceding` to account for current row.
-  } 
-};
-
-template<class T>
-struct timestamp_following_window_wrapper {
-  
-  const cudf::size_type *d_group_offsets;
-  const cudf::size_type *d_group_labels;
-  const T *d_timestamps;
-  cudf::size_type window_in_days;
-  T mult_factor;
-
-  cudf::size_type __device__ operator[](cudf::size_type idx) {
-    auto group_label = d_group_labels[idx];
-    auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
-    auto upper_bound_ = d_timestamps[idx] + window_in_days*mult_factor;
-
-    return upper_bound(d_timestamps, idx, group_end, upper_bound_) - idx - 1;
-  }
 };
 
 template <typename WindowType>
