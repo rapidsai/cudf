@@ -92,6 +92,7 @@ protected:
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_mean_aggregation());
+    run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_row_number_aggregation());
 
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys, input, expected_grouping, preceding_window, following_window, min_periods, cudf::experimental::make_sum_aggregation());
@@ -143,6 +144,48 @@ protected:
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i])
         ref_data[i] = count;
+    }
+
+    fixed_width_column_wrapper<cudf::size_type> col(ref_data.begin(), ref_data.end(),
+                                                    ref_valid.begin());
+    return col.release();
+  }
+
+  std::unique_ptr<cudf::column>
+  create_row_number_reference_output(cudf::column_view const& input,
+                                     std::vector<size_type> const& group_offsets,
+                                     size_type const& preceding_window,
+                                     size_type const& following_window,
+                                     size_type min_periods)
+  {
+    size_type num_rows = input.size();
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool>            ref_valid(num_rows);
+
+    // input data and mask
+  
+    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
+    bitmask_type* valid_mask = in_valid.data();
+
+    for(size_type i = 0; i < num_rows; i++) {
+      // load sizes
+      min_periods = std::max(min_periods, 1); // at least one observation is required
+
+      // compute bounds
+      auto group_end_index = std::upper_bound(group_offsets.begin(), group_offsets.end(), i);
+      auto group_start_index = group_end_index - 1;
+
+      size_type start = std::min(num_rows, std::max(0, i - preceding_window +1));
+      size_type end = std::min(num_rows, std::max(0, i + following_window + 1));
+      size_type start_index = std::max(*group_start_index, std::min(start, end));
+      size_type end_index = std::min(*group_end_index, std::max(start, end));
+
+      // aggregate
+      size_type count{end_index - start_index};
+      size_type row_number{i - start_index + 1};
+
+      ref_valid[i] = (count >= min_periods);
+      ref_data[i] = row_number;
     }
 
     fixed_width_column_wrapper<cudf::size_type> col(ref_data.begin(), ref_data.end(),
@@ -238,8 +281,13 @@ protected:
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::COUNT_VALID:
       return create_count_reference_output<false>(input, group_offsets, preceding_window, following_window, min_periods);
+
     case cudf::experimental::aggregation::COUNT_ALL:
       return create_count_reference_output<true>(input, group_offsets, preceding_window, following_window, min_periods);
+
+    case cudf::experimental::aggregation::ROW_NUMBER:
+      return create_row_number_reference_output(input, group_offsets, preceding_window, following_window, min_periods);
+
     case cudf::experimental::aggregation::MEAN:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(input, group_offsets, preceding_window,
@@ -476,6 +524,7 @@ protected:
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_mean_aggregation());
+    run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_row_number_aggregation());
 
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_sum_aggregation());
@@ -538,6 +587,59 @@ protected:
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i])
         ref_data[i] = count;
+    }
+
+    fixed_width_column_wrapper<cudf::size_type> col(ref_data.begin(), ref_data.end(),
+                                                    ref_valid.begin());
+    return col.release();
+  }
+
+  std::unique_ptr<cudf::column> 
+  create_row_number_reference_output(cudf::column_view const& timestamp_column,
+                                cudf::column_view const& input,
+                                std::vector<size_type> const& group_offsets,
+                                size_type const& preceding_window_in_days,
+                                size_type const& following_window_in_days,
+                                size_type min_periods)
+  {
+    assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS); // Testing with DAYS.
+
+    auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
+
+    size_type num_rows = input.size();
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
+
+    // input data and mask
+  
+    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
+    bitmask_type* valid_mask = in_valid.data();
+
+    for(size_type i = 0; i < num_rows; i++) {
+      // load sizes
+      min_periods = std::max(min_periods, 1); // at least one observation is required
+
+      // compute bounds
+      auto group_end_index = std::upper_bound(group_offsets.begin(), group_offsets.end(), i);
+      auto group_start_index = group_end_index - 1;
+
+      size_type start_index = i;
+      while ((start_index-1) >= *group_start_index && timestamp_vec[start_index-1] >= (timestamp_vec[i]-preceding_window_in_days)) {
+       --start_index; 
+      }
+
+      size_type end_index = i;
+      while ((end_index+1) < *group_end_index && timestamp_vec[end_index+1] <= (timestamp_vec[i]+following_window_in_days)) {
+        ++end_index;
+      }
+      ++end_index; // One past the last.
+
+      // aggregate
+      size_type count{end_index - start_index};
+      size_type row_number{i - start_index + 1};
+
+      ref_valid[i] = (count >= min_periods);
+      ref_data[i] = row_number;
     }
 
     fixed_width_column_wrapper<cudf::size_type> col(ref_data.begin(), ref_data.end(),
@@ -646,8 +748,13 @@ protected:
                                                              following_window, min_periods);
     case cudf::experimental::aggregation::COUNT_VALID:
       return create_count_reference_output<false>(timestamp_column, input, group_offsets, preceding_window, following_window, min_periods);
+
     case cudf::experimental::aggregation::COUNT_ALL:
       return create_count_reference_output<true>(timestamp_column, input, group_offsets, preceding_window, following_window, min_periods);
+
+    case cudf::experimental::aggregation::ROW_NUMBER:
+      return create_row_number_reference_output(timestamp_column, input, group_offsets, preceding_window, following_window, min_periods);
+
     case cudf::experimental::aggregation::MEAN:
       return create_reference_output<cudf::DeviceSum, cudf::experimental::aggregation::MEAN,
              cudf::experimental::detail::target_type_t<T, cudf::experimental::aggregation::MEAN>, true>(timestamp_column, input, group_offsets, preceding_window,

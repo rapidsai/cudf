@@ -83,6 +83,28 @@ process_rolling_window(column_device_view input,
 }
 
 /**
+ * @brief Calculates row-number within [start_index, end_index).
+ *        Count is updated depending on `min_periods`
+ *        Returns true if it was valid, else false.
+ */
+template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
+std::enable_if_t<op == aggregation::ROW_NUMBER, bool>
+__device__
+process_rolling_window(column_device_view input,
+                        mutable_column_device_view output,
+                        size_type start_index,
+                        size_type end_index,
+                        size_type current_index,
+                        size_type min_periods,
+                        InputType identity) {
+
+    bool output_is_valid = ((end_index - start_index) >= min_periods);
+    output.element<OutputType>(current_index) = (current_index - start_index + 1);
+
+    return output_is_valid;
+}
+
+/**
  * @brief Only used for `string_view` type to get ARGMIN and ARGMAX, which
  *        will be used to gather MIN and MAX. And returns true if the
  *        operation was valid, else false.
@@ -132,7 +154,7 @@ process_rolling_window(column_device_view input,
  */
 template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
 std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
-                 !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL), bool>
+                 !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL || op == aggregation::ROW_NUMBER), bool>
 __device__
 process_rolling_window(column_device_view input,
                         mutable_column_device_view output,
@@ -313,7 +335,11 @@ struct rolling_window_launcher
 
       cudf::mutable_column_view output_view = output->mutable_view();
       auto valid_count = kernel_launcher<T, agg_op, op, PrecedingWindowIterator, FollowingWindowIterator>(input, output_view, preceding_window_begin,
-              following_window_begin, min_periods, agg, agg_op::template identity<T>(), stream);
+              following_window_begin, 
+              min_periods, 
+              agg, 
+              agg_op::template identity<T>(), 
+              stream);
 
       output->set_null_count(output->size() - valid_count);
 
@@ -433,7 +459,7 @@ struct rolling_window_launcher
   }
 
 
-};
+}; // struct rolling_window_launcher<InputType>;
 
 struct dispatch_rolling {
     template <typename T, typename PrecedingWindowIterator, typename FollowingWindowIterator>

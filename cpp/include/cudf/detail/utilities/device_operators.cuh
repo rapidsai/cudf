@@ -73,6 +73,14 @@ struct DeviceCount {
   }
 };
 
+/* @brief `row_number` operator - used in rolling windows */
+struct DeviceRowNumber {
+  template <typename T>
+  static constexpr T identity() {
+    return T{0};
+  }
+};
+
 /**
  * @brief string value for sentinel which is used in min, max reduction
  * operators

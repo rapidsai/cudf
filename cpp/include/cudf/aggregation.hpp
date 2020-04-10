@@ -65,6 +65,7 @@ class aggregation {
     ARGMIN,    ///< Index of min element
     NUNIQUE,   ///< count number of unique elements
     NTH_ELEMENT, ///< get the nth element
+    ROW_NUMBER, ///< get row-number of element
     PTX,       ///< PTX UDF based reduction
     CUDA       ///< CUDA UDf based reduction
   };
@@ -179,6 +180,9 @@ make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
  */
 std::unique_ptr<aggregation>
 make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
+
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
