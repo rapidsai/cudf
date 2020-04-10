@@ -368,7 +368,7 @@ void reader::impl::read_column_chunks(
     size_t next_chunk = chunk + 1;
     const bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
     while (next_chunk < end_chunk) {
-      size_t next_offset = column_chunk_offsets[next_chunk];
+      const size_t next_offset = column_chunk_offsets[next_chunk];
       bool is_next_compressed = (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
       if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
         // Can't merge if not contiguous or mixing compressed and uncompressed
