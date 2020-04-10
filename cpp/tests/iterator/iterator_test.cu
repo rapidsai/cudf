@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -401,14 +401,14 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
   // calculate expected values by CPU
   T_output expected_value;
 
-  expected_value.count = d_col->size() - d_col->null_count();
+  expected_value.count = d_col->size() - static_cast<cudf::column_view>(w_col).null_count();
 
   std::vector<T> replaced_array(d_col->size());
   std::transform(host_values.begin(), host_values.end(), host_bools.begin(),
                  replaced_array.begin(),
                  [&](T x, bool b) { return (b) ? static_cast<T>(x) : init; });
 
-  expected_value.count = d_col->size() - d_col->null_count();
+  expected_value.count = d_col->size() - static_cast<cudf::column_view>(w_col).null_count();
   expected_value.value = std::accumulate(replaced_array.begin(),
                                          replaced_array.end(), T{0});
   expected_value.value_squared =
@@ -450,10 +450,7 @@ TYPED_TEST(IteratorTest, error_handling) {
   }
 
   CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_null_replacement_iterator(*d_col_no_null, T{0})),
-                            "Unexpected non-nullable column.");
-
-  CUDF_EXPECT_THROW_MESSAGE((d_col_null->begin<T>()),
-                            "Unexpected column with nulls.");
+                            "Unexpected non-nullable column.");  
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
                             "Unexpected non-nullable column.");

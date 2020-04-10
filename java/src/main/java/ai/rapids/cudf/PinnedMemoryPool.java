@@ -113,11 +113,17 @@ public final class PinnedMemoryPool implements AutoCloseable {
       long origAddress = 0;
       if (section != null) {
         origAddress = section.baseAddress;
-        PinnedMemoryPool.freeInternal(section);
-        if (origLength > 0) {
-          MemoryListener.hostDeallocation(origLength, id);
+        try {
+          PinnedMemoryPool.freeInternal(section);
+          if (origLength > 0) {
+            MemoryListener.hostDeallocation(origLength, id);
+          }
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          section = null;
         }
-        section = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
