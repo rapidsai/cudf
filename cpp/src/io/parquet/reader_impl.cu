@@ -366,7 +366,7 @@ void reader::impl::read_column_chunks(
     const size_t io_offset = column_chunk_offsets[chunk];
     size_t io_size = chunks[chunk].compressed_size;
     size_t next_chunk = chunk + 1;
-    bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
+    const bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
     while (next_chunk < end_chunk) {
       size_t next_offset = column_chunk_offsets[next_chunk];
       bool is_next_compressed = (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
