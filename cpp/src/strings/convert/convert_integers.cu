@@ -179,7 +179,9 @@ struct integer_to_string_size_fn
         if( value==0 )
             return 1;
         bool is_negative = value < 0;
-        value = abs(value);
+        // abs(std::numeric_limits<IntegerType>::min()) is negative
+        value = (value == std::numeric_limits<IntegerType>::min()) ? 
+                std::numeric_limits<IntegerType>::max() : abs(value);
         // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
         size_type digits = (value < 10 ? 1 :
                            (value < 100 ? 2 :
@@ -231,15 +233,14 @@ struct integer_to_string_fn
             return;
         }
         bool is_negative = value < 0;
-        value = abs(value);
         constexpr IntegerType base = 10;
         constexpr int MAX_DIGITS = 20; // largest 64-bit integer is 20 digits
         char digits[MAX_DIGITS]; // place-holder for digit chars
         int digits_idx = 0;
-        while( value > 0 )
+        while( value != 0 )
         {
             assert( digits_idx < MAX_DIGITS );
-            digits[digits_idx++] = '0' + (value % base);
+            digits[digits_idx++] = '0' + abs(value % base);
             value = value/base;
         }
         char* ptr = d_buffer;
