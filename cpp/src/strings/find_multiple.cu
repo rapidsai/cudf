@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -76,6 +77,7 @@ std::unique_ptr<column> find_multiple( strings_column_view const& strings,
                                        strings_column_view const& targets,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::find_multiple( strings, targets, mr );
 }
 

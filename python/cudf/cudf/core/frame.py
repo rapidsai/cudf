@@ -159,7 +159,7 @@ class Frame(libcudf.table.Table):
         # missing a column, that list will have None in the slot instead
         columns = [
             ([] if ignore_index else list(f._index._data.columns))
-            + [f[name]._column if name in f else None for name in names]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -584,6 +584,10 @@ class Frame(libcudf.table.Table):
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
 
+        if npartitions:
+            for i in range(npartitions - len(result)):
+                result.append(self._empty_like(keep_index))
+
         return result
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
@@ -912,7 +916,10 @@ class Frame(libcudf.table.Table):
                         col_replacement,
                         col_to_replace,
                     ) = _get_replacement_values(
-                        replacement, name, col, to_replace
+                        to_replace=to_replace,
+                        replacement=replacement,
+                        col_name=name,
+                        column=col,
                     )
 
                     copy_data[name] = col.find_and_replace(
@@ -1548,7 +1555,7 @@ class Frame(libcudf.table.Table):
         )
 
 
-def _get_replacement_values(replacement, col_name, column, to_replace):
+def _get_replacement_values(to_replace, replacement, col_name, column):
     from cudf.utils import utils
     from pandas.api.types import is_dict_like
 
@@ -1564,7 +1571,11 @@ def _get_replacement_values(replacement, col_name, column, to_replace):
                 replacement = [replacement] * len(to_replace)
             # Do not broadcast numeric dtypes
             elif pd.api.types.is_numeric_dtype(column.dtype):
-                replacement = [replacement]
+                if len(to_replace) > 0:
+                    replacement = [replacement]
+                else:
+                    # If to_replace is empty, replacement has to be empty.
+                    replacement = []
             else:
                 replacement = utils.scalar_broadcast_to(
                     replacement,
@@ -1593,8 +1604,13 @@ def _get_replacement_values(replacement, col_name, column, to_replace):
         replacement = [replacement]
 
     if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = [replacement[col_name]]
-        to_replace = [to_replace[col_name]]
+        replacement = replacement[col_name]
+        to_replace = to_replace[col_name]
+
+        if is_scalar(replacement):
+            replacement = [replacement]
+        if is_scalar(to_replace):
+            to_replace = [to_replace]
 
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)

@@ -23,11 +23,6 @@ import cudf
 import cudf._lib as libcudf
 
 from dask_cudf import sorting
-from dask_cudf.accessor import (
-    CachedAccessor,
-    CategoricalAccessor,
-    DatetimeAccessor,
-)
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -460,12 +455,6 @@ class Series(_Frame, dd.core.Series):
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
-
-    # ----------------------------------------------------------------------
-    # Accessor Methods
-    # ----------------------------------------------------------------------
-    dt = CachedAccessor("dt", DatetimeAccessor)
-    cat = CachedAccessor("cat", CategoricalAccessor)
 
 
 class Index(Series, dd.core.Index):

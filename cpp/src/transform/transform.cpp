@@ -50,7 +50,7 @@ void unary_operation(mutable_column_view output, column_view input,
           cudf::jit::get_type_name(output_type), {0}
           ) + code::kernel;
   }else{  
-    cuda_source = 
+    cuda_source = "\n" +
       cudf::jit::parse_single_function_cuda(
           udf, "GENERIC_UNARY_OP") + code::kernel;
   }
