@@ -166,17 +166,18 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
 
 TEST_F(StringsCharsTest, Integers)
 {
-    cudf::test::strings_column_wrapper strings({"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", ""});
+    cudf::test::strings_column_wrapper strings({"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10"});
     auto results = cudf::strings::is_integer(cudf::strings_column_view(strings));
-    cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,0,0,0,1,0,0} );
+    cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,0,0,0,1,0,0,0} );
     cudf::test::expect_columns_equal(*results,expected);
 }
 
 TEST_F(StringsCharsTest, Floats)
 {
-    cudf::test::strings_column_wrapper strings({"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "6.7e17", "-1.2e-5"});
+    cudf::test::strings_column_wrapper strings({"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "6.7e17", "-1.2e-5",
+                                                "e", ".e", "1.e+-2", "000.000", "1.0e+1.0", "1.2.3"});
     auto results = cudf::strings::is_float(cudf::strings_column_view(strings));
-    cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,1,0,0,1,1,1} );
+    cudf::test::fixed_width_column_wrapper<bool> expected( {1,1,1,0,0,1,1,1, 1,1,0,1,0,0} );
     cudf::test::expect_columns_equal(*results,expected);
 }
 
