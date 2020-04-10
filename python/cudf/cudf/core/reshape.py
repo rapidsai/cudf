@@ -6,10 +6,10 @@ import pandas as pd
 import cudf
 from cudf.core import DataFrame, Index, RangeIndex, Series
 from cudf.core.column import as_column, build_categorical_column
+from cudf.core.dataframe import _align_indices
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
-from cudf.core.dataframe import _align_indices
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
