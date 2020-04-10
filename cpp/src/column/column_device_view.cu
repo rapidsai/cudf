@@ -28,7 +28,7 @@ namespace cudf {
 column_device_view::column_device_view(column_view source)
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
-                                      source.null_count(), source.offset()},
+                                      source.offset()},
       _num_children{source.num_children()} {}
 
 // Free device memory allocated for children
@@ -147,7 +147,7 @@ create_device_view_from_view( ColumnView const& source, cudaStream_t stream )
 column_device_view::column_device_view( column_view source, void * h_ptr, void* d_ptr )
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
-                                      source.null_count(), source.offset()},
+                                      source.offset()},
       _num_children{source.num_children()}
 {
   d_children = child_columns_to_device_array<column_view,column_device_view>(source,h_ptr,d_ptr);
@@ -179,14 +179,14 @@ std::size_t column_device_view::extent(column_view const& source) {
 mutable_column_device_view::mutable_column_device_view( mutable_column_view source )
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
-                                      source.null_count(), source.offset()},
+                                      source.offset()},
       _num_children{source.num_children()} {}
 
 mutable_column_device_view::mutable_column_device_view(
     mutable_column_view source, void* h_ptr, void* d_ptr)
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
-                                      source.null_count(), source.offset()},
+                                      source.offset()},
       _num_children{source.num_children()} {
   d_children = child_columns_to_device_array<mutable_column_view,mutable_column_device_view>(source,h_ptr,d_ptr);
 }
