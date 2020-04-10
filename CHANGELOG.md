@@ -71,6 +71,7 @@
 - PR #4865 Add docs and clarify limitations of `applymap`
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4878 Remove obsolete string_from_host utility
 
 ## Bug Fixes
 
