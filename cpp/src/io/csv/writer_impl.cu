@@ -77,10 +77,11 @@ struct column_to_strings_fn
   {
     //bools...
     //
-    return strings_column_view{std::move(*cudf::strings::from_booleans(column,
-                                                                       options_.true_value(),
-                                                                       options_.false_value(),
-                                                                       mr_))};
+    auto conv_col_ptr = cudf::strings::from_booleans(column,
+                                                     options_.true_value(),
+                                                     options_.false_value(),
+                                                     mr_);
+    return strings_column_view{std::move(*conv_col_ptr)};
   }
 
   template<typename column_type>
@@ -89,6 +90,7 @@ struct column_to_strings_fn
   operator()(column_view const& column) const
   {
     //strings...
+    //
     return column;//strings_column_view(column);
   }
 
@@ -98,9 +100,10 @@ struct column_to_strings_fn
   operator()(column_view const& column) const
   {
     //ints...
-    //TODO:
     //
-    return strings_column_view(column);//for now
+    auto conv_col_ptr = cudf::strings::from_integers(column,
+                                                     mr_);
+    return strings_column_view{std::move(*conv_col_ptr)};
   }
 
   template<typename column_type>
@@ -109,9 +112,10 @@ struct column_to_strings_fn
   operator()(column_view const& column) const
   {
     //floats...
-    //TODO:
     //
-    return strings_column_view(column);//for now
+    auto conv_col_ptr = cudf::strings::from_floats(column,
+                                                   mr_);
+    return strings_column_view{std::move(*conv_col_ptr)};
   }
 
   template<typename column_type>
@@ -120,9 +124,12 @@ struct column_to_strings_fn
   operator()(column_view const& column) const
   {
     //timestamps...
-    //TODO:
     //
-    return strings_column_view(column);//for now
+    std::string format{"%Y-%m-%dT%H:%M:%SZ"};
+    auto conv_col_ptr = cudf::strings::from_timestamps(column,
+                                                       format,
+                                                       mr_);
+    return strings_column_view{std::move(*conv_col_ptr)};
   }
 
 
