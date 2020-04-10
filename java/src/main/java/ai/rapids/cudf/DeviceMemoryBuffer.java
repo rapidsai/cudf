@@ -46,11 +46,17 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
       long origAddress = address;
       if (address != 0) {
         long s = stream == null ? 0 : stream.getStream();
-        Rmm.free(address, lengthInBytes, s);
-        address = 0;
-        lengthInBytes = 0;
+        try {
+          Rmm.free(address, lengthInBytes, s);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+          lengthInBytes = 0;
+          stream = null;
+        }
         neededCleanup = true;
-        stream = null;
       }
       if (neededCleanup && logErrorIfNotClean) {
         log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
