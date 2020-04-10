@@ -440,7 +440,7 @@ class Frame(libcudf.table.Table):
                     )
                 )
 
-    def where(self, boolean_mask, other):
+    def where(self, cond, other=None):
         """
         Replace values with other where the condition is False.
 
@@ -453,7 +453,7 @@ class Frame(libcudf.table.Table):
         other: list of scalars or a dataframe or a series,
             Entries where cond is False are replaced with
             corresponding value from other. Callables are not
-            supported.
+            supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
             dataframe with same dimention as self.
@@ -490,8 +490,8 @@ class Frame(libcudf.table.Table):
         """
 
         if isinstance(self, cudf.DataFrame):
-            if not isinstance(boolean_mask, cudf.DataFrame):
-                boolean_mask = self.from_pandas(pd.DataFrame(boolean_mask))
+            if not isinstance(cond, cudf.DataFrame):
+                cond = self.from_pandas(pd.DataFrame(cond))
             other = self._normalize_columns_and_scalars_type(other)
             out_df = cudf.DataFrame(index=self.index)
             if len(self._columns) != len(other):
@@ -499,13 +499,13 @@ class Frame(libcudf.table.Table):
                     """Replacement list length or number of dataframe columns
                     should be equal to Number of columns of dataframe"""
                 )
-            if len(self._columns) != len(boolean_mask._columns):
+            if len(self._columns) != len(cond._columns):
                 raise ValueError(
                     """Array conditional must be same shape as self"""
                 )
 
             for in_col_name, cond_col_name, otr_col in zip(
-                self.columns, boolean_mask.columns, other
+                self.columns, cond.columns, other
             ):
                 input_col = self[in_col_name]._column
                 if is_categorical_dtype(input_col.dtype):
@@ -516,7 +516,7 @@ class Frame(libcudf.table.Table):
                     input_col = input_col.codes
 
                 result = libcudf.copying.copy_if_else(
-                    input_col, otr_col, boolean_mask[cond_col_name]._column
+                    input_col, otr_col, cond[cond_col_name]._column
                 )
 
                 if is_categorical_dtype(self[in_col_name].dtype):
@@ -546,7 +546,7 @@ class Frame(libcudf.table.Table):
                     other = other.codes
                 input_col = input_col.codes
             result = libcudf.copying.copy_if_else(
-                self._column, other, boolean_mask._column
+                self._column, other, cond._column
             )
 
             if is_categorical_dtype(self.dtype):
