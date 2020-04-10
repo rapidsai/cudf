@@ -49,6 +49,7 @@
 - PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
+- PR #4799 Remove null_count() and has_nulls() from column_device_view
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
 - PR #4783 Add support for child columns to mutable_column_device_view
 - PR #4802 Refactor `cudf::transpose` to increase performance.
@@ -67,6 +68,9 @@
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4865 Add docs and clarify limitations of `applymap`
+- PR #4871 Add in the build information when building the java jar file
+- PR #4869 Expose contiguous table when deserializing from Java
 
 ## Bug Fixes
 
@@ -115,12 +119,17 @@
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4826 Move memory resource from RmmTestEnvironment to the custom gtest main() scope
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
 - PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
+- PR #4838 Fix to support empty inputs to `replace` method
+- PR #4859 JSON reader: fix data type inference for string columns
+- PR #4868 Temporary fix to skip validation on Dask related runs
+- PR #4872 Fix broken column wrapper constructors in merge benchmark
 
 
 # cuDF 0.13.0 (31 Mar 2020)
