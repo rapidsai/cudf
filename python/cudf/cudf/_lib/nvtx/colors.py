@@ -7,7 +7,7 @@ _NVTX_COLORS = {
     "blue": 0x0000FF,
     "yellow": 0xFFFF00,
     "purple": 0x800080,
-    "rapids": 0x7400ff
+    "rapids": 0x7400ff,
     "cyan": 0x00FFFF,
     "red": 0xFF0000,
     "white": 0xFFFFFF,
