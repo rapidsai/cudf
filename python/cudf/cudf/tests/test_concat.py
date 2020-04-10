@@ -6,7 +6,8 @@ import pytest
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
-    
+
+
 def make_frames(index=None, nulls="none"):
     df = pd.DataFrame(
         {
@@ -237,11 +238,16 @@ def test_concat_string_index_name(myindex):
 
     assert df3.index.name == myindex
 
+
 def test_pandas_concat_compatibility_axis1():
-    d1 = gd.datasets.randomdata(3, dtypes={"a":float, "ind":float}).set_index("ind") 
-    d2 = gd.datasets.randomdata(3, dtypes={"b":float, "ind":float}).set_index("ind") 
+    d1 = gd.datasets.randomdata(3, dtypes={"a": float,
+                                           "ind": float}
+                                ).set_index("ind")
+    d2 = gd.datasets.randomdata(3, dtypes={"b": float,
+                                           "ind": float}
+                                ).set_index("ind")
     pd1 = d1.to_pandas()
     pd2 = d2.to_pandas()
     got = gd.concat([d1, d2], axis=1)
-    expect = pd.concat([pd1, pd2], axis=1)  
+    expect = pd.concat([pd1, pd2], axis=1)
     assert_eq(got, expect)

@@ -79,7 +79,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 df.index = o.index
             for col in o.columns:
                 df[col] = o[col]._column
-        
+
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
