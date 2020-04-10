@@ -634,21 +634,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
 // This is the struct to wrap the capturing lambda in order to pass the lambda to jitify.
 struct window_wrapper {
-
   const cudf::size_type *d_group_offsets;
   const cudf::size_type *d_group_labels;
   cudf::size_type window;
-
-  window_wrapper(
-    const cudf::size_type *d_group_offsets_, 
-    const cudf::size_type *d_group_labels_,
-    cudf::size_type window_
-  ):
-    d_group_offsets(d_group_offsets_),
-    d_group_labels(d_group_labels_),
-    window(window_)
-  {}
-
 };
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -713,17 +701,19 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
       return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
     };
 
-  window_wrapper grouped_preceding_window(
+  window_wrapper grouped_preceding_window
+  {
     group_offsets.data().get(), 
     group_labels.data().get(), 
     preceding_window
-  );
+  };
   
-  window_wrapper grouped_following_window(
+  window_wrapper grouped_following_window
+  {
     group_offsets.data().get(), 
     group_labels.data().get(), 
     following_window
-  );
+  };
  
   if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
     return cudf::experimental::detail::rolling_window_udf(input,
