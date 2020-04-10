@@ -2653,6 +2653,7 @@ class DataFrame(Frame):
                 newdf[col] = newseries
             result = newdf
             return result
+
     @applyutils.doc_apply()
     def apply_rows(
         self,
