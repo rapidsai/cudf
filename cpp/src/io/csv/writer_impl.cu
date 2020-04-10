@@ -52,9 +52,9 @@ namespace {//unnammed:
   
 struct column_to_strings_fn
 {
-  //negates all conditions used for
-  //instantiations of individual converters
-  //in strings/convert/convert_*.hpp
+  //compile-time predicate that defines unsupported column types;
+  //based on the conditions used for instantiations of individual
+  //converters in strings/convert/convert_*.hpp;
   //(this should have been a `variable template`,
   // instead of a static function, but nvcc (10.0)
   // fails to compile var-templs);
@@ -75,6 +75,11 @@ struct column_to_strings_fn
     mr_(mr)
   {
   }
+
+  //TODO: `null` replacement with `na_rep` could be defered to `concatenate()`
+  //instead of column-wise; might be faster
+  //
+  //TODO: pass `stream` to detail::<fname> version of <fname> calls below (?);
 
   //bools:
   //
@@ -262,9 +267,13 @@ void writer::impl::write(table_view const &table,
 
   //vts = split(table_view, row_offset, nrows);
   //loop v: vts{
+  //  str_table_view = make_empty();
   //  loop crt_col_v: v.columns{
-  //    str_col_v = column_to_strings_csv(crt_col_v);
+  //    str_col = type_dispatcher(crt_col_v.type(), column_to_strings_fn{options, mr_}, crt_col_v);
+  //    str_table_view.append(std::move(str_col));
   //  }
+  //  str_concat_col = concatenate(str_table_view, delimiter, na_rep, mr);
+  //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
   //}
 }
 
