@@ -110,60 +110,72 @@ struct column_to_strings_fn
     return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
+  //ints:
+  //
   template<typename column_type>
   std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //ints...
-    //
+    
     auto conv_col_ptr = cudf::strings::from_integers(column,
                                                      mr_);
-    //TODO: replace nulls by options.na_;
-    //
-    return strings_column_view{std::move(*conv_col_ptr)};
+
+    strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
+                                                                 options_.na_rep() ,
+                                                                 mr_);
+    
+    return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
+  //floats:
+  //
   template<typename column_type>
   std::enable_if_t<std::is_floating_point<column_type>::value,
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //floats...
-    //
     auto conv_col_ptr = cudf::strings::from_floats(column,
                                                    mr_);
-    //TODO: replace nulls by options.na_;
-    //
-    return strings_column_view{std::move(*conv_col_ptr)};
+
+    strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
+                                                                 options_.na_rep() ,
+                                                                 mr_);
+    
+    return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
+  //timestamps:
+  //
   template<typename column_type>
   std::enable_if_t<cudf::is_timestamp<column_type>(),
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //timestamps...
-    //
     std::string format{"%Y-%m-%dT%H:%M:%SZ"};
     auto conv_col_ptr = cudf::strings::from_timestamps(column,
                                                        format,
                                                        mr_);
-    //TODO: replace nulls by options.na_;
-    //
-    return strings_column_view{std::move(*conv_col_ptr)};
+
+    strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
+                                                                 options_.na_rep() ,
+                                                                 mr_);
+    
+    return strings_column_view{std::move(*converted_nulls_replaced)};
   }
 
 
+  //unsupported type of column:
+  //
   template<typename column_type>
   std::enable_if_t<is_not_handled<column_type>(),
                    strings_column_view>
   operator()(column_view const& column) const
   {
-    //not to be called...
-    //
     CUDF_FAIL("Unsupported column type.");
-    //silence the compiler: no return
   }
 private:
   writer_options const& options_;
