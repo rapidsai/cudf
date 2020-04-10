@@ -74,9 +74,15 @@ public class HostMemoryBuffer extends MemoryBuffer {
       boolean neededCleanup = false;
       long origAddress = address;
       if (address != 0) {
-        UnsafeMemoryAccessor.free(address);
-        MemoryListener.hostDeallocation(length, id);
-        address = 0;
+        try {
+          UnsafeMemoryAccessor.free(address);
+          MemoryListener.hostDeallocation(length, id);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -105,8 +111,14 @@ public class HostMemoryBuffer extends MemoryBuffer {
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (address != 0) {
-        munmap(address, length);
-        address = 0;
+        try {
+          munmap(address, length);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {

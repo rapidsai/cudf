@@ -131,6 +131,7 @@
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
+- PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 
 
 # cuDF 0.13.0 (31 Mar 2020)
