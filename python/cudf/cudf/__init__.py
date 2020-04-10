@@ -2,7 +2,7 @@
 
 from cudf.utils.gpu_utils import validate_setup  # isort:skip
 
-validate_setup()
+validate_setup(check_dask=False)
 
 import cupy
 
