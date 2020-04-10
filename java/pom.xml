@@ -228,6 +228,11 @@
     <build>
         <resources>
             <resource>
+              <!-- Include the properties file to provide the build information. -->
+              <directory>${project.build.directory}/extra-resources</directory>
+              <filtering>true</filtering>
+            </resource>
+            <resource>
               <directory>${basedir}/..</directory>
               <targetPath>META-INF</targetPath>
               <includes>
@@ -334,6 +339,11 @@
                                       failonerror="true"
                                       executable="make">
                                     <arg value="-j"/>
+                                </exec>
+                                <mkdir dir="${project.build.directory}/extra-resources"/>
+                                <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
+                                  <arg value="${project.basedir}/buildscripts/build-info"/>
+                                  <arg value="${project.version}"/>
                                 </exec>
                             </tasks>
                         </configuration>
