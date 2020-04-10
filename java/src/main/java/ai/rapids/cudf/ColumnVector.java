@@ -120,6 +120,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a column of strings where, for each string row in the input,
+   * the first character after spaces is modified to upper-case,
+   * while all the remaining characters in a word are modified to lower-case.
+   *
+   * Any null string entries return corresponding null output column entries
+   */
+  public ColumnVector toTitle() {
+    assert type == DType.STRING;
+    return new ColumnVector(title(getNativeView()));
+  }
+
+  private native long title(long handle);
+
+  /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
    * tracking code that this is expected for this column, and big scary warnings should
@@ -1571,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }

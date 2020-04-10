@@ -40,16 +40,25 @@ If you use the default cmake options libcudart will be dynamically linked to lib
 which are included.  If you do this the resulting jar will have a classifier associated with it
 because that jar can only be used with a single version of the CUDA runtime.  If you want
 to remove that requirement you can build RMM and cuDF with `-DCUDA_STATIC_RUNTIME=ON` when
-running cmake.  This will statically link in the CUDA runtime and result in a jar with no
+running cmake, and similarly -DCUDA_STATIC_RUNTIME=ON when running maven.  This will statically 
+link in the CUDA runtime and result in a jar with no
 classifier that should run on any host that has a version of the driver new enough to support
 the runtime that this was built with.  Official releases will indicate in the release notes
 the minimum driver version required.
 
-Then run maven as you would expect.
+To build with maven for dynamic linking you would run.
 
 ```
 mvn clean install
 ```
+
+for static linking you would run
+
+```
+mvn clean install -DCUDA_STATIC_RUNTIME=ON
+```
+
+You will get errors if you don't do it consistently.  We tried to detect these up front and stop the build early if there is a mismatch, but there may be some cases we missed and this can result in some very hard to debug errors.
 
 If you have a compatible GPU on your build system the tests will use it.  If not you will see a
 lot of skipped tests.

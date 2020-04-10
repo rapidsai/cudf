@@ -550,18 +550,21 @@ def test_hash_object_dispatch(index):
     # DataFrame
     result = dd.utils.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # Series
     result = dd.utils.hash_object_dispatch(obj["x"], index=index)
     expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
     result = dd.utils.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
