@@ -577,7 +577,7 @@ protected:
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_max_aggregation());
     run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_mean_aggregation());
-    
+
     if (!cudf::is_timestamp(input.type())) {
       run_test_col(keys, timestamp_column, input, expected_grouping, preceding_window_in_days, following_window_in_days, min_periods, cudf::experimental::make_sum_aggregation());
     }

@@ -752,7 +752,7 @@ namespace
         return 24L*60*60*1000*1000*1000;
     }
   }
- 
+
   template <typename TimestampImpl_t>
   std::unique_ptr<column> grouped_time_range_rolling_window_impl( column_view const& input,
                                                       column_view const& timestamp_column,
