@@ -109,6 +109,55 @@ std::unique_ptr<column> binary_operation(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
+/**
+ * @brief Performs null-aware comparison between every element from lhs with rhs.
+ *
+ * This compares every element from lhs with rhs and returns a bool as a result of
+ * comparison. The comparison works thusly:
+ *
+ * If lhs[i] is null && rhs is null, return true
+ * If lhs[i] is not null && rhs is not null, return the result of lhs[i] == rhs
+ * Else return false
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand scalar
+ * @param mr          Memory resource for allocating output column
+ * @param stream      CUDA stream on which to execute kernels
+ * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't same
+ */
+std::unique_ptr<column> null_aware_equal(
+    column_view const& lhs,
+    scalar const& rhs,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
+/**
+ * @brief Performs null-aware comparison between every element of lhs with the corresponding
+ * element from rhs.
+ *
+ * This compares each element from lhs with rhs in turn, and returns a bool as a result of
+ * comparison. The comparison works thusly:
+ *
+ * If lhs[i] is null and rhs[i] is null, return true
+ * If lhs[i] is not null and rhs[i] is not null, return the result of lhs[i] == rhs[i]
+ * Else return false
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param mr          Memory resource for allocating output column
+ * @param stream      CUDA stream on which to execute kernels
+ * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
+ * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't same
+ * @throw cudf::logic_error if @p lhs and @p rhs aren't the same size
+ * @throw cudf::logic_error if @p lhs or @p rhs is empty
+ */
+std::unique_ptr<column> null_aware_equal(
+    column_view const& lhs,
+    column_view const& rhs,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0);
+
 } // namespace compiled
 } // namespace binops
 } // namespace experimental

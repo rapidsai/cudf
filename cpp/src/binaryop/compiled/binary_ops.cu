@@ -145,6 +145,91 @@ struct binary_op {
   }
 };
 
+// This functor performs null aware comparison between two columns or a column and a scalar by
+// iterating over them on the device
+struct null_aware_comparator {
+    // This functor does the actual comparison between column and a scalar or two columns
+    template <typename ColT, typename RhsDeviceViewT>
+    struct compare_functor {
+        column_device_view const lhs_dev_view_;  // Column device view - lhs
+        RhsDeviceViewT const rhs_dev_view_;  // Scalar or a column device view - rhs
+
+        compare_functor(column_device_view const& lhs_dev_view,
+                        RhsDeviceViewT const& rhs_dev_view)
+            : lhs_dev_view_(lhs_dev_view),
+              rhs_dev_view_(rhs_dev_view) {}
+
+        // This is used to compare a scalar and a column value
+        template <typename RhsViewT = RhsDeviceViewT>
+        CUDA_DEVICE_CALLABLE
+        typename std::enable_if_t<!std::is_same<RhsViewT, column_device_view>::value, bool>
+        operator()(cudf::size_type i) const {
+            if (!rhs_dev_view_.is_valid() && !lhs_dev_view_.is_valid(i)) return true;
+
+            if (rhs_dev_view_.is_valid() && lhs_dev_view_.is_valid(i)) {
+                return (lhs_dev_view_.element<ColT>(i) == rhs_dev_view_.value());
+            }
+
+            return false;
+        }
+
+        // This is used to compare 2 column values
+        template <typename RhsViewT = RhsDeviceViewT>
+        CUDA_DEVICE_CALLABLE
+        typename std::enable_if_t<std::is_same<RhsViewT, column_device_view>::value, bool>
+        operator()(cudf::size_type i) const {
+            if (!rhs_dev_view_.is_valid(i) && !lhs_dev_view_.is_valid(i)) return true;
+
+            if (rhs_dev_view_.is_valid(i) && lhs_dev_view_.is_valid(i)) {
+                return lhs_dev_view_.element<ColT>(i) == rhs_dev_view_.template element<ColT>(i);
+            }
+
+            return false;
+        }
+    };
+
+    template <typename ColT>
+    auto get_device_view(cudf::scalar const& scalar_item) const {
+        return get_scalar_device_view(
+                static_cast<cudf::experimental::scalar_type_t<ColT>&>(
+                    const_cast<scalar&>(scalar_item)));
+    }
+
+    template <typename ColT>
+    auto get_device_view(column_device_view const& col_item) const {
+        return col_item;
+    }
+
+    // This is invoked to perform comparison for all cudf types barring dictionary types
+    template <typename ColT, typename RhsT>
+    typename std::enable_if_t<!std::is_same<ColT, cudf::dictionary32>::value, void>
+    operator()(mutable_column_view &out,
+               column_device_view const& lhs_dev_view,
+               RhsT const& rhs,
+               cudaStream_t stream) const {
+        // The rhs item can be a scalar or a column. Use the same interface to get its device view
+        auto const rhs_dev_view = get_device_view<ColT>(rhs);
+
+        compare_functor<ColT, typename std::remove_const<decltype(rhs_dev_view)>::type>
+            cfunc{lhs_dev_view, rhs_dev_view};
+
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(lhs_dev_view.size()),
+                          out.begin<bool>(),
+                          cfunc);
+    }
+
+    template <typename ColT, typename RhsT>
+    typename std::enable_if_t<std::is_same<ColT, cudf::dictionary32>::value, void>
+    operator()(mutable_column_view &out,
+               column_device_view const& lhs,
+               RhsT const& rhs,
+               cudaStream_t stream) const {
+        CUDF_FAIL("NULL aware comparator for column and scalar not supported for dictionary types");
+    }
+};
+
 }  // namespace
 
 std::unique_ptr<column> binary_operation(scalar const& lhs, column_view const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
@@ -169,6 +254,49 @@ std::unique_ptr<column> binary_operation(column_view const& lhs, column_view con
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
   return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, mr, stream);
+}
+
+std::unique_ptr<column> null_aware_equal(
+    column_view const& lhs,
+    scalar const& rhs,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+    // Make a bool8 numeric column that is non nullable
+    auto out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::UNALLOCATED,
+                                   stream, mr);
+    auto out_col_view = out->mutable_view();
+
+    // Create device views for column(s)
+    auto const lhs_dev_view = cudf::column_device_view::create(lhs, stream);
+
+    cudf::experimental::type_dispatcher(lhs.type(),
+                                        null_aware_comparator{},
+                                        out_col_view, *lhs_dev_view, rhs,
+                                        stream);
+
+    return out;
+}
+
+std::unique_ptr<column> null_aware_equal(
+    column_view const& lhs,
+    column_view const& rhs,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream) {
+    // Make a bool8 numeric column that is non nullable
+    auto out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::UNALLOCATED,
+                                   stream, mr);
+    auto out_col_view = out->mutable_view();
+
+    // Create device views for column(s)
+    auto const lhs_dev_view = cudf::column_device_view::create(lhs, stream);
+    auto const rhs_dev_view = cudf::column_device_view::create(rhs, stream);
+
+    cudf::experimental::type_dispatcher(lhs.type(),
+                                        null_aware_comparator{},
+                                        out_col_view, *lhs_dev_view, *rhs_dev_view,
+                                        stream);
+
+    return out;
 }
 
 }  // namespace compiled
