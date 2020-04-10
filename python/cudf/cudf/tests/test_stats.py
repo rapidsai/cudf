@@ -25,7 +25,7 @@ def test_series_reductions(method, dtype):
         mask = arr > 0.5
 
     arr = arr.astype(dtype)
-    arr2 = arr[mask]
+    arr2 = arr[~mask]
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
 
     def call_test(sr):
@@ -78,8 +78,8 @@ def test_series_unique():
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
-        assert set(arr[mask]) == set(sr.unique().to_array())
-        assert len(set(arr[mask])) == sr.nunique()
+        assert set(arr[~mask]) == set(sr.unique().to_array())
+        assert len(set(arr[~mask])) == sr.nunique()
 
 
 @pytest.mark.parametrize(
@@ -286,7 +286,7 @@ def test_series_median(dtype, num_na):
 
     arr = arr.astype(dtype)
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
-    arr2 = arr[mask]
+    arr2 = arr[~mask]
     ps = pd.Series(arr2, dtype=dtype)
 
     actual = sr.median(skipna=True)

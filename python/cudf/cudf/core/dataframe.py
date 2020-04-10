@@ -489,7 +489,7 @@ class DataFrame(Frame):
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
-            return self.mask(arg)
+            return self.mask(~arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
@@ -500,6 +500,8 @@ class DataFrame(Frame):
             if col in other.columns:
                 if other[col].has_nulls:
                     raise ValueError("Column must have no nulls.")
+                if self[col]._column.nullable:
+                    other[col] = other[col].set_mask(self[col]._column.mask)
 
                 out_mask = bools_to_mask(other[col]._column)
             else:

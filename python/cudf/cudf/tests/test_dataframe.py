@@ -1784,7 +1784,7 @@ def test_dataframe_boolmask(mask_shape):
         pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
     gdf = DataFrame.from_pandas(pdf)
     gdf_mask = DataFrame.from_pandas(pdf_mask)
-
+    # import pdb;pdb.set_trace()
     gdf = gdf[gdf_mask]
     pdf = pdf[pdf_mask]
 
@@ -3596,7 +3596,7 @@ def test_series_value_counts():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         sr.name = "col"
-        df = pd.DataFrame(data=arr[mask], columns=["col"])
+        df = pd.DataFrame(data=arr[~mask], columns=["col"])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().sort_index()
 
