@@ -632,5 +632,10 @@ std::unique_ptr<table> boolean_mask_scatter(
     column_view const& boolean_mask,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
+std::unique_ptr<column> boolean_mask_scatter(
+    column_view const& input, column_view const& target,
+    column_view const& boolean_mask,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf
