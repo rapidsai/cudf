@@ -132,13 +132,13 @@ struct IteratorTest : public cudf::test::BaseFixture
     bool result = thrust::transform_reduce(thrust::device,
         thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
         thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-        [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
+        [] __device__(auto it) { return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
         true,
         thrust::logical_and<bool>());
     #ifndef NDEBUG
     thrust::device_vector<bool> vec(expected.size(), false);
     thrust::transform(thrust::device,
-        thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
+        thrust::make_zip_iterator(thrust::make_tuple(d_in,  .begin())),
         thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
         vec.begin(),
         [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); }
@@ -188,10 +188,10 @@ TYPED_TEST(IteratorTest, non_null_iterator) {
   thrust::host_vector<T> replaced_array(host_array);
 
   // driven by iterator as a pointer of device array.
-  // FIXME: compilation error for cudf::experimental::bool8
-  // auto it_dev = dev_array.begin();
-  // this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
-  // this->iterator_test_cub(expected_value, it_dev, dev_array.size());
+  auto it_dev = dev_array.begin();
+  T expected_value = *std::min_element(replaced_array.begin(), replaced_array.end());
+  this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
+  this->iterator_test_cub(expected_value, it_dev, dev_array.size());
 
   // test column input
   cudf::test::fixed_width_column_wrapper<T> w_col(host_array.begin(),
