@@ -21,6 +21,7 @@
 
 #include "writer_impl.hpp"
 
+#include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -37,6 +38,9 @@
 #include <cstring>
 #include <utility>
 #include <type_traits>
+
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
@@ -85,7 +89,7 @@ struct column_to_strings_fn
   //
   template<typename column_type>
   std::enable_if_t<std::is_same<column_type, bool>::value,
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
     auto conv_col_ptr = cudf::strings::from_booleans(column,
@@ -94,32 +98,28 @@ struct column_to_strings_fn
                                                      mr_);
 
     strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
-                                                                 options_.na_rep() ,
-                                                                 mr_);
-    
-    return strings_column_view{std::move(*converted_nulls_replaced)};
+    return  cudf::strings::replace_nulls(strings_converted,
+                                         options_.na_rep() ,
+                                         mr_);
   }
 
   //strings:
   //
   template<typename column_type>
   std::enable_if_t<std::is_same<column_type, cudf::string_view>::value,
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
-    auto converted_nulls_replaced = cudf::strings::replace_nulls(column,
-                                                                 options_.na_rep() ,
-                                                                 mr_);
-    
-    return strings_column_view{std::move(*converted_nulls_replaced)};
+    return cudf::strings::replace_nulls(column,
+                                        options_.na_rep() ,
+                                        mr_);
   }
 
   //ints:
   //
   template<typename column_type>
   std::enable_if_t<std::is_integral<column_type>::value && !std::is_same<column_type, bool>::value,
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
     
@@ -127,49 +127,43 @@ struct column_to_strings_fn
                                                      mr_);
 
     strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
-                                                                 options_.na_rep() ,
-                                                                 mr_);
-    
-    return strings_column_view{std::move(*converted_nulls_replaced)};
+    return cudf::strings::replace_nulls(strings_converted,
+                                        options_.na_rep() ,
+                                        mr_);
   }
 
   //floats:
   //
   template<typename column_type>
   std::enable_if_t<std::is_floating_point<column_type>::value,
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
     auto conv_col_ptr = cudf::strings::from_floats(column,
                                                    mr_);
 
     strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
-                                                                 options_.na_rep() ,
-                                                                 mr_);
-    
-    return strings_column_view{std::move(*converted_nulls_replaced)};
+    return cudf::strings::replace_nulls(strings_converted,
+                                        options_.na_rep() ,
+                                        mr_);
   }
 
   //timestamps:
   //
   template<typename column_type>
   std::enable_if_t<cudf::is_timestamp<column_type>(),
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
-    std::string format{"%Y-%m-%dT%H:%M:%SZ"};
+    std::string format{"%Y-%m-%dT%H:%M:%SZ"};//same as default for `from_timestamp`
     auto conv_col_ptr = cudf::strings::from_timestamps(column,
                                                        format,
                                                        mr_);
 
     strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    auto converted_nulls_replaced = cudf::strings::replace_nulls(strings_converted,
-                                                                 options_.na_rep() ,
-                                                                 mr_);
-    
-    return strings_column_view{std::move(*converted_nulls_replaced)};
+    return cudf::strings::replace_nulls(strings_converted,
+                                        options_.na_rep() ,
+                                        mr_);
   }
 
 
@@ -177,7 +171,7 @@ struct column_to_strings_fn
   //
   template<typename column_type>
   std::enable_if_t<is_not_handled<column_type>(),
-                   strings_column_view>
+                   std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
     CUDF_FAIL("Unsupported column type.");
@@ -252,29 +246,59 @@ void writer::impl::write(table_view const &table,
   CUDF_EXPECTS( table.num_columns() > 0 && table.num_rows() > 0, "Empty table." );
 
   //no need to check same-size columns constraint; auto-enforced by table_view
-  auto rows_chunk = options_.rows_per_chunk();
+  auto n_rows_per_chunk = options_.rows_per_chunk();
   //
   // This outputs the CSV in row chunks to save memory.
   // Maybe we can use the total_rows*count calculation and a memory threshold
   // instead of an arbitrary chunk count.
   // The entire CSV chunk must fit in CPU memory before writing it out.
   //
-  if( rows_chunk % 8 ) // must be divisible by 8
-    rows_chunk += 8 - (rows_chunk % 8);
-  CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
+  if( n_rows_per_chunk % 8 ) // must be divisible by 8
+    n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
+  CUDF_EXPECTS( n_rows_per_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
   auto exec = rmm::exec_policy(stream);
+  
+  auto num_rows = table.num_rows();
+  std::vector<size_type> splits;
 
-  //vts = split(table_view, row_offset, nrows);
-  //loop v: vts{
-  //  str_table_view = make_empty();
-  //  loop crt_col_v: v.columns{
-  //    str_col = type_dispatcher(crt_col_v.type(), column_to_strings_fn{options, mr_}, crt_col_v);
-  //    str_table_view.append(std::move(str_col));
-  //  }
+  if (num_rows <= n_rows_per_chunk )
+    splits.push_back(num_rows);
+  else {
+    auto n_chunks = num_rows / n_rows_per_chunk;
+    splits.resize(n_chunks);
+
+    rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
+    thrust::inclusive_scan(exec->on(stream),
+                           d_splits.begin(), d_splits.end(),
+                           d_splits.begin());
+
+    CUDA_TRY(cudaMemcpyAsync(d_splits.data().get(), splits.data(),
+                             n_chunks*sizeof(size_type), cudaMemcpyDeviceToHost,
+                             stream));
+
+    CUDA_TRY(cudaStreamSynchronize(stream));
+  }
+
+  auto vector_views = cudf::experimental::split(table, splits);
+  for(auto&& sub_view: vector_views) {
+    std::vector<std::unique_ptr<column>> str_column_vec;
+    column_to_strings_fn converter{options_, mr_};
+    
+    std::transform(sub_view.begin(), sub_view.end(),
+                   std::back_inserter(str_column_vec),
+                   [converter](auto const& current_col) {
+                     return cudf::experimental::type_dispatcher(current_col.type(),
+                                                                converter,
+                                                                current_col);
+                   });
+    
+    auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
+    table_view str_table_view{std::move(*str_table_ptr)};
+    
   //  str_concat_col = concatenate(str_table_view, delimiter, na_rep, mr);
   //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
-  //}
+  }
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
