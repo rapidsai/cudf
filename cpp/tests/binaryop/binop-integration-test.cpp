@@ -924,7 +924,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
           { "eee", "bb", "<null>", "", "aa", "bbb", "ééé" },
           { true, false, true, true, true, false, true }
           );
-  // Empty string
+  // Match a valid string
   cudf::string_scalar str_scalar("<null>");
 
   // Output is non nullable - every row has a value
@@ -946,7 +946,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
   auto str_col = cudf::test::strings_column_wrapper(
           { "eee", "bb", "<null>", "", "aa", "bbb", "ééé" }
           );
-  // Empty string
+  // Matching a string that isn't present
   cudf::string_scalar str_scalar("foo");
 
   // Output is non nullable - every row has a value
@@ -968,7 +968,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
           { "eee", "bb", "<null>", "", "aa", "bbb", "ééé" },
           { true, false, true, true, true, false, true }
           );
-  // Empty string
+  // Matching an invalid string
   cudf::string_scalar str_scalar("bb");
 
   // Output is non nullable - every row has a value
@@ -990,7 +990,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
           { "eee", "bb", "<null>", "", "aa", "bbb", "ééé" },
           { true, false, true, true, true, false, true }
           );
-  // Empty string
+  // Valid string invalidated
   cudf::string_scalar str_scalar("bb");
   str_scalar.set_valid(false);
 
