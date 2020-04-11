@@ -64,13 +64,17 @@
 - PR #4840 Add docs for `T`, `empty` & `values`
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
+- PR #4847 Replace legacy NVTX calls with "standalone" NVTX bindings calls
 - PR #4851 Performance improvements relating to `concat` 
 - PR #4852 Add NVTX range calls to strings and nvtext APIs
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4865 Add docs and clarify limitations of `applymap`
+- PR #4867 Parquet reader: coalesce adjacent column chunk reads
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4873 Prevent mutable_view() from invoking null count
 
 ## Bug Fixes
 
@@ -130,6 +134,7 @@
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
+- PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 
 
 # cuDF 0.13.0 (31 Mar 2020)
