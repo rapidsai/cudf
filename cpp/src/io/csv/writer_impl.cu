@@ -24,6 +24,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <cudf/utilities/traits.hpp>
 
 #include <cudf/strings/convert/convert_booleans.hpp>
@@ -32,6 +33,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 
 #include <cudf/strings/replace.hpp>
+#include <cudf/strings/combine.hpp>
 
 
 #include <algorithm>
@@ -280,11 +282,18 @@ void writer::impl::write(table_view const &table,
     CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
+  //split table_view into chunks:
+  //
   auto vector_views = cudf::experimental::split(table, splits);
+
+  //convert each chunk to CSV:
+  //
   for(auto&& sub_view: vector_views) {
     std::vector<std::unique_ptr<column>> str_column_vec;
     column_to_strings_fn converter{options_, mr_};
-    
+
+    //populate vector of string-converted columns:
+    //
     std::transform(sub_view.begin(), sub_view.end(),
                    std::back_inserter(str_column_vec),
                    [converter](auto const& current_col) {
@@ -292,11 +301,17 @@ void writer::impl::write(table_view const &table,
                                                                 converter,
                                                                 current_col);
                    });
-    
+
+    //create string table view from str_column_vec:
+    //
     auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
     table_view str_table_view{std::move(*str_table_ptr)};
-    
-  //  str_concat_col = concatenate(str_table_view, delimiter, na_rep, mr);
+
+    std::string delimiter_str{options_.inter_column_delimiter()};
+    auto str_concat_col = cudf::strings::concatenate(str_table_view,
+                                                     delimiter_str,
+                                                     options_.na_rep(),
+                                                     mr_);
   //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
   }
 }
