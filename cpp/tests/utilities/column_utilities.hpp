@@ -133,12 +133,12 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  *
  * @tparam T The data type of the elements of the `column_view`
  * @param c the `column_view` to copy from
- * @return std::pair<std::vector<T>, std::vector<bitmask_type>> first is the
+ * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
-  std::vector<T> host_data(c.size());
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+  thrust::host_vector<T> host_data(c.size());
   CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return { host_data, bitmask_to_host(c) };
 }
@@ -154,7 +154,7 @@ std::pair<std::vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<std::vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
+inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);

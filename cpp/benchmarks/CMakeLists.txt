@@ -88,6 +88,14 @@ set(SHIFT_BENCH_SRC
 ConfigureBench(SHIFT_BENCH "${SHIFT_BENCH_SRC}")
 
 ###################################################################################################
+# - transpose benchmark ---------------------------------------------------------------------------
+
+set(TRANSPOSE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_benchmark.cu")
+
+ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
+
+###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC

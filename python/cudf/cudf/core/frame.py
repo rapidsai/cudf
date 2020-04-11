@@ -10,6 +10,7 @@ from pandas.api.types import is_dtype_equal
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
@@ -40,13 +41,12 @@ class Frame(libcudf.table.Table):
         return cls(table._data, index=table._index)
 
     @classmethod
+    @annotate("CUDF_CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
-
-        libcudf.nvtx.range_push("CUDF_CONCAT", "orange")
 
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
@@ -159,7 +159,7 @@ class Frame(libcudf.table.Table):
         # missing a column, that list will have None in the slot instead
         columns = [
             ([] if ignore_index else list(f._index._data.columns))
-            + [f[name]._column if name in f else None for name in names]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -219,8 +219,6 @@ class Frame(libcudf.table.Table):
 
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
-
-        libcudf.nvtx.range_pop()
 
         return out
 
@@ -321,11 +319,6 @@ class Frame(libcudf.table.Table):
             return self
         start, stop, stride = arg.indices(num_rows)
 
-        if stride is not None and stride != 1:
-            raise ValueError(
-                """Step size is not supported other than None and 1"""
-            )
-
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
@@ -337,23 +330,30 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop:
+        if start > stop and (stride is None or stride == 1):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
-            result = self._from_table(
-                libcudf.copying.table_slice(self, [start, stop], keep_index)[0]
-            )
+            if stride is not None and stride != 1:
+                return self._gather(
+                    cupy.arange(start, stop=stop, step=stride, dtype=np.int32)
+                )
+            else:
+                result = self._from_table(
+                    libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
 
-            result._copy_categories(self, include_index=keep_index)
-            # Adding index of type RangeIndex back to
-            # result
-            if keep_index is False and self.index is not None:
-                result.index = self.index[start:stop]
-            result.columns = self.columns
-            return result
+                result._copy_categories(self, include_index=keep_index)
+                # Adding index of type RangeIndex back to
+                # result
+                if keep_index is False and self.index is not None:
+                    result.index = self.index[start:stop]
+                result.columns = self.columns
+                return result
 
     def _normalize_scalars(self, other):
         """
@@ -581,6 +581,10 @@ class Frame(libcudf.table.Table):
 
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
+
+        if npartitions:
+            for i in range(npartitions - len(result)):
+                result.append(self._empty_like(keep_index))
 
         return result
 
@@ -897,6 +901,33 @@ class Frame(libcudf.table.Table):
         )
 
         result._copy_categories(self)
+        return result
+
+    def replace(self, to_replace, replacement):
+        copy_data = self._data.copy()
+
+        for name, col in copy_data.items():
+            if not (to_replace is None and replacement is None):
+                try:
+                    (
+                        col_all_nan,
+                        col_replacement,
+                        col_to_replace,
+                    ) = _get_replacement_values(
+                        to_replace=to_replace,
+                        replacement=replacement,
+                        col_name=name,
+                        column=col,
+                    )
+
+                    copy_data[name] = col.find_and_replace(
+                        col_to_replace, col_replacement, col_all_nan
+                    )
+                except KeyError:
+                    # Donot change the copy_data[name]
+                    pass
+
+        result = self._from_table(Frame(copy_data, self.index))
         return result
 
     def _copy_categories(self, other, include_index=True):
@@ -1347,7 +1378,7 @@ class Frame(libcudf.table.Table):
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
+                    codes=cat_codes.get(str(name) + "_codes", col),
                     mask=col.base_mask,
                     size=col.size,
                     offset=col.offset,
@@ -1520,3 +1551,65 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+
+def _get_replacement_values(to_replace, replacement, col_name, column):
+    from cudf.utils import utils
+    from pandas.api.types import is_dict_like
+
+    all_nan = False
+
+    if is_dict_like(to_replace) and replacement is None:
+        replacement = list(to_replace.values())
+        to_replace = list(to_replace.keys())
+    elif not is_scalar(to_replace):
+        if is_scalar(replacement):
+            all_nan = replacement is None
+            if all_nan:
+                replacement = [replacement] * len(to_replace)
+            # Do not broadcast numeric dtypes
+            elif pd.api.types.is_numeric_dtype(column.dtype):
+                if len(to_replace) > 0:
+                    replacement = [replacement]
+                else:
+                    # If to_replace is empty, replacement has to be empty.
+                    replacement = []
+            else:
+                replacement = utils.scalar_broadcast_to(
+                    replacement,
+                    (len(to_replace),),
+                    np.dtype(type(replacement)),
+                )
+        else:
+            # If both are non-scalar
+            if len(to_replace) != len(replacement):
+                raise ValueError(
+                    "Replacement lists must be "
+                    "of same length."
+                    "Expected {}, got {}.".format(
+                        len(to_replace), len(replacement)
+                    )
+                )
+    else:
+        if not is_scalar(replacement):
+            raise TypeError(
+                "Incompatible types '{}' and '{}' "
+                "for *to_replace* and *replacement*.".format(
+                    type(to_replace).__name__, type(replacement).__name__
+                )
+            )
+        to_replace = [to_replace]
+        replacement = [replacement]
+
+    if is_dict_like(to_replace) and is_dict_like(replacement):
+        replacement = replacement[col_name]
+        to_replace = to_replace[col_name]
+
+        if is_scalar(replacement):
+            replacement = [replacement]
+        if is_scalar(to_replace):
+            to_replace = [to_replace]
+
+    if isinstance(replacement, list):
+        all_nan = replacement.count(None) == len(replacement)
+    return all_nan, replacement, to_replace

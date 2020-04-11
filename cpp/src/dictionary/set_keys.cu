@@ -98,7 +98,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
 
     // compute the new nulls
     auto matches = experimental::detail::contains( keys, keys_column->view(), mr, stream );
-    auto d_matches = matches->view().data<experimental::bool8>();
+    auto d_matches = matches->view().data<bool>();
     auto d_indices = dictionary_column.indices().data<int32_t>();
     auto d_null_mask = dictionary_column.null_mask();
     auto new_nulls = experimental::detail::valid_if(
@@ -106,7 +106,7 @@ std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_colum
                     thrust::make_counting_iterator<size_type>(dictionary_column.offset()+dictionary_column.size()),
                     [d_null_mask, d_indices, d_matches] __device__ (size_type idx) {
                         if( d_null_mask && !bit_is_set(d_null_mask,idx) )
-                            return cudf::experimental::false_v;
+                            return false;
                         return d_matches[d_indices[idx]];
                     }, stream, mr);
 

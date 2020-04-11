@@ -136,8 +136,14 @@ public class Cuda {
       boolean neededCleanup = false;
       long origAddress = event;
       if (event != 0) {
-        destroyEvent(event);
-        event = 0;
+        try {
+          destroyEvent(event);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          event = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {

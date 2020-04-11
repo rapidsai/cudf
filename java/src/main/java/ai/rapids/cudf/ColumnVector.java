@@ -120,6 +120,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a column of strings where, for each string row in the input,
+   * the first character after spaces is modified to upper-case,
+   * while all the remaining characters in a word are modified to lower-case.
+   *
+   * Any null string entries return corresponding null output column entries
+   */
+  public ColumnVector toTitle() {
+    assert type == DType.STRING;
+    return new ColumnVector(title(getNativeView()));
+  }
+
+  private native long title(long handle);
+
+  /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
    * tracking code that this is expected for this column, and big scary warnings should
@@ -1571,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }
@@ -2046,6 +2060,46 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Close all non-null buffers. Exceptions that occur during the process will
+   * be aggregated into a single exception thrown at the end.
+   */
+  static void closeBuffers(MemoryBuffer data, MemoryBuffer valid, MemoryBuffer offsets) {
+    Throwable toThrow = null;
+    if (data != null) {
+      try {
+        data.close();
+      } catch (Throwable t) {
+        toThrow = t;
+      }
+    }
+    if (valid != null) {
+      try {
+        valid.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (offsets != null) {
+      try {
+        offsets.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (toThrow != null) {
+      throw new RuntimeException(toThrow);
+    }
+  }
+
+  /**
    * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
    * writing custom kernels or other cuda operations on the data.  DO NOT close this column
    * vector until you are completely done using the native column_view.  DO NOT modify the column in
@@ -2499,34 +2553,57 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       long size = getDeviceMemorySize();
       boolean neededCleanup = false;
       long address = 0;
+
+      // Always mark the resource as freed even if an exception is thrown.
+      // We cannot know how far it progressed before the exception, and
+      // therefore it is unsafe to retry.
+      Throwable toThrow = null;
       if (viewHandle != 0) {
         address = viewHandle;
-        deleteColumnView(viewHandle);
-        viewHandle = 0;
+        try {
+          deleteColumnView(viewHandle);
+        } catch (Throwable t) {
+          toThrow = t;
+        } finally {
+          viewHandle = 0;
+        }
         neededCleanup = true;
       }
       if (columnHandle != 0) {
         if (address != 0) {
           address = columnHandle;
         }
-        deleteCudfColumn(columnHandle);
-        columnHandle = 0;
+        try {
+          deleteCudfColumn(columnHandle);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          columnHandle = 0;
+        }
         neededCleanup = true;
       }
-      if (data != null) {
-        data.close();
-        data = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          closeBuffers(data, valid, offsets);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
-        neededCleanup = true;
+      if (toThrow != null) {
+        throw new RuntimeException(toThrow);
       }
       if (neededCleanup) {
         if (logErrorIfNotClean) {
