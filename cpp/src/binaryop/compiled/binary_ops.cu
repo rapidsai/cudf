@@ -203,7 +203,7 @@ struct null_aware_comparator {
     // This is invoked to perform comparison for all cudf types barring dictionary types
     template <typename ColT, typename RhsT>
     typename std::enable_if_t<!std::is_same<ColT, cudf::dictionary32>::value, void>
-    operator()(mutable_column_view &out,
+    operator()(mutable_column_view& out,
                column_device_view const& lhs_dev_view,
                RhsT const& rhs,
                cudaStream_t stream) const {
@@ -222,7 +222,7 @@ struct null_aware_comparator {
 
     template <typename ColT, typename RhsT>
     typename std::enable_if_t<std::is_same<ColT, cudf::dictionary32>::value, void>
-    operator()(mutable_column_view &out,
+    operator()(mutable_column_view& out,
                column_device_view const& lhs,
                RhsT const& rhs,
                cudaStream_t stream) const {
