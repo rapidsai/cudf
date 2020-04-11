@@ -514,6 +514,16 @@ class RangeIndex(Index):
         self._index = None
         self._name = name
 
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            self._start = result._start
+            self._stop = result._stop
+            self._cached_values = result._cached_values
+            self._index = result._index
+            self._name = result.name
+        else:
+            return result
+
     @property
     def name(self):
         return self._name
@@ -775,6 +785,13 @@ class GenericIndex(Index):
 
         name = kwargs.get("name")
         super().__init__({name: values})
+
+    def _mimic_inplace(self, result, inplace=False):
+        if inplace:
+            self.values = result.values
+            self.name = result.names
+        else:
+            return result
 
     @property
     def _values(self):

@@ -23,7 +23,6 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import (
     CategoricalColumn,
@@ -489,27 +488,13 @@ class DataFrame(Frame):
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
-            return self.mask(~arg)
+            return self.where(arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
-    def mask(self, other):
-        df = self.copy()
-        for col in self.columns:
-            if col in other.columns:
-                if other[col].has_nulls:
-                    raise ValueError("Column must have no nulls.")
-                if self[col]._column.nullable:
-                    other[col] = other[col].set_mask(self[col]._column.mask)
-
-                out_mask = bools_to_mask(other[col]._column)
-            else:
-                out_mask = create_null_mask(
-                    len(self[col]), state=MaskState.ALL_NULL
-                )
-            df[col] = df[col].set_mask(out_mask)
-        return df
+    def mask(self, cond, other=None):
+        return self.where(cond=~cond, other=other)
 
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*

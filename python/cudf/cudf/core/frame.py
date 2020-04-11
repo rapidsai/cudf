@@ -11,6 +11,7 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.scalar import Scalar
+from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -440,7 +441,7 @@ class Frame(libcudf.table.Table):
                     )
                 )
 
-    def where(self, cond, other=None):
+    def where(self, cond, other=None, inplace=False):
         """
         Replace values with other where the condition is False.
 
@@ -492,6 +493,24 @@ class Frame(libcudf.table.Table):
         if isinstance(self, cudf.DataFrame):
             if not isinstance(cond, cudf.DataFrame):
                 cond = self.from_pandas(pd.DataFrame(cond))
+
+            common_cols = set(self.columns).intersection(set(cond.columns))
+            if len(common_cols) > 0:
+                # If `self` and `cond` are having unequal index,
+                # then re-index `cond`.
+                if len(self.index) != len(cond.index) or any(
+                    self.index != cond.index
+                ):
+                    cond = cond.reindex(self.index)
+            else:
+                if cond.shape != self.shape:
+                    raise ValueError(
+                        """Array conditional must be same shape as self"""
+                    )
+                # Setting `self` column names to `cond`
+                # as `cond` has no column names.
+                cond.columns = self.columns
+
             other = self._normalize_columns_and_scalars_type(other)
             out_df = cudf.DataFrame(index=self.index)
             if len(self._columns) != len(other):
@@ -499,55 +518,66 @@ class Frame(libcudf.table.Table):
                     """Replacement list length or number of dataframe columns
                     should be equal to Number of columns of dataframe"""
                 )
-            if len(self._columns) != len(cond._columns):
-                raise ValueError(
-                    """Array conditional must be same shape as self"""
-                )
 
-            for in_col_name, cond_col_name, otr_col in zip(
-                self.columns, cond.columns, other
-            ):
-                input_col = self[in_col_name]._column
-                if is_categorical_dtype(input_col.dtype):
-                    if np.isscalar(otr_col):
-                        otr_col = input_col._encode(otr_col)
+            for column_name, other_column in zip(self.columns, other):
+                input_col = self[column_name]._column
+                if column_name in cond.columns:
+                    if is_categorical_dtype(input_col.dtype):
+                        if np.isscalar(other_column):
+                            other_column = input_col._encode(other_column)
+                        else:
+                            other_column = other_column.codes
+                        input_col = input_col.codes
+
+                    if len(input_col) == len(cond[column_name]._column):
+                        result = libcudf.copying.copy_if_else(
+                            input_col, other_column, cond[column_name]._column
+                        )
                     else:
-                        otr_col = otr_col.codes
-                    input_col = input_col.codes
+                        if input_col.nullable:
+                            cond[column_name] = cond[column_name].set_mask(
+                                input_col.mask
+                            )
 
-                result = libcudf.copying.copy_if_else(
-                    input_col, otr_col, cond[cond_col_name]._column
-                )
+                        out_mask = bools_to_mask(cond[column_name]._column)
+                        result = input_col.set_mask(out_mask)
 
-                if is_categorical_dtype(self[in_col_name].dtype):
-                    result = build_categorical_column(
-                        categories=self[in_col_name]._column.categories,
-                        codes=as_column(result.base_data, dtype=result.dtype),
-                        mask=result.base_mask,
-                        size=result.size,
-                        offset=result.offset,
-                        ordered=self[in_col_name]._column.ordered,
+                    if is_categorical_dtype(self[column_name].dtype):
+                        result = build_categorical_column(
+                            categories=self[column_name]._column.categories,
+                            codes=as_column(
+                                result.base_data, dtype=result.dtype
+                            ),
+                            mask=result.base_mask,
+                            size=result.size,
+                            offset=result.offset,
+                            ordered=self[column_name]._column.ordered,
+                        )
+                else:
+                    from cudf._lib.null_mask import MaskState, create_null_mask
+
+                    out_mask = create_null_mask(
+                        len(input_col), state=MaskState.ALL_NULL
                     )
+                    result = input_col.set_mask(out_mask)
+                out_df[column_name] = self[column_name].__class__(result)
 
-                out_df[in_col_name] = self[in_col_name].__class__(result)
-
-            return out_df
+            return self._mimic_inplace(self, out_df, inplace=inplace)
 
         else:
             other = self._normalize_columns_and_scalars_type(other)
             if isinstance(other, (cudf.Series, cudf.Index)):
-                other = other._column
+                other = other._data[other.name]
 
-            input_col = self._column
+            input_col = self._data[self.name]
             if is_categorical_dtype(input_col.dtype):
-                if np.isscalar(otr_col):
+                if np.isscalar(other_column):
                     other = input_col._encode(other)
                 else:
                     other = other.codes
                 input_col = input_col.codes
-            result = libcudf.copying.copy_if_else(
-                self._column, other, cond._column
-            )
+            cond = as_column(cond)
+            result = libcudf.copying.copy_if_else(input_col, other, cond)
 
             if is_categorical_dtype(self.dtype):
                 result = build_categorical_column(
@@ -559,9 +589,14 @@ class Frame(libcudf.table.Table):
                     ordered=self._column.ordered,
                 )
 
-            result = self.__class__(result)
-            result.index = self.index
-            return result
+            if isinstance(self, cudf.Index):
+                from cudf.core.index import as_index
+
+                result = as_index(result, name=self.name)
+            else:
+                result = self._copy_construct(data=result)
+
+            return self._mimic_inplace(result, inplace=inplace)
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 

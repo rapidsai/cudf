@@ -3595,7 +3595,7 @@ def test_series_value_counts():
         mask = arr != -1
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         sr.name = "col"
-        df = pd.DataFrame(data=arr[~mask], columns=["col"])
+        df = pd.DataFrame(data=arr[mask], columns=["col"])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().sort_index()
 
