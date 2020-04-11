@@ -110,8 +110,12 @@ mutable_column_view column::mutable_view() {
     child_views.emplace_back(*c);
   }
 
-  // Store the old null count
-  auto current_null_count = null_count();
+  // Store the old null count before resetting it. By accessing the value
+  // directly instead of calling `null_count()`, we can avoid a potential
+  // invocation of `count_unset_bits()`. This does however mean that calling
+  // `null_count()` on the resulting mutable view could still potentially
+  // invoke `count_unset_bits()`.
+  auto current_null_count = _null_count;
 
   // The elements of a column could be changed through a `mutable_column_view`,
   // therefore the existing `null_count` is no longer valid. Reset it to
