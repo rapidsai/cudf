@@ -10,6 +10,7 @@ from pandas.api.types import is_dtype_equal
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
@@ -40,13 +41,12 @@ class Frame(libcudf.table.Table):
         return cls(table._data, index=table._index)
 
     @classmethod
+    @annotate("CUDF_CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
-
-        libcudf.nvtx.range_push("CUDF_CONCAT", "orange")
 
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
@@ -219,8 +219,6 @@ class Frame(libcudf.table.Table):
 
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
-
-        libcudf.nvtx.range_pop()
 
         return out
 

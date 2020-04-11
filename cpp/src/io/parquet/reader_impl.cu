@@ -354,6 +354,46 @@ struct metadata : public FileMetaData {
   }
 };
 
+
+void reader::impl::read_column_chunks(
+    std::vector<rmm::device_buffer>& page_data,
+    hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+    size_t begin_chunk, size_t end_chunk,
+    const std::vector<size_t>& column_chunk_offsets,
+    cudaStream_t stream) {
+  // Transfer chunk data, coalescing adjacent chunks
+  for (size_t chunk = begin_chunk; chunk < end_chunk; ) {
+    const size_t io_offset = column_chunk_offsets[chunk];
+    size_t io_size = chunks[chunk].compressed_size;
+    size_t next_chunk = chunk + 1;
+    const bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
+    while (next_chunk < end_chunk) {
+      const size_t next_offset = column_chunk_offsets[next_chunk];
+      const bool is_next_compressed = (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
+      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
+        // Can't merge if not contiguous or mixing compressed and uncompressed
+        // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
+        // freed earlier (immediately after decompression stage) to limit peak memory requirements
+        break;
+      }
+      io_size += chunks[next_chunk].compressed_size;
+      next_chunk++;
+    }
+    if (io_size != 0) {
+      auto buffer = _source->get_buffer(io_offset, io_size);
+      page_data[chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+      uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
+      do {
+        chunks[chunk].compressed_data = d_compdata;
+        d_compdata += chunks[chunk].compressed_size;
+      } while (++chunk != next_chunk);
+    }
+    else {
+      chunk = next_chunk;
+    }
+  }
+}
+
 size_t reader::impl::count_page_headers(
     hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
     cudaStream_t stream) {
@@ -625,13 +665,17 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
     // Tracker for eventually deallocating compressed and uncompressed data
     std::vector<rmm::device_buffer> page_data(num_chunks);
 
+    // Keep track of column chunk file offsets
+    std::vector<size_t> column_chunk_offsets(num_chunks);
+
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows = num_rows;
     for (const auto &rg : selected_row_groups) {
-      auto row_group = _metadata->row_groups[rg.first];
+      const auto &row_group = _metadata->row_groups[rg.first];
       auto row_group_start = rg.second;
       auto row_group_rows = std::min<int>(remaining_rows, row_group.num_rows);
+      auto io_chunk_idx = chunks.size();
 
       for (size_t i = 0; i < num_columns; ++i) {
         auto col = _selected_columns[i];
@@ -657,19 +701,13 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
             column_types[i].id(), _timestamp_type.id(), col_schema.type,
             col_schema.converted_type, col_schema.type_length);
 
-        uint8_t *d_compdata = nullptr;
-        if (col_meta.total_compressed_size != 0) {
-          const auto offset = (col_meta.dictionary_page_offset != 0)
+        column_chunk_offsets[chunks.size()] = (col_meta.dictionary_page_offset != 0)
                                   ? std::min(col_meta.data_page_offset,
                                              col_meta.dictionary_page_offset)
                                   : col_meta.data_page_offset;
-          auto buffer =
-              _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-          d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
-        }
+
         chunks.insert(gpu::ColumnChunkDesc(
-            col_meta.total_compressed_size, d_compdata, col_meta.num_values,
+            col_meta.total_compressed_size, nullptr, col_meta.num_values,
             col_schema.type, type_width, row_group_start, row_group_rows,
             col_schema.max_definition_level, col_schema.max_repetition_level,
             required_bits(col_schema.max_definition_level),
@@ -683,6 +721,10 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
           total_decompressed_size += col_meta.total_uncompressed_size;
         }
       }
+      // Read compressed chunk data to device memory
+      read_column_chunks(page_data, chunks, io_chunk_idx, chunks.size(),
+                         column_chunk_offsets, stream);
+
       remaining_rows -= row_group.num_rows;
     }
     assert(remaining_rows <= 0);
@@ -698,7 +740,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
         decomp_page_data = decompress_page_data(chunks, pages, stream);
         // Free compressed data
         for (size_t c = 0; c < chunks.size(); c++) {
-          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED && page_data[c].size() != 0) {
             page_data[c].resize(0);
             page_data[c].shrink_to_fit();
           }

@@ -9,6 +9,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -601,6 +602,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
+    @annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
@@ -616,7 +618,6 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -651,7 +652,6 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
