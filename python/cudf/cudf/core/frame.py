@@ -560,7 +560,7 @@ class Frame(libcudf.table.Table):
                     result = input_col.set_mask(out_mask)
                 out_df[column_name] = self[column_name].__class__(result)
 
-            return self._mimic_inplace(self, out_df, inplace=inplace)
+            return self._mimic_inplace(out_df, inplace=inplace)
 
         else:
             other = self._normalize_columns_and_scalars_type(other)
