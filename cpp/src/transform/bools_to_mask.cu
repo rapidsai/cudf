@@ -42,11 +42,11 @@ bools_to_mask(column_view const& input,
     auto input_device_view_ptr = column_device_view::create(input, stream);
     auto input_device_view = *input_device_view_ptr;
     auto pred = [] __device__ (bool element) {
-        return !element;
+        return element;
     };
     if(input.nullable()) {
-        // Nulls are considered true
-        auto input_begin = make_null_replacement_iterator<bool>(input_device_view, true);
+        // Nulls are considered false
+        auto input_begin = make_null_replacement_iterator<bool>(input_device_view, false);
 
         auto mask = detail::valid_if(input_begin,
                                      input_begin + input.size(),
