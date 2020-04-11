@@ -74,6 +74,7 @@
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4873 Prevent mutable_view() from invoking null count
 
 ## Bug Fixes
 
