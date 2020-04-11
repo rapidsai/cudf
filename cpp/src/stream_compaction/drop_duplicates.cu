@@ -236,7 +236,7 @@ template <typename T>
 struct check_for_nan
 {
   /**---------------------------------------------------------------------------*
-   * @brief Construct a strcuture
+   * @brief Construct a structure
    *
    * @param[in] input The `column_device_view`
    *---------------------------------------------------------------------------**/

@@ -24,6 +24,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/reduction.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/device_vector.h>
@@ -794,11 +795,20 @@ TYPED_TEST(ReductionTest, Median)
   this->reduction_test(col, expected_value, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
 
+  auto col_odd = cudf::experimental::split(col, {1})[1];
+  double expected_value_odd = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 0.0;
+  this->reduction_test(col_odd, expected_value_odd, this->ret_non_arithmetic,
+                       cudf::experimental::make_median_aggregation());
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   double expected_null_value = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 0.0;
 
   this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
+                       cudf::experimental::make_median_aggregation());
+
+  auto col_nulls_odd = cudf::experimental::split(col_nulls, {1})[1];
+  double expected_null_value_odd = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : -6.5;
+  this->reduction_test(col_nulls_odd, expected_null_value_odd, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
 }
 
