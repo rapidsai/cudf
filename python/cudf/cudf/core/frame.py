@@ -441,15 +441,15 @@ class Frame(libcudf.table.Table):
 
     def where(self, cond, other=None, inplace=False):
         """
-        Replace values with other where the condition is False.
+        Replace values where the condition is False.
 
         Parameters
         ----------
-        cond : boolean
-            This can be Frame of booleans, where cond is True, keep the
-            original value. Where False, replace with corresponding value
-            from other. Callables are not supported.
-        other: list of scalars or a dataframe or a series,
+        cond : bool Series/DataFrame, array-like
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
             Entries where cond is False are replaced with
             corresponding value from other. Callables are not
             supported. Default is None.
@@ -458,34 +458,38 @@ class Frame(libcudf.table.Table):
             dataframe with same dimention as self.
 
             Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
 
         Returns
         -------
-        result : DataFrame/Series
+        Same type as caller
 
         Examples:
         ---------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
-        >>> print (df.where(df % 2 == 0, [-1, -1]))
+        >>> df.where(df % 2 == 0, [-1, -1])
            A  B
         0 -1 -1
         1  4 -1
         2 -1  8
 
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.where(ser > 2, 10))
+        >>> ser.where(ser > 2, 10)
         0     4
         1     3
         2    10
         3    10
         4    10
-        >>> print(ser.where(ser > 2))
-        0    4
-        1    3
-        2
-        3
-        4
+        dtype: int64
+        >>> ser.where(ser > 2)
+        0       4
+        1       3
+        2    null
+        3    null
+        4    null
+        dtype: int64
         """
 
         if isinstance(self, cudf.DataFrame):
@@ -595,6 +599,60 @@ class Frame(libcudf.table.Table):
                 result = self._copy_construct(data=result)
 
             return self._mimic_inplace(result, inplace=inplace)
+
+    def mask(self, cond, other=None, inplace=False):
+        """
+        Replace values where the condition is True.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is False, keep the original value.
+            Where True, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is True are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimention as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.mask(df % 2 == 0, [-1, -1])
+           A  B
+        0  1  3
+        1 -1  5
+        2  5 -1
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.mask(ser > 2, 10)
+        0    10
+        1    10
+        2     2
+        3     1
+        4     0
+        dtype: int64
+        >>> ser.mask(ser > 2)
+        0    null
+        1    null
+        2       2
+        3       1
+        4       0
+        dtype: int64
+        """
+        return self.where(cond=~cond, other=other, inplace=inplace)
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 

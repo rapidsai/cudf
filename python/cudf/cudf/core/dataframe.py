@@ -494,9 +494,6 @@ class DataFrame(Frame):
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
-    def mask(self, cond, other=None):
-        return self.where(cond=~cond, other=other)
-
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
