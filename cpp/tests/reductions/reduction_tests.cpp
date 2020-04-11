@@ -788,23 +788,23 @@ TYPED_TEST(ReductionTest, Median)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 3.0;
+  double expected_value = std::is_same<T, bool>::value ? 1.0 : 3.0;
   this->reduction_test(col, expected_value, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
 
   auto col_odd = cudf::experimental::split(col, {1})[1];
-  double expected_value_odd = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 0.0;
+  double expected_value_odd = std::is_same<T, bool>::value ? 1.0 : 0.0;
   this->reduction_test(col_odd, expected_value_odd, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  double expected_null_value = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : 0.0;
+  double expected_null_value = std::is_same<T, bool>::value ? 1.0 : 0.0;
 
   this->reduction_test(col_nulls, expected_null_value, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
 
   auto col_nulls_odd = cudf::experimental::split(col_nulls, {1})[1];
-  double expected_null_value_odd = std::is_same<T, cudf::experimental::bool8>::value ? 1.0 : -6.5;
+  double expected_null_value_odd = std::is_same<T, bool>::value ? 1.0 : -6.5;
   this->reduction_test(col_nulls_odd, expected_null_value_odd, this->ret_non_arithmetic,
                        cudf::experimental::make_median_aggregation());
 }
@@ -820,7 +820,7 @@ TYPED_TEST(ReductionTest, Quantile)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value0 = std::is_same<T, cudf::experimental::bool8>::value ? v[4] : v[6];
+  double expected_value0 = std::is_same<T, bool>::value ? v[4] : v[6];
   this->reduction_test(col, expected_value0, this->ret_non_arithmetic,
                        cudf::experimental::make_quantile_aggregation({0.0}, interp));
   double expected_value1 = v[3];
@@ -846,14 +846,14 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  cudf::size_type expected_value = std::is_same<T, cudf::experimental::bool8>::value ? 2 : 6;
+  cudf::size_type expected_value = std::is_same<T, bool>::value ? 2 : 6;
   this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
   this->reduction_test(col, expected_value, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type expected_null_value0 = std::is_same<T, cudf::experimental::bool8>::value ? 3 : 7;
-  cudf::size_type expected_null_value1 = std::is_same<T, cudf::experimental::bool8>::value ? 2 : 6;
+  cudf::size_type expected_null_value0 = std::is_same<T, bool>::value ? 3 : 7;
+  cudf::size_type expected_null_value1 = std::is_same<T, bool>::value ? 2 : 6;
 
   this->reduction_test(col_nulls, expected_null_value0, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
   this->reduction_test(col_nulls, expected_null_value1, this->ret_non_arithmetic, cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
