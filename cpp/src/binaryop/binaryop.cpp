@@ -247,8 +247,10 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if ((lhs.type().id() == type_id::STRING) &&
-      (rhs.type().id() == type_id::STRING)) {
+  if (op == binary_operator::NULL_AWARE_EQUAL) {
+    return binary_operation(rhs, lhs, op, output_type, mr, stream);
+  } else if ((lhs.type().id() == type_id::STRING) &&
+             (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
@@ -279,8 +281,15 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if ((lhs.type().id() == type_id::STRING) &&
-      (rhs.type().id() == type_id::STRING)) {
+  if (op == binary_operator::NULL_AWARE_EQUAL) {
+    // Check for datatype
+    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
+    CUDF_EXPECTS(lhs.size() > 0, "Column has to be non empty");
+    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
+
+    return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
+  } else if ((lhs.type().id() == type_id::STRING) &&
+             (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
@@ -313,8 +322,16 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if ((lhs.type().id() == type_id::STRING) &&
-      (rhs.type().id() == type_id::STRING)) {
+  if (op == binary_operator::NULL_AWARE_EQUAL) {
+    // Check for datatype
+    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both columns must be of the same type");
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the same size");
+    CUDF_EXPECTS(lhs.size() > 0, "Columns have to be non empty");
+    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
+
+    return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
+  } else if ((lhs.type().id() == type_id::STRING) &&
+             (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
                                               stream);
   }
@@ -371,29 +388,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return out;
 }
 
-std::unique_ptr<column> null_aware_equal(column_view const& lhs,
-                                         scalar const& rhs,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
-  // Check for datatype
-  CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
-  CUDF_EXPECTS(lhs.size() > 0, "Column has to be non empty");
-
-  return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
-}
-
-std::unique_ptr<column> null_aware_equal(column_view const& lhs,
-                                         column_view const& rhs,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
-  // Check for datatype
-  CUDF_EXPECTS(lhs.type() == rhs.type(), "Both columns must be of the same type");
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the same size");
-  CUDF_EXPECTS(lhs.size() > 0, "Columns have to be non empty");
-
-  return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
-}
-
 }  // namespace detail
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
@@ -430,27 +424,6 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
-}
-
-std::unique_ptr<column> null_aware_equal(column_view const& lhs,
-                                         scalar const& rhs,
-                                         rmm::mr::device_memory_resource* mr) {
-  CUDF_FUNC_RANGE();
-  return detail::null_aware_equal(lhs, rhs, mr);
-}
-
-std::unique_ptr<column> null_aware_equal(scalar const& lhs,
-                                         column_view const& rhs,
-                                         rmm::mr::device_memory_resource* mr) {
-  CUDF_FUNC_RANGE();
-  return detail::null_aware_equal(rhs, lhs, mr);
-}
-
-std::unique_ptr<column> null_aware_equal(column_view const& lhs,
-                                         column_view const& rhs,
-                                         rmm::mr::device_memory_resource* mr) {
-  CUDF_FUNC_RANGE();
-  return detail::null_aware_equal(lhs, rhs, mr);
 }
 
 }  // namespace experimental
