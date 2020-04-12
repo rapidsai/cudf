@@ -115,16 +115,16 @@ std::unique_ptr<column> binary_operation(
  * This compares every element from lhs with rhs and returns a bool as a result of
  * comparison. The comparison works thusly:
  *
- * If lhs[i] is null && rhs is null, return true
- * If lhs[i] is not null && rhs is not null, return the result of lhs[i] == rhs
- * Else return false
+ * for i in [0, lhs.size())
+ *   If lhs[i] is null && rhs is null, return true
+ *   If lhs[i] is not null && rhs is not null, return the result of lhs[i] == rhs
+ *   Else return false
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
  * @param mr          Memory resource for allocating output column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
- * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't same
  */
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
@@ -139,18 +139,16 @@ std::unique_ptr<column> null_aware_equal(
  * This compares each element from lhs with rhs in turn, and returns a bool as a result of
  * comparison. The comparison works thusly:
  *
- * If lhs[i] is null and rhs[i] is null, return true
- * If lhs[i] is not null and rhs[i] is not null, return the result of lhs[i] == rhs[i]
- * Else return false
+ * for i in [0, lhs.size())
+ *   If lhs[i] is null and rhs[i] is null, return true
+ *   If lhs[i] is not null and rhs[i] is not null, return the result of lhs[i] == rhs[i]
+ *   Else return false
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
  * @param mr          Memory resource for allocating output column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
- * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't same
- * @throw cudf::logic_error if @p lhs and @p rhs aren't the same size
- * @throw cudf::logic_error if @p lhs or @p rhs is empty
  */
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
