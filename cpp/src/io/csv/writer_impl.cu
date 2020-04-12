@@ -99,10 +99,15 @@ struct column_to_strings_fn
                                                      options_.false_value(),
                                                      mr_);
 
-    strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    return  cudf::strings::replace_nulls(strings_converted,
-                                         options_.na_rep() ,
-                                         mr_);
+    return conv_col_ptr;
+
+    //null replacement could be done here, but probably more efficient
+    //to defer it until concatenate() call:
+    //
+    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    // return  cudf::strings::replace_nulls(strings_converted,
+    //                                      options_.na_rep() ,
+    //                                      mr_);
   }
 
   //strings:
@@ -110,11 +115,19 @@ struct column_to_strings_fn
   template<typename column_type>
   std::enable_if_t<std::is_same<column_type, cudf::string_view>::value,
                    std::unique_ptr<column>>
-  operator()(column_view const& column) const
+  operator()(column_view const& column_v) const
   {
-    return cudf::strings::replace_nulls(column,
-                                        options_.na_rep() ,
-                                        mr_);
+    //just pass through:
+    //
+    column col{column_v};
+    return std::make_unique<column>(std::move(col));//TODO: look at more efficient way to return a unique_ptr<column> from a column_view...
+    
+    //null replacement could be done here, but probably more efficient
+    //to defer it until concatenate() call:
+    //
+    // return cudf::strings::replace_nulls(column,
+    //                                     options_.na_rep() ,
+    //                                     mr_);
   }
 
   //ints:
@@ -128,10 +141,15 @@ struct column_to_strings_fn
     auto conv_col_ptr = cudf::strings::from_integers(column,
                                                      mr_);
 
-    strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    return cudf::strings::replace_nulls(strings_converted,
-                                        options_.na_rep() ,
-                                        mr_);
+    return conv_col_ptr;
+
+    //null replacement could be done here, but probably more efficient
+    //to defer it until concatenate() call:
+    //
+    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    // return cudf::strings::replace_nulls(strings_converted,
+    //                                     options_.na_rep() ,
+    //                                     mr_);
   }
 
   //floats:
@@ -144,10 +162,15 @@ struct column_to_strings_fn
     auto conv_col_ptr = cudf::strings::from_floats(column,
                                                    mr_);
 
-    strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    return cudf::strings::replace_nulls(strings_converted,
-                                        options_.na_rep() ,
-                                        mr_);
+    return conv_col_ptr;
+
+    //null replacement could be done here, but probably more efficient
+    //to defer it until concatenate() call:
+    //
+    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    // return cudf::strings::replace_nulls(strings_converted,
+    //                                     options_.na_rep() ,
+    //                                     mr_);
   }
 
   //timestamps:
@@ -162,10 +185,15 @@ struct column_to_strings_fn
                                                        format,
                                                        mr_);
 
-    strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    return cudf::strings::replace_nulls(strings_converted,
-                                        options_.na_rep() ,
-                                        mr_);
+    return conv_col_ptr;
+
+    //null replacement could be done here, but probably more efficient
+    //to defer it until concatenate() call:
+    //
+    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
+    // return cudf::strings::replace_nulls(strings_converted,
+    //                                     options_.na_rep() ,
+    //                                     mr_);
   }
 
 
@@ -307,12 +335,18 @@ void writer::impl::write(table_view const &table,
     auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
     table_view str_table_view{std::move(*str_table_ptr)};
 
+    //concatenate columns in each row into one big string column
+    //(using null representation and delimiter):
+    //
     std::string delimiter_str{options_.inter_column_delimiter()};
     auto str_concat_col = cudf::strings::concatenate(str_table_view,
                                                      delimiter_str,
                                                      options_.na_rep(),
                                                      mr_);
-  //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
+
+    //TODO: dump to output
+    //
+    //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
   }
 }
 
