@@ -522,7 +522,7 @@ class Frame(libcudf.table.Table):
                 )
 
             for column_name, other_column in zip(self.columns, other):
-                input_col = self[column_name]._column
+                input_col = self._data[column_name]
                 if column_name in cond.columns:
                     if is_categorical_dtype(input_col.dtype):
                         if np.isscalar(other_column):
@@ -533,7 +533,7 @@ class Frame(libcudf.table.Table):
 
                     if len(input_col) == len(cond[column_name]._column):
                         result = libcudf.copying.copy_if_else(
-                            input_col, other_column, cond[column_name]._column
+                            input_col, other_column, cond._data[column_name]
                         )
                     else:
                         if input_col.nullable:
@@ -541,19 +541,19 @@ class Frame(libcudf.table.Table):
                                 input_col.mask
                             )
 
-                        out_mask = bools_to_mask(cond[column_name]._column)
+                        out_mask = bools_to_mask(cond._data[column_name])
                         result = input_col.set_mask(out_mask)
 
-                    if is_categorical_dtype(self[column_name].dtype):
+                    if is_categorical_dtype(self._data[column_name].dtype):
                         result = build_categorical_column(
-                            categories=self[column_name]._column.categories,
+                            categories=self._data[column_name].categories,
                             codes=as_column(
                                 result.base_data, dtype=result.dtype
                             ),
                             mask=result.base_mask,
                             size=result.size,
                             offset=result.offset,
-                            ordered=self[column_name]._column.ordered,
+                            ordered=self._data[column_name].ordered,
                         )
                 else:
                     from cudf._lib.null_mask import MaskState, create_null_mask
