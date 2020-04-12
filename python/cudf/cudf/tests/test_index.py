@@ -343,3 +343,43 @@ def test_empty_df_head_tail_index(n):
     pdf = pd.DataFrame(index=[1, 2, 3])
     assert_eq(df.head(n).index.values, pdf.head(n).index.values)
     assert_eq(df.tail(n).index.values, pdf.tail(n).index.values)
+
+
+@pytest.mark.parametrize(
+    "data,condition,other,error",
+    [
+        (pd.Index(range(5)), pd.Index(range(5)) > 0, None, None),
+        (pd.Index([1, 2, 3]), pd.Index([1, 2, 3]) != 2, None, None),
+        (pd.Index(list("abc")), pd.Index(list("abc")) == "c", None, None)
+        # TODO: Add more tests in this PR
+    ],
+)
+def test_index_where(data, condition, other, error):
+    ps = data
+    gs = cudf.from_pandas(data)
+
+    ps_condition = condition
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_condition = cudf.from_pandas(condition)
+    else:
+        gs_condition = condition
+
+    ps_other = other
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_other = cudf.from_pandas(other)
+    else:
+        gs_other = other
+
+    if error is None:
+        assert_eq(
+            ps.where(ps_condition, other=ps_other).fillna(-1).values,
+            gs.where(gs_condition, other=gs_other)
+            .to_pandas()
+            .fillna(-1)
+            .values,
+        )
+    else:
+        with pytest.raises(error):
+            ps.where(ps_condition, other=ps_other)
+        with pytest.raises(error):
+            gs.where(gs_condition, other=gs_other)
