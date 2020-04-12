@@ -652,6 +652,9 @@ class Frame(libcudf.table.Table):
         4       0
         dtype: int64
         """
+        if not hasattr(cond, "__invert__"):
+            cond = cupy.array(cond)
+
         return self.where(cond=~cond, other=other, inplace=inplace)
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
