@@ -4647,3 +4647,114 @@ def test_dataframe_strided_slice(arg):
     got = gdf[arg]
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data,condition,other,error",
+    [
+        (pd.Series(range(5)), pd.Series(range(5)) > 0, None, None),
+        (pd.Series(range(5)), pd.Series(range(5)) > 1, None, None),
+        (pd.Series(range(5)), pd.Series(range(5)) > 1, 10, None),
+        (
+            pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"]),
+            (
+                pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"])
+                % 3
+            )
+            == 0,
+            -pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"]),
+            None,
+        ),
+        (
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}),
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}),
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [True, True, True],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [True, True, True, False],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True, True, False], [True, True, True, False]],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True], [False, True], [True, False], [False, True]],
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True], [False, True], [True, False], [False, True]],
+            17,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [
+                [True, True, False, True],
+                [True, True, False, True],
+                [True, True, False, True],
+                [True, True, False, True],
+            ],
+            None,
+            ValueError,
+        ),
+    ],
+)
+def test_df_sr_mask_where(data, condition, other, error):
+    ps = data
+    gs = gd.from_pandas(data)
+
+    ps_condition = condition
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_condition = gd.from_pandas(condition)
+    else:
+        gs_condition = condition
+
+    ps_other = other
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_other = gd.from_pandas(other)
+    else:
+        gs_other = other
+
+    if error is None:
+        # import pdb;pdb.set_trace()
+        assert_eq(
+            ps.where(ps_condition, other=ps_other).fillna(-1),
+            gs.where(gs_condition, other=gs_other).fillna(-1),
+            check_dtype=False,
+        )
+        assert_eq(
+            ps.mask(ps_condition, other=ps_other).fillna(-1),
+            gs.mask(gs_condition, other=gs_other).fillna(-1),
+            check_dtype=False,
+        )
+    else:
+        with pytest.raises(error):
+            ps.where(ps_condition, other=ps_other)
+        with pytest.raises(error):
+            gs.where(gs_condition, other=gs_other)
+
+        with pytest.raises(error):
+            ps.mask(ps_condition, other=ps_other)
+        with pytest.raises(error):
+            gs.mask(gs_condition, other=gs_other)
