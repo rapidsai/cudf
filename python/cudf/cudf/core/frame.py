@@ -653,7 +653,7 @@ class Frame(libcudf.table.Table):
         dtype: int64
         """
         if not hasattr(cond, "__invert__"):
-            cond = cupy.array(cond)
+            cond = np.array(cond)
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
