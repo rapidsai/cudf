@@ -211,7 +211,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_scalar(self, arg):
         return self._df[arg[1]].loc[arg[0]]
 
-    @annotate("CUDF_LOC_GETITEM", color="blue", domain="cudf_python")
+    @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import Series, DataFrame
         from cudf.core.column import column
@@ -261,7 +261,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
         return df
 
-    @annotate("CUDF_LOC_SETITEM", color="blue", domain="cudf_python")
+    @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
         if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
             self._df.columns, pd.MultiIndex
@@ -288,7 +288,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def __init__(self, df):
         self._df = df
 
-    @annotate("CUDF_ILOC_GETITEM", color="blue", domain="cudf_python")
+    @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
@@ -341,7 +341,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             df._index = RangeIndex(start, stop)
         return df
 
-    @annotate("CUDF_ILOC_SETITEM", color="blue", domain="cudf_python")
+    @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
         columns = self._get_column_selection(key[1])
 

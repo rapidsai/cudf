@@ -282,7 +282,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
-    @annotate("CUDF_INDEX_EQUALS", color="green", domain="cudf_python")
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True
