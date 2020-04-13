@@ -12,7 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.io.parquet import ParquetChunkedWriter, merge_parquet_filemetadata
+from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
 
@@ -584,9 +584,9 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
 def test_parquet_writer_gpu_chunked(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    writer = ParquetChunkedWriter(gdf_fname)
-    writer.write(simple_gdf)
-    writer.write(simple_gdf)
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
     writer.close()
 
     assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))

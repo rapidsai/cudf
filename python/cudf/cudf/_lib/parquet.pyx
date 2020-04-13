@@ -291,10 +291,10 @@ cpdef write_parquet(
         return None
 
 
-cdef class ParquetChunkedWriter:
+cdef class ParquetWriter:
     """
-    ParquetChunkedWriter lets you write out a series of Tables to a single
-    Parquet file
+    ParquetWriter lets you incrementally write out a Parquet file from a series
+    of cudf tables
 
     See Also
     --------
@@ -314,7 +314,7 @@ cdef class ParquetChunkedWriter:
         self.comp_type = _get_comp_type(compression)
         self.index = index
 
-    def write(self, Table table):
+    def write_table(self, Table table):
         """ Writes a single table to the file """
         if not self.state:
             self._initialize_chunked_state(table)

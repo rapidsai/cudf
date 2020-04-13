@@ -261,4 +261,4 @@ def merge_parquet_filemetadata(filemetadata_list):
     return libparquet.merge_filemetadata(filemetadata_list)
 
 
-ParquetChunkedWriter = libparquet.ParquetChunkedWriter
+ParquetWriter = libparquet.ParquetWriter
