@@ -4656,6 +4656,12 @@ def test_dataframe_strided_slice(arg):
         (pd.Series(range(5)), pd.Series(range(5)) > 1, None, None),
         (pd.Series(range(5)), pd.Series(range(5)) > 1, 10, None),
         (
+            pd.Series(range(5)),
+            pd.Series(range(5)) > 1,
+            pd.Series(range(5, 10)),
+            None,
+        ),
+        (
             pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"]),
             (
                 pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"])

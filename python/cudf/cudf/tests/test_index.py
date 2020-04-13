@@ -351,6 +351,12 @@ def test_empty_df_head_tail_index(n):
         (pd.Index(range(5)), pd.Index(range(5)) > 0, None, None),
         (pd.Index([1, 2, 3]), pd.Index([1, 2, 3]) != 2, None, None),
         (pd.Index(list("abc")), pd.Index(list("abc")) == "c", None, None),
+        (
+            pd.Index(list("abc")),
+            pd.Index(list("abc")) == "c",
+            pd.Index(list("xyz")),
+            None,
+        ),
         (pd.Index(range(5)), pd.Index(range(4)) > 0, None, ValueError),
         (pd.Index(range(5)), pd.Index(range(5)) > 1, 10, None),
         (
