@@ -1254,7 +1254,6 @@ class DataFrame(Frame):
         return _DataFrameLocIndexer(self)
 
     @property
-    @annotate("CUDF_DATAFRAME_ILOC", color="blue", domain="cudf_python")
     def iloc(self):
         """
         Selecting rows and column by position.
