@@ -74,6 +74,7 @@
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4884 Add more NVTX annotations in cuDF Python
 
 ## Bug Fixes
 
