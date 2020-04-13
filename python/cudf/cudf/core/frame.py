@@ -1159,11 +1159,6 @@ class Frame(libcudf.table.Table):
         """
         Error for various combinations of merge input parameters
         """
-        if isinstance(
-            lhs.index, cudf.core.multiindex.MultiIndex
-        ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-            raise TypeError("MultiIndex joins not yet supported.")
-
         len_left_on = len(left_on) if left_on is not None else 0
         len_right_on = len(right_on) if right_on is not None else 0
 
@@ -1182,7 +1177,9 @@ class Frame(libcudf.table.Table):
                 )
 
         # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index) == (len_right_on + right_index):
+        if not (len_left_on + left_index * len(lhs.index.names)) == (
+            len_right_on + right_index * len(rhs.index.names)
+        ):
             raise ValueError(
                 "Merge operands must have same number of join key columns"
             )
