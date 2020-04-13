@@ -406,7 +406,7 @@ class NumericalColumn(column.ColumnBase):
                 return False
 
 
-@annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
