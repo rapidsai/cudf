@@ -35,7 +35,6 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/combine.hpp>
 
-
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -82,10 +81,10 @@ struct column_to_strings_fn
   {
   }
 
-  //TODO: `null` replacement with `na_rep` could be defered to `concatenate()`
+  //Note: Done: `null` replacement with `na_rep` defered to `concatenate()`
   //instead of column-wise; might be faster
   //
-  //TODO: pass `stream` to detail::<fname> version of <fname> calls below (?);
+  //Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr, stream) is declared and defined in combine.cu);
 
   //bools:
   //
