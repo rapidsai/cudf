@@ -148,7 +148,8 @@ struct binary_op {
 // This functor performs null aware comparison between two columns or a column and a scalar by
 // iterating over them on the device
 struct null_aware_comparator {
-    // This functor does the actual comparison between column and a scalar or two columns
+    // This functor does the actual comparison between column value and a scalar
+    // or two column values
     template <typename ColT, typename RhsDeviceViewT>
     struct compare_functor {
         column_device_view const lhs_dev_view_;  // Column device view - lhs

@@ -796,6 +796,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_IncompatibleTypes) {
       { 999, -37, 0, INT32_MAX },
       { true, true, true, false }
   };
+  auto another_int_col = make_random_wrapped_column<TypeLhs>(4);
   auto diff_sized_int_col = make_random_wrapped_column<TypeLhs>(3);
   auto float_col = make_random_wrapped_column<TypeRhs>(4);
   auto float_scalar = cudf::experimental::scalar_type_t<TypeRhs>(1.23f);
@@ -818,6 +819,11 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_IncompatibleTypes) {
   // Incompatible output column
   EXPECT_THROW(
       cudf::experimental::binary_operation(float_col, float_scalar,
+                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           data_type(experimental::type_to_id<int32_t>())),
+      cudf::logic_error);
+  EXPECT_THROW(
+      cudf::experimental::binary_operation(int_col, another_int_col,
                                            cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
                                            data_type(experimental::type_to_id<int32_t>())),
       cudf::logic_error);
@@ -1108,6 +1114,32 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
   expect_columns_equal(*op_col, fixed_width_column_wrapper<bool>{
           { false, false, true, true, false, true, true }},
           true);
+}
+
+TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8_SI32_SI32) {
+  using TypeOut = bool;
+  using TypeLhs = int32_t;
+  using TypeRhs = int32_t;
+
+  auto lhs_col = fixed_width_column_wrapper<TypeLhs>{
+      { -INT32_MAX, -37, 0, 499, 44, INT32_MAX },
+      { false, false, false, false, false, false }
+  };
+  auto rhs_col = fixed_width_column_wrapper<TypeLhs>{
+      { -47, 37, 12, 99, 4, -INT32_MAX },
+      { false, false, false, false, false, false }
+  };
+
+  // Output is non nullable - every row has a value
+  auto op_col = cudf::experimental::binary_operation(
+      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      data_type(experimental::type_to_id<TypeOut>()));
+  ASSERT_EQ(op_col->nullable(), false);
+
+  // Output is non nullable - every row has a value
+  expect_columns_equal(*op_col,
+                       fixed_width_column_wrapper<bool>{{ true, true, true, true, true, true }},
+                       true);
 }
 
 }  // namespace binop
