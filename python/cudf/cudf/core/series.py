@@ -1888,7 +1888,7 @@ class Series(Frame):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True):
+    def mean(self, axis=None, skipna=True, **kwargs):
         """
 
         Compute the mean of the series
@@ -1901,19 +1901,34 @@ class Series(Frame):
         15.5
         """
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.mean()
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.mean()
 
-    def std(self, ddof=1, axis=None, skipna=True):
+    def std(self, ddof=1, axis=None, skipna=True, **kwargs):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.std(ddof=ddof)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.std(ddof=ddof)
 
-    def var(self, ddof=1, axis=None, skipna=True):
+    def var(self, ddof=1, axis=None, skipna=True, **kwargs):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.var(ddof=ddof)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
