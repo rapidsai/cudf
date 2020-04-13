@@ -11,6 +11,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -281,6 +282,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
+    @annotate("CUDF_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True

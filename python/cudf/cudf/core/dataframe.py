@@ -166,6 +166,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    @annotate("CUDF_DATAFRAME_INIT", color="cyan", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -422,6 +423,7 @@ class DataFrame(Frame):
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
+    @annotate("CUDF_DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -510,6 +512,7 @@ class DataFrame(Frame):
             df[col] = df[col].set_mask(out_mask)
         return df
 
+    @annotate("CUDF_DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
@@ -1193,6 +1196,7 @@ class DataFrame(Frame):
             yield (k, self[k])
 
     @property
+    @annotate("CUDF_DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
@@ -1250,6 +1254,7 @@ class DataFrame(Frame):
         return _DataFrameLocIndexer(self)
 
     @property
+    @annotate("CUDF_DATAFRAME_ILOC", color="blue", domain="cudf_python")
     def iloc(self):
         """
         Selecting rows and column by position.
@@ -1596,6 +1601,7 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
+    @annotate("CUDF_DATAFRAME_COPY", color="cyan", domain="cudf_python")
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1627,6 +1633,7 @@ class DataFrame(Frame):
     def __reduce__(self):
         return (DataFrame, (self._data, self.index))
 
+    @annotate("CUDF_INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -2055,11 +2062,13 @@ class DataFrame(Frame):
 
         return outdf
 
+    @annotate("CUDF_ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
+    @annotate("CUDF_SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(self, ascending=True):
         """Sort by the index
         """
