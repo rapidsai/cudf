@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -222,10 +223,9 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.is_unique
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    libcudf.nvtx.range_pop()
     return out
 
 

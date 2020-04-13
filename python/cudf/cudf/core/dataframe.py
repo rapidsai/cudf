@@ -23,6 +23,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import (
@@ -165,6 +166,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -421,6 +423,7 @@ class DataFrame(Frame):
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
+    @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -509,6 +512,7 @@ class DataFrame(Frame):
             df[col] = df[col].set_mask(out_mask)
         return df
 
+    @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
@@ -1192,6 +1196,7 @@ class DataFrame(Frame):
             yield (k, self[k])
 
     @property
+    @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
@@ -1595,6 +1600,7 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
+    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1626,6 +1632,7 @@ class DataFrame(Frame):
     def __reduce__(self):
         return (DataFrame, (self._data, self.index))
 
+    @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -2054,11 +2061,13 @@ class DataFrame(Frame):
 
         return outdf
 
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
+    @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(self, ascending=True):
         """Sort by the index
         """
@@ -2215,6 +2224,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def merge(
         self,
         right,
@@ -2298,7 +2308,6 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2340,9 +2349,9 @@ class DataFrame(Frame):
             method,
             sort=sort,
         )
-        libcudf.nvtx.range_pop()
         return gdf_result
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
         self,
         other,
@@ -2378,9 +2387,6 @@ class DataFrame(Frame):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
-
         # Outer joins still use the old implementation
         if type != "":
             warnings.warn(
@@ -2519,7 +2525,6 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudf.nvtx.range_pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2626,35 +2631,36 @@ class DataFrame(Frame):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        if self.empty:
-            return self.copy()
+        # can't use `annotate` decorator here as we inspect the calling
+        # environment.
+        with annotate("QUERY", color="purple", domain="cudf_python"):
+            if self.empty:
+                return self.copy()
 
-        if not isinstance(local_dict, dict):
-            raise TypeError(
-                "local_dict type: expected dict but found {!r}".format(
-                    type(local_dict)
+            if not isinstance(local_dict, dict):
+                raise TypeError(
+                    "local_dict type: expected dict but found {!r}".format(
+                        type(local_dict)
+                    )
                 )
-            )
 
-        libcudf.nvtx.range_push("CUDF_QUERY", "purple")
-        # Get calling environment
-        callframe = inspect.currentframe().f_back
-        callenv = {
-            "locals": callframe.f_locals,
-            "globals": callframe.f_globals,
-            "local_dict": local_dict,
-        }
-        # Run query
-        boolmask = queryutils.query_execute(self, expr, callenv)
+            # Get calling environment
+            callframe = inspect.currentframe().f_back
+            callenv = {
+                "locals": callframe.f_locals,
+                "globals": callframe.f_globals,
+                "local_dict": local_dict,
+            }
+            # Run query
+            boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series(boolmask)
-        newdf = DataFrame()
-        for col in self.columns:
-            newseries = self[col][selected]
-            newdf[col] = newseries
-        result = newdf
-        libcudf.nvtx.range_pop()
-        return result
+            selected = Series(boolmask)
+            newdf = DataFrame()
+            for col in self.columns:
+                newseries = self[col][selected]
+                newdf[col] = newseries
+            result = newdf
+            return result
 
     @applyutils.doc_apply()
     def apply_rows(
