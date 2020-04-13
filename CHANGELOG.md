@@ -135,6 +135,7 @@
 - PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
+- PR #4877 Fix `DataFrame.mask` and align similar behavior to pandas
 
 
 # cuDF 0.13.0 (31 Mar 2020)
