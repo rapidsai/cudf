@@ -2209,7 +2209,7 @@ class StringColumn(column.ColumnBase):
         return out
 
 
-@annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _string_column_binop(lhs, rhs, op, out_dtype):
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     return out
