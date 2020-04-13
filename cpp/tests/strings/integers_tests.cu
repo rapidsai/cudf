@@ -138,9 +138,9 @@ TEST_F(StringsConvertTest, HexToInteger)
     for( auto itr = h_strings.begin(); itr != h_strings.end(); ++itr )
     {
         if( *itr==nullptr )
-           h_expected.push_back(0);
+            h_expected.push_back(0);
         else
-           h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
+            h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
     }
 
     auto strings_view = cudf::strings_column_view(strings);
