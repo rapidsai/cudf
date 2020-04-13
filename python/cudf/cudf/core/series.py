@@ -30,7 +30,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     min_scalar_type,
-    to_cudf_compatible_scalar,
 )
 
 
@@ -452,31 +451,20 @@ class Series(Frame):
         return not len(self)
 
     def __getitem__(self, arg):
-        data = self._column[arg]
-        index = self.index.take(arg)
-        if is_scalar(data) or data is None:
-            return data
-        return self._copy_construct(data=data, index=index)
+        if isinstance(arg, (slice, range, ColumnBase)) or (
+            pd.api.types.is_bool_dtype(as_column(arg).dtype)
+        ):
+            return self.iloc[arg]
+        else:
+            return self.loc[arg]
 
     def __setitem__(self, key, value):
-        # coerce value into a scalar or column
-        if is_scalar(value):
-            value = to_cudf_compatible_scalar(value)
-        else:
-            value = column.as_column(value)
-
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
-            value.dtype
+        if isinstance(key, (slice, range, ColumnBase)) or (
+            pd.api.types.is_bool_dtype(as_column(key).dtype)
         ):
-            # normalize types if necessary:
-            if not pd.api.types.is_integer(key):
-                to_dtype = np.result_type(value.dtype, self._column.dtype)
-                value = value.astype(to_dtype)
-                self._column._mimic_inplace(
-                    self._column.astype(to_dtype), inplace=True
-                )
-
-        self._column[key] = value
+            self.iloc[key] = value
+        else:
+            self.loc[key] = value
 
     def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.

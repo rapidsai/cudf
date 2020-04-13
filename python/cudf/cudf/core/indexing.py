@@ -6,7 +6,11 @@ import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype, is_scalar
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    to_cudf_compatible_scalar,
+)
 
 
 def indices_from_labels(obj, labels):
@@ -45,12 +49,36 @@ class _SeriesIlocIndexer(object):
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
-        return self._sr[arg]
+        data = self._sr._column[arg]
+        index = self._sr.index.take(arg)
+        if is_scalar(data) or data is None:
+            return data
+        return self._sr._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
+        from cudf.core.column import column
+
         if isinstance(key, tuple):
             key = list(key)
-        self._sr[key] = value
+
+        # coerce value into a scalar or column
+        if is_scalar(value):
+            value = to_cudf_compatible_scalar(value)
+        else:
+            value = column.as_column(value)
+
+        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
+            value.dtype
+        ):
+            # normalize types if necessary:
+            if not pd.api.types.is_integer(key):
+                to_dtype = np.result_type(value.dtype, self._sr._column.dtype)
+                value = value.astype(to_dtype)
+                self._sr._column._mimic_inplace(
+                    self._sr._column.astype(to_dtype), inplace=True
+                )
+
+        self._sr._column[key] = value
 
 
 class _SeriesLocIndexer(object):
@@ -62,7 +90,11 @@ class _SeriesLocIndexer(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        arg = self._loc_to_iloc(arg)
+        try:
+            arg = self._loc_to_iloc(arg)
+        except (TypeError, KeyError, IndexError, ValueError):
+            raise IndexError
+
         return self._sr.iloc[arg]
 
     def __setitem__(self, key, value):
@@ -90,10 +122,18 @@ class _SeriesLocIndexer(object):
             if arg.dtype in [np.bool, np.bool_]:
                 return arg
             else:
-                return indices_from_labels(self._sr, arg)
+                indices = indices_from_labels(self._sr, arg)
+                if indices.null_count > 0:
+                    raise IndexError("label scalar is out of bound")
+                return indices
         elif is_scalar(arg):
-            found_index = self._sr.index.find_label_range(arg, None)[0]
-            return found_index
+            try:
+                found_index = self._sr.index._values.find_first_value(
+                    arg, closest=False
+                )
+                return found_index
+            except (TypeError, KeyError, IndexError, ValueError):
+                raise IndexError("label scalar is out of bound")
         elif isinstance(arg, slice):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
@@ -177,7 +217,7 @@ class _DataFrameIndexer(object):
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
             if is_scalar(arg[0]) and is_scalar(arg[1]):
-                return df[df.columns[0]][0]
+                return df[df.columns[0]].iloc[0]
             elif not is_scalar(arg[0]):
                 axis = 1
             else:
@@ -306,7 +346,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 isinstance(arg[0], slice) or isinstance(arg[1], slice)
             ):
                 # Pandas returns a numpy scalar in this case
-                return df[0]
+                return df.iloc[0]
             if self._can_downcast_to_series(df, arg):
                 return self._downcast_to_series(df, arg)
             return df

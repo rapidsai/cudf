@@ -315,7 +315,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
         gdf = gdf.drop("col_category")
 
     for row in range(num_rows):
-        assert gdf["col_int32"][row] == row + skip_rows
+        assert gdf["col_int32"].iloc[row] == row + skip_rows
 
 
 def test_parquet_reader_spark_timestamps(datadir):

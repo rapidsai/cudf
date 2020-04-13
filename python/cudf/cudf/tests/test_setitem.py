@@ -82,3 +82,16 @@ def test_series_setitem_index():
     gdf = DataFrame(data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3])
     gdf["b"] = Series(data=[12, 11, 10], index=[3, 2, 1])
     assert_eq(df, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", [["a", "c"], slice(1, 2, 1), range(1, 2), [True, False, True]]
+)
+def test_series_set_item(psr, arg):
+    gsr = Series.from_pandas(psr)
+
+    psr[arg] = 11
+    gsr[arg] = 11
+
+    assert_eq(psr, gsr)

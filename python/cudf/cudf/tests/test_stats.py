@@ -235,10 +235,12 @@ def test_kurtosis(data, null_flag):
         pdata.iloc[[0, 2]] = None
 
     got = data.kurtosis()
+    got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt()
+    got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
@@ -272,6 +274,7 @@ def test_skew(data, null_flag):
 
     got = data.skew()
     expected = pdata.skew()
+    got = got if np.isscalar(got) else got.to_array()
     np.testing.assert_array_almost_equal(got, expected)
 
 
