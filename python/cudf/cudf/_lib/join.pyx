@@ -45,11 +45,14 @@ cpdef join(Table lhs,
            ):
     """
     Call libcudf++ join for full outer, inner and left joins.
-    Returns a list of tuples [(column, valid, name), ...]
     """
 
     cdef Table c_lhs = lhs
     cdef Table c_rhs = rhs
+
+    # Views might or might not include index
+    cdef table_view lhs_view
+    cdef table_view rhs_view
 
     # Will hold the join column indices into L and R tables
     cdef vector[int] left_on_ind
@@ -67,14 +70,11 @@ cpdef join(Table lhs,
     cdef vector[int] all_left_inds = range(lhs._num_columns + (lhs._num_indices * left_index))
     cdef vector[int] all_right_inds = range(rhs._num_columns + (rhs._num_indices * right_index))
 
+    result_col_names = compute_result_col_names(lhs, rhs, how)
+
     columns_in_common = OrderedDict()
     cdef vector[pair[int, int]] c_columns_in_common
 
-    # Views might or might not include index
-    cdef table_view lhs_view
-    cdef table_view rhs_view
-
-    result_col_names = compute_result_col_names(lhs, rhs, how)
     # keep track of where the desired index column will end up
     result_index_pos = None
     if left_index or right_index:
@@ -93,18 +93,32 @@ cpdef join(Table lhs,
             result_index_names = lhs._index_names
 
         elif left_index:
-            left_on_indices = [0]
-            right_on_indices = [right_join_cols.index(right_on[0])]
-            result_idx_positions = [len(left_join_cols)]
+            # Joins left index columns with right 'on' columns
+            left_on_indices = range(lhs._num_indices)
+            right_on_indices = [right_join_cols.index(on_col) for on_col in right_on]
+
+            # The left index columns 'become' the new RHS columns
+            # and the right index 'survives'
+            result_idx_positions = range(len(left_join_cols), len(left_join_cols) + lhs._num_indices)
             result_index_names = rhs._index_names
 
-            # common col gathered from the left
-            common = result_col_names.pop(result_col_names.index(right_on[0]))
-            result_col_names = [common] + result_col_names
+            # but since the common columns are gathered from the left
+            # the rhs 'on' cols are returned on the left of the result
+            # rearrange the names so account for this 
+            common = [None] * rhs._num_indices
+            for i in range(rhs._num_indices):
+                common[i] = result_col_names.pop(result_col_names.index(right_on[i]))
+            result_col_names = common + result_col_names
         elif right_index:
-            right_on_indices = [0]
-            left_on_indices = [left_join_cols.index(left_on[0])]
-            result_idx_positions = [0]
+            # Joins right index columns with left 'on' columns
+            right_on_indices = range(rhs._num_indices)
+            left_on_indices = [left_join_cols.index(on_col) for on_col in left_on]
+
+            # The right index columns 'become' the new LHS columns
+            # and the left index survives
+            # since they are already gathered from the left,
+            # no rearranging has to be done
+            result_idx_positions = range(len(right_join_cols))
             result_index_names = lhs._index_names
 
         for i_l, i_r in zip(left_on_indices, right_on_indices):
@@ -120,9 +134,9 @@ cpdef join(Table lhs,
         left_join_cols = list(lhs._data.keys())
         right_join_cols = list(rhs._data.keys())
 
-    # If one index is specified, there will only be one join column from other
-    # If neither, must build libcudf arguments for the actual join columns
-    # If both, could be joining on indices and cols, so must search
+    # If both left/right_index, joining on indices plus additional cols
+    # If neither, joining on just cols, not indices
+    # In both cases, must match up additional column indices in lhs/rhs
     if left_index == right_index:
         for name in left_on:
             left_on_ind.push_back(left_join_cols.index(name))
