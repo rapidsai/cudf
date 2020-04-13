@@ -12,7 +12,6 @@ import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
-from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -526,23 +525,18 @@ class Frame(libcudf.table.Table):
                 if column_name in cond.columns:
                     if is_categorical_dtype(input_col.dtype):
                         if np.isscalar(other_column):
-                            other_column = input_col._encode(other_column)
-                        else:
+                            try:
+                                other_column = input_col._encode(other_column)
+                            except ValueError:
+                                # When other is not present in categories.
+                                other_column = input_col.default_na_value()
+                        elif hasattr(other_column, "codes"):
                             other_column = other_column.codes
                         input_col = input_col.codes
 
-                    if len(input_col) == len(cond[column_name]._column):
-                        result = libcudf.copying.copy_if_else(
-                            input_col, other_column, cond._data[column_name]
-                        )
-                    else:
-                        if input_col.nullable:
-                            cond[column_name] = cond[column_name].set_mask(
-                                input_col.mask
-                            )
-
-                        out_mask = bools_to_mask(cond._data[column_name])
-                        result = input_col.set_mask(out_mask)
+                    result = libcudf.copying.copy_if_else(
+                        input_col, other_column, cond._data[column_name]
+                    )
 
                     if is_categorical_dtype(self._data[column_name].dtype):
                         result = build_categorical_column(
@@ -567,28 +561,41 @@ class Frame(libcudf.table.Table):
             return self._mimic_inplace(out_df, inplace=inplace)
 
         else:
-            other = self._normalize_columns_and_scalars_type(other)
-            if isinstance(other, (cudf.Series, cudf.Index)):
-                other = other._data[other.name]
+            if isinstance(self, cudf.core.multiindex.MultiIndex):
+                raise NotImplementedError(
+                    ".where is not supported for MultiIndex operations"
+                )
 
+            other = self._normalize_columns_and_scalars_type(other)
+
+            cond = as_column(cond)
+            if len(cond) != len(self):
+                raise ValueError(
+                    """Array conditional must be same shape as self"""
+                )
             input_col = self._data[self.name]
             if is_categorical_dtype(input_col.dtype):
-                if np.isscalar(other_column):
-                    other = input_col._encode(other)
-                else:
+                if np.isscalar(other):
+                    try:
+                        other = input_col._encode(other)
+                    except ValueError:
+                        # When other is not present in categories.
+                        other = input_col.default_na_value()
+                elif hasattr(other, "codes"):
                     other = other.codes
+
                 input_col = input_col.codes
-            cond = as_column(cond)
+
             result = libcudf.copying.copy_if_else(input_col, other, cond)
 
             if is_categorical_dtype(self.dtype):
                 result = build_categorical_column(
-                    categories=self._column.categories,
+                    categories=self._data[self.name].categories,
                     codes=as_column(result.base_data, dtype=result.dtype),
                     mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
-                    ordered=self._column.ordered,
+                    ordered=self._data[self.name].ordered,
                 )
 
             if isinstance(self, cudf.Index):
@@ -652,6 +659,11 @@ class Frame(libcudf.table.Table):
         4       0
         dtype: int64
         """
+        if isinstance(self, cudf.core.multiindex.MultiIndex):
+            raise NotImplementedError(
+                ".mask is not supported for MultiIndex operations"
+            )
+
         if not hasattr(cond, "__invert__"):
             cond = np.array(cond)
 
