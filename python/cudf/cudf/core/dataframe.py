@@ -165,6 +165,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -421,6 +422,7 @@ class DataFrame(Frame):
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
+    @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -494,6 +496,7 @@ class DataFrame(Frame):
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
+    @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
@@ -1177,6 +1180,7 @@ class DataFrame(Frame):
             yield (k, self[k])
 
     @property
+    @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
@@ -1580,6 +1584,7 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
+    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1611,6 +1616,7 @@ class DataFrame(Frame):
     def __reduce__(self):
         return (DataFrame, (self._data, self.index))
 
+    @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -2039,11 +2045,13 @@ class DataFrame(Frame):
 
         return outdf
 
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
+    @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(self, ascending=True):
         """Sort by the index
         """
@@ -2200,7 +2208,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
-    @annotate("CUDF_JOIN", color="blue", domain="cudf_python")
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def merge(
         self,
         right,
@@ -2327,7 +2335,7 @@ class DataFrame(Frame):
         )
         return gdf_result
 
-    @annotate("CUDF_JOIN", color="blue", domain="cudf_python")
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
         self,
         other,
@@ -2609,7 +2617,7 @@ class DataFrame(Frame):
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
-        with annotate("CUDF_QUERY", color="purple", domain="cudf_python"):
+        with annotate("QUERY", color="purple", domain="cudf_python"):
             if self.empty:
                 return self.copy()
 

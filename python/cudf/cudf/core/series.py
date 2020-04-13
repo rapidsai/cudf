@@ -602,7 +602,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    @annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
+    @annotate("BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
@@ -1734,23 +1734,23 @@ class Series(Frame):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.min(dtype=dtype)
 
     def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.max(dtype=dtype)
 
     def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.sum(dtype=dtype)
 
     def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.product(dtype=dtype)
 
     def prod(self, axis=None, skipna=True, dtype=None):
         """Alias for product"""
@@ -1881,19 +1881,19 @@ class Series(Frame):
         15.5
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self.nans_to_nulls().dropna()._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.std(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.var(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)

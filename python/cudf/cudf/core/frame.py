@@ -41,7 +41,7 @@ class Frame(libcudf.table.Table):
         return cls(table._data, index=table._index)
 
     @classmethod
-    @annotate("CUDF_CONCAT", color="orange", domain="cudf_python")
+    @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):
 
         # shallow-copy the input DFs in case the same DF instance
