@@ -4718,6 +4718,48 @@ def test_dataframe_strided_slice(arg):
             None,
             ValueError,
         ),
+        (
+            pd.Series([1, 2, np.nan]),
+            pd.Series([1, 2, np.nan]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([1, 2, np.nan]),
+            pd.Series([1, 2, np.nan]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6]),
+            pd.Series([4, np.nan, 6]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6]),
+            pd.Series([4, np.nan, 6]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6], dtype="category"),
+            pd.Series([4, np.nan, 6], dtype="category") != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category"),
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category") == "b",
+            None,
+            None,
+        ),
+        (
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category"),
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category") == "b",
+            "s",
+            None,
+        ),
     ],
 )
 def test_df_sr_mask_where(data, condition, other, error):
@@ -4725,7 +4767,7 @@ def test_df_sr_mask_where(data, condition, other, error):
     gs = gd.from_pandas(data)
 
     ps_condition = condition
-    if type(other).__module__.split(".")[0] == "pandas":
+    if type(condition).__module__.split(".")[0] == "pandas":
         gs_condition = gd.from_pandas(condition)
     else:
         gs_condition = condition
@@ -4737,17 +4779,35 @@ def test_df_sr_mask_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        # import pdb;pdb.set_trace()
-        assert_eq(
-            ps.where(ps_condition, other=ps_other).fillna(-1),
-            gs.where(gs_condition, other=gs_other).fillna(-1),
-            check_dtype=False,
-        )
-        assert_eq(
-            ps.mask(ps_condition, other=ps_other).fillna(-1),
-            gs.mask(gs_condition, other=gs_other).fillna(-1),
-            check_dtype=False,
-        )
+        expect_where = ps.where(ps_condition, other=ps_other)
+        got_where = gs.where(gs_condition, other=gs_other)
+
+        expect_mask = ps.mask(ps_condition, other=ps_other)
+        got_mask = gs.mask(gs_condition, other=gs_other)
+
+        if pd.api.types.is_categorical_dtype(expect_where):
+            np.testing.assert_array_equal(
+                expect_where.cat.codes, got_where.cat.codes.fillna(-1)
+            )
+            assert tuple(expect_where.cat.categories) == tuple(
+                got_where.cat.categories
+            )
+
+            np.testing.assert_array_equal(
+                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1)
+            )
+            assert tuple(expect_mask.cat.categories) == tuple(
+                got_mask.cat.categories
+            )
+        else:
+            assert_eq(
+                expect_where.fillna(-1),
+                got_where.fillna(-1),
+                check_dtype=False,
+            )
+            assert_eq(
+                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False,
+            )
     else:
         with pytest.raises(error):
             ps.where(ps_condition, other=ps_other)
@@ -4758,3 +4818,183 @@ def test_df_sr_mask_where(data, condition, other, error):
             ps.mask(ps_condition, other=ps_other)
         with pytest.raises(error):
             gs.mask(gs_condition, other=gs_other)
+
+
+@pytest.mark.parametrize(
+    "data,condition,other,has_cat",
+    [
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(["a", "a", "b", "c", "a", "d", "d", "a"]),
+                    "b": pd.Series(["o", "p", "q", "e", "p", "p", "a", "a"]),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(["a", "a", "b", "c", "a", "d", "d", "a"]),
+                    "b": pd.Series(["o", "p", "q", "e", "p", "p", "a", "a"]),
+                }
+            )
+            != "a",
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            != "a",
+            None,
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            == "a",
+            None,
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            != "a",
+            "a",
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            == "a",
+            "a",
+            True,
+        ),
+    ],
+)
+def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
+    ps = data
+    gs = gd.from_pandas(data)
+
+    ps_condition = condition
+    if type(condition).__module__.split(".")[0] == "pandas":
+        gs_condition = gd.from_pandas(condition)
+    else:
+        gs_condition = condition
+
+    ps_other = other
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_other = gd.from_pandas(other)
+    else:
+        gs_other = other
+
+    expect_where = ps.where(ps_condition, other=ps_other)
+    got_where = gs.where(gs_condition, other=gs_other)
+
+    expect_mask = ps.mask(ps_condition, other=ps_other)
+    got_mask = gs.mask(gs_condition, other=gs_other)
+
+    if has_cat is None:
+        assert_eq(
+            expect_where.fillna(-1).astype("str"),
+            got_where.fillna(-1),
+            check_dtype=False,
+        )
+        assert_eq(
+            expect_mask.fillna(-1).astype("str"),
+            got_mask.fillna(-1),
+            check_dtype=False,
+        )
+    else:
+        assert_eq(
+            expect_where, got_where, check_dtype=False,
+        )
+        assert_eq(
+            expect_mask, got_mask, check_dtype=False,
+        )
