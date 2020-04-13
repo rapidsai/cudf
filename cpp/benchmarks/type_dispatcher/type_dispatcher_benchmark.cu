@@ -192,7 +192,7 @@ void type_dispatcher_benchmark(benchmark::State& state){
   
   // Warm up  
   launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data().get(), work_per_thread);
-  cudaDeviceSynchronize();
+  CUDA_TRY(cudaDeviceSynchronize());
   
   for(auto _ : state){
     cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
