@@ -137,6 +137,7 @@
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
+- PR #4887 Remove `developer.rst` and any links
 
 
 # cuDF 0.13.0 (31 Mar 2020)
