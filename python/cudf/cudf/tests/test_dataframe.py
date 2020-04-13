@@ -4766,6 +4766,17 @@ def test_dataframe_strided_slice(arg):
             "s",
             None,
         ),
+        (
+            pd.Series([1, 2, 3, 2, 5]),
+            pd.Series([1, 2, 3, 2, 5]) == 2,
+            pd.DataFrame(
+                {
+                    "a": pd.Series([1, 2, 3, 2, 5]),
+                    "b": pd.Series([1, 2, 3, 2, 5]),
+                }
+            ),
+            NotImplementedError,
+        ),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])

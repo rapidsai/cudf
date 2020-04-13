@@ -566,6 +566,11 @@ class Frame(libcudf.table.Table):
                     ".where is not supported for MultiIndex operations"
                 )
 
+            if isinstance(other, cudf.DataFrame):
+                raise NotImplementedError(
+                    "cannot align with a higher dimensional Frame"
+                )
+
             other = self._normalize_columns_and_scalars_type(other)
 
             cond = as_column(cond)
