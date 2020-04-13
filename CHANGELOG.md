@@ -129,6 +129,7 @@
 - PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
