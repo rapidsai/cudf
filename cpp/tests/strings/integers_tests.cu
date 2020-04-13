@@ -76,6 +76,14 @@ TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
     EXPECT_EQ(0,results->size());
 }
 
+TEST_F(StringsConvertTest, EmptyStringsColumn)
+{
+    cudf::test::strings_column_wrapper strings({"", "", ""});
+    auto results = cudf::strings::to_integers( cudf::strings_column_view(strings), cudf::data_type{cudf::INT64});
+    cudf::test::fixed_width_column_wrapper<int64_t> expected( {0,0,0} );
+    cudf::test::expect_columns_equal(results->view(),expected);
+}
+
 template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {};
 
