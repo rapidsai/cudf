@@ -407,13 +407,5 @@ std::unique_ptr<table> boolean_mask_scatter(
   return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
 }
 
-std::unique_ptr<column> boolean_mask_scatter(
-  column_view const& input, column_view const& target,
-  column_view const& boolean_mask,
-  rmm::mr::device_memory_resource *mr) {
-    CUDF_FUNC_RANGE();
-    return detail::boolean_mask_scatter(input, target, boolean_mask, mr);
-  }
-
 }  // namespace experimental
 }  // namespace cudf

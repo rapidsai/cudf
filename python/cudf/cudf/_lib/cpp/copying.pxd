@@ -149,9 +149,3 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         table_view target,
         column_view boolean_mask
     ) except +
-
-    cdef unique_ptr[column] boolean_mask_scatter (
-        column_view input,
-        column_view target,
-        column_view boolean_mask
-    ) except +

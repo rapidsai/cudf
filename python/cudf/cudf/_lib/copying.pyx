@@ -571,26 +571,6 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
     )
 
 
-def _boolean_mask_scatter_column(Column input_column, Column target_column,
-                                 Column boolean_mask):
-    cdef column_view input_column_view = input_column.view()
-    cdef column_view target_column_view = target_column.view()
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.boolean_mask_scatter(
-                input_column_view,
-                target_column_view,
-                boolean_mask_view
-            )
-        )
-
-    return Column.from_unique_ptr(move(c_result))
-
-
 def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
                                  Column boolean_mask):
 

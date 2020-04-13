@@ -135,12 +135,6 @@ std::unique_ptr<table> boolean_mask_scatter(
     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
-std::unique_ptr<column> boolean_mask_scatter(
-    column_view const& input, column_view const& target,
-    column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr,
-    cudaStream_t stream = 0);
-
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
