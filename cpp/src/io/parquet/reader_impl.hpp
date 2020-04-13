@@ -78,6 +78,25 @@ class reader::impl {
                            int max_rowgroup_count, cudaStream_t stream);
 
  private:
+
+  /**
+   * @brief Reads compressed page data to device memory
+   *
+   * @param page_data Buffers to hold compressed page data for each chunk
+   * @param chunks List of column chunk descriptors
+   * @param begin_chunk Index of first column chunk to read
+   * @param end_chunk Index after the last column chunk to read
+   * @param column_chunk_offsets File offset for all chunks
+   * @param stream Stream to use for memory allocation and kernels
+   *
+   */
+  void read_column_chunks(
+      std::vector<rmm::device_buffer>& page_data,
+      hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+      size_t begin_chunk, size_t end_chunk,
+      const std::vector<size_t>& column_chunk_offsets,
+      cudaStream_t stream);
+
   /**
    * @brief Returns the number of total pages from the given column chunks
    *
