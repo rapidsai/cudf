@@ -4768,10 +4768,13 @@ def test_dataframe_strided_slice(arg):
         ),
     ],
 )
-def test_df_sr_mask_where(data, condition, other, error):
-    ps = data
-    gs = gd.from_pandas(data)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_df_sr_mask_where(data, condition, other, error, inplace):
+    ps_where = data
+    gs_where = gd.from_pandas(data)
 
+    ps_mask = ps_where.copy(deep=True)
+    gs_mask = gs_where.copy(deep=True)
     ps_condition = condition
     if type(condition).__module__.split(".")[0] == "pandas":
         gs_condition = gd.from_pandas(condition)
@@ -4785,11 +4788,24 @@ def test_df_sr_mask_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        expect_where = ps.where(ps_condition, other=ps_other)
-        got_where = gs.where(gs_condition, other=gs_other)
+        expect_where = ps_where.where(
+            ps_condition, other=ps_other, inplace=inplace
+        )
+        got_where = gs_where.where(
+            gs_condition, other=gs_other, inplace=inplace
+        )
 
-        expect_mask = ps.mask(ps_condition, other=ps_other)
-        got_mask = gs.mask(gs_condition, other=gs_other)
+        expect_mask = ps_mask.mask(
+            ps_condition, other=ps_other, inplace=inplace
+        )
+        got_mask = gs_mask.mask(gs_condition, other=gs_other, inplace=inplace)
+
+        if inplace:
+            expect_where = ps_where
+            got_where = gs_where
+
+            expect_mask = ps_mask
+            got_mask = gs_mask
 
         if pd.api.types.is_categorical_dtype(expect_where):
             np.testing.assert_array_equal(
@@ -4816,14 +4832,14 @@ def test_df_sr_mask_where(data, condition, other, error):
             )
     else:
         with pytest.raises(error):
-            ps.where(ps_condition, other=ps_other)
+            ps_where.where(ps_condition, other=ps_other, inplace=inplace)
         with pytest.raises(error):
-            gs.where(gs_condition, other=gs_other)
+            gs_where.where(gs_condition, other=gs_other, inplace=inplace)
 
         with pytest.raises(error):
-            ps.mask(ps_condition, other=ps_other)
+            ps_mask.mask(ps_condition, other=ps_other, inplace=inplace)
         with pytest.raises(error):
-            gs.mask(gs_condition, other=gs_other)
+            gs_mask.mask(gs_condition, other=gs_other, inplace=inplace)
 
 
 @pytest.mark.parametrize(
