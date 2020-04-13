@@ -179,7 +179,8 @@ struct integer_to_string_size_fn
         if( value==0 )
             return 1;
         bool is_negative = value < 0;
-        // abs(std::numeric_limits<IntegerType>::min()) is negative
+        // abs(std::numeric_limits<IntegerType>::min()) is negative;
+        // for all integer types, the max() and min() values have the same number of digits
         value = (value == std::numeric_limits<IntegerType>::min()) ?
                 std::numeric_limits<IntegerType>::max() : abs(value);
         // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
