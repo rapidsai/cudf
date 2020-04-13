@@ -116,6 +116,19 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
+)
+def test_series_get_item(psr, arg):
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[arg]
+    got = gsr[arg]
+
+    assert_eq(expect, got)
+
+
 def test_dataframe_column_name_indexing():
     df = DataFrame()
     data = np.asarray(range(10), dtype=np.int32)
