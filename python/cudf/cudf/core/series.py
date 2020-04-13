@@ -1730,57 +1730,57 @@ class Series(Frame):
         assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self, axis=None, skipna=True, dtype=None, **kwargs):
+    def min(self, axis=None, skipna=True, dtype=None):
         """Compute the min of the series
         """
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.min(dtype=dtype)
 
-    def max(self, axis=None, skipna=True, dtype=None, **kwargs):
+    def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.max(dtype=dtype)
 
-    def sum(self, axis=None, skipna=True, dtype=None, **kwargs):
+    def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.sum(dtype=dtype)
 
-    def product(self, axis=None, skipna=True, dtype=None, **kwargs):
+    def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.product(dtype=dtype)
 
@@ -1900,7 +1900,7 @@ class Series(Frame):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True, **kwargs):
+    def mean(self, axis=None, skipna=True):
         """
 
         Compute the mean of the series
@@ -1913,13 +1913,13 @@ class Series(Frame):
         15.5
         """
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.mean()
 
@@ -1927,27 +1927,27 @@ class Series(Frame):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.std(ddof=ddof)
 
-    def var(self, ddof=1, axis=None, skipna=True, **kwargs):
+    def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0)
-        nan_as_null = kwargs.get("nan_as_null", True)
-        if nan_as_null:
-            result_series = self
-        else:
+
+        if skipna:
             result_series = self.nans_to_nulls()
-            if skipna and result_series.null_count > 0:
+            if result_series.null_count > 0:
                 result_series = result_series.dropna()
+        else:
+            result_series = self
 
         return result_series._column.var(ddof=ddof)
 

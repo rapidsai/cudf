@@ -396,4 +396,4 @@ def test_nans_stats(ops):
     psr = pd.Series(data)
     gsr = Series(data, nan_as_null=False)
 
-    assert_eq(getattr(psr, ops)(), getattr(gsr, ops)(nan_as_null=False))
+    assert_eq(getattr(psr, ops)(), getattr(gsr, ops)())
