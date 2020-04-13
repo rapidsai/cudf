@@ -452,17 +452,13 @@ class Series(Frame):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (slice, range, ColumnBase)) or (
-            pd.api.types.is_bool_dtype(as_column(arg).dtype)
-        ):
+        if isinstance(arg, (slice, range, ColumnBase)):
             return self.iloc[arg]
         else:
             return self.loc[arg]
 
     def __setitem__(self, key, value):
-        if isinstance(key, (slice, range, ColumnBase)) or (
-            pd.api.types.is_bool_dtype(as_column(key).dtype)
-        ):
+        if isinstance(key, (slice, range, ColumnBase)):
             self.iloc[key] = value
         else:
             self.loc[key] = value

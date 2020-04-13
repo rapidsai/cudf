@@ -94,7 +94,7 @@ class _SeriesLocIndexer(object):
         try:
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError):
-            raise IndexError
+            raise IndexError("Failed to convert index to appropirate row")
 
         return self._sr.iloc[arg]
 
