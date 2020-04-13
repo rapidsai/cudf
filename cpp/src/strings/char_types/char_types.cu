@@ -19,12 +19,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/string.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
-
-#include <thrust/logical.h>
 
 //
 namespace cudf
@@ -98,14 +97,7 @@ std::unique_ptr<column> is_integer( strings_column_view const& strings,
         [d_column] __device__(size_type idx){
             if( d_column.is_null(idx) )
                 return false;
-            auto d_str = d_column.element<string_view>(idx);
-            if( d_str.empty() )
-                return false;
-            auto begin = d_str.begin();
-            if( *begin=='+' || *begin=='-' )
-                ++begin;
-            return thrust::all_of( thrust::seq, begin, d_str.end(),
-                [] __device__ (auto chr) { return chr >='0' && chr <= '9'; });
+            return string::is_integer(d_column.element<string_view>(idx));
         });
     //
     results->set_null_count(strings.null_count());
@@ -130,47 +122,7 @@ std::unique_ptr<column> is_float( strings_column_view const& strings,
         [d_column] __device__(size_type idx){
             if( d_column.is_null(idx) )
                 return false;
-            auto d_str = d_column.element<string_view>(idx);
-            if( d_str.empty() )
-                return false;
-            // strings allowed by the converter
-            if( d_str.compare("NaN",3)==0 )
-                return true;
-            if( d_str.compare("Inf",3)==0 )
-                return true;
-            if( d_str.compare("-Inf",4)==0 )
-                return true;
-            bool decimal_found = false;
-            bool exponent_found = false;
-            size_type bytes = d_str.size_bytes();
-            const char* data = d_str.data();
-            // sign character allowed at the beginning of the string
-            size_type chidx = ( *data=='-' || *data=='+' ) ? 1:0;
-            // check for float chars [0-9] and a single decimal '.'
-            // and scientific notation [eE][+-][0-9]
-            for( ; chidx < bytes; ++chidx )
-            {
-                auto chr = data[chidx];
-                if( chr >= '0' && chr <= '9' )
-                    continue;
-                if( !decimal_found && chr == '.' )
-                {
-                    decimal_found = true; // no more decimals
-                    continue;
-                }
-                if( !exponent_found && (chr == 'e' || chr == 'E') )
-                {
-                    if( chidx+1 < bytes )
-                        chr = data[chidx+1];
-                    if( chr == '-' || chr == '+' )
-                        ++chidx;
-                    decimal_found = true; // no decimal allowed in exponent
-                    exponent_found = true; // no more exponents
-                    continue;
-                }
-                return false;
-            }
-            return true;
+            return string::is_float(d_column.element<string_view>(idx));
         });
     //
     results->set_null_count(strings.null_count());
