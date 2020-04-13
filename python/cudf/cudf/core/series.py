@@ -1730,27 +1730,47 @@ class Series(Frame):
         assert axis in (None, 0) and skipna is True
         return self.valid_count
 
-    def min(self, axis=None, skipna=True, dtype=None):
+    def min(self, axis=None, skipna=True, dtype=None, **kwargs):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.min(dtype=dtype)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.min(dtype=dtype)
 
-    def max(self, axis=None, skipna=True, dtype=None):
+    def max(self, axis=None, skipna=True, dtype=None, **kwargs):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.max(dtype=dtype)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.max(dtype=dtype)
 
-    def sum(self, axis=None, skipna=True, dtype=None):
+    def sum(self, axis=None, skipna=True, dtype=None, **kwargs):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.sum(dtype=dtype)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.sum(dtype=dtype)
 
-    def product(self, axis=None, skipna=True, dtype=None):
+    def product(self, axis=None, skipna=True, dtype=None, **kwargs):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self.nans_to_nulls().dropna()._column.product(dtype=dtype)
+        nan_as_null = kwargs.get("nan_as_null", True)
+        if nan_as_null:
+            result_series = self
+        else:
+            result_series = self.nans_to_nulls().dropna()
+        return result_series._column.product(dtype=dtype)
 
     def prod(self, axis=None, skipna=True, dtype=None):
         """Alias for product"""
