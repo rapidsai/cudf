@@ -937,8 +937,12 @@ def test_merge_multi(kwargs):
     gleft = left.to_pandas()
     gright = right.to_pandas()
 
+    kwargs['sort'] = True
     expect = gleft.merge(gright, **kwargs)
     got = left.merge(right, **kwargs)
+
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
