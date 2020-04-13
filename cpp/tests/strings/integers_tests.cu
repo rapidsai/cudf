@@ -89,7 +89,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
     thrust::sequence( thrust::device, d_integers.begin(), d_integers.end(), -(size/2) );
     auto integers = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size);
     auto integers_view = integers->mutable_view();
-    cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
+    CUDA_TRY(cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice));
     integers_view.set_null_count(0);
 
     // convert to strings
