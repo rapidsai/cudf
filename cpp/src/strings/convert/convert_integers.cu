@@ -60,6 +60,8 @@ struct string_to_integer_fn
     {
         int64_t value = 0;
         size_type bytes = d_str.size_bytes();
+        if( bytes==0 )
+            return value;
         const char* ptr = d_str.data();
         int sign = 1;
         if( *ptr == '-' || *ptr == '+' )
