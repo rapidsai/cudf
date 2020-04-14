@@ -77,6 +77,7 @@
 - PR #4873 Prevent mutable_view() from invoking null count
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4903 Improve internal documentation of cudf-io compression/decompression kernels
 
 ## Bug Fixes
 
