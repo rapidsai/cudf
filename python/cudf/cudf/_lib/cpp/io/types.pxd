@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, shared_ptr
 from libcpp.string cimport string
 from libcpp.map cimport map
@@ -45,6 +46,11 @@ cdef extern from "cudf/io/types.hpp" \
 
         vector[string] column_names
         map[string, string] user_data
+
+    cdef cppclass table_metadata_with_nullability(table_metadata):
+        table_metadata_with_nullability() except +
+
+        vector[bool] nullability
 
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl
