@@ -38,6 +38,8 @@
 #include <cstring>
 #include <utility>
 #include <type_traits>
+#include <iterator>
+#include <sstream>
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
@@ -261,14 +263,12 @@ void writer::impl::write_chunked_begin(table_view const& table,
   CUDF_EXPECTS( metadata != nullptr, "Unexpected null metadata.");
 
   std::string delimiter_str{options_.inter_column_delimiter()};
-  std::string header_str;
-  std::for_each(metadata->column_names.begin(), metadata->column_names.end(),
-                [&header_str, delimiter_str](auto const& crt_str) {
-                  auto crt_delimited_str = crt_str + delimiter_str;
-                  header_str.append(crt_delimited_str);
-                });
+  
+  std::stringstream ss;
+  std::copy(metadata->column_names.begin(), metadata->column_names.end(),
+            std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
 
-  out_sink_->host_write(header_str.data(), header_str.size());
+  out_sink_->host_write(ss.str().data(), ss.str().size());
 }
 
 
@@ -296,8 +296,6 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
 void writer::impl::write(table_view const &table,
                          const table_metadata *metadata,
                          cudaStream_t stream) {
-  //TODO: chunked behavior / decision making (?)
-
   CUDF_EXPECTS( table.num_columns() > 0 && table.num_rows() > 0, "Empty table." );
   
 
@@ -378,7 +376,7 @@ void writer::impl::write(table_view const &table,
     write_chunked(strings_converted, metadata, stream);
   }
 
-  //finalize (no-op, for now):
+  //finalize (no-op, for now, but offers a hook for future extensions):
   //
   write_chunked_end(table, metadata, stream);
 }
