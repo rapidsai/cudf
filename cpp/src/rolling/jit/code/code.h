@@ -30,6 +30,8 @@ namespace code {
     extern const char* kernel;
     extern const char* operation_h;
 
+    extern const char* grouped_window_wrapper;
+
 }
 }
 }

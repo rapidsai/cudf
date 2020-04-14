@@ -27,6 +27,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/copying.hpp>
 #include <rolling/rolling_detail.hpp>
+#include <rolling/rolling_jit_detail.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -38,6 +39,7 @@
 
 #include <types.hpp.jit>
 #include <bit.hpp.jit>
+#include <rolling_jit_detail.hpp.jit>
 
 #include <rmm/device_scalar.hpp>
 #include <thrust/binary_search.h>
@@ -516,7 +518,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const &input,
   // Launch the jitify kernel
   cudf::jit::launcher(hash, cuda_source,
                       { cudf_types_hpp, cudf_utilities_bit_hpp,
-                        cudf::experimental::rolling::jit::code::operation_h },
+                        cudf::experimental::rolling::jit::code::operation_h,
+                        ___src_rolling_rolling_jit_detail_hpp },
                       compiler_flags, nullptr, stream)
     .set_kernel_inst("gpu_rolling_new", // name of the kernel we are launching
                       { cudf::jit::get_type_name(input.type()), // list of template arguments
@@ -632,13 +635,6 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   }
 }
 
-// This is the struct to wrap the capturing lambda in order to pass the lambda to jitify.
-struct window_wrapper {
-  const cudf::size_type *d_group_offsets;
-  const cudf::size_type *d_group_labels;
-  cudf::size_type window;
-};
-
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                size_type preceding_window,
@@ -701,24 +697,25 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
       return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
     };
 
-  window_wrapper grouped_preceding_window
-  {
-    group_offsets.data().get(), 
-    group_labels.data().get(), 
-    preceding_window
-  };
-  
-  window_wrapper grouped_following_window
-  {
-    group_offsets.data().get(), 
-    group_labels.data().get(), 
-    following_window
-  };
- 
   if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+
+    cudf::detail::preceding_window_wrapper grouped_preceding_window
+    {
+      group_offsets.data().get(),
+      group_labels.data().get(),
+      preceding_window
+    };
+
+    cudf::detail::following_window_wrapper grouped_following_window
+    {
+      group_offsets.data().get(),
+      group_labels.data().get(),
+      following_window
+    };
+
     return cudf::experimental::detail::rolling_window_udf(input,
-                                                          grouped_preceding_window, "preceding_window_wrapper",
-                                                          grouped_following_window, "following_window_wrapper",
+                                                          grouped_preceding_window, "cudf::detail::preceding_window_wrapper",
+                                                          grouped_following_window, "cudf::detail::following_window_wrapper",
                                                           min_periods, aggr, mr, 0);
   } else {
     return cudf::experimental::detail::rolling_window(input,
