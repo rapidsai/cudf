@@ -25,6 +25,7 @@
 
 #include "./util.h"
 #include "./custring_view.cuh"
+#include <cudf/utilities/error.hpp>
 
 //
 custring_view* custring_from_host( const char* str )
@@ -87,8 +88,8 @@ NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int 
 
     // copy file contents into device memory
     char* d_contents = 0;
-    cudaMalloc(&d_contents,contentsSize);
-    cudaMemcpy(d_contents,contents,contentsSize,cudaMemcpyHostToDevice);
+    CUDA_TRY(cudaMalloc(&d_contents,contentsSize));
+    CUDA_TRY(cudaMemcpy(d_contents,contents,contentsSize,cudaMemcpyHostToDevice));
     delete contents; // done with the host data
 
     // copy offsets vector into device memory
@@ -98,7 +99,7 @@ NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int 
     //printf("Processing %u lines\n",linesCount);
     // build empty output vector of string ptrs
     std::pair<const char*,size_t>* d_index = 0;
-    cudaMalloc(&d_index, linesCount * sizeof(std::pair<const char*,size_t>));
+    CUDA_TRY(cudaMalloc(&d_index, linesCount * sizeof(std::pair<const char*,size_t>)));
     // create an array of <char*,size_t> pairs pointing to the strings in device memory
     thrust::for_each_n(thrust::device, thrust::make_counting_iterator<size_t>(0), (size_t)linesCount,
         [d_contents, flags, d_offsets, column, d_index] __device__(size_t idx){
@@ -159,7 +160,7 @@ NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int 
             d_index[idx].second = (size_t)length;
       });
 
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     // the NVStrings object can now be created from the array of pairs
     NVStrings::sorttype stype = (NVStrings::sorttype)(flags & (CSV_SORT_LENGTH | CSV_SORT_NAME));
     NVStrings* rtn = NVStrings::create_from_index(d_index,(unsigned int)linesCount,true,stype);
