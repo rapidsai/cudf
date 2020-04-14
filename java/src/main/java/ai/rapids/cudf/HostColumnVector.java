@@ -483,19 +483,17 @@ public final class HostColumnVector implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
-      if (data != null) {
-        data.close();
-        data = null;
-        neededCleanup = true;
-      }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          ColumnVector.closeBuffers(data, valid, offsets);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {

@@ -179,16 +179,23 @@ private:
             bool successful_read = false;
             std::string serialized;
             #if defined(JITIFY_USE_CACHE)
-                boost::filesystem::path file_name = getCacheDir() / name;
-                cacheFile file{file_name.string()};
-                serialized = file.read();
-                successful_read = file.is_read_successful();
+                boost::filesystem::path cache_dir = getCacheDir();
+                if (not cache_dir.empty()) {
+                    boost::filesystem::path file_name = cache_dir / name;
+                    cacheFile file{file_name.string()};
+                    serialized = file.read();
+                    successful_read = file.is_read_successful();
+                }
             #endif
             if (not successful_read) {
                 // JIT compile and write to file if possible
                 serialized = func().serialize();
                 #if defined(JITIFY_USE_CACHE)
-                    file.write(serialized);
+                    if (not cache_dir.empty()) {
+                        boost::filesystem::path file_name = cache_dir / name;
+                        cacheFile file{file_name.string()};
+                        file.write(serialized);
+                    }
                 #endif
             }
             // Add deserialized T to cache and return

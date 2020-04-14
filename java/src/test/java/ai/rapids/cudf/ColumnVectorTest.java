@@ -226,18 +226,21 @@ public class ColumnVectorTest extends CudfTestBase {
     Double[]  ins = new Double[] {0.0, -0.0, Double.NaN, MIN_PLUS_NaN, MAX_PLUS_NaN, MIN_MINUS_NaN, MAX_MINUS_NaN, null};
     Double[] outs = new Double[] {0.0,  0.0, Double.NaN,   Double.NaN,   Double.NaN,    Double.NaN,    Double.NaN, null};
 
-    try (ColumnVector     input      = ColumnVector.fromBoxedDoubles(ins);
-         HostColumnVector expected   = ColumnVector.fromBoxedDoubles(outs).copyToHost();
-         HostColumnVector normalized = input.normalizeNANsAndZeros().copyToHost()) {
-      for (int i = 0; i<input.getRowCount(); ++i) {
-        if (expected.isNull(i)) {
-          assertTrue(normalized.isNull(i));
-        }
-        else {
-          assertEquals(
-                  Double.doubleToRawLongBits(expected.getDouble(i)),
-                  Double.doubleToRawLongBits(normalized.getDouble(i))
-          );
+    try (ColumnVector input = ColumnVector.fromBoxedDoubles(ins);
+         ColumnVector expectedColumn = ColumnVector.fromBoxedDoubles(outs);
+         ColumnVector normalizedColumn = input.normalizeNANsAndZeros()) {
+      try (HostColumnVector expected = expectedColumn.copyToHost();
+           HostColumnVector normalized = normalizedColumn.copyToHost()) {
+        for (int i = 0; i<input.getRowCount(); ++i) {
+          if (expected.isNull(i)) {
+            assertTrue(normalized.isNull(i));
+          }
+          else {
+            assertEquals(
+                    Double.doubleToRawLongBits(expected.getDouble(i)),
+                    Double.doubleToRawLongBits(normalized.getDouble(i))
+            );
+          }
         }
       }
     }
@@ -1542,8 +1545,8 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector ns_string_times = ColumnVector.fromStrings(TIMES_NS_STRING);
          ColumnVector ns_timestamps = ColumnVector.timestampNanoSecondsFromLongs(TIMES_NS);
          ColumnVector ns_string_times_all = ColumnVector.fromStrings(TIMES_NS_STRING_ALL);
-         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%f");
-         ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%f")) {
+         ColumnVector allSupportedFormatsTimestampAsStrings = ns_timestamps.asStrings("%d::%m::%y::%Y::%H::%M::%S::%9f");
+         ColumnVector timestampsAsStrings = ns_timestamps.asStrings("%Y-%m-%d %H:%M:%S.%9f")) {
       assertColumnsAreEqual(ns_string_times, timestampsAsStrings);
       assertColumnsAreEqual(allSupportedFormatsTimestampAsStrings, ns_string_times_all);
     }
