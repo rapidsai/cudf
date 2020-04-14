@@ -7,6 +7,7 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
 
 ## Improvements
