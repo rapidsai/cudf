@@ -223,7 +223,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.is_unique
 
 
-@annotate("CUDF_BINARY_OP", color="orange", domain="cudf_python")
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
