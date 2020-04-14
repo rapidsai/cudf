@@ -492,7 +492,11 @@ class Frame(libcudf.table.Table):
         """
 
         if isinstance(self, cudf.DataFrame):
-            if not isinstance(cond, cudf.DataFrame):
+            if isinstance(cond, cupy.core.ndarray):
+                cond = self.from_gpu_matrix(
+                    cond, columns=self.columns, index=self.index
+                )
+            elif not isinstance(cond, cudf.DataFrame):
                 cond = self.from_pandas(pd.DataFrame(cond))
 
             common_cols = set(self.columns).intersection(set(cond.columns))
@@ -670,7 +674,10 @@ class Frame(libcudf.table.Table):
             )
 
         if not hasattr(cond, "__invert__"):
-            cond = np.array(cond)
+            # We Invert `cond` below and call `where`, so
+            # making sure the object supports
+            # `~`(inversion) operator or `__invert__` method
+            cond = cupy.array(cond)
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 

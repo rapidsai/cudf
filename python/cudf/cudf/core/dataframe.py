@@ -3394,7 +3394,10 @@ class DataFrame(Frame):
             df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            indices = data[index]
+            if isinstance(index, cudf.Index):
+                indices = index
+            else:
+                indices = data[index]
             return df.set_index(indices.astype(np.int64))
 
         return df
