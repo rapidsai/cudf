@@ -25,6 +25,9 @@
 #include <memory>
 #include <string>
 
+#include <rmm/device_buffer.hpp>
+#include <cudf/utilities/error.hpp>
+
 namespace cudf {
 namespace io {
 
@@ -87,6 +90,36 @@ class datasource {
    * @return bool True if there is data, False otherwise
    **/
   virtual bool empty() const { return size() == 0; }
+
+  /**
+   * @brief Returns a device buffer with a subset of data from the source
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   * @param[in] stream cuda stream to use
+   *
+   * @return rmm::device_buffer the data buffer
+   **/
+  virtual rmm::device_buffer get_device_buffer(size_t offset, size_t size, cudaStream_t stream = 0) {
+    auto host_buffer = get_buffer(offset, size);
+    auto device_buffer = rmm::device_buffer(host_buffer->data(), host_buffer->size(), stream);
+    CUDA_TRY(cudaStreamSynchronize(stream)); // Due to host_buffer scope
+    return std::move(device_buffer);
+  }
+
+  /**
+   * @brief Reads bytes to device memory
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   * @param[out] dst Destination
+   * @param[in] stream cuda stream to use
+   *
+   **/
+  virtual void device_read(size_t offset, size_t size, void *dst, cudaStream_t stream = 0) {
+    auto host_buffer = get_buffer(offset, size);
+    CUDA_TRY(cudaMemcpyAsync(dst, host_buffer->data(), host_buffer->size(), cudaMemcpyHostToDevice, stream));
+  }
 };
 
 }  // namespace io
