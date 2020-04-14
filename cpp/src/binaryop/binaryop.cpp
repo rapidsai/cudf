@@ -282,12 +282,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                "Invalid/Unsupported output datatype");
 
   if (op == binary_operator::NULL_AWARE_EQUAL) {
-    // Check for datatype
-    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
-    CUDF_EXPECTS(lhs.size() > 0, "Column has to be non empty");
-    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
-
-    return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
+    return binops::compiled::null_aware_equal(lhs, rhs, output_type, mr, stream);
   } else if ((lhs.type().id() == type_id::STRING) &&
              (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
@@ -323,13 +318,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                "Invalid/Unsupported output datatype");
 
   if (op == binary_operator::NULL_AWARE_EQUAL) {
-    // Check for datatype
-    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both columns must be of the same type");
-    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the same size");
-    CUDF_EXPECTS(lhs.size() > 0, "Columns have to be non empty");
-    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
-
-    return binops::compiled::null_aware_equal(lhs, rhs, mr, stream);
+    return binops::compiled::null_aware_equal(lhs, rhs, output_type, mr, stream);
   } else if ((lhs.type().id() == type_id::STRING) &&
              (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,

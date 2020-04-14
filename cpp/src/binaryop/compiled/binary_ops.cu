@@ -260,8 +260,14 @@ std::unique_ptr<column> binary_operation(column_view const& lhs, column_view con
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
     scalar const& rhs,
+    data_type output_type,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream) {
+    // Check for datatype
+    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
+    CUDF_EXPECTS(lhs.size() > 0, "Column has to be non empty");
+    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
+
     // Make a bool8 numeric column that is non nullable
     auto out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::UNALLOCATED,
                                    stream, mr);
@@ -281,8 +287,15 @@ std::unique_ptr<column> null_aware_equal(
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
     column_view const& rhs,
+    data_type output_type,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream) {
+    // Check for datatype
+    CUDF_EXPECTS(lhs.type() == rhs.type(), "Both columns must be of the same type");
+    CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the same size");
+    CUDF_EXPECTS(lhs.size() > 0, "Columns have to be non empty");
+    CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
+
     // Make a bool8 numeric column that is non nullable
     auto out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::UNALLOCATED,
                                    stream, mr);

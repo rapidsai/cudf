@@ -122,6 +122,7 @@ std::unique_ptr<column> binary_operation(
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
+ * @param output_type The desired data type of the output column - it should be bool
  * @param mr          Memory resource for allocating output column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
@@ -129,6 +130,7 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
     scalar const& rhs,
+    data_type output_type,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
@@ -146,6 +148,7 @@ std::unique_ptr<column> null_aware_equal(
  *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column - it should be bool
  * @param mr          Memory resource for allocating output column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
@@ -153,6 +156,7 @@ std::unique_ptr<column> null_aware_equal(
 std::unique_ptr<column> null_aware_equal(
     column_view const& lhs,
     column_view const& rhs,
+    data_type output_type,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);
 
