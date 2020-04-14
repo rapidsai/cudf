@@ -97,7 +97,6 @@ def test_series_setitem_index():
     ],
 )
 def test_setitem_dataframe_series_inplace(df):
-    breakpoint()
     pdf = df
     gdf = DataFrame.from_pandas(pdf)
 

@@ -1182,20 +1182,8 @@ class Series(Frame):
 
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
-            from cudf.core.multiindex import MultiIndex
-
             self._column._mimic_inplace(result._column, inplace=True)
-            if isinstance(result._index, MultiIndex):
-                for in_col, res_col in zip(
-                    self.index._source_data._columns,
-                    result.index._source_data._columns,
-                ):
-                    in_col._mimic_inplace(res_col, inplace=True)
-            else:
-                index_col = self._index._data[self._index.name]
-                index_col._mimic_inplace(
-                    result.index._data[result.index.name], inplace=True
-                )
+            self.index._mimic_inplace(result.index, inplace=True)
             self._size = len(self._index)
             self.name = result.name
         else:
