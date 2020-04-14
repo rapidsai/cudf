@@ -45,7 +45,7 @@
 - PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
-- PR #4772 Cleanup dask_cudf to_parquet and enable "_metadata" creation
+- PR #4772 Cleanup `dask_cudf` `to_parquet` and enable `"_metadata"` creation
 - PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
@@ -140,6 +140,7 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- Pr #4899 Fix series inplace handling
 
 
 # cuDF 0.13.0 (31 Mar 2020)
