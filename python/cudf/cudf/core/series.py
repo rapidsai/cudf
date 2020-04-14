@@ -1970,6 +1970,14 @@ class Series(Frame):
 
             result_series = self
 
+        if min_count > 0:
+            valid_count = len(result_series) - result_series.null_count
+            if valid_count < min_count:
+                return np.nan
+        elif min_count < 0:
+            msg = "min_count value cannot be negative({0}), will default to 0."
+            warnings.warn(msg.format(min_count))
+
         return result_series._column.sum(dtype=dtype)
 
     def product(
@@ -2034,6 +2042,14 @@ class Series(Frame):
                 return np.nan
 
             result_series = self
+
+        if min_count > 0:
+            valid_count = len(result_series) - result_series.null_count
+            if valid_count < min_count:
+                return np.nan
+        elif min_count < 0:
+            msg = "min_count value cannot be negative({0}), will default to 0."
+            warnings.warn(msg.format(min_count))
 
         return result_series._column.product(dtype=dtype)
 

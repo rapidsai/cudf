@@ -432,3 +432,24 @@ def test_nans_stats(data, ops, skipna):
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`
     assert_eq(getattr(psr, ops)(skipna=True), getattr(gsr, ops)(skipna=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
+def test_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.Series(data)
+    gsr = Series(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+    )
