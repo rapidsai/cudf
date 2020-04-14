@@ -36,7 +36,7 @@ class annotate(ContextDecorator):
         Using a decorator:
 
         >>> @nvtx.annotate("my_func", color="red", domain="cudf")
-       ... def func():
+        ... def func():
         ...     time.sleep(0.1)
 
         Using a context manager:
