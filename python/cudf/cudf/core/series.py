@@ -2551,7 +2551,6 @@ class Series(Frame):
 
         Parameters
         ----------
-
         skipna: bool, default True
             Exclude NA/null values when computing the result.
 
