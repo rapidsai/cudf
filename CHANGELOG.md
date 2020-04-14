@@ -136,6 +136,7 @@
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
+- PR #4875 Fix cudf::strings::from_integer logic converting min integer to string
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
