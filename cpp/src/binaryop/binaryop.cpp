@@ -247,7 +247,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if (op == binary_operator::NULL_AWARE_EQUAL) {
+  if (op == binary_operator::NULL_EQUALS) {
     return binary_operation(rhs, lhs, op, output_type, mr, stream);
   } else if ((lhs.type().id() == type_id::STRING) &&
              (rhs.type().id() == type_id::STRING)) {
@@ -281,8 +281,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if (op == binary_operator::NULL_AWARE_EQUAL) {
-    return binops::compiled::null_aware_equal(lhs, rhs, output_type, mr, stream);
+  if (op == binary_operator::NULL_EQUALS) {
+    return binops::compiled::null_equals(lhs, rhs, output_type, mr, stream);
   } else if ((lhs.type().id() == type_id::STRING) &&
              (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,
@@ -317,8 +317,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(output_type),
                "Invalid/Unsupported output datatype");
 
-  if (op == binary_operator::NULL_AWARE_EQUAL) {
-    return binops::compiled::null_aware_equal(lhs, rhs, output_type, mr, stream);
+  if (op == binary_operator::NULL_EQUALS) {
+    return binops::compiled::null_equals(lhs, rhs, output_type, mr, stream);
   } else if ((lhs.type().id() == type_id::STRING) &&
              (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr,

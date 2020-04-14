@@ -803,28 +803,28 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_IncompatibleTypes) {
 
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_col, float_scalar,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<TypeOut>())),
       cudf::logic_error);
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_col, float_col,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<TypeOut>())),
       cudf::logic_error);
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_col, diff_sized_int_col,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<TypeOut>())),
       cudf::logic_error);
   // Incompatible output column
   EXPECT_THROW(
       cudf::experimental::binary_operation(float_col, float_scalar,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<int32_t>())),
       cudf::logic_error);
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_col, another_int_col,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<int32_t>())),
       cudf::logic_error);
 }
@@ -840,12 +840,12 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_EmptyColumn) {
 
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_scalar, int_col,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<TypeOut>())),
       cudf::logic_error);
   EXPECT_THROW(
       cudf::experimental::binary_operation(int_col, another_int_col,
-                                           cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+                                           cudf::experimental::binary_operator::NULL_EQUALS,
                                            data_type(experimental::type_to_id<TypeOut>())),
       cudf::logic_error);
 }
@@ -863,7 +863,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_SI32_SI32
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      int_col, int_scalar, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      int_col, int_scalar, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -886,7 +886,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      int_col, int_scalar, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      int_col, int_scalar, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -918,7 +918,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_tsD_tsD) 
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      ts_scalar, ts_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      ts_scalar, ts_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -944,7 +944,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      str_col, str_scalar, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      str_col, str_scalar, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -968,7 +968,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      str_scalar, str_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      str_scalar, str_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -992,7 +992,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Scalar_B8_string_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      str_col, str_scalar, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      str_col, str_scalar, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -1016,7 +1016,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      str_scalar, str_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      str_scalar, str_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -1041,7 +1041,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      str_col, str_scalar, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      str_col, str_scalar, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -1078,7 +1078,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_tsD_tsD_N
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -1106,7 +1106,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_Vector_B8_string_st
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 
@@ -1132,7 +1132,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_VectorAllInvalid_B8
 
   // Output is non nullable - every row has a value
   auto op_col = cudf::experimental::binary_operation(
-      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_AWARE_EQUAL,
+      lhs_col, rhs_col, cudf::experimental::binary_operator::NULL_EQUALS,
       data_type(experimental::type_to_id<TypeOut>()));
   ASSERT_EQ(op_col->nullable(), false);
 

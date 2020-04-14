@@ -60,7 +60,7 @@ enum class binary_operator : int32_t {
   SHIFT_RIGHT_UNSIGNED,   ///< operator >>> 
 
   LOG_BASE,               ///< logarithm to the base
-  NULL_AWARE_EQUAL,       ///< Returns true when both operands are null and non nullable bool column
+  NULL_EQUALS,            ///< Returns true when both operands are null and non nullable bool column
   
   INVALID_BINARY          ///< invalid operation
 };

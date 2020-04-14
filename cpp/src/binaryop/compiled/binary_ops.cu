@@ -147,7 +147,7 @@ struct binary_op {
 
 // This functor performs null aware comparison between two columns or a column and a scalar by
 // iterating over them on the device
-struct null_aware_comparator {
+struct null_equals_comparator {
     // This functor does the actual comparison between column value and a scalar
     // or two column values
     template <typename ColT, typename RhsDeviceViewT>
@@ -257,7 +257,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs, column_view con
   return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, mr, stream);
 }
 
-std::unique_ptr<column> null_aware_equal(
+std::unique_ptr<column> null_equals(
     column_view const& lhs,
     scalar const& rhs,
     data_type output_type,
@@ -277,14 +277,14 @@ std::unique_ptr<column> null_aware_equal(
     auto const lhs_dev_view = cudf::column_device_view::create(lhs, stream);
 
     cudf::experimental::type_dispatcher(lhs.type(),
-                                        null_aware_comparator{},
+                                        null_equals_comparator{},
                                         out_col_view, *lhs_dev_view, rhs,
                                         stream);
 
     return out;
 }
 
-std::unique_ptr<column> null_aware_equal(
+std::unique_ptr<column> null_equals(
     column_view const& lhs,
     column_view const& rhs,
     data_type output_type,
@@ -306,7 +306,7 @@ std::unique_ptr<column> null_aware_equal(
     auto const rhs_dev_view = cudf::column_device_view::create(rhs, stream);
 
     cudf::experimental::type_dispatcher(lhs.type(),
-                                        null_aware_comparator{},
+                                        null_equals_comparator{},
                                         out_col_view, *lhs_dev_view, *rhs_dev_view,
                                         stream);
 
