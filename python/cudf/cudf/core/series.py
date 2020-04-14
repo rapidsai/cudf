@@ -1793,9 +1793,27 @@ class Series(Frame):
     #
     # Stats
     #
-    def count(self, axis=None):
-        """The number of non-null values"""
-        assert axis in (None, 0)
+    def count(self, level=None, **kwargs):
+        """
+        Return number of non-NA/null observations in the Series
+
+        Returns
+        -------
+        int
+            Number of non-null values in the Series.
+
+        Notes
+        -----
+        Parameters currently not supported is `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, 5, 2, 4, 3])
+        >>> ser.count()
+        5
+        """
+        assert level in (None,)
         return self.valid_count
 
     def min(
@@ -1808,7 +1826,7 @@ class Series(Frame):
         **kwargs,
     ):
         """
-        Return the minimum of the values in the series
+        Return the minimum of the values in the Series.
 
         Parameters
         ----------
@@ -1863,7 +1881,7 @@ class Series(Frame):
         **kwargs,
     ):
         """
-        Return the maximum of the values in the series
+        Return the maximum of the values in the Series.
 
         Parameters
         ----------
@@ -1919,7 +1937,7 @@ class Series(Frame):
         **kwargs,
     ):
         """
-        Return sum of the values in the series
+        Return sum of the values in the Series.
 
         Parameters
         ----------
@@ -1991,7 +2009,7 @@ class Series(Frame):
         **kwargs,
     ):
         """
-        Return product of the values in the series
+        Return product of the values in the Series.
 
         Parameters
         ----------
@@ -2110,7 +2128,7 @@ class Series(Frame):
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
-        Return cumulative minimum of the series
+        Return cumulative minimum of the Series.
 
         Parameters
         ----------
@@ -2159,7 +2177,7 @@ class Series(Frame):
 
     def cummax(self, axis=0, skipna=True, *args, **kwargs):
         """
-        Return cumulative maximum of the series
+        Return cumulative maximum of the Series.
 
         Parameters
         ----------
@@ -2205,7 +2223,7 @@ class Series(Frame):
 
     def cumsum(self, axis=0, skipna=True, *args, **kwargs):
         """
-        Return cumulative sum of the series
+        Return cumulative sum of the Series.
 
         Parameters
         ----------
@@ -2265,7 +2283,7 @@ class Series(Frame):
 
     def cumprod(self, axis=0, skipna=True, *args, **kwargs):
         """
-        Return cumulative product of the series
+        Return cumulative product of the Series.
 
         Parameters
         ----------
@@ -2373,14 +2391,14 @@ class Series(Frame):
     def std(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         level=None,
         ddof=1,
         numeric_only=None,
         **kwargs,
     ):
         """
-        Return sample standard deviation of the series.
+        Return sample standard deviation of the Series.
 
         Normalized by N-1 by default. This can be changed using
         the ddof argument
@@ -2411,6 +2429,8 @@ class Series(Frame):
             and numeric_only in (None, True)
         )
 
+        skipna = True if skipna is None else skipna
+
         if skipna:
             result_series = self.nans_to_nulls()
             if result_series.has_nulls:
@@ -2426,14 +2446,14 @@ class Series(Frame):
     def var(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         level=None,
         ddof=1,
         numeric_only=None,
         **kwargs,
     ):
         """
-        Return unbiased variance of the series.
+        Return unbiased variance of the Series.
 
         Normalized by N-1 by default. This can be changed using the
         ddof argument
@@ -2463,6 +2483,8 @@ class Series(Frame):
             and level in (None,)
             and numeric_only in (None, True)
         )
+
+        skipna = True if skipna is None else skipna
 
         if skipna:
             result_series = self.nans_to_nulls()
