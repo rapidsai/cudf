@@ -1280,7 +1280,17 @@ class Series(Frame):
         True
         """
 
-        assert axis in (None, 0) and level in (None,)
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if bool_only not in (None, False):
+            raise NotImplementedError(
+                "bool_only parameter is not implemented yet"
+            )
+
         if skipna:
             result_series = self.nans_to_nulls()
             if len(result_series) == result_series.null_count:
@@ -1319,7 +1329,17 @@ class Series(Frame):
         True
         """
 
-        assert axis in (None, 0) and level in (None,)
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if bool_only not in (None, False):
+            raise NotImplementedError(
+                "bool_only parameter is not implemented yet"
+            )
+
         if skipna:
             result_series = self.nans_to_nulls()
             if len(result_series) == result_series.null_count:
@@ -1813,7 +1833,10 @@ class Series(Frame):
         >>> ser.count()
         5
         """
-        assert level in (None,)
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
         return self.valid_count
 
     def min(
@@ -1853,11 +1876,16 @@ class Series(Frame):
         1
         """
 
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -1908,11 +1936,16 @@ class Series(Frame):
         5
         """
 
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -1971,12 +2004,17 @@ class Series(Frame):
         >>> ser.sum()
         15
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
-        assert axis in (None, 0)
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         if skipna:
             result_series = self.nans_to_nulls()
@@ -2043,11 +2081,17 @@ class Series(Frame):
         >>> ser.product()
         120
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -2157,7 +2201,8 @@ class Series(Frame):
         4    1
         """
 
-        assert axis in (None, 0)
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
 
         if skipna:
             result_col = self.nans_to_nulls()._column
@@ -2207,6 +2252,9 @@ class Series(Frame):
         """
         assert axis in (None, 0)
 
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
         if skipna:
             result_col = self.nans_to_nulls()._column
         else:
@@ -2253,7 +2301,8 @@ class Series(Frame):
         4    15
         """
 
-        assert axis in (None, 0)
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
 
         if skipna:
             result_col = self.nans_to_nulls()._column
@@ -2312,7 +2361,8 @@ class Series(Frame):
         4    120
         """
 
-        assert axis in (None, 0)
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
 
         if skipna:
             result_col = self.nans_to_nulls()._column
@@ -2368,11 +2418,17 @@ class Series(Frame):
         >>> ser.mean()
         15.5
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -2423,11 +2479,17 @@ class Series(Frame):
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -2478,11 +2540,17 @@ class Series(Frame):
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -2601,11 +2669,17 @@ class Series(Frame):
         Parameters currently not supported are `axis`, `level` and
         `numeric_only`
         """
-        assert (
-            axis in (None, 0)
-            and level in (None,)
-            and numeric_only in (None, True)
-        )
+
+        if axis not in (None, 0):
+            raise NotImplementedError("axis parameter is not implemented yet")
+
+        if level is not None:
+            raise NotImplementedError("level parameter is not implemented yet")
+
+        if numeric_only not in (None, True):
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
 
         skipna = True if skipna is None else skipna
 
@@ -2656,7 +2730,11 @@ class Series(Frame):
         >>> ser1.cov(ser2)
         -0.015750000000000004
         """
-        assert min_periods in (None,)
+
+        if min_periods is not None:
+            raise NotImplementedError(
+                "min_periods parameter is not implemented yet"
+            )
 
         if self.empty or other.empty:
             return np.nan

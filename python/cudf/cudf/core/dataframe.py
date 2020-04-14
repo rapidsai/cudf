@@ -4485,7 +4485,7 @@ class DataFrame(Frame):
 
             level = kwargs.pop("level", None)
             if level not in (None,):
-                msg = "Row-wise operations  currently do not \
+                msg = "Row-wise operations currently do not \
                     support `level`."
                 raise ValueError(msg)
 
