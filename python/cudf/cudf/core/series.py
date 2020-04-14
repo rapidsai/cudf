@@ -1737,9 +1737,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.min(dtype=dtype)
@@ -1751,9 +1754,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.max(dtype=dtype)
@@ -1764,9 +1770,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.sum(dtype=dtype)
@@ -1777,9 +1786,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.product(dtype=dtype)
@@ -1916,9 +1928,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.mean()
@@ -1930,9 +1945,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.std(ddof=ddof)
@@ -1944,9 +1962,12 @@ class Series(Frame):
 
         if skipna:
             result_series = self.nans_to_nulls()
-            if result_series.null_count > 0:
+            if result_series.has_nulls:
                 result_series = result_series.dropna()
         else:
+            if self.has_nulls:
+                return np.nan
+
             result_series = self
 
         return result_series._column.var(ddof=ddof)

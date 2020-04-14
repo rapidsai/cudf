@@ -390,10 +390,18 @@ def test_df_corr():
 @pytest.mark.parametrize(
     "ops", ["mean", "min", "max", "sum", "product", "var", "std"]
 )
-def test_nans_stats(ops):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_nans_stats(ops, skipna):
+    data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100]
+    psr = pd.Series(data)
+    gsr = Series(data)
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
+    )
 
-    data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, 5, 2, 3, -100]
     psr = pd.Series(data)
     gsr = Series(data, nan_as_null=False)
-
-    assert_eq(getattr(psr, ops)(), getattr(gsr, ops)())
+    # Since there is no concept of `nan_as_null` in pandas,
+    # nulls will be returned in the operations. So only
+    # testing for `skipna=True` when `nan_as_null=False`
+    assert_eq(getattr(psr, ops)(skipna=True), getattr(gsr, ops)(skipna=True))
