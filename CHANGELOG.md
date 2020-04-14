@@ -75,6 +75,7 @@
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4884 Add more NVTX annotations in cuDF Python
 
 ## Bug Fixes
 
@@ -127,14 +128,19 @@
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
 - PR #4834 Fix bug in transform in handling single line UDFs
+- PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
 - PR #4872 Fix broken column wrapper constructors in merge benchmark
+- PR #4875 Fix cudf::strings::from_integer logic converting min integer to string
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
+- PR #4780 Handle nulls in Statistical column operations
+- PR #4887 Remove `developer.rst` and any links
 
 
 # cuDF 0.13.0 (31 Mar 2020)
