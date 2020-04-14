@@ -156,7 +156,7 @@ fused_concatenate_string_offset_kernel(column_device_view const* input_views,
     output_data[output_index] =
         input_data[offset_index + input_view.offset()] // handle parent offset
         - input_data[input_view.offset()] // subract first offset if non-zero
-        + partition_offsets[partition_index]; // add cumulative chars offset
+        + partition_offsets[partition_index]; // add offset of source column
 
     if (Nullable) {
       bool const bit_is_set = input_view.is_valid(offset_index);
@@ -240,30 +240,29 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
     return make_empty_strings_column(mr, stream);
   }
 
-  CUDF_EXPECTS( strings_count < std::numeric_limits<size_type>::max(), 
-      "total number of strings is too large for cudf column" );
-  CUDF_EXPECTS( total_bytes < std::numeric_limits<size_type>::max(),
-      "total size of strings is too large for cudf column" );
+  CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(), 
+      "total number of strings is too large for cudf column");
+  CUDF_EXPECTS(total_bytes <= std::numeric_limits<size_type>::max(),
+      "total size of strings is too large for cudf column");
 
   bool const has_nulls = std::any_of(
       columns.begin(), columns.end(),
       [](auto const& col) { return col.has_nulls(); });
 
   // create chars column
-  auto chars_column = make_numeric_column( data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
+  auto chars_column = make_numeric_column(data_type{INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
   auto d_new_chars = chars_column->mutable_view().data<char>();
+  chars_column->set_null_count(0);
 
   // create offsets column
-  auto offsets_column = make_numeric_column( data_type{INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  auto d_new_offsets = offsets_view.data<int32_t>();
+  auto offsets_column = make_numeric_column(data_type{INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
+  auto d_new_offsets = offsets_column->mutable_view().data<int32_t>();
+  offsets_column->set_null_count(0);
 
   rmm::device_buffer null_mask;
   size_type null_count{};
-  bitmask_type* mask_data{};
   if (has_nulls) {
-    null_mask = create_null_mask( strings_count, mask_state::UNINITIALIZED, stream, mr );
-    mask_data = reinterpret_cast<bitmask_type*>(null_mask.data());
+    null_mask = create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);
   }
 
   { // Copy offsets columns with single kernel launch
@@ -281,7 +280,7 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
         static_cast<size_type>(d_views.size()),
         strings_count,
         d_new_offsets,
-        mask_data,
+        reinterpret_cast<bitmask_type*>(null_mask.data()),
         d_valid_count.data());
 
     if (has_nulls) {
@@ -326,8 +325,6 @@ std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
     }
   }
 
-  offsets_column->set_null_count(0);  // reset the null counts
-  chars_column->set_null_count(0);    // for children columns
   return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
                               null_count, std::move(null_mask), stream, mr);
 }
