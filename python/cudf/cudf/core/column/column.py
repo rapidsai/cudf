@@ -150,13 +150,9 @@ class ColumnBase(Column):
         return self.binary_operator("eq", other).min()
 
     def all(self):
-        if self.null_count != 0:
-            return False
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
-        if self.valid_count == 0:
-            return False
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):

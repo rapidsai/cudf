@@ -16,7 +16,8 @@ interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 
 @pytest.mark.parametrize("method", methods)
 @pytest.mark.parametrize("dtype", params_dtypes)
-def test_series_reductions(method, dtype):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_series_reductions(method, dtype, skipna):
     np.random.seed(0)
     arr = np.random.random(100)
     if np.issubdtype(dtype, np.integer):
@@ -26,17 +27,18 @@ def test_series_reductions(method, dtype):
         mask = arr > 0.5
 
     arr = arr.astype(dtype)
-    arr2 = arr[mask]
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    psr = sr.to_pandas()
+    psr[~mask] = np.nan
 
-    def call_test(sr):
+    def call_test(sr, skipna):
         fn = getattr(sr, method)
         if method in ["std", "var"]:
-            return fn(ddof=1)
+            return fn(ddof=1, skipna=skipna)
         else:
-            return fn()
+            return fn(skipna=skipna)
 
-    expect, got = call_test(arr2), call_test(sr)
+    expect, got = call_test(psr, skipna=skipna), call_test(sr, skipna=skipna)
     print(expect, got)
     np.testing.assert_approx_equal(expect, got)
 
@@ -388,11 +390,36 @@ def test_df_corr():
 
 
 @pytest.mark.parametrize(
-    "ops", ["mean", "min", "max", "sum", "product", "var", "std"]
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+    ],
+)
+@pytest.mark.parametrize(
+    "ops",
+    [
+        "mean",
+        "min",
+        "max",
+        "sum",
+        "product",
+        "var",
+        "std",
+        "prod",
+        "kurtosis",
+        "skew",
+        "any",
+        "all",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+    ],
 )
 @pytest.mark.parametrize("skipna", [True, False])
-def test_nans_stats(ops, skipna):
-    data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100]
+def test_nans_stats(data, ops, skipna):
     psr = pd.Series(data)
     gsr = Series(data)
     assert_eq(
