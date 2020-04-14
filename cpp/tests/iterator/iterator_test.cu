@@ -138,7 +138,7 @@ struct IteratorTest : public cudf::test::BaseFixture
     #ifndef NDEBUG
     thrust::device_vector<bool> vec(expected.size(), false);
     thrust::transform(thrust::device,
-        thrust::make_zip_iterator(thrust::make_tuple(d_in,  .begin())),
+        thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
         thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
         vec.begin(),
         [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); }

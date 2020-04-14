@@ -226,30 +226,30 @@ std::unique_ptr<experimental::table>
   return detail::gather(input, unique_indices_view, false, false, false, mr, stream);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A structure to be used for checking `NAN` at an index in a 
  * `column_device_view`
  *
  * @tparam T The type of `column_device_view`
- *---------------------------------------------------------------------------**/
+ */
 template <typename T>
 struct check_for_nan
 {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a structure
    *
    * @param[in] input The `column_device_view`
-   *---------------------------------------------------------------------------**/
+   */
   check_for_nan(cudf::column_device_view input) :_input{input}{}
 
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Operator to be called to check for `NAN` at `index` in `_input`
    *
    * @param[in] index The index at which the `NAN` needs to be checked in `input`
    *
    * @returns bool true if value at `index` is `NAN` and not null, else false
-   *---------------------------------------------------------------------------**/
+   */
   __device__
   bool operator()(size_type index)
   {
@@ -260,13 +260,13 @@ protected:
   cudf::column_device_view _input;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A structure to be used along with type_dispatcher to check if a
  * `column_view` has `NAN`.
- *---------------------------------------------------------------------------**/
+ */
 struct has_nans{
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Checks if `input` has `NAN`
    *
    * @note This will be applicable only for floating point type columns.
@@ -275,7 +275,7 @@ struct has_nans{
    * @param[in] stream Optional CUDA stream on which to execute kernels
    *
    * @returns bool true if `input` has `NAN` else false
-   *---------------------------------------------------------------------------**/
+   */
   template <typename T,
          std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
   bool operator()(column_view const& input, cudaStream_t stream){
@@ -288,7 +288,7 @@ struct has_nans{
       return count > 0;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Checks if `input` has `NAN`
    *
    * @note This will be applicable only for non-floating point type columns. And
@@ -299,7 +299,7 @@ struct has_nans{
    * @param[in] stream Optional CUDA stream on which to execute kernels
    *
    * @returns bool Always false as non-floating point columns can't have `NAN`
-   *---------------------------------------------------------------------------**/
+   */
   template <typename T,
           std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   bool operator()(column_view const& input, cudaStream_t stream){

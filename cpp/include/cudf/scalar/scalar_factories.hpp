@@ -58,12 +58,12 @@ std::unique_ptr<scalar> make_timestamp_scalar(
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
- * specified timestamp `data_type` and a validity bool.
+ * specified fixed-width `data_type`.
  * 
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a timestamp type
  *
- * @param type The desired timestamp element type
+ * @param type The desired fixed-width element type
  * @param stream Optional stream on which to issue all memory allocations
  * @param mr Optional resource to use for device memory
  *           allocation of the scalar's `data` and `is_valid` bool.
