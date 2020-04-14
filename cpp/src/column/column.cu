@@ -103,6 +103,8 @@ column_view column::view() const {
 
 // Create mutable view
 mutable_column_view column::mutable_view() {
+  CUDF_FUNC_RANGE();
+
   // create views of children
   std::vector<mutable_column_view> child_views;
   child_views.reserve(_children.size());
@@ -111,7 +113,7 @@ mutable_column_view column::mutable_view() {
   }
 
   // Store the old null count
-  auto current_null_count = null_count();
+  //auto current_null_count = null_count();
 
   // The elements of a column could be changed through a `mutable_column_view`,
   // therefore the existing `null_count` is no longer valid. Reset it to
@@ -123,7 +125,7 @@ mutable_column_view column::mutable_view() {
                              size(),
                              _data.data(),
                              static_cast<bitmask_type *>(_null_mask.data()),
-                             current_null_count,
+                             cudf::UNKNOWN_NULL_COUNT,
                              0,
                              child_views};
 }

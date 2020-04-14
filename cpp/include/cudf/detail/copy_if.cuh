@@ -29,6 +29,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -243,7 +244,6 @@ struct scatter_gather_functor
              rmm::mr::device_memory_resource *mr =
                  rmm::mr::get_default_resource(),
              cudaStream_t stream = 0) {
-   
     auto output_column = cudf::experimental::detail::allocate_like(input, output_size, cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
     auto output = output_column->mutable_view();
 
@@ -300,9 +300,10 @@ namespace detail {
  */
 template <typename Filter>
 std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter filter,
-                          rmm::mr::device_memory_resource *mr =
-                              rmm::mr::get_default_resource(),
-                          cudaStream_t stream = 0) {
+                                             rmm::mr::device_memory_resource *mr =
+                                               rmm::mr::get_default_resource(),
+                                             cudaStream_t stream = 0) {
+    CUDF_FUNC_RANGE();
 
     if (0 == input.num_rows() || 0 == input.num_columns()) {
         return experimental::empty_like(input);
@@ -316,8 +317,8 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
 
     // allocate temp storage for block counts and offsets
     // TODO: use an uninitialized buffer to avoid the initialization kernel
-    rmm::device_vector<cudf::size_type> block_counts(grid.num_blocks);
-    rmm::device_vector<cudf::size_type> block_offsets(grid.num_blocks + 1, 0);
+    rmm::device_vector<cudf::size_type> block_counts(2 * grid.num_blocks + 1, 0);
+    //rmm::device_vector<cudf::size_type> block_offsets(grid.num_blocks + 1, 0);
 
     // 1. Find the count of elements in each block that "pass" the mask
     compute_block_counts<Filter, block_size>
@@ -335,22 +336,22 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
         // Determine and allocate temporary device storage
         size_t temp_storage_bytes = 0;
         cub::DeviceScan::InclusiveSum(nullptr, temp_storage_bytes,
-                                      &block_counts[0], &block_offsets[1],
+                                      &block_counts[0], &block_counts[grid.num_blocks + 1],
                                       grid.num_blocks, stream);
         rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, mr);
 
         // Run exclusive prefix sum
         cub::DeviceScan::InclusiveSum(d_temp_storage.data(), temp_storage_bytes,
-                                      &block_counts[0], &block_offsets[1],
+                                      &block_counts[0], &block_counts[grid.num_blocks + 1],
                                       grid.num_blocks, stream);
 
         cudaStreamSynchronize(stream);
         // As it is InclusiveSum, last value in block_offsets will be output_size
-        output_size = block_offsets.back();
+        output_size = block_counts.back();
     } else {
         // With num_blocks <= 1, block_offsets will always be `0`
         cudaStreamSynchronize(stream);
-        output_size = block_counts.back();
+        output_size = block_counts[grid.num_blocks - 1];
     }
 
     CHECK_CUDA(stream);
@@ -362,11 +363,11 @@ std::unique_ptr<experimental::table> copy_if(table_view const& input, Filter fil
 
        std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
        std::transform(input.begin(), input.end(), out_columns.begin(),
-               [&] (auto col_view){
-                                    return cudf::experimental::type_dispatcher(col_view.type(),
-                                    scatter_gather_functor<Filter, block_size>{},
-                                    col_view, output_size,
-                                    thrust::raw_pointer_cast(block_offsets.data()), filter, mr, stream);});
+        [&] (auto col_view) {
+          return cudf::experimental::type_dispatcher(col_view.type(),
+            scatter_gather_functor<Filter, block_size>{},
+            col_view, output_size,
+            thrust::raw_pointer_cast(block_counts.data() + grid.num_blocks), filter, mr, stream);});
    
         return std::make_unique<experimental::table>(std::move(out_columns));
 

@@ -124,6 +124,8 @@ cudf::size_type elements_per_thread(Kernel kernel,
                                     cudf::size_type block_size,
                                     cudf::size_type max_per_thread = 32)
 {
+  CUDF_FUNC_RANGE();
+
   // calculate theoretical occupancy
   int max_blocks = 0;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel,

@@ -16,6 +16,7 @@
 
 #include "copy_if.cuh"
 #include <cudf/legacy/table.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
  
 namespace {
 
@@ -54,6 +55,7 @@ namespace cudf {
  */
 table apply_boolean_mask(table const &input,
                          gdf_column const &boolean_mask) {
+  CUDF_FUNC_RANGE();
   if (boolean_mask.size == 0) return empty_like(input);
 
   CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
