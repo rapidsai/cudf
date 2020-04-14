@@ -1334,12 +1334,14 @@ class DataFrame(Frame):
         return self.loc
 
     @property
+    @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
     @columns.setter
+    @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
             columns = columns.to_pandas()
