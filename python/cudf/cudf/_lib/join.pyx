@@ -118,14 +118,12 @@ cpdef join(Table lhs,
             # and the left index survives
             # since they are already gathered from the left,
             # no rearranging has to be done
-            result_idx_positions = range(len(right_join_cols))
+            result_idx_positions = range(lhs._num_indices)
             result_index_names = lhs._index_names
-
         for i_l, i_r in zip(left_on_indices, right_on_indices):
             left_on_ind.push_back(i_l)
             right_on_ind.push_back(i_r)
             columns_in_common[(i_l, i_r)] = None
-
     else:
         # cuDF's Python layer will create a new RangeIndex for this case
         lhs_view = c_lhs.data_view()
@@ -199,9 +197,12 @@ cpdef join(Table lhs,
     all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
         ix_odict = OrderedDict()
-        for name, pos in zip(result_index_names, result_idx_positions):
+        for name, pos in zip(result_index_names[::-1], result_idx_positions[::-1]):
             ix_odict[name] = all_cols_py.pop(pos)
-        index_cols = Table(ix_odict)
+        other_dict = OrderedDict()
+        for k, v in list(ix_odict.items())[::-1]:
+            other_dict[k] = v
+        index_cols = Table(other_dict)
     else:
         index_cols = None
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
