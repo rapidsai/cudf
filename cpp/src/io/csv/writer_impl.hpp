@@ -24,6 +24,7 @@
 #include "csv.h"
 #include "csv_gpu.h"
 
+#include <cudf/strings/strings_column_view.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -44,7 +45,7 @@ namespace csv {
 
 using namespace cudf::io::csv;
 using namespace cudf::io;
-
+  
 /**
  * @brief Implementation for CSV writer
  **/
@@ -87,11 +88,11 @@ class writer::impl {
   /**
    * @brief Write dataset to CSV format without header.
    *
-   * @param table The set of columns
+   * @param strings_column Subset of columns converted to string to be written.
    * @param metadata The metadata associated with the table
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write_chunked(table_view const& table,
+  void write_chunked(strings_column_view const& strings_column,
                      const table_metadata *metadata = nullptr,
                      cudaStream_t stream = nullptr);
 
@@ -106,6 +107,7 @@ class writer::impl {
                          const table_metadata *metadata = nullptr,
                          cudaStream_t stream = nullptr)
   {
+    //purposely no-op (for now);
   }
 
 private:

@@ -23,7 +23,6 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 
 #include <cudf/utilities/traits.hpp>
 
@@ -253,17 +252,44 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 {
 }
 
+// write the header: column names:
+//
 void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata *metadata,
                                        cudaStream_t stream)
 {
+  CUDF_EXPECTS( metadata != nullptr, "Unexpected null metadata.");
+
+  std::string delimiter_str{options_.inter_column_delimiter()};
+  std::string header_str;
+  std::for_each(metadata->column_names.begin(), metadata->column_names.end(),
+                [&header_str, delimiter_str](auto const& crt_str) {
+                  auto crt_delimited_str = crt_str + delimiter_str;
+                  header_str.append(crt_delimited_str);
+                });
+
+  out_sink_->host_write(header_str.data(), header_str.size());
 }
 
 
-void writer::impl::write_chunked(table_view const& table,
+void writer::impl::write_chunked(strings_column_view const& strings_column,
                                  const table_metadata *metadata,
                                  cudaStream_t stream)
 {
+  //TODO: dump to output
+  //
+  // loop str_row: *str_concat_col {
+  //    auto buffer = str_row.buffer();
+  //    out_sink_->host_write(buffer_.data(), buffer_.size());
+  //}
+  //
+  // or:
+  //
+  //  for_each(strings_column.begin(), strings_column.end(),
+  //           [sink = out_sink_](auto str_row) mutable {
+  //               auto host_buffer = str_row.host_buffer();
+  //               sink->host_write(host_buffer_.data(), host_buffer_.size());
+  //           });//or...sink->device_write(device_buffer,...); (!!!!!)
 }
 
   
@@ -273,7 +299,12 @@ void writer::impl::write(table_view const &table,
   //TODO: chunked behavior / decision making (?)
 
   CUDF_EXPECTS( table.num_columns() > 0 && table.num_rows() > 0, "Empty table." );
+  
 
+  //write header: column names separated by delimiter:
+  //
+  write_chunked_begin(table, metadata, stream);
+  
   //no need to check same-size columns constraint; auto-enforced by table_view
   auto n_rows_per_chunk = options_.rows_per_chunk();
   //
@@ -343,10 +374,13 @@ void writer::impl::write(table_view const &table,
                                                      options_.na_rep(),
                                                      mr_);
 
-    //TODO: dump to output
-    //
-    //  thrust::copy(str_concat_col.begin(), str_concat_col.end(), data_sink_obj); 
+    strings_column_view strings_converted{std::move(*str_concat_col)};
+    write_chunked(strings_converted, metadata, stream);
   }
+
+  //finalize (no-op, for now):
+  //
+  write_chunked_end(table, metadata, stream);
 }
 
 void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
