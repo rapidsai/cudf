@@ -452,13 +452,13 @@ class Series(Frame):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(arg, (slice, range, ColumnBase)):
+        if isinstance(arg, slice):
             return self.iloc[arg]
         else:
             return self.loc[arg]
 
     def __setitem__(self, key, value):
-        if isinstance(key, (slice, range, ColumnBase)):
+        if isinstance(key, slice):
             self.iloc[key] = value
         else:
             self.loc[key] = value
@@ -1374,7 +1374,7 @@ class Series(Frame):
         """Sort by the index.
         """
         inds = self.index.argsort(ascending=ascending)
-        return self.take(inds)
+        return self.iloc[inds]
 
     def sort_values(self, ascending=True, na_position="last"):
         """
