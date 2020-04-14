@@ -482,13 +482,17 @@ struct write_parquet_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
-  compression_type compression;
+  compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
-  statistics_freq stats_level;
+  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Set of columns to output
   table_view table;
   /// Optional associated metadata
   const table_metadata *metadata;
+  /// Optionally return the raw parquet file metadata output
+  bool return_filemetadata = false;
+  /// Column chunks file path to be set in the raw output metadata
+  std::string metadata_out_file_path;
 
   write_parquet_args() = default;
 
@@ -514,10 +518,23 @@ struct write_parquet_args {
  *
  * @param args Settings for controlling writing behavior
  * @param mr Optional resource to use for device memory allocation
+ *
+ * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
+ *         requested in write_parquet_args (empty blob otherwise)
  */
-void write_parquet(write_parquet_args const& args, rmm::mr::device_memory_resource* mr =
-                                               rmm::mr::get_default_resource());
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
+  write_parquet_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
+ * into a single metadata blob
+ *
+ * @param[in] metadata_list List of input file metadata
+ * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+ */
+std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
  * @brief Settings to use for `write_parquet_chunked()`
@@ -526,11 +543,13 @@ struct write_parquet_chunked_args {
   /// Specify the sink to use for writer output
   sink_info sink;
   /// Specify the compression format to use
-  compression_type compression;
+  compression_type compression = compression_type::AUTO;
   /// Specify the level of statistics in the output file
-  statistics_freq stats_level;
+  statistics_freq stats_level = statistics_freq::STATISTICS_ROWGROUP;
   /// Optional associated metadata.
   const table_metadata_with_nullability *metadata;
+
+  write_parquet_chunked_args() = default;
 
   explicit write_parquet_chunked_args(sink_info const& sink_,
                               const table_metadata_with_nullability *metadata_ = nullptr,

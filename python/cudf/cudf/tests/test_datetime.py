@@ -33,6 +33,36 @@ def timeseries_us_data():
     )
 
 
+def timestamp_ms_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333",
+            "2019-07-16 00:00:00.666",
+            "2019-07-16 00:00:00.888",
+        ]
+    )
+
+
+def timestamp_us_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333",
+            "2019-07-16 00:00:00.666666",
+            "2019-07-16 00:00:00.888888",
+        ]
+    )
+
+
+def timestamp_ns_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333333",
+            "2019-07-16 00:00:00.666666666",
+            "2019-07-16 00:00:00.888888888",
+        ]
+    )
+
+
 def numerical_data():
     return np.arange(1, 10)
 
@@ -253,6 +283,25 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     np.testing.assert_equal(np_data, np.array(gdf_series))
 
 
+@pytest.mark.parametrize(
+    "data", [timestamp_ms_data(), timestamp_us_data(), timestamp_ns_data()]
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, dtype
+):
+    pd_sr = data
+    gdf_sr = cudf.Series.from_pandas(pd_sr)
+
+    expect = pd_sr.values.astype(dtype)
+    got = gdf_sr.astype(dtype).values_host
+
+    np.testing.assert_equal(expect, got)
+
+
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize(
     "from_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
@@ -347,10 +396,7 @@ def test_datetime_to_arrow(dtype):
     [
         [],
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
-        pytest.param(
-            pd.Series([None, None], dtype="datetime64[ns]"),
-            marks=pytest.mark.xfail,
-        ),
+        pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
 @pytest.mark.parametrize(
@@ -456,3 +502,29 @@ def test_datetime_has_null_test_pyarrow():
 
     assert_eq(expected, data.has_nulls)
     assert_eq(expected_count, data.null_count)
+
+
+def test_datetime_dataframe():
+    data = {
+        "timearray": np.array(
+            [0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]"
+        )
+    }
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+    assert_eq(pdf.dropna(), gdf.dropna())
+
+    assert_eq(pdf.isnull(), gdf.isnull())
+
+    data = np.array([0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]")
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps, gs)
+
+    assert_eq(ps.dropna(), gs.dropna())
+
+    assert_eq(ps.isnull(), gs.isnull())

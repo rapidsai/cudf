@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -110,19 +110,32 @@ public final class PinnedMemoryPool implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = 0;
       if (section != null) {
-        PinnedMemoryPool.freeInternal(section);
-        if (origLength > 0) {
-          MemoryListener.hostDeallocation(origLength, getId());
+        origAddress = section.baseAddress;
+        try {
+          PinnedMemoryPool.freeInternal(section);
+          if (origLength > 0) {
+            MemoryListener.hostDeallocation(origLength, id);
+          }
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          section = null;
         }
-        section = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A PINNED HOST BUFFER WAS LEAKED!!!!");
+        log.error("A PINNED HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked pinned host buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return section == null;
     }
   }
 

@@ -89,6 +89,8 @@ namespace jit {
         operator_name = "ShiftRight"; break;        
       case binary_operator::SHIFT_RIGHT_UNSIGNED:
         operator_name = "ShiftRightUnsigned"; break;
+      case binary_operator::LOG_BASE:
+        operator_name = "LogBase"; break;
       default:
         operator_name = "None"; break;
     }

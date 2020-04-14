@@ -108,9 +108,8 @@ public final class HostColumnVector implements AutoCloseable {
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
-      log.error("Close called too many times on {}", this);
       offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+      throw new IllegalStateException("Close called too many times " + this);
     }
   }
 
@@ -224,6 +223,11 @@ public final class HostColumnVector implements AutoCloseable {
         if (type == DType.STRING) {
           // This needs a different type
           dataLen = getEndStringOffset(rows - 1);
+          if (dataLen == 0 && getNullCount() == 0) {
+            // This is a work around to an issue where a column of all empty strings must have at
+            // least one byte or it will not be interpreted correctly.
+            dataLen = 1;
+          }
         }
         data = DeviceMemoryBuffer.allocate(dataLen);
         data.copyFromHostBuffer(hdata, 0, dataLen);
@@ -479,23 +483,21 @@ public final class HostColumnVector implements AutoCloseable {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
-      if (data != null) {
-        data.close();
-        data = null;
-        neededCleanup = true;
-      }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          ColumnVector.closeBuffers(data, valid, offsets);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("YOU LEAKED A HOST COLUMN VECTOR!!!!");
+        log.error("A HOST COLUMN VECTOR WAS LEAKED (ID: " + id + ")");
         logRefCountDebug("Leaked vector");
       }
       return neededCleanup;
@@ -515,6 +517,11 @@ public final class HostColumnVector implements AutoCloseable {
       }
     }
 
+    @Override
+    public boolean isClean() {
+      return data == null && valid == null && offsets == null;
+    }
+
     /**
      * This returns total memory allocated on the host for the ColumnVector.
      */
@@ -530,6 +537,11 @@ public final class HostColumnVector implements AutoCloseable {
         total += offsets.length;
       }
       return total;
+    }
+
+    @Override
+    public String toString() {
+      return "(ID: " + id + ")";
     }
   }
 

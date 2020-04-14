@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/error.hpp>

@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <array>
+#include <regex>
 
 namespace cudf {
 namespace experimental {
@@ -214,30 +215,62 @@ struct metadata : public FileMetaData {
   }
 
   /**
-   * @brief Extracts the column name used for the row indexes in a dataframe
+   * @brief Extracts the pandas "index_columns" section
    *
    * PANDAS adds its own metadata to the key_value section when writing out the
    * dataframe to a file to aid in exact reconstruction. The JSON-formatted
    * metadata contains the index column(s) and PANDA-specific datatypes.
    *
-   * @return std::string Name of the index column
+   * @return comma-separated index column names in quotes
    */
-  std::string get_pandas_index_name() {
-    auto it =
-        std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
+  std::string get_pandas_index() {
+    auto it = std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
                      [](const auto &item) { return item.key == "pandas"; });
-
     if (it != key_value_metadata.end()) {
-      const auto pos = it->value.find("index_columns");
-      if (pos != std::string::npos) {
-        const auto begin = it->value.find('[', pos);
-        const auto end = it->value.find(']', begin);
-        if ((end - begin) > 1) {
-          return it->value.substr(begin + 2, end - begin - 3);
-        }
+      // Captures a list of quoted strings found inside square brackets after `"index_columns":`
+      // Inside quotes supports newlines, brackets, escaped quotes, etc. 
+      // One-liner regex:
+      // "index_columns"\s*:\s*\[\s*((?:"(?:|(?:.*?(?![^\\]")).?)[^\\]?",?\s*)*)\]
+      // Documented below.
+      std::regex index_columns_expr{
+        R"("index_columns"\s*:\s*\[\s*)"    // match preamble, opening square bracket, whitespace
+          R"(()"                            // Open first capturing group
+            R"((?:")"                       // Open non-capturing group match opening quote
+              R"((?:|(?:.*?(?![^\\]")).?))" // match empty string or anything between quotes
+              R"([^\\]?")"                  // Match closing non-escaped quote
+              R"(,?\s*)"                    // Match optional comma and whitespace
+            R"()*)"                         // Close non-capturing group and repeat 0 or more times
+          R"())"                            // Close first capturing group
+        R"(\])"                             // Match closing square brackets
+      };
+      std::smatch sm;
+      if (std::regex_search(it->value, sm, index_columns_expr)) {
+        return std::move(sm[1].str());
       }
     }
     return "";
+  }
+
+  /**
+   * @brief Extracts the column name(s) used for the row indexes in a dataframe
+   *
+   * @param names List of column names to load, where index column name(s) will be added
+   */
+  void add_pandas_index_names(std::vector<std::string>& names) {
+    auto str = get_pandas_index();
+    if (str.length() != 0) {
+      std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
+      std::smatch sm;
+      while (std::regex_search(str, sm, index_name_expr)) {
+        if (sm.size() == 2) { // 2 = whole match, first item
+          if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
+            std::regex esc_quote{R"(\\")"};
+            names.emplace_back(std::move(std::regex_replace(sm[1].str(), esc_quote, R"(")")));
+          }
+        }
+        str = sm.suffix();
+      }
+    }
   }
 
   /**
@@ -260,7 +293,7 @@ struct metadata : public FileMetaData {
       }
       row_count = 0;
       do {
-        selection.emplace_back(row_group, row_start);
+        selection.emplace_back(row_group, row_start + row_count);
         row_count += row_groups[row_group].num_rows;
       } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
@@ -289,13 +322,11 @@ struct metadata : public FileMetaData {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
-   * @param include_index Whether to always include the PANDAS index column
-   * @param pandas_index Name of the PANDAS index column
+   * @param include_index Whether to always include the PANDAS index column(s)
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index,
-                      const std::string &pandas_index) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index) {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto names = get_column_names();
@@ -307,10 +338,7 @@ struct metadata : public FileMetaData {
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       if (include_index) {
-        if (std::find(use_names.begin(), use_names.end(), pandas_index) ==
-            use_names.end()) {
-          use_names.push_back(pandas_index);
-        }
+        add_pandas_index_names(use_names);
       }
       for (const auto &use_name : use_names) {
         for (size_t i = 0; i < names.size(); ++i) {
@@ -326,8 +354,48 @@ struct metadata : public FileMetaData {
   }
 };
 
+
+void reader::impl::read_column_chunks(
+    std::vector<rmm::device_buffer>& page_data,
+    hostdevice_vector<gpu::ColumnChunkDesc>& chunks,
+    size_t begin_chunk, size_t end_chunk,
+    const std::vector<size_t>& column_chunk_offsets,
+    cudaStream_t stream) {
+  // Transfer chunk data, coalescing adjacent chunks
+  for (size_t chunk = begin_chunk; chunk < end_chunk; ) {
+    const size_t io_offset = column_chunk_offsets[chunk];
+    size_t io_size = chunks[chunk].compressed_size;
+    size_t next_chunk = chunk + 1;
+    const bool is_compressed = (chunks[chunk].codec != parquet::Compression::UNCOMPRESSED);
+    while (next_chunk < end_chunk) {
+      const size_t next_offset = column_chunk_offsets[next_chunk];
+      const bool is_next_compressed = (chunks[next_chunk].codec != parquet::Compression::UNCOMPRESSED);
+      if (next_offset != io_offset + io_size || is_next_compressed != is_compressed) {
+        // Can't merge if not contiguous or mixing compressed and uncompressed
+        // Not coalescing uncompressed with compressed chunks is so that compressed buffers can be
+        // freed earlier (immediately after decompression stage) to limit peak memory requirements
+        break;
+      }
+      io_size += chunks[next_chunk].compressed_size;
+      next_chunk++;
+    }
+    if (io_size != 0) {
+      auto buffer = _source->get_buffer(io_offset, io_size);
+      page_data[chunk] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
+      uint8_t *d_compdata = reinterpret_cast<uint8_t *>(page_data[chunk].data());
+      do {
+        chunks[chunk].compressed_data = d_compdata;
+        d_compdata += chunks[chunk].compressed_size;
+      } while (++chunk != next_chunk);
+    }
+    else {
+      chunk = next_chunk;
+    }
+  }
+}
+
 size_t reader::impl::count_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
     cudaStream_t stream) {
   size_t total_pages = 0;
 
@@ -348,8 +416,8 @@ size_t reader::impl::count_page_headers(
 }
 
 void reader::impl::decode_page_headers(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages =
         chunks[c].num_data_pages + chunks[c].num_dict_pages;
@@ -368,8 +436,8 @@ void reader::impl::decode_page_headers(
 }
 
 rmm::device_buffer reader::impl::decompress_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, cudaStream_t stream) {
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -479,8 +547,8 @@ rmm::device_buffer reader::impl::decompress_page_data(
 }
 
 void reader::impl::decode_page_data(
-    const hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-    const hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
+    hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+    hostdevice_vector<gpu::PageInfo> &pages, size_t min_row,
     size_t total_rows, const std::vector<int> &chunk_map,
     std::vector<column_buffer> &out_buffers, cudaStream_t stream) {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc &chunk) {
@@ -548,12 +616,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
-  // Store the index column (PANDAS-specific)
-  _pandas_index = _metadata->get_pandas_index_name();
-
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(
-      options.columns, options.use_pandas_metadata, _pandas_index);
+      options.columns, options.use_pandas_metadata);
 
   // Override output timestamp resolution if requested
   if (options.timestamp_type.id() != EMPTY) {
@@ -600,13 +665,17 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
     // Tracker for eventually deallocating compressed and uncompressed data
     std::vector<rmm::device_buffer> page_data(num_chunks);
 
+    // Keep track of column chunk file offsets
+    std::vector<size_t> column_chunk_offsets(num_chunks);
+
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
     auto remaining_rows = num_rows;
     for (const auto &rg : selected_row_groups) {
-      auto row_group = _metadata->row_groups[rg.first];
+      const auto &row_group = _metadata->row_groups[rg.first];
       auto row_group_start = rg.second;
       auto row_group_rows = std::min<int>(remaining_rows, row_group.num_rows);
+      auto io_chunk_idx = chunks.size();
 
       for (size_t i = 0; i < num_columns; ++i) {
         auto col = _selected_columns[i];
@@ -632,19 +701,13 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
             column_types[i].id(), _timestamp_type.id(), col_schema.type,
             col_schema.converted_type, col_schema.type_length);
 
-        uint8_t *d_compdata = nullptr;
-        if (col_meta.total_compressed_size != 0) {
-          const auto offset = (col_meta.dictionary_page_offset != 0)
+        column_chunk_offsets[chunks.size()] = (col_meta.dictionary_page_offset != 0)
                                   ? std::min(col_meta.data_page_offset,
                                              col_meta.dictionary_page_offset)
                                   : col_meta.data_page_offset;
-          auto buffer =
-              _source->get_buffer(offset, col_meta.total_compressed_size);
-          page_data[chunks.size()] = rmm::device_buffer(buffer->data(), buffer->size(), stream);
-          d_compdata = static_cast<uint8_t *>(page_data[chunks.size()].data());
-        }
+
         chunks.insert(gpu::ColumnChunkDesc(
-            col_meta.total_compressed_size, d_compdata, col_meta.num_values,
+            col_meta.total_compressed_size, nullptr, col_meta.num_values,
             col_schema.type, type_width, row_group_start, row_group_rows,
             col_schema.max_definition_level, col_schema.max_repetition_level,
             required_bits(col_schema.max_definition_level),
@@ -658,6 +721,10 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
           total_decompressed_size += col_meta.total_uncompressed_size;
         }
       }
+      // Read compressed chunk data to device memory
+      read_column_chunks(page_data, chunks, io_chunk_idx, chunks.size(),
+                         column_chunk_offsets, stream);
+
       remaining_rows -= row_group.num_rows;
     }
     assert(remaining_rows <= 0);
@@ -673,7 +740,7 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_grou
         decomp_page_data = decompress_page_data(chunks, pages, stream);
         // Free compressed data
         for (size_t c = 0; c < chunks.size(); c++) {
-          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED) {
+          if (chunks[c].codec != parquet::Compression::UNCOMPRESSED && page_data[c].size() != 0) {
             page_data[c].resize(0);
             page_data[c].shrink_to_fit();
           }
@@ -740,9 +807,6 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 
 // Destructor within this translation unit
 reader::~reader() = default;
-
-// Forward to implementation
-std::string reader::get_pandas_index() { return _impl->get_pandas_index(); }
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {

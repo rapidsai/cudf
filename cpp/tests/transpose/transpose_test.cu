@@ -145,7 +145,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
   auto expected_view = make_table_view(expected_cols);
 
   auto result = transpose(input_view);
-  auto result_view = result->view();
+  auto result_view = std::get<1>(result);
 
   CUDF_EXPECTS(result_view.num_columns() == expected_view.num_columns(), "Expected same number of columns");
   for (cudf::size_type i = 0; i < result_view.num_columns(); ++i) {
@@ -219,8 +219,10 @@ TYPED_TEST(TransposeTest, EmptyColumns)
 TYPED_TEST(TransposeTest, MismatchedColumns)
 {
   fixed_width_column_wrapper<TypeParam> col1{{1, 2, 3}};
-  fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
-  fixed_width_column_wrapper<float> col3{{7, 8, 9}};
+  fixed_width_column_wrapper<int8_t>    col2{{4, 5, 6}};
+  fixed_width_column_wrapper<float>     col3{{7, 8, 9}};
   cudf::table_view input{{col1, col2, col3}};
   EXPECT_THROW(cudf::transpose(input), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

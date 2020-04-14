@@ -24,7 +24,7 @@
  * Provides the overloads for all of possible cudf's data types,
  * where cudf's data types are, int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and cudf::experimental::bool8
+ * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
  * `atomicCAS`.
  * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
@@ -33,7 +33,6 @@
  * ---------------------------------------------------------------------------**/
 
 #include <cudf/types.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/error.hpp>
@@ -496,13 +495,13 @@ genericAtomicOperation(T* address, T const & update_value, BinaryOp op)
     return T(fun(reinterpret_cast<R*>(address), update_value_rep, op));
 }
 
-// specialization for cudf::experimental::bool8 types
+// specialization for bool types
 template <typename BinaryOp>
 __forceinline__  __device__
-cudf::experimental::bool8 genericAtomicOperation(cudf::experimental::bool8* address, cudf::experimental::bool8 const & update_value, BinaryOp op)
+bool genericAtomicOperation(bool* address, bool const & update_value, BinaryOp op)
 {
-    using T = cudf::experimental::bool8;
-    // don't use underlying type to apply operation for cudf::experimental::bool8
+    using T = bool;
+    // don't use underlying type to apply operation for bool
     auto fun = cudf::detail::genericAtomicOperationImpl<T, BinaryOp>{};
     return T(fun(address, update_value, op));
 }
@@ -519,7 +518,7 @@ cudf::experimental::bool8 genericAtomicOperation(cudf::experimental::bool8* addr
  * The supported cudf types for `atomicAdd` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and cudf::experimental::bool8
+ * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
  *
  * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double.
  * (`double` is supported after Pascal).
@@ -547,7 +546,7 @@ T atomicAdd(T* address, T val)
  * The supported cudf types for `atomicMin` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and cudf::experimental::bool8
+ * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -573,7 +572,7 @@ T atomicMin(T* address, T val)
  * The supported cudf types for `atomicMax` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and cudf::experimental::bool8
+ * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *
@@ -599,7 +598,7 @@ T atomicMax(T* address, T val)
  * The supported cudf types for `atomicCAS` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::detail::timestamp_D, cudf::detail::timestamp_s, cudf::detail::timestamp_ms
- * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and cudf::experimental::bool8
+ * cudf::detail::timestamp_us, cudf::detail::timestamp_ns and bool
  * Cuda natively supports `sint32`, `uint32`, `uint64`.
  * Other types are implemented by `atomicCAS`.
  *

@@ -110,43 +110,6 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
 }
 
 /**
- * @brief for each warp in the block do a reduction (summation) of the
- * `__popc(bit_mask)` on a certain lane (default is lane 0).
- * @param[in] bit_mask The bit_mask to be reduced.
- * @return[out] result of each block is returned in thread 0.
- */
-template <class bit_container, int32_t lane = 0>
-__device__ __inline__
-size_type single_lane_block_popc_reduce(bit_container bit_mask) {
-  assert(blockDim.x <= 1024); // Required for reduction
-  static __shared__ size_type warp_count[warp_size];
-
-  int32_t lane_id = (threadIdx.x % warp_size);
-  int32_t warp_id = (threadIdx.x / warp_size);
-
-  // Assuming one lane of each warp holds the value that we want to perform
-  // reduction
-  if (lane_id == lane) {
-    warp_count[warp_id] = __popc(bit_mask);
-  }
-  __syncthreads();
-
-  size_type block_count = 0;
-
-  if (warp_id == 0) {
-    // Maximum block size is 1024 and 1024 / 32 = 32
-    // so one single warp is enough to do the reduction over different warps
-    size_type count =
-      (lane_id < (blockDim.x / warp_size)) ? warp_count[lane_id] : 0;
-
-    __shared__ typename cub::WarpReduce<size_type>::TempStorage temp_storage;
-    block_count = cub::WarpReduce<size_type>(temp_storage).Sum(count);
-  }
-
-  return block_count;
-}
-
-/**
  * @brief Get the number of elements that can be processed per thread.
  *
  * @param[in] kernel The kernel for which the elements per thread needs to be assessed

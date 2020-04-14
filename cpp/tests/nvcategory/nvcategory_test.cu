@@ -17,9 +17,6 @@
  * limitations under the License.
  */
 
-
-#include <gtest/gtest.h>
-
 #include <cudf/legacy/binaryop.hpp>
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
@@ -37,8 +34,11 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
+
+#include <tests/utilities/cudf_gtest.hpp>
+
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 

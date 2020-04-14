@@ -253,6 +253,10 @@ def test_dataframe_basic():
     df_tup[(1, "foobar")] = data
     np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
 
+    df = DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
+    assert_eq(df, pdf)
+
 
 def test_dataframe_drop_method():
     df = DataFrame()
@@ -834,6 +838,28 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             expected_value = row.val - 100 if valid else -1
             got_value = row.key
             assert expected_value == got_value
+
+
+@pytest.mark.parametrize("keep_index", [True, False])
+def test_dataframe_hash_partition_keep_index(keep_index):
+
+    gdf = DataFrame(
+        {"val": [1, 2, 3, 4], "key": [3, 2, 1, 4]}, index=[4, 3, 2, 1]
+    )
+
+    expected_df1 = DataFrame(
+        {"val": [1], "key": [3]}, index=[4] if keep_index else None
+    )
+    expected_df2 = DataFrame(
+        {"val": [2, 3, 4], "key": [2, 1, 4]},
+        index=[3, 2, 1] if keep_index else range(1, 4),
+    )
+    expected = [expected_df1, expected_df2]
+
+    parts = gdf.partition_by_hash(["key"], nparts=2, keep_index=keep_index)
+
+    for exp, got in zip(expected, parts):
+        assert_eq(exp, got)
 
 
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
@@ -1885,6 +1911,13 @@ def test_dataframe_rename():
 
     rename_mapper = {"a": "z", "b": "y", "c": "x"}
     expect = pdf.rename(columns=rename_mapper)
+    got = gdf.rename(columns=rename_mapper)
+
+    assert_eq(expect, got)
+
+    gdf = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    rename_mapper = {"a": "z", "b": "z", "c": "z"}
+    expect = DataFrame({"z": [1, 2, 3], "z_1": [4, 5, 6], "z_2": [7, 8, 9]})
     got = gdf.rename(columns=rename_mapper)
 
     assert_eq(expect, got)
@@ -3577,6 +3610,8 @@ def test_series_value_counts():
         [0, 12, 14],
         np.random.randint(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
+        [None, None, None, None],
+        [np.nan, None, -1, 2, 3],
     ],
 )
 @pytest.mark.parametrize(
@@ -3584,21 +3619,16 @@ def test_series_value_counts():
     [
         np.random.randint(-100, 100, 10),
         [],
-        pytest.param([1.0, 12.0, None, None, 120], marks=pytest.mark.xfail),
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [np.nan, None, -1, 2, 3],
+        [1.0, 12.0, None, None, 120],
+        [None, None, None],
         ["0", "12", "14"],
-        pytest.param(
-            ["0", "12", "14", "a"],
-            marks=[
-                pytest.mark.xfail(
-                    reason="We don't gracefully handle typecasting errors."
-                )
-            ],
-        ),
+        ["0", "12", "14", "a"],
     ],
 )
 def test_isin_numeric(data, values):
-    psr = pd.Series(data)
+    index = np.random.randint(0, 100, len(data))
+    psr = pd.Series(data, index=index)
     gsr = Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -3620,12 +3650,7 @@ def test_isin_numeric(data, values):
     "values",
     [
         [],
-        pytest.param(
-            [1514764800000000000, 1577664000000000000],
-            marks=[
-                pytest.mark.xfail(reason="We don't yet support nanoseconds.")
-            ],
-        ),
+        [1514764800000000000, 1577664000000000000],
         ["2019-04-03", "2019-12-30", "2012-01-01"],
     ],
 )
@@ -3651,7 +3676,8 @@ def test_isin_datetime(data, values):
     [
         [],
         ["this", "is"],
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [None, None, None],
+        ["12", "14", "19"],
         pytest.param(
             [12, 14, 19],
             marks=[
@@ -3731,7 +3757,153 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got._column.data_array_view.copy_to_host(), expected)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
+        ),
+        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
+            names=("number", "color"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values,level,err",
+    [
+        (["red", "orange", "yellow"], "color", None),
+        (["red", "white", "yellow"], "color", None),
+        ([0, 1, 2, 10, 11, 15], "number", None),
+        ([0, 1, 2, 10, 11, 15], None, TypeError),
+        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
+        (pd.Index(["red", "white", "yellow"]), "color", None),
+        ([(1, "red"), (3, "red")], None, None),
+        (((1, "red"), (3, "red")), None, None),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3], ["red", "blue", "green"]],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    [1, 2, 3, 10, 100],
+                    ["red", "blue", "green", "pink", "white"],
+                ],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+    ],
+)
+def test_isin_multiindex(data, values, level, err):
+    pmdx = data
+    gmdx = gd.from_pandas(data)
+
+    if err is None:
+        expected = pmdx.isin(values, level=level)
+        if isinstance(values, pd.MultiIndex):
+            values = gd.from_pandas(values)
+        got = gmdx.isin(values, level=level)
+
+        assert_eq(got, expected)
+    else:
+        with pytest.raises((ValueError, TypeError)):
+            expected = pmdx.isin(values, level=level)
+
+        with pytest.raises(err):
+            got = gmdx.isin(values, level=level)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [8, 2, 1, 0, 2, 4, 5],
+                "num_wings": [2, 0, 2, 1, 2, 4, -1],
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0, 2],
+        {"num_wings": [0, 3]},
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        ["sparrow", "pigeon"],
+        pd.Series(["sparrow", "pigeon"], dtype="category"),
+        pd.Series([1, 2, 3, 4, 5]),
+        "abc",
+        123,
+    ],
+)
+def test_isin_dataframe(data, values):
+    from cudf.utils.dtypes import is_scalar
+
+    pdf = data
+    gdf = gd.from_pandas(pdf)
+
+    if is_scalar(values):
+        with pytest.raises(TypeError):
+            pdf.isin(values)
+        with pytest.raises(TypeError):
+            gdf.isin(values)
+    else:
+        expected = pdf.isin(values)
+        if isinstance(values, (pd.DataFrame, pd.Series)):
+            values = gd.from_pandas(values)
+        got = gdf.isin(values)
+
+        assert_eq(got, expected)
 
 
 def test_constructor_properties():
@@ -4424,7 +4596,7 @@ def test_change_column_dtype_in_empty():
 
 
 def test_dataframe_from_table_empty_index():
-    from cudf._libxx.table import Table
+    from cudf._lib.table import Table
 
     df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     odict = df._data
@@ -4454,3 +4626,25 @@ def test_dataframe_from_dictionary_series_same_name_index(dtype):
 
     assert_eq(expect, got)
     assert expect.index.names == got.index.names
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 8, 3), slice(1, 20, 4), slice(-2, -6, -2)]
+)
+def test_dataframe_strided_slice(arg):
+    mul = pd.DataFrame(
+        {
+            "Index": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "AlphaIndex": ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+        }
+    )
+    pdf = pd.DataFrame(
+        {"Val": [10, 9, 8, 7, 6, 5, 4, 3, 2]},
+        index=pd.MultiIndex.from_frame(mul),
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
+
+    expect = pdf[arg]
+    got = gdf[arg]
+
+    assert_eq(expect, got)

@@ -14,22 +14,22 @@ import nvstrings
 
 import cudf
 import cudf._lib as libcudf
-import cudf._libxx as libcudfxx
-from cudf._libxx.column import Column
-from cudf._libxx.null_mask import (
+from cudf._lib.column import Column
+from cudf._lib.null_mask import (
     MaskState,
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._libxx.scalar import Scalar
-from cudf._libxx.stream_compaction import unique_count as cpp_unique_count
-from cudf._libxx.transform import bools_to_mask
-from cudf.core._sort import get_sorted_inds
+from cudf._lib.quantiles import quantile as cpp_quantile
+from cudf._lib.scalar import Scalar
+from cudf._lib.stream_compaction import unique_count as cpp_unique_count
+from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     np_to_pa_dtype,
@@ -84,9 +84,7 @@ class ColumnBase(Column):
         View the data as a device array object
         """
         if self.dtype == "object":
-            # TODO: Change this to raise exception once copying.pyx is ported
-            return self.nvstrings
-            # raise ValueError("Cannot get an array view of a StringColumn")
+            raise ValueError("Cannot get an array view of a StringColumn")
 
         if is_categorical_dtype(self.dtype):
             return self.codes.data_array_view
@@ -154,12 +152,12 @@ class ColumnBase(Column):
     def all(self):
         if self.null_count != 0:
             return False
-        return bool(libcudfxx.reduce.reduce("all", self, dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
         if self.valid_count == 0:
             return False
-        return bool(libcudfxx.reduce.reduce("any", self, dtype=np.bool_))
+        return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
         n = self.data.size
@@ -169,12 +167,6 @@ class ColumnBase(Column):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-        from cudf.core.series import Series
-        from cudf.core.column import (
-            StringColumn,
-            CategoricalColumn,
-            NumericalColumn,
-        )
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
@@ -185,13 +177,13 @@ class ColumnBase(Column):
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
         # Notice, we can always cast pure null columns
-        not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
+        not_null_cols = list(filter(lambda o: o.valid_count > 0, objs))
         if len(not_null_cols) > 0 and (
             len(
                 [
                     o
                     for o in not_null_cols
-                    if not isinstance(o, NumericalColumn)
+                    if not is_numerical_dtype(o.dtype)
                     or np.issubdtype(o.dtype, np.datetime64)
                 ]
             )
@@ -207,82 +199,65 @@ class ColumnBase(Column):
         # Find the first non-null column:
         head = objs[0]
         for i, obj in enumerate(objs):
-            if len(obj) != obj.null_count:
+            if obj.valid_count > 0:
                 head = obj
                 break
 
         for i, obj in enumerate(objs):
             # Check that all columns are the same type:
-            if not pd.api.types.is_dtype_equal(objs[i].dtype, head.dtype):
+            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
                 # if all null, cast to appropriate dtype
-                if len(obj) == obj.null_count:
-                    from cudf.core.column import column_empty_like
-
+                if obj.valid_count == 0:
                     objs[i] = column_empty_like(
                         head, dtype=head.dtype, masked=True, newsize=len(obj)
                     )
+                else:
+                    raise ValueError("All columns must be the same type")
 
-        # Handle categories for categoricals
-        if all(isinstance(o, CategoricalColumn) for o in objs):
+        cats = None
+        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
+
+        # Combine CategoricalColumn categories
+        if is_categorical:
+            # Combine and de-dupe the categories
             cats = (
-                Series(ColumnBase._concat([o.categories for o in objs]))
+                cudf.concat([o.cat().categories for o in objs])
+                .to_series()
                 .drop_duplicates()
                 ._column
             )
             objs = [
                 o.cat()._set_categories(cats, is_unique=True) for o in objs
             ]
-
-        head = objs[0]
-        for obj in objs:
-            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
-                raise ValueError("All series must be of same type")
+            # Map `objs` into a list of the codes until we port Categorical to
+            # use the libcudf++ Category data type.
+            objs = [o.cat().codes._column for o in objs]
+            head = head.cat().codes._column
 
         newsize = sum(map(len, objs))
-        if newsize > libcudfxx.MAX_COLUMN_SIZE:
+        if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
                 "Result of concat cannot have "
-                "size > {}".format(libcudfxx.MAX_COLUMN_SIZE_STR)
+                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
             )
-
-        # Handle strings separately
-        if all(isinstance(o, StringColumn) for o in objs):
-            result_nbytes = sum(o._nbytes for o in objs)
-            if result_nbytes > libcudfxx.MAX_STRING_COLUMN_BYTES:
-                raise MemoryError(
-                    "Result of concat cannot have > {}  bytes".format(
-                        libcudfxx.MAX_STRING_COLUMN_BYTES_STR
-                    )
-                )
-            # TODO: remove nvstrings when concat.pyx is ported
-            objs = [o.nvstrings for o in objs]
-            return as_column(nvstrings.from_strings(*objs))
 
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
-        nulls = any(col.nullable for col in objs)
 
-        if is_categorical_dtype(head):
-            data_dtype = head.codes.dtype
-            data = None
-            children = (column_empty(newsize, dtype=head.codes.dtype),)
-        else:
-            data_dtype = head.dtype
-            data = Buffer.empty(size=newsize * data_dtype.itemsize)
-            children = ()
-
-        # Allocate output mask only if there's nulls in the input objects
-        mask = None
-        if nulls:
-            mask = create_null_mask(newsize, state=MaskState.UNINITIALIZED)
-
-        col = build_column(
-            data=data, dtype=head.dtype, mask=mask, children=children
-        )
-
-        # Performance the actual concatenation
+        # Perform the actual concatenation
         if newsize > 0:
-            col = libcudf.concat._column_concat(objs, col)
+            col = libcudf.concat.concat_columns(objs)
+        else:
+            col = column_empty(0, head.dtype, masked=True)
+
+        if is_categorical:
+            col = build_categorical_column(
+                categories=cats,
+                codes=as_column(col.base_data, dtype=col.dtype),
+                mask=col.base_mask,
+                size=col.size,
+                offset=col.offset,
+            )
 
         return col
 
@@ -347,11 +322,11 @@ class ColumnBase(Column):
         fill_scalar = Scalar(fill_value, self.dtype)
 
         if not inplace:
-            return libcudfxx.filling.fill(self, begin, end, fill_scalar)
+            return libcudf.filling.fill(self, begin, end, fill_scalar)
 
         if is_string_dtype(self.dtype):
             return self._mimic_inplace(
-                libcudfxx.filling.fill(self, begin, end, fill_scalar),
+                libcudf.filling.fill(self, begin, end, fill_scalar),
                 inplace=True,
             )
 
@@ -359,7 +334,7 @@ class ColumnBase(Column):
             mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
             self.set_base_mask(mask)
 
-        libcudfxx.filling.fill_in_place(self, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(self, begin, end, fill_scalar)
 
         return self
 
@@ -369,11 +344,11 @@ class ColumnBase(Column):
 
         result = self if inplace else self.copy()
 
-        libcudfxx.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
     def shift(self, offset, fill_value):
-        return libcudfxx.copying.shift(self, offset, fill_value)
+        return libcudf.copying.shift(self, offset, fill_value)
 
     @property
     def valid_count(self):
@@ -395,7 +370,7 @@ class ColumnBase(Column):
         copies the references of the data and mask.
         """
         if deep:
-            return libcudfxx.copying.copy_column(self)
+            return libcudf.copying.copy_column(self)
         else:
             return build_column(
                 self.base_data,
@@ -438,10 +413,13 @@ class ColumnBase(Column):
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
-        # TODO: Remove this when copying.pyx is ported
-        val = self.data_array_view[index]  # this can raise IndexError
-        if isinstance(val, nvstrings.nvstrings):
-            val = val.to_host()[0]
+
+        val = self[index : (index + 1)]
+        if val.null_count == 1:
+            val = None
+        else:
+            val = val.to_array()[0]
+
         valid = (
             cudautils.mask_get.py_func(self.mask_array_view, index)
             if self.mask
@@ -459,11 +437,13 @@ class ColumnBase(Column):
 
             if is_categorical_dtype(self):
                 codes = self.codes[arg]
-                return build_column(
-                    data=None,
-                    dtype=self.dtype,
-                    mask=codes.mask,
-                    children=(codes,),
+                return build_categorical_column(
+                    categories=self.categories,
+                    codes=as_column(codes.base_data, dtype=codes.dtype),
+                    mask=codes.base_mask,
+                    ordered=self.ordered,
+                    size=codes.size,
+                    offset=codes.offset,
                 )
 
             start, stop, stride = arg.indices(len(self))
@@ -478,7 +458,7 @@ class ColumnBase(Column):
             # compute mask slice
             if stride == 1 or stride is None:
 
-                return libcudfxx.copying.column_slice(self, [start, stop])[0]
+                return libcudf.copying.column_slice(self, [start, stop])[0]
             else:
                 # Need to create a gather map for given slice with stride
                 gather_map = as_column(
@@ -489,8 +469,7 @@ class ColumnBase(Column):
                         dtype=np.dtype(np.int32),
                     )
                 )
-                return self.as_frame()._gather(gather_map)._as_column()
-
+                return self.take(gather_map)
         else:
             arg = column.as_column(arg)
             if len(arg) == 0:
@@ -566,13 +545,13 @@ class ColumnBase(Column):
             and not is_scalar(value)
         ):
 
-            out = libcudfxx.copying.copy_range(
+            out = libcudf.copying.copy_range(
                 value, self, 0, nelem, key_start, key_stop, False
             )
             if is_categorical_dtype(value.dtype):
                 out = build_categorical_column(
                     categories=value.categories,
-                    codes=out,
+                    codes=as_column(out.base_data, dtype=out.dtype),
                     mask=out.base_mask,
                     size=out.size,
                     offset=out.offset,
@@ -590,7 +569,7 @@ class ColumnBase(Column):
                     if is_categorical_dtype(self.dtype):
                         out = build_categorical_column(
                             categories=self.categories,
-                            codes=out,
+                            codes=as_column(out.base_data, dtype=out.dtype),
                             mask=out.base_mask,
                             size=out.size,
                             offset=out.offset,
@@ -609,7 +588,7 @@ class ColumnBase(Column):
                 if "out of bounds" in str(e):
                     raise IndexError(
                         f"index out of bounds for column of size {len(self)}"
-                    )
+                    ) from e
                 raise
 
         self._mimic_inplace(out, inplace=True)
@@ -624,7 +603,7 @@ class ColumnBase(Column):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudfxx.unary.is_null(self)
+        return libcudf.unary.is_null(self)
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
@@ -634,7 +613,7 @@ class ColumnBase(Column):
     def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudfxx.unary.is_valid(self)
+        return libcudf.unary.is_valid(self)
 
     def notna(self):
         """Identify non-missing values in a Column. Alias for notnull.
@@ -668,34 +647,110 @@ class ColumnBase(Column):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
-        if isinstance(q, Number):
+
+        is_number = isinstance(q, Number)
+
+        if is_number:
             quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
             quant = q
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
-    def take(self, indices):
+        # get sorted indicies and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(True, "after")
+        sorted_indices = sorted_indices[self.null_count :]
+
+        return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+
+    def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
         """
-        from cudf.core.column import column_empty_like
-
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
-
         try:
-            result = libcudf.copying.gather(self, indices)
+            return (
+                self.as_frame()
+                ._gather(indices, keep_index=keep_index)
+                ._as_column()
+            )
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(
                     f"index out of bounds for column of size {len(self)}"
-                )
+                ) from e
             raise
 
-        return result
+    def isin(self, values):
+        """Check whether values are contained in the Column.
+
+        Parameters
+        ----------
+        values : set or list-like
+            The sequence of values to test. Passing in a single string will
+            raise a TypeError. Instead, turn a single string into a list
+            of one element.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Column
+            Column of booleans indicating if each element is in values.
+        Raises
+        -------
+        TypeError
+            If values is a string
+        """
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
+
+        from cudf import DataFrame, Series
+
+        lhs = self
+        rhs = None
+
+        try:
+            # We need to convert values to same type as self,
+            # hence passing dtype=self.dtype
+            rhs = as_column(values, dtype=self.dtype)
+        except ValueError:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return as_column(cupy.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat().categories._values
+            rhs_cats = rhs.cat().categories._values
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat().set_categories(cats, is_unique=True)
+                rhs = rhs.cat().set_categories(cats, is_unique=True)
+            else:
+                # If they're not the same dtype, short-circuit if the values
+                # list doesn't have any nulls. If it does have nulls, make
+                # the values list a Categorical with a single null
+                if not rhs.has_nulls:
+                    return cupy.zeros(len(self), dtype="bool")
+                rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
+
+        lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+
+        return res._column
 
     def as_mask(self):
         """Convert booleans to bitmask
@@ -773,7 +828,7 @@ class ColumnBase(Column):
             return self.find_last_value(label, closest=True) + 1
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self[col_inds]
         return col_keys, col_inds
 
@@ -842,7 +897,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data_ptr, True),
+            "data": (self.data_ptr, False),
             "version": 1,
         }
 
@@ -920,7 +975,11 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     ):
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
         return build_column(
-            data=None, dtype=dtype, mask=codes.mask, children=(codes,)
+            data=None,
+            dtype=dtype,
+            mask=codes.base_mask,
+            children=(as_column(codes.base_data, dtype=codes.dtype),),
+            size=codes.size,
         )
 
     return column_empty(row_count, dtype, masked)
@@ -958,9 +1017,7 @@ def column_empty(row_count, dtype="object", masked=False):
         data = None
         children = (
             build_column(
-                data=Buffer.empty(
-                    (row_count + 1) * np.dtype("int32").itemsize
-                ),
+                data=Buffer(cupy.zeros(row_count + 1, dtype="int32")),
                 dtype="int32",
             ),
             build_column(
@@ -1047,7 +1104,11 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
+    if len(categories) == 0 and len(codes):
+        raise ValueError("Cannot have nonempty codes for empty categories")
+
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+
     return build_column(
         data=None,
         dtype=dtype,
@@ -1115,12 +1176,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     # TODO: Remove nvstrings here when nvstrings is fully removed
     elif isinstance(arbitrary, nvstrings.nvstrings):
         byte_count = arbitrary.byte_count()
-        if byte_count > libcudfxx.MAX_STRING_COLUMN_BYTES:
+        if byte_count > libcudf.MAX_STRING_COLUMN_BYTES:
             raise MemoryError(
                 "Cannot construct string columns "
                 "containing > {} bytes. "
                 "Consider using dask_cudf to partition "
-                "your data.".format(libcudfxx.MAX_STRING_COLUMN_BYTES_STR)
+                "your data.".format(libcudf.MAX_STRING_COLUMN_BYTES_STR)
             )
         sbuf = Buffer.empty(arbitrary.byte_count())
         obuf = Buffer.empty(
@@ -1150,13 +1211,17 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
-        dtype = np.dtype(desc["typestr"])
+        current_dtype = np.dtype(desc["typestr"])
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
-        col = build_column(data, dtype=dtype, mask=mask)
+        col = build_column(data, dtype=current_dtype, mask=mask)
+
+        if dtype is not None:
+            col = col.astype(dtype)
+
         if np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
-                mask = libcudfxx.transform.nans_to_nulls(col.fillna(np.nan))
+                mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
@@ -1270,6 +1335,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 size=pa_size,
                 offset=pa_offset,
             )
+        elif isinstance(arbitrary, pa.ListArray):
+            raise NotImplementedError(
+                "cudf doesn't support list like data types"
+            )
+
         else:
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary
@@ -1312,14 +1382,27 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 pa.array(arbitrary, from_pandas=nan_as_null),
                 dtype=arbitrary.dtype,
             )
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif isinstance(arbitrary, pd.Timestamp):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
+        if (
+            (nan_as_null is True)
+            and isinstance(arbitrary, (np.floating, float))
+            and np.isnan(arbitrary)
+        ):
+            arbitrary = None
+            if dtype is None:
+                dtype = np.dtype("float64")
+
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
@@ -1369,6 +1452,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
+            # There is no cast operation available for pa.Array from int to
+            # str, Hence instead of handling in pa.Array block, we
+            # will have to type-cast here.
+            if dtype is not None:
+                data = data.astype(dtype)
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
@@ -1416,7 +1504,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     data = as_column(
-                        np.asarray(arbitrary, dtype=np.dtype(dtype)),
+                        np.asarray(
+                            arbitrary,
+                            dtype=dtype if dtype is None else np.dtype(dtype),
+                        ),
+                        dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
     return data
