@@ -1286,7 +1286,7 @@ class Series(Frame):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if bool_only not in (None, False):
+        if bool_only not in (None, True):
             raise NotImplementedError(
                 "bool_only parameter is not implemented yet"
             )
@@ -1335,7 +1335,7 @@ class Series(Frame):
         if level is not None:
             raise NotImplementedError("level parameter is not implemented yet")
 
-        if bool_only not in (None, False):
+        if bool_only not in (None, True):
             raise NotImplementedError(
                 "bool_only parameter is not implemented yet"
             )
@@ -1842,7 +1842,7 @@ class Series(Frame):
     def min(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -1887,6 +1887,8 @@ class Series(Frame):
                 "numeric_only parameter is not implemented yet"
             )
 
+        skipna = True if skipna is None else skipna
+
         if skipna:
             result_series = self.nans_to_nulls()
             if result_series.has_nulls:
@@ -1902,7 +1904,7 @@ class Series(Frame):
     def max(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -1947,6 +1949,8 @@ class Series(Frame):
                 "numeric_only parameter is not implemented yet"
             )
 
+        skipna = True if skipna is None else skipna
+
         if skipna:
             result_series = self.nans_to_nulls()
             if result_series.has_nulls:
@@ -1962,7 +1966,7 @@ class Series(Frame):
     def sum(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -2015,6 +2019,8 @@ class Series(Frame):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
+
+        skipna = True if skipna is None else skipna
 
         if skipna:
             result_series = self.nans_to_nulls()
