@@ -1324,12 +1324,9 @@ class Series(Frame):
             result_series = self.nans_to_nulls()
             if len(result_series) == result_series.null_count:
                 return False
-            # if result_series.has_nulls:
-            #     result_series = result_series.dropna()
+
         else:
             result_series = self
-            # if self.has_nulls:
-            #     result_series = self.fillna(self._column.default_na_value())
 
         return result_series._column.any()
 
