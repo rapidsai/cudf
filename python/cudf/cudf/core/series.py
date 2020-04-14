@@ -9,6 +9,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -601,6 +602,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
+    @annotate("BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
@@ -616,7 +618,6 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -651,7 +652,6 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
@@ -1601,8 +1601,9 @@ class Series(Frame):
 
         Parameters
         ----------
-        udf : Either a callable python function or a python function already
-        decorated by ``numba.cuda.jit`` for call on the GPU as a device
+        udf : function
+            Either a callable python function or a python function already
+            decorated by ``numba.cuda.jit`` for call on the GPU as a device
 
         out_dtype  : numpy.dtype; optional
             The dtype for use in the output.
@@ -1634,6 +1635,71 @@ class Series(Frame):
           * math.tan()
           * math.gamma()
           * math.lgamma()
+
+        * Series with string dtypes are not supported in `applymap` method.
+
+        * Global variables need to be re-defined explicitly inside
+          the udf, as numba considers them to be compile-time constants
+          and there is no known way to obtain value of the global variable.
+
+        Examples
+        --------
+        Returning a Series of booleans using only a literal pattern.
+        >>> import cudf
+        >>> s = cudf.Series([1, 10, -10, 200, 100])
+        >>> s.applymap(lambda x: x)
+        0      1
+        1     10
+        2    -10
+        3    200
+        4    100
+        dtype: int64
+        >>> s.applymap(lambda x: x in [1, 100, 59])
+        0     True
+        1    False
+        2    False
+        3    False
+        4     True
+        dtype: bool
+        >>> s.applymap(lambda x: x ** 2)
+        0        1
+        1      100
+        2      100
+        3    40000
+        4    10000
+        dtype: int64
+        >>> s.applymap(lambda x: (x ** 2) + (x / 2))
+        0        1.5
+        1      105.0
+        2       95.0
+        3    40100.0
+        4    10050.0
+        dtype: float64
+
+        >>> def cube_function(a):
+        ...     return a ** 3
+        ...
+        >>> s.applymap(cube_function)
+        0          1
+        1       1000
+        2      -1000
+        3    8000000
+        4    1000000
+        dtype: int64
+
+        >>> def custom_udf(x):
+        ...     if x > 0:
+        ...         return x + 5
+        ...     else:
+        ...         return x - 5
+        ...
+        >>> s.applymap(custom_udf)
+        0      6
+        1     15
+        2    -15
+        3    205
+        4    105
+        dtype: int64
 
         """
         if callable(udf):
@@ -1668,23 +1734,23 @@ class Series(Frame):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.min(dtype=dtype)
 
     def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.max(dtype=dtype)
 
     def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.sum(dtype=dtype)
 
     def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.product(dtype=dtype)
 
     def prod(self, axis=None, skipna=True, dtype=None):
         """Alias for product"""
@@ -1815,19 +1881,19 @@ class Series(Frame):
         15.5
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self.nans_to_nulls().dropna()._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.std(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.var(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)

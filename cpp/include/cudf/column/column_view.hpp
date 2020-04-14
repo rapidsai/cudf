@@ -482,7 +482,7 @@ class mutable_column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
    *---------------------------------------------------------------------------**/
-  mutable_column_view& child(size_type child_index) noexcept {
+  mutable_column_view child(size_type child_index) const noexcept {
     return mutable_children[child_index];
   }
 

@@ -20,6 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <nvtext/tokenize.hpp>
 #include <nvtext/detail/tokenize.hpp>
 #include <text/utilities/tokenize_ops.cuh>
@@ -150,6 +151,7 @@ std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings
                                         cudf::string_scalar const& delimiter,
                                         rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::tokenize( strings, delimiter, mr );
 }
 
@@ -157,6 +159,7 @@ std::unique_ptr<cudf::column> tokenize( cudf::strings_column_view const& strings
                                         cudf::strings_column_view const& delimiters,
                                         rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::tokenize( strings, delimiters, mr );
 }
 
@@ -164,6 +167,7 @@ std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& str
                                             cudf::string_scalar const& delimiter,
                                             rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_tokens( strings, delimiter, mr );
 }
 
@@ -171,6 +175,7 @@ std::unique_ptr<cudf::column> count_tokens( cudf::strings_column_view const& str
                                             cudf::strings_column_view const& delimiters,
                                             rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_tokens( strings, delimiters, mr );
 }
 

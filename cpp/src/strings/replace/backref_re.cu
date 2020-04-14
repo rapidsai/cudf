@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/replace_re.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 #include <strings/regex/regex.cuh>
@@ -226,6 +227,7 @@ std::unique_ptr<column> replace_with_backrefs( strings_column_view const& string
                                                std::string const& repl,
                                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::replace_with_backrefs(strings, pattern, repl, mr);
 }
 

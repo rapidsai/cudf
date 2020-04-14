@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -59,6 +60,8 @@ struct string_to_integer_fn
     {
         int64_t value = 0;
         size_type bytes = d_str.size_bytes();
+        if( bytes==0 )
+            return value;
         const char* ptr = d_str.data();
         int sign = 1;
         if( *ptr == '-' || *ptr == '+' )
@@ -151,6 +154,7 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
                                      data_type output_type,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::to_integers(strings, output_type, mr );
 }
 
@@ -323,6 +327,7 @@ std::unique_ptr<column> from_integers( column_view const& integers,
 std::unique_ptr<column> from_integers( column_view const& integers,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_integers(integers,mr);
 }
 
