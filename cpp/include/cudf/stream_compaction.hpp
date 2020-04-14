@@ -149,8 +149,8 @@ enum class duplicate_keep_option {
 std::unique_ptr<experimental::table>
     drop_duplicates(table_view const& input,
                     std::vector<size_type> const& keys,
-                    duplicate_keep_option const& keep,
-                    bool const& nulls_are_equal = true,
+                    duplicate_keep_option const keep,
+                    bool const nulls_are_equal = true,
                     rmm::mr::device_memory_resource *mr =
                         rmm::mr::get_default_resource());
 
@@ -173,7 +173,7 @@ std::unique_ptr<experimental::table>
  */
 cudf::size_type unique_count(column_view const& input,
                              include_nulls const _include_nulls,
-                             bool const& nan_as_null,
+                             bool const nan_as_null,
                              rmm::mr::device_memory_resource *mr =
                                  rmm::mr::get_default_resource());
 

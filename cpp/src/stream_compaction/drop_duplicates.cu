@@ -107,8 +107,8 @@ template<typename Exec,
  */
 column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        cudf::mutable_column_view & unique_indices,
-                                       duplicate_keep_option const& keep,
-                                       bool const& nulls_are_equal = true,
+                                       duplicate_keep_option const keep,
+                                       bool const nulls_are_equal = true,
                                        cudaStream_t stream=0)
 {
   // sort only indices
@@ -153,7 +153,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 }
 
 cudf::size_type unique_count(table_view const& keys,
-                             bool const& nulls_are_equal = true,
+                             bool const nulls_are_equal = true,
                              cudaStream_t stream=0)
 {
   // sort only indices
@@ -195,8 +195,8 @@ cudf::size_type unique_count(table_view const& keys,
 std::unique_ptr<experimental::table>
   drop_duplicates(table_view const& input,
                   std::vector<size_type> const& keys,
-                  duplicate_keep_option const& keep,
-                  bool const& nulls_are_equal,
+                  duplicate_keep_option const keep,
+                  bool const nulls_are_equal,
                   rmm::mr::device_memory_resource* mr,
                   cudaStream_t stream)
 {
@@ -308,8 +308,8 @@ struct has_nans{
 };
 
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const& _include_nulls,
-                             bool const& nan_as_null,
+                             include_nulls const _include_nulls,
+                             bool const nan_as_null,
                              cudaStream_t stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) {
@@ -345,16 +345,16 @@ cudf::size_type unique_count(column_view const& input,
 std::unique_ptr<experimental::table>
   drop_duplicates(table_view const& input,
                   std::vector<size_type> const& keys,
-                  duplicate_keep_option const& keep,
-                  bool const& nulls_are_equal,
+                  duplicate_keep_option const keep,
+                  bool const nulls_are_equal,
                   rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::drop_duplicates(input, keys, keep, nulls_are_equal, mr);
 }
 
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const& _include_nulls,
-                             bool const& nan_as_null,
+                             include_nulls const _include_nulls,
+                             bool const nan_as_null,
                              rmm::mr::device_memory_resource *mr) {
   CUDF_FUNC_RANGE();
   return detail::unique_count(input, _include_nulls, nan_as_null);
