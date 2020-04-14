@@ -896,20 +896,19 @@ def test_join_multi(how, column_a, column_b, column_c):
     ],
 )
 def test_merge_multi(kwargs):
-    # join indices
-    j_1_l = [1, 2, 3, 4, 3, 5, 6]
-    j_2_l = [1, 3, 5, 7, 5, 9, 0]
-    j_1_r = [0, 9, 3, 4, 3, 7, 8]
-    j_2_r = [2, 4, 5, 7, 5, 6, 8]
 
-    # data columns
-    d_1_l = ["o", "p", "q", "r", "s", "t", "u"]
-    d_2_l = ["v", "w", "x", "y", "z", "1", "2"]
-    d_1_r = ["a", "b", "c", "d", "e", "f", "g"]
-    d_2_r = ["j", "i", "j", "k", "l", "m", "n"]
-
-    left = DataFrame({"a": j_1_l, "b": j_2_l, "c": d_1_l, "d": d_2_l})
-    right = DataFrame({"a": j_1_r, "b": j_2_r, "c": d_1_r, "d": d_2_r})
+    left = DataFrame({
+        'a': [1, 2, 3, 4, 3, 5, 6],
+        'b': [1, 3, 5, 7, 5, 9, 0],
+        'c': ["o", "p", "q", "r", "s", "t", "u"],
+        'd': ["v", "w", "x", "y", "z", "1", "2"]
+    })
+    right = DataFrame({
+        'a': [0, 9, 3, 4, 3, 7, 8],
+        'b': [2, 4, 5, 7, 5, 6, 8],
+        'c': ["a", "b", "c", "d", "e", "f", "g"],
+        'd': ["j", "i", "j", "k", "l", "m", "n"]
+    })
 
     if (
         kwargs["left_on"] is not None
@@ -941,8 +940,17 @@ def test_merge_multi(kwargs):
     expect = gleft.merge(gright, **kwargs)
     got = left.merge(right, **kwargs)
 
+    assert_eq(expect.sort_index().index, got.sort_index().index)
+
+    expect.index = range(len(expect))
+    got.index = range(len(got))
+    expect = expect.sort_values(list(expect.columns))
+    got = got.sort_values(list(got.columns))
+    expect.index = range(len(expect))
+    got.index = range(len(got))
 
     assert_eq(expect, got)
+
 
 
 @pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
