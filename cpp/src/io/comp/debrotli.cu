@@ -1976,13 +1976,14 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
  * @brief Brotli decoding kernel
  * See https://tools.ietf.org/html/rfc7932
  *
+ * blockDim = {NUMTHREADS,1,1}
+ *
  * @param inputs[in] Source/Destination buffer information per block
  * @param outputs[out] Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between blocks)
  * @param count Number of blocks to decompress
  **/
-// blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
 gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, uint8_t *scratch, uint32_t scratch_size, uint32_t count)
 {
