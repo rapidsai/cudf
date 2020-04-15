@@ -65,12 +65,9 @@ class Domain(metaclass=CachedInstanceMeta):
         self.handle = DomainHandle(name)
 
 
-def push_range(EventAttributes attributes, domain):
-    cdef EventAttributes attrs = attributes
-    cdef DomainHandle dh = domain.handle
-    nvtxDomainRangePushEx(dh.c_obj, &attrs.c_obj)
+def push_range(EventAttributes attributes, DomainHandle domain):
+    nvtxDomainRangePushEx(domain.c_obj, &attributes.c_obj)
 
 
-def pop_range(domain):
-    cdef DomainHandle dh = domain.handle
-    nvtxDomainRangePop(dh.c_obj)
+def pop_range(DomainHandle domain):
+    nvtxDomainRangePop(domain.c_obj)
