@@ -27,6 +27,8 @@ def test_series_reductions(method, dtype, skipna):
         mask = arr > 0.5
 
     arr = arr.astype(dtype)
+    if dtype in (np.float32, np.float64):
+        arr[[2, 5, 14, 19, 50, 70]] = np.nan
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
     psr = sr.to_pandas()
     psr[~mask] = np.nan
