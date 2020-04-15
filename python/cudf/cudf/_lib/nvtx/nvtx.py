@@ -3,6 +3,7 @@
 from contextlib import ContextDecorator
 
 from cudf._lib.nvtx._lib import (
+    EventAttributes,
     pop_range as libnvtx_pop_range,
     push_range as libnvtx_push_range,
 )
@@ -49,21 +50,20 @@ class annotate(ContextDecorator):
         ...    time.sleep(10)
         ...
         """
-        self.message = message
-        self.color = color
+        self.attributes = EventAttributes(message, color)
         self.domain = domain
 
     def __enter__(self):
-        push_range(self.message, self.color, self.domain)
+        libnvtx_push_range(self.attributes, self.domain)
         return self
 
     def __exit__(self, *exc):
-        pop_range(self.domain)
+        libnvtx_pop_range(self.domain)
         return False
 
     def __call__(self, func):
-        if self.message is None:
-            self.message = func.__name__
+        if self.attributes.message is None:
+            self.attributes.message = func.__name__
         return super().__call__(func)
 
 
@@ -89,7 +89,7 @@ def push_range(message=None, color="blue", domain=None):
     >>> time.sleep(1)
     >>> nvtx.pop_range(domain="cudf")
     """
-    libnvtx_push_range(message, color, domain)
+    libnvtx_push_range(EventAttributes(message, color), domain)
 
 
 def pop_range(domain=None):
