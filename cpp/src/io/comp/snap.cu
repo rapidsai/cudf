@@ -168,7 +168,7 @@ static __device__ uint8_t * StoreCopy(uint8_t *dst, uint8_t *end, uint32_t copy_
 }
 
 /*
- * @brief Returns mask of any thread in the warp that has hash value
+ * @brief Returns mask of any thread in the warp that has a hash value
  * equal to that of the calling thread
  */
 static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
@@ -283,6 +283,7 @@ static __device__ uint32_t Match60(const uint8_t *src1, const uint8_t *src2, uin
 
 /*
  * @brief Snappy compression kernel
+ * See http://github.com/google/snappy/blob/master/format_description.txt
  *
  * @param[in] inputs Source/Destination buffer information per block
  * @param[out] outputs Compression status per block
