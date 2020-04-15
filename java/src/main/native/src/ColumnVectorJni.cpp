@@ -41,7 +41,6 @@
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
-#include <cudf/reshape.hpp>
 
 #include "jni_utils.hpp"
 
@@ -722,23 +721,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNI
     cudf::table_view* string_columns = new cudf::table_view(column_views);
 
     std::unique_ptr<cudf::column> result = cudf::strings::concatenate(*string_columns, *separator_scalar, *narep_scalar);
-    return reinterpret_cast<jlong>(result.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_interleaveColumns(JNIEnv *env, jclass,
-                                                                  jlongArray column_handles) {
-  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
-  try {
-    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
-    std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(), std::back_inserter(column_views),
-      [](auto const& p_column) { return *p_column;}
-    );
-    cudf::table_view* table_view = new cudf::table_view(column_views);
-
-    std::unique_ptr<cudf::column> result = cudf::experimental::interleave_columns(*table_view);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

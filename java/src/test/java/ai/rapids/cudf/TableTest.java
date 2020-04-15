@@ -1050,6 +1050,18 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInterleaveColumns() {
+    try (Table t = new Table.TestBuilder()
+          .column(1,2,3,4,5)
+          .column(6,7,8,9,10)
+          .build();
+         ColumnVector expected = ColumnVector.fromInts(1,6,2,7,3,8,4,9,5,10);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)

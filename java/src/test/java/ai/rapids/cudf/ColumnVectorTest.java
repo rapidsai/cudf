@@ -1099,16 +1099,6 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testInterleaveColumns() {
-    try (ColumnVector a = ColumnVector.fromInts(1,2,3,4,5);
-         ColumnVector b = ColumnVector.fromInts(6,7,8,9,10);
-         ColumnVector c = ColumnVector.fromInts(1,6,2,7,3,8,4,9,5,10);
-         ColumnVector d = ColumnVector.interleaveColumns(new ColumnVector[] { a, b })) {
-      assertColumnsAreEqual(c, d);
-    }
-  }
-
-  @Test
   void testStringConcat() {
     try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
                                                    "g\nH", "IJ\"\u0100\u0101\u0500\u0501",

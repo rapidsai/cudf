@@ -1763,37 +1763,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Interleave an array of columns into a single column.
-   *
-   * Example:
-   * ```
-   * input  = [[A1, A2, A3], [B1, B2, B3]]
-   * return = [A1, B1, A2, B2, A3, B3]
-   * ```
-   *
-   * @param columns Columns to interleave.
-   *
-   * @return The interleaved columns as a single column
-   */
-  public static ColumnVector interleaveColumns(ColumnVector[] columns) {
-    assert columns.length >= 2 : ".interleaveColumns() operation requires at least 2 columns";
-    long size = columns[0].getRowCount();
-    long[] column_views = new long[columns.length];
-    long deviceMemorySizeEstimate = 0;
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
-      column_views[i] = columns[i].getNativeView();
-      deviceMemorySizeEstimate += columns[i].getDeviceMemorySize();
-    }
-
-    try (DevicePrediction prediction = new DevicePrediction(deviceMemorySizeEstimate, "interleaveColumns")) {
-      return new ColumnVector(interleaveColumns(column_views));
-    }
-  }
-
-  /**
    * Locates the starting index of the first instance of the given string in each row of a column.
    * 0 indexing, returns -1 if the substring is not found. Overloading stringLocate to support
    * default values for start (0) and end index.
@@ -2287,8 +2256,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         by the stringConcatenate method.
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
-
-  private static native long interleaveColumns(long[] columnViews);
 
   private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
 
