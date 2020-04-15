@@ -45,6 +45,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
@@ -88,6 +89,7 @@ struct column_to_strings_fn
   //instead of column-wise; might be faster
   //
   //Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr, stream) is declared and defined in combine.cu);
+  //Possible solution: declare `extern`, or just declare a prototype inside `namespace cudf::strings::detail`;
 
   //bools:
   //
@@ -319,6 +321,8 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
   //(2) the calling member function to be public;
   //(otherwise known compiler error)
   //
+  //extract row sizes in bytes from the offsets:
+  //
   auto exec = rmm::exec_policy(stream);
   thrust::transform(exec->on(stream),
                     thrust::make_counting_iterator<size_type>(0), thrust::make_counting_iterator<size_type>(num_offsets),
@@ -326,7 +330,64 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
                     [ptr_all_bytes, total_num_bytes, num_offsets] __device__ (auto row_index) {
                       return row_index < num_offsets-1 ? ptr_all_bytes[row_index+1] - ptr_all_bytes[row_index] : total_num_bytes - ptr_all_bytes[row_index]; 
                     });
-     
+
+  //copy offsets to host:
+  //
+  thrust::host_vector<size_type> h_offsets(num_offsets);
+  CUDA_TRY(cudaMemcpyAsync(h_offsets.data(), pair_buff_offsets.second.data().get(), 
+                           num_offsets*sizeof(size_type), cudaMemcpyDeviceToHost,
+                           stream));
+
+  //copy sizes to host:
+  //
+  thrust::host_vector<size_type> h_row_sizes(num_rows);
+  CUDA_TRY(cudaMemcpyAsync(h_row_sizes.data(), d_row_sizes.data().get(), 
+                           num_rows*sizeof(size_type), cudaMemcpyDeviceToHost,
+                           stream));
+
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  if (out_sink_->supports_device_write()) {
+    //host algorithm call, but the underlying call
+    //is a device_write taking a device buffer;
+    //
+    thrust::transform(thrust::host,
+                      h_offsets.begin(), h_offsets.end(),
+                      h_row_sizes.begin(),
+                      thrust::make_discard_iterator(),//discard output
+                      [&sink = out_sink_, ptr_all_bytes, stream] (size_type offset_indx, size_type row_sz) mutable {
+                        sink->device_write(ptr_all_bytes + offset_indx,
+                                           row_sz,
+                                           stream);
+                        return 0;//discarded (but necessary)
+                      });
+  }
+#if 0
+  else {
+    //copy the bytes to host, too:
+    //
+    thrust::host_vector<char> h_bytes(total_num_bytes);
+    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(), ptr_all_bytes, 
+                             total_num_bytes*sizeof(char),
+                             cudaMemcpyDeviceToHost,
+                             stream));
+
+    CUDA_TRY(cudaStreamSynchronize(stream));
+
+    //host algorithm call, where the underlying call
+    //is also host_write taking a host buffer;
+    //
+    thrust::transform(thrust::host,
+                      h_offsets.begin(), h_offsets.end(),
+                      h_row_sizes.begin(),
+                      thrust::make_discard_iterator(),//discard output
+                      [&sink = out_sink_, h_bytes, stream] (size_type offset_indx, size_type row_sz) mutable {
+                        sink->host_write(h_bytes.data() + offset_indx,
+                                           row_sz);
+                        return 0;//discarded (but necessary)
+                      });
+  }
+#endif
 }
 
   
@@ -368,7 +429,7 @@ void writer::impl::write(table_view const &table,
                            d_splits.begin(), d_splits.end(),
                            d_splits.begin());
 
-    CUDA_TRY(cudaMemcpyAsync(d_splits.data().get(), splits.data(),
+    CUDA_TRY(cudaMemcpyAsync(splits.data(), d_splits.data().get(), 
                              n_chunks*sizeof(size_type), cudaMemcpyDeviceToHost,
                              stream));
 
