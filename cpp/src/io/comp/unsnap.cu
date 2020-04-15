@@ -717,10 +717,11 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
  * @brief Snappy decompression kernel
  * See http://github.com/google/snappy/blob/master/format_description.txt
  *
+ * blockDim {128,1,1}
+ *
  * @param[in] inputs Source & destination information per block
  * @param[out] outputs Decompression status per block
  **/
-// blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
 {
