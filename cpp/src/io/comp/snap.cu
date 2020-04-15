@@ -285,11 +285,12 @@ static __device__ uint32_t Match60(const uint8_t *src1, const uint8_t *src2, uin
  * @brief Snappy compression kernel
  * See http://github.com/google/snappy/blob/master/format_description.txt
  *
+ * blockDim {128,1,1}
+ *
  * @param[in] inputs Source/Destination buffer information per block
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
  **/
-// blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
 {
