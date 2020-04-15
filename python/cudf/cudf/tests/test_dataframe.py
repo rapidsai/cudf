@@ -1461,32 +1461,88 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize(
-    "func",
+    "data",
     [
-        lambda df: df.count(),
-        lambda df: df.min(),
-        lambda df: df.max(),
-        lambda df: df.sum(),
-        lambda df: df.product(),
-        lambda df: df.cummin(),
-        lambda df: df.cummax(),
-        lambda df: df.cumsum(),
-        lambda df: df.cumprod(),
-        lambda df: df.mean(),
-        lambda df: df.sum(),
-        lambda df: df.max(),
-        lambda df: df.std(ddof=1),
-        lambda df: df.var(ddof=1),
-        lambda df: df.std(ddof=2),
-        lambda df: df.var(ddof=2),
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
     ],
 )
-def test_dataframe_reductions(func):
-    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
-    print(func(pdf))
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df, **kwargs: df.min(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.product(**kwargs),
+        lambda df, **kwargs: df.cummin(**kwargs),
+        lambda df, **kwargs: df.cummax(**kwargs),
+        lambda df, **kwargs: df.cumsum(**kwargs),
+        lambda df, **kwargs: df.cumprod(**kwargs),
+        lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.std(ddof=1, **kwargs),
+        lambda df, **kwargs: df.var(ddof=1, **kwargs),
+        lambda df, **kwargs: df.std(ddof=2, **kwargs),
+        lambda df, **kwargs: df.var(ddof=2, **kwargs),
+        lambda df, **kwargs: df.kurt(**kwargs),
+        lambda df, **kwargs: df.skew(**kwargs),
+        lambda df, **kwargs: df.all(**kwargs),
+        lambda df, **kwargs: df.any(**kwargs),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False, None])
+def test_dataframe_reductions(data, func, skipna):
+    pdf = pd.DataFrame(data=data)
+    print(func(pdf, skipna=skipna))
     gdf = DataFrame.from_pandas(pdf)
-    print(func(gdf))
+    print(func(gdf, skipna=skipna))
+    assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
+    ],
+)
+@pytest.mark.parametrize("func", [lambda df: df.count()])
+def test_dataframe_count_reduction(data, func):
+    pdf = pd.DataFrame(data=data)
+    gdf = DataFrame.from_pandas(pdf)
+
     assert_eq(func(pdf), func(gdf))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
+def test_dataframe_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.DataFrame(data)
+    gsr = DataFrame(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2980,6 +3036,11 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.all(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.all(level="a")
 
     got = gdata.all()
     expected = pdata.all()
@@ -3024,9 +3085,14 @@ def test_any(data):
 
         # test bool_only
         if pdata["b"].dtype == "bool":
-            got = gdata.all(bool_only=True)
-            expected = pdata.all(bool_only=True)
+            got = gdata.any(bool_only=True)
+            expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.any(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.any(level="a")
 
     got = gdata.any()
     expected = pdata.any()

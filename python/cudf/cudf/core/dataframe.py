@@ -3671,40 +3671,454 @@ class DataFrame(Frame):
         coerced = filtered.astype(common_dtype)
         return coerced
 
-    def count(self, **kwargs):
-        return self._apply_support_method("count", **kwargs)
-
-    def min(self, axis=0, **kwargs):
-        return self._apply_support_method("min", axis=axis, **kwargs)
-
-    def max(self, axis=0, **kwargs):
-        return self._apply_support_method("max", axis=axis, **kwargs)
-
-    def sum(self, axis=0, **kwargs):
-        return self._apply_support_method("sum", axis=axis, **kwargs)
-
-    def product(self, axis=0, **kwargs):
-        return self._apply_support_method("prod", axis=axis, **kwargs)
-
-    def prod(self, axis=0, **kwargs):
-        """Alias for product.
+    def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
-        return self.product(axis=axis, **kwargs)
+        Count non-NA cells for each column or row.
 
-    def cummin(self, **kwargs):
-        return self._apply_support_method("cummin", **kwargs)
+        The values None, NaN, NaT are considered NA.
 
-    def cummax(self, **kwargs):
-        return self._apply_support_method("cummax", **kwargs)
+        Returns
+        -------
+        Series
+            For each column/row the number of non-NA/null entries.
 
-    def cumsum(self, **kwargs):
-        return self._apply_support_method("cumsum", **kwargs)
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
 
-    def cumprod(self, **kwargs):
-        return self._apply_support_method("cumprod", **kwargs)
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> df = cudf.DataFrame({"Person":
+                   ["John", "Myla", "Lewis", "John", "Myla"],
+                   "Age": [24., np.nan, 21., 33, 26],
+                   "Single": [False, True, True, True, False]})
+        >>> df.count()
+        Person    5
+        Age       4
+        Single    5
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "count",
+            axis=axis,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
-    def mean(self, axis=0, numeric_only=None, **kwargs):
-        """Return the mean of the values for the requested axis.
+    def min(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return the minimum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.min()
+        a    1
+        b    7
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "min",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def max(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return the maximum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.max()
+        a     4
+        b    10
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "max",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def sum(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return sum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.sum()
+        a    10
+        b    34
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def product(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return product of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.product()
+        a      24
+        b    5040
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "prod",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def prod(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return product of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.prod()
+        a      24
+        b    5040
+        dtype: int64
+        """
+        return self.product(
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def cummin(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative minimum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummin()
+           a  b
+        0  1  7
+        1  1  7
+        2  1  7
+        3  1  7
+        """
+        return self._apply_support_method(
+            "cummin", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cummax(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative maximum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummax()
+           a   b
+        0  1   7
+        1  2   8
+        2  3   9
+        3  4  10
+        """
+        return self._apply_support_method(
+            "cummax", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cumsum(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative sum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumsum()
+            a   b
+        0   1   7
+        1   3  15
+        2   6  24
+        3  10  34
+        """
+        return self._apply_support_method(
+            "cumsum", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cumprod(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative product of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumprod()
+            a     b
+        0   1     7
+        1   2    56
+        2   6   504
+        3  24  5040
+        """
+        return self._apply_support_method(
+            "cumprod", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def mean(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """
+        Return the mean of the values for the requested axis.
         Parameters
         ----------
         axis : {index (0), columns (1)}
@@ -3723,27 +4137,170 @@ class DataFrame(Frame):
         Returns
         -------
         mean : Series or DataFrame (if level specified)
-        """
-        return self._apply_support_method("mean", axis=axis, **kwargs)
 
-    def std(self, axis=0, ddof=1, **kwargs):
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.mean()
+        a    2.5
+        b    8.5
+        dtype: float64
+        """
         return self._apply_support_method(
-            "std", axis=axis, ddof=ddof, **kwargs
+            "mean",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
         )
 
-    def var(self, axis=0, ddof=1, **kwargs):
+    def std(
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        ddof=1,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return sample standard deviation of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using
+        the ddof argument
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations
+            is N - ddof, where N represents the number of elements.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.std()
+        a    1.290994
+        b    1.290994
+        dtype: float64
+        """
+
         return self._apply_support_method(
-            "var", axis=axis, ddof=ddof, **kwargs
+            "std",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def var(
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        ddof=1,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return unbiased variance of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using the
+        ddof argument
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations is
+            N - ddof, where N represents the number of elements.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.var()
+        a    1.666667
+        b    1.666667
+        dtype: float64
+        """
+        return self._apply_support_method(
+            "var",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
         )
 
     def kurtosis(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
+        Return Fisher's unbiased kurtosis of a sample.
+
+        Kurtosis obtained using Fisher’s definition of
+        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.kurt()
+        a   -1.2
+        b   -1.2
+        dtype: float64
         """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -3758,10 +4315,38 @@ class DataFrame(Frame):
     # Alias for kurtosis.
     kurt = kurtosis
 
-    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def skew(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """
+        Return unbiased Fisher-Pearson skew of a sample.
+
+        Parameters
+        ----------
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
+        >>> df.skew()
+        a    0.00000
+        b   -0.37037
+        dtype: float64
+        """
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -3770,21 +4355,106 @@ class DataFrame(Frame):
             skipna=skipna,
             level=level,
             numeric_only=numeric_only,
+            **kwargs,
         )
 
-    def all(self, bool_only=None, **kwargs):
-        if bool_only:
-            return self.select_dtypes(include="bool")._apply_support_method(
-                "all", **kwargs
-            )
-        return self._apply_support_method("all", **kwargs)
+    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+        """
+        Return whether all elements are True in DataFrame.
 
-    def any(self, bool_only=None, **kwargs):
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be True, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.all()
+        a     True
+        b    False
+        dtype: bool
+        """
         if bool_only:
             return self.select_dtypes(include="bool")._apply_support_method(
-                "any", **kwargs
+                "all",
+                axis=axis,
+                bool_only=bool_only,
+                skipna=skipna,
+                level=level,
+                **kwargs,
             )
-        return self._apply_support_method("any", **kwargs)
+        return self._apply_support_method(
+            "all",
+            axis=axis,
+            bool_only=bool_only,
+            skipna=skipna,
+            level=level,
+            **kwargs,
+        )
+
+    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+        """
+        Return whether any elements is True in DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be False, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.any()
+        a    True
+        b    True
+        dtype: bool
+        """
+        if bool_only:
+            return self.select_dtypes(include="bool")._apply_support_method(
+                "any",
+                axis=axis,
+                bool_only=bool_only,
+                skipna=skipna,
+                level=level,
+                **kwargs,
+            )
+        return self._apply_support_method(
+            "any",
+            axis=axis,
+            bool_only=bool_only,
+            skipna=skipna,
+            level=level,
+            **kwargs,
+        )
 
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
@@ -3809,13 +4479,37 @@ class DataFrame(Frame):
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
             if skipna not in (None, True, 1):
-                msg = (
-                    "Row-wise operations do not current support skipna=False."
-                )
-                raise ValueError(msg)
+                msg = "Row-wise operations currently do not \
+                    support `skipna=False`."
+                raise NotImplementedError(msg)
+
+            level = kwargs.pop("level", None)
+            if level not in (None,):
+                msg = "Row-wise operations currently do not \
+                    support `level`."
+                raise NotImplementedError(msg)
+
+            numeric_only = kwargs.pop("numeric_only", None)
+            if numeric_only not in (None, True):
+                msg = "Row-wise operations currently do not \
+                    support `numeric_only=False`."
+                raise NotImplementedError(msg)
+
+            min_count = kwargs.pop("min_count", None)
+            if min_count not in (None, 0):
+                msg = "Row-wise operations currently do not \
+                        support `min_count`."
+                raise NotImplementedError(msg)
+
+            bool_only = kwargs.pop("bool_only", None)
+            if bool_only not in (None, True):
+                msg = "Row-wise operations currently do not \
+                        support `bool_only`."
+                raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op()
             arr = cupy.asarray(prepared.as_gpu_matrix())
+
             result = getattr(arr, method)(axis=1, **kwargs)
 
             if len(result.shape) == 1:
