@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-/* @file gpuinflate.cu
+/** @file gpuinflate.cu
 
   Derived from zlib's contrib/puff.c, original copyright notice below
 
-*/
+**/
 
 /*
 Copyright (C) 2002-2013 Mark Adler, all rights reserved
@@ -60,18 +60,18 @@ namespace io {
 #define LOG2LENLUT  10
 #define LOG2DISTLUT 8
 
-/*
+/**
  * @brief Intermediate arrays for building huffman tables
- */
+ **/
 struct scratch_arr
 {
     int16_t lengths[MAXCODES];  // descriptor code lengths
     int16_t offs[MAXBITS + 1];  // offset in symbol table for each length (scratch)
 };
 
-/*
+/**
  * @brief Huffman LUTs for length and distance codes
- */
+ **/
 struct lut_arr
 {
     int32_t lenlut[1 << LOG2LENLUT];    // LUT for length decoding
@@ -79,15 +79,15 @@ struct lut_arr
 };
 
 
-// 4 batches of 32 symbols
+/// 4 batches of 32 symbols
 #define LOG2_BATCH_COUNT   2 // 1..5
 #define LOG2_BATCH_SIZE    5
 #define BATCH_COUNT        (1 << LOG2_BATCH_COUNT)
 #define BATCH_SIZE         (1 << LOG2_BATCH_SIZE)
 
-/*
+/**
  * @brief Inter-warp communication queue
- */
+ **/
 struct xwarp_s
 {
     int32_t batch_len[BATCH_COUNT]; //< Length of each batch - <0:end, 0:not ready, >0:symbol count
@@ -104,7 +104,7 @@ struct xwarp_s
 #define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)
 
 #define PREFETCH_ADDR32(q, p)    (uint32_t *)(&q.pref_data[(PREFETCH_SIZE - 4) & (size_t)(p)])
-// @brief Prefetcher state
+/// @brief Prefetcher state
 struct prefetch_queue_s
 {
     const uint8_t *cur_p; // Prefetch location
@@ -114,9 +114,9 @@ struct prefetch_queue_s
 
 #endif // ENABLE_PREFETCH
 
-/*
+/**
  * @brief Inflate decompressor state
- */
+ **/
 struct inflate_state_s {
     // output state
     uint8_t *out;           //< output buffer
@@ -198,7 +198,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
 }
 
 
-/*
+/**
  * @brief Decode a code from the stream s using huffman table {symbols,counts}.
  * Return the symbol or a negative value if there is an error.
  * If all of the lengths are zero, i.e. an empty code, or if the code is 
@@ -221,7 +221,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  *
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
- */
+ **/
 __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
 {
     unsigned int len;            // current number of bits in code
@@ -248,7 +248,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
 }
 
 
-/*
+/**
  * @brief Given the list of code lengths length[0..n-1] representing a canonical
  * Huffman code for n symbols, construct the tables required to decode those
  * codes.  Those tables are the number of codes of each length, and the symbols
@@ -279,7 +279,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  *
  * - Within a given code length, the symbols are kept in ascending order for
  *   the code bits definition.
- */
+ **/
 __device__ int construct(inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
 {
     int symbol;         // current symbol when stepping through length[]
@@ -321,11 +321,11 @@ __device__ int construct(inflate_state_s *s, int16_t *counts, int16_t *symbols, 
 
 
 
-// permutation of code length codes
+/// permutation of code length codes
 static const __device__ __constant__ uint8_t g_code_order[19 + 1] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15, 0xff };
 
 
-// Dynamic block (custom huffman tables)
+/// Dynamic block (custom huffman tables)
 __device__ int init_dynamic(inflate_state_s *s)
 {
     int nlen, ndist, ncode;             /* number of lengths in descriptor */
@@ -399,7 +399,7 @@ __device__ int init_dynamic(inflate_state_s *s)
 
 
 
-/*
+/**
  * @brief Initializes a fixed codes block.
  *
  * Format notes:
@@ -422,7 +422,7 @@ __device__ int init_dynamic(inflate_state_s *s)
  *   in an error if received.  Since all of the distance codes are the same
  *   length, this can be implemented as an incomplete code.  Then the invalid
  *   codes are detected while decoding.
- */
+ **/
 __device__ int init_fixed(inflate_state_s *s)
 {
     int16_t *lengths = s->u.scratch.lengths;
@@ -450,7 +450,7 @@ __device__ int init_fixed(inflate_state_s *s)
 }
 
 
-/*
+/**
  * @brief Decode literal/length and distance codes until an end-of-block code.
  *
  * Format notes:
@@ -504,9 +504,9 @@ __device__ int init_fixed(inflate_state_s *s)
  *   defined for overlapped arrays.  You should not use memmove() or bcopy()
  *   since though their behavior -is- defined for overlapping arrays, it is
  *   defined to do the wrong thing in this case.
- */
+ **/
 
-// permutation of code length codes
+/// permutation of code length codes
 static const __device__ __constant__ uint16_t g_lens[29] = { // Size base for length codes 257..285
     3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
     35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
@@ -527,7 +527,7 @@ static const __device__ __constant__ uint16_t g_dext[30] = { // Extra bits for d
 
 
 
-// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
+/// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
 __device__ void decode_symbols(inflate_state_s *s)
 {
     uint32_t bitpos = s->bitpos;
@@ -730,8 +730,10 @@ __device__ void decode_symbols(inflate_state_s *s)
 }
 
 
-// @brief Build lookup tables for faster decode
-// LUT format is symbols*16+length
+/**
+ * @brief Build lookup tables for faster decode
+ * LUT format is symbols*16+length
+ **/
 __device__ void init_length_lut(inflate_state_s *s, int t)
 {
     int32_t *lut = s->u.lut.lenlut;
@@ -783,8 +785,10 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
 }
 
 
-// @brief Build lookup tables for faster decode of distance symbol
-// LUT format is symbols*16+length
+/**
+ * @brief Build lookup tables for faster decode of distance symbol
+ * LUT format is symbols*16+length
+ **/
 __device__ void init_distance_lut(inflate_state_s *s, int t)
 {
     int32_t *lut = s->u.lut.distlut;
@@ -832,7 +836,7 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
 }
 
 
-// @brief WARP1: process symbols and output uncompressed stream
+/// @brief WARP1: process symbols and output uncompressed stream
 __device__ void process_symbols(inflate_state_s *s, int t)
 {
     uint8_t *out = s->out;
@@ -921,7 +925,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
 }
 
 
-/*
+/**
  * @brief Initializes a stored block.
  *
  * Format notes:
@@ -937,7 +941,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
  *
  * - A stored block can have zero length.  This is sometimes used to byte-align
  *   subsets of the compressed data for random access or partial recovery.
- */
+ **/
 __device__ int init_stored(inflate_state_s *s)
 {
     uint32_t len, nlen;   // length of stored block
@@ -969,7 +973,7 @@ __device__ int init_stored(inflate_state_s *s)
 }
 
 
-// Copy bytes from stored block to destination
+/// Copy bytes from stored block to destination
 __device__ void copy_stored(inflate_state_s *s, int t)
 {
     int len = s->stored_blk_len;
@@ -1092,20 +1096,20 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 }
 #endif // ENABLE_PREFETCH
 
-/*
+/**
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952
- */
+ **/
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
 #define GZ_FLG_FNAME    0x08    // Original file name present
 #define GZ_FLG_FCOMMENT 0x10    // Comment present
 
-/*
+/**
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
- */
+ **/
 __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 {
     int hdr_len = -1;
@@ -1152,13 +1156,13 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 }
 
 
-/*
+/**
  * @brief INFLATE decompression kernel
  *
  * @param inputs Source and destination buffer information per block
  * @param outputs Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
- */
+ **/
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(NUMTHREADS)
 inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
@@ -1287,11 +1291,11 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
 }
 
 
-/*
+/**
  * @brief Copy a group of buffers
  *
  * @param inputs Source and destination information per block
- */
+ **/
 // blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
 copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
