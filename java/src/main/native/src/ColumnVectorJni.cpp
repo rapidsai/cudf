@@ -727,7 +727,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNI
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_interleaveColumns(JNIEnv *env, jobject j_object,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_interleaveColumns(JNIEnv *env, jclass,
                                                                   jlongArray column_handles) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   try {
