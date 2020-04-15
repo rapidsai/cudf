@@ -4481,25 +4481,25 @@ class DataFrame(Frame):
             if skipna not in (None, True, 1):
                 msg = "Row-wise operations currently do not \
                     support `skipna=False`."
-                raise ValueError(msg)
+                raise NotImplementedError(msg)
 
             level = kwargs.pop("level", None)
             if level not in (None,):
                 msg = "Row-wise operations currently do not \
                     support `level`."
-                raise ValueError(msg)
+                raise NotImplementedError(msg)
 
             numeric_only = kwargs.pop("numeric_only", None)
             if numeric_only not in (None, True):
                 msg = "Row-wise operations currently do not \
                     support `numeric_only=False`."
-                raise ValueError(msg)
+                raise NotImplementedError(msg)
 
             min_count = kwargs.pop("min_count", None)
             if min_count not in (None, 0):
                 msg = "Row-wise operations currently do not \
                         support `min_count`."
-                raise ValueError(msg)
+                raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op()
             arr = cupy.asarray(prepared.as_gpu_matrix())
