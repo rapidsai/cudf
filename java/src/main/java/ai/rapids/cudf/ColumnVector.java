@@ -1762,6 +1762,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Interleave an array of columns into a single column.
+   *
+   * Example:
+   * ```
+   * input  = [[A1, A2, A3], [B1, B2, B3]]
+   * return = [A1, B1, A2, B2, A3, B3]
+   * ```
+   *
+   * @param columns Columns to interleave.
+   *
+   * @return The interleaved columns as a single column
+   */
   public static ColumnVector interleaveColumns(ColumnVector[] columns) {
     assert columns.length >= 2 : ".interleaveColumns() operation requires at least 2 columns";
     long size = columns[0].getRowCount();
