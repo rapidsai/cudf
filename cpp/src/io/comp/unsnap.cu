@@ -32,31 +32,31 @@ namespace io {
 
 #define LOG_CYCLECOUNT      0
 
-/*
+/**
  * @brief Describes a single LZ77 symbol (single entry in batch)
- */
+ **/
 struct unsnap_batch_s
 {
     int32_t len;        // 1..64 = Number of bytes
     uint32_t offset;    // copy distance if greater than zero or negative of literal offset in byte stream
 };
 
-/*
+/**
  * @brief Queue structure used to exchange data between warps
- */
+ **/
 struct unsnap_queue_s
 {
-    uint32_t prefetch_wrpos;            //< Prefetcher write position
-    uint32_t prefetch_rdpos;            //< Prefetch consumer read position
-    int32_t prefetch_end;               //< Prefetch enable flag (0 stops prefetcher)
-    int32_t batch_len[BATCH_COUNT];     //< Length of each batch - <0:end, 0:not ready, >0:symbol count
-    unsnap_batch_s batch[BATCH_COUNT * BATCH_SIZE]; //< LZ77 batch data
-    uint8_t buf[PREFETCH_SIZE];         //< Prefetch buffer
+    uint32_t prefetch_wrpos;            ///< Prefetcher write position
+    uint32_t prefetch_rdpos;            ///< Prefetch consumer read position
+    int32_t prefetch_end;               ///< Prefetch enable flag (0 stops prefetcher)
+    int32_t batch_len[BATCH_COUNT];     ///< Length of each batch - <0:end, 0:not ready, >0:symbol count
+    unsnap_batch_s batch[BATCH_COUNT * BATCH_SIZE]; ///< LZ77 batch data
+    uint8_t buf[PREFETCH_SIZE];         ///< Prefetch buffer
 };
 
-/*
+/**
  * @brief snappy decompression state
- */
+ **/
 struct unsnap_state_s
 {
     const uint8_t *base;        //< base ptr of compressed stream
@@ -69,12 +69,12 @@ struct unsnap_state_s
     gpu_inflate_input_s in;     //< input parameters for current block
 };
 
-/*
+/**
  * @brief prefetches data for the symbol decoding stage
  *
  * @param s decompression state
  * @param t warp lane id
- */
+ **/
 __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
 {
     const uint8_t *base = s->base;
@@ -119,7 +119,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
     } while (blen > 0);
 }
 
-/*
+/**
  * @brief Lookup table for get_len3_mask()
  *
  * Indexed by a 10-bit pattern, contains the corresponding 4-bit mask of
@@ -138,7 +138,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
  *       k_len3lut[k] = v | (n << 4);
  *   }
  *
- */
+ **/
 static const uint8_t __device__ __constant__ k_len3lut[1 << 10] =
 {
     0x80,0x91,0x80,0x91,0x92,0x91,0x92,0x91,0x80,0xa3,0x80,0xa3,0x92,0xa3,0x92,0xa3,
@@ -207,12 +207,12 @@ static const uint8_t __device__ __constant__ k_len3lut[1 << 10] =
     0xac,0xbd,0xac,0xbd,0xbe,0xbd,0xbe,0xbd,0xac,0xcf,0xac,0xcf,0xbe,0xcf,0xbe,0xcf
 };
 
-/*
+/**
  * @brief Returns a 32-bit mask where 1 means 3-byte code length and 0 means 2-byte
  * code length, given an input mask of up to 96 bits.
  *
  * Implemented by doing 8 consecutive lookups, building the result 4-bit at a time
- */
+ **/
 inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
 {
     uint32_t m, v, m4, n;
@@ -253,11 +253,11 @@ inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
 }
 
 
-/*
+/**
  * @brief Returns a 32-bit mask where each 2-bit pair contains the symbol length
  * minus 2, given two input masks each containing bit0 or bit1 of the corresponding
  * code length minus 2 for up to 32 bytes
- */
+ **/
 inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
 {
     uint32_t m;
@@ -278,12 +278,12 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
 
 #define READ_BYTE(pos)  s->q.buf[(pos) & (PREFETCH_SIZE-1)]
 
-/*
+/**
  * @brief decode symbols and output LZ77 batches (single-warp)
  *
  * @param s decompression state
  * @param t warp lane id
- */
+ **/
 __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
 {
     uint32_t cur = 0;
@@ -541,14 +541,14 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     }
 }
 
-/* 
+/**
  * @brief process LZ77 symbols and output uncompressed stream
  *
  * @param s decompression state
  * @param t thread id within participating group (lane id)
  *
  * NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that would result in out-of-bounds accesses)
- */
+ **/
 __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
 {
     const uint8_t *literal_base = s->base;
@@ -713,13 +713,13 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
     } while (1);
 }
 
-/*
+/**
  * @brief Snappy decompression kernel
  * See http://github.com/google/snappy/blob/master/format_description.txt
  *
  * @param[in] inputs Source & destination information per block
  * @param[out] outputs Decompression status per block
- */
+ **/
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
 unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
