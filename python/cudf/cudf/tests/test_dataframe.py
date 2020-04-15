@@ -1461,31 +1461,53 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize(
-    "func",
+    "data",
     [
-        lambda df: df.count(),
-        lambda df: df.min(),
-        lambda df: df.max(),
-        lambda df: df.sum(),
-        lambda df: df.product(),
-        lambda df: df.cummin(),
-        lambda df: df.cummax(),
-        lambda df: df.cumsum(),
-        lambda df: df.cumprod(),
-        lambda df: df.mean(),
-        lambda df: df.sum(),
-        lambda df: df.max(),
-        lambda df: df.std(ddof=1),
-        lambda df: df.var(ddof=1),
-        lambda df: df.std(ddof=2),
-        lambda df: df.var(ddof=2),
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
     ],
 )
-def test_dataframe_reductions(func):
-    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
-    print(func(pdf))
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df, **kwargs: df.min(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.product(**kwargs),
+        lambda df, **kwargs: df.cummin(**kwargs),
+        lambda df, **kwargs: df.cummax(**kwargs),
+        lambda df, **kwargs: df.cumsum(**kwargs),
+        lambda df, **kwargs: df.cumprod(**kwargs),
+        lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.std(ddof=1, **kwargs),
+        lambda df, **kwargs: df.var(ddof=1, **kwargs),
+        lambda df, **kwargs: df.std(ddof=2, **kwargs),
+        lambda df, **kwargs: df.var(ddof=2, **kwargs),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False])
+def test_dataframe_reductions(data, func, skipna):
+    pdf = pd.DataFrame(data=data)
+    print(func(pdf, skipna=skipna))
     gdf = DataFrame.from_pandas(pdf)
-    print(func(gdf))
+    print(func(gdf, skipna=skipna))
+    assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+    ],
+)
+@pytest.mark.parametrize("func", [lambda df: df.count()])
+def test_dataframe_count_reduction(data, func):
+    pdf = pd.DataFrame(data=data)
+    gdf = DataFrame.from_pandas(pdf)
+
     assert_eq(func(pdf), func(gdf))
 
 
