@@ -1485,6 +1485,10 @@ def gdf(pdf):
         lambda df, **kwargs: df.var(ddof=1, **kwargs),
         lambda df, **kwargs: df.std(ddof=2, **kwargs),
         lambda df, **kwargs: df.var(ddof=2, **kwargs),
+        lambda df, **kwargs: df.kurt(**kwargs),
+        lambda df, **kwargs: df.skew(**kwargs),
+        lambda df, **kwargs: df.all(**kwargs),
+        lambda df, **kwargs: df.any(**kwargs),
     ],
 )
 @pytest.mark.parametrize("skipna", [True, False])
@@ -1509,6 +1513,27 @@ def test_dataframe_count_reduction(data, func):
     gdf = DataFrame.from_pandas(pdf)
 
     assert_eq(func(pdf), func(gdf))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
+def test_dataframe_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.DataFrame(data)
+    gsr = DataFrame(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
