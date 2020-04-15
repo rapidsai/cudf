@@ -20,9 +20,9 @@
 namespace cudf {
 namespace io {
 
-/*
+/**
  * @brief shared state for statistics gather kernel
- */
+ **/
 struct stats_state_s
 {
     stats_column_desc col;   ///< Column information
@@ -33,9 +33,9 @@ struct stats_state_s
     volatile statistics_val warp_sum[32]; ///< Sum reduction scratch
 };
 
-/*
+/**
  * @brief shared state for statistics merge kernel
- */
+ **/
 struct merge_state_s
 {
     stats_column_desc col;        ///< Column information
@@ -48,9 +48,9 @@ struct merge_state_s
     volatile uint32_t warp_nulls[32]; ///< Nulls reduction scratch
 };
 
-/*
+/**
  * Warp-wide Min reduction for integer types
- */
+ **/
 inline __device__ int64_t WarpReduceMinInt(int64_t vmin)
 {
     int64_t v = SHFL_XOR(vmin, 1);
@@ -82,9 +82,9 @@ inline __device__ int64_t WarpReduceMaxInt(int64_t vmax)
     return max(vmax, v);
 }
 
-/*
+/**
  * Warp-wide Min reduction for floating point types
- */
+ **/
 inline __device__ double WarpReduceMinFloat(double vmin)
 {
     double v = SHFL_XOR(vmin, 1);
@@ -99,9 +99,9 @@ inline __device__ double WarpReduceMinFloat(double vmin)
     return fmin(vmin, v);
 }
 
-/*
+/**
  * Warp-wide Max reduction for floating point types
- */
+ **/
 inline __device__ double WarpReduceMaxFloat(double vmax)
 {
     double v = SHFL_XOR(vmax, 1);
@@ -116,9 +116,9 @@ inline __device__ double WarpReduceMaxFloat(double vmax)
     return fmax(vmax, v);
 }
 
-/*
+/**
  * Warp-wide Sum reduction for floating point types
- */
+ **/
 inline __device__ double WarpReduceSumFloat(double vsum)
 {
     double v = SHFL_XOR(vsum, 1);
@@ -134,9 +134,9 @@ inline __device__ double WarpReduceSumFloat(double vsum)
     return vsum;
 }
 
-/*
+/**
  * Warp-wide Min reduction for string types
- */
+ **/
 inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
 {
     uint32_t len = SHFL_XOR(lmin, 1);
@@ -172,9 +172,9 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
     return {smin, lmin};
 }
 
-/*
+/**
  * Warp-wide Max reduction for string types
- */
+ **/
 inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
 {
     uint32_t len = SHFL_XOR(lmax, 1);
@@ -210,13 +210,13 @@ inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lm
     return { smax, lmax };
 }
 
-/*
+/**
  * @brief Gather statistics for integer-like columns
  *
  * @param s shared block state
  * @param dtype data type
  * @param t thread id
- */
+ **/
 void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t)
 {
     int64_t vmin = INT64_MAX;
@@ -298,13 +298,13 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
     }
 }
 
-/*
+/**
  * @brief Gather statistics for floating-point columns
  *
  * @param s shared block state
  * @param dtype data type
  * @param t thread id
- */
+ **/
 void __device__ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t)
 {
     double vmin = CUDART_INF;
@@ -376,12 +376,12 @@ struct nvstrdesc_s {
     size_t count;
 };
 
-/*
+/**
  * @brief Gather statistics for string columns
  *
  * @param s shared block state
  * @param t thread id
- */
+ **/
 void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
 {
     uint32_t len_sum = 0;
@@ -497,7 +497,7 @@ gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *grou
     }
 }
 
-/*
+/**
  * @brief Merge statistics for integer-like columns
  *
  * @param s shared block state
@@ -505,7 +505,7 @@ gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *grou
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- */
+ **/
 void __device__ mergeIntColumnStats(merge_state_s *s, statistics_dtype dtype, const statistics_chunk *ck_in, uint32_t num_chunks, uint32_t t)
 {
     int64_t vmin = INT64_MAX;
@@ -574,7 +574,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s, statistics_dtype dtype, co
     }
 }
 
-/*
+/**
  * @brief Merge statistics for floating-point columns
  *
  * @param s shared block state
@@ -582,7 +582,7 @@ void __device__ mergeIntColumnStats(merge_state_s *s, statistics_dtype dtype, co
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- */
+ **/
 void __device__ mergeFloatColumnStats(merge_state_s *s, const statistics_chunk *ck_in, uint32_t num_chunks, uint32_t t)
 {
     double vmin = CUDART_INF;
@@ -656,14 +656,14 @@ void __device__ mergeFloatColumnStats(merge_state_s *s, const statistics_chunk *
     }
 }
 
-/*
+/**
  * @brief Merge statistics for string columns
  *
  * @param s shared block state
  * @param ck_in pointer to first statistic chunk
  * @param num_chunks number of statistic chunks to merge
  * @param t thread id
- */
+ **/
 void __device__ mergeStringColumnStats(merge_state_s *s, const statistics_chunk *ck_in, uint32_t num_chunks, uint32_t t)
 {
     uint32_t len_sum = 0;
