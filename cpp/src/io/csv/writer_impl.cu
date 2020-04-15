@@ -43,6 +43,8 @@
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#include <thrust/transform.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
@@ -276,7 +278,7 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
                                  const table_metadata *metadata,
                                  cudaStream_t stream)
 {
-  //TODO: dump to output
+  //dump to output
   //
   // loop str_row: *str_concat_col {
   //    auto buffer = str_row.buffer();
@@ -290,6 +292,41 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
   //               auto host_buffer = str_row.host_buffer();
   //               sink->host_write(host_buffer_.data(), host_buffer_.size());
   //           });//or...sink->device_write(device_buffer,...); (!!!!!)
+
+  auto pair_buff_offsets = cudf::strings::create_offsets(strings_column, stream, mr_);
+
+  auto num_rows = strings_column.size();
+  decltype(num_rows) num_offsets = pair_buff_offsets.second.size();
+
+  /* cannot use with CUDF_EXPECTS() because it's a macro...
+  std::stringstream ss_err;
+  ss_err << "Unexpected discrepancy between number of offsets: "
+         << num_offsets
+         << " and number of rows: "
+         << num_rows << ".";
+  */
+  CUDF_EXPECTS( num_rows == num_offsets, "Unexpected discrepancy between number of offsets and number of rows.");//ss_err.str().c_str() );
+
+  
+  auto total_num_bytes = pair_buff_offsets.first.size();
+  char const* ptr_all_bytes = pair_buff_offsets.first.data().get();
+
+  rmm::device_vector<size_type> d_row_sizes(num_rows);
+
+  //extended device lambdas called inside a member function
+  //of a nested classes need:
+  //(1) the nested class to be declared public;
+  //(2) the calling member function to be public;
+  //(otherwise known compiler error)
+  //
+  auto exec = rmm::exec_policy(stream);
+  thrust::transform(exec->on(stream),
+                    thrust::make_counting_iterator<size_type>(0), thrust::make_counting_iterator<size_type>(num_offsets),
+                    d_row_sizes.begin(), 
+                    [ptr_all_bytes, total_num_bytes, num_offsets] __device__ (auto row_index) {
+                      return row_index < num_offsets-1 ? ptr_all_bytes[row_index+1] - ptr_all_bytes[row_index] : total_num_bytes - ptr_all_bytes[row_index]; 
+                    });
+     
 }
 
   

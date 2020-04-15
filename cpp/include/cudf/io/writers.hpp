@@ -331,11 +331,12 @@ private:
  * @brief Class to write CSV dataset data into columns.
  */
 class writer {
- private:
+public:
   class impl;
+private:
   std::unique_ptr<impl> _impl;
 
- public:
+public:
   /**
    * @brief Constructor for output to a file.
    *
