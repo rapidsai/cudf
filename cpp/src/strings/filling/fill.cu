@@ -23,7 +23,7 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 namespace cudf

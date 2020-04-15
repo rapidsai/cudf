@@ -32,7 +32,11 @@ R"***(
     using namespace simt::std;
 
     struct Add {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
             return static_cast<TypeOut>(static_cast<TypeCommon>(x) + static_cast<TypeCommon>(y));
@@ -42,7 +46,11 @@ R"***(
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow difference of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
             return static_cast<TypeOut>(static_cast<TypeCommon>(x) - static_cast<TypeCommon>(y));
@@ -52,8 +60,7 @@ R"***(
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
-            return static_cast<TypeOut>(static_cast<TypeCommon>(y) - static_cast<TypeCommon>(x));
+            return Sub::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 

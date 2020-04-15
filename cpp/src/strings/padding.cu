@@ -21,7 +21,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/padding.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 

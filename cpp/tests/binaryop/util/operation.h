@@ -22,6 +22,7 @@
 #include <cmath>
 #include <type_traits>
 #include <cstdint>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace library {
@@ -29,17 +30,29 @@ namespace operation {
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Add {
-        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-            using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
-            return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename OutT = TypeOut,
+                  typename std::enable_if<
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
+                      !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
+        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
+            using TypeCommon = typename std::common_type<OutT, TypeLhs, TypeRhs>::type;
+            return static_cast<OutT>(static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
         }
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-    struct Sub {
-        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-            using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
-            return static_cast<TypeOut>(static_cast<TypeCommon>(lhs) - static_cast<TypeCommon>(rhs));
+    struct Sub {        
+        // Disallow difference of timestamps with any other type (including itself)
+        template <typename OutT = TypeOut,
+                  typename std::enable_if<
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
+                      !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
+        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
+            using TypeCommon = typename std::common_type<OutT, TypeLhs, TypeRhs>::type;
+            return static_cast<OutT>(static_cast<TypeCommon>(lhs) - static_cast<TypeCommon>(rhs));
         }
     };
 
