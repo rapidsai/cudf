@@ -146,14 +146,6 @@ set(SCALAR_TEST_SRC
 
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
-# - bool8 wrapper tests ---------------------------------------------------------------------------
-
-set(BOOLS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/bools_test.cpp")
-
-ConfigureTest(BOOLS_TEST "${BOOLS_TEST_SRC}")
-
-
 ###################################################################################################
 # - timestamps tests ----------------------------------------------------------------------------------
 
@@ -555,7 +547,7 @@ ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 set(NVCATEGORY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/nvcategory/nvcategory_test.cu")
 
-ConfigureTest(NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
+ConfigureTest(LEGACY_NVCATEGORY_TEST "${NVCATEGORY_TEST_SRC}")
 
 ###################################################################################################
 # - DLPack tests ----------------------------------------------------------------------------------
@@ -700,7 +692,7 @@ ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 set(DEVICE_TABLE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/device_table/device_table_tests.cu")
 
-ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
 # - sorted-merge tests ----------------------------------------------------------------------------
@@ -844,29 +836,29 @@ ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/array_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/attrs_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/booleans_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/case_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/chars_types_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/combine_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/concatenate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/contains_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/datetime_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/extract_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/fill_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/findall_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/find_multiple_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/floats_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/hash_string.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/integers_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/ipv4_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/pad_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_regex_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/replace_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/split_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/strip_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/substring_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/translate_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/urls_tests.cpp")
 

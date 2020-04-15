@@ -7,9 +7,12 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4789 Disallow timestamp sum and diffs via binary ops
+- PR #4815 Add JNI total memory allocated API
 
 ## Improvements
 
+- PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
@@ -27,9 +30,11 @@
 - PR #4645 Add Alias for `kurtosis` as `kurt`
 - PR #4668 Add Java bindings for log2/log10 unary ops and log_base binary op
 - PR #4616 Enable different RMM allocation modes in unit tests
+- PR #4520 Fix several single char -> single char case mapping values. Add support for single -> multi char mappings.
 - PR #4700 Expose events and more stream functionality in java
 - PR #4699 Make Java's MemoryBuffer public and add MemoryBuffer.slice
 - PR #4691 Fix compiler argument syntax for ccache
+- PR #3581 Remove `bool8`
 - PR #4692 Add GPU and CUDA validations
 - PR #4705 quantile cython bindings
 - PR #4627 Remove legacy Cython
@@ -41,9 +46,41 @@
 - PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
+- PR #4772 Cleanup `dask_cudf` `to_parquet` and enable `"_metadata"` creation
+- PR #4733 Fix `isin` docs for `DataFrame`, `Series`, `Index`, and add `DataFrame.isin` support
 - PR #4767 Remove linking against `gtest_main` and `gmock_main` in unit tests
 - PR #4660 Port `cudf::partition` api to python/cython
+- PR #4799 Remove null_count() and has_nulls() from column_device_view
 - PR #4778 Remove `scatter_to_tables` from libcudf, cython and python
+- PR #4783 Add support for child columns to mutable_column_device_view
+- PR #4802 Refactor `cudf::transpose` to increase performance.
+- PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
+- PR #4793 Add `cudf._cuda` to setup.py
+- PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
+- PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
+- PR #4816 Remove java API use of deprecated RMM APIs
+- PR #4817 Fix `fixed_point` documentation
+- PR #4840 Add docs for `T`, `empty` & `values`
+- PR #4841 Remove unused `single_lane_block_popc_reduce` function
+- PR #4842 Added Java bindings for titlizing a String column
+- PR #4847 Replace legacy NVTX calls with "standalone" NVTX bindings calls
+- PR #4851 Performance improvements relating to `concat` 
+- PR #4852 Add NVTX range calls to strings and nvtext APIs
+- PR #4849 Update Java bindings to use new NVTX API
+- PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4870 Add chunked parquet file writing from python
+- PR #4865 Add docs and clarify limitations of `applymap`
+- PR #4867 Parquet reader: coalesce adjacent column chunk reads
+- PR #4871 Add in the build information when building the java jar file
+- PR #4869 Expose contiguous table when deserializing from Java
+- PR #4878 Remove obsolete string_from_host utility
+- PR #4873 Prevent mutable_view() from invoking null count
+- PR #4884 Add more NVTX annotations in cuDF Python
+- PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
+- PR #4894 Add annotations for the `.columns` property and setter
+- PR #4905 Get decorated function name as message when annotating
 
 ## Bug Fixes
 
@@ -75,6 +112,7 @@
 - PR #4743 Fix loc issue with Multiindex on DataFrame and Series
 - PR #4725 Fix issue java with not setting GPU on background thread
 - PR #4701 Fix issue related to mixed input types in `as_column`
+- PR #4748 Fix strings::all_characters_of_type to allow verify-types mask
 - PR #4747 Fix random failures of decompression gtests
 - PR #4749 Setting `nan_as_null=True` while creating a column in DataFrame creation
 - PR #4761 Fix issues with `nan_as_null` in certain case
@@ -84,6 +122,32 @@
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
+- PR #4800 Fix dataframe slicing with strides
+- PR #4796 Fix groupby apply for operations that fail on empty groups
+- PR #4801 gitignore `_cuda/*.cpp` files
+- PR #4805 Fix hash_object_dispatch definitions in dask_cudf
+- PR #4813 Fix `GenericIndex` printing
+- PR #4804 Fix issue related `repartition` during hash based repartition
+- PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4826 Move memory resource from RmmTestEnvironment to the custom gtest main() scope
+- PR #4839 Update Java bindings for timestamp cast formatting changes
+- PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4834 Fix bug in transform in handling single line UDFs
+- PR #4857 Change JIT cache default directory to $HOME/.cudf
+- PR #4807 Fix `categories` duplication in `dask_cudf`
+- PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4883 Fix series get/set to match pandas
+- PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
+- PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
+- PR #4838 Fix to support empty inputs to `replace` method
+- PR #4859 JSON reader: fix data type inference for string columns
+- PR #4868 Temporary fix to skip validation on Dask related runs
+- PR #4872 Fix broken column wrapper constructors in merge benchmark
+- PR #4875 Fix cudf::strings::from_integer logic converting min integer to string
+- PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
+- PR #4780 Handle nulls in Statistical column operations
+- PR #4887 Remove `developer.rst` and any links
+- Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
 
 

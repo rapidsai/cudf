@@ -21,19 +21,28 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pwd.h>
 
 namespace cudf {
 namespace jit {
 
-// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$TEMPDIR/cudf_$CUDF_VERSION`.
+// Get the directory in home to use for storing the cache
+boost::filesystem::path get_user_home_cache_dir() {
+  auto home_dir = std::getenv("HOME");
+  if (home_dir != nullptr) {
+    return boost::filesystem::path(home_dir) / ".cudf" / std::string{CUDF_STRINGIFY(CUDF_VERSION)};
+  } else {
+    return boost::filesystem::path();
+  }
+}
+
+// Default `LIBCUDF_KERNEL_CACHE_PATH` to `$HOME/.cudf/$CUDF_VERSION`.
 // This definition can be overridden at compile time by specifying a
 // `-DLIBCUDF_KERNEL_CACHE_PATH=/kernel/cache/path` CMake argument.
 // Use `boost::filesystem` for cross-platform path resolution and dir
 // creation. This path is used in the `getCacheDir()` function below.
 #if !defined(LIBCUDF_KERNEL_CACHE_PATH)
-#define LIBCUDF_KERNEL_CACHE_PATH            \
-  boost::filesystem::temp_directory_path() / \
-    ("cudf_" + std::string{CUDF_STRINGIFY(CUDF_VERSION)})
+#define LIBCUDF_KERNEL_CACHE_PATH  get_user_home_cache_dir()
 #endif
 
 /**
@@ -46,7 +55,9 @@ namespace jit {
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.
  *
- * The default cache directory `$TEMPDIR/cudf_$CUDF_VERSION`.
+ * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
+ * are used and if $HOME is not defined, returns an empty path and file 
+ * caching is not used.
  **/
 boost::filesystem::path getCacheDir() {
   // The environment variable always overrides the
@@ -55,8 +66,10 @@ boost::filesystem::path getCacheDir() {
   auto kernel_cache_path = boost::filesystem::path(
       kernel_cache_path_env != nullptr ? kernel_cache_path_env
                                        : LIBCUDF_KERNEL_CACHE_PATH);
-  // `mkdir -p` the kernel cache path if it doesn't exist
-  boost::filesystem::create_directories(kernel_cache_path);
+  if (not kernel_cache_path.empty()) {
+    // `mkdir -p` the kernel cache path if it doesn't exist
+    boost::filesystem::create_directories(kernel_cache_path);
+  }
   return kernel_cache_path;
 }
 

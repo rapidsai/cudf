@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>

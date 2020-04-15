@@ -22,8 +22,9 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.cuh>
 
 #include <vector>
@@ -146,23 +147,17 @@ struct format_compiler
                 template_string.append(1,ch);
                 continue;
             }
-            if( specifier_lengths.find(ch)==specifier_lengths.end() )
+            if( ch >='0' && ch <= '9' )
             {
-                std::ostringstream message;
-                message << "cuDF failure at: " __FILE__ ":" << __LINE__ << ": ";
-                message << "invalid timestamp specifier: " << ch;
-                throw cudf::logic_error(message.str());
+                CUDF_EXPECTS( *str=='f', "precision not supported for specifier: " + std::string(1,*str) );
+                specifier_lengths[*str] = static_cast<int8_t>(ch-'0');
+                ch = *str++;
+                length--;
             }
+            CUDF_EXPECTS( specifier_lengths.find(ch)!=specifier_lengths.end(),
+                          "invalid format specifier: " + std::string(1,ch) );
 
             int8_t spec_length = specifier_lengths[ch];
-            if( ch=='f' )
-            {
-                // adjust spec_length based on units (default is 6 for micro-seconds)
-                if( units==timestamp_units::ms )
-                    spec_length = 3;
-                else if( units==timestamp_units::ns )
-                    spec_length = 9;
-            }
             items.push_back(format_item::new_specifier(ch,spec_length));
             template_string.append((size_t)spec_length,ch);
         }
@@ -173,8 +168,9 @@ struct format_compiler
     }
 
     // these calls are only valid after compile_to_device is called
-    size_type template_bytes() const { return static_cast<size_type>(template_string.size()); }
-    size_type items_count() const    { return static_cast<size_type>(d_items.size()); }
+    size_type template_bytes() const   { return static_cast<size_type>(template_string.size()); }
+    size_type items_count() const      { return static_cast<size_type>(d_items.size()); }
+    int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
 };
 
 
@@ -186,6 +182,7 @@ struct parse_datetime
     format_item const* d_format_items;
     size_type items_count;
     timestamp_units units;
+    int8_t subsecond_precision;
 
     //
     __device__ int32_t str2int( const char* str, size_type bytes )
@@ -204,7 +201,7 @@ struct parse_datetime
 
     // Walk the format_items to read the datetime string.
     // Returns 0 if all ok.
-    __device__ int parse_into_parts( string_view d_string, int32_t* timeparts )
+    __device__ int parse_into_parts( string_view const& d_string, int32_t* timeparts )
     {
         auto ptr = d_string.data();
         auto length = d_string.size_bytes();
@@ -287,7 +284,7 @@ struct parse_datetime
         return 0;
     }
 
-    __device__ int64_t timestamp_from_parts( int32_t* timeparts, timestamp_units units )
+    __device__ int64_t timestamp_from_parts( int32_t const* timeparts, timestamp_units units )
     {
         auto year = timeparts[TP_YEAR];
         if( units==timestamp_units::years )
@@ -324,11 +321,18 @@ struct parse_datetime
         if( units==timestamp_units::seconds )
             return timestamp;
 
-        auto subsecond = timeparts[TP_SUBSECOND];
+        int64_t powers_of_ten[] = { 1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L };
+        int64_t subsecond = timeparts[TP_SUBSECOND] * powers_of_ten[9-subsecond_precision]; // normalize to nanoseconds
         if( units==timestamp_units::ms )
+        {
             timestamp *= 1000L;
+            subsecond = subsecond / 1000000L;
+        }
         else if( units==timestamp_units::us )
+        {
             timestamp *= 1000000L;
+            subsecond = subsecond / 1000L;
+        }
         else if( units==timestamp_units::ns )
             timestamp *= 1000000000L;
         timestamp += subsecond;
@@ -385,7 +389,7 @@ struct dispatch_to_timestamps_fn
         format_compiler compiler(format.c_str(),units);
         auto d_items = compiler.compile_to_device();
         auto d_results = results_view.data<T>();
-        parse_datetime<T> pfn{d_strings,d_items,compiler.items_count(),units};
+        parse_datetime<T> pfn{d_strings,d_items,compiler.items_count(),units,compiler.subsecond_precision()};
         thrust::transform( rmm::exec_policy(stream)->on(stream),
             thrust::make_counting_iterator<size_type>(0),
             thrust::make_counting_iterator<size_type>(results_view.size()),
@@ -440,6 +444,7 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
                                              std::string const& format,
                                              rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_timestamps( strings, timestamp_type, format, mr );
 }
 
@@ -627,7 +632,7 @@ struct datetime_formatter
         return str;
     }
 
-    __device__ char* format_from_parts( int32_t* timeparts, char* ptr )
+    __device__ char* format_from_parts( int32_t const* timeparts, char* ptr )
     {
         for( size_t idx=0; idx < items_count; ++idx )
         {
@@ -676,8 +681,18 @@ struct datetime_formatter
                     ptr = int2str(ptr,item.length,timeparts[TP_SECOND]);
                     break;
                 case 'f': // sub-second
-                    ptr = int2str(ptr,item.length,timeparts[TP_SUBSECOND]);
+                {
+                    char subsecond_digits[] = "000000000"; // 9 max digits
+                    const int digits = [units=units] {
+                        if( units==timestamp_units::ms ) return 3;
+                        if( units==timestamp_units::us ) return 6;
+                        if( units==timestamp_units::ns ) return 9;
+                        return 0;
+                    }();
+                    int2str( subsecond_digits, digits, timeparts[TP_SUBSECOND] );
+                    ptr = copy_and_increment(ptr,subsecond_digits,item.length);
                     break;
+                }
                 case 'p': // am or pm
                     // 0 = 12am, 12 = 12pm
                     if( timeparts[TP_HOUR] < 12 )
@@ -797,6 +812,7 @@ std::unique_ptr<column> from_timestamps( column_view const& timestamps,
                                          std::string const& format,
                                          rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_timestamps(timestamps, format, mr );
 }
 

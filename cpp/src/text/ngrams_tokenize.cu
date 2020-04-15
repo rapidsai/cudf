@@ -19,8 +19,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.cuh>
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/ngrams_tokenize.hpp>
@@ -246,6 +247,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& 
                                                cudf::string_scalar const& separator,
                                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::ngrams_tokenize( strings, ngrams, delimiter, separator, mr );
 }
 

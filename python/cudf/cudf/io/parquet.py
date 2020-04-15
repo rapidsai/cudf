@@ -3,6 +3,7 @@
 import warnings
 
 import pyarrow.parquet as pq
+from fsspec.core import get_fs_token_paths
 from pyarrow.compat import guid
 
 import cudf
@@ -27,18 +28,24 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     ]
 
 
-def _mkdir_if_not_exists(fs, path):
-    if fs._isfilestore() and not fs.exists(path):
-        try:
-            fs.mkdir(path)
-        except OSError:
-            assert fs.exists(path)
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
 
 
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
 def write_to_dataset(
-    df, root_path, partition_cols=None, fs=None, preserve_index=False, **kwargs
+    df,
+    root_path,
+    partition_cols=None,
+    fs=None,
+    preserve_index=False,
+    return_metadata=False,
+    **kwargs,
 ):
     """Wraps `to_parquet` to write partitioned Parquet datasets.
     For each combination of partition group and value,
@@ -64,12 +71,16 @@ def write_to_dataset(
     partition_cols : list,
         Column names by which to partition the dataset
         Columns are partitioned in the order they are given
+    return_metadata : bool, default False
+        Return parquet metadata for written data. Returned metadata will
+        include the file-path metadata (relative to `root_path`).
     **kwargs : dict,
         kwargs for to_parquet function.
     """
 
-    fs, root_path = pq._get_filesystem_and_path(fs, root_path)
-    _mkdir_if_not_exists(fs, root_path)
+    fs = _ensure_filesystem(fs, root_path)
+    fs.mkdirs(root_path, exist_ok=True)
+    metadata = []
 
     if partition_cols is not None and len(partition_cols) > 0:
 
@@ -88,23 +99,51 @@ def write_to_dataset(
             keys = tuple([sub_df[col].iloc[0] for col in partition_cols])
             if not isinstance(keys, tuple):
                 keys = (keys,)
-            subdir = "/".join(
+            subdir = fs.sep.join(
                 [
                     "{colname}={value}".format(colname=name, value=val)
                     for name, val in zip(partition_cols, keys)
                 ]
             )
-            prefix = "/".join([root_path, subdir])
-            _mkdir_if_not_exists(fs, prefix)
+            prefix = fs.sep.join([root_path, subdir])
+            fs.mkdirs(prefix, exist_ok=True)
             outfile = guid() + ".parquet"
-            full_path = "/".join([prefix, outfile])
+            full_path = fs.sep.join([prefix, outfile])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
-            write_df.to_parquet(full_path, index=preserve_index, **kwargs)
+            if return_metadata:
+                metadata.append(
+                    write_df.to_parquet(
+                        full_path,
+                        index=preserve_index,
+                        metadata_file_path=fs.sep.join([subdir, outfile]),
+                        **kwargs,
+                    )
+                )
+            else:
+                write_df.to_parquet(full_path, index=preserve_index, **kwargs)
+
     else:
         outfile = guid() + ".parquet"
-        full_path = "/".join([root_path, outfile])
-        df.to_parquet(full_path, index=preserve_index, **kwargs)
+        full_path = fs.sep.join([root_path, outfile])
+        if return_metadata:
+            metadata.append(
+                df.to_parquet(
+                    full_path,
+                    index=preserve_index,
+                    metadata_file_path=outfile,
+                    **kwargs,
+                )
+            )
+        else:
+            df.to_parquet(full_path, index=preserve_index, **kwargs)
+
+    if metadata:
+        return (
+            merge_parquet_filemetadata(metadata)
+            if len(metadata) > 1
+            else metadata[0]
+        )
 
 
 @ioutils.doc_read_parquet_metadata()
@@ -210,7 +249,7 @@ def to_parquet(
             index = True
 
         pa_table = df.to_arrow(preserve_index=index)
-        pq.write_to_dataset(
+        return pq.write_to_dataset(
             pa_table, path, partition_cols=partition_cols, *args, **kwargs
         )
 
@@ -220,3 +259,6 @@ def merge_parquet_filemetadata(filemetadata_list):
     """{docstring}"""
 
     return libparquet.merge_filemetadata(filemetadata_list)
+
+
+ParquetWriter = libparquet.ParquetWriter

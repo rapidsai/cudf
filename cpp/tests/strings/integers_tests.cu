@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,17 +25,16 @@
 
 #include <vector>
 #include <string>
-#include <gmock/gmock.h>
 
 
 struct StringsConvertTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsConvertTest, ToInteger)
 {
-    std::vector<const char*> h_strings{ "eee", "1234", nullptr, "", "-9832", "93.24", "765é", "-1.78e+5", "2147483647" };
+    std::vector<const char*> h_strings{ "eee", "1234", nullptr, "", "-9832", "93.24", "765é", "-1.78e+5", "2147483647", "-2147483648" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-    std::vector<int32_t> h_expected{ 0, 1234, 0, 0, -9832, 93, 765, -1, 2147483647 };
+    std::vector<int32_t> h_expected{ 0, 1234, 0, 0, -9832, 93, 765, -1, 2147483647, -2147483648 };
 
     auto strings_view = cudf::strings_column_view(strings);
     auto results = cudf::strings::to_integers(strings_view, cudf::data_type{cudf::INT32} );
@@ -47,14 +46,15 @@ TEST_F(StringsConvertTest, ToInteger)
 
 TEST_F(StringsConvertTest, FromInteger)
 {
-    std::vector<int32_t> h_integers{ 100, 987654321, 0, 0, -12761, 0, 5, -4, 2147483647 };
-    std::vector<const char*> h_expected{ "100", "987654321", nullptr, "0", "-12761", "0", "5", "-4", "2147483647" };
+    int32_t minint = std::numeric_limits<int32_t>::min();
+    int32_t maxint = std::numeric_limits<int32_t>::max();
+    std::vector<int32_t> h_integers{ 100, 987654321, 0, 0, -12761, 0, 5, -4, maxint, minint };
+    std::vector<const char*> h_expected{ "100", "987654321", nullptr, "0", "-12761", "0", "5", "-4", "2147483647", "-2147483648" };
 
     cudf::test::fixed_width_column_wrapper<int32_t> integers( h_integers.begin(), h_integers.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
 
     auto results = cudf::strings::from_integers(integers);
-    //cudf::strings::print(cudf::strings_column_view(*results));
 
     cudf::test::strings_column_wrapper expected( h_expected.begin(), h_expected.end(),
         thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
@@ -76,6 +76,14 @@ TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
     EXPECT_EQ(0,results->size());
 }
 
+TEST_F(StringsConvertTest, EmptyStringsColumn)
+{
+    cudf::test::strings_column_wrapper strings({"", "", ""});
+    auto results = cudf::strings::to_integers( cudf::strings_column_view(strings), cudf::data_type{cudf::INT64});
+    cudf::test::fixed_width_column_wrapper<int64_t> expected( {0,0,0} );
+    cudf::test::expect_columns_equal(results->view(),expected);
+}
+
 template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {};
 
@@ -84,12 +92,13 @@ TYPED_TEST_CASE(StringsIntegerConvertTest, IntegerTypes);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
-    cudf::size_type size = 255;
-    thrust::device_vector<TypeParam> d_integers(size);
-    thrust::sequence( thrust::device, d_integers.begin(), d_integers.end(), -(size/2) );
-    auto integers = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, size);
+    thrust::device_vector<TypeParam> d_integers(255);
+    thrust::sequence( thrust::device, d_integers.begin(), d_integers.end(), -(TypeParam)(d_integers.size()/2) );
+    d_integers.push_back(std::numeric_limits<TypeParam>::min());
+    d_integers.push_back(std::numeric_limits<TypeParam>::max());
+    auto integers = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, (cudf::size_type)d_integers.size());
     auto integers_view = integers->mutable_view();
-    cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), size * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
+    cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), d_integers.size() * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
     integers_view.set_null_count(0);
 
     // convert to strings
@@ -139,7 +148,7 @@ TEST_F(StringsConvertTest, HexToInteger)
         if( *itr==nullptr )
             h_expected.push_back(0);
         else
-           h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
+            h_expected.push_back( (int)std::stol(std::string(*itr),0,16) );
     }
 
     auto strings_view = cudf::strings_column_view(strings);

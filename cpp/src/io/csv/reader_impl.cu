@@ -455,17 +455,31 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(
   // or a linetermination within a quotechar pair.
   if (opts.quotechar != '\0') {
     auto count = std::distance(it_begin, it_end) - 1;
-
+    // First element is zero if reading from start of file, skip it in that case
+    // Check the first element otherwise, it could be a quotation
+    const int start = (h_row_offsets[0] == 0) ? 1 : 0;
+    // Starting in the incomplete first row (before first line terminator in the byte range)?
+    bool is_partial_row = (h_row_offsets[0] != 0);
     auto filtered_count = count;
     bool quotation = false;
-    for (int i = 1; i < count; ++i) {
-      if (h_data[h_row_offsets[i] - 1] == opts.quotechar) {
-        quotation = !quotation;
-        h_row_offsets[i] = static_cast<uint64_t>(-1);
+    for (int i = start; i < count; ++i) {
+      auto& offset = h_row_offsets[i];
+      if (offset > 0 && h_data[offset - 1] == opts.quotechar) {
+        // Don't update the quotation state before hitting the first line terminator 
+        if (!is_partial_row) {
+          quotation = !quotation;
+        }
+        offset = static_cast<uint64_t>(-1);
         filtered_count--;
-      } else if (quotation) {
-        h_row_offsets[i] = static_cast<uint64_t>(-1);
-        filtered_count--;
+      } else if (offset > 0 && h_data[offset - 1] == opts.terminator) {
+        if (quotation){
+          offset = static_cast<uint64_t>(-1);
+          filtered_count--;
+        }
+        else if (is_partial_row){
+          // Hit the the first line terminator, reset the is_partial_row flag
+          is_partial_row = false;
+        }
       }
     }
     if (filtered_count != count) {

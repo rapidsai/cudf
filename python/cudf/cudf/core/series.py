@@ -6,10 +6,10 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
@@ -31,7 +31,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     min_scalar_type,
-    to_cudf_compatible_scalar,
 )
 
 
@@ -416,7 +415,7 @@ class Series(Frame):
 
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
-            return func(self)
+            return func(*inputs)
         else:
             return NotImplemented
 
@@ -453,37 +452,22 @@ class Series(Frame):
         return not len(self)
 
     def __getitem__(self, arg):
-        data = self._column[arg]
-        index = self.index.take(arg)
-        if is_scalar(data) or data is None:
-            return data
-        return self._copy_construct(data=data, index=index)
+        if isinstance(arg, slice):
+            return self.iloc[arg]
+        else:
+            return self.loc[arg]
 
     def __setitem__(self, key, value):
-        # coerce value into a scalar or column
-        if is_scalar(value):
-            value = to_cudf_compatible_scalar(value)
+        if isinstance(key, slice):
+            self.iloc[key] = value
         else:
-            value = column.as_column(value)
-
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
-            value.dtype
-        ):
-            # normalize types if necessary:
-            if not pd.api.types.is_integer(key):
-                to_dtype = np.result_type(value.dtype, self._column.dtype)
-                value = value.astype(to_dtype)
-                self._column._mimic_inplace(
-                    self._column.astype(to_dtype), inplace=True
-                )
-
-        self._column[key] = value
+            self.loc[key] = value
 
     def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.
         """
         if keep_index is True or is_scalar(indices):
-            return self[indices]
+            return self.iloc[indices]
         else:
             col_inds = as_column(indices)
             data = self._column.take(col_inds, keep_index=False)
@@ -602,6 +586,7 @@ class Series(Frame):
             lines.append(category_memory)
         return "\n".join(lines)
 
+    @annotate("BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         """
         Internal util to call a binary operator *fn* on operands *self*
@@ -617,7 +602,6 @@ class Series(Frame):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
 
-        libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
@@ -652,7 +636,6 @@ class Series(Frame):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
         result = lhs._copy_construct(data=outcol, name=result_name)
-        libcudf.nvtx.range_pop()
         return result
 
     def add(self, other, fill_value=None, axis=0):
@@ -955,6 +938,10 @@ class Series(Frame):
         ser = self._binaryop(other, "l_and")
         return ser.astype(np.bool_)
 
+    def remainder(self, other):
+        ser = self._binaryop(other, "mod")
+        return ser
+
     def logical_or(self, other):
         ser = self._binaryop(other, "l_or")
         return ser.astype(np.bool_)
@@ -1179,8 +1166,8 @@ class Series(Frame):
 
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
-            self._data = result._data
-            self._index = result._index
+            self._column._mimic_inplace(result._column, inplace=True)
+            self.index._mimic_inplace(result.index, inplace=True)
             self._size = len(self._index)
             self.name = result.name
         else:
@@ -1466,7 +1453,7 @@ class Series(Frame):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -1479,8 +1466,10 @@ class Series(Frame):
             * list of numeric or str:
                 - If *replacement* is also list-like, *to_replace* and
                   *replacement* must be of same length.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
+        inplace : bool, default False
+            If True, in place.
 
         See also
         --------
@@ -1491,54 +1480,10 @@ class Series(Frame):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
-        # if all the elements of replacement column are None then propagate the
-        # same dtype as self.dtype in column._values for replacement
-        all_nan = False
-        if not is_scalar(to_replace):
-            if is_scalar(replacement):
-                all_nan = replacement is None
-                if all_nan:
-                    replacement = [replacement] * len(to_replace)
-                # Do not broadcast numeric dtypes
-                elif pd.api.types.is_numeric_dtype(self.dtype):
-                    replacement = [replacement]
-                else:
-                    replacement = utils.scalar_broadcast_to(
-                        replacement,
-                        (len(to_replace),),
-                        np.dtype(type(replacement)),
-                    )
-            else:
-                # If both are non-scalar
-                if len(to_replace) != len(replacement):
-                    raise ValueError(
-                        "Replacement lists must be "
-                        "of same length."
-                        "Expected {}, got {}.".format(
-                            len(to_replace), len(replacement)
-                        )
-                    )
-        else:
-            if not is_scalar(replacement):
-                raise TypeError(
-                    "Incompatible types '{}' and '{}' "
-                    "for *to_replace* and *replacement*.".format(
-                        type(to_replace).__name__, type(replacement).__name__
-                    )
-                )
-            to_replace = [to_replace]
-            replacement = [replacement]
 
-        if is_dict_like(to_replace) or is_dict_like(replacement):
-            raise TypeError("Dict-like args not supported in Series.replace()")
+        result = super().replace(to_replace=to_replace, replacement=value)
 
-        if isinstance(replacement, list):
-            all_nan = replacement.count(None) == len(replacement)
-        result = self._column.find_and_replace(
-            to_replace, replacement, all_nan
-        )
-
-        return self._copy_construct(data=result)
+        return self._mimic_inplace(result, inplace=inplace)
 
     def reverse(self):
         """Reverse the Series
@@ -1640,8 +1585,9 @@ class Series(Frame):
 
         Parameters
         ----------
-        udf : Either a callable python function or a python function already
-        decorated by ``numba.cuda.jit`` for call on the GPU as a device
+        udf : function
+            Either a callable python function or a python function already
+            decorated by ``numba.cuda.jit`` for call on the GPU as a device
 
         out_dtype  : numpy.dtype; optional
             The dtype for use in the output.
@@ -1673,6 +1619,71 @@ class Series(Frame):
           * math.tan()
           * math.gamma()
           * math.lgamma()
+
+        * Series with string dtypes are not supported in `applymap` method.
+
+        * Global variables need to be re-defined explicitly inside
+          the udf, as numba considers them to be compile-time constants
+          and there is no known way to obtain value of the global variable.
+
+        Examples
+        --------
+        Returning a Series of booleans using only a literal pattern.
+        >>> import cudf
+        >>> s = cudf.Series([1, 10, -10, 200, 100])
+        >>> s.applymap(lambda x: x)
+        0      1
+        1     10
+        2    -10
+        3    200
+        4    100
+        dtype: int64
+        >>> s.applymap(lambda x: x in [1, 100, 59])
+        0     True
+        1    False
+        2    False
+        3    False
+        4     True
+        dtype: bool
+        >>> s.applymap(lambda x: x ** 2)
+        0        1
+        1      100
+        2      100
+        3    40000
+        4    10000
+        dtype: int64
+        >>> s.applymap(lambda x: (x ** 2) + (x / 2))
+        0        1.5
+        1      105.0
+        2       95.0
+        3    40100.0
+        4    10050.0
+        dtype: float64
+
+        >>> def cube_function(a):
+        ...     return a ** 3
+        ...
+        >>> s.applymap(cube_function)
+        0          1
+        1       1000
+        2      -1000
+        3    8000000
+        4    1000000
+        dtype: int64
+
+        >>> def custom_udf(x):
+        ...     if x > 0:
+        ...         return x + 5
+        ...     else:
+        ...         return x - 5
+        ...
+        >>> s.applymap(custom_udf)
+        0      6
+        1     15
+        2    -15
+        3    205
+        4    105
+        dtype: int64
 
         """
         if callable(udf):
@@ -1707,23 +1718,23 @@ class Series(Frame):
         """Compute the min of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.min(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.min(dtype=dtype)
 
     def max(self, axis=None, skipna=True, dtype=None):
         """Compute the max of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.max(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.max(dtype=dtype)
 
     def sum(self, axis=None, skipna=True, dtype=None):
         """Compute the sum of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.sum(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.sum(dtype=dtype)
 
     def product(self, axis=None, skipna=True, dtype=None):
         """Compute the product of the series"""
         assert axis in (None, 0) and skipna is True
-        return self._column.product(dtype=dtype)
+        return self.nans_to_nulls().dropna()._column.product(dtype=dtype)
 
     def prod(self, axis=None, skipna=True, dtype=None):
         """Alias for product"""
@@ -1854,19 +1865,19 @@ class Series(Frame):
         15.5
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean()
+        return self.nans_to_nulls().dropna()._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.std(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.var(ddof=ddof)
+        return self.nans_to_nulls().dropna()._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
@@ -2026,52 +2037,39 @@ class Series(Frame):
             return np.nan
         return cov / lhs_std / rhs_std
 
-    def isin(self, test):
-        from cudf import DataFrame
+    def isin(self, values):
+        """Check whether values are contained in Series.
 
-        lhs = self
-        rhs = None
+        Parameters
+        ----------
+        values : set or list-like
+            The sequence of values to test. Passing in a single string will
+            raise a TypeError. Instead, turn a single string into a list
+            of one element.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Series
+            Series of booleans indicating if each element is in values.
+        Raises
+        -------
+        TypeError
+            If values is a string
+        """
 
-        try:
-            rhs = column.as_column(test, dtype=self.dtype)
-            # if necessary, convert values via typecast
-            rhs = Series(rhs.astype(self.dtype))
-        except Exception:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
-            return Series(cupy.zeros(len(self), dtype="bool"))
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
 
-        # If categorical, combine categories first
-        if is_categorical_dtype(lhs):
-            lhs_cats = lhs.cat.categories._values
-            rhs_cats = rhs.cat.categories._values
-            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
-                # if the categories are the same dtype, we can combine them
-                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
-                lhs = lhs.cat.set_categories(cats, is_unique=True)
-                rhs = rhs.cat.set_categories(cats, is_unique=True)
-            else:
-                # If they're not the same dtype, short-circuit if the test
-                # list doesn't have any nulls. If it does have nulls, make
-                # the test list a Categorical with a single null
-                if not rhs.has_nulls:
-                    return Series(cupy.zeros(len(self), dtype="bool"))
-                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
-                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
-
-        # fillna so we can find nulls
-        if rhs.has_nulls:
-            lhs = lhs.fillna(lhs._column.default_na_value())
-            rhs = rhs.fillna(lhs._column.default_na_value())
-
-        lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
-        rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
-        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
-        res = res["bool"].fillna(False)
-        res.name = self.name
-
-        return res
+        return Series(
+            self._column.isin(values), index=self.index, name=self.name
+        )
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)

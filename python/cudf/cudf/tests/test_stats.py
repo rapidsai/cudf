@@ -6,6 +6,7 @@ import pytest
 
 from cudf.core import Series
 from cudf.datasets import randomdata
+from cudf.tests.utils import assert_eq
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -168,7 +169,6 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
-    from cudf.tests import utils
 
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -179,7 +179,7 @@ def test_approx_quantiles():
     q1 = gdf_series.quantile(quant_values, exact=False)
     q2 = pdf_series.quantile(quant_values)
 
-    utils.assert_eq(q1, q2)
+    assert_eq(q1, q2)
 
 
 def test_approx_quantiles_int():
@@ -197,14 +197,13 @@ def test_approx_quantiles_int():
 @pytest.mark.parametrize("data", [[], [1, 2, 3, 10, 326497]])
 @pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
 def test_misc_quantiles(data, q):
-    from cudf.tests import utils
 
     pdf_series = pd.Series(data)
     gdf_series = Series(data)
 
     expected = pdf_series.quantile(q)
     actual = gdf_series.quantile(q)
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -235,10 +234,12 @@ def test_kurtosis(data, null_flag):
         pdata.iloc[[0, 2]] = None
 
     got = data.kurtosis()
+    got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt()
+    got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
@@ -272,6 +273,7 @@ def test_skew(data, null_flag):
 
     got = data.skew()
     expected = pdata.skew()
+    got = got if np.isscalar(got) else got.to_array()
     np.testing.assert_array_almost_equal(got, expected)
 
 
@@ -380,10 +382,21 @@ def test_corr1d(data1, data2):
 
 
 def test_df_corr():
-    from cudf.tests import utils
 
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr()
     expected = pdf.corr()
-    utils.assert_eq(got, expected)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "ops", ["mean", "min", "max", "sum", "product", "var", "std"]
+)
+def test_nans_stats(ops):
+
+    data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, 5, 2, 3, -100]
+    psr = pd.Series(data)
+    gsr = Series(data, nan_as_null=False)
+
+    assert_eq(getattr(psr, ops)(), getattr(gsr, ops)())

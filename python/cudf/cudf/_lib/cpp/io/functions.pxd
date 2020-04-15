@@ -3,7 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport shared_ptr, unique_ptr
 from libc.stdint cimport uint8_t
 
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -161,6 +161,35 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef unique_ptr[vector[uint8_t]] \
         write_parquet(write_parquet_args args) except +
 
+    cdef cppclass write_parquet_chunked_args:
+        cudf_io_types.sink_info sink
+        cudf_io_types.compression_type compression
+        cudf_io_types.statistics_freq stats_level
+        const cudf_io_types.table_metadata *metadata
+
+        write_parquet_chunked_args() except +
+        write_parquet_chunked_args(
+            cudf_io_types.sink_info sink_,
+            cudf_io_types.table_metadata *table_metadata_,
+            cudf_io_types.compression_type compression_,
+            cudf_io_types.statistics_freq stats_lvl_
+        ) except +
+
+    cdef shared_ptr[pq_chunked_state] \
+        write_parquet_chunked_begin(write_parquet_chunked_args args) except +
+
+    cdef void write_parquet_chunked(cudf_table_view.table_view table_,
+                                    shared_ptr[pq_chunked_state]) except +
+
+    cdef void write_parquet_chunked_end(shared_ptr[pq_chunked_state]) except +
+
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +
+
+
+cdef extern from "cudf/io/functions.hpp" \
+        namespace "cudf::experimental::io::detail::parquet" nogil:
+
+    cdef cppclass pq_chunked_state:
+        pass

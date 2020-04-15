@@ -241,6 +241,81 @@ class MultiIndex(Index):
         )
         return self.codes
 
+    def isin(self, values, level=None):
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index or Multi-Index
+            Sought values.
+        level : str or int, optional
+            Name or position of the index level to use (if the index
+            is a MultiIndex).
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+        Notes
+        -------
+        When `level` is None, `values` can only be MultiIndex, or a
+        set/list-like tuples.
+        When `level` is provided, `values` can be Index or MultiIndex,
+        or a set/list-like tuples.
+        """
+        from cudf.utils.dtypes import is_list_like
+
+        if level is None:
+            if isinstance(values, cudf.MultiIndex):
+                values_idx = values
+            elif (
+                (
+                    isinstance(
+                        values,
+                        (
+                            cudf.Series,
+                            cudf.Index,
+                            cudf.DataFrame,
+                            column.ColumnBase,
+                        ),
+                    )
+                )
+                or (not is_list_like(values))
+                or (
+                    is_list_like(values)
+                    and len(values) > 0
+                    and not isinstance(values[0], tuple)
+                )
+            ):
+                raise TypeError(
+                    "values need to be a Multi-Index or set/list-like tuple \
+                        squences  when `level=None`."
+                )
+            else:
+                values_idx = cudf.MultiIndex.from_tuples(
+                    values, names=self.names
+                )
+
+            res = []
+            for name in self.names:
+                level_idx = self.get_level_values(name)
+                value_idx = values_idx.get_level_values(name)
+
+                existence = level_idx.isin(value_idx)
+                res.append(existence)
+
+            result = res[0]
+            for i in res[1:]:
+                result = result & i
+        else:
+            level_series = self.get_level_values(level)
+            result = level_series.isin(values)
+
+        return result
+
     def _compute_levels_and_codes(self):
         levels = []
         from cudf import DataFrame
@@ -522,7 +597,7 @@ class MultiIndex(Index):
             return match
         result = []
         for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item][0]])
+            result.append(match.levels[level][match.codes[item].iloc[0]])
         return tuple(result)
 
     def to_frame(self, index=True, name=None):
@@ -770,3 +845,12 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            for in_col, oth_col in zip(
+                self._source_data._columns, other._source_data._columns,
+            ):
+                in_col._mimic_inplace(oth_col, inplace=True)
+        else:
+            return other
