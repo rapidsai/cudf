@@ -3363,8 +3363,8 @@ class DataFrame(Frame):
         Parameters
         ----------
         data : numba gpu ndarray
-        index : str
-            The name of the index column in *data*.
+        index : str, Index
+            The name of the index column in `data` or an Index itself.
             If None, the default index is used.
         columns : list of str
             List of column names to include.
