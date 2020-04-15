@@ -14,6 +14,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
 
+
 def compute_result_col_names(lhs, rhs, how):
     if how in ('left', 'inner', 'outer'):
         # the result columns are all the left columns (including common ones)
@@ -67,8 +68,12 @@ cpdef join(Table lhs,
 
     # Only used for semi or anti joins
     # The result columns are only the left hand columns
-    cdef vector[int] all_left_inds = range(lhs._num_columns + (lhs._num_indices * left_index))
-    cdef vector[int] all_right_inds = range(rhs._num_columns + (rhs._num_indices * right_index))
+    cdef vector[int] all_left_inds = range(
+        lhs._num_columns + (lhs._num_indices * left_index)
+    )
+    cdef vector[int] all_right_inds = range(
+        rhs._num_columns + (rhs._num_indices * right_index)
+    )
 
     result_col_names = compute_result_col_names(lhs, rhs, how)
 
@@ -95,24 +100,32 @@ cpdef join(Table lhs,
         elif left_index:
             # Joins left index columns with right 'on' columns
             left_on_indices = range(lhs._num_indices)
-            right_on_indices = [right_join_cols.index(on_col) for on_col in right_on]
+            right_on_indices = [
+                right_join_cols.index(on_col) for on_col in right_on
+            ]
 
             # The left index columns 'become' the new RHS columns
             # and the right index 'survives'
-            result_idx_positions = range(len(left_join_cols), len(left_join_cols) + lhs._num_indices)
+            result_idx_positions = range(
+                len(left_join_cols), len(left_join_cols) + lhs._num_indices
+            )
             result_index_names = rhs._index_names
 
             # but since the common columns are gathered from the left
             # the rhs 'on' cols are returned on the left of the result
-            # rearrange the names so account for this 
+            # rearrange the names so account for this
             common = [None] * rhs._num_indices
             for i in range(rhs._num_indices):
-                common[i] = result_col_names.pop(result_col_names.index(right_on[i]))
+                common[i] = result_col_names.pop(
+                    result_col_names.index(right_on[i])
+                )
             result_col_names = common + result_col_names
         elif right_index:
             # Joins right index columns with left 'on' columns
             right_on_indices = range(rhs._num_indices)
-            left_on_indices = [left_join_cols.index(on_col) for on_col in left_on]
+            left_on_indices = [
+                left_join_cols.index(on_col) for on_col in left_on
+            ]
 
             # The right index columns 'become' the new LHS columns
             # and the left index survives
@@ -197,7 +210,9 @@ cpdef join(Table lhs,
     all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
         ix_odict = OrderedDict()
-        for name, pos in zip(result_index_names[::-1], result_idx_positions[::-1]):
+        for name, pos in zip(
+            result_index_names[::-1], result_idx_positions[::-1]
+        ):
             ix_odict[name] = all_cols_py.pop(pos)
         other_dict = OrderedDict()
         for k, v in list(ix_odict.items())[::-1]:

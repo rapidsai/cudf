@@ -897,18 +897,22 @@ def test_join_multi(how, column_a, column_b, column_c):
 )
 def test_merge_multi(kwargs):
 
-    left = DataFrame({
-        'a': [1, 2, 3, 4, 3, 5, 6],
-        'b': [1, 3, 5, 7, 5, 9, 0],
-        'c': ["o", "p", "q", "r", "s", "t", "u"],
-        'd': ["v", "w", "x", "y", "z", "1", "2"]
-    })
-    right = DataFrame({
-        'a': [0, 9, 3, 4, 3, 7, 8],
-        'b': [2, 4, 5, 7, 5, 6, 8],
-        'c': ["a", "b", "c", "d", "e", "f", "g"],
-        'd': ["j", "i", "j", "k", "l", "m", "n"]
-    })
+    left = DataFrame(
+        {
+            "a": [1, 2, 3, 4, 3, 5, 6],
+            "b": [1, 3, 5, 7, 5, 9, 0],
+            "c": ["o", "p", "q", "r", "s", "t", "u"],
+            "d": ["v", "w", "x", "y", "z", "1", "2"],
+        }
+    )
+    right = DataFrame(
+        {
+            "a": [0, 9, 3, 4, 3, 7, 8],
+            "b": [2, 4, 5, 7, 5, 6, 8],
+            "c": ["a", "b", "c", "d", "e", "f", "g"],
+            "d": ["j", "i", "j", "k", "l", "m", "n"],
+        }
+    )
 
     if (
         kwargs["left_on"] is not None
@@ -936,7 +940,7 @@ def test_merge_multi(kwargs):
     gleft = left.to_pandas()
     gright = right.to_pandas()
 
-    kwargs['sort'] = True
+    kwargs["sort"] = True
     expect = gleft.merge(gright, **kwargs)
     got = left.merge(right, **kwargs)
 
@@ -950,7 +954,6 @@ def test_merge_multi(kwargs):
     got.index = range(len(got))
 
     assert_eq(expect, got)
-
 
 
 @pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
