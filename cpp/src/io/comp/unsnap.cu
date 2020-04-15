@@ -59,14 +59,14 @@ struct unsnap_queue_s
  **/
 struct unsnap_state_s
 {
-    const uint8_t *base;        //< base ptr of compressed stream
-    const uint8_t *end;         //< end of compressed stream
-    uint32_t uncompressed_size; //< uncompressed stream size
-    uint32_t bytes_left;        //< bytes to uncompressed remaining
-    int32_t error;              //< current error status
-    uint32_t tstart;            //< start time for perf logging
-    volatile unsnap_queue_s q;  //< queue for cross-warp communication
-    gpu_inflate_input_s in;     //< input parameters for current block
+    const uint8_t *base;        ///< base ptr of compressed stream
+    const uint8_t *end;         ///< end of compressed stream
+    uint32_t uncompressed_size; ///< uncompressed stream size
+    uint32_t bytes_left;        ///< bytes to uncompressed remaining
+    int32_t error;              ///< current error status
+    uint32_t tstart;            ///< start time for perf logging
+    volatile unsnap_queue_s q;  ///< queue for cross-warp communication
+    gpu_inflate_input_s in;     ///< input parameters for current block
 };
 
 /**
