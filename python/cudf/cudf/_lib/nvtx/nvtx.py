@@ -63,7 +63,7 @@ class annotate(ContextDecorator):
         return False
 
     def __call__(self, func):
-        if self.attributes.message is None:
+        if not self.attributes.message:
             self.attributes.message = func.__name__
         return super().__call__(func)
 
