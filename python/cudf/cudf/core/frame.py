@@ -1455,6 +1455,13 @@ class Frame(libcudf.table.Table):
             return rtn
 
         if left_index or right_index:
+            if isinstance(
+                lhs.index, cudf.core.multiindex.MultiIndex
+            ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
+                warnings.warn(
+                    "Implicit typecasting of multi-indices not yet supported"
+                )
+                return lhs, rhs, []
             if left_index and right_index:
                 to_dtype = casting_rules(
                     lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how
