@@ -76,6 +76,7 @@
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4878 Remove obsolete string_from_host utility
 - PR #4873 Prevent mutable_view() from invoking null count
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate

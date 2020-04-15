@@ -22,6 +22,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/contains.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
 
