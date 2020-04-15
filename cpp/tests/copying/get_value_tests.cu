@@ -39,13 +39,13 @@ TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypes);
 
 TYPED_TEST(FixedWidthGetValueTest, BasicGet) {
   fixed_width_column_wrapper<TypeParam> col{9, 8, 7, 6};
-  auto s = experimental::get_element(col, 2);
+  auto s = experimental::get_element(col, 0);
 
   using ScalarType = experimental::scalar_type_t<TypeParam>;
   auto typed_s = static_cast<ScalarType const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  EXPECT_EQ(TypeParam(7), typed_s->value());
+  EXPECT_EQ(TypeParam(9), typed_s->value());
 }
 
 TYPED_TEST(FixedWidthGetValueTest, GetFromNullable) {

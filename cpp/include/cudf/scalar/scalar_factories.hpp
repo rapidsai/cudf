@@ -24,7 +24,7 @@
 namespace cudf {
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
- * specified numeric `data_type` and a validity bool.
+ * specified numeric `data_type`.
  * 
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a numeric type
@@ -41,7 +41,7 @@ std::unique_ptr<scalar> make_numeric_scalar(
 
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
- * specified timestamp `data_type` and a validity bool.
+ * specified timestamp `data_type`.
  * 
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a timestamp type
@@ -61,7 +61,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  * specified fixed-width `data_type`.
  * 
  * @throws std::bad_alloc if device memory allocation fails
- * @throws cudf::logic_error if `type` is not a timestamp type
+ * @throws cudf::logic_error if `type` is not a fixed-width type
  *
  * @param type The desired fixed-width element type
  * @param stream Optional stream on which to issue all memory allocations
