@@ -65,8 +65,8 @@ namespace io {
  **/
 struct scratch_arr
 {
-    int16_t lengths[MAXCODES];  // descriptor code lengths
-    int16_t offs[MAXBITS + 1];  // offset in symbol table for each length (scratch)
+    int16_t lengths[MAXCODES];  ///< descriptor code lengths
+    int16_t offs[MAXBITS + 1];  ///< offset in symbol table for each length (scratch)
 };
 
 /**
@@ -74,8 +74,8 @@ struct scratch_arr
  **/
 struct lut_arr
 {
-    int32_t lenlut[1 << LOG2LENLUT];    // LUT for length decoding
-    int32_t distlut[1 << LOG2DISTLUT];  // LUT for fast distance decoding
+    int32_t lenlut[1 << LOG2LENLUT];    ///< LUT for length decoding
+    int32_t distlut[1 << LOG2DISTLUT];  ///< LUT for fast distance decoding
 };
 
 
@@ -107,8 +107,8 @@ struct xwarp_s
 /// @brief Prefetcher state
 struct prefetch_queue_s
 {
-    const uint8_t *cur_p; // Prefetch location
-    int run; // prefetcher will exit when run=0
+    const uint8_t *cur_p; ///< Prefetch location
+    int run; ///< prefetcher will exit when run=0
     uint8_t pref_data[PREFETCH_SIZE];
 };
 
@@ -119,22 +119,22 @@ struct prefetch_queue_s
  **/
 struct inflate_state_s {
     // output state
-    uint8_t *out;           //< output buffer
-    uint8_t *outbase;       //< start of output buffer
-    uint8_t *outend;        //< end of output buffer
+    uint8_t *out;           ///< output buffer
+    uint8_t *outbase;       ///< start of output buffer
+    uint8_t *outend;        ///< end of output buffer
     // Input state
-    uint8_t *cur;           //< input buffer
-    uint8_t *end;           //< end of input buffer
+    uint8_t *cur;           ///< input buffer
+    uint8_t *end;           ///< end of input buffer
 
-    uint2    bitbuf;        //< bit buffer (64-bit)
-    uint32_t bitpos;        //< position in bit buffer
+    uint2    bitbuf;        ///< bit buffer (64-bit)
+    uint32_t bitpos;        ///< position in bit buffer
 
-    int32_t err;            //< Error status
-    int     btype;          //< current block type
-    int     blast;          //< last block
-    uint32_t stored_blk_len;//< length of stored (uncompressed) block
+    int32_t err;            ///< Error status
+    int     btype;          ///< current block type
+    int     blast;          ///< last block
+    uint32_t stored_blk_len;///< length of stored (uncompressed) block
 
-    uint16_t first_slow_len;    //< first code not in fast LUT
+    uint16_t first_slow_len;   ///< first code not in fast LUT
     uint16_t index_slow_len;
     uint16_t first_slow_dist;
     uint16_t index_slow_dist;
