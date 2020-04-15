@@ -48,7 +48,7 @@ struct unsnap_queue_s
 {
     uint32_t prefetch_wrpos;            ///< Prefetcher write position
     uint32_t prefetch_rdpos;            ///< Prefetch consumer read position
-    int32_t prefetch_end;               ///< Prefetch enable flag (0 stops prefetcher)
+    int32_t prefetch_end;               ///< Prefetch enable flag (nonzero stops prefetcher)
     int32_t batch_len[BATCH_COUNT];     ///< Length of each batch - <0:end, 0:not ready, >0:symbol count
     unsnap_batch_s batch[BATCH_COUNT * BATCH_SIZE]; ///< LZ77 batch data
     uint8_t buf[PREFETCH_SIZE];         ///< Prefetch buffer
