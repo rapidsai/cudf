@@ -35,16 +35,18 @@ namespace strings
 namespace detail
 {
 
-// From benchmark data, the fused kernel optimization appears to perform better
-// only when the number of chars/col is below a certain threshold (which changes
-// depending on if nulls are being handled as well)
+// Benchmark data, shared at https://github.com/rapidsai/cudf/pull/4703, shows
+// that the single kernel optimization generally performs better, but when the
+// number of chars/col is beyond a certain threshold memcpy performs better.
+// This heuristic estimates which strategy will give better performance by
+// comparing the mean chars/col with values from the above table.
 constexpr bool use_fused_kernel_heuristic(
     bool const has_nulls,
     size_t const total_bytes,
     size_t const num_columns) {
   return has_nulls
-      ? total_bytes < num_columns * 2097152
-      : total_bytes < num_columns * 1048576;
+      ? total_bytes < num_columns * 1572864 // midpoint of 1048576 and 2097152
+      : total_bytes < num_columns * 393216; // midpoint of 262144 and 524288
 }
 
 // Using a functor instead of a lambda as a workaround for:
