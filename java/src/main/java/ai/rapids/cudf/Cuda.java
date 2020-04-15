@@ -298,11 +298,13 @@ public class Cuda {
 
   /**
    * Set the id of the current device.
-   * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
+   * <p>Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
    * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.
+   * <p>Note if RMM has been initialized and the requested device ID does not
+   * match the device used to initialize RMM then this will throw an error.
    * @throws CudaException on any error
    */
-  public static native void setDevice(int device) throws CudaException;
+  public static native void setDevice(int device) throws CudaException, CudfException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
