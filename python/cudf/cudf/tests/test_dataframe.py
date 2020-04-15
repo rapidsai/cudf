@@ -3036,6 +3036,11 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.all(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.all(level="a")
 
     got = gdata.all()
     expected = pdata.all()
@@ -3080,9 +3085,14 @@ def test_any(data):
 
         # test bool_only
         if pdata["b"].dtype == "bool":
-            got = gdata.all(bool_only=True)
-            expected = pdata.all(bool_only=True)
+            got = gdata.any(bool_only=True)
+            expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.any(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.any(level="a")
 
     got = gdata.any()
     expected = pdata.any()

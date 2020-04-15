@@ -217,7 +217,7 @@ class Series(Frame):
             return DatetimeProperties(self)
         else:
             raise AttributeError(
-                "Can only use .dt accessor with datetimelike " "values"
+                "Can only use .dt accessor with datetimelike values"
             )
 
     @property

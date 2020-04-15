@@ -4300,7 +4300,7 @@ class DataFrame(Frame):
         """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -4346,7 +4346,7 @@ class DataFrame(Frame):
         """
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -4499,6 +4499,12 @@ class DataFrame(Frame):
             if min_count not in (None, 0):
                 msg = "Row-wise operations currently do not \
                         support `min_count`."
+                raise NotImplementedError(msg)
+
+            bool_only = kwargs.pop("bool_only", None)
+            if bool_only not in (None, True):
+                msg = "Row-wise operations currently do not \
+                        support `bool_only`."
                 raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op()
