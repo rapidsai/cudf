@@ -121,7 +121,7 @@ std::unique_ptr<scalar> get_element(
   cudaStream_t stream,
   rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(index > 0 and index < input.size(), "Index out of bounds");
+  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
   return type_dispatcher(input.type(), get_element_functor{},
                          input, index, stream, mr);
 }
