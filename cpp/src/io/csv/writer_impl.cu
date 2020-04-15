@@ -215,7 +215,9 @@ private:
   rmm::mr::device_memory_resource* mr_;
 };
 
-
+//This helper doesn't seem necessary, anymore:
+//dead-code it for now...
+//  
 /**
  * @brief Helper function for write_csv.
  *
@@ -224,16 +226,16 @@ private:
  * @param mr...
  * @return strings_column_view instance formated for CSV column output.
 **/
-strings_column_view column_to_strings_csv(column_view const& column,
-                                          writer_options const& options,
-                                          rmm::mr::device_memory_resource* mr = nullptr) {
-  //TODO;
-  //
-  column_to_strings_fn col2str{options, mr};
-  auto ret = col2str.template operator()<bool>(column); // check instantiation: okay
+// strings_column_view column_to_strings_csv(column_view const& column,
+//                                           writer_options const& options,
+//                                           rmm::mr::device_memory_resource* mr = nullptr) {
+//   //TODO;
+//   //
+//   column_to_strings_fn col2str{options, mr};
+//   auto ret = col2str.template operator()<bool>(column); // check instantiation: okay
   
-  return strings_column_view{column}; // for now
-}
+//   return strings_column_view{column}; // for now
+// }
 
 } // unnamed namespace
 
@@ -280,20 +282,13 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
                                  const table_metadata *metadata,
                                  cudaStream_t stream)
 {
-  //dump to output
-  //
-  // loop str_row: *str_concat_col {
-  //    auto buffer = str_row.buffer();
-  //    out_sink_->host_write(buffer_.data(), buffer_.size());
-  //}
-  //
-  // or:
+  //algorithm outline:
   //
   //  for_each(strings_column.begin(), strings_column.end(),
   //           [sink = out_sink_](auto str_row) mutable {
   //               auto host_buffer = str_row.host_buffer();
   //               sink->host_write(host_buffer_.data(), host_buffer_.size());
-  //           });//or...sink->device_write(device_buffer,...); (!!!!!)
+  //           });//or...sink->device_write(device_buffer,...);
 
   auto pair_buff_offsets = cudf::strings::create_offsets(strings_column, stream, mr_);
 
@@ -362,6 +357,8 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
                         return 0;//discarded (but necessary)
                       });
   } else {
+    //no device write possible;
+    //
     //copy the bytes to host, too:
     //
     thrust::host_vector<char> h_bytes(total_num_bytes);
