@@ -565,10 +565,6 @@ class Frame(libcudf.table.Table):
             return self._mimic_inplace(out_df, inplace=inplace)
 
         else:
-            if isinstance(self, cudf.core.multiindex.MultiIndex):
-                raise NotImplementedError(
-                    ".where is not supported for MultiIndex operations"
-                )
 
             if isinstance(other, cudf.DataFrame):
                 raise NotImplementedError(
@@ -668,10 +664,6 @@ class Frame(libcudf.table.Table):
         4       0
         dtype: int64
         """
-        if isinstance(self, cudf.core.multiindex.MultiIndex):
-            raise NotImplementedError(
-                ".mask is not supported for MultiIndex operations"
-            )
 
         if not hasattr(cond, "__invert__"):
             # We Invert `cond` below and call `where`, so

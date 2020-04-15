@@ -316,6 +316,16 @@ class MultiIndex(Index):
 
         return result
 
+    def mask(self, cond, other=None, inplace=False):
+        raise NotImplementedError(
+            ".mask is not supported for MultiIndex operations"
+        )
+
+    def where(self, cond, other=None, inplace=False):
+        raise NotImplementedError(
+            ".where is not supported for MultiIndex operations"
+        )
+
     def _compute_levels_and_codes(self):
         levels = []
         from cudf import DataFrame
