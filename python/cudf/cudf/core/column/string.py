@@ -308,7 +308,7 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out[0]
+            out = out.iloc[0]
         return out
 
     def join(self, sep):

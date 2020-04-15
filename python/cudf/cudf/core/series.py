@@ -31,7 +31,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     min_scalar_type,
-    to_cudf_compatible_scalar,
 )
 
 
@@ -453,37 +452,22 @@ class Series(Frame):
         return not len(self)
 
     def __getitem__(self, arg):
-        data = self._column[arg]
-        index = self.index.take(arg)
-        if is_scalar(data) or data is None:
-            return data
-        return self._copy_construct(data=data, index=index)
+        if isinstance(arg, slice):
+            return self.iloc[arg]
+        else:
+            return self.loc[arg]
 
     def __setitem__(self, key, value):
-        # coerce value into a scalar or column
-        if is_scalar(value):
-            value = to_cudf_compatible_scalar(value)
+        if isinstance(key, slice):
+            self.iloc[key] = value
         else:
-            value = column.as_column(value)
-
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
-            value.dtype
-        ):
-            # normalize types if necessary:
-            if not pd.api.types.is_integer(key):
-                to_dtype = np.result_type(value.dtype, self._column.dtype)
-                value = value.astype(to_dtype)
-                self._column._mimic_inplace(
-                    self._column.astype(to_dtype), inplace=True
-                )
-
-        self._column[key] = value
+            self.loc[key] = value
 
     def take(self, indices, keep_index=True):
         """Return Series by taking values from the corresponding *indices*.
         """
         if keep_index is True or is_scalar(indices):
-            return self[indices]
+            return self.iloc[indices]
         else:
             col_inds = as_column(indices)
             data = self._column.take(col_inds, keep_index=False)
@@ -1182,8 +1166,8 @@ class Series(Frame):
 
     def _mimic_inplace(self, result, inplace=False):
         if inplace:
-            self._data = result._data
-            self._index = result._index
+            self._column._mimic_inplace(result._column, inplace=True)
+            self.index._mimic_inplace(result.index, inplace=True)
             self._size = len(self._index)
             self.name = result.name
         else:

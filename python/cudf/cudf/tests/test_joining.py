@@ -196,8 +196,8 @@ def test_dataframe_join_cats():
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
     assert set(got.index.to_pandas()) & set("abc")
-    assert set(got["b"]) & set(bb)
-    assert set(got["c"]) & set(cc)
+    assert set(got["b"].to_array()) & set(bb)
+    assert set(got["c"].to_array()) & set(cc)
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])

@@ -109,6 +109,23 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
 }
 
+TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Scalar_SI64_FP64_SI32) {
+  using TypeOut = int64_t;
+  using TypeLhs = double;
+  using TypeRhs = int32_t;
+
+  using SUB = cudf::library::operation::Sub<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+
+  auto out = cudf::experimental::binary_operation(
+      lhs, rhs, cudf::experimental::binary_operator::SUB,
+      data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SUB());
+}
+
 TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
   using TypeOut = int64_t;
   using TypeLhs = int64_t;
