@@ -84,6 +84,7 @@
 - PR #4756 Fix regex error checking for valid quantifier condition
 - PR #4777 Fix data pointer for column slices of zero length
 - PR #4770 Fix readonly flag in `Column. __cuda_array_interface__`
+- PR #4889 Fix multi-index merging
 
 
 # cuDF 0.13.0 (31 Mar 2020)
