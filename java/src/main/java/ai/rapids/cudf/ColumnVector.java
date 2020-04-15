@@ -1788,7 +1788,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       deviceMemorySizeEstimate += columns[i].getDeviceMemorySize();
     }
 
-    try (DevicePrediction prediction = new DevicePrediction(deviceMemorySizeEstimate, "stringConcatenate")) {
+    try (DevicePrediction prediction = new DevicePrediction(deviceMemorySizeEstimate, "interleaveColumns")) {
       return new ColumnVector(interleaveColumns(column_views));
     }
   }
