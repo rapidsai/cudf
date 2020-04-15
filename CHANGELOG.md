@@ -136,6 +136,7 @@
 - PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method

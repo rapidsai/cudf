@@ -205,7 +205,7 @@ def test_categorical_masking():
 
     assert len(expect_masked) == len(got_masked)
     assert len(expect_masked) == got_masked.valid_count
-    assert list(expect_masked) == list(got_masked)
+    assert_eq(got_masked, expect_masked)
 
 
 def test_df_cat_set_index():
