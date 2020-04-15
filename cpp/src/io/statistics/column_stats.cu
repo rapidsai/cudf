@@ -457,10 +457,11 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
  * @brief Gather column chunk statistics (min/max values, sum and null count)
  * for a group of rows.
  *
+ * blockDim {1024,1,1}
+ *
  * @param chunks Destination statistics results
  * @param groups Statistics source information
  **/
-// blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024, 1)
 gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
 {
@@ -753,11 +754,12 @@ void __device__ mergeStringColumnStats(merge_state_s *s, const statistics_chunk 
 /**
  * @brief Combine multiple statistics chunk together to form new statistics chunks
  *
+ * blockDim {1024,1,1}
+ *
  * @param chunks_out Destination statistic chunks
  * @param chunks_in Source statistic chunks
  * @param groups Statistic chunk grouping information
  **/
-// blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024, 1)
 gpuMergeColumnStatistics(statistics_chunk *chunks_out, const statistics_chunk *chunks_in, const statistics_merge_group *groups)
 {
