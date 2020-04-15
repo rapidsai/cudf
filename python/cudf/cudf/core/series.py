@@ -467,7 +467,7 @@ class Series(Frame):
         """Return Series by taking values from the corresponding *indices*.
         """
         if keep_index is True or is_scalar(indices):
-            return self[indices]
+            return self.iloc[indices]
         else:
             col_inds = as_column(indices)
             data = self._column.take(col_inds, keep_index=False)
@@ -1374,7 +1374,7 @@ class Series(Frame):
         """Sort by the index.
         """
         inds = self.index.argsort(ascending=ascending)
-        return self.iloc[inds]
+        return self.take(inds)
 
     def sort_values(self, ascending=True, na_position="last"):
         """

@@ -590,6 +590,19 @@ def test_series_take(ntake, keep_index):
         )
 
 
+def test_series_take_positional():
+    psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
+
+    gsr = Series.from_pandas(psr)
+
+    take_indices = [1, 2, 0, 3]
+
+    expect = psr.take(take_indices)
+    got = gsr.take(take_indices, keep_index=True)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
 @pytest.mark.parametrize("slice_start", [None, 0, 1, 3, 10, -10])
 @pytest.mark.parametrize("slice_end", [None, 0, 1, 30, 50, -1])

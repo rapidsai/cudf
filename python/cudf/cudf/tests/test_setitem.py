@@ -96,7 +96,7 @@ def test_series_set_item(psr, arg):
 
     assert_eq(psr, gsr)
 
-    
+
 @pytest.mark.parametrize(
     "df",
     [
