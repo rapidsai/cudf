@@ -47,7 +47,7 @@ class hostdevice_vector {
   }
 
   ~hostdevice_vector() {
-    auto free_result = cudaFreeHost(h_data);
+    auto const free_result = cudaFreeHost(h_data);
     assert(free_result == cudaSuccess);
   }
 
