@@ -9,6 +9,7 @@
 - PR #4771 Added in an option to statically link against cudart
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
+- PR #4906 Add JNI and Java bindings for interleave_columns
 
 ## Improvements
 
