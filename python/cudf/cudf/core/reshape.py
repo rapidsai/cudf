@@ -64,6 +64,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
+        # Step through objects to align indexes for pandas-like output
         aligned = []
         prev = list(_align_indices(objs[0], objs[1]))
         for idx in range(len(objs) - 2):
