@@ -549,6 +549,8 @@ struct write_parquet_chunked_args {
   /// Optional associated metadata.
   const table_metadata_with_nullability *metadata;
 
+  write_parquet_chunked_args() = default;
+
   explicit write_parquet_chunked_args(sink_info const& sink_,
                               const table_metadata_with_nullability *metadata_ = nullptr,
                               compression_type compression_ = compression_type::AUTO,
