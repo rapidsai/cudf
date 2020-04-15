@@ -534,8 +534,9 @@ class Frame(libcudf.table.Table):
                             try:
                                 other_column = input_col._encode(other_column)
                             except ValueError:
-                                # When other is not present in categories.
-                                other_column = input_col.default_na_value()
+                                # When other is not present in categories,
+                                # fill with Null.
+                                other_column = None
                         elif hasattr(other_column, "codes"):
                             other_column = other_column.codes
                         input_col = input_col.codes
@@ -586,8 +587,9 @@ class Frame(libcudf.table.Table):
                     try:
                         other = input_col._encode(other)
                     except ValueError:
-                        # When other is not present in categories.
-                        other = input_col.default_na_value()
+                        # When other is not present in categories,
+                        # fill with Null.
+                        other = None
                 elif hasattr(other, "codes"):
                     other = other.codes
 
