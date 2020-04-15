@@ -23,6 +23,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
+from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import (
@@ -165,6 +166,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -250,8 +252,6 @@ class DataFrame(Frame):
                 # in `columns` that don't exist in `keys`:
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
-        else:
-            columns = pd.Index(data.keys(), tupleize_cols=True)
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -269,10 +269,16 @@ class DataFrame(Frame):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data):
+            self._data.multiindex = True
+            for (i, col_name) in enumerate(data):
+                self._data.multiindex = self._data.multiindex and isinstance(
+                    col_name, tuple
+                )
+                self.insert(i, col_name, data[col_name])
 
-        self.columns = columns
+        if columns is not None:
+            self.columns = columns
 
     @classmethod
     def _from_table(cls, table, index=None):
@@ -417,6 +423,7 @@ class DataFrame(Frame):
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
+    @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -505,6 +512,7 @@ class DataFrame(Frame):
             df[col] = df[col].set_mask(out_mask)
         return df
 
+    @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
@@ -682,11 +690,32 @@ class DataFrame(Frame):
 
     @property
     def empty(self):
+        """
+        Indicator whether DataFrame is empty.
+
+        True if DataFrame is entirely empty (no items), meaning any
+        of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame is empty, return True, if not return False.
+        """
         return not len(self)
 
     @property
     def values(self):
+        """
+        Return a CuPy representation of the DataFrame.
 
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the DataFrame.
+        """
         return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
@@ -1167,6 +1196,7 @@ class DataFrame(Frame):
             yield (k, self[k])
 
     @property
+    @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
@@ -1230,9 +1260,9 @@ class DataFrame(Frame):
 
         Examples
         --------
-        >>> df = cudf.DataFrame([('a', range(20)),
-        ...                      ('b', range(20)),
-        ...                      ('c', range(20))])
+        >>> df = cudf.DataFrame({'a': range(20),
+        ...                      'b': range(20),
+        ...                      'c': range(20)})
 
         Select a single row using an integer index.
 
@@ -1304,12 +1334,14 @@ class DataFrame(Frame):
         return self.loc
 
     @property
+    @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
     @columns.setter
+    @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
             columns = columns.to_pandas()
@@ -1532,7 +1564,7 @@ class DataFrame(Frame):
         else:
             return result
 
-    def take(self, positions):
+    def take(self, positions, keep_index=True):
         """
         Return a new DataFrame containing the rows specified by *positions*
 
@@ -1566,10 +1598,11 @@ class DataFrame(Frame):
         positions = as_column(positions)
         if pd.api.types.is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
-        out = self._gather(positions)
+        out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
         return out
 
+    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1580,19 +1613,8 @@ class DataFrame(Frame):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
-        data = OrderedDict()
-
-        if deep:
-            index = self._index.copy(deep)
-            for k in self._data:
-                data[k] = self._data[k].copy(deep)
-        else:
-            index = self._index
-            for k in self._data:
-                data[k] = self._data[k]
-
-        out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-        out.index = index
+        out = DataFrame(data=self._data.copy(deep=deep))
+        out.index = self.index.copy(deep=deep)
         return out
 
     def __copy__(self):
@@ -1612,6 +1634,7 @@ class DataFrame(Frame):
     def __reduce__(self):
         return (DataFrame, (self._data, self.index))
 
+    @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -2040,11 +2063,13 @@ class DataFrame(Frame):
 
         return outdf
 
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
+    @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(self, ascending=True):
         """Sort by the index
         """
@@ -2157,6 +2182,19 @@ class DataFrame(Frame):
 
     @property
     def T(self):
+        """
+        Transpose index and columns.
+
+        Reflect the DataFrame over its main diagonal by writing rows
+        as columns and vice-versa. The property T is an accessor to
+        the method transpose().
+
+        Returns
+        -------
+        out : DataFrame
+            The transposed DataFrame.
+        """
+
         return self.transpose()
 
     def melt(self, **kwargs):
@@ -2188,6 +2226,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def merge(
         self,
         right,
@@ -2271,7 +2310,6 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2311,10 +2349,11 @@ class DataFrame(Frame):
             rsuffix,
             how,
             method,
+            sort=sort,
         )
-        libcudf.nvtx.range_pop()
         return gdf_result
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
         self,
         other,
@@ -2350,9 +2389,6 @@ class DataFrame(Frame):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
-
         # Outer joins still use the old implementation
         if type != "":
             warnings.warn(
@@ -2491,7 +2527,6 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudf.nvtx.range_pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2598,35 +2633,36 @@ class DataFrame(Frame):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        if self.empty:
-            return self.copy()
+        # can't use `annotate` decorator here as we inspect the calling
+        # environment.
+        with annotate("QUERY", color="purple", domain="cudf_python"):
+            if self.empty:
+                return self.copy()
 
-        if not isinstance(local_dict, dict):
-            raise TypeError(
-                "local_dict type: expected dict but found {!r}".format(
-                    type(local_dict)
+            if not isinstance(local_dict, dict):
+                raise TypeError(
+                    "local_dict type: expected dict but found {!r}".format(
+                        type(local_dict)
+                    )
                 )
-            )
 
-        libcudf.nvtx.range_push("CUDF_QUERY", "purple")
-        # Get calling environment
-        callframe = inspect.currentframe().f_back
-        callenv = {
-            "locals": callframe.f_locals,
-            "globals": callframe.f_globals,
-            "local_dict": local_dict,
-        }
-        # Run query
-        boolmask = queryutils.query_execute(self, expr, callenv)
+            # Get calling environment
+            callframe = inspect.currentframe().f_back
+            callenv = {
+                "locals": callframe.f_locals,
+                "globals": callframe.f_globals,
+                "local_dict": local_dict,
+            }
+            # Run query
+            boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series(boolmask)
-        newdf = DataFrame()
-        for col in self.columns:
-            newseries = self[col][selected]
-            newdf[col] = newseries
-        result = newdf
-        libcudf.nvtx.range_pop()
-        return result
+            selected = Series(boolmask)
+            newdf = DataFrame()
+            for col in self.columns:
+                newseries = self[col][selected]
+                newdf[col] = newseries
+            result = newdf
+            return result
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -2806,7 +2842,7 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, replacement):
+    def replace(self, to_replace=None, value=None, inplace=False):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2831,11 +2867,13 @@ class DataFrame(Frame):
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
                   replaced with replacement*.
-        replacement : numeric, str, list-like, or dict
+        value : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
             match in length).
+        inplace : bool, default False
+            If True, in place.
 
         Returns
         -------
@@ -2858,17 +2896,10 @@ class DataFrame(Frame):
         5  null
         6     6
         """
-        outdf = self.copy()
 
-        if not is_dict_like(to_replace):
-            to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(replacement):
-            replacement = dict.fromkeys(self.columns, replacement)
+        outdf = super().replace(to_replace=to_replace, replacement=value)
 
-        for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], replacement[k])
-
-        return outdf
+        return self._mimic_inplace(outdf, inplace=inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -3523,6 +3554,99 @@ class DataFrame(Frame):
             result.index = as_index(q)
             return result
 
+    def isin(self, values):
+        """
+        Whether each element in the DataFrame is contained in values.
+
+        Parameters
+        ----------
+
+        values : iterable, Series, DataFrame or dict
+            The result will only be true at a location if all
+            the labels match. If values is a Series, that’s the index.
+            If values is a dict, the keys must be the column names,
+            which must match. If values is a DataFrame, then both the
+            index and column labels must match.
+
+        Returns
+        -------
+        DataFrame:
+            DataFrame of booleans showing whether each element in
+            the DataFrame is contained in values.
+
+        """
+
+        if isinstance(values, dict):
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                if col in values:
+                    val = values[col]
+                    result_df[col] = self._data[col].isin(val)
+                else:
+                    result_df[col] = utils.scalar_broadcast_to(
+                        False, len(self)
+                    )
+
+            result_df.index = self.index
+            return result_df
+        elif isinstance(values, Series):
+            values = values.reindex(self.index)
+
+            result = DataFrame()
+            import numpy as np
+
+            for col in self.columns:
+                if is_categorical_dtype(
+                    self[col].dtype
+                ) and is_categorical_dtype(values.dtype):
+                    res = self._data[col].binary_operator("eq", values._column)
+                    result[col] = res
+                elif (
+                    is_categorical_dtype(self[col].dtype)
+                    or np.issubdtype(self[col].dtype, np.dtype("object"))
+                ) or (
+                    is_categorical_dtype(values.dtype)
+                    or np.issubdtype(values.dtype, np.dtype("object"))
+                ):
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+                else:
+                    result[col] = self._data[col].binary_operator(
+                        "eq", values._column
+                    )
+
+            result.index = self.index
+            return result
+        elif isinstance(values, DataFrame):
+            values = values.reindex(self.index)
+
+            result = DataFrame()
+            for col in self.columns:
+                if col in values.columns:
+                    result[col] = self._data[col].binary_operator(
+                        "eq", values[col]._column
+                    )
+                else:
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+            result.index = self.index
+            return result
+        else:
+            if not is_list_like(values):
+                raise TypeError(
+                    "only list-like or dict-like objects are "
+                    "allowed to be passed to DataFrame.isin(), "
+                    "you passed a "
+                    "{0!r}".format(type(values).__name__)
+                )
+
+            result_df = DataFrame()
+
+            for col in self.columns:
+                result_df[col] = self._data[col].isin(values)
+            result_df.index = self.index
+            return result_df
+
     #
     # Stats
     #
@@ -3866,7 +3990,9 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3913,9 +4039,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if map_size is None:
-            map_size = map_index.unique_count()
-        else:
+        if kwargs.get("debug", False) == 1 and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
@@ -3925,18 +4049,6 @@ class DataFrame(Frame):
 
         tables = self._partition(map_index, map_size, keep_index)
 
-        if map_size:
-            # Make sure map_size is >= the number of uniques in map_index
-            if len(tables) > map_size:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (len(tables), map_size)
-                )
-
-            # Append empty dataframes if map_size > len(tables)
-
-            for i in range(map_size - len(tables)):
-                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):

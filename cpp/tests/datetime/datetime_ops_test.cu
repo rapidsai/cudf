@@ -275,17 +275,17 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds) {
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
   auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
-       662688000,   // 1991-01-01 00:00:00 GMT
-       949496401,   // 2000-02-02 13:00:01 GMT - leap year
-       4106854801,  // 2100-02-21 01:00:01 GMT - not a leap year
-       1582391837,  // 2020-02-22 17:17:17 GMT - leap year
-       1363046401,  // 2013-03-12 00:00:01 GMT
-       1302696000,  // 2011-04-13 12:00:00 GMT
-       1495800001,  // 2017-05-26 12:00:01 GMT
-       1056931201,  // 2003-06-30 00:00:01 GMT - already last day
-       1031961599,  // 2002-09-13 23:59:59 GMT
-       0,           // This is the UNIX epoch - 1970-01-01
-      -131968728,   // 1965-10-26 14:01:12 GMT
+       662688000L,   // 1991-01-01 00:00:00 GMT
+       949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+       4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
+       1582391837L,  // 2020-02-22 17:17:17 GMT - leap year
+       1363046401L,  // 2013-03-12 00:00:01 GMT
+       1302696000L,  // 2011-04-13 12:00:00 GMT
+       1495800001L,  // 2017-05-26 12:00:01 GMT
+       1056931201L,  // 2003-06-30 00:00:01 GMT - already last day
+       1031961599L,  // 2002-09-13 23:59:59 GMT
+       0L,           // This is the UNIX epoch - 1970-01-01
+      -131968728L,   // 1965-10-26 14:01:12 GMT
   };
 
   expect_columns_equal(*last_day_of_month(timestamps_s),

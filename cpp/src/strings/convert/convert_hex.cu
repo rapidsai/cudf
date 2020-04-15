@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -119,7 +120,7 @@ struct dispatch_hex_to_integers_fn
 };
 
 template <>
-void dispatch_hex_to_integers_fn::operator()<experimental::bool8>(column_device_view const&, mutable_column_view&, cudaStream_t) const
+void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&, mutable_column_view&, cudaStream_t) const
 {
     CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
 }
@@ -156,6 +157,7 @@ std::unique_ptr<column> hex_to_integers( strings_column_view const& strings,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::hex_to_integers(strings, output_type, mr );
 }
 

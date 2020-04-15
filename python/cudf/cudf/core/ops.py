@@ -91,3 +91,17 @@ def logical_or(lhs, rhs):
         return np.logical_or(lhs, rhs)
     else:
         return getattr(lhs, "logical_or")(rhs)
+
+
+def remainder(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.mod(lhs, rhs)
+    else:
+        return getattr(lhs, "remainder")(rhs)
+
+
+def floor_divide(lhs, rhs):
+    if isinstance(lhs, Number) and isinstance(rhs, Number):
+        return np.floor_divide(lhs, rhs)
+    else:
+        return getattr(lhs, "floordiv")(rhs)

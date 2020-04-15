@@ -48,6 +48,7 @@ import static ai.rapids.cudf.Table.sum;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1237,6 +1238,8 @@ public class TableTest extends CudfTestBase {
       DataInputStream din = new DataInputStream(bin);
       try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
         assertTablesAreEqual(t, result.getTable());
+        assertEquals(result.getTable(), result.getContiguousTable().getTable());
+        assertNotNull(result.getContiguousTable().getBuffer());
       }
     }
   }
@@ -1248,6 +1251,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(10, result.getNumRows());
     }
   }
@@ -1259,6 +1263,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(0, result.getNumRows());
     }
   }
@@ -1534,8 +1539,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
             assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin2).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin2);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         } finally {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
@@ -1569,8 +1578,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
             assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         }
       }
     }

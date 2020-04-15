@@ -664,20 +664,93 @@ class ColumnBase(Column):
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def take(self, indices):
+    def take(self, indices, keep_index=True):
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
         try:
-            return self.as_frame()._gather(indices)._as_column()
+            return (
+                self.as_frame()
+                ._gather(indices, keep_index=keep_index)
+                ._as_column()
+            )
         except RuntimeError as e:
             if "out of bounds" in str(e):
                 raise IndexError(
                     f"index out of bounds for column of size {len(self)}"
                 ) from e
             raise
+
+    def isin(self, values):
+        """Check whether values are contained in the Column.
+
+        Parameters
+        ----------
+        values : set or list-like
+            The sequence of values to test. Passing in a single string will
+            raise a TypeError. Instead, turn a single string into a list
+            of one element.
+        use_name : bool
+            If ``True`` then combine hashed column values
+            with hashed column name. This is useful for when the same
+            values in different columns should be encoded
+            with different hashed values.
+        Returns
+        -------
+        result: Column
+            Column of booleans indicating if each element is in values.
+        Raises
+        -------
+        TypeError
+            If values is a string
+        """
+        if is_scalar(values):
+            raise TypeError(
+                "only list-like objects are allowed to be passed "
+                f"to isin(), you passed a [{type(values).__name__}]"
+            )
+
+        from cudf import DataFrame, Series
+
+        lhs = self
+        rhs = None
+
+        try:
+            # We need to convert values to same type as self,
+            # hence passing dtype=self.dtype
+            rhs = as_column(values, dtype=self.dtype)
+        except ValueError:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return as_column(cupy.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat().categories._values
+            rhs_cats = rhs.cat().categories._values
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat().set_categories(cats, is_unique=True)
+                rhs = rhs.cat().set_categories(cats, is_unique=True)
+            else:
+                # If they're not the same dtype, short-circuit if the values
+                # list doesn't have any nulls. If it does have nulls, make
+                # the values list a Categorical with a single null
+                if not rhs.has_nulls:
+                    return cupy.zeros(len(self), dtype="bool")
+                rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
+
+        lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+
+        return res._column
 
     def as_mask(self):
         """Convert booleans to bitmask
@@ -824,7 +897,7 @@ class ColumnBase(Column):
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
             "typestr": self.dtype.str,
-            "data": (self.data_ptr, True),
+            "data": (self.data_ptr, False),
             "version": 1,
         }
 
@@ -1309,14 +1382,27 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 pa.array(arbitrary, from_pandas=nan_as_null),
                 dtype=arbitrary.dtype,
             )
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif isinstance(arbitrary, pd.Timestamp):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
+        if dtype is not None:
+            data = data.astype(dtype)
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         length = length or 1
+        if (
+            (nan_as_null is True)
+            and isinstance(arbitrary, (np.floating, float))
+            and np.isnan(arbitrary)
+        ):
+            arbitrary = None
+            if dtype is None:
+                dtype = np.dtype("float64")
+
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
@@ -1366,6 +1452,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
+            # There is no cast operation available for pa.Array from int to
+            # str, Hence instead of handling in pa.Array block, we
+            # will have to type-cast here.
+            if dtype is not None:
+                data = data.astype(dtype)
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
 
@@ -1417,6 +1508,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                             arbitrary,
                             dtype=dtype if dtype is None else np.dtype(dtype),
                         ),
+                        dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
     return data
