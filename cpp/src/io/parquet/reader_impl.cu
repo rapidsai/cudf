@@ -308,7 +308,7 @@ struct metadata : public FileMetaData {
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
-        row_count = static_cast<size_type>(std::min<int64_t>(get_total_rows(), INT32_MAX));
+        row_count = static_cast<decltype(row_count)>(std::min<int64_t>(get_total_rows(), std::numeric_limits<decltype(row_count)>::max()));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
