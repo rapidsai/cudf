@@ -361,9 +361,7 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
                                            stream);
                         return 0;//discarded (but necessary)
                       });
-  }
-#if 0
-  else {
+  } else {
     //copy the bytes to host, too:
     //
     thrust::host_vector<char> h_bytes(total_num_bytes);
@@ -377,17 +375,17 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
     //host algorithm call, where the underlying call
     //is also host_write taking a host buffer;
     //
+    char const* ptr_h_bytes = h_bytes.data();
     thrust::transform(thrust::host,
                       h_offsets.begin(), h_offsets.end(),
                       h_row_sizes.begin(),
                       thrust::make_discard_iterator(),//discard output
-                      [&sink = out_sink_, h_bytes, stream] (size_type offset_indx, size_type row_sz) mutable {
-                        sink->host_write(h_bytes.data() + offset_indx,
-                                           row_sz);
+                      [&sink = out_sink_, ptr_h_bytes, stream] (size_type offset_indx, size_type row_sz) mutable {
+                        sink->host_write(ptr_h_bytes + offset_indx,
+                                         row_sz);
                         return 0;//discarded (but necessary)
                       });
   }
-#endif
 }
 
   
