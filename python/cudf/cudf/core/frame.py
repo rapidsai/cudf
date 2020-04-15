@@ -673,7 +673,7 @@ class Frame(libcudf.table.Table):
             # We Invert `cond` below and call `where`, so
             # making sure the object supports
             # `~`(inversion) operator or `__invert__` method
-            cond = cupy.array(cond)
+            cond = cupy.asarray(cond)
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
