@@ -23,7 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 namespace
