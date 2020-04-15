@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
 
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
@@ -1722,7 +1723,6 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
 
 @pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
-    from numba import cuda
     import cudf
 
     ctx = cuda.current_context()
@@ -4709,6 +4709,24 @@ def test_dataframe_strided_slice(arg):
         ),
         (
             pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            cuda.to_device(
+                np.array(
+                    [[True, True], [False, True], [True, False], [False, True]]
+                )
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            cupy.array(
+                [[True, True], [False, True], [True, False], [False, True]]
+            ),
+            17,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
             [[True, True], [False, True], [True, False], [False, True]],
             17,
             None,
@@ -4786,7 +4804,15 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
 
     ps_mask = ps_where.copy(deep=True)
     gs_mask = gs_where.copy(deep=True)
-    ps_condition = condition
+
+    if hasattr(condition, "__cuda_array_interface__"):
+        if type(condition).__module__.split(".")[0] == "cupy":
+            ps_condition = cupy.asnumpy(condition)
+        else:
+            ps_condition = np.array(condition).astype("bool")
+    else:
+        ps_condition = condition
+
     if type(condition).__module__.split(".")[0] == "pandas":
         gs_condition = gd.from_pandas(condition)
     else:
