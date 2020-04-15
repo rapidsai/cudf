@@ -1,26 +1,26 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /* debrotli.cu
-*
-* CUDA-based brotli decompression
-*
-* Portions of this file are derived from Google's Brotli project at
-* https://github.com/google/brotli, original license text below.
-*/
+ *
+ * CUDA-based brotli decompression
+ *
+ * Portions of this file are derived from Google's Brotli project at
+ * https://github.com/google/brotli, original license text below.
+ */
 
 /* Copyright 2013 Google Inc. All Rights Reserved.
 
@@ -74,6 +74,7 @@ namespace io {
 
 #define BREV8(x)    (__brev(x) >> 24u)  // kReverseBits[x]
 
+// @brief Various local scratch arrays
 struct huff_scratch_s
 {
     uint16_t code_length_histo[16];
@@ -85,7 +86,7 @@ struct huff_scratch_s
     uint16_t symbols_lists_array[720];
 };
 
-// Contains a collection of Huffman trees with the same alphabet size.
+// @brief Contains a collection of Huffman trees with the same alphabet size.
 // max_symbol is needed due to simple codes since log2(alphabet_size) could be
 // greater than log2(max_symbol).
 struct debrotli_huff_tree_group_s
@@ -103,6 +104,9 @@ struct debrotli_huff_tree_group_s
                             +3*BROTLI_HUFFMAN_MAX_SIZE_258*sizeof(uint16_t)     \
                             +3*BROTLI_HUFFMAN_MAX_SIZE_26*sizeof(uint16_t)      )
 
+/*
+ * Brotli decoder state
+ */
 struct debrotli_state_s
 {
     // Bitstream
@@ -154,7 +158,7 @@ inline __device__ uint32_t Log2Floor(uint32_t value) {
     return 32 - __clz(value);
 }
 
-// initializes the bit reader
+// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, size_t pos = 0)
 {
     const uint8_t *p = base + pos;
@@ -1966,7 +1970,16 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
 }
 
 
-
+/*
+ * @brief Brotli decoding kernel
+ * See https://tools.ietf.org/html/rfc7932
+ *
+ * @param inputs[in] Source/Destination buffer information per block
+ * @param outputs[out] Decompressor status per block
+ * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
+ * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between blocks)
+ * @param count Number of blocks to decompress
+ */
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
 gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, uint8_t *scratch, uint32_t scratch_size, uint32_t count)
