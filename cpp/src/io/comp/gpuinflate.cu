@@ -1159,11 +1159,12 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 /**
  * @brief INFLATE decompression kernel
  *
+ * blockDim {NUMTHREADS,1,1}
+ *
  * @param inputs Source and destination buffer information per block
  * @param outputs Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  **/
-// blockDim {128,1,1}
 __global__ void __launch_bounds__(NUMTHREADS)
 inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
 {
@@ -1294,9 +1295,10 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
 /**
  * @brief Copy a group of buffers
  *
+ * blockDim {1024,1,1}
+ *
  * @param inputs Source and destination information per block
  **/
-// blockDim {1024,1,1}
 __global__ void __launch_bounds__(1024)
 copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
 {
