@@ -19,12 +19,16 @@ class annotate(ContextDecorator):
 
         Parameters
         ----------
-        message : str
+        message : str, optional
             A message associated with the annotated code range.
-        color : str, color
+            When used as a decorator, the default value of message
+            is the name of the function being decorated.
+            When used as a context manager, the default value
+            is the empty string.
+        color : str or color, optional
             A color associated with the annotated code range.
             Supports `matplotlib` colors if it is available.
-        domain : str
+        domain : str, optional
             Name of a domain under which the code range is scoped.
             The default domain is called "NVTX".
 
@@ -56,6 +60,11 @@ class annotate(ContextDecorator):
     def __exit__(self, *exc):
         pop_range(self.domain)
         return False
+
+    def __call__(self, func):
+        if self.message is None:
+            self.message = func.__name__
+        return super().__call__(func)
 
 
 def push_range(message=None, color="blue", domain=None):
