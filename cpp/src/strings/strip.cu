@@ -21,7 +21,7 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <thrust/transform.h>
