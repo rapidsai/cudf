@@ -404,8 +404,8 @@ class Frame(libcudf.table.Table):
             other, cudf.DataFrame
         ):
             return [
-                other[self_col].astype(self[self_col].dtype)._column
-                for self_col in self.columns
+                other[self_col].astype(self._data[self_col].dtype)._column
+                for self_col in self._data.names
             ]
 
         elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
@@ -424,10 +424,10 @@ class Frame(libcudf.table.Table):
             elif (self, cudf.DataFrame):
                 out = []
                 if is_scalar(other):
-                    other = [other for i in range(len(self.columns))]
+                    other = [other for i in range(len(self._data.names))]
                 out = [
                     self[in_col_name]._normalize_scalars(sclr)
-                    for in_col_name, sclr in zip(self.columns, other)
+                    for in_col_name, sclr in zip(self._data.names, other)
                 ]
 
                 return out
@@ -494,12 +494,14 @@ class Frame(libcudf.table.Table):
         if isinstance(self, cudf.DataFrame):
             if isinstance(cond, cupy.core.ndarray):
                 cond = self.from_gpu_matrix(
-                    cond, columns=self.columns, index=self.index
+                    cond, columns=self._data.names, index=self.index
                 )
             elif not isinstance(cond, cudf.DataFrame):
                 cond = self.from_pandas(pd.DataFrame(cond))
 
-            common_cols = set(self.columns).intersection(set(cond.columns))
+            common_cols = set(self._data.names).intersection(
+                set(cond._data.names)
+            )
             if len(common_cols) > 0:
                 # If `self` and `cond` are having unequal index,
                 # then re-index `cond`.
@@ -524,9 +526,9 @@ class Frame(libcudf.table.Table):
                     should be equal to Number of columns of dataframe"""
                 )
 
-            for column_name, other_column in zip(self.columns, other):
+            for column_name, other_column in zip(self._data.names, other):
                 input_col = self._data[column_name]
-                if column_name in cond.columns:
+                if column_name in cond._data:
                     if is_categorical_dtype(input_col.dtype):
                         if np.isscalar(other_column):
                             try:
@@ -753,7 +755,7 @@ class Frame(libcudf.table.Table):
             not np.iterable(subset)
             or isinstance(subset, str)
             or isinstance(subset, tuple)
-            and subset in self.columns
+            and subset in self._data.names
         ):
             subset = (subset,)
         diff = set(subset) - set(self._data)
@@ -789,7 +791,7 @@ class Frame(libcudf.table.Table):
             else:
                 thresh = len(df)
 
-        for col in self.columns:
+        for col in self._data.names:
             if (len(df[col]) - df[col].null_count) < thresh:
                 continue
             out_cols.append(col)
@@ -996,7 +998,7 @@ class Frame(libcudf.table.Table):
             not np.iterable(subset)
             or isinstance(subset, str)
             or isinstance(subset, tuple)
-            and subset in self.columns
+            and subset in self._data.names
         ):
             subset = (subset,)
         diff = set(subset) - set(self._data)
