@@ -77,6 +77,7 @@
 - PR #4873 Prevent mutable_view() from invoking null count
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4901 Improve unit tests for casting Java numeric types to string
 
 ## Bug Fixes
 
