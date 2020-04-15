@@ -11,6 +11,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -90,6 +91,13 @@ class Index(Frame):
             return self
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            col = self._data[self.name]
+            col._mimic_inplace(other._data[other.name], inplace=True)
+        else:
+            return other
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -281,6 +289,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True

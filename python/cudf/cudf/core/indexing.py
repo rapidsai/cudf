@@ -6,6 +6,7 @@ import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
+from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
@@ -210,6 +211,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_scalar(self, arg):
         return self._df[arg[1]].loc[arg[0]]
 
+    @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import Series, DataFrame
         from cudf.core.column import column
@@ -259,6 +261,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
         return df
 
+    @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
         if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
             self._df.columns, pd.MultiIndex
@@ -285,6 +288,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def __init__(self, df):
         self._df = df
 
+    @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
         from cudf.core.dataframe import DataFrame, Series
@@ -337,6 +341,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             df._index = RangeIndex(start, stop)
         return df
 
+    @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
         columns = self._get_column_selection(key[1])
 
