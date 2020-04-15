@@ -1062,6 +1062,16 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInterleaveMixedColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6,7,8,9,10)
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns());
+    }
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
