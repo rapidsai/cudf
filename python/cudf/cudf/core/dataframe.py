@@ -3711,7 +3711,7 @@ class DataFrame(Frame):
     def min(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -3759,7 +3759,7 @@ class DataFrame(Frame):
     def max(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -3807,7 +3807,7 @@ class DataFrame(Frame):
     def sum(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         dtype=None,
         level=None,
         numeric_only=None,
@@ -4159,7 +4159,7 @@ class DataFrame(Frame):
     def std(
         self,
         axis=None,
-        skipna=True,
+        skipna=None,
         level=None,
         ddof=1,
         numeric_only=None,

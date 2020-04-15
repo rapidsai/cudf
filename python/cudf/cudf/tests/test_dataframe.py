@@ -1465,6 +1465,9 @@ def gdf(pdf):
     [
         {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
         {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
     ],
 )
 @pytest.mark.parametrize(
@@ -1491,7 +1494,7 @@ def gdf(pdf):
         lambda df, **kwargs: df.any(**kwargs),
     ],
 )
-@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("skipna", [True, False, None])
 def test_dataframe_reductions(data, func, skipna):
     pdf = pd.DataFrame(data=data)
     print(func(pdf, skipna=skipna))
@@ -1505,6 +1508,9 @@ def test_dataframe_reductions(data, func, skipna):
     [
         {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
         {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
     ],
 )
 @pytest.mark.parametrize("func", [lambda df: df.count()])
@@ -1520,10 +1526,13 @@ def test_dataframe_count_reduction(data, func):
     [
         {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
         {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
-@pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.parametrize("skipna", [True, False, None])
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)

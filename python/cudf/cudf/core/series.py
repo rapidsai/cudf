@@ -1340,6 +1340,9 @@ class Series(Frame):
                 "bool_only parameter is not implemented yet"
             )
 
+        if self.empty:
+            return False
+
         if skipna:
             result_series = self.nans_to_nulls()
             if len(result_series) == result_series.null_count:
@@ -2210,6 +2213,8 @@ class Series(Frame):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
+        skipna = True if skipna is None else skipna
+
         if skipna:
             result_col = self.nans_to_nulls()._column
         else:
@@ -2261,6 +2266,8 @@ class Series(Frame):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
 
+        skipna = True if skipna is None else skipna
+
         if skipna:
             result_col = self.nans_to_nulls()._column
         else:
@@ -2309,6 +2316,8 @@ class Series(Frame):
 
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
+
+        skipna = True if skipna is None else skipna
 
         if skipna:
             result_col = self.nans_to_nulls()._column
@@ -2369,6 +2378,8 @@ class Series(Frame):
 
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
+
+        skipna = True if skipna is None else skipna
 
         if skipna:
             result_col = self.nans_to_nulls()._column
