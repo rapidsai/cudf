@@ -23,7 +23,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/char_types/is_flags.h>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 
