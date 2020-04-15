@@ -32,7 +32,8 @@ cdef class EventAttributes:
 
     @message.setter
     def message(self, value):
-        self.c_obj.message.ascii = <const char*> value
+        self._message = value.encode("ascii")
+        self.c_obj.message.ascii = <const char*> self._message
 
 
 cdef class DomainHandle:
