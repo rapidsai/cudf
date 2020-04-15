@@ -63,18 +63,20 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if axis == 1:
         assert typs.issubset(allowed_typs)
         df = DataFrame()
-        
+
         aligned = []
         prev = list(_align_indices(objs[0], objs[1]))
-        for idx in range(len(objs)-2):
+        for idx in range(len(objs) - 2):
             aligned = []
-            for step in range(idx+1):
-                aligned.append(_align_indices(prev[step], objs[idx+2])[0])
-            aligned = aligned + list(_align_indices(prev[idx+1], objs[idx+2]))
-        
+            for step in range(idx + 1):
+                aligned.append(_align_indices(prev[step], objs[idx + 2])[0])
+            aligned = aligned + list(
+                _align_indices(prev[idx + 1], objs[idx + 2])
+            )
+
             prev = aligned
         objs = aligned
-                    
+
         sr_name = 0
         for idx, o in enumerate(objs):
             if isinstance(o, Series):
