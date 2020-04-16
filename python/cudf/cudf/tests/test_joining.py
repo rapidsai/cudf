@@ -866,6 +866,96 @@ def test_join_multi(how, column_a, column_b, column_c):
     )
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {
+            "left_on": ["a", "b"],
+            "right_on": ["a", "b"],
+            "left_index": False,
+            "right_index": False,
+        },  # left and right on, no indices
+        {
+            "left_on": None,
+            "right_on": None,
+            "left_index": True,
+            "right_index": True,
+        },  # left_inded and right_index, no on
+        {
+            "left_on": ["a", "b"],
+            "right_on": None,
+            "left_index": False,
+            "right_index": True,
+        },  # left on and right_index
+        {
+            "left_on": None,
+            "right_on": ["a", "b"],
+            "left_index": True,
+            "right_index": False,
+        },  # right_on and left_index
+    ],
+)
+def test_merge_multi(kwargs):
+
+    left = DataFrame(
+        {
+            "a": [1, 2, 3, 4, 3, 5, 6],
+            "b": [1, 3, 5, 7, 5, 9, 0],
+            "c": ["o", "p", "q", "r", "s", "t", "u"],
+            "d": ["v", "w", "x", "y", "z", "1", "2"],
+        }
+    )
+    right = DataFrame(
+        {
+            "a": [0, 9, 3, 4, 3, 7, 8],
+            "b": [2, 4, 5, 7, 5, 6, 8],
+            "c": ["a", "b", "c", "d", "e", "f", "g"],
+            "d": ["j", "i", "j", "k", "l", "m", "n"],
+        }
+    )
+
+    if (
+        kwargs["left_on"] is not None
+        and kwargs["right_on"] is not None
+        and kwargs["left_index"] is False
+        and kwargs["right_index"] is False
+    ):
+        left = left.set_index(["c", "d"])
+        right = right.set_index(["c", "d"])
+    elif (
+        kwargs["left_on"] is None
+        and kwargs["right_on"] is None
+        and kwargs["left_index"] is True
+        and kwargs["right_index"] is True
+    ):
+        left = left.set_index(["a", "b"])
+        right = right.set_index(["a", "b"])
+    elif kwargs["left_on"] is not None and kwargs["right_index"] is True:
+        left = left.set_index(["c", "d"])
+        right = right.set_index(["a", "b"])
+    elif kwargs["right_on"] is not None and kwargs["left_index"] is True:
+        left = left.set_index(["a", "b"])
+        right = right.set_index(["c", "d"])
+
+    gleft = left.to_pandas()
+    gright = right.to_pandas()
+
+    kwargs["sort"] = True
+    expect = gleft.merge(gright, **kwargs)
+    got = left.merge(right, **kwargs)
+
+    assert_eq(expect.sort_index().index, got.sort_index().index)
+
+    expect.index = range(len(expect))
+    got.index = range(len(got))
+    expect = expect.sort_values(list(expect.columns))
+    got = got.sort_values(list(got.columns))
+    expect.index = range(len(expect))
+    got.index = range(len(got))
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])
 @pytest.mark.parametrize("dtype_r", ["int8", "int16", "int32", "int64"])
 def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
