@@ -8,6 +8,7 @@
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
 - PR #4815 Add JNI total memory allocated API
+
 ## Improvements
 
 - PR #4825 Update the iloc exp in dataframe.py
