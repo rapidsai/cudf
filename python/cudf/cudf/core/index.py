@@ -477,16 +477,18 @@ class Index(Frame):
         return ind
 
     @classmethod
-    def _from_table(cls, table, names=None):
+    def _from_table(cls, table):
         if not isinstance(table, RangeIndex):
             if table._num_columns == 0:
                 raise ValueError("Cannot construct Index from any empty Table")
-            if names is None:
-                names = table._data.names
             if table._num_columns == 1:
-                return as_index(table._data.columns[0], name=names[0])
+                return as_index(
+                    table._data.columns[0], name=table._data.names[0]
+                )
             else:
-                return cudf.MultiIndex._from_table(table, names=names)
+                return cudf.MultiIndex._from_table(
+                    table, names=table._data.names
+                )
         else:
             return as_index(table)
 
