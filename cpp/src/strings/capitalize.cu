@@ -22,6 +22,7 @@
 #include <cudf/strings/case.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/char_types/is_flags.h>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
@@ -298,6 +299,7 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   
   auto strings_column = column_device_view::create(strings.parent(),stream);
   auto d_column = *strings_column;
+  size_type null_count = strings.null_count();
 
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
@@ -315,7 +317,7 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
 
   // build the chars column -- convert characters based on case_flag parameter
   size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
+  auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
   auto chars_view = chars_column->mutable_view();
   auto d_chars = chars_view.data<char>();
 
@@ -328,7 +330,7 @@ std::unique_ptr<column> modify_strings( strings_column_view const& strings,
   
   //
   return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                             d_column.null_count(), std::move(null_mask), stream, mr);
+                             null_count, std::move(null_mask), stream, mr);
 }
 
 }//namespace detail

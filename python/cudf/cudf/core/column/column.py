@@ -150,13 +150,9 @@ class ColumnBase(Column):
         return self.binary_operator("eq", other).min()
 
     def all(self):
-        if self.null_count != 0:
-            return False
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
-        if self.valid_count == 0:
-            return False
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
@@ -440,12 +436,7 @@ class ColumnBase(Column):
         else:
             val = val.to_array()[0]
 
-        valid = (
-            cudautils.mask_get.py_func(self.mask_array_view, index)
-            if self.mask
-            else True
-        )
-        return val if valid else None
+        return val
 
     def __getitem__(self, arg):
         from cudf.core.column import column

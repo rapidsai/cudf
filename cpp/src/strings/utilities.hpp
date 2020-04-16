@@ -15,11 +15,6 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/strings/string_view.cuh>
-#include <cudf/strings/detail/utilities.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf
 {
@@ -27,16 +22,6 @@ namespace strings
 {
 namespace detail
 {
-
-/**
- * @brief Creates a temporary string_view object from a host string.
- *
- * @param[in] str Null-terminated, encoded string in CPU memory.
- * @param[in] stream Stream to execute any device code against.
- * @return Device object pointer.
- */
-std::unique_ptr<string_view, std::function<void(string_view*)>>
-    string_from_host( const char* str, cudaStream_t stream=0 );
 
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;

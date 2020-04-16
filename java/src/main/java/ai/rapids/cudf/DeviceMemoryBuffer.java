@@ -31,9 +31,13 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
 
   private static final class DeviceBufferCleaner extends MemoryBufferCleaner {
     private long address;
+    private long lengthInBytes;
+    private Cuda.Stream stream;
 
-    DeviceBufferCleaner(long address) {
+    DeviceBufferCleaner(long address, long lengthInBytes, Cuda.Stream stream) {
       this.address = address;
+      this.lengthInBytes = lengthInBytes;
+      this.stream = stream;
     }
 
     @Override
@@ -41,8 +45,17 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
       boolean neededCleanup = false;
       long origAddress = address;
       if (address != 0) {
-        Rmm.free(address, 0);
-        address = 0;
+        long s = stream == null ? 0 : stream.getStream();
+        try {
+          Rmm.free(address, lengthInBytes, s);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+          lengthInBytes = 0;
+          stream = null;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -95,8 +108,8 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     super(address, lengthInBytes, new RmmDeviceBufferCleaner(rmmBufferAddress));
   }
 
-  DeviceMemoryBuffer(long address, long lengthInBytes) {
-    super(address, lengthInBytes, new DeviceBufferCleaner(address));
+  DeviceMemoryBuffer(long address, long lengthInBytes, Cuda.Stream stream) {
+    super(address, lengthInBytes, new DeviceBufferCleaner(address, lengthInBytes, stream));
   }
 
   private DeviceMemoryBuffer(long address, long lengthInBytes, DeviceMemoryBuffer parent) {
@@ -109,7 +122,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @return the buffer
    */
   public static DeviceMemoryBuffer allocate(long bytes) {
-    return new DeviceMemoryBuffer(Rmm.alloc(bytes, 0), bytes);
+    return Rmm.alloc(bytes);
   }
 
   /**

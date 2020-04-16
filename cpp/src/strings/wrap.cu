@@ -23,7 +23,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/char_types/is_flags.h>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 
@@ -114,6 +114,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
   
   auto strings_column = column_device_view::create(strings.parent(),stream);
   auto d_column = *strings_column;
+  size_type null_count = strings.null_count();
 
   // copy null mask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
@@ -134,7 +135,7 @@ std::unique_ptr<column> wrap( strings_column_view const& strings,
                      thrust::make_counting_iterator<size_type>(0), strings_count, d_execute_fctr);
   
   return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                             d_column.null_count(), std::move(null_mask), stream, mr);
+                             null_count, std::move(null_mask), stream, mr);
 }
 
 }//namespace detail
