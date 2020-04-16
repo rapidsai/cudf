@@ -146,7 +146,7 @@
 - PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
-- PR #4879 Fix output for cudf.concat with axis=1 for pandas parity 
+- PR #4879 Fix output for `cudf.concat` with `axis=1` for pandas parity 
 - PR #4838 Fix to support empty inputs to `replace` method
 - PR #4859 JSON reader: fix data type inference for string columns
 - PR #4868 Temporary fix to skip validation on Dask related runs
@@ -158,7 +158,6 @@
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
-
 
 
 # cuDF 0.13.0 (31 Mar 2020)
