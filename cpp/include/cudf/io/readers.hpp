@@ -515,6 +515,8 @@ class reader {
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
+   *
+   * @throw cudf::logic_error if stripe index is out of range
    */
   table_with_metadata read_stripe(size_type stripe, size_type stripe_count = 1,
                                   cudaStream_t stream = 0);
@@ -526,6 +528,8 @@ class reader {
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
+   *
+   * @throw cudf::logic_error if stripe index is out of range
    */
   table_with_metadata read_stripes(const std::vector<size_type>& stripe_list,
                                    cudaStream_t stream = 0);
@@ -642,6 +646,8 @@ class reader {
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
+   *
+   * @throw cudf::logic_error if row group index is out of range
    */
   table_with_metadata read_row_group(size_type row_group, size_type row_group_count = 1,
                                      cudaStream_t stream = 0);
@@ -653,6 +659,8 @@ class reader {
    * @param stream Optional stream to use for device memory alloc and kernels
    *
    * @return The set of columns along with table metadata
+   *
+   * @throw cudf::logic_error if row group index is out of range
    */
   table_with_metadata read_row_groups(const std::vector<size_type>& row_group_list,
                                       cudaStream_t stream = 0);
