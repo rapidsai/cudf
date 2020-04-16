@@ -82,6 +82,10 @@ def is_categorical_dtype(obj):
     """
     if obj is None:
         return False
+    if isinstance(obj, cudf.CategoricalDtype):
+        return True
+    if obj is cudf.CategoricalDtype:
+        return True
     if isinstance(obj, np.dtype):
         return False
     if isinstance(obj, CategoricalDtype):
@@ -115,7 +119,9 @@ def is_categorical_dtype(obj):
         ),
     ):
         return is_categorical_dtype(obj.dtype)
-
+    if hasattr(obj, "type"):
+        if obj.type is CategoricalDtypeType:
+            return True
     return pandas_dtype(obj).type is CategoricalDtypeType
 
 
