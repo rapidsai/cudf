@@ -6,12 +6,28 @@ import pandas as pd
 import cudf
 from cudf.core import DataFrame, Index, RangeIndex, Series
 from cudf.core.column import as_column, build_categorical_column
-from cudf.core.dataframe import _align_indices
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
+
+
+def align_objs(objs):
+    index = objs[0].index
+    for obj in objs[1:]:
+        name = index.name
+        index = (
+            cudf.DataFrame(index=obj.index)
+            .join(cudf.DataFrame(index=index), how="outer")
+            .index
+        )
+        index.name = name
+
+    for i, obj in enumerate(objs):
+        objs[i] = obj.reindex(index)
+
+    return objs
 
 
 def concat(objs, axis=0, ignore_index=False, sort=None):
@@ -64,19 +80,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
-        # Step through objects to align indexes for pandas-like output
-        aligned = []
-        prev = list(_align_indices(objs[0], objs[1]))
-        for idx in range(len(objs) - 2):
-            aligned = []
-            for step in range(idx + 1):
-                aligned.append(_align_indices(prev[step], objs[idx + 2])[0])
-            aligned = aligned + list(
-                _align_indices(prev[idx + 1], objs[idx + 2])
-            )
-
-            prev = aligned
-        objs = aligned
+        objs = align_objs(objs)
 
         sr_name = 0
         for idx, o in enumerate(objs):

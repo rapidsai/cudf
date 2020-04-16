@@ -261,11 +261,7 @@ def test_pandas_concat_compatibility_axis1():
     pd4 = d4.to_pandas()
     pd5 = d5.to_pandas()
 
-    expect = pd.concat(
-        [pd1, pd2, pd3, pd4, pd5], axis=1, verify_integrity=True
-    )
-    got = gd.concat([d1, d2, d3, d4, d5], axis=1)
+    expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
+    got = gd.concat([d1, d2, d3, d4, d5], axis=1).sort_index()
 
-    print(got)
-    print(expect)
     assert_eq(got, expect)
