@@ -14,6 +14,16 @@ _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
 def align_objs(objs):
+    """Align a set of Series or Dataframe objects.
+
+    Parameters
+    ----------
+    objs : list of DataFrame, Series, or Index
+
+    Returns
+    -------
+    A set of reindexed and aligned objects ready for concatenation
+    """
     index = objs[0].index
     for obj in objs[1:]:
         name = index.name
