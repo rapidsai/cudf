@@ -52,6 +52,8 @@ cdef class Table:
     def _num_rows(self):
         if self._index is not None:
             return len(self._index)
+        if len(self._data) == 0:
+            return 0
         return len(self._data.columns[0])
 
     @property
