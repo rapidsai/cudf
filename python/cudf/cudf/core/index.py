@@ -482,9 +482,19 @@ class Index(Frame):
             if table._num_columns == 0:
                 raise ValueError("Cannot construct Index from any empty Table")
             if table._num_columns == 1:
-                return as_index(
-                    table._data.columns[0], name=table._data.names[0]
-                )
+                values = next(iter(table._data.values()))
+
+                if isinstance(values, NumericalColumn):
+                    out = GenericIndex.__new__(GenericIndex)
+                elif isinstance(values, DatetimeColumn):
+                    out = DatetimeIndex.__new__(DatetimeIndex)
+                elif isinstance(values, StringColumn):
+                    out = StringIndex.__new__(StringIndex)
+                elif isinstance(values, CategoricalColumn):
+                    out = CategoricalIndex.__new__(CategoricalIndex)
+                out._data = table._data
+                out._index = None
+                return out
             else:
                 return cudf.MultiIndex._from_table(
                     table, names=table._data.names
