@@ -24,10 +24,7 @@ from cudf._lib.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.nvtx import (
-    range_pop as nvtx_range_pop,
-    range_push as nvtx_range_push,
-)
+from cudf._lib.nvtx import annotate
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -113,7 +110,7 @@ from cudf._lib.strings.substring import (
 from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, column_empty
+from cudf.core.column import column, column_empty, datetime
 from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
@@ -311,7 +308,7 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out[0]
+            out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -602,16 +599,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "isupper currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
@@ -623,16 +611,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "islower currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
     def lower(self, **kwargs):
@@ -2046,9 +2025,7 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = pd.core.tools.datetimes._guess_datetime_format(
-                        self[self.notna()][0]
-                    )
+                    fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
 
@@ -2158,7 +2135,7 @@ class StringColumn(column.ColumnBase):
     def fillna(self, fill_value):
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value)
+        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
@@ -2232,10 +2209,9 @@ class StringColumn(column.ColumnBase):
         return out
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _string_column_binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    nvtx_range_pop()
     return out
 
 

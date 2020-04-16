@@ -18,6 +18,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <iostream>
 #include <thrust/for_each.h>
@@ -144,6 +145,7 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type> >
                     cudaStream_t stream,
                     rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     size_type count = strings.size();
     const int32_t* d_offsets = strings.offsets().data<int32_t>();
     d_offsets += strings.offset(); // nvbug-2808421 : do not combine with the previous line

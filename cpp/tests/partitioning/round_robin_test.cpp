@@ -55,7 +55,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -189,7 +189,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -323,7 +323,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -457,7 +457,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -523,7 +523,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -633,7 +633,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -687,7 +687,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else
@@ -712,7 +712,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition) {
 
   auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
       if (cudf::experimental::type_to_id<TypeParam>() == cudf::BOOL8) {
-        cudf::experimental::bool8 ret = (row % 2 == 0);
+        bool ret = (row % 2 == 0);
         return static_cast<TypeParam>(ret);
       }
       else

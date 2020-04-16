@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,11 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 
 #include <vector>
 #include <thrust/transform.h>
@@ -1051,6 +1052,7 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
                                             size_type maxsplit,
                                             rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::split( strings, delimiter, maxsplit, mr );
 }
 
@@ -1059,6 +1061,7 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
                                              size_type maxsplit,
                                              rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::rsplit( strings, delimiter, maxsplit, mr );
 }
 
@@ -1067,6 +1070,7 @@ contiguous_split_record_result contiguous_split_record(
     string_scalar const& delimiter,
     size_type maxsplit,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::contiguous_split_record<detail::Dir::FORWARD>(strings, delimiter, maxsplit, mr, 0);
 }
 
@@ -1075,6 +1079,7 @@ contiguous_split_record_result contiguous_rsplit_record(
     string_scalar const& delimiter,
     size_type maxsplit,
     rmm::mr::device_memory_resource* mr) {
+  CUDF_FUNC_RANGE();
   return detail::contiguous_split_record<detail::Dir::BACKWARD>(strings, delimiter, maxsplit, mr, 0);
 }
 

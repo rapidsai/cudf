@@ -206,10 +206,10 @@ TEST_F(CsvReaderTest, Booleans) {
   expect_column_data_equal(std::vector<int32_t>{1, 0, 0, 0, 1}, view.column(0));
   expect_column_data_equal(std::vector<int16_t>{0, 1, 1, 0, 1}, view.column(2));
   expect_column_data_equal(
-      std::vector<cudf::experimental::bool8>{
-          cudf::experimental::true_v, cudf::experimental::true_v,
-          cudf::experimental::false_v, cudf::experimental::true_v,
-          cudf::experimental::false_v},
+      std::vector<bool>{
+          true, true,
+          false, true,
+          false},
       view.column(3));
 }
 
@@ -518,6 +518,23 @@ TEST_F(CsvReaderTest, ByteRange) {
                            view.column(0));
 }
 
+TEST_F(CsvReaderTest, ByteRangeStrings) {
+  std::string input = "\"a\"\n\"b\"\n\"c\"";
+  cudf_io::read_csv_args in_args{cudf_io::source_info{input.c_str(), input.size()}};
+  in_args.names = {"A"};
+  in_args.dtype = {"str"};
+  in_args.header = -1;
+  in_args.byte_range_offset = 4;
+  auto result = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::STRING, view.column(0).type().id());
+
+  expect_column_data_equal(std::vector<std::string>{"c"},
+                           view.column(0));
+}
+
 TEST_F(CsvReaderTest, BlanksAndComments) {
   auto filepath = temp_env->get_temp_dir() + "BlanksAndComments.csv";
   {
@@ -613,6 +630,16 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint) {
     ASSERT_TRUE(std::isnan(elem));
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
+}
+
+TEST_F(CsvReaderTest, StringInference) {
+  std::string buffer = "\"-1\"\n";
+  cudf_io::read_csv_args in_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};
+  in_args.header = -1;
+  const auto result = cudf_io::read_csv(in_args);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);  
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  
 }
 
 CUDF_TEST_PROGRAM_MAIN()

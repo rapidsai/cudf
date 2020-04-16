@@ -28,7 +28,7 @@
 #include <cudf/detail/search.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/logical.h>
@@ -186,7 +186,7 @@ struct multi_contains_dispatch {
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream) {
 
-    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool8>()},
+    std::unique_ptr<column> result = make_numeric_column(data_type{experimental::type_to_id<bool>()},
                                                          haystack.size(),
                                                          copy_bitmask(haystack),
                                                          haystack.null_count(),
@@ -199,8 +199,7 @@ struct multi_contains_dispatch {
     mutable_column_view result_view = result.get()->mutable_view();
 
     if (needles.size() == 0) {
-      bool8 f = false;
-      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool8>(), result_view.end<bool8>(), f);
+      thrust::fill(rmm::exec_policy(stream)->on(stream), result_view.begin<bool>(), result_view.end<bool>(), false);
       return result;
     }
 
@@ -214,7 +213,7 @@ struct multi_contains_dispatch {
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
-                        result_view.begin<bool8>(),
+                        result_view.begin<bool>(),
                         [device_hash_set, d_haystack] __device__ (size_t index) {
                           return d_haystack.is_null_nocheck(index) || device_hash_set.contains(d_haystack.element<Element>(index));
                         });
@@ -222,7 +221,7 @@ struct multi_contains_dispatch {
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
-                        result_view.begin<bool8>(),
+                        result_view.begin<bool>(),
                         [device_hash_set, d_haystack] __device__ (size_t index) {
                           return device_hash_set.contains(d_haystack.element<Element>(index));
                         });

@@ -113,7 +113,7 @@ def test_string_export(ps_gs):
 def test_string_get_item(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -145,7 +145,7 @@ def test_string_get_item(ps_gs, item):
 def test_string_bool_mask(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -164,7 +164,7 @@ def test_string_bool_mask(ps_gs, item):
 def test_string_repr(ps_gs, item):
     ps, gs = ps_gs
 
-    got_out = gs[item]
+    got_out = gs.iloc[item]
     expect_out = ps.iloc[item]
 
     expect = str(expect_out)
@@ -1105,11 +1105,21 @@ _string_char_types_data = [
     [" ", "\t\r\n ", ""],
     ["leopard", "Golden Eagle", "SNAKE", ""],
     [r"¯\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻", "┬─┬ノ( º _ ºノ)"],
+    ["a1", "A1", "a!", "A!", "!1", "aA"],
 ]
 
 
 @pytest.mark.parametrize(
-    "type_op", ["isdecimal", "isalnum", "isalpha", "isdigit", "isnumeric"]
+    "type_op",
+    [
+        "isdecimal",
+        "isalnum",
+        "isalpha",
+        "isdigit",
+        "isnumeric",
+        "isupper",
+        "islower",
+    ],
 )
 @pytest.mark.parametrize("data", _string_char_types_data)
 def test_string_char_types(type_op, data):
@@ -1117,19 +1127,6 @@ def test_string_char_types(type_op, data):
     ps = pd.Series(data)
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
-
-
-@pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
-@pytest.mark.parametrize("data", _string_char_types_data)
-@pytest.mark.parametrize("case_check_op", ["isupper", "islower"])
-def test_string_char_case_check(data, case_check_op):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    # some tests may pass, but for the wrong reasons.
-    assert_eq(
-        getattr(gs.str, case_check_op)(), getattr(ps.str, case_check_op)()
-    )
 
 
 @pytest.mark.parametrize(

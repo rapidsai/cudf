@@ -91,14 +91,17 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def replace_nulls(Column input_col, object replacement):
+def replace_nulls(Column input_col, object replacement, object dtype=None):
     """
     Calls one of the version of replace_nulls depedning on type
     of replacement
     """
 
     if is_scalar(replacement):
-        return replace_nulls_scalar(input_col, Scalar(replacement))
+        return replace_nulls_scalar(
+            input_col,
+            Scalar(replacement, dtype=dtype)
+        )
     else:
         return replace_nulls_column(input_col, replacement)
 
