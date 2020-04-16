@@ -1456,33 +1456,61 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringCast() {
+  void testCastByteToString() {
 
-    Short[] shortValues = {1, 3, 45, -0, null};
+    Byte[] byteValues = {1, 3, 45, -0, null, Byte.MIN_VALUE, Byte.MAX_VALUE};
+    String[] stringByteValues = getStringArray(byteValues);
+
+    testCastFixedWidthToStringsAndBack(DType.INT8, () -> ColumnVector.fromBoxedBytes(byteValues), () -> ColumnVector.fromStrings(stringByteValues));
+  }
+
+  @Test
+  void testCastShortToString() {
+
+    Short[] shortValues = {1, 3, 45, -0, null, Short.MIN_VALUE, Short.MAX_VALUE};
     String[] stringShortValues = getStringArray(shortValues);
 
     testCastFixedWidthToStringsAndBack(DType.INT16, () -> ColumnVector.fromBoxedShorts(shortValues), () -> ColumnVector.fromStrings(stringShortValues));
+  }
 
-    Integer[] integerArray = {1, -2, 3, null, 8};
+  @Test
+  void testCastIntToString() {
+    Integer[] integerArray = {1, -2, 3, null, 8, Integer.MIN_VALUE, Integer.MAX_VALUE};
     String[] stringIntValues = getStringArray(integerArray);
 
     testCastFixedWidthToStringsAndBack(DType.INT32, () -> ColumnVector.fromBoxedInts(integerArray), () -> ColumnVector.fromStrings(stringIntValues));
+  }
 
-    Long[] longValues = {null, 3l, 2l, -43l, null};
+  @Test
+  void testCastLongToString() {
+
+    Long[] longValues = {null, 3l, 2l, -43l, null, Long.MIN_VALUE, Long.MAX_VALUE};
     String[] stringLongValues = getStringArray(longValues);
 
     testCastFixedWidthToStringsAndBack(DType.INT64, () -> ColumnVector.fromBoxedLongs(longValues), () -> ColumnVector.fromStrings(stringLongValues));
+  }
+
+  @Test
+  void testCastFloatToString() {
 
     Float[] floatValues = {Float.NaN, null, 03f, -004f, 12f};
     String[] stringFloatValues = getStringArray(floatValues);
 
     testCastFixedWidthToStringsAndBack(DType.FLOAT32, () -> ColumnVector.fromBoxedFloats(floatValues), () -> ColumnVector.fromStrings(stringFloatValues));
+  }
+
+  @Test
+  void testCastDoubleToString() {
 
     Double[] doubleValues = {Double.NaN, Double.NEGATIVE_INFINITY, 4d, 98d, null, Double.POSITIVE_INFINITY};
     //Creating the string array manually because of the way cudf converts POSITIVE_INFINITY to "Inf" instead of "INFINITY"
     String[] stringDoubleValues = {"NaN","-Inf", "4.0", "98.0", null, "Inf"};
 
     testCastFixedWidthToStringsAndBack(DType.FLOAT64, () -> ColumnVector.fromBoxedDoubles(doubleValues), () -> ColumnVector.fromStrings(stringDoubleValues));
+  }
+
+  @Test
+  void testCastBoolToString() {
 
     Boolean[] booleans = {true, false, false};
     String[] stringBools = getStringArray(booleans);

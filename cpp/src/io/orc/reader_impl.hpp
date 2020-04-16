@@ -73,12 +73,15 @@ class reader::impl {
    * @param num_rows Number of rows to read
    * @param stripe Stripe index to select
    * @param max_stripe_count Max number of consecutive stripes if greater than 0
+   * @param stripe_indices Indices of individual stripes to load if non-null [max_stripe_count]
    * @param stream Stream to use for memory allocation and kernels
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int skip_rows, int num_rows, int stripe,
-                           int max_stripe_count, cudaStream_t stream);
+  table_with_metadata read(size_type skip_rows, size_type num_rows,
+                           size_type stripe, size_type max_stripe_count,
+                           const size_type *stripe_indices,
+                           cudaStream_t stream);
 
  private:
   /**
