@@ -259,3 +259,6 @@ def merge_parquet_filemetadata(filemetadata_list):
     """{docstring}"""
 
     return libparquet.merge_filemetadata(filemetadata_list)
+
+
+ParquetWriter = libparquet.ParquetWriter

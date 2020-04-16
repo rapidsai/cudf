@@ -21,8 +21,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
 
 #include <nvtext/normalize.hpp>
 #include <text/utilities/tokenize_ops.cuh>

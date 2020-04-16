@@ -22,6 +22,7 @@
 #include <cmath>
 #include <type_traits>
 #include <cstdint>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace library {
@@ -29,17 +30,28 @@ namespace operation {
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Add {
-        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename OutT = TypeOut,
+                  typename std::enable_if<
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
+                      !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
+        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
             using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-            return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
+            return (static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
         }
     };
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     struct Sub {
-        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-            return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
+        // Disallow difference of timestamps with any other type (including itself)
+        template <typename OutT = TypeOut,
+                  typename std::enable_if<
+                      !cudf::is_timestamp_t<OutT>::value &&
+                      !cudf::is_timestamp_t<TypeLhs>::value &&
+                      !cudf::is_timestamp_t<TypeRhs>::value, void>::type * = nullptr>
+        OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
+            return (static_cast<OutT>(lhs) - static_cast<OutT>(rhs));
         }
     };
 
