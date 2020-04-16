@@ -88,6 +88,7 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4909 Added ability to transform a column using cuda method in Java bindings 
 
 ## Bug Fixes
 
