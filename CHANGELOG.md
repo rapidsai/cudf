@@ -154,6 +154,7 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 
 
