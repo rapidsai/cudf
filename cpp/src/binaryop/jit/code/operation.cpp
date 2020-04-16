@@ -398,9 +398,31 @@ R"***(
     struct RLogBase {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
+            return LogBase::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
+
+    struct NullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) return true;
+            if (lhs_valid && rhs_valid) return x == y;
+            return false;
+        }
+    };
+
+    struct RNullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            return NullEquals::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                                  output_valid);
+        }
+    };
+
 )***";
 
 } // namespace code

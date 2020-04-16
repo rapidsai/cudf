@@ -29,6 +29,14 @@ namespace detail {
 rmm::device_buffer scalar_col_valid_mask_and(column_view const& col, scalar const& s, cudaStream_t stream, rmm::mr::device_memory_resource* mr);
 }
 
+/**
+ * @brief Does the binop need to know if an operand is null/invalid to perform special
+ * processing?
+ */
+inline bool null_using_binop(binary_operator op) {
+  return op == binary_operator::NULL_EQUALS;
+}
+
 namespace compiled {
 
 /**
@@ -105,57 +113,6 @@ std::unique_ptr<column> binary_operation(
     column_view const& lhs,
     column_view const& rhs,
     binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
-/**
- * @brief Performs null-aware comparison between every element from lhs with rhs.
- *
- * This compares every element from lhs with rhs and returns a bool as a result of
- * comparison. The comparison works thusly:
- *
- * for i in [0, lhs.size())
- *   If lhs[i] is null && rhs is null, return true
- *   If lhs[i] is not null && rhs is not null, return the result of lhs[i] == rhs
- *   Else return false
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand scalar
- * @param output_type The desired data type of the output column - it should be bool
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
- */
-std::unique_ptr<column> null_equals(
-    column_view const& lhs,
-    scalar const& rhs,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-
-/**
- * @brief Performs null-aware comparison between every element of lhs with the corresponding
- * element from rhs.
- *
- * This compares each element from lhs with rhs in turn, and returns a bool as a result of
- * comparison. The comparison works thusly:
- *
- * for i in [0, lhs.size())
- *   If lhs[i] is null and rhs[i] is null, return true
- *   If lhs[i] is not null and rhs[i] is not null, return the result of lhs[i] == rhs[i]
- *   Else return false
- *
- * @param lhs         The left operand column
- * @param rhs         The right operand column
- * @param output_type The desired data type of the output column - it should be bool
- * @param mr          Memory resource for allocating output column
- * @param stream      CUDA stream on which to execute kernels
- * @return std::unique_ptr<column> Output column of bool8 type that is non nullable
- */
-std::unique_ptr<column> null_equals(
-    column_view const& lhs,
-    column_view const& rhs,
     data_type output_type,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream = 0);

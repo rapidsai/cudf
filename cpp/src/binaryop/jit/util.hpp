@@ -91,6 +91,8 @@ namespace jit {
         operator_name = "ShiftRightUnsigned"; break;
       case binary_operator::LOG_BASE:
         operator_name = "LogBase"; break;
+      case binary_operator::NULL_EQUALS:
+        operator_name = "NullEquals"; break;
       default:
         operator_name = "None"; break;
     }
