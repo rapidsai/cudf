@@ -414,13 +414,15 @@ class ColumnBase(Column):
         if val.null_count == 1:
             val = None
         else:
-            val = val.to_array()[0]
             valid = (
                 cudautils.mask_get.py_func(self.mask_array_view, index)
                 if self.mask
                 else True
             )
-            val = val if valid else None
+            if valid:
+                val = val.to_array()[0]
+            else:
+                val = None
 
         return val
 
