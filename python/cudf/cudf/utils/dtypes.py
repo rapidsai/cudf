@@ -246,21 +246,16 @@ def check_upcast_unsupported_dtype(dtype):
     if dtype in np_to_cudf_types:
         return dtype
 
-    if dtype.kind in ("u", "i"):
-        supported_i_types = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-        ]
-        for supported_type in supported_i_types:
-            if dtype <= supported_type:
-                return supported_type
-    elif dtype.kind in ("f"):
-        supported_f_types = [np.dtype("float32"), np.dtype("float64")]
-        for supported_type in supported_f_types:
-            if dtype <= supported_type:
-                return supported_type
+    # A mapping of un-supported types to next capable supported dtype.
+    up_cast_types_map = {
+        np.dtype("uint8"): np.dtype("int16"),
+        np.dtype("uint16"): np.dtype("int32"),
+        np.dtype("uint32"): np.dtype("int64"),
+        np.dtype("float16"): np.dtype("float32"),
+    }
+
+    if dtype in up_cast_types_map:
+        return up_cast_types_map[dtype]
 
     raise NotImplementedError(
         "Cannot upcast {0} dtype, as it is not supported by CuDF.".format(

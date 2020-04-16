@@ -1204,6 +1204,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         current_dtype = np.dtype(desc["typestr"])
+
+        arb_dtype = check_upcast_unsupported_dtype(current_dtype)
+        if arb_dtype != current_dtype:
+            arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
+            current_dtype = arb_dtype
+
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
@@ -1365,32 +1371,23 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
-            data = as_column(
-                np.asarray(arbitrary),
-                dtype=arbitrary.dtype,
+            data = as_column(np.asarray(arbitrary), dtype=arbitrary.dtype,)
+        elif arbitrary.dtype.kind in ("f"):
+            arb_dtype = check_upcast_unsupported_dtype(
+                arbitrary.dtype if dtype is None else dtype
             )
-        elif arbitrary.dtype.kind in ("O", "U"):
+            data = as_column(
+                cupy.asarray(arbitrary, dtype=arb_dtype),
+                nan_as_null=nan_as_null,
+            )
+        elif arbitrary.dtype.kind in ("u", "i"):
+            data = as_column(
+                cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
+            )
+        else:
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
                 dtype=arbitrary.dtype,
-            )
-        else:
-            arb_dtype = check_upcast_unsupported_dtype(arbitrary.dtype)
-
-            if arb_dtype != arbitrary.dtype:
-                # This cast is exclusively needed for halffloat to
-                # float until the following issues are resolved:
-                # https://github.com/apache/arrow/issues/2691
-                # https://issues.apache.org/jira/browse/ARROW-7242
-                arbitrary = arbitrary.astype(arb_dtype)
-
-            data = as_column(
-                pa.array(
-                    arbitrary,
-                    from_pandas=nan_as_null,
-                    type=np_to_pa_dtype(arb_dtype),
-                ),
-                dtype=arb_dtype,
             )
         if dtype is not None:
             data = data.astype(dtype)
@@ -1467,7 +1464,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             # will have to type-cast here.
             if dtype is not None:
                 data = data.astype(dtype)
-        else:
+        elif arb_dtype.kind in ("f"):
             arb_dtype = check_upcast_unsupported_dtype(
                 arb_dtype if dtype is None else dtype
             )
@@ -1475,6 +1472,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
             )
+        else:
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
