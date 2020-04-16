@@ -1366,7 +1366,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
             data = as_column(
-                pa.array(np.asarray(arbitrary), from_pandas=True),
+                np.asarray(arbitrary),
                 dtype=arbitrary.dtype,
             )
         elif arbitrary.dtype.kind in ("O", "U"):
