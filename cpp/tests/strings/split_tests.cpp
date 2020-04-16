@@ -202,7 +202,13 @@ TEST_F(StringsSplitTest, AllNullsCase)
 
     auto results = cudf::strings::split(cudf::strings_column_view(strings));
     EXPECT_TRUE( results->num_columns()==1 );
-    auto column = results->get_column(0);
+    auto column = results->get_column(0).view();
+    EXPECT_TRUE( column.size()==3 );
+    EXPECT_TRUE( column.has_nulls() );
+    EXPECT_TRUE( column.null_count()==column.size() );
+    results = cudf::strings::split(cudf::strings_column_view(strings),cudf::string_scalar("-"));
+    EXPECT_TRUE( results->num_columns()==1 );
+    column = results->get_column(0);
     EXPECT_TRUE( column.size()==3 );
     EXPECT_TRUE( column.has_nulls() );
     EXPECT_TRUE( column.null_count()==column.size() );

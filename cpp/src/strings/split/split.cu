@@ -305,14 +305,6 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
 {
     std::vector<std::unique_ptr<column>> results;
     auto strings_count = strings_column.size();
-    // boundary case: if no columns, return one null column (issue #119)
-    if( strings_count==0 )
-    {
-        results.push_back(std::make_unique<column>( data_type{STRING}, strings_count,
-                          rmm::device_buffer{0,stream,mr}, // no data
-                          create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr), strings_count ));
-        return std::make_unique<experimental::table>(std::move(results));
-    }
 
     auto execpol = rmm::exec_policy(stream);
     auto d_offsets = strings_column.offsets().data<int32_t>() + strings_column.offset();
@@ -361,6 +353,14 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
     // column count is the maximum number of tokens for any string
     size_type columns_count =
         *thrust::max_element(execpol->on(stream), token_counts.begin(), token_counts.end() );
+    // boundary case: if no columns, return one null column (custrings issue #119)
+    if( columns_count==0 )
+    {
+        results.push_back(std::make_unique<column>( data_type{STRING}, strings_count,
+                          rmm::device_buffer{0,stream,mr}, // no data
+                          create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr), strings_count ));
+    }
+
     // create working area to hold token positions
     rmm::device_vector<string_index_pair> tokens( columns_count * strings_count );
     string_index_pair* d_tokens = tokens.data().get();
