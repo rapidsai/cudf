@@ -47,7 +47,8 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
-            source_data = kwargs["source_data"].reset_index(drop=True)
+            source_data = kwargs["source_data"].copy(deep=False)
+            source_data.reset_index(drop=True, inplace=True)
 
             if isinstance(source_data, pd.DataFrame):
                 source_data = DataFrame.from_pandas(source_data)
@@ -315,6 +316,16 @@ class MultiIndex(Index):
             result = level_series.isin(values)
 
         return result
+
+    def mask(self, cond, other=None, inplace=False):
+        raise NotImplementedError(
+            ".mask is not supported for MultiIndex operations"
+        )
+
+    def where(self, cond, other=None, inplace=False):
+        raise NotImplementedError(
+            ".where is not supported for MultiIndex operations"
+        )
 
     def _compute_levels_and_codes(self):
         levels = []

@@ -16,7 +16,8 @@ interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 
 @pytest.mark.parametrize("method", methods)
 @pytest.mark.parametrize("dtype", params_dtypes)
-def test_series_reductions(method, dtype):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_series_reductions(method, dtype, skipna):
     np.random.seed(0)
     arr = np.random.random(100)
     if np.issubdtype(dtype, np.integer):
@@ -26,17 +27,20 @@ def test_series_reductions(method, dtype):
         mask = arr > 0.5
 
     arr = arr.astype(dtype)
-    arr2 = arr[mask]
+    if dtype in (np.float32, np.float64):
+        arr[[2, 5, 14, 19, 50, 70]] = np.nan
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    psr = sr.to_pandas()
+    psr[~mask] = np.nan
 
-    def call_test(sr):
+    def call_test(sr, skipna):
         fn = getattr(sr, method)
         if method in ["std", "var"]:
-            return fn(ddof=1)
+            return fn(ddof=1, skipna=skipna)
         else:
-            return fn()
+            return fn(skipna=skipna)
 
-    expect, got = call_test(arr2), call_test(sr)
+    expect, got = call_test(psr, skipna=skipna), call_test(sr, skipna=skipna)
     print(expect, got)
     np.testing.assert_approx_equal(expect, got)
 
@@ -243,6 +247,9 @@ def test_kurtosis(data, null_flag):
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
+    with pytest.raises(NotImplementedError):
+        data.kurt(numeric_only=False)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -275,6 +282,9 @@ def test_skew(data, null_flag):
     expected = pdata.skew()
     got = got if np.isscalar(got) else got.to_array()
     np.testing.assert_array_almost_equal(got, expected)
+
+    with pytest.raises(NotImplementedError):
+        data.skew(numeric_only=False)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
@@ -391,12 +401,67 @@ def test_df_corr():
 
 
 @pytest.mark.parametrize(
-    "ops", ["mean", "min", "max", "sum", "product", "var", "std"]
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+        [],
+    ],
 )
-def test_nans_stats(ops):
+@pytest.mark.parametrize(
+    "ops",
+    [
+        "mean",
+        "min",
+        "max",
+        "sum",
+        "product",
+        "var",
+        "std",
+        "prod",
+        "kurtosis",
+        "skew",
+        "any",
+        "all",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False, None])
+def test_nans_stats(data, ops, skipna):
+    psr = pd.Series(data)
+    gsr = Series(data)
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
+    )
 
-    data = [0.0, 1, 3, 6, np.NaN, 7, 5.0, 5, 2, 3, -100]
     psr = pd.Series(data)
     gsr = Series(data, nan_as_null=False)
+    # Since there is no concept of `nan_as_null` in pandas,
+    # nulls will be returned in the operations. So only
+    # testing for `skipna=True` when `nan_as_null=False`
+    assert_eq(getattr(psr, ops)(skipna=True), getattr(gsr, ops)(skipna=True))
 
-    assert_eq(getattr(psr, ops)(), getattr(gsr, ops)())
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
+def test_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.Series(data)
+    gsr = Series(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+    )

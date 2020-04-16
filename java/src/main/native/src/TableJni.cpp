@@ -26,6 +26,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/reshape.hpp>
 
 #include "jni_utils.hpp"
 
@@ -890,6 +891,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(JNIEnv *env,
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env, jclass,
+    jlongArray j_cudf_table_view) {
+
+  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);
+  try {
+    cudf::table_view *table_view = reinterpret_cast<cudf::table_view *>(j_cudf_table_view);
+    std::unique_ptr<cudf::column> result = cudf::experimental::interleave_columns(*table_view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, jclass clazz,
