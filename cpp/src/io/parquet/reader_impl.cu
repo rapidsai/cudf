@@ -192,7 +192,7 @@ struct metadata : public FileMetaData {
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
   }
 
-  inline int get_total_rows() const { return num_rows; }
+  inline int64_t get_total_rows() const { return num_rows; }
   inline int get_num_row_groups() const { return row_groups.size(); }
   inline int get_num_columns() const { return row_groups[0].columns.size(); }
 
@@ -278,19 +278,28 @@ struct metadata : public FileMetaData {
    *
    * @param row_group Index of the row group to select
    * @param max_rowgroup_count Max number of consecutive row groups if > 0
+   * @param row_group_indices Arbitrary rowgroup list[max_rowgroup_count] if non-null
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
    *
    * @return List of row group indexes and its starting row
    */
-  auto select_row_groups(int row_group, int max_rowgroup_count, int &row_start, int &row_count) {
-    std::vector<std::pair<int, int>> selection;
+  auto select_row_groups(size_type row_group, size_type max_rowgroup_count,
+                         const size_type *row_group_indices,
+                         size_type &row_start, size_type &row_count) {
+    std::vector<std::pair<size_type, size_t>> selection;
 
-    if (row_group != -1) {
-      CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
-      for (int i = 0; i < row_group; ++i) {
-        row_start += row_groups[i].num_rows;
+    if (row_group_indices) {
+      row_count = 0;
+      for (size_type i = 0; i < max_rowgroup_count; i++) {
+        auto rowgroup_idx = row_group_indices[i];
+        CUDF_EXPECTS(rowgroup_idx >= 0 && rowgroup_idx < get_num_row_groups(), "Invalid rowgroup index");
+        selection.emplace_back(rowgroup_idx, row_count);
+        row_count += row_groups[rowgroup_idx].num_rows;
       }
+    }
+    else if (row_group != -1) {
+      CUDF_EXPECTS(row_group < get_num_row_groups(), "Non-existent row group");
       row_count = 0;
       do {
         selection.emplace_back(row_group, row_start + row_count);
@@ -298,18 +307,19 @@ struct metadata : public FileMetaData {
       } while (--max_rowgroup_count > 0 && ++row_group < get_num_row_groups());
     } else {
       row_start = std::max(row_start, 0);
-      if (row_count == -1) {
-        row_count = get_total_rows();
+      if (row_count < 0) {
+        row_count = static_cast<size_type>(std::min<int64_t>(get_total_rows(), std::numeric_limits<size_type>::max()));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
-      for (int i = 0, count = 0; i < (int)row_groups.size(); ++i) {
+      for (size_t i = 0, count = 0; i < row_groups.size(); ++i) {
+        size_t chunk_start_row = count;
         count += row_groups[i].num_rows;
-        if (count > row_start || count == 0) {
-          selection.emplace_back(i, count - row_groups[i].num_rows);
+        if (count > static_cast<size_t>(row_start) || count == 0) {
+          selection.emplace_back(i, chunk_start_row);
         }
-        if (count >= (row_start + row_count)) {
+        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) {
           break;
         }
       }
@@ -629,14 +639,15 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _strings_to_categorical = options.strings_to_categorical;
 }
 
-table_with_metadata reader::impl::read(int skip_rows, int num_rows, int row_group,
-                                       int max_rowgroup_count, cudaStream_t stream) {
+table_with_metadata reader::impl::read(size_type skip_rows, size_type num_rows, size_type row_group,
+                                       size_type max_rowgroup_count, const size_type *row_group_indices,
+                                       cudaStream_t stream) {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
   // Select only row groups required
   const auto selected_row_groups =
-      _metadata->select_row_groups(row_group, max_rowgroup_count, skip_rows, num_rows);
+      _metadata->select_row_groups(row_group, max_rowgroup_count, row_group_indices, skip_rows, num_rows);
 
   // Get a list of column data types
   std::vector<data_type> column_types;
@@ -810,20 +821,27 @@ reader::~reader() = default;
 
 // Forward to implementation
 table_with_metadata reader::read_all(cudaStream_t stream) {
-  return _impl->read(0, -1, -1, -1, stream);
+  return _impl->read(0, -1, -1, -1, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_row_group(size_type row_group, size_type row_group_count,
                                            cudaStream_t stream) {
-  return _impl->read(0, -1, row_group, row_group_count, stream);
+  return _impl->read(0, -1, row_group, row_group_count, nullptr, stream);
+}
+
+// Forward to implementation
+table_with_metadata reader::read_row_groups(const std::vector<size_type>& row_group_list,
+                                         cudaStream_t stream) {
+  return _impl->read(0, -1, -1, static_cast<size_type>(row_group_list.size()),
+                                row_group_list.data(), stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_rows(size_type skip_rows,
                                       size_type num_rows,
                                       cudaStream_t stream) {
-  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, stream);
+  return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
 }
 
 }  // namespace parquet

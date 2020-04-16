@@ -19,7 +19,7 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>

@@ -20,7 +20,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/sequence.h>
 
