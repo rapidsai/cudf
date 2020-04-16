@@ -936,7 +936,7 @@ class Frame(libcudf.table.Table):
         to `self`.
         """
         for name, col, other_col in zip(
-            self._column_names, self._columns, other._columns
+            self._data.keys(), self._data.values(), other._data.values()
         ):
             if is_categorical_dtype(other_col) and not is_categorical_dtype(
                 col
@@ -1369,7 +1369,7 @@ class Frame(libcudf.table.Table):
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-        to_frame_data = OrderedDict()
+        to_frame_data = cudf.core.column_accessor.ColumnAccessor()
         for name, col in result:
             if is_string_dtype(col):
                 to_frame_data[name] = col

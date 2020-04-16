@@ -4021,7 +4021,7 @@ class DataFrame(Frame):
         # map_index might be a column name or array,
         # make it a Column
         if isinstance(map_index, str):
-            map_index = self[map_index]._column
+            map_index = self._data[map_index]
         elif isinstance(map_index, Series):
             map_index = map_index._column
         else:
