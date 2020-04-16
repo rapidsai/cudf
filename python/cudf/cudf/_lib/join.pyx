@@ -209,16 +209,16 @@ cpdef join(Table lhs,
 
     all_cols_py = columns_from_ptr(move(c_result))
     if left_index or right_index:
-        ix_odict = OrderedDict()
+        ind_cols = OrderedDict()
         for name, pos in zip(
             result_index_names[::-1], result_idx_positions[::-1]
         ):
-            ix_odict[name] = all_cols_py.pop(pos)
-        other_dict = OrderedDict()
-        for k, v in list(ix_odict.items())[::-1]:
-            other_dict[k] = v
-        index_cols = Table(other_dict)
+            ind_cols[name] = all_cols_py.pop(pos)
+        index = OrderedDict()
+        for k, v in reversed(ind_cols.items()):
+            index[k] = v
+        index = Table(index)
     else:
-        index_cols = None
+        index = None
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
-    return Table(data=data_ordered_dict, index=index_cols)
+    return Table(data=data_ordered_dict, index=index)
