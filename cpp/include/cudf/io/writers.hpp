@@ -297,7 +297,7 @@ struct writer_options {
   {
     return false_value_;
   }
-private:
+
   // string to use for null entries:
   //
   std::string const na_rep_;

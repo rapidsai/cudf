@@ -296,7 +296,6 @@ struct write_csv_args: private detail::csv::writer_options {
     return metadata_;
   }
 
-private:
   // Specify the sink to use for writer output:
   //
   sink_info const& sink_;

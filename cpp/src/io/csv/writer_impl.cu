@@ -215,29 +215,6 @@ private:
   writer_options const& options_;
   rmm::mr::device_memory_resource* mr_;
 };
-
-//This helper doesn't seem necessary, anymore:
-//dead-code it for now...
-//  
-/**
- * @brief Helper function for write_csv.
- *
- * @param column The column to be converted.
- * @param options ...
- * @param mr...
- * @return strings_column_view instance formated for CSV column output.
-**/
-// strings_column_view column_to_strings_csv(column_view const& column,
-//                                           writer_options const& options,
-//                                           rmm::mr::device_memory_resource* mr = nullptr) {
-//   //TODO;
-//   //
-//   column_to_strings_fn col2str{options, mr};
-//   auto ret = col2str.template operator()<bool>(column); // check instantiation: okay
-  
-//   return strings_column_view{column}; // for now
-// }
-
 } // unnamed namespace
 
 // Forward to implementation
