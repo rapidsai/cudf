@@ -715,24 +715,10 @@ class DataFrame(Frame):
         return cupy.asarray(self.as_gpu_matrix())
 
     def __array__(self, dtype=None):
-        """
-        Return the values as a NumPy array.
-
-        Parameters
-        ----------
-        dtype : str or numpy.dtype, optional
-            The dtype to use for the resulting NumPy array. By default,
-            the dtype is inferred from the data.
-        Returns
-        -------
-        numpy.ndarray
-            The values in the series converted to a :class:`numpy.ndarary`
-            with the specified `dtype`.
-        """
-        array = self.as_matrix()
-        if dtype is not None:
-            array = array.astype(dtype)
-        return array
+        raise NotImplementedError(
+            "__array__ is not supported in CuDF, use .as_matrix()\
+                 for converting to numpy instead."
+        )
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """

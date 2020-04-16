@@ -375,22 +375,10 @@ class Index(Frame):
         return Series(self._values)
 
     def __array__(self, dtype=None):
-        """
-        Return the values as a NumPy array.
-
-        Parameters
-        ----------
-        dtype : str or numpy.dtype, optional
-            The dtype to use for the resulting NumPy array. By default,
-            the dtype is inferred from the data.
-        Returns
-        -------
-        numpy.ndarray
-            The values in the series converted to a :class:`numpy.ndarary`
-            with the specified `dtype`.
-        """
-
-        return self._values.__array__(dtype=dtype)
+        raise NotImplementedError(
+            "__array__ is not supported in CuDF, use .to_array()\
+                 for converting to numpy instead."
+        )
 
     @property
     def is_unique(self):
