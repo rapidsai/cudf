@@ -340,7 +340,8 @@ struct column_view_printer {
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
                    [&h_data](auto idx) {
-                     return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                     return h_data.second.empty() || bit_is_set(h_data.second.data(), idx) 
+                              ? h_data.first[idx] : std::string("NULL");
                    });
   }
 
