@@ -212,7 +212,7 @@ static jlongArray convert_table_for_return(JNIEnv * env,
     return outcol_handles.get_jArray();
 }
 
-static jlongArray convert_table_for_return(JNIEnv * env, std::unique_ptr<cudf::experimental::table> &table_result) {
+jlongArray convert_table_for_return(JNIEnv * env, std::unique_ptr<cudf::experimental::table> &table_result) {
     std::vector<std::unique_ptr<cudf::column>> extra;
     return convert_table_for_return(env, table_result, extra);
 }

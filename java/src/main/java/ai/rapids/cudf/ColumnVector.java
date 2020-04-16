@@ -1807,6 +1807,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+   *                  Default of empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit(Scalar delimiter) {
+    assert type == DType.STRING : "column type must be a String";
+    assert delimiter.getType() == DType.STRING : "substring scalar must be a string scalar";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
+      return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    }
+  }
+
+  public Table stringSplit() { return stringSplit(Scalar.fromString("")); }
+
+  /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
    * Overloading subString to support if end index is not provided. Appending -1 to indicate to
    * read until end of string.
@@ -2174,6 +2193,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param end character index to end the search on (exclusive).
    */
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
+
+  /**
+   * Native method which returns array of columns by splitting each string using the specified
+   * delimiter.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param delimiter  UTF-8 encoded string indentifying the split points in each string.
+   */
+  private static native long[] stringSplit(long columnView, long delimiter);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
