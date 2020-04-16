@@ -9,6 +9,7 @@
 - PR #4771 Added in an option to statically link against cudart
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
+- PR #4906 Add Java bindings for interleave_columns
 
 ## Improvements
 
@@ -43,6 +44,7 @@
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4779 Allow reading arbitrary stripes/rowgroup lists in CPP columnar readers
 - PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
@@ -77,9 +79,15 @@
 - PR #4869 Expose contiguous table when deserializing from Java
 - PR #4878 Remove obsolete string_from_host utility
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4877 Fix `DataFrame.mask` and align `mask` & `where` behavior with pandas
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4901 Improve unit tests for casting Java numeric types to string
+- PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
+- PR #4905 Get decorated function name as message when annotating
+- PR #4907 Reuse EventAttributes across NVTX annotations
+- PR #4912 Drop old `valid` check in `element_indexing`
 
 ## Bug Fixes
 
@@ -135,6 +143,7 @@
 - PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4879 Fix output for cudf.concat with axis=1 for pandas parity 
@@ -146,7 +155,9 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
+- PR #4889 Fix multi-index merging
 
 
 
