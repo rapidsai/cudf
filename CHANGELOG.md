@@ -86,6 +86,7 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 
 ## Bug Fixes
 
