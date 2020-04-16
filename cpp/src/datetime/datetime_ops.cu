@@ -161,6 +161,7 @@ template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                           cudaStream_t stream,
                                           rmm::mr::device_memory_resource* mr) {
+  CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
   auto size = column.size();
   auto output_col_type = data_type{OutputColCudfT};
   auto null_mask = copy_bitmask(column, stream, mr);
@@ -168,6 +169,9 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
       output_col_type, size, rmm::device_buffer{size * cudf::size_of(output_col_type), stream, mr},
       null_mask, column.null_count(),
       std::vector<std::unique_ptr<cudf::column>>{});
+
+  // Return an empty column if source column is empty
+  if (size == 0) return output;
 
   auto launch = launch_functor<TransformFunctor,
                                typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>

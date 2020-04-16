@@ -387,4 +387,15 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate) {
                        true);
 }
 
+TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn) {
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Crete an empty column
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{};
+  auto out_col = day_of_year(timestamps_d);
+  EXPECT_EQ(out_col->size(), 0);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
