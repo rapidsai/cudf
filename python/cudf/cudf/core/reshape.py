@@ -40,7 +40,7 @@ def align_objs(objs):
     return objs
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None):
+def concat(objs, axis=0, ignore_index=False, sort=None, align_index=False):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -51,6 +51,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
+    align_index : bool, default False
+        Set True to align the index of the *objs*
 
     Returns
     -------
@@ -90,7 +92,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
-        objs = align_objs(objs)
+        if align_index:
+            objs = align_objs(objs)
 
         sr_name = 0
         for idx, o in enumerate(objs):
