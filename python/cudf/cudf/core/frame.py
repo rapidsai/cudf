@@ -938,9 +938,9 @@ class Frame(libcudf.table.Table):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if is_categorical_dtype(other_col) and not is_categorical_dtype(
-                col
-            ):
+            if isinstance(
+                other_col, cudf.core.column.CategoricalColumn
+            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=as_column(col.base_data, dtype=col.dtype),
