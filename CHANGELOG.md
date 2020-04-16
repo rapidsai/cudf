@@ -77,6 +77,7 @@
 - PR #4869 Expose contiguous table when deserializing from Java
 - PR #4878 Remove obsolete string_from_host utility
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4877 Fix `DataFrame.mask` and align `mask` & `where` behavior with pandas
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
 - PR #4894 Add annotations for the `.columns` property and setter

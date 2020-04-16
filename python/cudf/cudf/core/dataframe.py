@@ -24,7 +24,6 @@ import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
-from cudf._lib.transform import bools_to_mask
 from cudf.core import column
 from cudf.core.column import (
     CategoricalColumn,
@@ -492,25 +491,10 @@ class DataFrame(Frame):
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
-            return self.mask(arg)
+            return self.where(arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
-
-    def mask(self, other):
-        df = self.copy()
-        for col in self.columns:
-            if col in other.columns:
-                if other[col].has_nulls:
-                    raise ValueError("Column must have no nulls.")
-
-                out_mask = bools_to_mask(other[col]._column)
-            else:
-                out_mask = create_null_mask(
-                    len(self[col]), state=MaskState.ALL_NULL
-                )
-            df[col] = df[col].set_mask(out_mask)
-        return df
 
     @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
@@ -875,7 +859,7 @@ class DataFrame(Frame):
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
-                "[%d rows x %d columns]" % (len(self), len(self.columns))
+                "[%d rows x %d columns]" % (len(self), len(self._data.names))
             )
         return "\n".join(lines)
 
@@ -895,18 +879,18 @@ class DataFrame(Frame):
             else pd.options.display.width / 2
         )
 
-        if len(self) <= nrows and len(self.columns) <= ncols:
+        if len(self) <= nrows and len(self._data.names) <= ncols:
             output = self.copy(deep=False)
         else:
-            left_cols = len(self.columns)
+            left_cols = len(self._data.names)
             right_cols = 0
             upper_rows = len(self)
             lower_rows = 0
             if len(self) > nrows and nrows > 0:
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
-            if len(self.columns) > ncols:
-                right_cols = len(self.columns) - int(ncols / 2.0) - 1
+            if len(self._data.names) > ncols:
+                right_cols = len(self._data.names) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
@@ -942,7 +926,8 @@ class DataFrame(Frame):
         if lines[-2].startswith("<p>"):
             lines = lines[:-2]
             lines.append(
-                "<p>%d rows × %d columns</p>" % (len(self), len(self.columns))
+                "<p>%d rows × %d columns</p>"
+                % (len(self), len(self._data.names))
             )
             lines.append("</div>")
         return "\n".join(lines)
@@ -1181,8 +1166,8 @@ class DataFrame(Frame):
         return iter(self.columns)
 
     def equals(self, other):
-        for col in self.columns:
-            if col not in other.columns:
+        for col in self._data.names:
+            if col not in other._data.names:
                 return False
             if not self[col].equals(other[col]):
                 return False
@@ -1352,9 +1337,9 @@ class DataFrame(Frame):
         if not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
-        if not len(columns) == len(self.columns):
+        if not len(columns) == len(self._data.names):
             raise ValueError(
-                f"Length mismatch: expected {len(self.columns)} elements ,"
+                f"Length mismatch: expected {len(self._data.names)} elements ,"
                 f"got {len(columns)} elements"
             )
 
@@ -1708,7 +1693,7 @@ class DataFrame(Frame):
         if isinstance(data, GeneratorType):
             data = Series(data)
 
-        self.insert(len(self.columns), name, data)
+        self.insert(len(self._data.names), name, data)
 
     def drop(
         self,
@@ -1880,7 +1865,7 @@ class DataFrame(Frame):
                 else:
                     out[key] = col
         elif callable(mapper):
-            for col in self.columns:
+            for col in self._data.names:
                 out[mapper(col)] = self[col]
 
         if inplace:
@@ -1914,7 +1899,7 @@ class DataFrame(Frame):
         A (nrow x ncol) numba device ndarray
         """
         if columns is None:
-            columns = self.columns
+            columns = self._data.names
 
         cols = [self._data[k] for k in columns]
         ncol = len(cols)
@@ -2147,7 +2132,7 @@ class DataFrame(Frame):
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
         new_positions = sorted_series.index.gpu_values
-        for k in self.columns:
+        for k in self._data.names:
             if k == column:
                 df[k] = sorted_series
             else:
@@ -2411,7 +2396,7 @@ class DataFrame(Frame):
                 method="hash",
             )
 
-        same_names = set(self.columns) & set(other.columns)
+        same_names = set(self._data.names) & set(other._data.names)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError(
                 "there are overlapping columns but "
@@ -2658,9 +2643,9 @@ class DataFrame(Frame):
 
             selected = Series(boolmask)
             newdf = DataFrame()
-            for col in self.columns:
-                newseries = self[col][selected]
-                newdf[col] = newseries
+            for col_name in self._data.names:
+                newseries = self[col_name][selected]
+                newdf[col_name] = newseries
             result = newdf
             return result
 
@@ -3311,12 +3296,12 @@ class DataFrame(Frame):
         numpy recarray
         """
         members = [("index", self.index.dtype)] if index else []
-        members += [(col, self[col].dtype) for col in self.columns]
+        members += [(col, self[col].dtype) for col in self._data.names]
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
             ret["index"] = self.index.to_array()
-        for col in self.columns:
+        for col in self._data.names:
             ret[col] = self[col].to_array()
         return ret
 
@@ -3379,8 +3364,8 @@ class DataFrame(Frame):
         Parameters
         ----------
         data : numba gpu ndarray
-        index : str
-            The name of the index column in *data*.
+        index : str, Index
+            The name of the index column in `data` or an Index itself.
             If None, the default index is used.
         columns : list of str
             List of column names to include.
@@ -3412,7 +3397,10 @@ class DataFrame(Frame):
             df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            indices = data[index]
+            if isinstance(index, cudf.Index):
+                indices = index
+            else:
+                indices = data[index]
             return df.set_index(indices.astype(np.int64))
 
         return df
@@ -3484,11 +3472,11 @@ class DataFrame(Frame):
         if not numeric_only:
             raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
-            columns = self.columns
+            columns = self._data.names
 
         result = DataFrame()
 
-        for k in self.columns:
+        for k in self._data.names:
 
             if k in columns:
                 res = self[k].quantile(
@@ -3580,7 +3568,7 @@ class DataFrame(Frame):
 
             result_df = DataFrame()
 
-            for col in self.columns:
+            for col in self._data.names:
                 if col in values:
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
@@ -3597,7 +3585,7 @@ class DataFrame(Frame):
             result = DataFrame()
             import numpy as np
 
-            for col in self.columns:
+            for col in self._data.names:
                 if is_categorical_dtype(
                     self[col].dtype
                 ) and is_categorical_dtype(values.dtype):
@@ -3622,7 +3610,7 @@ class DataFrame(Frame):
             values = values.reindex(self.index)
 
             result = DataFrame()
-            for col in self.columns:
+            for col in self._data.names:
                 if col in values.columns:
                     result[col] = self._data[col].binary_operator(
                         "eq", values[col]._column
@@ -3642,7 +3630,7 @@ class DataFrame(Frame):
 
             result_df = DataFrame()
 
-            for col in self.columns:
+            for col in self._data.names:
                 result_df[col] = self._data[col].isin(values)
             result_df.index = self.index
             return result_df
