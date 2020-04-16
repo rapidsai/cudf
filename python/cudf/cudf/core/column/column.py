@@ -28,6 +28,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
+    check_upcast_unsupported_dtype,
     is_categorical_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -1368,10 +1369,29 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 pa.array(np.asarray(arbitrary), from_pandas=True),
                 dtype=arbitrary.dtype,
             )
-        else:
+        elif arbitrary.dtype.kind in ("O", "U"):
             data = as_column(
                 pa.array(arbitrary, from_pandas=nan_as_null),
                 dtype=arbitrary.dtype,
+            )
+        else:
+            print(arbitrary.dtype)
+            arb_dtype = check_upcast_unsupported_dtype(arbitrary.dtype)
+
+            if arb_dtype != arbitrary.dtype:
+                # This cast is exclusively needed for halffloat to
+                # float until the following issues are resolved:
+                # https://github.com/apache/arrow/issues/2691
+                # https://issues.apache.org/jira/browse/ARROW-7242
+                arbitrary = arbitrary.astype(arb_dtype)
+
+            data = as_column(
+                pa.array(
+                    arbitrary,
+                    from_pandas=nan_as_null,
+                    type=np_to_pa_dtype(arb_dtype),
+                ),
+                dtype=arb_dtype,
             )
         if dtype is not None:
             data = data.astype(dtype)
@@ -1449,7 +1469,13 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if dtype is not None:
                 data = data.astype(dtype)
         else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
+            arb_dtype = check_upcast_unsupported_dtype(
+                arb_dtype if dtype is None else dtype
+            )
+            data = as_column(
+                cupy.asarray(arbitrary, dtype=arb_dtype),
+                nan_as_null=nan_as_null,
+            )
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(
