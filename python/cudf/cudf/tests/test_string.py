@@ -113,7 +113,7 @@ def test_string_export(ps_gs):
 def test_string_get_item(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -145,7 +145,7 @@ def test_string_get_item(ps_gs, item):
 def test_string_bool_mask(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -164,7 +164,7 @@ def test_string_bool_mask(ps_gs, item):
 def test_string_repr(ps_gs, item):
     ps, gs = ps_gs
 
-    got_out = gs[item]
+    got_out = gs.iloc[item]
     expect_out = ps.iloc[item]
 
     expect = str(expect_out)

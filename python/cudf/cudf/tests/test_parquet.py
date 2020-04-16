@@ -12,7 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.io.parquet import merge_parquet_filemetadata
+from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
 
@@ -315,7 +315,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
         gdf = gdf.drop("col_category")
 
     for row in range(num_rows):
-        assert gdf["col_int32"][row] == row + skip_rows
+        assert gdf["col_int32"].iloc[row] == row + skip_rows
 
 
 def test_parquet_reader_spark_timestamps(datadir):
@@ -579,6 +579,17 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_chunked(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
+    writer.close()
+
+    assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
 
 
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
