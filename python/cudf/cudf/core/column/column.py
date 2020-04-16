@@ -48,7 +48,8 @@ class ColumnBase(Column):
         mask : Buffer, optional
         children : tuple, optional
         """
-        super().__init__(
+        blah = super()
+        blah.__init__(
             data,
             size=size,
             dtype=dtype,

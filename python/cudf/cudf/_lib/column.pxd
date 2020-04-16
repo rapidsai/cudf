@@ -14,7 +14,17 @@ from cudf._lib.cpp.column.column_view cimport (
 
 
 cdef class Column:
-    cdef dict __dict__
+    cdef int _offset
+    cdef int _size
+    cdef object _dtype
+    cdef object _base_children
+    cdef object _base_data
+    cdef object _base_mask
+    cdef object _children
+    cdef object _data
+    cdef object _mask
+    cdef object _null_count
+
     cdef column_view _view(self, size_type null_count) except *
     cdef column_view view(self) except *
     cdef mutable_column_view mutable_view(self) except *
