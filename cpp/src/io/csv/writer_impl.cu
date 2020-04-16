@@ -271,7 +271,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
     {
       CUDF_EXPECTS( metadata != nullptr, "Unexpected null metadata."); 
       CUDF_EXPECTS( metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
-                    "Mismatch between column headers and table columns.");
+                    "Mismatch between number of column headers and table columns.");
 
       std::string delimiter_str{options_.inter_column_delimiter()};
 
@@ -304,14 +304,7 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
   auto num_rows = strings_column.size();
   decltype(num_rows) num_offsets = pair_buff_offsets.second.size();
 
-  /* cannot use with CUDF_EXPECTS() because it's a macro...
-  std::stringstream ss_err;
-  ss_err << "Unexpected discrepancy between number of offsets: "
-         << num_offsets
-         << " and number of rows: "
-         << num_rows << ".";
-  */
-  CUDF_EXPECTS( num_rows == num_offsets, "Unexpected discrepancy between number of offsets and number of rows.");//ss_err.str().c_str() );
+  CUDF_EXPECTS( num_rows == num_offsets, "Unexpected discrepancy between number of offsets and number of rows.");
 
   
   auto total_num_bytes = pair_buff_offsets.first.size();
