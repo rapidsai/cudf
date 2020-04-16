@@ -2440,8 +2440,8 @@ class DataFrame(Frame):
         for name, col in other._data.items():
             rhs[name] = col
 
-        lhs = lhs.reset_index(drop=True)
-        rhs = rhs.reset_index(drop=True)
+        lhs.reset_index(drop=True, inplace=True)
+        rhs.reset_index(drop=True, inplace=True)
 
         cat_join = []
         for name in idx_col_names:
