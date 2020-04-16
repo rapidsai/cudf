@@ -58,17 +58,12 @@ def _shuffle_group_2(df, cols, ignore_index, nparts):
     return result2, df.iloc[:0]
 
 
-def _rearrange_by_hash_simple(df, columns, npartitions, ignore_index=True):
-
-    if isinstance(columns, str):
-        columns = [columns]
-    elif isinstance(columns, tuple):
-        columns = list(columns)
+def _simple_shuffle(df, columns, npartitions, ignore_index=True):
 
     token = tokenize(df, columns)
 
     group = {  # Convert partition into dict of dataframe pieces
-        ("shuffle-group-" + token, i): (
+        ("simple-shuffle-group-" + token, i): (
             _shuffle_group,
             (df._name, i),
             columns,
@@ -82,9 +77,9 @@ def _rearrange_by_hash_simple(df, columns, npartitions, ignore_index=True):
     }
 
     split = {  # Get out each individual dataframe piece from the dicts
-        ("shuffle-split-" + token, i, j): (
+        ("simple-shuffle-split-" + token, i, j): (
             getitem,
-            ("shuffle-group-" + token, i),
+            ("simple-shuffle-group-" + token, i),
             j,
         )
         for i in range(df.npartitions)
@@ -92,27 +87,29 @@ def _rearrange_by_hash_simple(df, columns, npartitions, ignore_index=True):
     }
 
     combine = {  # concatenate those pieces together, with their friends
-        ("shuffle-combine-" + token, j): (
+        ("simple-shuffle-combine-" + token, j): (
             _concat,
-            [("shuffle-split-" + token, i, j) for i in range(df.npartitions)],
+            [
+                ("simple-shuffle-split-" + token, i, j)
+                for i in range(df.npartitions)
+            ],
             ignore_index,
         )
         for j in range(npartitions)
     }
 
-    end = {
-        ("simple-shuffle-" + token, j): ("shuffle-combine-" + token, j)
-        for j in range(npartitions)
-    }
-
-    dsk = toolz.merge(end, group, split, combine)
+    dsk = toolz.merge(group, split, combine)
     graph = HighLevelGraph.from_collections(
-        "simple-shuffle-" + token, dsk, dependencies=[df]
+        "simple-shuffle-combine-" + token, dsk, dependencies=[df]
     )
-    df2 = df.__class__(graph, "simple-shuffle-" + token, df, df.divisions)
-    df2.divisions = (None,) * (df.npartitions + 1)
+    if df.npartitions == npartitions:
+        divisions = df.divisions
+    else:
+        divisions = (None,) * (npartitions + 1)
 
-    return df2
+    return df.__class__(
+        graph, "simple-shuffle-combine-" + token, df, divisions
+    )
 
 
 def rearrange_by_hash(
@@ -126,22 +123,25 @@ def rearrange_by_hash(
         max_branch = max_branch or 32
         stages = int(math.ceil(math.log(n) / math.log(max_branch)))
 
-    if npartitions and (max_branch and npartitions <= max_branch):
-        # We are repartitioning into a small number of partitions.
+    if isinstance(columns, str):
+        columns = [columns]
+    elif isinstance(columns, tuple):
+        columns = list(columns)
+
+    if max_branch and (npartitions or df.npartitions) <= max_branch:
+        # We are creating a small number of output partitions.
         # No need for staged shuffling
-        return _rearrange_by_hash_simple(
-            df, columns, npartitions, ignore_index=ignore_index
+        return _simple_shuffle(
+            df,
+            columns,
+            (npartitions or df.npartitions),
+            ignore_index=ignore_index,
         )
 
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
     else:
         k = n
-
-    if isinstance(columns, str):
-        columns = [columns]
-    elif isinstance(columns, tuple):
-        columns = list(columns)
 
     groups = []
     splits = []
@@ -259,16 +259,9 @@ def set_index_post(df, index_name, drop, column_dtype):
 
 def _set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
-
-    # Use searchsorted to avoid string-compare limitations
-    # TODO: Simplify after github issue #4432 is resolved...
-    #       partitions[
-    #           (s >= divisions.iloc[-1])
-    #       ] = len(divisions) - 2
     partitions[
         divisions.tail(1).searchsorted(s, side="right").astype("bool")
     ] = (len(divisions) - 2)
-
     return partitions
 
 
