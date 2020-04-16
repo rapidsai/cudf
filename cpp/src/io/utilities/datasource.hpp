@@ -121,11 +121,8 @@ class datasource {
    * @return rmm::device_buffer the data buffer
    **/
   virtual rmm::device_buffer get_device_buffer(size_t offset, size_t size, cudaStream_t stream = 0) {
-    auto host_buffer = get_buffer(offset, size);
-    auto device_buffer = rmm::device_buffer(host_buffer->data(), host_buffer->size(), stream);
-    if (!has_fixed_mappings()) {
-      CUDA_TRY(cudaStreamSynchronize(stream)); // Due to host_buffer scope
-    }
+    auto device_buffer = rmm::device_buffer(size, stream);
+    device_read(offset, size, device_buffer.data(), stream);
     return std::move(device_buffer);
   }
 
