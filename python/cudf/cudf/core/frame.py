@@ -1306,11 +1306,6 @@ class Frame(libcudf.table.Table):
         """
         Error for various combinations of merge input parameters
         """
-        if isinstance(
-            lhs.index, cudf.core.multiindex.MultiIndex
-        ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-            raise TypeError("MultiIndex joins not yet supported.")
-
         len_left_on = len(left_on) if left_on is not None else 0
         len_right_on = len(right_on) if right_on is not None else 0
 
@@ -1329,7 +1324,9 @@ class Frame(libcudf.table.Table):
                 )
 
         # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index) == (len_right_on + right_index):
+        if not (len_left_on + left_index * len(lhs.index.names)) == (
+            len_right_on + right_index * len(rhs.index.names)
+        ):
             raise ValueError(
                 "Merge operands must have same number of join key columns"
             )
@@ -1605,6 +1602,25 @@ class Frame(libcudf.table.Table):
             return rtn
 
         if left_index or right_index:
+            if isinstance(
+                lhs.index, cudf.core.multiindex.MultiIndex
+            ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
+                if left_index and right_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                elif left_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs[right_on]._data.columns
+                elif right_index:
+                    compare_cols_l = lhs[left_on]._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                for l, r in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(l.dtype, r.dtype):
+                        raise NotImplementedError(
+                            "Typecasting not yet supported for MultiIndicies"
+                        )
+
+                return lhs, rhs, []
             if left_index and right_index:
                 to_dtype = casting_rules(
                     lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how
