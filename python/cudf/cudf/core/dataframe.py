@@ -3995,6 +3995,7 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
+    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
     def scatter_by_map(
         self, map_index, map_size=None, keep_index=True, **kwargs
     ):
