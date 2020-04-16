@@ -113,17 +113,9 @@ class _SeriesLocIndexer(object):
             return indices_from_labels(self._sr, arg)
 
         if isinstance(
-            arg,
-            (
-                list,
-                np.ndarray,
-                pd.Series,
-                range,
-                Index,
-                DeviceNDArray,
-                cupy.ndarray,
-            ),
-        ):
+            arg, (list, pd.Series, range, Index, DeviceNDArray, np.ndarray)
+        ) or hasattr(arg, "__cuda_array_interface__"):
+
             if len(arg) == 0:
                 arg = Series(np.array([], dtype="int32"))
             else:
