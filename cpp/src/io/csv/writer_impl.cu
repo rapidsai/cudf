@@ -121,7 +121,8 @@ struct column_to_strings_fn
                    std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
-    //just pass through:
+    //_not_ just pass through:
+    //TODO: must handle presence of delimiter, '\n' in row:
     //
     column col{column_v};
     return std::make_unique<column>(std::move(col));//TODO: look at more efficient way to return a unique_ptr<column> from a column_view...
@@ -266,15 +267,23 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata *metadata,
                                        cudaStream_t stream)
 {
-  CUDF_EXPECTS( metadata != nullptr, "Unexpected null metadata.");
+  if ( options_.include_header() )
+    {
+      CUDF_EXPECTS( metadata != nullptr, "Unexpected null metadata."); 
+      CUDF_EXPECTS( metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
+                    "Mismatch between column headers and table columns.");
 
-  std::string delimiter_str{options_.inter_column_delimiter()};
-  
-  std::stringstream ss;
-  std::copy(metadata->column_names.begin(), metadata->column_names.end(),
-            std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
+      std::string delimiter_str{options_.inter_column_delimiter()};
 
-  out_sink_->host_write(ss.str().data(), ss.str().size());
+      //avoid delimiter after last element:
+      //
+      std::stringstream ss;
+      std::copy(metadata->column_names.begin(), metadata->column_names.end()-1,
+                std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
+      ss<<metadata->column_names.back();
+
+      out_sink_->host_write(ss.str().data(), ss.str().size());
+    }
 }
 
 
