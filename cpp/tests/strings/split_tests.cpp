@@ -28,23 +28,20 @@
 #include <tests/strings/utilities.h>
 
 #include <vector>
-#include <gmock/gmock.h>
-
 
 struct StringsSplitTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsSplitTest, Split)
 {
-    std::vector<const char*> h_strings{ "Héllo thesé", nullptr, "are some", "tést String", "" };
+    std::vector<const char*> h_strings{ "Héllo thesé", nullptr, "are some", "tést String", "", "no-delimiter" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-
     cudf::strings_column_view strings_view( strings );
 
-    std::vector<const char*> h_expected1{ "Héllo", nullptr, "are", "tést", "" };
+    std::vector<const char*> h_expected1{ "Héllo", nullptr, "are", "tést", "", "no-delimiter" };
     cudf::test::strings_column_wrapper expected1( h_expected1.begin(), h_expected1.end(),
         thrust::make_transform_iterator( h_expected1.begin(), [] (auto str) { return str!=nullptr; }));
-    std::vector<const char*> h_expected2{ "thesé", nullptr, "some", "String", nullptr };
+    std::vector<const char*> h_expected2{ "thesé", nullptr, "some", "String", nullptr, nullptr };
     cudf::test::strings_column_wrapper expected2( h_expected2.begin(), h_expected2.end(),
         thrust::make_transform_iterator( h_expected2.begin(), [] (auto str) { return str!=nullptr; }));
     std::vector<std::unique_ptr<cudf::column>> expected_columns;
@@ -57,17 +54,34 @@ TEST_F(StringsSplitTest, Split)
     cudf::test::expect_tables_equal(*results,*expected);
 }
 
+TEST_F(StringsSplitTest, SplitWithMax)
+{
+    cudf::test::strings_column_wrapper strings( { "Héllo::thesé::world", "are::some", "tést::String:", ":last::one" } );
+    cudf::strings_column_view strings_view( strings );
+
+    cudf::test::strings_column_wrapper expected1( { "Héllo", "are", "tést", ":last" } );
+    cudf::test::strings_column_wrapper expected2( { "thesé::world", "some", "String:", "one" } );
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(expected1.release());
+    expected_columns.push_back(expected2.release());
+    auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+
+    auto results = cudf::strings::split(strings_view, cudf::string_scalar("::"),1);
+    EXPECT_TRUE( results->num_columns()==2 );
+    cudf::test::expect_tables_equal(*results,*expected);
+}
+
 TEST_F(StringsSplitTest, SplitWhitespace)
 {
-    std::vector<const char*> h_strings{ "Héllo thesé", nullptr, "are\tsome", "tést\nString", "  " };
+    std::vector<const char*> h_strings{ "Héllo thesé", nullptr, "are\tsome", "tést\nString", "  ", " a  b ", "" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-
     cudf::strings_column_view strings_view( strings );
-    std::vector<const char*> h_expected1{ "Héllo", nullptr, "are", "tést", nullptr };
+
+    std::vector<const char*> h_expected1{ "Héllo", nullptr, "are", "tést", nullptr, "a", nullptr };
     cudf::test::strings_column_wrapper expected1( h_expected1.begin(), h_expected1.end(),
         thrust::make_transform_iterator( h_expected1.begin(), [] (auto str) { return str!=nullptr; }));
-    std::vector<const char*> h_expected2{ "thesé", nullptr, "some", "String", nullptr };
+    std::vector<const char*> h_expected2{ "thesé", nullptr, "some", "String", nullptr, "b", nullptr };
     cudf::test::strings_column_wrapper expected2( h_expected2.begin(), h_expected2.end(),
         thrust::make_transform_iterator( h_expected2.begin(), [] (auto str) { return str!=nullptr; }));
     std::vector<std::unique_ptr<cudf::column>> expected_columns;
@@ -80,13 +94,31 @@ TEST_F(StringsSplitTest, SplitWhitespace)
     cudf::test::expect_tables_equal(*results,*expected);
 }
 
+TEST_F(StringsSplitTest, SplitWhitespaceWithMax)
+{
+    cudf::test::strings_column_wrapper strings( { "a bc d", "a  bc  d", " ab cd e", "ab cd e ", " ab cd e " } );
+    cudf::strings_column_view strings_view( strings );
+
+    cudf::test::strings_column_wrapper expected1( { "a", "a", "ab", "ab", "ab" } );
+    cudf::test::strings_column_wrapper expected2( { "bc d", "bc  d", "cd e", "cd e ", "cd e " } );
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(expected1.release());
+    expected_columns.push_back(expected2.release());
+    auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+
+    auto results = cudf::strings::split(strings_view, cudf::string_scalar(""),1);
+    EXPECT_TRUE( results->num_columns()==2 );
+    cudf::test::expect_tables_equal(*results,*expected);
+}
+
 TEST_F(StringsSplitTest, RSplit)
 {
     std::vector<const char*> h_strings{ "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b ", " a  bbb   c" };
     cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
-
     cudf::strings_column_view strings_view( strings );
+    cudf::test::print(strings);
+
     std::vector<const char*> h_expected1{ "héllo", nullptr, "a", "a", "", "ab", "", " a b ", " a  bbb   c" };
     cudf::test::strings_column_wrapper expected1( h_expected1.begin(), h_expected1.end(),
         thrust::make_transform_iterator( h_expected1.begin(), [] (auto str) { return str!=nullptr; }));
@@ -102,6 +134,7 @@ TEST_F(StringsSplitTest, RSplit)
     expected_columns.push_back(expected3.release());
     auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
 
+    std::cout << "rsplit(_):\n";
     auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("_"));
     EXPECT_TRUE( results->num_columns()==3 );
     cudf::test::expect_tables_equal(*results,*expected);
@@ -131,6 +164,25 @@ TEST_F(StringsSplitTest, RSplitWhitespace)
 
     auto results = cudf::strings::rsplit(strings_view);
     EXPECT_TRUE( results->num_columns()==3 );
+    cudf::test::expect_tables_equal(*results,*expected);
+}
+
+TEST_F(StringsSplitTest, RSplitWhitespaceWithMax)
+{
+    cudf::test::strings_column_wrapper strings( { "a bc d", "a  bc  d", " ab cd e", "ab cd e ", " ab cd e " } );
+    std::cout << "strings: ";
+    cudf::test::print(strings); 
+    cudf::strings_column_view strings_view( strings );
+
+    cudf::test::strings_column_wrapper expected1( { "a bc", "a  bc", " ab cd", "ab cd", " ab cd" } );
+    cudf::test::strings_column_wrapper expected2( { "d", "d", "e", "e", "e" } );
+    std::vector<std::unique_ptr<cudf::column>> expected_columns;
+    expected_columns.push_back(expected1.release());
+    expected_columns.push_back(expected2.release());
+    auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+
+    auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar(""),1);
+    EXPECT_TRUE( results->num_columns()==2 );
     cudf::test::expect_tables_equal(*results,*expected);
 }
 
