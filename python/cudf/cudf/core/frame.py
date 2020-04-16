@@ -1489,9 +1489,21 @@ class Frame(libcudf.table.Table):
             if isinstance(
                 lhs.index, cudf.core.multiindex.MultiIndex
             ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-                warnings.warn(
-                    "Implicit typecasting of multi-indices not yet supported"
-                )
+                if left_index and right_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                elif left_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs[right_on]._data.columns
+                elif right_index:
+                    compare_cols_l = lhs[left_on]._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                for l, r in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(l.dtype, r.dtype):
+                        raise NotImplementedError(
+                            "Typecasting not yet supported for MultiIndicies"
+                        )
+
                 return lhs, rhs, []
             if left_index and right_index:
                 to_dtype = casting_rules(
