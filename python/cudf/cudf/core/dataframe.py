@@ -285,7 +285,12 @@ class DataFrame(Frame):
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
-        return cls(data=table._data, index=index)
+            else:
+                index = RangeIndex(table._num_rows)
+        out = cls.__new__(cls)
+        out._data = table._data
+        out._index = index
+        return out
 
     @staticmethod
     def _align_input_series_indices(data, index):
