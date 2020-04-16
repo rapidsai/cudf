@@ -597,7 +597,7 @@ class MultiIndex(Index):
             return match
         result = []
         for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item][0]])
+            result.append(match.levels[level][match.codes[item].iloc[0]])
         return tuple(result)
 
     def to_frame(self, index=True, name=None):
@@ -845,3 +845,12 @@ class MultiIndex(Index):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            for in_col, oth_col in zip(
+                self._source_data._columns, other._source_data._columns,
+            ):
+                in_col._mimic_inplace(oth_col, inplace=True)
+        else:
+            return other
