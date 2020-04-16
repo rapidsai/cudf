@@ -80,36 +80,39 @@ def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.
     """
-    from cudf.core import Series, Index
-    from cudf.core.column import ColumnBase, CategoricalColumn
-    from cudf.core.index import CategoricalIndex
-
     if obj is None:
         return False
-    if isinstance(obj, cudf.core.dtypes.CategoricalDtype):
+    if isinstance(obj, np.dtype):
+        return False
+    if isinstance(obj, CategoricalDtype):
         return True
-    if obj is cudf.core.dtypes.CategoricalDtype:
+    if obj is CategoricalDtype:
         return True
     if obj is CategoricalDtypeType:
         return True
     if isinstance(obj, str) and obj == "category":
         return True
-    if hasattr(obj, "type"):
-        if obj.type is CategoricalDtypeType:
-            return True
     if isinstance(
         obj,
         (
             CategoricalDtype,
-            CategoricalIndex,
-            CategoricalColumn,
+            cudf.core.index.CategoricalIndex,
+            cudf.core.column.CategoricalColumn,
             pd.Categorical,
             pd.CategoricalIndex,
         ),
     ):
         return True
     if isinstance(
-        obj, (Index, Series, ColumnBase, pd.Index, pd.Series, np.ndarray)
+        obj,
+        (
+            cudf.Index,
+            cudf.Series,
+            cudf.core.column.ColumnBase,
+            pd.Index,
+            pd.Series,
+            np.ndarray,
+        ),
     ):
         return is_categorical_dtype(obj.dtype)
 
