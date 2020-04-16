@@ -113,7 +113,16 @@ class _SeriesLocIndexer(object):
             return indices_from_labels(self._sr, arg)
 
         if isinstance(
-            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
+            arg,
+            (
+                list,
+                np.ndarray,
+                pd.Series,
+                range,
+                Index,
+                DeviceNDArray,
+                cupy.ndarray,
+            ),
         ):
             if len(arg) == 0:
                 arg = Series(np.array([], dtype="int32"))

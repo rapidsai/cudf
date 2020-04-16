@@ -9,7 +9,7 @@ from cudf.tests.utils import assert_eq, gen_rand
 
 params_dtype = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]
 
-params_sizes = [1, 2, 13, 64, 100, 1000]
+params_sizes = [1, 2, 13, 64, 100]
 
 
 def _gen_params():
