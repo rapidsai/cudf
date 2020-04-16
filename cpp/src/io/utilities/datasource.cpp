@@ -91,6 +91,8 @@ class memory_mapped_source : public datasource {
     }
   }
 
+  virtual bool has_fixed_mappings() const override { return true; }
+
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
                                                   size_t size) override {
     // Clamp length to available data in the mapped region
@@ -135,6 +137,65 @@ class memory_mapped_source : public datasource {
   size_t map_offset_ = 0;
 };
 
+/**
+ * @brief Implementation class for reading from a file optimized for reading
+ * to device memory. Attempts to hide HtoD transfer latency with disk io by using
+ * a double-buffer.
+ *
+ **/
+class gpu_async_filereader : public datasource {
+  static constexpr uint32_t default_buffer_size = 16 << 20; // 16MB
+  struct pinned_filebuf {
+    uint8_t *host_bfr = nullptr;
+    cudaStream_t stream = 0;
+    cudaEvent_t completion_event = 0;
+    uint32_t position = 0;
+    bool event_pending = false;
+    ~pinned_filebuf() {
+      if (completion_event) {
+        cudaEventDestroy(completion_event);
+      }
+      if (host_bfr) {
+        cudaFreeHost(host_bfr);
+      }
+    }
+  };
+ public:
+  explicit gpu_async_filereader(const std::string& filepath, uint32_t bfrsize = default_buffer_size):
+    fd_(open(filepath.c_str(), O_RDONLY)), bufid_(0), buffer_size_(bfrsize) {
+    CUDF_EXPECTS(fd_ != -1, "Cannot open file");
+  }
+  ~gpu_async_filereader() {
+    if (fd_ != -1) {
+      close(fd_);
+    }
+  }
+  size_t size() const override {
+    struct stat st {};
+    CUDF_EXPECTS(fstat(fd_, &st) != -1, "Cannot query file size");
+    return static_cast<size_t>(st.st_size);
+  }
+  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
+                                                  size_t size) override {
+    std::shared_ptr<arrow::Buffer> buffer;
+    auto status = arrow::AllocateBuffer(size, &buffer);
+    CUDF_EXPECTS(status.ok(), "Failed to allocate buffer");
+    CUDF_EXPECTS(size == read_at(offset, buffer->mutable_data(), size), "File read failed");
+    return buffer;
+  }
+ protected:
+  size_t read_at(size_t offset, void *dst, size_t bytecnt) {
+    CUDF_EXPECTS(offset == static_cast<size_t>(lseek(fd_, offset, SEEK_SET)), "Failed to seek");
+    return read(fd_, dst, bytecnt);
+  }
+ private:
+  const int fd_;
+  const uint32_t buffer_size_;
+  int bufid_;
+  pinned_filebuf dblbuf_[2];
+};
+
+
 std::unique_ptr<datasource> datasource::create(const std::string filepath,
                                                size_t offset, size_t size) {
   // Use our own memory mapping implementation for direct file reads
@@ -154,6 +215,11 @@ std::unique_ptr<datasource> datasource::create(
   // Support derived classes of the top-level Arrow IO interface
   return std::make_unique<arrow_io_source>(file);
 }
+
+std::unique_ptr<datasource> datasource::create_async_gpureader(const std::string filepath) {
+  return std::make_unique<gpu_async_filereader>(filepath.c_str());
+}
+
 
 }  // namespace io
 }  // namespace cudf

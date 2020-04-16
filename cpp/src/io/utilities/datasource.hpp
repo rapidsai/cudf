@@ -54,12 +54,19 @@ class datasource {
   static std::unique_ptr<datasource> create(const char *data, size_t length);
 
   /**
-   * @brief Create a source from a from an Arrow file
+   * @brief Create a source from an Arrow file
    *
    * @param[in] filepath Path to the file to use
    **/
   static std::unique_ptr<datasource> create(
       std::shared_ptr<arrow::io::RandomAccessFile> file);
+
+  /**
+   * @brief Create a file source optimized for reads to device memory
+   *
+   * @param[in] filepath Path to the file to use
+   **/
+  static std::unique_ptr<datasource> create_async_gpureader(const std::string filepath);
 
   /**
    * @brief Base class destructor
@@ -92,6 +99,19 @@ class datasource {
   virtual bool empty() const { return size() == 0; }
 
   /**
+   * @brief Returns whether the data source returns fixed-address buffers
+   *
+   * @return bool True if get_buffer addresses only depend on offset, False otherwise
+   **/
+  virtual bool has_fixed_mappings() const { return false; }
+
+  /**
+   * @brief Flush any pending read requests (for async sources)
+   *
+   **/
+  virtual void flush() {}
+
+  /**
    * @brief Returns a device buffer with a subset of data from the source
    *
    * @param[in] offset Bytes from the start
@@ -103,7 +123,9 @@ class datasource {
   virtual rmm::device_buffer get_device_buffer(size_t offset, size_t size, cudaStream_t stream = 0) {
     auto host_buffer = get_buffer(offset, size);
     auto device_buffer = rmm::device_buffer(host_buffer->data(), host_buffer->size(), stream);
-    CUDA_TRY(cudaStreamSynchronize(stream)); // Due to host_buffer scope
+    if (!has_fixed_mappings()) {
+      CUDA_TRY(cudaStreamSynchronize(stream)); // Due to host_buffer scope
+    }
     return std::move(device_buffer);
   }
 
@@ -119,6 +141,9 @@ class datasource {
   virtual void device_read(size_t offset, size_t size, void *dst, cudaStream_t stream = 0) {
     auto host_buffer = get_buffer(offset, size);
     CUDA_TRY(cudaMemcpyAsync(dst, host_buffer->data(), host_buffer->size(), cudaMemcpyHostToDevice, stream));
+    if (!has_fixed_mappings()) {
+      CUDA_TRY(cudaStreamSynchronize(stream)); // Due to host_buffer scope
+    }
   }
 };
 
