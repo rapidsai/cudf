@@ -58,6 +58,63 @@ def _shuffle_group_2(df, cols, ignore_index, nparts):
     return result2, df.iloc[:0]
 
 
+def _rearrange_by_hash_simple(df, columns, npartitions, ignore_index=True):
+
+    if isinstance(columns, str):
+        columns = [columns]
+    elif isinstance(columns, tuple):
+        columns = list(columns)
+
+    token = tokenize(df, columns)
+
+    group = {  # Convert partition into dict of dataframe pieces
+        ("shuffle-group-" + token, i): (
+            _shuffle_group,
+            (df._name, i),
+            columns,
+            0,
+            npartitions,
+            npartitions,
+            ignore_index,
+            npartitions,
+        )
+        for i in range(df.npartitions)
+    }
+
+    split = {  # Get out each individual dataframe piece from the dicts
+        ("shuffle-split-" + token, i, j): (
+            getitem,
+            ("shuffle-group-" + token, i),
+            j,
+        )
+        for i in range(df.npartitions)
+        for j in range(npartitions)
+    }
+
+    combine = {  # concatenate those pieces together, with their friends
+        ("shuffle-combine-" + token, j): (
+            _concat,
+            [("shuffle-split-" + token, i, j) for i in range(df.npartitions)],
+            ignore_index,
+        )
+        for j in range(npartitions)
+    }
+
+    end = {
+        ("simple-shuffle-" + token, j): ("shuffle-combine-" + token, j)
+        for j in range(npartitions)
+    }
+
+    dsk = toolz.merge(end, group, split, combine)
+    graph = HighLevelGraph.from_collections(
+        "simple-shuffle-" + token, dsk, dependencies=[df]
+    )
+    df2 = df.__class__(graph, "simple-shuffle-" + token, df, df.divisions)
+    df2.divisions = (None,) * (df.npartitions + 1)
+
+    return df2
+
+
 def rearrange_by_hash(
     df, columns, npartitions, max_branch=None, ignore_index=True
 ):
@@ -68,6 +125,13 @@ def rearrange_by_hash(
     else:
         max_branch = max_branch or 32
         stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+
+    if npartitions and (max_branch and npartitions <= max_branch):
+        # We are repartitioning into a small number of partitions.
+        # No need for staged shuffling
+        return _rearrange_by_hash_simple(
+            df, columns, npartitions, ignore_index=ignore_index
+        )
 
     if stages > 1:
         k = int(math.ceil(n ** (1 / stages)))
