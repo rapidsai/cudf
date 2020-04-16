@@ -381,7 +381,8 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
-def test_repartition_hash_staged():
+@pytest.mark.parametrize("npartitions", [2, 17, 20])
+def test_repartition_hash_staged(npartitions):
     by = ["b"]
     datarange = 35
     size = 100
@@ -393,8 +394,11 @@ def test_repartition_hash_staged():
     )
     # WARNING: Specific npartitions-max_branch combination
     # was specifically chosen to cover changes in #4676
-    ddf = dgd.from_cudf(gdf, npartitions=17)
-    ddf_new = ddf.repartition(columns=by, max_branch=4)
+    npartitions_initial = 17
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=4
+    )
 
     # Make sure we are getting a dask_cudf dataframe
     assert type(ddf_new) == type(ddf)
@@ -416,7 +420,7 @@ def test_repartition_hash_staged():
 
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
-@pytest.mark.parametrize("npartitions", [4, 5])
+@pytest.mark.parametrize("npartitions", [3, 4, 5])
 def test_repartition_hash(by, npartitions):
     npartitions_i = 4
     datarange = 26
