@@ -50,7 +50,10 @@ cdef class Table:
 
     @property
     def _num_indices(self):
-        return len(self._index_names)
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
 
     @property
     def _num_rows(self):
