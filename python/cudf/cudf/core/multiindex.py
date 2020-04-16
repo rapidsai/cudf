@@ -597,7 +597,7 @@ class MultiIndex(Index):
             return match
         result = []
         for level, item in enumerate(match.codes):
-            result.append(match.levels[level][match.codes[item][0]])
+            result.append(match.levels[level][match.codes[item].iloc[0]])
         return tuple(result)
 
     def to_frame(self, index=True, name=None):

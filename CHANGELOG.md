@@ -81,6 +81,9 @@
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
+- PR #4905 Get decorated function name as message when annotating
+- PR #4907 Reuse EventAttributes across NVTX annotations
 
 ## Bug Fixes
 
@@ -136,6 +139,7 @@
 - PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method

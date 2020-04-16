@@ -96,14 +96,14 @@ def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = Series(a1)
     # Indexing
-    sr1 = series[i1]
+    sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
-    sr2 = sr1[i2]
+    sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
-    sr3 = sr2[i3]
+    sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
@@ -114,6 +114,19 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
+)
+def test_series_get_item(psr, arg):
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[arg]
+    got = gsr[arg]
+
+    assert_eq(expect, got)
 
 
 def test_dataframe_column_name_indexing():
@@ -449,15 +462,18 @@ def test_series_iloc(nelem):
     np.testing.assert_allclose(
         gs.iloc[nelem - 1 : -1], ps.iloc[nelem - 1 : -1]
     )
-    np.testing.assert_allclose(gs.iloc[0 : nelem - 1], ps.iloc[0 : nelem - 1])
-    np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
-    np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
-    np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
     np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : nelem + 1], ps.iloc[nelem - 1 : nelem + 1]
+        gs.iloc[0 : nelem - 1].to_pandas(), ps.iloc[0 : nelem - 1]
+    )
+    np.testing.assert_allclose(gs.iloc[0:nelem].to_pandas(), ps.iloc[0:nelem])
+    np.testing.assert_allclose(gs.iloc[1:1].to_pandas(), ps.iloc[1:1])
+    np.testing.assert_allclose(gs.iloc[1:2].to_pandas(), ps.iloc[1:2].values)
+    np.testing.assert_allclose(
+        gs.iloc[nelem - 1 : nelem + 1].to_pandas(),
+        ps.iloc[nelem - 1 : nelem + 1],
     )
     np.testing.assert_allclose(
-        gs.iloc[nelem : nelem * 2], ps.iloc[nelem : nelem * 2]
+        gs.iloc[nelem : nelem * 2].to_pandas(), ps.iloc[nelem : nelem * 2]
     )
 
 
@@ -572,6 +588,19 @@ def test_series_take(ntake, keep_index):
         np.testing.assert_array_equal(
             out.index.to_array(), sr.index.to_array()
         )
+
+
+def test_series_take_positional():
+    psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
+
+    gsr = Series.from_pandas(psr)
+
+    take_indices = [1, 2, 0, 3]
+
+    expect = psr.take(take_indices)
+    got = gsr.take(take_indices, keep_index=True)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
