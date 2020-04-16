@@ -416,12 +416,7 @@ class ColumnBase(Column):
         else:
             val = val.to_array()[0]
 
-        valid = (
-            cudautils.mask_get.py_func(self.mask_array_view, index)
-            if self.mask
-            else True
-        )
-        return val if valid else None
+        return val
 
     def __getitem__(self, arg):
         from cudf.core.column import column

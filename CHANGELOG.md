@@ -84,6 +84,7 @@
 - PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
+- PR #4912 Drop old `valid` check in `element_indexing`
 
 ## Bug Fixes
 
