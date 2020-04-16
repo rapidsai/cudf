@@ -82,6 +82,7 @@
 - PR #4894 Add annotations for the `.columns` property and setter
 - PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
 - PR #4905 Get decorated function name as message when annotating
+- PR #4907 Reuse EventAttributes across NVTX annotations
 
 ## Bug Fixes
 

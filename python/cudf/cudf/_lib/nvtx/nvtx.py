@@ -3,6 +3,8 @@
 from contextlib import ContextDecorator
 
 from cudf._lib.nvtx._lib import (
+    Domain,
+    EventAttributes,
     pop_range as libnvtx_pop_range,
     push_range as libnvtx_push_range,
 )
@@ -49,21 +51,20 @@ class annotate(ContextDecorator):
         ...    time.sleep(10)
         ...
         """
-        self.message = message
-        self.color = color
-        self.domain = domain
+        self.attributes = EventAttributes(message, color)
+        self.domain = Domain(domain)
 
     def __enter__(self):
-        push_range(self.message, self.color, self.domain)
+        libnvtx_push_range(self.attributes, self.domain.handle)
         return self
 
     def __exit__(self, *exc):
-        pop_range(self.domain)
+        libnvtx_pop_range(self.domain.handle)
         return False
 
     def __call__(self, func):
-        if self.message is None:
-            self.message = func.__name__
+        if not self.attributes.message:
+            self.attributes.message = func.__name__
         return super().__call__(func)
 
 
@@ -89,7 +90,7 @@ def push_range(message=None, color="blue", domain=None):
     >>> time.sleep(1)
     >>> nvtx.pop_range(domain="cudf")
     """
-    libnvtx_push_range(message, color, domain)
+    libnvtx_push_range(EventAttributes(message, color), Domain(domain).handle)
 
 
 def pop_range(domain=None):
@@ -102,4 +103,4 @@ def pop_range(domain=None):
         The domain under which the code range is scoped. The default
         domain is "NVTX".
     """
-    libnvtx_pop_range(domain)
+    libnvtx_pop_range(Domain(domain).handle)
