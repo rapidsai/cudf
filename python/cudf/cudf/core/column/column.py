@@ -1375,7 +1375,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 dtype=arbitrary.dtype,
             )
         else:
-            print(arbitrary.dtype)
             arb_dtype = check_upcast_unsupported_dtype(arbitrary.dtype)
 
             if arb_dtype != arbitrary.dtype:
