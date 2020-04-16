@@ -81,6 +81,9 @@ namespace
 //      5    ''     a  _bbb___c
 //      6    ''    aa  b__ccc__
 //
+
+// TODO: create base class for common accessors
+//       - base_ptr, string, is_valid, delimiter, max_tokens(compute)
 struct split_tokenizer_fn
 {
     column_device_view const d_strings;  // strings to split
@@ -121,6 +124,7 @@ struct split_tokenizer_fn
         }
     }
 
+    // TODO: see if this is common and add to base class
     // the process_tokens() only handles tokens for strings that contain delimiters;
     // this function will initialize the output tokens appropriately for all strings
     // empty and null strings result in all null tokens
@@ -180,7 +184,7 @@ struct split_tokenizer_fn
             ++idx;
         }
         // the number of tokens is delim_count+1 but capped to max_tokens
-        d_counts[str_idx-1] = ((max_tokens > 0) && (delim_count+1 > max_tokens)) 
+        d_counts[str_idx-1] = ((max_tokens > 0) && (delim_count+1 > max_tokens))
                               ? max_tokens : delim_count+1;
         //printf(" tokens[%d]=%d\n",(str_idx-1),d_counts[str_idx-1]);
     }
@@ -285,7 +289,7 @@ struct rsplit_tokenizer_fn
             }
             ++idx;
         }
-        d_counts[str_idx-1] = ((max_tokens > 0) && (delim_count+1 > max_tokens)) 
+        d_counts[str_idx-1] = ((max_tokens > 0) && (delim_count+1 > max_tokens))
                               ? max_tokens : delim_count+1;
         //printf( " tokens[%d]=%d\n",(str_idx-1),d_counts[str_idx-1]);
     }
@@ -316,35 +320,34 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
                      - thrust::device_pointer_cast(d_offsets)[0];
 
     // count the number of delimiters in the entire column
-    size_type delimiter_count = thrust::count_if( execpol->on(stream), 
-        thrust::make_counting_iterator<size_type>(0), 
+    size_type delimiter_count = thrust::count_if( execpol->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(chars_bytes),
         [tokenizer, d_offsets, chars_bytes] __device__ (size_type idx) {
             return tokenizer.is_delimiter(idx,d_offsets,chars_bytes);
         });
+    // create vector of every delimiter position in the chars column
     rmm::device_vector<size_type> delimiter_positions(delimiter_count);
     auto d_positions = delimiter_positions.data().get();
-    auto copy_end = thrust::copy_if( execpol->on(stream), thrust::make_counting_iterator<size_type>(0), 
+    auto copy_end = thrust::copy_if( execpol->on(stream), thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(chars_bytes), delimiter_positions.begin(),
         [tokenizer, d_offsets, chars_bytes] __device__ (size_type idx) {
             return tokenizer.is_delimiter(idx,d_offsets,chars_bytes);
         });
     rmm::device_vector<size_type> string_indexes(delimiter_count); // these will be strings that
     auto d_string_indexes = string_indexes.data().get();           // contain delimiters in them
-    //auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<int32_t>(0),
-    //    [d_strings] __device__ (size_type idx) { return d_strings.child(0).data<int32_t>()[idx+d_strings.offset()]; } );
-    thrust::upper_bound( execpol->on(stream), 
-        d_offsets, d_offsets + strings_count, // offsets_transformer_itr, offsets_transformer_itr + strings_count,
+    thrust::upper_bound( execpol->on(stream),
+        d_offsets, d_offsets + strings_count,
         delimiter_positions.begin(), copy_end, string_indexes.begin() );
 
     // compute the number of tokens per string
     rmm::device_vector<size_type> token_counts(strings_count);
     auto d_token_counts = token_counts.data().get();
     // initialize token counts for strings without delimiters in them
-    thrust::transform( execpol->on(stream), 
-        thrust::make_counting_iterator<size_type>(0), 
+    thrust::transform( execpol->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
-        d_token_counts, 
+        d_token_counts,
         [tokenizer] __device__ (size_type idx) {
             return static_cast<size_type>(tokenizer.d_strings.is_valid(idx));
         } );
@@ -354,14 +357,10 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
         [tokenizer, d_positions, delimiter_count, d_string_indexes, d_token_counts] __device__(size_type idx) {
             tokenizer.count_tokens(idx,d_positions,delimiter_count,d_string_indexes,d_token_counts);
         } );
-        
+
     // column count is the maximum number of tokens for any string
-    size_type columns_count = 
+    size_type columns_count =
         *thrust::max_element(execpol->on(stream), token_counts.begin(), token_counts.end() );
-    //
-    //nvtx3::domain_thread_range<::nvtx3::domain::global> r2{"range 2"};
-    //nvtx3::thread_range r1{"reduce+lower_bound"};
-    //printf(" delimiter_count=%d, columns_count=%d\n", delimiter_count, columns_count);
     // create working area to hold token positions
     rmm::device_vector<string_index_pair> tokens( columns_count * strings_count );
     string_index_pair* d_tokens = tokens.data().get();
@@ -480,7 +479,7 @@ struct base_whitespace_split_tokenizer
     base_whitespace_split_tokenizer( column_device_view const& d_strings, size_type max_tokens )
     : d_strings(d_strings), max_tokens(max_tokens) {}
 
-protected:    
+protected:
     column_device_view const d_strings;
     size_type max_tokens; // maximum number of tokens
 };
@@ -494,7 +493,7 @@ struct whitespace_string_tokenizer
     /**
      * @brief Identifies the position range of the next token in the given
      * string at the specified iterator position.
-     * 
+     *
      * Tokens are delimited by one or more whitespace characters.
      *
      * @return true if a token has been found
@@ -533,7 +532,7 @@ struct whitespace_string_tokenizer
     /**
      * @brief Identifies the position range of the previous token in the given
      * string at the specified iterator position.
-     * 
+     *
      * Tokens are delimited by one or more whitespace characters.
      *
      * @return true if a token has been found
@@ -659,15 +658,12 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer
 //
 template<typename Tokenizer>
 std::unique_ptr<experimental::table> whitespace_split_fn( size_type strings_count,
-                                               Tokenizer tokenizer,
-                                               rmm::mr::device_memory_resource* mr,
-                                               cudaStream_t stream )
+                                                          Tokenizer tokenizer,
+                                                          rmm::mr::device_memory_resource* mr,
+                                                          cudaStream_t stream )
 {
     //size_type strings_count = strings_column.size();
     auto execpol = rmm::exec_policy(stream);
-    //auto strings_device_view = column_device_view::create(strings_column.parent(),stream);
-    //whitespace_token_counter_fn counter{*strings_device_view,max_tokens};
-    //whitespace_rsplit_tokenizer_fn tokenizer{*strings_device_view,max_tokens};
 
     // compute the number of tokens per string
     size_type columns_count = 0;
