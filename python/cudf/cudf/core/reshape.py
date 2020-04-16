@@ -13,7 +13,7 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def align_objs(objs):
+def align_objs(objs, how="outer"):
     """Align a set of Series or Dataframe objects.
 
     Parameters
@@ -29,18 +29,18 @@ def align_objs(objs):
         name = index.name
         index = (
             cudf.DataFrame(index=obj.index)
-            .join(cudf.DataFrame(index=index), how="outer")
+            .join(cudf.DataFrame(index=index), how=how)
             .index
         )
         index.name = name
 
-    for i, obj in enumerate(objs):
+    for i, obj in enumerate(list(objs)):
         objs[i] = obj.reindex(index)
 
     return objs
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None, align_index=False):
+def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -51,9 +51,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None, align_index=False):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
-    align_index : bool, default False
-        Set True to align the index of the *objs*
-
+    
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
@@ -92,7 +90,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None, align_index=False):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
-        if align_index:
+        if not ignore_index:
             objs = align_objs(objs)
 
         sr_name = 0
