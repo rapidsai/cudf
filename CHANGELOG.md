@@ -9,6 +9,7 @@
 - PR #4771 Added in an option to statically link against cudart
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
+- PR #4906 Add Java bindings for interleave_columns
 
 ## Improvements
 
@@ -82,6 +83,7 @@
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4901 Improve unit tests for casting Java numeric types to string
 - PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
@@ -152,6 +154,7 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 
 
