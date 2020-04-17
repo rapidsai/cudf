@@ -116,23 +116,20 @@ class _SeriesLocIndexer(object):
             except (TypeError, KeyError, IndexError, ValueError):
                 raise IndexError("label scalar is out of bound")
 
-        if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+        elif isinstance(arg, slice):
+            start_index, stop_index = self._sr.index.find_label_range(
+                arg.start, arg.stop
+            )
+            return slice(start_index, stop_index, arg.step)
+
+        elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
 
             return indices_from_labels(self._sr, arg)
 
-        if (
-            isinstance(arg, (list, pd.Series, range, Index, DeviceNDArray))
-            or hasattr(arg, "__array_interface__")
-            or hasattr(arg, "__cuda_array_interface__")
-        ):
-
-            if len(arg) == 0:
-                arg = Series(column.column_empty(0, dtype="int32"))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
+        else:
+            arg = Series(column.as_column(arg))
             if arg.dtype in [np.bool, np.bool_]:
                 return arg
             else:
@@ -140,17 +137,6 @@ class _SeriesLocIndexer(object):
                 if indices.null_count > 0:
                     raise IndexError("label scalar is out of bound")
                 return indices
-        elif isinstance(arg, slice):
-            start_index, stop_index = self._sr.index.find_label_range(
-                arg.start, arg.stop
-            )
-            return slice(start_index, stop_index, arg.step)
-        else:
-            raise NotImplementedError(
-                ".loc not implemented for label type {}".format(
-                    type(arg).__name__
-                )
-            )
 
 
 class _DataFrameIndexer(object):
