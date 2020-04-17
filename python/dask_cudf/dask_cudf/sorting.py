@@ -19,12 +19,12 @@ from cudf.utils.dtypes import is_categorical_dtype
 
 
 def set_partitions_hash(df, columns, npartitions):
-    c = hash_object_dispatch(df[columns], index=False)
+    c = hash_object_dispatch(df[columns], index=False).values
     return np.mod(c, npartitions)
 
 
 def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
-    c = hash_object_dispatch(df[columns], index=False)
+    c = hash_object_dispatch(df[columns], index=False).values
     typ = np.min_scalar_type(npartitions * 2)
     c = np.mod(c, npartitions).astype(typ, copy=False)
     if stage > 0:
@@ -42,7 +42,7 @@ def rearrange_by_hash(
     if npartitions and npartitions != df.npartitions:
         # Use main-line dask for new npartitions
         meta = df._meta._constructor_sliced([0])
-        partitions = df[columns].map_partitions(
+        partitions = df.map_partitions(
             set_partitions_hash, columns, npartitions, meta=meta
         )
         # Note: Dask will use a shallow copy for assign
@@ -258,7 +258,7 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantile(q=q)
+    meta = df._meta_nonempty.quantiles(q=q)
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):

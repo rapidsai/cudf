@@ -52,11 +52,22 @@ abstract public class MemoryBuffer implements AutoCloseable {
           log.error("A SLICED BUFFER WAS LEAKED(ID: " + id + " parent: " + parent + ")");
           logRefCountDebug("Leaked sliced buffer");
         }
-        parent.close();
-        parent = null;
+        try {
+          parent.close();
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          parent = null;
+        }
         return true;
       }
       return false;
+    }
+
+    @Override
+    public boolean isClean() {
+      return parent == null;
     }
   }
 

@@ -1,319 +1,645 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-import cudf
-from cudf.core.buffer import Buffer
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-
-import cudf.utils.utils as utils
-from cudf.utils.dtypes import is_string_dtype, is_categorical_dtype
-from cudf._lib.utils cimport (
-    columns_from_table,
-    table_from_columns,
-    table_to_dataframe
-)
-from cudf._lib.includes.copying cimport (
-    copy as cpp_copy,
-    copy_range as cpp_copy_range,
-    gather as cpp_gather,
-    scatter as cpp_scatter,
-    scatter_to_tables as cpp_scatter_to_tables
-)
-from cudf._libxx.null_mask import create_null_mask, MaskState
-
-import numba
-import numpy as np
 import pandas as pd
-import pyarrow as pa
 
-import rmm
+from libcpp cimport bool
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.vector cimport vector
+from libc.stdint cimport int32_t
 
-from libc.stdint cimport uintptr_t
+from cudf._lib.column cimport Column
+from cudf._lib.scalar cimport Scalar
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
+from cudf._lib.scalar cimport Scalar
+from cudf._lib.table cimport Table
 
-from libcpp.map cimport map as cmap
-from libcpp.string  cimport string as cstring
-
-
-pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
-
-
-def clone_columns_with_size(in_cols, row_size):
-    from cudf.core.column import column
-
-    out_cols = []
-    for col in in_cols:
-        o_col = column.column_empty_like(col,
-                                         dtype=col.dtype,
-                                         masked=col.mask,
-                                         newsize=row_size)
-        out_cols.append(o_col)
-
-    return out_cols
-
-
-def _normalize_maps(maps, size):
-    from cudf.core.column import column
-
-    maps = column.as_column(maps).astype("int32")
-    maps = maps.binary_operator("mod", np.int32(size))
-    maps = maps.data_array_view
-    return maps
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
+from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport size_type
+cimport cudf._lib.cpp.copying as cpp_copying
 
 
-def gather(source, maps, bounds_check=True):
+def copy_column(Column input_column):
     """
-    Gathers elements from source into dest (if given) using the gathermap maps.
-    If dest is not given, it is allocated inside the function and returned.
+    Deep copies a column
 
     Parameters
     ----------
-    source : Column or list of Columns
-    maps : DeviceNDArray
+    input_columns : column to be copied
 
     Returns
     -------
-    Column or list of Columns, or None if dest is given
+    Deep copied column
     """
-    from cudf.core.column import column, CategoricalColumn
 
-    if isinstance(source, (list, tuple)):
-        in_cols = source
+    cdef column_view input_column_view = input_column.view()
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(make_unique[column](input_column_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def _copy_range_in_place(Column input_column,
+                         Column target_column,
+                         size_type input_begin,
+                         size_type input_end,
+                         size_type target_begin):
+
+    cdef column_view input_column_view = input_column.view()
+    cdef mutable_column_view target_column_view = target_column.mutable_view()
+    cdef size_type c_input_begin = input_begin
+    cdef size_type c_input_end = input_end
+    cdef size_type c_target_begin = target_begin
+
+    with nogil:
+        cpp_copying.copy_range_in_place(
+            input_column_view,
+            target_column_view,
+            c_input_begin,
+            c_input_end,
+            c_target_begin)
+
+
+def _copy_range(Column input_column,
+                Column target_column,
+                size_type input_begin,
+                size_type input_end,
+                size_type target_begin):
+
+    cdef column_view input_column_view = input_column.view()
+    cdef column_view target_column_view = target_column.view()
+    cdef size_type c_input_begin = input_begin
+    cdef size_type c_input_end = input_end
+    cdef size_type c_target_begin = target_begin
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_copying.copy_range(
+            input_column_view,
+            target_column_view,
+            c_input_begin,
+            c_input_end,
+            c_target_begin)
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def copy_range(Column input_column,
+               Column target_column,
+               size_type input_begin,
+               size_type input_end,
+               size_type target_begin,
+               size_type target_end,
+               bool inplace):
+    """
+    Copy input_column from input_begin to input_end to
+    target_column from target_begin to target_end
+    """
+
+    if abs(target_end - target_begin) <= 1:
+        return target_column
+
+    if target_begin < 0:
+        target_begin = target_begin + target_column.size
+
+    if target_end < 0:
+        target_end = target_end + target_column.size
+
+    if target_begin > target_end:
+        return target_column
+
+    if inplace is True:
+        _copy_range_in_place(input_column, target_column,
+                             input_begin, input_end, target_begin)
     else:
-        in_cols = [source]
+        return _copy_range(input_column, target_column,
+                           input_begin, input_end, target_begin)
 
-    for i, in_col in enumerate(in_cols):
-        in_cols[i] = column.as_column(in_cols[i])
 
-    in_size = in_cols[0].size
+def gather(Table source_table, Column gather_map, bool keep_index=True):
+    assert pd.api.types.is_integer_dtype(gather_map.dtype)
 
-    maps = column.as_column(maps)
+    cdef unique_ptr[table] c_result
+    cdef table_view source_table_view
+    if keep_index is True:
+        source_table_view = source_table.view()
+    else:
+        source_table_view = source_table.data_view()
+    cdef column_view gather_map_view = gather_map.view()
+    cdef bool c_bounds_check = True
 
-    col_count=len(in_cols)
-    gather_count = len(maps)
+    with nogil:
+        c_result = move(
+            cpp_copying.gather(
+                source_table_view,
+                gather_map_view,
+                c_bounds_check
+            )
+        )
 
-    cdef cudf_table* c_in_table = table_from_columns(in_cols)
-    cdef cudf_table c_out_table
-    cdef gdf_column* c_maps = column_view_from_column(maps)
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=source_table._column_names,
+        index_names=(
+            None if (
+                source_table._index is None)
+            or keep_index is False
+            else source_table._index_names
+        )
+    )
+
+
+def _scatter_table(Table source_table, Column scatter_map,
+                   Table target_table, bool bounds_check=True):
+
+    cdef table_view source_table_view = source_table.data_view()
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = target_table.data_view()
     cdef bool c_bounds_check = bounds_check
 
+    cdef unique_ptr[table] c_result
+
     with nogil:
-        c_out_table = cpp_gather(c_in_table, c_maps[0], c_bounds_check)
-
-    out_cols = columns_from_table(&c_out_table)
-
-    for i, in_col in enumerate(in_cols):
-        if isinstance(in_col, CategoricalColumn):
-            out_cols[i] = column.build_categorical_column(
-                categories=in_col.cat().categories,
-                codes=out_cols[i],
-                mask=out_cols[i].mask,
-                ordered=in_col.cat().ordered
+        c_result = move(
+            cpp_copying.scatter(
+                source_table_view,
+                scatter_map_view,
+                target_table_view,
+                c_bounds_check
             )
+        )
 
-    free_column(c_maps)
-    free_table(c_in_table)
+    out_table = Table.from_unique_ptr(
+        move(c_result),
+        column_names=target_table._column_names,
+        index_names=None
+    )
 
-    if isinstance(source, (list, tuple)):
-        return out_cols
-    else:
-        return out_cols[0]
+    out_table._index = (
+        None if target_table._index is None else target_table._index.copy(
+            deep=False)
+    )
+
+    return out_table
 
 
-def scatter(source, maps, target, bounds_check=True):
-    from cudf.core.column import column
+def _scatter_scalar(scalars, Column scatter_map,
+                    Table target_table, bool bounds_check=True):
 
-    cdef cudf_table* c_source_table
-    cdef cudf_table* c_target_table
-    cdef cudf_table c_result_table
-
-    source_cols = source
-    target_cols = target
-
-    if not isinstance(target_cols, (list, tuple)):
-        target_cols = [target_cols]
-
-    if not isinstance(source_cols, (list, tuple)):
-        source_cols = [source_cols] * len(target_cols)
-
-    for i in range(len(target_cols)):
-        target_cols[i] = column.as_column(target_cols[i])
-        source_cols[i] = column.as_column(source_cols[i])
-        assert source_cols[i].dtype == target_cols[i].dtype
-
-    c_source_table = table_from_columns(source_cols)
-    c_target_table = table_from_columns(target_cols)
-
-    cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef vector[unique_ptr[scalar]] source_scalars
+    source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
+    cdef Scalar slr
+    for val, col in zip(scalars, target_table._columns):
+        slr = Scalar(val, col.dtype)
+        source_scalars.push_back(move(slr.c_value))
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = target_table.data_view()
+
+    cdef unique_ptr[table] c_result
 
     with nogil:
-        c_result_table = cpp_scatter(
-            c_source_table[0],
-            c_maps[0],
-            c_target_table[0],
-            c_bounds_check)
+        c_result = move(
+            cpp_copying.scatter(
+                source_scalars,
+                scatter_map_view,
+                target_table_view,
+                c_bounds_check
+            )
+        )
 
-    free_column(c_maps)
+    out_table = Table.from_unique_ptr(
+        move(c_result),
+        column_names=target_table._column_names,
+        index_names=None
+    )
 
-    result_cols = columns_from_table(&c_result_table)
+    out_table._index = (
+        None if target_table._index is None else target_table._index.copy(
+            deep=False)
+    )
 
-    for i, in_col in enumerate(target_cols):
-        if is_categorical_dtype(in_col.dtype):
-            result_cols[i] = column.build_categorical_column(
-                categories=in_col.cat().categories,
-                codes=result_cols[i],
-                mask=result_cols[i].mask,
-                ordered=in_col.cat().ordered
+    return out_table
+
+
+def scatter(object input, object scatter_map, Table target,
+            bool bounds_check=True):
+    """
+    Scattering input into taregt as per the scatter map,
+    input can be a list of scalars or can be a table
+    """
+
+    from cudf.core.column.column import as_column
+
+    if not isinstance(scatter_map, Column):
+        scatter_map = as_column(scatter_map)
+
+    if isinstance(input, Table):
+        return _scatter_table(input, scatter_map, target, bounds_check)
+    else:
+        return _scatter_scalar(input, scatter_map, target, bounds_check)
+
+
+def column_empty_like(Column input_column):
+
+    cdef column_view input_column_view = input_column.view()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_copying.empty_like(input_column_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def column_allocate_like(Column input_column, size=None):
+
+    cdef size_type c_size = 0
+    cdef column_view input_column_view = input_column.view()
+    cdef unique_ptr[column] c_result
+
+    if size is None:
+        with nogil:
+            c_result = move(cpp_copying.allocate_like(
+                input_column_view,
+                cpp_copying.mask_allocation_policy.RETAIN)
+            )
+    else:
+        c_size = size
+        with nogil:
+            c_result = move(cpp_copying.allocate_like(
+                input_column_view,
+                c_size,
+                cpp_copying.mask_allocation_policy.RETAIN)
             )
 
-    del c_source_table
-    del c_target_table
+    return Column.from_unique_ptr(move(c_result))
 
-    if isinstance(target, (list, tuple)):
-        return result_cols
+
+def table_empty_like(Table input_table, bool keep_index=True):
+
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
     else:
-        return result_cols[0]
+        input_table_view = input_table.data_view()
 
-
-def copy_column(input_col):
-    """
-        Call cudf::copy
-    """
-    cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column c_out_col
+    cdef unique_ptr[table] c_result
 
     with nogil:
-        c_out_col = cpp_copy(c_input_col[0])
+        c_result = move(cpp_copying.empty_like(input_table_view))
 
-    free_column(c_input_col)
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=input_table._column_names,
+        index_names=(
+            input_table._index._column_names if keep_index is True else None
+        )
+    )
 
-    return gdf_column_to_column(&c_out_col)
 
+def column_slice(Column input_column, object indices):
 
-def copy_range(out_col, in_col, int out_begin, int out_end,
-               int in_begin):
+    cdef column_view input_column_view = input_column.view()
+    cdef vector[size_type] c_indices
+    c_indices.reserve(len(indices))
 
-    from cudf.core.column import as_column
+    cdef vector[column_view] c_result
 
-    if abs(out_end - out_begin) <= 1:
-        return out_col
+    cdef int index
 
-    if out_begin < 0:
-        out_begin = len(out_col) + out_begin
-    if out_end < 0:
-        out_end = len(out_col) + out_end
-
-    if out_begin > out_end:
-        return out_col
-
-    if not out_col.has_nulls and in_col.nullable:
-        mask = create_null_mask(len(out_col), state=MaskState.ALL_VALID)
-        out_col = out_col.set_mask(mask)
-
-    if not in_col.has_nulls and out_col.nullable:
-        mask = create_null_mask(len(in_col), state=MaskState.ALL_VALID)
-        in_col = in_col.set_mask(mask)
-
-    cdef gdf_column* c_out_col = column_view_from_column(out_col)
-    cdef gdf_column* c_in_col = column_view_from_column(in_col)
+    for index in indices:
+        c_indices.push_back(index)
 
     with nogil:
-        cpp_copy_range(c_out_col,
-                       c_in_col[0],
-                       out_begin,
-                       out_end,
-                       in_begin)
+        c_result = move(
+            cpp_copying.slice(
+                input_column_view,
+                c_indices)
+        )
 
-    if is_string_dtype(out_col) and len(out_col) > 0:
-        nvcat_ptr = int(<uintptr_t>c_out_col.dtype_info.category)
-        nvcat_obj = None
-        if nvcat_ptr:
-            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-            nvstr_obj = nvcat_obj.to_strings()
+    num_of_result_cols = c_result.size()
+    result = [
+        Column.from_column_view(
+            c_result[i],
+            input_column) for i in range(num_of_result_cols)]
+
+    return result
+
+
+def table_slice(Table input_table, object indices, bool keep_index=True):
+
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
+    else:
+        input_table_view = input_table.data_view()
+
+    cdef vector[size_type] c_indices
+    c_indices.reserve(len(indices))
+
+    cdef vector[table_view] c_result
+
+    cdef int index
+    for index in indices:
+        c_indices.push_back(index)
+
+    with nogil:
+        c_result = move(
+            cpp_copying.slice(
+                input_table_view,
+                c_indices)
+        )
+
+    num_of_result_cols = c_result.size()
+    result =[
+        Table.from_table_view(
+            c_result[i],
+            input_table,
+            column_names=input_table._column_names,
+            index_names=(
+                input_table._index._column_names if (
+                    keep_index is True)
+                else None
+            )
+        ) for i in range(num_of_result_cols)]
+
+    return result
+
+
+def column_split(Column input_column, object splits):
+
+    cdef column_view input_column_view = input_column.view()
+    cdef vector[size_type] c_splits
+    c_splits.reserve(len(splits))
+
+    cdef vector[column_view] c_result
+
+    cdef int split
+
+    for split in splits:
+        c_splits.push_back(split)
+
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_column_view,
+                c_splits)
+        )
+
+    num_of_result_cols = c_result.size()
+    result = [
+        Column.from_column_view(
+            c_result[i],
+            input_column
+        ) for i in range(num_of_result_cols)
+    ]
+
+    return result
+
+
+def table_split(Table input_table, object splits, bool keep_index=True):
+
+    cdef table_view input_table_view
+    if keep_index is True:
+        input_table_view = input_table.view()
+    else:
+        input_table_view = input_table.data_view()
+
+    cdef vector[size_type] c_splits
+    c_splits.reserve(len(splits))
+
+    cdef vector[table_view] c_result
+
+    cdef int split
+    for split in splits:
+        c_splits.push_back(split)
+
+    with nogil:
+        c_result = move(
+            cpp_copying.split(
+                input_table_view,
+                c_splits)
+        )
+
+    num_of_result_cols = c_result.size()
+    result = [
+        Table.from_table_view(
+            c_result[i],
+            input_table,
+            column_names=input_table._column_names,
+            index_names=input_table._index_names if (
+                keep_index is True)
+            else None
+        ) for i in range(num_of_result_cols)]
+
+    return result
+
+
+def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
+
+    cdef column_view lhs_view = lhs.view()
+    cdef column_view rhs_view = rhs.view()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.copy_if_else(
+                lhs_view,
+                rhs_view,
+                boolean_mask_view
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
+
+    cdef scalar* lhs_scalar = lhs.c_value.get()
+    cdef column_view rhs_view = rhs.view()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.copy_if_else(
+                lhs_scalar[0],
+                rhs_view,
+                boolean_mask_view
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
+
+    cdef column_view lhs_view = lhs.view()
+    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.copy_if_else(
+                lhs_view,
+                rhs_scalar[0],
+                boolean_mask_view
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
+
+    cdef scalar* lhs_scalar = lhs.c_value.get()
+    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.copy_if_else(
+                lhs_scalar[0],
+                rhs_scalar[0],
+                boolean_mask_view
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def copy_if_else(object lhs, object rhs, Column boolean_mask):
+
+    if isinstance(lhs, Column):
+        if isinstance(rhs, Column):
+            return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
-            nvstr_obj = nvstrings.to_device([])
-        out_col = as_column(nvstr_obj)
+            return _copy_if_else_column_scalar(
+                lhs, Scalar(rhs, lhs.dtype), boolean_mask)
+    else:
+        if isinstance(rhs, Column):
+            return _copy_if_else_scalar_column(
+                Scalar(lhs, rhs.dtype), rhs, boolean_mask)
+        else:
+            if lhs is None and rhs is None:
+                return lhs
 
-    free_column(c_in_col)
-    free_column(c_out_col)
-
-    return out_col
+            return _copy_if_else_scalar_scalar(
+                Scalar(lhs), Scalar(rhs), boolean_mask)
 
 
-def scatter_to_frames(source, maps, index=None, names=None, index_names=None):
-    """
-    Scatters rows to 'n' dataframes according to maps
+def _boolean_mask_scatter_table(Table input_table, Table target_table,
+                                Column boolean_mask):
 
-    Parameters
-    ----------
-    source : list of Columns
-    maps : non-null column with values ranging from 0 to n-1 for each row
-    index : list of Columns, or None
+    cdef table_view input_table_view = input_table.view()
+    cdef table_view target_table_view = target_table.view()
+    cdef column_view boolean_mask_view = boolean_mask.view()
 
-    Returns
-    -------
-    list of scattered dataframes
-    """
-    from cudf.core.column import column, build_column, build_categorical_column
-    from cudf.core.series import Series
-    in_cols = list(source)
-
-    if index:
-        ind_names_tmp = [(ind_name or "_tmp_index")
-                         for ind_name in index_names]
-        for i in range(len(index)):
-            in_cols.append(index[i])
-            names.append(ind_names_tmp[i])
-
-    col_count=len(in_cols)
-    if col_count == 0:
-        return []
-
-    cats = {}
-    for i, in_col in enumerate(in_cols):
-        in_cols[i] = column.as_column(in_cols[i])
-        if is_categorical_dtype(in_cols[i]):
-            cats[names[i]] = (
-                Series(in_cols[i].categories),
-                in_cols[i].ordered
-            )
-
-    in_size = in_cols[0].size
-
-    maps = column.as_column(maps).astype("int32")
-    gather_count = len(maps)
-    assert(gather_count == in_size)
-
-    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols, names)
-    cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
-    cdef gdf_column* c_maps = column_view_from_column(maps)
-    cdef vector[cudf_table] c_out_tables
+    cdef unique_ptr[table] c_result
 
     with nogil:
-        c_out_tables = cpp_scatter_to_tables(c_in_table[0], c_maps[0])
-
-    out_tables = []
-    for tab in c_out_tables:
-        df = table_to_dataframe(&tab, int_col_names=False)
-        for name, cat_info in cats.items():
-            if is_categorical_dtype(df[name].dtype):
-                data_dtype = df[name].codes.dtype
-            else:
-                data_dtype = df[name].dtype
-            df[name] = Series(
-                build_categorical_column(
-                    categories=cat_info[0],
-                    codes=df[name]._column,
-                    ordered=cat_info[1]
-                )
+        c_result = move(
+            cpp_copying.boolean_mask_scatter(
+                input_table_view,
+                target_table_view,
+                boolean_mask_view
             )
-        if index:
-            df = df.set_index(ind_names_tmp)
-            if len(index) == 1:
-                df.index.name = index_names[0]
-        out_tables.append(df)
+        )
 
-    free_table(c_in_table, c_in_cols)
-    free_column(c_maps)
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=target_table._column_names,
+        index_names=target_table._index._column_names
+    )
 
-    return out_tables
+
+def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
+                                 Column boolean_mask):
+
+    cdef vector[reference_wrapper[scalar]] input_scalar_vector
+    input_scalar_vector.reserve(len(input_scalars))
+    cdef Scalar scl
+    for scl in input_scalars:
+        input_scalar_vector.push_back(reference_wrapper[scalar](
+            scl.c_value.get()[0]))
+    cdef table_view target_table_view = target_table.view()
+    cdef column_view boolean_mask_view = boolean_mask.view()
+
+    cdef unique_ptr[table] c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.boolean_mask_scatter(
+                input_scalar_vector,
+                target_table_view,
+                boolean_mask_view
+            )
+        )
+
+    return Table.from_unique_ptr(
+        move(c_result),
+        column_names=target_table._column_names,
+        index_names=target_table._index._column_names
+    )
+
+
+def boolean_mask_scatter(object input, Table target_table,
+                         Column boolean_mask):
+
+    if isinstance(input, Table):
+        return _boolean_mask_scatter_table(
+            input,
+            target_table,
+            boolean_mask
+        )
+    else:
+        scalar_list = [Scalar(i) for i in input]
+        return _boolean_mask_scatter_scalar(
+            scalar_list,
+            target_table,
+            boolean_mask
+        )
+
+
+def shift(Column input, int offset, object fill_value=None):
+
+    cdef Scalar fill
+
+    if isinstance(fill_value, Scalar):
+        fill = fill_value
+    else:
+        fill = Scalar(fill_value, input.dtype)
+
+    cdef column_view c_input = input.view()
+    cdef int32_t c_offset = offset
+    cdef scalar* c_fill_value = fill.c_value.get()
+    cdef unique_ptr[column] c_output
+
+    with nogil:
+        c_output = move(
+            cpp_copying.shift(
+                c_input,
+                c_offset,
+                c_fill_value[0]
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_output))

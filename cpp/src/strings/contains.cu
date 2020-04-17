@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/contains.hpp>
-#include <cudf/wrappers/bool.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
 
@@ -55,7 +55,7 @@ struct contains_fn
     column_device_view d_strings;
     bool bmatch{false}; // do not make this a template parameter to keep compile times down
 
-    __device__ cudf::experimental::bool8 operator()(size_type idx)
+    __device__ bool operator()(size_type idx)
     {
         if( d_strings.is_null(idx) )
             return 0;
@@ -63,8 +63,9 @@ struct contains_fn
         prog.set_stack_mem(data1,data2);
         string_view d_str = d_strings.element<string_view>(idx);
         int32_t begin = 0;
-        int32_t end = bmatch ? 1 : d_str.length(); // 1=match only the beginning of the string
-        return static_cast<experimental::bool8>(prog.find(idx,d_str,begin,end));
+        int32_t end = bmatch ? 1    // match only the beginning of the string;
+                             : -1;  // this handles empty strings too
+        return static_cast<bool>(prog.find(idx,d_str,begin,end));
     }
 };
 
@@ -86,7 +87,7 @@ std::unique_ptr<column> contains_util( strings_column_view const& strings,
     // create the output column
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
-    auto d_results = results->mutable_view().data<cudf::experimental::bool8>();
+    auto d_results = results->mutable_view().data<bool>();
 
     // fill the output column
     auto execpol = rmm::exec_policy(stream);
@@ -137,6 +138,7 @@ std::unique_ptr<column> contains_re( strings_column_view const& strings,
                                      std::string const& pattern,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::contains_re(strings, pattern, mr);
 }
 
@@ -144,6 +146,7 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
                                      std::string const& pattern,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::matches_re(strings, pattern, mr);
 }
 
@@ -237,6 +240,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
                                   std::string const& pattern,
                                   rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_re(strings, pattern, mr);
 }
 

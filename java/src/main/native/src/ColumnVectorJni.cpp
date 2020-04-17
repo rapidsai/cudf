@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/strings/capitalize.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/quantiles.hpp>
@@ -87,6 +88,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
     }
     std::unique_ptr<column> result = cudf::concatenate(columns_vector);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, jclass,
+    jlong j_initial_val, jlong j_step, jint row_count) {
+  JNI_NULL_CHECK(env, j_initial_val, "scalar is null", 0);
+  try {
+    auto initial_val = reinterpret_cast<cudf::scalar const*>(j_initial_val);
+    auto step = reinterpret_cast<cudf::scalar const*>(j_step);
+    std::unique_ptr<cudf::column> col;
+    if (step) {
+      col = cudf::experimental::sequence(row_count, *initial_val, *step);
+    } else {
+      col = cudf::experimental::sequence(row_count, *initial_val);
+    }
+    return reinterpret_cast<jlong>(col.release());
   }
   CATCH_STD(env, 0);
 }
@@ -210,14 +228,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jcl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, jclass clazz,
                                                                          jlong input_column,
                                                                          jint quantile_method,
-                                                                         jdouble quantile) {
+                                                                         jdoubleArray jquantiles) {
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
+    cudf::jni::native_jdoubleArray native_quantiles(env, jquantiles);
+    std::vector<double> quantiles(native_quantiles.data(), native_quantiles.data() + native_quantiles.size()); 
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
     cudf::experimental::interpolation n_quantile_method =
         static_cast<cudf::experimental::interpolation>(quantile_method);
-    std::unique_ptr<cudf::scalar> result =
-        cudf::experimental::quantile(*n_input_column, quantile, n_quantile_method);
+    std::unique_ptr<cudf::column> result =
+        cudf::experimental::quantile(*n_input_column, quantiles, n_quantile_method);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -800,6 +820,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(JNIEnv *env,
+                                                                                jclass clazz,
+                                                                                jlong input_column) {
+    using cudf::column_view;
+
+    JNI_NULL_CHECK(env, input_column, "Input column is null", 0);
+    try {
+       return reinterpret_cast<jlong>(
+         cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view*>(input_column)).release()
+       );
+    }
+    CATCH_STD(env, 0);
+}
+
 ////////
 // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
 // should typically only be called from the CudfColumn inner class.
@@ -1142,4 +1176,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_clamper(JNIEnv *env, jo
     CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_title(JNIEnv *env, jobject j_object, jlong handle) {
+
+    JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+    try {
+        cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+        std::unique_ptr<cudf::column> result = cudf::strings::title(*view);
+        return reinterpret_cast<jlong>(result.release());
+    }
+    CATCH_STD(env, 0);
+}
 } // extern "C"

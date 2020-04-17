@@ -30,7 +30,7 @@
 #include <rolling/legacy/rolling_detail.hpp>
 
 // allocate column
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
 #include <jit/launcher.h>
 #include <jit/legacy/type.h>

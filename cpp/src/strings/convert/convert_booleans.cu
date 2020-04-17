@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -54,7 +55,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
     auto results = make_numeric_column( data_type{BOOL8}, strings_count,
         copy_bitmask( strings.parent(), stream, mr), strings.null_count(), stream, mr);
     auto results_view = results->mutable_view();
-    auto d_results = results_view.data<experimental::bool8>();
+    auto d_results = results_view.data<bool>();
 
     thrust::transform( rmm::exec_policy(stream)->on(stream),
         thrust::make_counting_iterator<size_type>(0),
@@ -77,6 +78,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
                                      string_scalar const& true_string,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::to_booleans(strings, true_string, mr );
 }
 
@@ -111,7 +113,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
             if( d_column.is_null(idx) )
                 return 0;
             size_type bytes = 0;
-            if( d_column.element<experimental::bool8>(idx) )
+            if( d_column.element<bool>(idx) )
                 bytes = d_true.size_bytes();
             else
                 bytes = d_false.size_bytes();
@@ -132,7 +134,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
         [d_column, d_true, d_false, d_offsets, d_chars] __device__ (size_type idx) {
             if( d_column.is_null(idx) )
                 return;
-            string_view result = ( d_column.element<experimental::bool8>(idx) ? d_true : d_false );
+            string_view result = ( d_column.element<bool>(idx) ? d_true : d_false );
             memcpy( d_chars + d_offsets[idx], result.data(), result.size_bytes() );
         });
     //
@@ -149,6 +151,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
                                        string_scalar const& false_string,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_booleans(booleans,true_string,false_string,mr);
 }
 

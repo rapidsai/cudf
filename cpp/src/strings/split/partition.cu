@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <vector>
 
@@ -234,6 +235,7 @@ std::unique_ptr<experimental::table> partition( strings_column_view const& strin
                                                 string_scalar const& delimiter,
                                                 rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::partition( strings, delimiter, mr );
 }
 
@@ -241,6 +243,7 @@ std::unique_ptr<experimental::table> rpartition( strings_column_view const& stri
                                                  string_scalar const& delimiter,
                                                  rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::rpartition( strings, delimiter, mr );
 }
 

@@ -1,76 +1,76 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from libc.stdlib cimport free
-from libcpp.vector cimport vector
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 
-cimport cudf._lib.includes.transpose as cpp_transpose
+from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
+
+from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
+
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.transpose cimport (
+    transpose as cpp_transpose
+)
 
 
-def transpose(df):
+def transpose(Table source):
     """Transpose index and columns.
 
     See Also
     --------
     cudf.core.DataFrame.transpose
     """
-    from cudf.core.column import column_empty
 
-    if len(df.columns) == 0:
-        return df
+    if source._num_columns == 0:
+        return source
 
-    dtype = df.dtypes.iloc[0]
-    d_type = pd.api.types.pandas_dtype(dtype)
-    if is_categorical_dtype(d_type):
-        raise NotImplementedError('Categorical columns are not yet '
-                                  'supported for function')
-    elif d_type.kind in 'OU':
-        raise NotImplementedError('String columns are not yet '
-                                  'supported for function')
+    cats = None
+    dtype = source._columns[0].dtype
 
-    if any(t != dtype for t in df.dtypes):
-        raise ValueError('all columns must have the same dtype')
-    has_null = any(c.null_count for c in df._data.columns)
+    if is_categorical_dtype(dtype):
+        if any(not is_categorical_dtype(c.dtype) for c in source._columns):
+            raise ValueError('Columns must all have the same dtype')
+        cats = list(c.cat().categories for c in source._columns)
+        cats = cudf.Series(cudf.concat(cats)).drop_duplicates()._column
+        source = Table(index=source._index, data=[
+            (name, col.cat()._set_categories(cats, is_unique=True).codes)
+            for name, col in source._data.items()
+        ])
+    elif dtype.kind in 'OU':
+        raise NotImplementedError('Cannot transpose string columns')
+    elif any(c.dtype != dtype for c in source._columns):
+        raise ValueError('Columns must all have the same dtype')
 
-    out_df = cudf.DataFrame()
-
-    ncols = len(df.columns)
-    cdef vector[gdf_column*] cols
-    for col in df._data:
-        cols.push_back(column_view_from_column(df[col]._column))
-
-    new_nrow = ncols
-    new_ncol = len(df)
-
-    new_col_series = [
-        cudf.Series(column_empty(new_nrow, dtype=dtype, masked=has_null))
-        for i in range(0, new_ncol)
-    ]
-
-    cdef vector[gdf_column*] new_cols
-    for i in range(0, new_ncol):
-        new_cols.push_back(column_view_from_column(new_col_series[i]._column))
+    cdef pair[unique_ptr[column], table_view] c_result
+    cdef table_view c_input = source.data_view()
 
     with nogil:
-        result = cpp_transpose.gdf_transpose(
-            ncols,
-            cols.data(),
-            new_cols.data()
-        )
+        c_result = move(cpp_transpose(c_input))
 
-    for i in range(ncols):
-        free(cols[i])
-    for i in range(new_ncol):
-        free(new_cols[i])
+    result_owner = Column.from_unique_ptr(move(c_result.first))
+    result = Table.from_table_view(
+        c_result.second,
+        owner=result_owner,
+        column_names=range(source._num_rows)
+    )
 
-    check_gdf_error(result)
+    if cats is not None:
+        result = Table(index=result._index, data=[
+            (name, cudf.core.column.column.build_categorical_column(
+                codes=cudf.core.column.column.as_column(
+                    col.base_data, dtype=col.dtype),
+                mask=col.base_mask,
+                size=col.size,
+                categories=cats,
+                offset=col.offset,
+            ))
+            for name, col in result._data.items()
+        ])
 
-    for i in range(0, new_ncol):
-        out_df[i] = new_col_series[i]
-
-    return out_df
+    return result

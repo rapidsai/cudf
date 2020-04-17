@@ -361,6 +361,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long interleaveColumns(long input);
+
   private static native long[] filter(long input, long mask);
 
   //XXX until we have split a ColumnVector into a host column and a device column
@@ -864,6 +866,25 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Interleave all columns into a single column. Columns must all have the same data type and length.
+   *
+   * Example:
+   * ```
+   * input  = [[A1, A2, A3], [B1, B2, B3]]
+   * return = [A1, B1, A2, B2, A3, B3]
+   * ```
+   *
+   * @return The interleaved columns as a single column
+   */
+  public ColumnVector interleaveColumns() {
+    assert this.getNumberOfColumns() >= 2 : ".interleaveColumns() operation requires at least 2 columns";
+    try (DevicePrediction prediction = new DevicePrediction(this.getDeviceMemorySize(), "interleaveColumns")) {
+      return new ColumnVector(interleaveColumns(this.nativeHandle));
+    }
+  }
+
+
+  /**
    * Given a sorted table return the lower bound.
    * Example:
    *
@@ -992,34 +1013,85 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true, isNullSmallest);
   }
 
+  /**
+   * Returns count aggregation with only valid values.
+   * Null values are skipped.
+   * @param index Column on which aggregation is to be performed
+   * @return count aggregation of column `index` with null values skipped.
+   */
   public static Aggregate count(int index) {
-    return Aggregate.count(index);
+    return Aggregate.count(index, false);
   }
 
+  /**
+   * Returns count aggregation
+   * @param index Column on which aggregation is to be performed.
+   * @param include_nulls Include nulls if set to true
+   * @return count aggregation of column `index`
+   */
+  public static Aggregate count(int index, boolean include_nulls) {
+    return Aggregate.count(index, include_nulls);
+  }
+
+  /**
+   * Returns max aggregation. Null values are skipped.
+   * @param index Column on which max aggregation is to be performed.
+   * @return max aggregation of column `index`
+   */
   public static Aggregate max(int index) {
     return Aggregate.max(index);
   }
 
+  /**
+   * Returns min aggregation. Null values are skipped.
+   * @param index Column on which min aggregation is to be performed.
+   * @return min aggregation of column `index`
+   */
   public static Aggregate min(int index) {
     return Aggregate.min(index);
   }
 
+  /**
+   * Returns sum aggregation. Null values are skipped.
+   * @param index Column on which sum aggregation is to be performed.
+   * @return sum aggregation of column `index`
+   */
   public static Aggregate sum(int index) {
     return Aggregate.sum(index);
   }
 
+  /**
+   * Returns mean aggregation. Null values are skipped.
+   * @param index Column on which mean aggregation is to be performed.
+   * @return mean aggregation of column `index`
+   */
   public static Aggregate mean(int index) {
     return Aggregate.mean(index);
   }
 
+  /**
+   * Returns median aggregation. Null values are skipped.
+   * @param index Column on which median aggregation is to be performed.
+   * @return median aggregation of column `index`
+   */
   public static Aggregate median(int index) {
     return Aggregate.median(index);
   }
 
+  /**
+   * Returns aggregate operations grouped by columns provided in indices
+   * @param groupByOptions Options provided in the builder
+   * @param indices columnns to be considered for groupBy
+   */
   public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
+  /**
+   * Returns aggregate operations grouped by columns provided in indices
+   * null is considered as key while grouping.
+   * @param indices columnns to be considered for groupBy
+   */
   public AggregateOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);

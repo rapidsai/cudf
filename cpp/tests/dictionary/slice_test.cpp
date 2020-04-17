@@ -61,8 +61,8 @@ TEST_F(DictionarySliceTest, SliceColumn)
 
 TEST_F(DictionarySliceTest, SplitColumn)
 {
-    cudf::test::fixed_width_column_wrapper<float> input{ {4.25, 7.125, 0.5, 0, -11.75, 7.125, 0.5},
-                                                         {   1,     1,   1, 0,      1,     1,   1} };
+    cudf::test::fixed_width_column_wrapper<float> input{ {4.25, 7.125, 0.5, 0., -11.75, 7.125, 0.5},
+                                                         {   1,     1,   1,  0,      1,     1,   1} };
     auto dictionary = cudf::dictionary::encode( input );
 
     std::vector<cudf::size_type> splits{ 2,6 };
@@ -72,7 +72,7 @@ TEST_F(DictionarySliceTest, SplitColumn)
     auto output1 = cudf::dictionary::decode( cudf::dictionary_column_view(results[0]) );
     cudf::test::expect_columns_equal(expected1,output1->view());
 
-    cudf::test::fixed_width_column_wrapper<float> expected2{ {0.5, 0, -11.75, 7.125}, {1,0,1,1} };
+    cudf::test::fixed_width_column_wrapper<float> expected2{ {0.5, 0., -11.75, 7.125}, {1,0,1,1} };
     auto output2 = cudf::dictionary::decode( cudf::dictionary_column_view(results[1]) );
     cudf::test::expect_columns_equal(expected2,output2->view());
 

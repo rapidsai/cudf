@@ -120,6 +120,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a column of strings where, for each string row in the input,
+   * the first character after spaces is modified to upper-case,
+   * while all the remaining characters in a word are modified to lower-case.
+   *
+   * Any null string entries return corresponding null output column entries
+   */
+  public ColumnVector toTitle() {
+    assert type == DType.STRING;
+    return new ColumnVector(title(getNativeView()));
+  }
+
+  private native long title(long handle);
+
+  /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
    * data may not have a clear lifecycle thanks to java and GC. This API informs the leak
    * tracking code that this is expected for this column, and big scary warnings should
@@ -670,6 +684,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new vector of length rows, starting at the initialValue and going by step each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param step the step to add to each subsequent row.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
+    if (!initialValue.isValid() || !step.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
+    }
+  }
+
+  /**
+   * Create a new vector of length rows, starting at the initialValue and going by 1 each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, int rows) {
+    if (!initialValue.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
+    }
+  }
+
+  /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
@@ -687,6 +736,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         columnHandles[i] = columns[i].getNativeView();
       }
       return new ColumnVector(concatenate(columnHandles));
+    }
+  }
+
+  /**
+   * Create a new vector of "normalized" values, where:
+   *  1. All representations of NaN (and -NaN) are replaced with the normalized NaN value
+   *  2. All elements equivalent to 0.0 (including +0.0 and -0.0) are replaced with +0.0.
+   *  3. All elements that are not equivalent to NaN or 0.0 remain unchanged.
+   * 
+   * {@link https://docs.oracle.com/javase/8/docs/api/java/lang/Double.html#longBitsToDouble-long-}
+   * describes how equivalent values of NaN/-NaN might have different bitwise representations.
+   * 
+   * This method may be used to compare different bitwise values of 0.0 or NaN as logically
+   * equivalent. For instance, if these values appear in a groupby key column, without normalization
+   * 0.0 and -0.0 would be erroneously treated as distinct groups, as will each representation of NaN.
+   * 
+   * @return A new ColumnVector with all elements equivalent to NaN/0.0 replaced with a normalized equivalent.
+   */
+  public ColumnVector normalizeNANsAndZeros() {
+    try (DevicePrediction prediction =
+                 new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeros")) {
+      return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
     }
   }
 
@@ -1224,13 +1295,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Calculate the quantile of this ColumnVector
-   * @param method   the method used to calculate the quantile
-   * @param quantile the quantile value [0,1]
-   * @return the quantile as double. The type can be changed in future
+   * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
+   * in the desired order.
+   * @param method   the method used to calculate the quantiles
+   * @param quantiles the quantile values [0,1]
+   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
    */
-  public Scalar quantile(QuantileMethod method, double quantile) {
-    return new Scalar(type, quantile(getNativeView(), method.nativeId, quantile));
+  public ColumnVector quantile(QuantileMethod method, double[] quantiles) {
+    return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
   }
 
   /**
@@ -1513,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }
@@ -1988,6 +2060,46 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Close all non-null buffers. Exceptions that occur during the process will
+   * be aggregated into a single exception thrown at the end.
+   */
+  static void closeBuffers(MemoryBuffer data, MemoryBuffer valid, MemoryBuffer offsets) {
+    Throwable toThrow = null;
+    if (data != null) {
+      try {
+        data.close();
+      } catch (Throwable t) {
+        toThrow = t;
+      }
+    }
+    if (valid != null) {
+      try {
+        valid.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (offsets != null) {
+      try {
+        offsets.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (toThrow != null) {
+      throw new RuntimeException(toThrow);
+    }
+  }
+
+  /**
    * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
    * writing custom kernels or other cuda operations on the data.  DO NOT close this column
    * vector until you are completely done using the native column_view.  DO NOT modify the column in
@@ -2175,7 +2287,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long upperStrings(long cudfViewHandle);
 
-  private static native long quantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+  private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
   private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
                                            int preceding, int following,
@@ -2184,6 +2296,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long lengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
@@ -2226,6 +2340,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
   
   private static native long transform(long viewHandle, String udf, boolean isPtx);
+
+  /**
+   * Native method to normalize the various bitwise representations of NAN and zero.
+   * 
+   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * 
+   * @param viewHandle `long` representation of pointer to input column_view.
+   * @return Pointer to a new `column` of normalized values.
+   * @throws CudfException On failure to normalize.
+   */
+  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
@@ -2428,34 +2553,57 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       long size = getDeviceMemorySize();
       boolean neededCleanup = false;
       long address = 0;
+
+      // Always mark the resource as freed even if an exception is thrown.
+      // We cannot know how far it progressed before the exception, and
+      // therefore it is unsafe to retry.
+      Throwable toThrow = null;
       if (viewHandle != 0) {
         address = viewHandle;
-        deleteColumnView(viewHandle);
-        viewHandle = 0;
+        try {
+          deleteColumnView(viewHandle);
+        } catch (Throwable t) {
+          toThrow = t;
+        } finally {
+          viewHandle = 0;
+        }
         neededCleanup = true;
       }
       if (columnHandle != 0) {
         if (address != 0) {
           address = columnHandle;
         }
-        deleteCudfColumn(columnHandle);
-        columnHandle = 0;
+        try {
+          deleteCudfColumn(columnHandle);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          columnHandle = 0;
+        }
         neededCleanup = true;
       }
-      if (data != null) {
-        data.close();
-        data = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          closeBuffers(data, valid, offsets);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
-        neededCleanup = true;
+      if (toThrow != null) {
+        throw new RuntimeException(toThrow);
       }
       if (neededCleanup) {
         if (logErrorIfNotClean) {
@@ -2465,6 +2613,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         MemoryListener.deviceDeallocation(size, id);
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return viewHandle == 0 && columnHandle == 0 && data == null && valid == null && offsets == null;
     }
 
     /**
