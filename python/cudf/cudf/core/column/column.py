@@ -28,7 +28,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
-    check_upcast_unsupported_dtype,
+    check_cast_unsupported_dtype,
     is_categorical_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -1205,7 +1205,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         desc = arbitrary.__cuda_array_interface__
         current_dtype = np.dtype(desc["typestr"])
 
-        arb_dtype = check_upcast_unsupported_dtype(current_dtype)
+        arb_dtype = check_cast_unsupported_dtype(current_dtype)
         if arb_dtype != current_dtype:
             arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
             current_dtype = arb_dtype
@@ -1372,7 +1372,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif arbitrary.dtype == np.bool:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype,)
         elif arbitrary.dtype.kind in ("f"):
-            arb_dtype = check_upcast_unsupported_dtype(
+            arb_dtype = check_cast_unsupported_dtype(
                 arbitrary.dtype if dtype is None else dtype
             )
             data = as_column(
@@ -1464,7 +1464,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("f"):
-            arb_dtype = check_upcast_unsupported_dtype(
+            arb_dtype = check_cast_unsupported_dtype(
                 arb_dtype if dtype is None else dtype
             )
             data = as_column(

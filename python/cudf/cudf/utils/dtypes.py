@@ -237,7 +237,7 @@ def min_numeric_column_type(x):
     return x.dtype
 
 
-def check_upcast_unsupported_dtype(dtype):
+def check_cast_unsupported_dtype(dtype):
     from cudf._lib.types import np_to_cudf_types
     import warnings
 
@@ -267,7 +267,5 @@ def check_upcast_unsupported_dtype(dtype):
         return cast_types_map[dtype]
 
     raise NotImplementedError(
-        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(
-            dtype
-        )
+        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
     )
