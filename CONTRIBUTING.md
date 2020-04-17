@@ -110,6 +110,27 @@ pre-commit install
 from the root of the cuDF repository. Now `isort`, `Black`, and `flake8` will be
 run each time you commit changes.
 
+#### C++/CUDA
+
+cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html)
+
+In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
+```
+python3 ./cpp/scripts/run-clang-format.py -inplace
+```
+
+##### Setting up format on save with VS Code
+
+If you want to set up `clang-format` to format on save with VS Code:
+1. [Install C/C++ (ms-vscode.cpptools)](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) VS Code extension
+2. Add the following two lines to `settings.json`:
+```
+"C_Cpp.clang_format_path": "${CONDA_PREFIX_1}/pkgs/clang-tools-8.0.1-hc9558a2_2/bin/clang-format",
+"editor.formatOnSave": true,
+```
+
+If you are using `rapids-compose`, `clang-format` should work automatically.
+
 ### Get libcudf Dependencies
 
 Compiler requirements:
