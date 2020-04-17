@@ -157,7 +157,7 @@
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
-- PR #4992 Fix cudf::strings:split logic for many columns
+- PR #4922 Fix cudf::strings:split logic for many columns
 
 
 # cuDF 0.13.0 (31 Mar 2020)
