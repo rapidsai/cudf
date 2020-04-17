@@ -63,6 +63,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
 - PR #4817 Fix `fixed_point` documentation
+- PR #4844 Change Doxygen color to RAPIDS purple and documentation improvement
 - PR #4840 Add docs for `T`, `empty` & `values`
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
@@ -85,11 +86,13 @@
 - PR #4894 Add annotations for the `.columns` property and setter
 - PR #4901 Improve unit tests for casting Java numeric types to string
 - PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
+- PR #4903 Improve internal documentation of cudf-io compression/decompression kernels
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #3259 Add .clang-format
+- PR #4917 Add support for casting unsupported `dtypes` of same kind
 
 ## Bug Fixes
 
