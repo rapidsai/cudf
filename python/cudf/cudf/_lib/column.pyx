@@ -273,7 +273,7 @@ cdef class Column:
         if inplace:
             self._offset = other_col.offset
             self._size = other_col.size
-            self.dtype = other_col.dtype
+            self._dtype = other_col._dtype
             self.set_base_data(other_col.base_data)
             self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
