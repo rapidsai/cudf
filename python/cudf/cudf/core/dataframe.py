@@ -219,9 +219,6 @@ class DataFrame(Frame):
         if dtype:
             self._data = self.astype(dtype)._data
 
-        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
-        self._allow_setattr_to_setitem = True
-
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
@@ -244,7 +241,6 @@ class DataFrame(Frame):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
-
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
@@ -395,29 +391,23 @@ class DataFrame(Frame):
         return list(o)
 
     def __setattr__(self, key, col):
-        if getattr(self, "_allow_setattr_to_setitem", False):
-            # if an attribute already exists, set it.
-            try:
-                object.__getattribute__(self, key)
-                object.__setattr__(self, key, col)
-                return
-            except AttributeError:
-                pass
 
-            # if a column already exists, set it.
+        # if an attribute already exists, set it.
+        try:
+            object.__getattribute__(self, key)
+            object.__setattr__(self, key, col)
+            return
+        except AttributeError:
+            pass
+
+        # if a column already exists, set it.
+        if key != "_data":
             try:
                 self[key]  # __getitem__ to verify key exists
                 self[key] = col
                 return
             except KeyError:
                 pass
-
-            warnings.warn(
-                "Columns may not be added to a DataFrame using a new "
-                + "attribute name. A new attribute will be created: '%s'"
-                % key,
-                UserWarning,
-            )
 
         object.__setattr__(self, key, col)
 
