@@ -254,15 +254,15 @@ def test_pandas_concat_compatibility_axis1(overlap):
         3, dtypes={"d": float, "ind": float}
     ).set_index("ind")
     d5 = gd.datasets.randomdata(
-            3, dtypes={"e": float, "ind": float}
-        ).set_index("ind")
-    
+        3, dtypes={"e": float, "ind": float}
+    ).set_index("ind")
+
     pd1 = d1.to_pandas()
     pd2 = d2.to_pandas()
     pd3 = d3.to_pandas()
     pd4 = d4.to_pandas()
     pd5 = d5.to_pandas()
-    
+
     if overlap:
         d6 = d5.rename(columns={"e": "f"})
         d7 = d5.rename(columns={"e": "f"})
