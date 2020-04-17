@@ -144,7 +144,7 @@ class memory_mapped_source : public datasource {
  *
  **/
 class gpu_async_filereader : public datasource {
-  static constexpr uint32_t default_buffer_size = 16 << 20; // 16MB
+  static constexpr uint32_t default_buffer_size = 2 << 20; // 2x2MB
 
   struct pinned_filebuf {
     uint8_t *host_bfr = nullptr;
@@ -168,6 +168,7 @@ class gpu_async_filereader : public datasource {
           CUDA_TRY(cudaEventCreateWithFlags(&completion_event, cudaEventDisableTiming));
         }
         CUDA_TRY(cudaEventRecord(completion_event, stream));
+        cudaStreamQuery(stream); // In case cudaEventRecord did not flush all the way to gpu
         event_pending = true;
       }
     }
@@ -227,6 +228,8 @@ class gpu_async_filereader : public datasource {
       if (!merge_enable) {
         dblbuf_[bufid_].flush();
         bufid_ = !bufid_;
+      }
+      if (!merge_enable || !dblbuf_[bufid_].host_bfr) {
         // If HtoD transfers are faster than disk reads, we should in theory never actually wait on the completion events
         dblbuf_[bufid_].init_or_wait(buffer_size_, stream);
       }
