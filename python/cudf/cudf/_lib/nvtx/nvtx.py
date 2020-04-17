@@ -68,6 +68,14 @@ class annotate(ContextDecorator):
         return super().__call__(func)
 
 
+class _annotate_nop:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, func):
+        return func
+
+
 def push_range(message=None, color="blue", domain=None):
     """
     Mark the beginning of a code range.
