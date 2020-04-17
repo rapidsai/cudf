@@ -92,6 +92,13 @@ class Index(Frame):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            col = self._data[self.name]
+            col._mimic_inplace(other._data[other.name], inplace=True)
+        else:
+            return other
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -452,6 +459,27 @@ class Index(Frame):
         result = self.to_series().isin(values).values
 
         return result
+
+    def where(self, cond, other=None):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, or array-like
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+        Returns
+        -------
+        Same type as caller
+        """
+        return super().where(cond=cond, other=other)
 
     @property
     def __cuda_array_interface__(self):

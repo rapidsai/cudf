@@ -115,7 +115,7 @@ NVStrings* NVStrings::cat( NVStrings* others, const char* separator, const char*
             RMM_FREE(d_narep,0);
         return rtn;
     }
-    cudaMemset(d_buffer,0,rtn->pImpl->getMemorySize());
+    CUDA_TRY(cudaMemset(d_buffer,0,rtn->pImpl->getMemorySize()));
     // compute the offset
     rmm::device_vector<size_t> offsets(count,0);
     thrust::exclusive_scan(execpol->on(0),sizes.begin(),sizes.end(),offsets.begin());
@@ -246,7 +246,7 @@ NVStrings* NVStrings::cat( std::vector<NVStrings*>& others, const char* separato
             RMM_FREE(d_narep,0);
         return rtn;
     }
-    cudaMemset(d_buffer,0,rtn->pImpl->getMemorySize());
+    CUDA_TRY(cudaMemset(d_buffer,0,rtn->pImpl->getMemorySize()));
     // compute the offset
     rmm::device_vector<size_t> offsets(count,0);
     thrust::exclusive_scan(execpol->on(0),sizes.begin(),sizes.end(),offsets.begin());

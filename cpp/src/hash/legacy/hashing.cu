@@ -491,7 +491,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   // Compute exclusive scan of size of each partition to determine offset location
   // of each partition in final output. This can be done independently on a separate stream
   cudaStream_t s1{};
-  cudaStreamCreate(&s1);
+  CUDA_TRY(cudaStreamCreate(&s1));
   cudf::size_type * scanned_global_partition_sizes{global_partition_sizes};
   thrust::exclusive_scan(rmm::exec_policy(s1)->on(s1),
                          global_partition_sizes, 
@@ -530,8 +530,8 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   RMM_TRY(RMM_FREE(row_partition_numbers, 0));
   RMM_TRY(RMM_FREE(block_partition_sizes, 0));
 
-  cudaStreamSynchronize(s1);
-  cudaStreamDestroy(s1);
+  CUDA_TRY(cudaStreamSynchronize(s1));
+  CUDA_TRY(cudaStreamDestroy(s1));
   RMM_TRY(RMM_FREE(global_partition_sizes, 0));
 
   return GDF_SUCCESS;

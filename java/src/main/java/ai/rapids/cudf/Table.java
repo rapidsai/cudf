@@ -361,6 +361,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long interleaveColumns(long input);
+
   private static native long[] filter(long input, long mask);
 
   //XXX until we have split a ColumnVector into a host column and a device column
@@ -862,6 +864,25 @@ public final class Table implements AutoCloseable {
       return new Table(concatenate(tableHandles));
     }
   }
+
+  /**
+   * Interleave all columns into a single column. Columns must all have the same data type and length.
+   *
+   * Example:
+   * ```
+   * input  = [[A1, A2, A3], [B1, B2, B3]]
+   * return = [A1, B1, A2, B2, A3, B3]
+   * ```
+   *
+   * @return The interleaved columns as a single column
+   */
+  public ColumnVector interleaveColumns() {
+    assert this.getNumberOfColumns() >= 2 : ".interleaveColumns() operation requires at least 2 columns";
+    try (DevicePrediction prediction = new DevicePrediction(this.getDeviceMemorySize(), "interleaveColumns")) {
+      return new ColumnVector(interleaveColumns(this.nativeHandle));
+    }
+  }
+
 
   /**
    * Given a sorted table return the lower bound.

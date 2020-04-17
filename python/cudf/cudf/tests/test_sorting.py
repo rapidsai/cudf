@@ -285,7 +285,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
                 if isinstance(df[name]._column, NumericalColumn):
-                    assert sr[0] == i
+                    assert sr.iloc[0] == i
         assert nrows == nelem
 
     _check_scatter_by_map(
