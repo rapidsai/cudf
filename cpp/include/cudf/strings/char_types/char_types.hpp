@@ -104,7 +104,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
  * @brief Returns a boolean column identifying strings in which all
  * characters are valid for conversion to integers.
  *
- * The output row entry will be set to true if the corresponding string element
+ * The output row entry will be set to `true` if the corresponding string element
  * has at least one character in [-+0-9].
  *
  * ```
@@ -125,10 +125,26 @@ std::unique_ptr<column> is_integer( strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Returns `true` if all strings contain
+ * characters that are valid for conversion to integers.
+ *
+ * This function will return `true` if all string elements
+ * has at least one character in [-+0-9].
+ *
+ * Any null entry or empty string will cause this function to return `false`.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Resource for allocating device memory.
+ * @return true if all string are valid
+ */
+bool all_integer( strings_column_view const& strings,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
  * @brief Returns a boolean column identifying strings in which all
  * characters are valid for conversion to floats.
  *
- * The output row entry will be set to true if the corresponding string element
+ * The output row entry will be set to `true` if the corresponding string element
  * has at least one character in [-+0-9eE.].
  *
  * ```
@@ -147,6 +163,22 @@ std::unique_ptr<column> is_integer( strings_column_view const& strings,
  */
 std::unique_ptr<column> is_float( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Returns `true` if all strings contain
+ * characters that are valid for conversion to floats.
+ *
+ * This function will return `true` if all string elements
+ * has at least one character in [-+0-9eE.].
+ *
+ * Any null entry or empty string will cause this function to return `false`.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Resource for allocating device memory.
+ * @return true if all string are valid
+ */
+bool all_float( strings_column_view const& strings,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 } // namespace strings
 } // namespace cudf
