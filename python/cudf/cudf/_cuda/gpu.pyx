@@ -246,7 +246,7 @@ def driverGetVersion():
     and status code.
     """
     cdef int version
-    cdef int status = cudaDriverGetVersion(&version)
+    cdef cudaError_t status = cudaDriverGetVersion(&version)
     if status != 0:
         raise CUDARuntimeError(status)
     return version
@@ -263,7 +263,7 @@ def runtimeGetVersion():
     """
 
     cdef int version
-    cdef int status = cudaRuntimeGetVersion(&version)
+    cdef cudaError_t status = cudaRuntimeGetVersion(&version)
     if status != 0:
         raise CUDARuntimeError(status)
     return version
@@ -279,7 +279,7 @@ def getDeviceCount():
     """
 
     cdef int count
-    cdef int status = cudaGetDeviceCount(&count)
+    cdef cudaError_t status = cudaGetDeviceCount(&count)
     if status != 0:
         raise CUDARuntimeError(status)
     return count
@@ -301,7 +301,7 @@ def getDeviceAttribute(object attr, int device):
     """
 
     cdef int value
-    cdef int status = cudaDeviceGetAttribute(&value, attr, device)
+    cdef cudaError_t status = cudaDeviceGetAttribute(&value, attr, device)
     if status != 0:
         raise CUDARuntimeError(status)
     return value
@@ -321,7 +321,7 @@ def getDeviceProperties(int device):
     """
 
     cdef cudaDeviceProp prop
-    cdef int status = cudaGetDeviceProperties(&prop, device)
+    cdef cudaError_t status = cudaGetDeviceProperties(&prop, device)
     if status != 0:
         raise CUDARuntimeError(status)
     return prop
@@ -341,7 +341,7 @@ def deviceGetName(int device):
     """
 
     cdef char* device_name = <char*> malloc(256 * sizeof(char))
-    cdef int status = cuDeviceGetName(device_name, 256, device)
+    cdef cudaError_t status = cuDeviceGetName(device_name, 256, device)
     if status != 0:
         raise CUDARuntimeError(status)
     return device_name
