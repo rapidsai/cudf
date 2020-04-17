@@ -72,6 +72,12 @@ class _annotate_nop:
     def __init__(self, *args, **kwargs):
         pass
 
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
     def __call__(self, func):
         return func
 
