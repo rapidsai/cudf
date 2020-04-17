@@ -179,7 +179,8 @@ class CategoricalAccessor(object):
         df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
         df = cur_df.merge(df, on="old_codes", how="left")
-        df = df.sort_values(by="order").reset_index(True)
+        df = df.sort_values(by="order")
+        df.reset_index(drop=True, inplace=True)
 
         ordered = kwargs.get("ordered", self.ordered)
         new_codes = df["new_codes"]._column

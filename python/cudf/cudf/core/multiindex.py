@@ -47,7 +47,8 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if "source_data" in kwargs:
-            source_data = kwargs["source_data"].reset_index(drop=True)
+            source_data = kwargs["source_data"].copy(deep=False)
+            source_data.reset_index(drop=True, inplace=True)
 
             if isinstance(source_data, pd.DataFrame):
                 source_data = DataFrame.from_pandas(source_data)
