@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/case.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
-#include "char_types/is_flags.h"
-#include "char_types/char_cases.h"
-#include "./utilities.hpp"
-#include "./utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <strings/char_types/is_flags.h>
+#include <strings/char_types/char_cases.h>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 
 namespace cudf
@@ -153,6 +155,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    size_type null_count = strings.null_count();
 
     // copy null mask
     rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
@@ -173,7 +176,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
 
     // build the chars column -- convert characters based on case_flag parameter
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column = strings::detail::create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
+    auto chars_column = strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     
@@ -184,7 +187,7 @@ std::unique_ptr<column> convert_case( strings_column_view const& strings,
                                   d_new_offsets, d_chars} );        
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               d_column.null_count(), std::move(null_mask), stream, mr);
+                               null_count, std::move(null_mask), stream, mr);
 }
 
 } // namespace
@@ -224,18 +227,21 @@ std::unique_ptr<column> swapcase( strings_column_view const& strings,
 std::unique_ptr<column> to_lower( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_lower( strings, mr );
 }
 
 std::unique_ptr<column> to_upper( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_upper( strings, mr);
 }
 
 std::unique_ptr<column> swapcase( strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::swapcase( strings, mr);
 }
 

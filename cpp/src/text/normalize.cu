@@ -20,8 +20,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
 
 #include <nvtext/normalize.hpp>
 #include <text/utilities/tokenize_ops.cuh>
@@ -126,6 +127,7 @@ std::unique_ptr<cudf::column> normalize_spaces( cudf::strings_column_view const&
 std::unique_ptr<cudf::column> normalize_spaces( cudf::strings_column_view const& strings,
                                                 rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::normalize_spaces( strings, mr );
 }
 

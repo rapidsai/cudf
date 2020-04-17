@@ -954,6 +954,28 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
     assert list(df["int2"]) == list(ref_df["int2"])
 
 
+@pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
+def test_csv_reader_byte_range_strings(segment_bytes):
+    names = ["strings"]
+    buffer = "\n".join('"' + str(x) + '"' for x in range(1, 100))
+    file_size = len(buffer)
+
+    ref_df = read_csv(StringIO(buffer), names=names).to_pandas()
+
+    dfs = []
+    for segment in range((file_size + segment_bytes - 1) // segment_bytes):
+        dfs.append(
+            read_csv(
+                StringIO(buffer),
+                names=names,
+                byte_range=(segment * segment_bytes, segment_bytes),
+            )
+        )
+    df = cudf.concat(dfs).to_pandas()
+
+    assert list(df["strings"]) == list(ref_df["strings"])
+
+
 @pytest.mark.parametrize(
     "header_row, skip_rows, skip_blanks",
     [

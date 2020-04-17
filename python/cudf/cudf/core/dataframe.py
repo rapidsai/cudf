@@ -23,7 +23,7 @@ from pandas.api.types import is_dict_like
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf._lib.transform import bools_to_mask
+from cudf._lib.nvtx import annotate
 from cudf.core import column
 from cudf.core.column import (
     CategoricalColumn,
@@ -165,6 +165,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -250,8 +251,6 @@ class DataFrame(Frame):
                 # in `columns` that don't exist in `keys`:
                 extra_cols = [col for col in columns if col not in data.keys()]
                 data.update({key: None for key in extra_cols})
-        else:
-            columns = pd.Index(data.keys(), tupleize_cols=True)
 
         data, index = self._align_input_series_indices(data, index=index)
 
@@ -269,10 +268,16 @@ class DataFrame(Frame):
         else:
             self._index = as_index(index)
 
-        for (i, col_name) in enumerate(data):
-            self.insert(i, col_name, data[col_name])
+        if len(data):
+            self._data.multiindex = True
+            for (i, col_name) in enumerate(data):
+                self._data.multiindex = self._data.multiindex and isinstance(
+                    col_name, tuple
+                )
+                self.insert(i, col_name, data[col_name])
 
-        self.columns = columns
+        if columns is not None:
+            self.columns = columns
 
     @classmethod
     def _from_table(cls, table, index=None):
@@ -417,6 +422,7 @@ class DataFrame(Frame):
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
+    @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
         """
         If *arg* is a ``str`` or ``int`` type, return the column Series.
@@ -485,26 +491,12 @@ class DataFrame(Frame):
             else:
                 return self._get_columns_by_label(mask)
         elif isinstance(arg, DataFrame):
-            return self.mask(arg)
+            return self.where(arg)
         else:
             msg = "__getitem__ on type {!r} is not supported"
             raise TypeError(msg.format(type(arg)))
 
-    def mask(self, other):
-        df = self.copy()
-        for col in self.columns:
-            if col in other.columns:
-                if other[col].has_nulls:
-                    raise ValueError("Column must have no nulls.")
-
-                out_mask = bools_to_mask(other[col]._column)
-            else:
-                out_mask = create_null_mask(
-                    len(self[col]), state=MaskState.ALL_NULL
-                )
-            df[col] = df[col].set_mask(out_mask)
-        return df
-
+    @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
         """Add/set column by *arg or DataFrame*
         """
@@ -682,11 +674,32 @@ class DataFrame(Frame):
 
     @property
     def empty(self):
+        """
+        Indicator whether DataFrame is empty.
+
+        True if DataFrame is entirely empty (no items), meaning any
+        of the axes are of length 0.
+
+        Returns
+        -------
+        out : bool
+            If DataFrame is empty, return True, if not return False.
+        """
         return not len(self)
 
     @property
     def values(self):
+        """
+        Return a CuPy representation of the DataFrame.
 
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        out: cupy.ndarray
+            The values of the DataFrame.
+        """
         return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
@@ -846,7 +859,7 @@ class DataFrame(Frame):
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
-                "[%d rows x %d columns]" % (len(self), len(self.columns))
+                "[%d rows x %d columns]" % (len(self), len(self._data.names))
             )
         return "\n".join(lines)
 
@@ -866,18 +879,18 @@ class DataFrame(Frame):
             else pd.options.display.width / 2
         )
 
-        if len(self) <= nrows and len(self.columns) <= ncols:
+        if len(self) <= nrows and len(self._data.names) <= ncols:
             output = self.copy(deep=False)
         else:
-            left_cols = len(self.columns)
+            left_cols = len(self._data.names)
             right_cols = 0
             upper_rows = len(self)
             lower_rows = 0
             if len(self) > nrows and nrows > 0:
                 upper_rows = int(nrows / 2.0) + 1
                 lower_rows = upper_rows + (nrows % 2)
-            if len(self.columns) > ncols:
-                right_cols = len(self.columns) - int(ncols / 2.0) - 1
+            if len(self._data.names) > ncols:
+                right_cols = len(self._data.names) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
@@ -913,7 +926,8 @@ class DataFrame(Frame):
         if lines[-2].startswith("<p>"):
             lines = lines[:-2]
             lines.append(
-                "<p>%d rows × %d columns</p>" % (len(self), len(self.columns))
+                "<p>%d rows × %d columns</p>"
+                % (len(self), len(self._data.names))
             )
             lines.append("</div>")
         return "\n".join(lines)
@@ -1152,8 +1166,8 @@ class DataFrame(Frame):
         return iter(self.columns)
 
     def equals(self, other):
-        for col in self.columns:
-            if col not in other.columns:
+        for col in self._data.names:
+            if col not in other._data.names:
                 return False
             if not self[col].equals(other[col]):
                 return False
@@ -1167,6 +1181,7 @@ class DataFrame(Frame):
             yield (k, self[k])
 
     @property
+    @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
     def loc(self):
         """
         Selecting rows and columns by label or boolean mask.
@@ -1304,12 +1319,14 @@ class DataFrame(Frame):
         return self.loc
 
     @property
+    @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
         """Returns a tuple of columns
         """
         return self._data.to_pandas_index()
 
     @columns.setter
+    @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
         if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
             columns = columns.to_pandas()
@@ -1320,9 +1337,9 @@ class DataFrame(Frame):
         if not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
-        if not len(columns) == len(self.columns):
+        if not len(columns) == len(self._data.names):
             raise ValueError(
-                f"Length mismatch: expected {len(self.columns)} elements ,"
+                f"Length mismatch: expected {len(self._data.names)} elements ,"
                 f"got {len(columns)} elements"
             )
 
@@ -1570,6 +1587,7 @@ class DataFrame(Frame):
         out.columns = self.columns
         return out
 
+    @annotate("DATAFRAME_COPY", color="cyan", domain="cudf_python")
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1580,19 +1598,8 @@ class DataFrame(Frame):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
-        data = OrderedDict()
-
-        if deep:
-            index = self._index.copy(deep)
-            for k in self._data:
-                data[k] = self._data[k].copy(deep)
-        else:
-            index = self._index
-            for k in self._data:
-                data[k] = self._data[k]
-
-        out = DataFrame(data=data, columns=self.columns.copy(deep=deep))
-        out.index = index
+        out = DataFrame(data=self._data.copy(deep=deep))
+        out.index = self.index.copy(deep=deep)
         return out
 
     def __copy__(self):
@@ -1612,6 +1619,7 @@ class DataFrame(Frame):
     def __reduce__(self):
         return (DataFrame, (self._data, self.index))
 
+    @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.
 
@@ -1685,7 +1693,7 @@ class DataFrame(Frame):
         if isinstance(data, GeneratorType):
             data = Series(data)
 
-        self.insert(len(self.columns), name, data)
+        self.insert(len(self._data.names), name, data)
 
     def drop(
         self,
@@ -1857,7 +1865,7 @@ class DataFrame(Frame):
                 else:
                     out[key] = col
         elif callable(mapper):
-            for col in self.columns:
+            for col in self._data.names:
                 out[mapper(col)] = self[col]
 
         if inplace:
@@ -1891,7 +1899,7 @@ class DataFrame(Frame):
         A (nrow x ncol) numba device ndarray
         """
         if columns is None:
-            columns = self.columns
+            columns = self._data.names
 
         cols = [self._data[k] for k in columns]
         ncol = len(cols)
@@ -2040,11 +2048,13 @@ class DataFrame(Frame):
 
         return outdf
 
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
 
+    @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(self, ascending=True):
         """Sort by the index
         """
@@ -2122,7 +2132,7 @@ class DataFrame(Frame):
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
         new_positions = sorted_series.index.gpu_values
-        for k in self.columns:
+        for k in self._data.names:
             if k == column:
                 df[k] = sorted_series
             else:
@@ -2157,6 +2167,19 @@ class DataFrame(Frame):
 
     @property
     def T(self):
+        """
+        Transpose index and columns.
+
+        Reflect the DataFrame over its main diagonal by writing rows
+        as columns and vice-versa. The property T is an accessor to
+        the method transpose().
+
+        Returns
+        -------
+        out : DataFrame
+            The transposed DataFrame.
+        """
+
         return self.transpose()
 
     def melt(self, **kwargs):
@@ -2188,6 +2211,7 @@ class DataFrame(Frame):
 
         return melt(self, **kwargs)
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def merge(
         self,
         right,
@@ -2271,7 +2295,6 @@ class DataFrame(Frame):
         4    3    13.0
         2    4    14.0    12.0
         """
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
         if indicator:
             raise NotImplementedError(
                 "Only indicator=False is currently supported"
@@ -2313,9 +2336,9 @@ class DataFrame(Frame):
             method,
             sort=sort,
         )
-        libcudf.nvtx.range_pop()
         return gdf_result
 
+    @annotate("JOIN", color="blue", domain="cudf_python")
     def join(
         self,
         other,
@@ -2351,9 +2374,6 @@ class DataFrame(Frame):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-
-        libcudf.nvtx.range_push("CUDF_JOIN", "blue")
-
         # Outer joins still use the old implementation
         if type != "":
             warnings.warn(
@@ -2376,7 +2396,7 @@ class DataFrame(Frame):
                 method="hash",
             )
 
-        same_names = set(self.columns) & set(other.columns)
+        same_names = set(self._data.names) & set(other._data.names)
         if same_names and not (lsuffix or rsuffix):
             raise ValueError(
                 "there are overlapping columns but "
@@ -2420,8 +2440,8 @@ class DataFrame(Frame):
         for name, col in other._data.items():
             rhs[name] = col
 
-        lhs = lhs.reset_index(drop=True)
-        rhs = rhs.reset_index(drop=True)
+        lhs.reset_index(drop=True, inplace=True)
+        rhs.reset_index(drop=True, inplace=True)
 
         cat_join = []
         for name in idx_col_names:
@@ -2492,7 +2512,6 @@ class DataFrame(Frame):
             df.index.names = index_frame_l.columns
             for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
                 df.index._data[new_key] = df.index._data.pop(old_key)
-        libcudf.nvtx.range_pop()
         return df
 
     @copy_docstring(DataFrameGroupBy)
@@ -2599,35 +2618,36 @@ class DataFrame(Frame):
                         datetimes
         1 2018-10-08T00:00:00.000
         """
-        if self.empty:
-            return self.copy()
+        # can't use `annotate` decorator here as we inspect the calling
+        # environment.
+        with annotate("QUERY", color="purple", domain="cudf_python"):
+            if self.empty:
+                return self.copy()
 
-        if not isinstance(local_dict, dict):
-            raise TypeError(
-                "local_dict type: expected dict but found {!r}".format(
-                    type(local_dict)
+            if not isinstance(local_dict, dict):
+                raise TypeError(
+                    "local_dict type: expected dict but found {!r}".format(
+                        type(local_dict)
+                    )
                 )
-            )
 
-        libcudf.nvtx.range_push("CUDF_QUERY", "purple")
-        # Get calling environment
-        callframe = inspect.currentframe().f_back
-        callenv = {
-            "locals": callframe.f_locals,
-            "globals": callframe.f_globals,
-            "local_dict": local_dict,
-        }
-        # Run query
-        boolmask = queryutils.query_execute(self, expr, callenv)
+            # Get calling environment
+            callframe = inspect.currentframe().f_back
+            callenv = {
+                "locals": callframe.f_locals,
+                "globals": callframe.f_globals,
+                "local_dict": local_dict,
+            }
+            # Run query
+            boolmask = queryutils.query_execute(self, expr, callenv)
 
-        selected = Series(boolmask)
-        newdf = DataFrame()
-        for col in self.columns:
-            newseries = self[col][selected]
-            newdf[col] = newseries
-        result = newdf
-        libcudf.nvtx.range_pop()
-        return result
+            selected = Series(boolmask)
+            newdf = DataFrame()
+            for col_name in self._data.names:
+                newseries = self[col_name][selected]
+                newdf[col_name] = newseries
+            result = newdf
+            return result
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -3276,12 +3296,12 @@ class DataFrame(Frame):
         numpy recarray
         """
         members = [("index", self.index.dtype)] if index else []
-        members += [(col, self[col].dtype) for col in self.columns]
+        members += [(col, self[col].dtype) for col in self._data.names]
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
             ret["index"] = self.index.to_array()
-        for col in self.columns:
+        for col in self._data.names:
             ret[col] = self[col].to_array()
         return ret
 
@@ -3344,8 +3364,8 @@ class DataFrame(Frame):
         Parameters
         ----------
         data : numba gpu ndarray
-        index : str
-            The name of the index column in *data*.
+        index : str, Index
+            The name of the index column in `data` or an Index itself.
             If None, the default index is used.
         columns : list of str
             List of column names to include.
@@ -3377,7 +3397,10 @@ class DataFrame(Frame):
             df[k] = Series(data[:, i], nan_as_null=nan_as_null)
 
         if index is not None:
-            indices = data[index]
+            if isinstance(index, cudf.Index):
+                indices = index
+            else:
+                indices = data[index]
             return df.set_index(indices.astype(np.int64))
 
         return df
@@ -3449,11 +3472,11 @@ class DataFrame(Frame):
         if not numeric_only:
             raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
-            columns = self.columns
+            columns = self._data.names
 
         result = DataFrame()
 
-        for k in self.columns:
+        for k in self._data.names:
 
             if k in columns:
                 res = self[k].quantile(
@@ -3545,7 +3568,7 @@ class DataFrame(Frame):
 
             result_df = DataFrame()
 
-            for col in self.columns:
+            for col in self._data.names:
                 if col in values:
                     val = values[col]
                     result_df[col] = self._data[col].isin(val)
@@ -3562,7 +3585,7 @@ class DataFrame(Frame):
             result = DataFrame()
             import numpy as np
 
-            for col in self.columns:
+            for col in self._data.names:
                 if is_categorical_dtype(
                     self[col].dtype
                 ) and is_categorical_dtype(values.dtype):
@@ -3587,7 +3610,7 @@ class DataFrame(Frame):
             values = values.reindex(self.index)
 
             result = DataFrame()
-            for col in self.columns:
+            for col in self._data.names:
                 if col in values.columns:
                     result[col] = self._data[col].binary_operator(
                         "eq", values[col]._column
@@ -3607,7 +3630,7 @@ class DataFrame(Frame):
 
             result_df = DataFrame()
 
-            for col in self.columns:
+            for col in self._data.names:
                 result_df[col] = self._data[col].isin(values)
             result_df.index = self.index
             return result_df
@@ -3636,40 +3659,454 @@ class DataFrame(Frame):
         coerced = filtered.astype(common_dtype)
         return coerced
 
-    def count(self, **kwargs):
-        return self._apply_support_method("count", **kwargs)
-
-    def min(self, axis=0, **kwargs):
-        return self._apply_support_method("min", axis=axis, **kwargs)
-
-    def max(self, axis=0, **kwargs):
-        return self._apply_support_method("max", axis=axis, **kwargs)
-
-    def sum(self, axis=0, **kwargs):
-        return self._apply_support_method("sum", axis=axis, **kwargs)
-
-    def product(self, axis=0, **kwargs):
-        return self._apply_support_method("prod", axis=axis, **kwargs)
-
-    def prod(self, axis=0, **kwargs):
-        """Alias for product.
+    def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
-        return self.product(axis=axis, **kwargs)
+        Count non-NA cells for each column or row.
 
-    def cummin(self, **kwargs):
-        return self._apply_support_method("cummin", **kwargs)
+        The values None, NaN, NaT are considered NA.
 
-    def cummax(self, **kwargs):
-        return self._apply_support_method("cummax", **kwargs)
+        Returns
+        -------
+        Series
+            For each column/row the number of non-NA/null entries.
 
-    def cumsum(self, **kwargs):
-        return self._apply_support_method("cumsum", **kwargs)
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
 
-    def cumprod(self, **kwargs):
-        return self._apply_support_method("cumprod", **kwargs)
+        Examples
+        --------
+        >>> import cudf
+        >>> import numpy as np
+        >>> df = cudf.DataFrame({"Person":
+                   ["John", "Myla", "Lewis", "John", "Myla"],
+                   "Age": [24., np.nan, 21., 33, 26],
+                   "Single": [False, True, True, True, False]})
+        >>> df.count()
+        Person    5
+        Age       4
+        Single    5
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "count",
+            axis=axis,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
 
-    def mean(self, axis=0, numeric_only=None, **kwargs):
-        """Return the mean of the values for the requested axis.
+    def min(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return the minimum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.min()
+        a    1
+        b    7
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "min",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def max(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return the maximum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.max()
+        a     4
+        b    10
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "max",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def sum(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return sum of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.sum()
+        a    10
+        b    34
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def product(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return product of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.product()
+        a      24
+        b    5040
+        dtype: int64
+        """
+        return self._apply_support_method(
+            "prod",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def prod(
+        self,
+        axis=None,
+        skipna=None,
+        dtype=None,
+        level=None,
+        numeric_only=None,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return product of the values in the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        dtype: data type
+            Data type to cast the result to.
+
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level`, `numeric_only`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.prod()
+        a      24
+        b    5040
+        dtype: int64
+        """
+        return self.product(
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            level=level,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    def cummin(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative minimum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummin()
+           a  b
+        0  1  7
+        1  1  7
+        2  1  7
+        3  1  7
+        """
+        return self._apply_support_method(
+            "cummin", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cummax(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative maximum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.cummax()
+           a   b
+        0  1   7
+        1  2   8
+        2  3   9
+        3  4  10
+        """
+        return self._apply_support_method(
+            "cummax", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cumsum(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative sum of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumsum()
+            a   b
+        0   1   7
+        1   3  15
+        2   6  24
+        3  10  34
+        """
+        return self._apply_support_method(
+            "cumsum", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def cumprod(self, axis=None, skipna=True, *args, **kwargs):
+        """
+        Return cumulative product of the DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA,
+            the result will be NA.
+
+        Returns
+        -------
+        DataFrame
+
+        Notes
+        -----
+        Parameters currently not supported is `axis`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> s.cumprod()
+            a     b
+        0   1     7
+        1   2    56
+        2   6   504
+        3  24  5040
+        """
+        return self._apply_support_method(
+            "cumprod", axis=axis, skipna=skipna, *args, **kwargs
+        )
+
+    def mean(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """
+        Return the mean of the values for the requested axis.
         Parameters
         ----------
         axis : {index (0), columns (1)}
@@ -3688,27 +4125,170 @@ class DataFrame(Frame):
         Returns
         -------
         mean : Series or DataFrame (if level specified)
-        """
-        return self._apply_support_method("mean", axis=axis, **kwargs)
 
-    def std(self, axis=0, ddof=1, **kwargs):
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.mean()
+        a    2.5
+        b    8.5
+        dtype: float64
+        """
         return self._apply_support_method(
-            "std", axis=axis, ddof=ddof, **kwargs
+            "mean",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+            **kwargs,
         )
 
-    def var(self, axis=0, ddof=1, **kwargs):
+    def std(
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        ddof=1,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return sample standard deviation of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using
+        the ddof argument
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations
+            is N - ddof, where N represents the number of elements.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.std()
+        a    1.290994
+        b    1.290994
+        dtype: float64
+        """
+
         return self._apply_support_method(
-            "var", axis=axis, ddof=ddof, **kwargs
+            "std",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def var(
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        ddof=1,
+        numeric_only=None,
+        **kwargs,
+    ):
+        """
+        Return unbiased variance of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using the
+        ddof argument
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations is
+            N - ddof, where N represents the number of elements.
+
+        Returns
+        -------
+        scalar
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.var()
+        a    1.666667
+        b    1.666667
+        dtype: float64
+        """
+        return self._apply_support_method(
+            "var",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
         )
 
     def kurtosis(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
+        Return Fisher's unbiased kurtosis of a sample.
+
+        Kurtosis obtained using Fisher’s definition of
+        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.kurt()
+        a   -1.2
+        b   -1.2
+        dtype: float64
         """
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -3723,10 +4303,38 @@ class DataFrame(Frame):
     # Alias for kurtosis.
     kurt = kurtosis
 
-    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+    def skew(
+        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
+    ):
+        """
+        Return unbiased Fisher-Pearson skew of a sample.
+
+        Parameters
+        ----------
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `level` and
+        `numeric_only`
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
+        >>> df.skew()
+        a    0.00000
+        b   -0.37037
+        dtype: float64
+        """
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
-            raise TypeError(msg)
+            raise NotImplementedError(msg)
 
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method(
@@ -3735,21 +4343,106 @@ class DataFrame(Frame):
             skipna=skipna,
             level=level,
             numeric_only=numeric_only,
+            **kwargs,
         )
 
-    def all(self, bool_only=None, **kwargs):
-        if bool_only:
-            return self.select_dtypes(include="bool")._apply_support_method(
-                "all", **kwargs
-            )
-        return self._apply_support_method("all", **kwargs)
+    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+        """
+        Return whether all elements are True in DataFrame.
 
-    def any(self, bool_only=None, **kwargs):
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be True, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.all()
+        a     True
+        b    False
+        dtype: bool
+        """
         if bool_only:
             return self.select_dtypes(include="bool")._apply_support_method(
-                "any", **kwargs
+                "all",
+                axis=axis,
+                bool_only=bool_only,
+                skipna=skipna,
+                level=level,
+                **kwargs,
             )
-        return self._apply_support_method("any", **kwargs)
+        return self._apply_support_method(
+            "all",
+            axis=axis,
+            bool_only=bool_only,
+            skipna=skipna,
+            level=level,
+            **kwargs,
+        )
+
+    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+        """
+        Return whether any elements is True in DataFrame.
+
+        Parameters
+        ----------
+
+        skipna: bool, default True
+            Exclude NA/null values. If the entire row/column is NA and
+            skipna is True, then the result will be False, as for an
+            empty row/column.
+            If skipna is False, then NA are treated as True, because
+            these are not equal to zero.
+
+        Returns
+        -------
+        Series
+
+        Notes
+        -----
+        Parameters currently not supported are `axis`, `bool_only`, `level`.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 0, 10, 10]})
+        >>> df.any()
+        a    True
+        b    True
+        dtype: bool
+        """
+        if bool_only:
+            return self.select_dtypes(include="bool")._apply_support_method(
+                "any",
+                axis=axis,
+                bool_only=bool_only,
+                skipna=skipna,
+                level=level,
+                **kwargs,
+            )
+        return self._apply_support_method(
+            "any",
+            axis=axis,
+            bool_only=bool_only,
+            skipna=skipna,
+            level=level,
+            **kwargs,
+        )
 
     def _apply_support_method(self, method, axis=0, *args, **kwargs):
         assert axis in (None, 0, 1)
@@ -3774,13 +4467,37 @@ class DataFrame(Frame):
             # for dask metadata compatibility
             skipna = kwargs.pop("skipna", None)
             if skipna not in (None, True, 1):
-                msg = (
-                    "Row-wise operations do not current support skipna=False."
-                )
-                raise ValueError(msg)
+                msg = "Row-wise operations currently do not \
+                    support `skipna=False`."
+                raise NotImplementedError(msg)
+
+            level = kwargs.pop("level", None)
+            if level not in (None,):
+                msg = "Row-wise operations currently do not \
+                    support `level`."
+                raise NotImplementedError(msg)
+
+            numeric_only = kwargs.pop("numeric_only", None)
+            if numeric_only not in (None, True):
+                msg = "Row-wise operations currently do not \
+                    support `numeric_only=False`."
+                raise NotImplementedError(msg)
+
+            min_count = kwargs.pop("min_count", None)
+            if min_count not in (None, 0):
+                msg = "Row-wise operations currently do not \
+                        support `min_count`."
+                raise NotImplementedError(msg)
+
+            bool_only = kwargs.pop("bool_only", None)
+            if bool_only not in (None, True):
+                msg = "Row-wise operations currently do not \
+                        support `bool_only`."
+                raise NotImplementedError(msg)
 
             prepared = self._prepare_for_rowwise_op()
             arr = cupy.asarray(prepared.as_gpu_matrix())
+
             result = getattr(arr, method)(axis=1, **kwargs)
 
             if len(result.shape) == 1:
@@ -3955,7 +4672,9 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
-    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -4002,9 +4721,7 @@ class DataFrame(Frame):
                 "Use an integer array/column for better performance."
             )
 
-        if map_size is None:
-            map_size = map_index.unique_count()
-        else:
+        if kwargs.get("debug", False) == 1 and map_size is not None:
             unique_count = map_index.unique_count()
             if map_size < unique_count:
                 raise ValueError(
@@ -4014,18 +4731,6 @@ class DataFrame(Frame):
 
         tables = self._partition(map_index, map_size, keep_index)
 
-        if map_size:
-            # Make sure map_size is >= the number of uniques in map_index
-            if len(tables) > map_size:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (len(tables), map_size)
-                )
-
-            # Append empty dataframes if map_size > len(tables)
-
-            for i in range(map_size - len(tables)):
-                tables.append(self._empty_like(keep_index))
         return tables
 
     def stack(self, level=-1, dropna=True):

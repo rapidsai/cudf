@@ -128,7 +128,19 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
     sr = cudf.Series(np.arange(10))
 
     if nulls == "some":
-        sr[[1, 3, 4, 7]] = None
+        mask = [
+            True,
+            False,
+            True,
+            False,
+            False,
+            True,
+            True,
+            False,
+            True,
+            True,
+        ]
+        sr[sr[~np.asarray(mask)]] = None
     elif nulls == "all":
         sr[:] = None
 
@@ -140,20 +152,7 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
 
     if mask_type == "bools":
         if nulls == "some":
-            obj.__cuda_array_interface__["mask"] = cuda.to_device(
-                [
-                    True,
-                    False,
-                    True,
-                    False,
-                    False,
-                    True,
-                    True,
-                    False,
-                    True,
-                    True,
-                ]
-            )
+            obj.__cuda_array_interface__["mask"] = cuda.to_device(mask)
         elif nulls == "all":
             obj.__cuda_array_interface__["mask"] = cuda.to_device([False] * 10)
 

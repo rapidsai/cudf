@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/char_types/char_types.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 //
 namespace cudf
@@ -87,6 +89,7 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
                                                 string_character_types verify_types,
                                                 rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::all_characters_of_type(strings, types, verify_types, mr);
 }
 
