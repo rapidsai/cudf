@@ -23,6 +23,7 @@ extern "C" {
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Scalar_closeScalar(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     cudf::scalar* s = reinterpret_cast<cudf::scalar*>(scalar_handle);
     delete s;
   }
@@ -31,6 +32,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Scalar_closeScalar(JNIEnv* env, jclas
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Scalar_isScalarValid(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     cudf::scalar* s = reinterpret_cast<cudf::scalar*>(scalar_handle);
     return static_cast<jboolean>(s->is_valid());
   }
@@ -39,6 +41,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Scalar_isScalarValid(JNIEnv* env,
 
 JNIEXPORT jbyte JNICALL Java_ai_rapids_cudf_Scalar_getByte(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<int8_t>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jbyte>(s->value());
@@ -48,6 +51,7 @@ JNIEXPORT jbyte JNICALL Java_ai_rapids_cudf_Scalar_getByte(JNIEnv* env, jclass, 
 
 JNIEXPORT jshort JNICALL Java_ai_rapids_cudf_Scalar_getShort(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<int16_t>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jshort>(s->value());
@@ -57,6 +61,7 @@ JNIEXPORT jshort JNICALL Java_ai_rapids_cudf_Scalar_getShort(JNIEnv* env, jclass
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Scalar_getInt(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<int32_t>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jint>(s->value());
@@ -66,6 +71,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Scalar_getInt(JNIEnv* env, jclass, jl
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getLong(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<int64_t>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jlong>(s->value());
@@ -75,6 +81,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getLong(JNIEnv* env, jclass, 
 
 JNIEXPORT jfloat JNICALL Java_ai_rapids_cudf_Scalar_getFloat(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<float>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jfloat>(s->value());
@@ -84,6 +91,7 @@ JNIEXPORT jfloat JNICALL Java_ai_rapids_cudf_Scalar_getFloat(JNIEnv* env, jclass
 
 JNIEXPORT jdouble JNICALL Java_ai_rapids_cudf_Scalar_getDouble(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     using ScalarType = cudf::experimental::scalar_type_t<double>;
     auto s = reinterpret_cast<ScalarType*>(scalar_handle);
     return static_cast<jdouble>(s->value());
@@ -93,6 +101,7 @@ JNIEXPORT jdouble JNICALL Java_ai_rapids_cudf_Scalar_getDouble(JNIEnv* env, jcla
 
 JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv* env, jclass, jlong scalar_handle) {
   try {
+    cudf::jni::auto_set_device(env);
     auto s = reinterpret_cast<cudf::string_scalar*>(scalar_handle);
     std::string val{s->to_string()};
     if (val.size() > 0x7FFFFFFF) {
@@ -107,6 +116,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv* env, jcl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv* env, jclass,
     jboolean value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::BOOL8));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -122,6 +132,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv* env, 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv* env, jclass,
     jbyte value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::INT8));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -136,6 +147,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt8Scalar(JNIEnv* env, j
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv* env, jclass,
     jshort value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::INT16));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -150,6 +162,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt16Scalar(JNIEnv* env, 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv* env, jclass,
     jint value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -164,6 +177,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt32Scalar(JNIEnv* env, 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv* env, jclass,
     jlong value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::INT64));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -178,6 +192,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeInt64Scalar(JNIEnv* env, 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv* env, jclass,
     jfloat value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::FLOAT32));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -192,6 +207,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat32Scalar(JNIEnv* env
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv* env, jclass,
     jdouble value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_numeric_scalar(cudf::data_type(cudf::FLOAT64));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -206,6 +222,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeFloat64Scalar(JNIEnv* env
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv* env, jclass,
     jbyteArray value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::string strval;
     if (is_valid) {
       cudf::jni::native_jbyteArray jbytes{env, value};
@@ -221,6 +238,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStringScalar(JNIEnv* env,
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEnv* env, jclass,
     jint value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::scalar> s = cudf::make_timestamp_scalar(cudf::data_type(cudf::TIMESTAMP_DAYS));
     s->set_valid(is_valid);
     if (is_valid) {
@@ -235,6 +253,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampDaysScalar(JNIEn
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(JNIEnv* env, jclass,
     jint jdtype_id, jlong value, jboolean is_valid) {
   try {
+    cudf::jni::auto_set_device(env);
     auto dtype_id = static_cast<cudf::type_id>(jdtype_id);
     std::unique_ptr<cudf::scalar> s = cudf::make_timestamp_scalar(cudf::data_type(dtype_id));
     s->set_valid(is_valid);
@@ -253,6 +272,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
   JNI_NULL_CHECK(env, lhs_ptr, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
   try {
+    cudf::jni::auto_set_device(env);
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
 
