@@ -26,12 +26,12 @@ namespace string
 {
 
 /**
- * @brief Returns true if all characters in the string
+ * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.
  *
  * Valid characters are in [-+0-9]. The sign character (+/-)
  * is optional but if present must be the first character.
- * An empty string returns false.
+ * An empty string returns `false`.
  * No bounds checking is performed to verify if the integer will fit
  * within a specific integer type.
  *
@@ -50,7 +50,7 @@ __device__ bool is_integer( string_view const& d_str )
 }
 
 /**
- * @brief Returns true if all characters in the string
+ * @brief Returns `true` if all characters in the string
  * are valid for conversion to a float type.
  *
  * Valid characters are in [-+0-9eE.]. The sign character (+/-)
@@ -59,7 +59,7 @@ __device__ bool is_integer( string_view const& d_str )
  * if the string is formatted with scientific notation.
  * The decimal character can appear only once and never after the
  * 'e' or 'E' character.
- * An empty string returns false.
+ * An empty string returns `false`.
  * No bounds checking is performed to verify if the value would fit
  * within a specific float type.
  * The following strings are also allowed "NaN", "Inf" and, "-Inf"
