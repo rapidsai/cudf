@@ -94,6 +94,7 @@ cdef extern from "cudf/io/functions.hpp" \
         vector[string] columns
         size_type stripe
         size_type stripe_count
+        vector[size_type] stripe_list
         size_type skip_rows
         size_type num_rows
         bool use_index
@@ -114,6 +115,7 @@ cdef extern from "cudf/io/functions.hpp" \
         vector[string] columns
         size_t row_group
         size_t row_group_count
+        vector[size_type] row_group_list
         size_t skip_rows
         size_t num_rows
         bool strings_to_categorical

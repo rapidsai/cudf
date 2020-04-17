@@ -28,6 +28,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
+    check_cast_unsupported_dtype,
     is_categorical_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -150,13 +151,9 @@ class ColumnBase(Column):
         return self.binary_operator("eq", other).min()
 
     def all(self):
-        if self.null_count != 0:
-            return False
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
     def any(self):
-        if self.valid_count == 0:
-            return False
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
@@ -420,12 +417,7 @@ class ColumnBase(Column):
         else:
             val = val.to_array()[0]
 
-        valid = (
-            cudautils.mask_get.py_func(self.mask_array_view, index)
-            if self.mask
-            else True
-        )
-        return val if valid else None
+        return val
 
     def __getitem__(self, arg):
         from cudf.core.column import column
@@ -1202,6 +1194,12 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         current_dtype = np.dtype(desc["typestr"])
+
+        arb_dtype = check_cast_unsupported_dtype(current_dtype)
+        if arb_dtype != current_dtype:
+            arbitrary = cupy.asarray(arbitrary).astype(arb_dtype)
+            current_dtype = arb_dtype
+
         data = _data_from_cuda_array_interface_desc(arbitrary)
         mask = _mask_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
@@ -1362,10 +1360,18 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
-            # Bug in PyArrow or HDF that requires us to do this
+            data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype,)
+        elif arbitrary.dtype.kind in ("f"):
+            arb_dtype = check_cast_unsupported_dtype(
+                arbitrary.dtype if dtype is None else dtype
+            )
             data = as_column(
-                pa.array(np.asarray(arbitrary), from_pandas=True),
-                dtype=arbitrary.dtype,
+                cupy.asarray(arbitrary, dtype=arb_dtype),
+                nan_as_null=nan_as_null,
+            )
+        elif arbitrary.dtype.kind in ("u", "i"):
+            data = as_column(
+                cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
         else:
             data = as_column(
@@ -1447,8 +1453,16 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             # will have to type-cast here.
             if dtype is not None:
                 data = data.astype(dtype)
+        elif arb_dtype.kind in ("f"):
+            arb_dtype = check_cast_unsupported_dtype(
+                arb_dtype if dtype is None else dtype
+            )
+            data = as_column(
+                cupy.asarray(arbitrary, dtype=arb_dtype),
+                nan_as_null=nan_as_null,
+            )
         else:
-            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null)
+            data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
 
     elif isinstance(arbitrary, memoryview):
         data = as_column(

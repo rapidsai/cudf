@@ -244,3 +244,37 @@ def min_numeric_column_type(x):
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     return x.dtype
+
+
+def check_cast_unsupported_dtype(dtype):
+    from cudf._lib.types import np_to_cudf_types
+    import warnings
+
+    if is_categorical_dtype(dtype):
+        return dtype
+    dtype = np.dtype(dtype)
+    if dtype in np_to_cudf_types:
+        return dtype
+
+    # A mapping of un-supported types to next capable supported dtype.
+    cast_types_map = {
+        np.dtype("uint8"): np.dtype("int16"),
+        np.dtype("uint16"): np.dtype("int32"),
+        np.dtype("uint32"): np.dtype("int64"),
+        np.dtype("uint64"): np.dtype("int64"),
+        np.dtype("float16"): np.dtype("float32"),
+    }
+
+    if dtype in cast_types_map:
+
+        if dtype == np.dtype("uint64"):
+            warnings.warn(
+                "Downcasting from uint64 to int64, potential data \
+                    overflow can occur."
+            )
+
+        return cast_types_map[dtype]
+
+    raise NotImplementedError(
+        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+    )

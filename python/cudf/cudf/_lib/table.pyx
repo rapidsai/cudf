@@ -49,6 +49,13 @@ cdef class Table:
         return len(self._data)
 
     @property
+    def _num_indices(self):
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
+
+    @property
     def _num_rows(self):
         if self._index is not None:
             return len(self._index)
