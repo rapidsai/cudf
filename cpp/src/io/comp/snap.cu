@@ -28,25 +28,33 @@ namespace io {
 #define MAX_COPY_LENGTH     64      // Syntax limit
 #define MAX_COPY_DISTANCE   32768   // Matches encoder limit as described in snappy format description
 
+/**
+ * @brief snappy compressor state
+ **/
 struct snap_state_s
 {
-    const uint8_t *src;
-    uint32_t src_len;
-    uint8_t *dst_base;
-    uint8_t *dst;
-    uint8_t *end;
-    volatile uint32_t literal_length;
-    volatile uint32_t copy_length;
-    volatile uint32_t copy_distance;
-    uint16_t hash_map[1 << HASH_BITS];
+    const uint8_t *src;  ///< Ptr to uncompressed data
+    uint32_t src_len;    ///< Uncompressed data length
+    uint8_t *dst_base;   ///< Base ptr to output compressed data
+    uint8_t *dst;        ///< Current ptr to uncompressed data
+    uint8_t *end;        ///< End of uncompressed data buffer
+    volatile uint32_t literal_length; ///< Number of literal bytes
+    volatile uint32_t copy_length;    ///< Number of copy bytes
+    volatile uint32_t copy_distance;  ///< Distance for copy bytes
+    uint16_t hash_map[1 << HASH_BITS]; ///< Low 16-bit offset from hash
 };
 
+/**
+ * @brief 12-bit hash from four consecutive bytes
+ **/
 static inline __device__ uint32_t snap_hash(uint32_t v)
 {
     return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - HASH_BITS);
 }
 
-
+/**
+ * @brief Fetches four consecutive bytes
+ **/
 static inline __device__ uint32_t fetch4(const uint8_t *src)
 {
     uint32_t src_align = 3 & reinterpret_cast<uintptr_t>(src);
@@ -55,7 +63,17 @@ static inline __device__ uint32_t fetch4(const uint8_t *src)
     return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
 }
 
-
+/**
+ * @brief Outputs a snappy literal symbol
+ *
+ * @param dst Destination compressed byte stream
+ * @param end End of compressed data buffer
+ * @param src Pointer to literal bytes
+ * @param len_minus1 Number of literal bytes minus 1
+ * @param t Thread in warp
+ *
+ * @return Updated pointer to compressed byte stream
+ **/
 static __device__ uint8_t * StoreLiterals(uint8_t *dst, uint8_t *end, const uint8_t *src, uint32_t len_minus1, uint32_t t)
 {
     if (len_minus1 < 60)
@@ -114,7 +132,16 @@ static __device__ uint8_t * StoreLiterals(uint8_t *dst, uint8_t *end, const uint
     return dst + len_minus1 + 1;
 }
 
-
+/**
+ * @brief Outputs a snappy copy symbol (assumed to be called by a single thread)
+ *
+ * @param dst Destination compressed byte stream
+ * @param end End of compressed data buffer
+ * @param copy_len Copy length
+ * @param distance Copy distance
+ *
+ * @return Updated pointer to compressed byte stream
+ **/
 static __device__ uint8_t * StoreCopy(uint8_t *dst, uint8_t *end, uint32_t copy_len, uint32_t distance)
 {
     if (copy_len < 12 && distance < 2048)
@@ -140,7 +167,10 @@ static __device__ uint8_t * StoreCopy(uint8_t *dst, uint8_t *end, uint32_t copy_
     }
 }
 
-
+/**
+ * @brief Returns mask of any thread in the warp that has a hash value
+ * equal to that of the calling thread
+ **/
 static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 {
 #if (__CUDA_ARCH__ >= 700)
@@ -157,7 +187,17 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 #endif
 }
 
-
+/**
+ * @brief Finds the first occurence of a consecutive 4-byte match in the input sequence,
+ * or at most MAX_LITERAL_LENGTH bytes
+ *
+ * @param s Compressor state (copy_length set to 4 if a match is found, zero otherwise)
+ * @param src Uncompressed buffer
+ * @param pos0 Position in uncompressed buffer
+ * @param t thread in warp
+ *
+ * @return Number of bytes before first match (literal length)
+ **/
 static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src, uint32_t pos0, uint32_t t)
 {
     uint32_t len = s->src_len;
@@ -226,7 +266,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
 }
 
 
-// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
+/// @brief Returns the number of matching bytes for two byte sequences up to 63 bytes
 static __device__ uint32_t Match60(const uint8_t *src1, const uint8_t *src2, uint32_t len, uint32_t t)
 {
     uint32_t mismatch = BALLOT(t >= len || src1[t] != src2[t]);
@@ -241,8 +281,16 @@ static __device__ uint32_t Match60(const uint8_t *src1, const uint8_t *src2, uin
     }
 }
 
-
-// blockDim {128,1,1}
+/**
+ * @brief Snappy compression kernel
+ * See http://github.com/google/snappy/blob/master/format_description.txt
+ *
+ * blockDim {128,1,1}
+ *
+ * @param[in] inputs Source/Destination buffer information per block
+ * @param[out] outputs Compression status per block
+ * @param[in] count Number of blocks to compress
+ **/
 extern "C" __global__ void __launch_bounds__(128)
 snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
 {
