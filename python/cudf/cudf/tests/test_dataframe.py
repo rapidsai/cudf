@@ -2,6 +2,7 @@
 
 import array as arr
 import operator
+import random
 
 import cupy
 import numpy as np
@@ -5124,3 +5125,113 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
         assert_eq(
             expect_mask, got_mask, check_dtype=False,
         )
+
+
+@pytest.mark.parametrize(
+    "data,expected_upcast_type,error",
+    [
+        (
+            pd.Series(
+                [random.choice([0, 1, 255, 250]) for _ in range(10)],
+                dtype="uint8",
+            ),
+            np.dtype("int16"),
+            None,
+        ),
+        (
+            pd.Series(
+                [random.choice([0, 1, 65535, 65534]) for _ in range(10)],
+                dtype="uint16",
+            ),
+            np.dtype("int32"),
+            None,
+        ),
+        (
+            pd.Series(
+                [
+                    random.choice([0, 1, 4294967295, 4294967294])
+                    for _ in range(10)
+                ],
+                dtype="uint32",
+            ),
+            np.dtype("int64"),
+            None,
+        ),
+        (
+            pd.Series(
+                [
+                    random.choice(
+                        [0, 1, 18446744073709551615, 18446744073709551614]
+                    )
+                    for _ in range(10)
+                ],
+                dtype="uint64",
+            ),
+            None,
+            UserWarning,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float32"),
+            np.dtype("float32"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float16"),
+            np.dtype("float32"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float64"),
+            np.dtype("float64"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float128"),
+            None,
+            NotImplementedError,
+        ),
+    ],
+)
+def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
+    pdf = pd.DataFrame({"one_col": data})
+    if error == NotImplementedError:
+        with pytest.raises(error):
+            df = gd.from_pandas(data)
+
+        with pytest.raises(error):
+            df = gd.Series(data)
+
+        with pytest.raises(error):
+            df = gd.from_pandas(pdf)
+
+        with pytest.raises(error):
+            df = gd.DataFrame(pdf)
+    elif error == UserWarning:
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.Series(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(pdf)
+
+        with pytest.warns(UserWarning):
+            df = gd.DataFrame(pdf)
+    else:
+        df = gd.from_pandas(data)
+
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = gd.Series(data)
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = gd.from_pandas(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type
+
+        df = gd.DataFrame(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type

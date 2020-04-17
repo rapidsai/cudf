@@ -98,7 +98,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
     d_integers.push_back(std::numeric_limits<TypeParam>::max());
     auto integers = cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, (cudf::size_type)d_integers.size());
     auto integers_view = integers->mutable_view();
-    cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), d_integers.size() * sizeof(TypeParam), cudaMemcpyDeviceToDevice );
+    CUDA_TRY(cudaMemcpy( integers_view.data<TypeParam>(), d_integers.data().get(), d_integers.size() * sizeof(TypeParam), cudaMemcpyDeviceToDevice ));
     integers_view.set_null_count(0);
 
     // convert to strings

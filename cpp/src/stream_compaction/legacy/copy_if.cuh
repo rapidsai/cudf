@@ -292,13 +292,14 @@ cudf::size_type get_output_size(cudf::size_type * block_counts,
                               cudaStream_t stream = 0)
 {
   cudf::size_type last_block_count = 0;
-  cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
-                  sizeof(cudf::size_type), cudaMemcpyDefault, stream);
+  CUDA_TRY(cudaMemcpyAsync(&last_block_count, &block_counts[num_blocks - 1],
+                  sizeof(cudf::size_type), cudaMemcpyDefault, stream));
   cudf::size_type last_block_offset = 0;
-  if (num_blocks > 1)
-    cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
-                    sizeof(cudf::size_type), cudaMemcpyDefault, stream);
-  cudaStreamSynchronize(stream);
+  if (num_blocks > 1) {
+    CUDA_TRY(cudaMemcpyAsync(&last_block_offset, &block_offsets[num_blocks - 1],
+                    sizeof(cudf::size_type), cudaMemcpyDefault, stream));
+  }
+  CUDA_TRY(cudaStreamSynchronize(stream));
   return last_block_count + last_block_offset;
 }
 
@@ -377,8 +378,8 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
     RMM_FREE(d_temp_storage, stream);
   }
   else {
-    cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
-                    stream);
+    CUDA_TRY(cudaMemsetAsync(block_offsets, 0, grid.num_blocks * sizeof(cudf::size_type),
+                    stream));
   }
 
   CHECK_CUDA(stream);

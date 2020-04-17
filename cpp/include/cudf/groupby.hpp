@@ -25,6 +25,7 @@
 
 namespace cudf {
 namespace experimental {
+//! `groupby` APIs
 namespace groupby {
 
 namespace detail {
