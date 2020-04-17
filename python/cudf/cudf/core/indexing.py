@@ -103,8 +103,18 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        from cudf.core.column import column
         from cudf.core.series import Series
         from cudf.core.index import Index
+
+        if is_scalar(arg):
+            try:
+                found_index = self._sr.index._values.find_first_value(
+                    arg, closest=False
+                )
+                return found_index
+            except (TypeError, KeyError, IndexError, ValueError):
+                raise IndexError("label scalar is out of bound")
 
         if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
@@ -112,12 +122,14 @@ class _SeriesLocIndexer(object):
 
             return indices_from_labels(self._sr, arg)
 
-        if isinstance(
-            arg, (list, pd.Series, range, Index, DeviceNDArray, np.ndarray)
-        ) or hasattr(arg, "__cuda_array_interface__"):
+        if (
+            isinstance(arg, (list, pd.Series, range, Index, DeviceNDArray))
+            or hasattr(arg, "__array_interface__")
+            or hasattr(arg, "__cuda_array_interface__")
+        ):
 
             if len(arg) == 0:
-                arg = Series(np.array([], dtype="int32"))
+                arg = Series(column.column_empty(0, dtype="int32"))
             else:
                 arg = Series(arg)
         if isinstance(arg, Series):
@@ -128,14 +140,6 @@ class _SeriesLocIndexer(object):
                 if indices.null_count > 0:
                     raise IndexError("label scalar is out of bound")
                 return indices
-        elif is_scalar(arg):
-            try:
-                found_index = self._sr.index._values.find_first_value(
-                    arg, closest=False
-                )
-                return found_index
-            except (TypeError, KeyError, IndexError, ValueError):
-                raise IndexError("label scalar is out of bound")
         elif isinstance(arg, slice):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
