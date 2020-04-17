@@ -67,7 +67,7 @@ struct ColumnChunkDesc {
   ColumnChunkDesc() = default;
   explicit constexpr ColumnChunkDesc(
       size_t compressed_size_, uint8_t *compressed_data_, size_t num_values_,
-      uint16_t datatype_, uint16_t datatype_length_, uint32_t start_row_,
+      uint16_t datatype_, uint16_t datatype_length_, size_t start_row_,
       uint32_t num_rows_, int16_t max_definition_level_,
       int16_t max_repetition_level_, uint8_t def_level_bits_,
       uint8_t rep_level_bits_, int8_t codec_, int8_t converted_type_,

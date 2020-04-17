@@ -1050,6 +1050,52 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInterleaveIntColumns() {
+    try (Table t = new Table.TestBuilder()
+          .column(1,2,3,4,5)
+          .column(6,7,8,9,10)
+          .build();
+         ColumnVector expected = ColumnVector.fromInts(1,6,2,7,3,8,4,9,5,10);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveFloatColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6f,7f,8f,9f,10f)
+        .build();
+         ColumnVector expected = ColumnVector.fromFloats(1f,6f,2f,7f,3f,8f,4f,9f,5f,10f);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveStringColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column("a", "b", "c")
+        .column("d", "e", "f")
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "Only fixed-width types are supported in interleave_columns");
+    }
+  }
+
+  @Test
+  void testInterleaveMixedColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6,7,8,9,10)
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "All columns must have the same data type in interleave_columns");
+    }
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)

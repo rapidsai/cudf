@@ -22,6 +22,7 @@
 #include <cudf/strings/case.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/char_types/is_flags.h>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
