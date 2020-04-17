@@ -21,8 +21,8 @@ AlwaysBreakAfterDefinitionReturnType: All
 AlwaysBreakAfterReturnType: All
 AlwaysBreakBeforeMultilineStrings: true
 AlwaysBreakTemplateDeclarations: Yes
-BinPackArguments:  true       
-BinPackParameters: true
+BinPackArguments:  false       
+BinPackParameters: false
 BraceWrapping:
   AfterClass:            false
   AfterControlStatement: false
@@ -94,7 +94,7 @@ ObjCSpaceBeforeProtocolList: true
 PenaltyBreakAssignment: 2
 PenaltyBreakBeforeFirstCallParameter: 1
 PenaltyBreakComment: 300
-PenaltyBreakFirstLessLess: 120
+PenaltyBreakFirstLessLess: 140
 PenaltyBreakString: 1000
 PenaltyBreakTemplateDeclaration: 10
 PenaltyExcessCharacter: 1000000
