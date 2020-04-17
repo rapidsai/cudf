@@ -239,6 +239,7 @@ def min_numeric_column_type(x):
 
 def check_upcast_unsupported_dtype(dtype):
     from cudf._lib.types import np_to_cudf_types
+    import warnings
 
     if is_categorical_dtype(dtype):
         return dtype
@@ -251,10 +252,18 @@ def check_upcast_unsupported_dtype(dtype):
         np.dtype("uint8"): np.dtype("int16"),
         np.dtype("uint16"): np.dtype("int32"),
         np.dtype("uint32"): np.dtype("int64"),
+        np.dtype("uint64"): np.dtype("int64"),
         np.dtype("float16"): np.dtype("float32"),
     }
 
     if dtype in up_cast_types_map:
+
+        if dtype == np.dtype("uint64"):
+            warnings.warn(
+                "Downcasting from uint64 to int64, potential data \
+                    overflow can occur."
+            )
+
         return up_cast_types_map[dtype]
 
     raise NotImplementedError(

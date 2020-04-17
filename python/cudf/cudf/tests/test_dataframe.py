@@ -5167,7 +5167,7 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
                 dtype="uint64",
             ),
             None,
-            NotImplementedError,
+            UserWarning,
         ),
         (
             pd.Series([random.random() for _ in range(10)], dtype="float32"),
@@ -5193,7 +5193,7 @@ def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
 )
 def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
-    if error is not None:
+    if error == NotImplementedError:
         with pytest.raises(error):
             df = gd.from_pandas(data)
 
@@ -5204,6 +5204,18 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
             df = gd.from_pandas(pdf)
 
         with pytest.raises(error):
+            df = gd.DataFrame(pdf)
+    elif error == UserWarning:
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.Series(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(pdf)
+
+        with pytest.warns(UserWarning):
             df = gd.DataFrame(pdf)
     else:
         df = gd.from_pandas(data)
