@@ -90,6 +90,7 @@
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #3259 Add .clang-format
 
 ## Bug Fixes
 
@@ -354,7 +355,6 @@
 - PR #4554 Removed raw RMM allocation from `column_device_view`
 - PR #4619 Remove usage of `nvstrings` in `data_array_view`
 - PR #4654 Upgrade version of `numba` required to `>=0.48.0`
-- PR #3259 Add .clang-format
 - PR #4035 Port NVText tokenize function to libcudf++
 - PR #4042 Port cudf/io/functions.hpp to Cython for use in IO bindings
 - PR #4058 Port hash.pyx to use libcudf++ APIs
