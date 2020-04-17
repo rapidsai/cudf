@@ -1,5 +1,6 @@
 from itertools import combinations
 
+import cupy
 import numpy as np
 import pandas as pd
 import pytest
@@ -303,6 +304,7 @@ def test_series_loc_numerical():
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
     )
+    assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
 def test_series_loc_string():
