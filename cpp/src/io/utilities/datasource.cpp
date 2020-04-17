@@ -192,28 +192,20 @@ class gpu_async_filereader : public datasource {
   };
 
  public:
-  explicit gpu_async_filereader(const std::string& filepath, uint32_t buffer_size = default_buffer_size):
-    fd_(open(filepath.c_str(), O_RDONLY)), bufid_(0), buffer_size_(buffer_size) {
-    CUDF_EXPECTS(fd_ != -1, "Cannot open file");
-  }
-
-  ~gpu_async_filereader() {
-    if (fd_ != -1) {
-      close(fd_);
-    }
+  explicit gpu_async_filereader(std::shared_ptr<arrow::io::RandomAccessFile> file, uint32_t buffer_size = default_buffer_size):
+    file_(file), bufid_(0), buffer_size_(buffer_size) {
   }
 
   size_t size() const override {
-    struct stat st {};
-    CUDF_EXPECTS(fstat(fd_, &st) != -1, "Cannot query file size");
-    return static_cast<size_t>(st.st_size);
+    int64_t sz = 0;
+    CUDF_EXPECTS(file_->GetSize(&sz).ok(), "Failed to get file size");
+    return sz;
   }
 
   const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset, size_t size) override {
     std::shared_ptr<arrow::Buffer> buffer;
-    auto status = arrow::AllocateBuffer(size, &buffer);
-    CUDF_EXPECTS(status.ok(), "Failed to allocate buffer");
-    CUDF_EXPECTS(size == read_at(offset, buffer->mutable_data(), size), "File read failed");
+    CUDF_EXPECTS(file_->ReadAt(offset, size, &buffer).ok(), "ReadAt failed");
+    CUDF_EXPECTS(size == buffer->size(), "Failed to read all bytes");
     return buffer;
   }
 
@@ -251,12 +243,13 @@ class gpu_async_filereader : public datasource {
 
  protected:
   size_t read_at(size_t offset, void *dst, size_t bytecnt) {
-    CUDF_EXPECTS(offset == static_cast<size_t>(lseek(fd_, offset, SEEK_SET)), "Failed to seek");
-    return read(fd_, dst, bytecnt);
+    int64_t bytes_read = 0;
+    CUDF_EXPECTS(file_->ReadAt(offset, bytecnt, &bytes_read, dst).ok(), "ReadAt failed");
+    return bytes_read;
   }
 
  private:
-  const int fd_;
+  std::shared_ptr<arrow::io::RandomAccessFile> file_;
   const uint32_t buffer_size_;
   int bufid_;
   pinned_filebuf dblbuf_[2];
@@ -284,7 +277,10 @@ std::unique_ptr<datasource> datasource::create(
 }
 
 std::unique_ptr<datasource> datasource::create_async_gpureader(const std::string filepath) {
-  return std::make_unique<gpu_async_filereader>(filepath.c_str());
+  std::shared_ptr<arrow::io::ReadableFile> file;
+  auto status = arrow::io::ReadableFile::Open(filepath, &file);
+  CUDF_EXPECTS(status.ok(), "Failed to open file");
+  return std::make_unique<gpu_async_filereader>(file);
 }
 
 
