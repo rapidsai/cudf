@@ -239,7 +239,8 @@ def test_concat_string_index_name(myindex):
     assert df3.index.name == myindex
 
 
-def test_pandas_concat_compatibility_axis1():
+@pytest.mark.parametrize("overlap", [False, True])
+def test_pandas_concat_compatibility_axis1(overlap):
     d1 = gd.datasets.randomdata(
         3, dtypes={"a": float, "ind": float}
     ).set_index("ind")
@@ -255,13 +256,20 @@ def test_pandas_concat_compatibility_axis1():
     d5 = gd.datasets.randomdata(
         3, dtypes={"e": float, "ind": float}
     ).set_index("ind")
+
     pd1 = d1.to_pandas()
     pd2 = d2.to_pandas()
     pd3 = d3.to_pandas()
     pd4 = d4.to_pandas()
     pd5 = d5.to_pandas()
 
-    expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
-    got = gd.concat([d1, d2, d3, d4, d5], axis=1).sort_index()
+    if overlap:
+        d6 = d5.rename(columns={"e": "f"})
+        pd6 = d6.to_pandas()
+        expect = pd.concat([pd1, pd2, pd3, pd4, pd5, pd6], axis=1)
+        got = gd.concat([d1, d2, d3, d4, d5, d6], axis=1).sort_index()
+    else:
+        expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
+        got = gd.concat([d1, d2, d3, d4, d5], axis=1).sort_index()
 
     assert_eq(got, expect)

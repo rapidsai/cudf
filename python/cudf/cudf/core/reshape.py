@@ -51,7 +51,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
-    
+
     Returns
     -------
     A new object of like type with rows from each object in ``objs``.
