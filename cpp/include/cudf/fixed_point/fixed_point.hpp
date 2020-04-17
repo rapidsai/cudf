@@ -62,7 +62,7 @@ constexpr inline auto is_supported_construction_value_type() {
       || std::is_floating_point<T>::value;
 }
 
-//! Helper functions for `fixed_point` type
+// Helper functions for `fixed_point` type
 namespace detail {
     /**
     * @brief A function for integer exponentiation by squaring
