@@ -276,10 +276,11 @@ class Series(Frame):
         return self.copy()
 
     def __array__(self, dtype=None):
-        raise NotImplementedError(
-            "__array__ is not supported in CuDF, To construct \
-                a GPU array, consider using cupy.asarray(...)\n\
-                To construct a host array, consider using .to_array()"
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU array, consider using \
+            cupy.asarray(...)\nTo explicitly construct a \
+            host array, consider using .to_array()"
         )
 
     def append(self, other, ignore_index=False):

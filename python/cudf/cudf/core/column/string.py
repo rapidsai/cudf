@@ -2087,9 +2087,10 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().values
 
     def __array__(self, dtype=None):
-        raise NotImplementedError(
+        raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-                To explicitly construct a host array, consider using .to_array()"
+                To explicitly construct a host array, \
+                    consider using .to_array()"
         )
 
     def serialize(self):

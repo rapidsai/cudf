@@ -89,5 +89,5 @@ def test_numpy_non_contiguious():
 def test_series_dataframe__array__(data, dtype):
     gs = data
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         gs.__array__(dtype=dtype)
