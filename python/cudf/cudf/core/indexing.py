@@ -3,7 +3,6 @@
 import cupy
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 from cudf._lib.nvtx import annotate
@@ -105,7 +104,6 @@ class _SeriesLocIndexer(object):
     def _loc_to_iloc(self, arg):
         from cudf.core.column import column
         from cudf.core.series import Series
-        from cudf.core.index import Index
 
         if is_scalar(arg):
             try:
