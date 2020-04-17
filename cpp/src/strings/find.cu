@@ -22,7 +22,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/transform.h>
 
