@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cpython.bytes cimport PyBytes_FromStringAndSize, PyBytes_AS_STRING
 from cudf._cuda.gpu cimport (
     cudaDriverGetVersion,
     cudaRuntimeGetVersion,
@@ -14,7 +15,6 @@ from cudf._cuda.gpu cimport (
     cuDeviceGetName
 )
 from enum import IntEnum
-from libc.stdlib cimport malloc
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 
@@ -341,8 +341,9 @@ def deviceGetName(int device):
     """
 
     cdef int size = 256
-    cdef char* device_name = <char*> malloc(size * sizeof(char))
-    cdef int status = cuDeviceGetName(device_name, size, device)
+    cdef bytes device_name = PyBytes_FromStringAndSize(NULL, size)
+    cdef char* device_name_ptr = PyBytes_AS_STRING(device_name)
+    cdef int status = cuDeviceGetName(device_name_ptr, size, device)
     if status != 0:
         raise CUDARuntimeError(status)
     return device_name
