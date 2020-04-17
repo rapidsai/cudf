@@ -5,16 +5,18 @@ a GPU. This is still a work in progress so some APIs may change until the 1.0 re
 
 ## Behavior on Systems with Multiple GPUs
 
-The cudf project currently operates with a single GPU per process.  The CUDA runtime will
-automatically search for a GPU to use if a thread has not specifically requested a device,
-and Java processes tend to run with many threads.  If one of the Java threads using cudf
-does not use the same device being used by other cudf threads then this will lead to an
-invalid state that can trigger application crashes.
+The cudf project currently works with a single GPU per process. The CUDA runtime
+assigns the default GPU to all new operating system threads when they start to
+interact with CUDA. This means that if you use a multi-threaded environment,
+like Java processes tend to be, and try to use a non-default GPU for cudf you
+can run into hard to debug issues including resource leaks, invalid states,
+application crashes, and poor performance.
 
-To avoid these crashes, cudf will remember which CUDA device was used to initialize the
-Rapids Memory Manager (RMM) via cudf.  cudf methods will automatically set the thread's
-CUDA device to this initial device if necessary.  Note that mixing cudf calls with other
-CUDA libraries that could change the thread's current CUDA device will be problematic.
+To prevent this the Java cudf API will remember the device used to initialize
+the Rapids Memory Manager (RMM), and automatically set the thread's active
+device to it, if needed. It will not set the device back when the cudf call
+completes. This is different from most CUDA libraries and can result in
+unexpected behavior if you try to mix these libraries using the same thread.
 
 ## Dependency
 
