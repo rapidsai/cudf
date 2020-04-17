@@ -340,8 +340,9 @@ def deviceGetName(int device):
     and status code.
     """
 
-    cdef char* device_name = <char*> malloc(256 * sizeof(char))
-    cdef int status = cuDeviceGetName(device_name, 256, device)
+    cdef int size = 256
+    cdef char* device_name = <char*> malloc(size * sizeof(char))
+    cdef int status = cuDeviceGetName(device_name, size, device)
     if status != 0:
         raise CUDARuntimeError(status)
     return device_name
