@@ -308,26 +308,6 @@ class ColumnBase(Column):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    # def __array__(self, dtype=None):
-    #     """
-    #     Return the values as a NumPy array.
-
-    #     Parameters
-    #     ----------
-    #     dtype : str or numpy.dtype, optional
-    #         The dtype to use for the resulting NumPy array. By default,
-    #         the dtype is inferred from the data.
-    #     Returns
-    #     -------
-    #     numpy.ndarray
-    #         The values in the series converted to a :class:`numpy.ndarary`
-    #         with the specified `dtype`.
-    #     """
-    #     array = self.to_array(fillna=np.nan)
-    #     if dtype is not None:
-    #         array = array.astype(dtype)
-    #     return array
-
     def _fill(self, fill_value, begin=0, end=-1, inplace=False):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
