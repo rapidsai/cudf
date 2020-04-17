@@ -60,10 +60,8 @@ struct Launcher {
 
         // find optimal blocksize
         int mingridsize, blocksize;
-        CUDA_TRY(
-            cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
-                                               gpu_op_kernel<T, Tout, F>)
-        );
+        CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
+                                               gpu_op_kernel<T, Tout, F>));
         // find needed gridsize
         int neededgridsize = (input->size + blocksize - 1) / blocksize;
         int gridsize = std::min(neededgridsize, mingridsize);

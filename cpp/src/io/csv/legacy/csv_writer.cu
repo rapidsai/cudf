@@ -397,7 +397,7 @@ gdf_error write_csv(csv_write_arg* args)
         }
         // copy the csv_data to host memory and write it out
         std::vector<char> h_csv(memsize);
-        cudaMemcpyAsync(h_csv.data(), d_csv_data, memsize, cudaMemcpyDeviceToHost);
+        CUDA_TRY(cudaMemcpyAsync(h_csv.data(), d_csv_data, memsize, cudaMemcpyDeviceToHost));
         filecsv.write(h_csv.data(),memsize);
 
         // get ready for the next chunk of rows

@@ -42,8 +42,8 @@ struct DecompressTest : public cudf::test::BaseFixture {
   }
 
   void TearDown() override {
-    cudaFreeHost(inf_stat);
-    cudaFreeHost(inf_args);
+    ASSERT_CUDA_SUCCEEDED(cudaFreeHost(inf_stat));
+    ASSERT_CUDA_SUCCEEDED(cudaFreeHost(inf_args));
   }
   
   std::vector<uint8_t> vector_from_string(const char *str) const {

@@ -73,6 +73,7 @@
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4853 Added CUDA_TRY to multiple places in libcudf code
 - PR #4870 Add chunked parquet file writing from python
 - PR #4865 Add docs and clarify limitations of `applymap`
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
