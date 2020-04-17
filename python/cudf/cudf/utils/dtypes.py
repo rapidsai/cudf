@@ -248,7 +248,7 @@ def check_upcast_unsupported_dtype(dtype):
         return dtype
 
     # A mapping of un-supported types to next capable supported dtype.
-    up_cast_types_map = {
+    cast_types_map = {
         np.dtype("uint8"): np.dtype("int16"),
         np.dtype("uint16"): np.dtype("int32"),
         np.dtype("uint32"): np.dtype("int64"),
@@ -256,7 +256,7 @@ def check_upcast_unsupported_dtype(dtype):
         np.dtype("float16"): np.dtype("float32"),
     }
 
-    if dtype in up_cast_types_map:
+    if dtype in cast_types_map:
 
         if dtype == np.dtype("uint64"):
             warnings.warn(
@@ -264,10 +264,10 @@ def check_upcast_unsupported_dtype(dtype):
                     overflow can occur."
             )
 
-        return up_cast_types_map[dtype]
+        return cast_types_map[dtype]
 
     raise NotImplementedError(
-        "Cannot upcast {0} dtype, as it is not supported by CuDF.".format(
+        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(
             dtype
         )
     )
