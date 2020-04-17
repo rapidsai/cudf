@@ -634,9 +634,12 @@ std::unique_ptr<table> boolean_mask_scatter(
 
 /**
  * @brief Get the element at specified index from a column
- * 
- * @throws cudf::logic_error if `index` is not within the range`[0, input.size())`
- * 
+ *
+ * Note: This function is expensive (invokes a kernel launch). So, it is not
+ * recommended to be used in performance sensitive code or inside a loop.
+ *
+ * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
+ *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
  * @param mr Optional, The resource to use for all returned allocations
