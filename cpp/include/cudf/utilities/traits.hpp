@@ -279,4 +279,20 @@ constexpr inline bool is_simple(data_type type) {
   return not is_compound(type);
 }
 
+template <typename T>
+constexpr inline bool is_nested() {
+  return std::is_same<T, cudf::list_view>::value;
+}
+
+struct is_nested_impl {
+  template <typename T>
+  bool operator()() {
+    return is_nested<T>();
+  }
+};
+
+constexpr inline bool is_nested(data_type type) {
+  return cudf::experimental::type_dispatcher(type, is_nested_impl{});
+}
+
 }  // namespace cudf

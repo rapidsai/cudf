@@ -22,6 +22,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/binary_search.h>
@@ -183,17 +184,34 @@ struct for_each_concatenate {
     return col;
   }
 
+  template<typename ColumnType,  
+    std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()() {
+    std::vector<cudf::lists_column_view> lviews;
+    
+    lviews.reserve(views.size());
+    for(auto &v : views){ 
+      lviews.emplace_back(v); 
+    }
+        
+    auto col = cudf::lists::detail::concatenate(lviews, mr, stream);
+
+    // If concatenated string column is nullable, proceed to calculate it
+    /*
+    if (col->nullable()) {
+      cudf::detail::concatenate_masks(views,
+          (col->mutable_view()).null_mask(), stream);
+    }
+    */
+
+    return col;
+  }
+
   template <typename ColumnType,
       std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
     CUDF_FAIL("dictionary not supported yet");
-  }
-
-  template <typename ColumnType,
-      std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()() {
-    CUDF_FAIL("list_view not supported yet");
-  }
+  }  
 
   template <typename ColumnType,
       std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>

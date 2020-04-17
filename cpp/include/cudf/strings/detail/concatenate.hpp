@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 

@@ -475,5 +475,28 @@ class strings_column_wrapper : public detail::column_wrapper {
                                std::cbegin(validity)) {}
 };
 
+
+class list_column_wrapper : public cudf::test::detail::column_wrapper {
+public:      
+   // fixed-width
+   template<typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>   
+   list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
+   {            
+      wrapped = cudf::test::fixed_width_column_wrapper<T>(t).release();      
+      // test::print(*wrapped);
+   }
+      
+   // strings
+   template<typename T, std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
+   list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
+   {            
+      wrapped = cudf::test::strings_column_wrapper(t.begin(), t.end()).release();      
+      // test::print(*wrapped);       
+   }   
+        
+   // list
+   list_column_wrapper(std::initializer_list<list_column_wrapper> t);   
+};
+
 }  // namespace test
 }  // namespace cudf
