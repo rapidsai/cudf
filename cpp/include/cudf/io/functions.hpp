@@ -243,17 +243,7 @@ table_with_metadata read_csv(
 /**
  * @brief Settings to use for `write_csv()`
  */
-struct write_csv_args: private detail::csv::writer_options {
-  //inject private base accessors:
-  //
-  using detail::csv::writer_options::na_rep;
-  using detail::csv::writer_options::include_header;
-  using detail::csv::writer_options::rows_per_chunk;
-  using detail::csv::writer_options::line_terminator;
-  using detail::csv::writer_options::inter_column_delimiter;
-  using detail::csv::writer_options::true_value;
-  using detail::csv::writer_options::false_value;
-  
+struct write_csv_args: detail::csv::writer_options {
   write_csv_args(sink_info const& snk,
                  table_view const& table,
                  std::string const& na,

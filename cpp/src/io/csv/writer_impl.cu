@@ -122,7 +122,22 @@ struct column_to_strings_fn
   operator()(column_view const& column_v) const
   {
     //_not_ just pass through:
-    //TODO: must handle presence of delimiter, '\n' in row:
+    //TODO: must handle special characters: {delimiter, '\n', "} in row:
+    //
+    // algorithm outline:
+    //
+    // target = "\"";
+    // repl = ""\"\";
+    //
+    // /* "slice" the part of interest: */
+    // str_column_ref = {};
+    // for each str_row: column_v {
+    //    if ((not null str_row) &&
+    //        (str_row.find("\n") || str_row.find("\"") || str_row.find(delimiter) ))        str_column_ref.append(ref(str_row));
+    // cudf::strings::replace(str_column_ref, target, repl);
+    // prepend(str_column_ref, target); //?
+    // append(str_column_ref, target);  //?
+    //}
     //
     column col{column_v};
     return std::make_unique<column>(std::move(col));//TODO: look at more efficient way to return a unique_ptr<column> from a column_view...
