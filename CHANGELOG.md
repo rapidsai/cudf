@@ -63,6 +63,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
 - PR #4817 Fix `fixed_point` documentation
+- PR #4844 Change Doxygen color to RAPIDS purple and documentation improvement
 - PR #4840 Add docs for `T`, `empty` & `values`
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
