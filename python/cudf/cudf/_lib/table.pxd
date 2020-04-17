@@ -9,7 +9,9 @@ from cudf._lib.cpp.table.table_view cimport (
 
 
 cdef class Table:
-    cdef dict __dict__
+    cdef public:
+        cdef object _data
+        cdef object _index
 
     cdef table_view view(self) except *
     cdef mutable_table_view mutable_view(self) except *
