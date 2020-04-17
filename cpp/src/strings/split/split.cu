@@ -307,7 +307,8 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
     auto strings_count = strings_column.size();
 
     auto execpol = rmm::exec_policy(stream);
-    auto d_offsets = strings_column.offsets().data<int32_t>() + strings_column.offset();
+    auto d_offsets = strings_column.offsets().data<int32_t>();
+    d_offsets += strings_column.offset(); // nvbug-2808421 : do not combine with the previous line
     auto chars_bytes = thrust::device_pointer_cast(d_offsets)[strings_count]
                      - thrust::device_pointer_cast(d_offsets)[0];
 
@@ -725,7 +726,7 @@ std::unique_ptr<experimental::table> whitespace_split_fn( size_type strings_coun
 } // namespace
 
 
-std::unique_ptr<experimental::table> split( strings_column_view const& strings,
+std::unique_ptr<experimental::table> split( strings_column_view const& strings_column,
                                             string_scalar const& delimiter = string_scalar(""),
                                             size_type maxsplit=-1,
                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -737,20 +738,20 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
     if( maxsplit > 0 )
         max_tokens = maxsplit + 1; // makes consistent with Pandas
 
-    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto strings_device_view = column_device_view::create(strings_column.parent(),stream);
     if( delimiter.size()==0 )
     {
-        return whitespace_split_fn( strings.size(),
-                         whitespace_split_tokenizer_fn{*strings_column,max_tokens},
-                         mr, stream);
+        return whitespace_split_fn( strings_column.size(),
+                                    whitespace_split_tokenizer_fn{*strings_device_view,max_tokens},
+                                    mr, stream);
     }
 
     string_view d_delimiter( delimiter.data(), delimiter.size() );
-    return split_fn( strings, split_tokenizer_fn{*strings_column,d_delimiter,max_tokens},
+    return split_fn( strings_column, split_tokenizer_fn{*strings_device_view,d_delimiter,max_tokens},
                      mr, stream);
 }
 
-std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
+std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings_column,
                                              string_scalar const& delimiter = string_scalar(""),
                                              size_type maxsplit=-1,
                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -762,16 +763,16 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
     if( maxsplit > 0 )
         max_tokens = maxsplit + 1; // makes consistent with Pandas
 
-    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto strings_device_view = column_device_view::create(strings_column.parent(),stream);
     if( delimiter.size()==0 )
     {
-        return whitespace_split_fn( strings.size(),
-                         whitespace_rsplit_tokenizer_fn{*strings_column,max_tokens},
-                         mr, stream);
+        return whitespace_split_fn( strings_column.size(),
+                                    whitespace_rsplit_tokenizer_fn{*strings_device_view,max_tokens},
+                                    mr, stream);
     }
 
     string_view d_delimiter( delimiter.data(), delimiter.size() );
-    return split_fn( strings, rsplit_tokenizer_fn{*strings_column,d_delimiter,max_tokens},
+    return split_fn( strings_column, rsplit_tokenizer_fn{*strings_device_view,d_delimiter,max_tokens},
                      mr, stream);
 }
 
@@ -779,22 +780,22 @@ std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
 
 // external APIs
 
-std::unique_ptr<experimental::table> split( strings_column_view const& strings,
+std::unique_ptr<experimental::table> split( strings_column_view const& strings_column,
                                             string_scalar const& delimiter,
                                             size_type maxsplit,
                                             rmm::mr::device_memory_resource* mr )
 {
     CUDF_FUNC_RANGE();
-    return detail::split( strings, delimiter, maxsplit, mr );
+    return detail::split( strings_column, delimiter, maxsplit, mr );
 }
 
-std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
+std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings_column,
                                              string_scalar const& delimiter,
                                              size_type maxsplit,
                                              rmm::mr::device_memory_resource* mr)
 {
     CUDF_FUNC_RANGE();
-    return detail::rsplit( strings, delimiter, maxsplit, mr );
+    return detail::rsplit( strings_column, delimiter, maxsplit, mr );
 }
 
 } // namespace strings
