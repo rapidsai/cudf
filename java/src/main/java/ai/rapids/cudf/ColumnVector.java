@@ -1811,19 +1811,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * The number of rows in the output columns will be the same as the input column.
    * Null entries are added for a row where split results have been exhausted.
    * Null string entries return corresponding null output columns.
-   * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  Default of empty string indicates split on whitespace.
    * @return New table of strings columns.
    */
   public Table stringSplit(Scalar delimiter) {
     assert type == DType.STRING : "column type must be a String";
-    assert delimiter.getType() == DType.STRING : "substring scalar must be a string scalar";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
     try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
       return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
     }
   }
 
-  public Table stringSplit() { return stringSplit(Scalar.fromString("")); }
+  /**
+   * Returns a list of columns by splitting each string using whitespace as the delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit() {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplit(emptyString);
+    }
+  }
 
   /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
@@ -2198,7 +2211,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Native method which returns array of columns by splitting each string using the specified
    * delimiter.
    * @param columnView native handle of the cudf::column_view being operated on.
-   * @param delimiter  UTF-8 encoded string indentifying the split points in each string.
+   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
    */
   private static native long[] stringSplit(long columnView, long delimiter);
 

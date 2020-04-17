@@ -78,7 +78,7 @@ public final class Table implements AutoCloseable {
    * refcount on itself and all its contents when closed and free resources if refcount is zero
    * @param cudfColumns - Array of nativeHandles
    */
-  public Table(long[] cudfColumns) {
+  Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {

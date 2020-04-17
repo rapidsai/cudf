@@ -1894,7 +1894,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void stringSplit() {
+  void teststringSplit() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
          Table expected = new Table.TestBuilder().column("Héllo", "thésé", null, "", "ARé", "test")
          .column("there", null, null, null, "some", "strings")
@@ -1906,7 +1906,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void stringSplitWhiteSpace() {
+  void teststringSplitWhiteSpace() {
     try (ColumnVector v = ColumnVector.fromStrings("Héllo thesé", null, "are\tsome", "tést\nString", " ");
          Table expected = new Table.TestBuilder().column("Héllo", null, "are", "tést", null)
          .column("thesé", null, "some", "String", null)
@@ -1914,6 +1914,24 @@ public class ColumnVectorTest extends CudfTestBase {
          Table result = v.stringSplit()) {
       assertTablesAreEqual(expected, result);
     }
+  }
+
+  @Test
+  void teststringSplitThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Scalar delimiter = Scalar.fromString(null);
+           Table result = cv.stringSplit(delimiter)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+    try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+         Scalar delimiter = Scalar.fromInt(1);
+         Table result = cv.stringSplit(delimiter)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Table result = cv.stringSplit(null)) {}
+    });
   }
 
   @Test
