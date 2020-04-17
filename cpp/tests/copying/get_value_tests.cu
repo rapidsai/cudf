@@ -68,6 +68,16 @@ TYPED_TEST(FixedWidthGetValueTest, GetNull) {
   EXPECT_FALSE(s->is_valid());
 }
 
+TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds) {
+  fixed_width_column_wrapper<TypeParam> col({9, 8, 7, 6},
+                                            {0, 1, 0, 1});
+  
+  CUDF_EXPECT_THROW_MESSAGE(experimental::get_element(col, -1);,
+                            "Index out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(experimental::get_element(col, 4);,
+                            "Index out of bounds");
+}
+
 
 struct StringGetValueTest : public BaseFixture {};
 
