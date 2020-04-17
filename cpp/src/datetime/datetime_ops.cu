@@ -19,6 +19,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
@@ -162,16 +163,16 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                           cudaStream_t stream,
                                           rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
+
   auto size = column.size();
   auto output_col_type = data_type{OutputColCudfT};
-  auto null_mask = copy_bitmask(column, stream, mr);
-  auto output = std::make_unique<cudf::column>(
-      output_col_type, size, rmm::device_buffer{size * cudf::size_of(output_col_type), stream, mr},
-      null_mask, column.null_count(),
-      std::vector<std::unique_ptr<cudf::column>>{});
 
   // Return an empty column if source column is empty
-  if (size == 0) return output;
+  if (size == 0) return make_empty_column(output_col_type);
+
+  auto null_mask = copy_bitmask(column, stream, mr);
+  auto output = make_fixed_width_column(output_col_type, size, null_mask,
+                                        column.null_count(), stream, mr);
 
   auto launch = launch_functor<TransformFunctor,
                                typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>
