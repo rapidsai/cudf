@@ -1909,6 +1909,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Removes whitespace from the beginning and end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "strip")) {
+      return new ColumnVector(stringStrip(getNativeView()));
+    }
+  }
+
+  /**
    * Checks if each string in a column contains a specified comparison string, resulting in a
    * parallel column of the boolean results.
    * @param compString scalar containing the string being searched for.
@@ -2217,6 +2228,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method to strip whitespace from the start and end of a string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   */
+  private static native long stringStrip(long columnView) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
