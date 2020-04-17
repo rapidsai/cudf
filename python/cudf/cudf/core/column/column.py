@@ -831,6 +831,8 @@ class ColumnBase(Column):
         return cpp_unique_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
+        # print("came to as type", self, dtype)
+        # import pdb;pdb.set_trace()
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
@@ -843,6 +845,7 @@ class ColumnBase(Column):
             return self.as_numerical_column(dtype, **kwargs)
 
     def as_categorical_column(self, dtype, **kwargs):
+        # import pdb;pdb.set_trace()
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -1151,6 +1154,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     from cudf.core.series import Series
     from cudf.core.index import Index
 
+    # import pdb;pdb.set_trace()
+    # print("in", arbitrary)
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
@@ -1227,6 +1232,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         return col
 
     elif isinstance(arbitrary, pa.Array):
+        # print("came to pa array")
+        # import pdb;pdb.set_trace()
         if isinstance(arbitrary, pa.StringArray):
             pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
                 arbitrary
@@ -1270,6 +1277,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 categories = as_column([], dtype="object")
             else:
                 categories = as_column(arbitrary.dictionary)
+            # import pdb;pdb.set_trace()
+            # print("building categorical column", dtype, arbitrary)
             dtype = CategoricalDtype(
                 categories=categories, ordered=arbitrary.type.ordered
             )
@@ -1389,6 +1398,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 dtype=arbitrary.dtype,
             )
         if dtype is not None:
+            # print("BEF", data, dtype)
             data = data.astype(dtype)
 
     elif isinstance(arbitrary, pd.Timestamp):
@@ -1419,6 +1429,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = data.fillna(np.datetime64("NaT"))
 
     elif hasattr(arbitrary, "__array_interface__"):
+        # print("inside np")
         # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
         shape = desc["shape"]
@@ -1455,6 +1466,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
+            # import pdb;pdb.set_trace()
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
@@ -1480,6 +1492,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         )
 
     else:
+        # import pdb;pdb.set_trace()
         try:
             data = as_column(
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
@@ -1512,11 +1525,16 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
-                    data = as_column(sr, nan_as_null=nan_as_null)
+                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
+                    # print("DF", data, dtype)
+                    # import pdb;pdb.set_trace()
+                    # if dtype is not None:
+                    #     data = data.astype(dtype)
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
+                    # import pdb;pdb.set_trace()
                     data = as_column(
                         np.asarray(
                             arbitrary,
@@ -1525,6 +1543,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
+    # print("out", data)
     return data
 
 

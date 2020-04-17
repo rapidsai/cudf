@@ -95,6 +95,7 @@ class Series(Frame):
     def __init__(
         self, data=None, index=None, name=None, nan_as_null=True, dtype=None
     ):
+        # import pdb;pdb.set_trace()
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name

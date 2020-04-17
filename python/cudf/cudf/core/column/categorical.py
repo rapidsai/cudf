@@ -573,7 +573,16 @@ class CategoricalColumn(column.ColumnBase):
         return self._is_monotonic_decreasing
 
     def as_categorical_column(self, dtype, **kwargs):
-        return self
+        if isinstance(dtype, str) and dtype == "category":
+            return self
+        if isinstance(
+            dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
+        ):
+            if (dtype.categories is None) and (dtype.ordered is None):
+                return self
+        return self.cat()._set_categories(
+            new_categories=dtype.categories, ordered=dtype.ordered
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         return self._get_decategorized_column().as_numerical_column(
