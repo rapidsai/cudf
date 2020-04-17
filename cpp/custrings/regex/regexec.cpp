@@ -8,6 +8,7 @@ extern "C" {
 
 #include "./regex.cuh"
 #include "./regcomp.h"
+#include <cudf/utilities/error.hpp>
 
 dreprog* dreprog::create_from(const char32_t* pattern, unsigned char* uflags )
 {
@@ -67,7 +68,7 @@ dreprog* dreprog::create_from(const char32_t* pattern, unsigned char* uflags )
     // copy flat prog to device memory
     dreprog* d_rtn = 0;
     RMM_ALLOC(&d_rtn,memsize,0);//cudaMalloc(&d_rtn,memsize);
-    cudaMemcpy(d_rtn,rtn,memsize,cudaMemcpyHostToDevice);
+    CUDA_TRY(cudaMemcpy(d_rtn,rtn,memsize,cudaMemcpyHostToDevice));
     free(rtn);
     return d_rtn;
 }
@@ -90,14 +91,14 @@ bool dreprog::alloc_relists( size_t count )
         return false;
     RMM_ALLOC(&rmem,rlmsz,0);
     //rtn->relists_mem = rmem;
-    cudaMemcpy(&relists_mem,&rmem,sizeof(void*),cudaMemcpyHostToDevice);
+    CUDA_TRY(cudaMemcpy(&relists_mem,&rmem,sizeof(void*),cudaMemcpyHostToDevice));
     return true;
 }
 
 void dreprog::free_relists()
 {
     void* cptr = 0; // this magic works but only as member function
-    cudaMemcpy(&cptr,&relists_mem,sizeof(void*),cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(&cptr,&relists_mem,sizeof(void*),cudaMemcpyDeviceToHost));
     if( cptr )
         RMM_FREE(cptr,0);//cudaFree(cptr);
 }
@@ -105,14 +106,14 @@ void dreprog::free_relists()
 int dreprog::inst_counts()
 {
     int count = 0;
-    cudaMemcpy(&count,&insts_count,sizeof(int),cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(&count,&insts_count,sizeof(int),cudaMemcpyDeviceToHost));
     return count;
 }
 
 int dreprog::group_counts()
 {
     int count = 0;
-    cudaMemcpy(&count,&num_capturing_groups,sizeof(int),cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(&count,&num_capturing_groups,sizeof(int),cudaMemcpyDeviceToHost));
     return count;
 }
 
