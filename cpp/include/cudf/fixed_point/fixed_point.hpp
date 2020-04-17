@@ -23,6 +23,7 @@
 //! `fixed_point` and supporting types
 namespace numeric {
 
+/** \cond HIDDEN_SYMBOLS */
 // This is a wrapper struct that enforces "strong typing"
 // at the construction site of the type. No implicit
 // conversions will be allowed and you will need to use the
@@ -33,6 +34,7 @@ struct strong_typedef {
     CUDA_HOST_DEVICE_CALLABLE explicit strong_typedef(T t) : _t(t) {}
     CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
 };
+/** \endcond */
 
 using scale_type = strong_typedef<int32_t>;
 
