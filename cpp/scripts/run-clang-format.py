@@ -26,15 +26,10 @@ EXPECTED_VERSION = "8.0.1"
 VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 # NOTE: populate this list with more top-level dirs as we add more of them to
 #       to the cuml repo
-DEFAULT_DIRS = [# "cpp/bench",
-                # "cpp/comms/mpi/include",
-                # "cpp/comms/mpi/src",
-                # "cpp/comms/std/include",
-                # "cpp/comms/std/src",
+DEFAULT_DIRS = ["cpp/benchmarks",
+                "cpp/custrings"
                 "cpp/include",
-                # "cpp/examples",
                 "cpp/src",
-                # "cpp/src_prims",
                 "cpp/test"]
 
 
