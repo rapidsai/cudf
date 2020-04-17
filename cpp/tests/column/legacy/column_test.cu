@@ -131,7 +131,7 @@ struct ColumnConcatTest : public GdfTest
     for (int i = 0; i < num; ++i) {
       gdf_column_concat(output_gdf_col.get(), columns_to_concat, num_columns);
     }
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = end-start;
     std::cout << "Time for " << num << " concats of " << num_columns << " columns of " 

@@ -28,7 +28,8 @@ struct managed {
     }
 
     static void operator delete(void *ptr) noexcept {
-        cudaFree(ptr);
+        auto const free_result = cudaFree(ptr);
+        assert(free_result == cudaSuccess);
     }
 };
 

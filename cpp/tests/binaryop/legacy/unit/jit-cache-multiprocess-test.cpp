@@ -61,7 +61,7 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
                                                     {"3", "int"});
         (*std::get<1>(kernel)).configure(grid, block)
             .launch(input, &output[idx]);
-        cudaDeviceSynchronize();
+        CUDA_TRY(cudaDeviceSynchronize());
 
         ASSERT_TRUE(expect == output[idx]) << "Expected val: " << expect << '\n'
                                            << "  Actual val: " << output[idx];
@@ -84,8 +84,8 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to pipe
     }
 
-    cudaMallocManaged(&input, sizeof(input));
-    cudaMallocManaged(&output, sizeof(output) * num_tests * 2);
+    CUDA_TRY(cudaMallocManaged(&input, sizeof(input)));
+    CUDA_TRY(cudaMallocManaged(&output, sizeof(output) * num_tests * 2));
 
     for (size_t i = 0; i < num_tests; i++)
     {

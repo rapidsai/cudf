@@ -56,14 +56,14 @@ struct column_printer {
     Element const* column_data { static_cast<Element const*>(the_column->data) };
 
     std::vector<Element> host_side_data(num_rows);
-    cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
-               cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
+               cudaMemcpyDeviceToHost));
 
     cudf::size_type const num_masks { gdf_valid_allocation_size(num_rows) };
     std::vector<cudf::valid_type> h_mask(num_masks, ~cudf::valid_type { 0 });
     if (nullptr != the_column->valid) {
-      cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(cudf::valid_type),
-                 cudaMemcpyDeviceToHost);
+      CUDA_TRY(cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(cudf::valid_type),
+                 cudaMemcpyDeviceToHost));
     }
 
     for (cudf::size_type i = 0; i < num_rows; ++i) {
@@ -278,10 +278,10 @@ void print_valid_data(const cudf::valid_type *validity_mask,
   error = cudaGetLastError();
 
   std::vector<cudf::valid_type> h_mask(gdf_valid_allocation_size(num_rows));
-  if (error != cudaErrorInvalidValue && isDeviceType(attrib))
-    cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows),
-               cudaMemcpyDeviceToHost);
-  else
+  if (error != cudaErrorInvalidValue && isDeviceType(attrib)) {
+    CUDA_TRY(cudaMemcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows),
+               cudaMemcpyDeviceToHost));
+  } else
     memcpy(h_mask.data(), validity_mask, gdf_valid_allocation_size(num_rows));
 
   std::transform(

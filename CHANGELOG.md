@@ -74,6 +74,7 @@
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
 - PR #4863 Create is_integer/is_float functions for checking characters before calling to_integers/to_floats
+- PR #4853 Added CUDA_TRY to multiple places in libcudf code
 - PR #4870 Add chunked parquet file writing from python
 - PR #4865 Add docs and clarify limitations of `applymap`
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
