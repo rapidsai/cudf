@@ -89,7 +89,7 @@
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
-- PR #4925 Type `status` variables as `int`
+- PR #4925 Type `status` variables as `cudaError_t`
 
 ## Bug Fixes
 
