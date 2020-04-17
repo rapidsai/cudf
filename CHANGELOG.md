@@ -89,6 +89,7 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4909 Added ability to transform a column using cuda method in Java bindings 
 
 ## Bug Fixes
 
@@ -155,7 +156,9 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
+- PR #4889 Fix multi-index merging
 
 
 # cuDF 0.13.0 (31 Mar 2020)
