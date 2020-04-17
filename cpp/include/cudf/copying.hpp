@@ -460,7 +460,7 @@ struct packed_table {
 packed_table pack(cudf::table_view const& input,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-contiguous_split_result unpack(packed_table input,
+contiguous_split_result unpack(packed_table & input,
                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
