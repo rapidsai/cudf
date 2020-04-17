@@ -704,8 +704,9 @@ class DataFrame(Frame):
 
     def __array__(self, dtype=None):
         raise NotImplementedError(
-            "__array__ is not supported in CuDF, use .as_matrix()\
-                 for converting to numpy instead."
+            "__array__ is not supported in CuDF, To construct \
+                a GPU matrix, consider using .as_gpu_matrix()\n\
+                To construct a host matrix, consider using .as_matrix()"
         )
 
     def _get_numeric_data(self):

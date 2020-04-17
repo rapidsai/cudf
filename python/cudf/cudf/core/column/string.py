@@ -2088,8 +2088,8 @@ class StringColumn(column.ColumnBase):
 
     def __array__(self, dtype=None):
         raise NotImplementedError(
-            "__array__ is not supported in CuDF, use .to_array()\
-                 for converting to numpy instead."
+            "__array__ is not supported in CuDF, \
+                To construct a host array, consider using .to_array()"
         )
 
     def serialize(self):
