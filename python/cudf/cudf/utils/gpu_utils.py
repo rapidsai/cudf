@@ -51,7 +51,7 @@ def validate_setup(check_dask=True):
             )
             warnings.warn(
                 "You will need a GPU with NVIDIA Pascal™ or newer architecture"
-                "\nDetected GPU 0: " + str(device_name.decode()) + "\n"
+                "\nDetected GPU 0: " + device_name + "\n"
                 "Detected Compute Capability: "
                 + str(major_version)
                 + "."

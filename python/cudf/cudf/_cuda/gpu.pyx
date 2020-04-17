@@ -346,4 +346,4 @@ def deviceGetName(int device):
     cdef int status = cuDeviceGetName(device_name_ptr, size, device)
     if status != 0:
         raise CUDARuntimeError(status)
-    return device_name
+    return device_name.decode()
