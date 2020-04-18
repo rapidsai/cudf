@@ -63,10 +63,10 @@ struct DigitizeTest : public GdfTest {
     rmm::device_vector<cudf::size_type> out_indices_dev(col_in->size);
     gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
     out_data.resize(out_indices_dev.size());
-    cudaMemcpy(out_data.data(),
+    CUDA_TRY(cudaMemcpy(out_data.data(),
                out_indices_dev.data().get(),
                out_indices_dev.size() * sizeof(cudf::size_type),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost));
     return result;
   }
 };
@@ -99,10 +99,10 @@ void digitize_detail(bool right, const std::vector<int32_t>& expected) {
   gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
 
   std::vector<cudf::size_type> out_indices(out_indices_dev.size());
-  cudaMemcpy(out_indices.data(),
+  CUDA_TRY(cudaMemcpy(out_indices.data(),
              out_indices_dev.data().get(),
              out_indices_dev.size() * sizeof(cudf::size_type),
-             cudaMemcpyDeviceToHost);
+             cudaMemcpyDeviceToHost));
   EXPECT_EQ(result, GDF_SUCCESS);
 
   const size_t num_rows = col_in_data.size();

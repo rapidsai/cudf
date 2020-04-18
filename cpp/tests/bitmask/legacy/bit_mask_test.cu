@@ -357,12 +357,12 @@ TEST_F(BitMaskTest, PerformanceTest)
   EXPECT_EQ(GDF_SUCCESS, bit_mask::copy_bit_mask(bit_mask.get_valid(), local_valid, num_rows, cudaMemcpyHostToDevice));
 
   auto start = std::chrono::system_clock::now();
-  cudaProfilerStart();
+  CUDA_TRY(cudaProfilerStart());
   for(int i = 0; i < 1000; ++i) {
     cudf::size_type local_count = 0;
     count_bits(&local_count, bit_mask, grid_size, block_size);
   }
-  cudaProfilerStop();
+  CUDA_TRY(cudaProfilerStop());
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end-start;
   std::cout << "Elapsed time (ms): " << elapsed_seconds.count()*1000 << std::endl;

@@ -257,11 +257,11 @@ TEST_F(ValidsTest, DISABLED_PerformanceTest) {
   int count{-1};
 
   auto start = std::chrono::system_clock::now();
-  cudaProfilerStart();
+  CUDA_TRY(cudaProfilerStart());
   for (int i = 0; i < 1000; ++i)
     gdf_error error_code =
         gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
-  cudaProfilerStop();
+  CUDA_TRY(cudaProfilerStop());
   auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end - start;
   std::cout << "Elapsed time (ms): " << elapsed_seconds.count() * 1000

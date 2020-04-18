@@ -15,6 +15,7 @@
  */
 #include "parquet_gpu.h"
 #include <io/utilities/block_utils.cuh>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace io {
@@ -342,7 +343,7 @@ gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
 cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch, size_t scratch_size, uint32_t num_chunks, cudaStream_t stream)
 {
     if (num_chunks > 0 && scratch_size > 0) { // zero scratch size implies no dictionaries
-        cudaMemsetAsync(dev_scratch, 0, scratch_size, stream);
+        CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
         gpuBuildChunkDictionaries <<< num_chunks, 1024, 0, stream >>>(chunks, dev_scratch);
     }
     return cudaSuccess;

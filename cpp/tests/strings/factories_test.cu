@@ -71,7 +71,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
         h_offsets[idx+1] = offset;
     }
     rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings(strings);
-    cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
+    CUDA_TRY(cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
     auto column = cudf::make_strings_column( d_strings );
     EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});
     EXPECT_EQ(column->null_count(), nulls);

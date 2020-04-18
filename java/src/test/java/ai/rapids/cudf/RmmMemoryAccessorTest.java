@@ -41,7 +41,7 @@ class RmmMemoryAccessorTest extends CudfTestBase {
     }
     File f = File.createTempFile("ALL_LOG",".csv");
     f.deleteOnExit();
-    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logTo(f), 1024*1024*1024, -1);
+    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logTo(f), 1024*1024*1024);
     try (DeviceMemoryBuffer address = Rmm.alloc(10, Cuda.DEFAULT_STREAM)) {
       assertNotEquals(0, address);
     }

@@ -28,6 +28,7 @@
 
 #include "../custring_view.cuh"
 #include "../util.h"
+#include <cudf/utilities/error.hpp>
 
 //
 NVStrings* NVText::create_ngrams(NVStrings& strs, unsigned int ngrams, const char* separator )
@@ -327,7 +328,7 @@ NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter,
     thrust::transform_inclusive_scan( execpol->on(0), strings.begin(), strings.end(),
         d_token_offsets+1, string_token_counter_fn{d_strings,d_delimiter,d_separator},
         thrust::plus<int32_t>());
-    cudaMemset( d_token_offsets, 0, sizeof(int32_t) );
+    CUDA_TRY(cudaMemset( d_token_offsets, 0, sizeof(int32_t) ));
     int32_t total_tokens = token_offsets[count];  // 5
 
     // get the token positions per string
@@ -348,7 +349,7 @@ NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter,
             auto token_count = d_token_offsets[idx+1] - d_token_offsets[idx];
             return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
         }, thrust::plus<int32_t>());
-    cudaMemset( d_ngram_offsets, 0, sizeof(int32_t) );
+    CUDA_TRY(cudaMemset( d_ngram_offsets, 0, sizeof(int32_t) ));
     int32_t total_ngrams = ngram_offsets[count]; // 3
 
     // compute the size of the ngrams for each string
@@ -361,7 +362,7 @@ NVStrings* NVText::ngrams_tokenize(NVStrings const& strs, const char* delimiter,
         ngram_sizes_fn{d_separator, ngrams, d_token_offsets, d_token_positions,
                        d_ngram_offsets},//, d_ngram_sizes},
         thrust::plus<int32_t>() );
-    cudaMemset( d_chars_offsets, 0, sizeof(int32_t));
+    CUDA_TRY(cudaMemset( d_chars_offsets, 0, sizeof(int32_t)));
 
     // create output buffer size
     auto output_chars_size = chars_offsets[count];  // 14

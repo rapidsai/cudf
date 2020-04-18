@@ -14,7 +14,6 @@ from cudf._cuda.gpu cimport (
     cuDeviceGetName
 )
 from enum import IntEnum
-from libc.stdlib cimport malloc
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 
@@ -340,8 +339,12 @@ def deviceGetName(int device):
     and status code.
     """
 
-    cdef char* device_name = <char*> malloc(256 * sizeof(char))
-    status = cuDeviceGetName(device_name, 256, device)
+    cdef char[256] device_name
+    cdef int status = cuDeviceGetName(
+        device_name,
+        sizeof(device_name),
+        device
+    )
     if status != 0:
         raise CUDARuntimeError(status)
-    return device_name
+    return device_name.decode()
