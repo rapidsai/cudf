@@ -380,6 +380,9 @@ cdef extern from "cuda.h" nogil:
 
     CUresult cuDeviceGetName(char* name, int length, int device)
 
+    CUresult cuGetErrorName(CUresult error, const char** pStr)
+    CUresult cuGetErrorString(CUresult error, const char** pStr)
+
 cdef extern from "cuda_runtime_api.h" nogil:
 
     cudaError_t cudaDriverGetVersion(int* driverVersion)
