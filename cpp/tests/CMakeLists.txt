@@ -577,7 +577,8 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/pack_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 

@@ -39,13 +39,15 @@ packed_table pack(cudf::table_view const& input,
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
 {
-  contiguous_split_result contiguous_data = std::move(contiguous_split(input, {0})[0]);
+  contiguous_split_result contiguous_data = std::move(contiguous_split(input, {})[0]);
 
-  packed_table result{{}, std::move(contiguous_data.all_data)};
+  packed_table::serialized_column table_element = {{}, 0, 0, 0, contiguous_data.table.num_columns()};
+
+  packed_table result{{table_element}, std::move(contiguous_data.all_data)};
   
   std::vector<column_view> table_columns(input.begin(), input.end());
 
-  add_columns(table_columns, *contiguous_data.all_data, &result.table_metadata);
+  add_columns(table_columns, *result.table_data, &result.table_metadata);
 
   return result;
 }
