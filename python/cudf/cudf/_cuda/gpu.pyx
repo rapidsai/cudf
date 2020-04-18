@@ -34,6 +34,31 @@ class CUDARuntimeError(RuntimeError):
         return (type(self), (self.status,))
 
 
+class CUDADriverError(RuntimeError):
+
+    def __init__(self, CUresult status):
+        self.status = status
+
+        cdef const char* name_cstr
+        cdef CUresult name_status = cuGetErrorName(status, &name_cstr)
+        if name_status != 0:
+            raise CUDADriverError(name_status)
+
+        cdef const char* msg_cstr
+        cdef CUresult msg_status = cuGetErrorString(status, &msg_cstr)
+        if msg_status != 0:
+            raise CUDADriverError(msg_status)
+
+        cdef str name = name_cstr.decode()
+        cdef str msg = msg_cstr.decode()
+
+        super(CUDADriverError, self).__init__(
+            '%s: %s' % (name, msg))
+
+    def __reduce__(self):
+        return (type(self), (self.status,))
+
+
 class CudaDeviceAttr(IntEnum):
     cudaDevAttrMaxThreadsPerBlock = \
         <c_attr> cudaDeviceAttr.cudaDevAttrMaxThreadsPerBlock
