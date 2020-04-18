@@ -9,6 +9,8 @@
 - PR #4771 Added in an option to statically link against cudart
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
+- PR #4906 Add Java bindings for interleave_columns
+- PR #4923 Add Java and JNI bindings for string split
 
 ## Improvements
 
@@ -44,6 +46,7 @@
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
+- PR #4779 Allow reading arbitrary stripes/rowgroup lists in CPP columnar readers
 - PR #4766 Update to use header-only NVTX v3 and remove need to link against nvtx.
 - PR #4716 Remove direct calls to RMM_ALLOC/RMM_FREE
 - PR #4765 Add in java support for sequence
@@ -62,6 +65,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
 - PR #4817 Fix `fixed_point` documentation
+- PR #4844 Change Doxygen color to RAPIDS purple and documentation improvement
 - PR #4840 Add docs for `T`, `empty` & `values`
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
@@ -71,15 +75,28 @@
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4853 Added CUDA_TRY to multiple places in libcudf code
 - PR #4870 Add chunked parquet file writing from python
 - PR #4865 Add docs and clarify limitations of `applymap`
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
 - PR #4871 Add in the build information when building the java jar file
 - PR #4869 Expose contiguous table when deserializing from Java
+- PR #4878 Remove obsolete string_from_host utility
 - PR #4873 Prevent mutable_view() from invoking null count
+- PR #4877 Fix `DataFrame.mask` and align `mask` & `where` behavior with pandas
 - PR #4884 Add more NVTX annotations in cuDF Python
 - PR #4902 Use ContextDecorator instead of contextmanager for nvtx.annotate
 - PR #4894 Add annotations for the `.columns` property and setter
+- PR #4901 Improve unit tests for casting Java numeric types to string
+- PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
+- PR #4903 Improve internal documentation of cudf-io compression/decompression kernels
+- PR #4905 Get decorated function name as message when annotating
+- PR #4907 Reuse EventAttributes across NVTX annotations
+- PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4918 Adding support for `cupy.ndarray` in `series.loc`
+- PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #4917 Add support for casting unsupported `dtypes` of same kind
+- PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
 
 ## Bug Fixes
 
@@ -135,6 +152,7 @@
 - PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
 - PR #4846 Fix CSV parsing with byte_range parameter and string columns
+- PR #4883 Fix series get/set to match pandas
 - PR #4861 Fix to_integers illegal-memory-access with all-empty strings column
 - PR #4860 Fix issues in HostMemoryBufferTest, and testNormalizeNANsAndZeros
 - PR #4838 Fix to support empty inputs to `replace` method
@@ -145,7 +163,9 @@
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
+- PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
+- PR #4889 Fix multi-index merging
 
 
 # cuDF 0.13.0 (31 Mar 2020)

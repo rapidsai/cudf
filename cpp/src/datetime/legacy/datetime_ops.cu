@@ -406,7 +406,7 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -439,8 +439,8 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -451,7 +451,7 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -484,8 +484,8 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -496,7 +496,7 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -528,8 +528,8 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -540,7 +540,7 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -572,8 +572,8 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -585,7 +585,7 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -611,8 +611,8 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -624,7 +624,7 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -649,8 +649,8 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }
@@ -662,7 +662,7 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 	GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
 
 	cudaStream_t stream;
-	cudaStreamCreate(&stream);
+	CUDA_TRY(cudaStreamCreate(&stream));
 
 
     if (input->valid){
@@ -687,8 +687,8 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 		return GDF_UNSUPPORTED_DTYPE;
 	}
 
-	cudaStreamSynchronize(stream);
-	cudaStreamDestroy(stream);
+	CUDA_TRY(cudaStreamSynchronize(stream));
+	CUDA_TRY(cudaStreamDestroy(stream));
 
 	return GDF_SUCCESS;
 }

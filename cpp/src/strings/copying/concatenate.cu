@@ -21,7 +21,7 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>

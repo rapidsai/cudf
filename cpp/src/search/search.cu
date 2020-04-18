@@ -28,7 +28,7 @@
 #include <cudf/detail/search.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/logical.h>
