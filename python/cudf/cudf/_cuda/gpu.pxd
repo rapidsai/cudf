@@ -378,15 +378,17 @@ cdef extern from "cuda.h" nogil:
         cudaUUID_t  uuid
         int  warpSize
 
-    int cuDeviceGetName(char* name, int length, int device)
+    CUresult cuDeviceGetName(char* name, int length, int device)
 
 cdef extern from "cuda_runtime_api.h" nogil:
 
-    int cudaDriverGetVersion(int* driverVersion)
-    int cudaRuntimeGetVersion(int* runtimeVersion)
-    int cudaGetDeviceCount(int* count)
-    int cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device)
-    int cudaGetDeviceProperties(cudaDeviceProp* prop, int device)
+    cudaError_t cudaDriverGetVersion(int* driverVersion)
+    cudaError_t cudaRuntimeGetVersion(int* runtimeVersion)
+    cudaError_t cudaGetDeviceCount(int* count)
+    cudaError_t cudaDeviceGetAttribute(int* value,
+                                       cudaDeviceAttr attr,
+                                       int device)
+    cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int device)
 
     const char* cudaGetErrorName(cudaError_t error)
     const char* cudaGetErrorString(cudaError_t error)
