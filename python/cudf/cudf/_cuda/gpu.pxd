@@ -300,6 +300,8 @@ cdef extern from "cuda.h" nogil:
         cudaUUID_t  uuid
         int  warpSize
 
+    int cuDeviceGetName(char* name, int length, int device)
+
 cdef extern from "cuda_runtime_api.h" nogil:
 
     int cudaDriverGetVersion(int* driverVersion)
@@ -310,6 +312,5 @@ cdef extern from "cuda_runtime_api.h" nogil:
 
     const char* cudaGetErrorName(cudaError_t error)
     const char* cudaGetErrorString(cudaError_t error)
-    int cuDeviceGetName(char* name, int length, int device)
 
 ctypedef int underlying_type_attribute
