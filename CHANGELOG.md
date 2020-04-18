@@ -162,8 +162,9 @@
 - PR #4780 Handle nulls in Statistical column operations
 - PR #4887 Remove `developer.rst` and any links
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
-- Pr #4899 Fix series inplace handling
+- PR #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
+- PR #4942 Fix to_csv truncating files opened in append mode
 
 
 # cuDF 0.13.0 (31 Mar 2020)
