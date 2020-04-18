@@ -23,10 +23,10 @@ from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 class CUDARuntimeError(RuntimeError):
 
-    def __init__(self, status):
+    def __init__(self, cudaError_t status):
         self.status = status
-        cdef bytes name = cudaGetErrorName(<cudaError_t>status)
-        cdef bytes msg = cudaGetErrorString(<cudaError_t>status)
+        cdef bytes name = cudaGetErrorName(status)
+        cdef bytes msg = cudaGetErrorString(status)
         super(CUDARuntimeError, self).__init__(
             '%s: %s' % (name.decode(), msg.decode()))
 
