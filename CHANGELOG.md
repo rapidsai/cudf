@@ -91,9 +91,11 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
 - P# #4933 Enable nop annotate
+- PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
 
 ## Bug Fixes
 
