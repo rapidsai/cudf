@@ -305,7 +305,9 @@ cdef extern from "cuda_runtime_api.h" nogil:
     cudaError_t cudaDriverGetVersion(int* driverVersion)
     cudaError_t cudaRuntimeGetVersion(int* runtimeVersion)
     cudaError_t cudaGetDeviceCount(int* count)
-    cudaError_t cudaDeviceGetAttribute(int* value, cudaDeviceAttr attr, int device)
+    cudaError_t cudaDeviceGetAttribute(int* value,
+                                       cudaDeviceAttr attr,
+                                       int device)
     cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int device)
 
     const char* cudaGetErrorName(cudaError_t error)
