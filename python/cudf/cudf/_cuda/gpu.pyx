@@ -340,7 +340,11 @@ def deviceGetName(int device):
     """
 
     cdef char[256] device_name
-    cdef int status = cuDeviceGetName(device_name, sizeof(device_name), device)
+    cdef int status = cuDeviceGetName(
+        device_name,
+        sizeof(device_name),
+        device
+    )
     if status != 0:
         raise CUDARuntimeError(status)
     return <bytes>device_name
