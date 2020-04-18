@@ -371,5 +371,5 @@ def deviceGetName(int device):
     cdef char* device_name = <char*> malloc(256 * sizeof(char))
     status = cuDeviceGetName(device_name, 256, device)
     if status != 0:
-        raise CUDARuntimeError(status)
+        raise CUDADriverError(status)
     return device_name
