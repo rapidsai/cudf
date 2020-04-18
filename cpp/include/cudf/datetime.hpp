@@ -21,6 +21,7 @@
 #include <memory>
 
 namespace cudf {
+//! `datetime` APIs
 namespace datetime {
 namespace detail {
 

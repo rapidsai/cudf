@@ -176,7 +176,7 @@ class orc_column_view {
             view.offsets().data<size_type>(), view.chars().data<char>(),
             _nulls, _data_count);
       _data = _indexes.data();
-      cudaStreamSynchronize(stream);
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
     // Generating default name if name isn't present in metadata
     if (metadata && _id < metadata->column_names.size()) {

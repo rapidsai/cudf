@@ -573,8 +573,7 @@ reader::Impl::gather_column_dtypes() {
           static_cast<const char *>(data_.data()), row_offsets.data().get(),
           num_records, num_actual_cols, opts, d_column_flags.data().get(),
           column_stats.device_ptr()));
-      CUDA_TRY(
-          cudaMemcpyAsync(column_stats.host_ptr(), column_stats.device_ptr(),
+      CUDA_TRY(cudaMemcpyAsync(column_stats.host_ptr(), column_stats.device_ptr(),
                           column_stats.memory_size(), cudaMemcpyDeviceToHost));
       CUDA_TRY(cudaStreamSynchronize(0));
 

@@ -63,6 +63,7 @@
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
 - PR #4817 Fix `fixed_point` documentation
+- PR #4844 Change Doxygen color to RAPIDS purple and documentation improvement
 - PR #4840 Add docs for `T`, `empty` & `values`
 - PR #4841 Remove unused `single_lane_block_popc_reduce` function
 - PR #4842 Added Java bindings for titlizing a String column
@@ -72,6 +73,7 @@
 - PR #4849 Update Java bindings to use new NVTX API
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
 - PR #4848 Side step `unique_count` calculation in `scatter_by_map`
+- PR #4853 Added CUDA_TRY to multiple places in libcudf code
 - PR #4870 Add chunked parquet file writing from python
 - PR #4865 Add docs and clarify limitations of `applymap`
 - PR #4867 Parquet reader: coalesce adjacent column chunk reads
@@ -85,11 +87,14 @@
 - PR #4894 Add annotations for the `.columns` property and setter
 - PR #4901 Improve unit tests for casting Java numeric types to string
 - PR #4888 Handle dropping of nan's & nulls using `skipna` parameter in Statistical reduction ops
+- PR #4903 Improve internal documentation of cudf-io compression/decompression kernels
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #4917 Add support for casting unsupported `dtypes` of same kind
+- PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
 
 ## Bug Fixes
 
