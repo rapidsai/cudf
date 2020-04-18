@@ -347,4 +347,4 @@ def deviceGetName(int device):
     )
     if status != 0:
         raise CUDARuntimeError(status)
-    return <bytes>device_name
+    return device_name.decode()
