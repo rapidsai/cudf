@@ -11,7 +11,10 @@ from cudf._cuda.gpu cimport (
     cudaGetErrorName,
     cudaGetErrorString,
     cudaError_t,
-    cuDeviceGetName
+    CUresult,
+    cuDeviceGetName,
+    cuGetErrorName,
+    cuGetErrorString
 )
 from enum import IntEnum
 from libc.stdlib cimport malloc
