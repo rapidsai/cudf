@@ -4649,7 +4649,7 @@ class DataFrame(Frame):
         index=True,
         line_terminator="\n",
         chunksize=None,
-        mode='w',
+        mode="w",
     ):
         """{docstring}"""
         import cudf.io.csv as csv

@@ -97,7 +97,7 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
-    mode='w',
+    mode="w",
 ):
     """{docstring}"""
 
