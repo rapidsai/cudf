@@ -25,10 +25,10 @@ class CUDARuntimeError(RuntimeError):
 
     def __init__(self, cudaError_t status):
         self.status = status
-        cdef bytes name = cudaGetErrorName(status)
-        cdef bytes msg = cudaGetErrorString(status)
+        cdef str name = cudaGetErrorName(status).decode()
+        cdef str msg = cudaGetErrorString(status).decode()
         super(CUDARuntimeError, self).__init__(
-            '%s: %s' % (name.decode(), msg.decode()))
+            '%s: %s' % (name, msg))
 
     def __reduce__(self):
         return (type(self), (self.status,))
