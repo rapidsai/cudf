@@ -369,9 +369,9 @@ def deviceGetName(int device):
 
     cdef char[256] device_name
     cdef CUresult status = cuDeviceGetName(
-      device_name,
-      sizeof(device_name),
-      device
+        device_name,
+        sizeof(device_name),
+        device
     )
     if status != 0:
         raise CUDADriverError(status)
