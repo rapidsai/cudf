@@ -275,14 +275,6 @@ class Series(Frame):
     def __deepcopy__(self):
         return self.copy()
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU array, consider using \
-            cupy.asarray(...)\nTo explicitly construct a \
-            host array, consider using .to_array()"
-        )
-
     def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
