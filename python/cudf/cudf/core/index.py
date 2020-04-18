@@ -383,14 +383,6 @@ class Index(Frame):
 
         return Series(self._values)
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
-            To explicitly construct a GPU array, consider using \
-            cupy.asarray(...)\nTo explicitly construct a host \
-            array, consider using .to_array()"
-        )
-
     @property
     def is_unique(self):
         raise (NotImplementedError)
