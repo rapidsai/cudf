@@ -17,7 +17,6 @@ from cudf._cuda.gpu cimport (
     cuGetErrorString
 )
 from enum import IntEnum
-from libc.stdlib cimport malloc
 from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 
 
@@ -364,12 +363,16 @@ def deviceGetName(int device):
         device : int
             Device number to query
 
-    This function automatically raises CUDARuntimeError with error message
+    This function automatically raises CUDADriverError with error message
     and status code.
     """
 
-    cdef char* device_name = <char*> malloc(256 * sizeof(char))
-    cdef CUresult status = cuDeviceGetName(device_name, 256, device)
+    cdef char[256] device_name
+    cdef CUresult status = cuDeviceGetName(
+      device_name,
+      sizeof(device_name),
+      device
+    )
     if status != 0:
         raise CUDADriverError(status)
-    return device_name
+    return device_name.decode()
