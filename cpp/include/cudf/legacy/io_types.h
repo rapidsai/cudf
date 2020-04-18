@@ -48,4 +48,6 @@ typedef struct
 
     int rows_per_chunk;           // maximum number of rows to process for each file write
 
+    bool append_file;             // open output file in append mode instead of truncate mode
+
 } csv_write_arg;

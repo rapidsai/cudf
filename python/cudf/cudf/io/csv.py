@@ -97,6 +97,7 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    mode='w',
 ):
     """{docstring}"""
 
@@ -117,6 +118,7 @@ def to_csv(
 
     if isinstance(path, IOBase):
         path = path.name
+        mode = path.mode
 
     return libcudf_legacy.csv.write_csv(
         cols=df._data,
@@ -127,4 +129,5 @@ def to_csv(
         header=header,
         line_terminator=line_terminator,
         rows_per_chunk=rows_per_chunk,
+        mode=mode,
     )

@@ -275,7 +275,9 @@ gdf_error write_csv(csv_write_arg* args)
     CUDF_EXPECTS( all_sizes_match, "write_csv: columns sizes do not match" );
 
     // check the file can be written
-    std::ofstream filecsv(filepath,std::ios::out|std::ios::binary|std::ios::trunc);
+    auto const mode = std::ios::out | std::ios::binary |
+        (args->append_file ? std::ios::app : std::ios::trunc);
+    std::ofstream filecsv(filepath, mode);
     CUDF_EXPECTS( filecsv.is_open(), "write_csv: file could not be opened");
 
     //

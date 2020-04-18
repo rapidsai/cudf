@@ -4649,6 +4649,7 @@ class DataFrame(Frame):
         index=True,
         line_terminator="\n",
         chunksize=None,
+        mode='w',
     ):
         """{docstring}"""
         import cudf.io.csv as csv
@@ -4663,6 +4664,7 @@ class DataFrame(Frame):
             index,
             line_terminator,
             chunksize,
+            mode,
         )
 
     @ioutils.doc_to_orc()

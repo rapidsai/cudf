@@ -85,4 +85,6 @@ cdef extern from "cudf/cudf.h" nogil:
 
         int rows_per_chunk
 
+        bool append_file
+
     cdef gdf_error write_csv(csv_write_arg* args) except +

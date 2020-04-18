@@ -248,6 +248,7 @@ cpdef write_csv(
     header=True,
     line_terminator="\n",
     rows_per_chunk=8,
+    mode='w',
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
@@ -278,6 +279,14 @@ cpdef write_csv(
     csv_writer.include_header = header
     # Minimum rows per chunk allowed by csvwriter is 8
     csv_writer.rows_per_chunk = rows_per_chunk if rows_per_chunk > 8 else 8
+
+    # Mode string must contain 'a' or 'w'
+    if 'a' in mode:
+        csv_writer.append_file = True
+    elif 'w' in mode:
+        csv_writer.append_file = False
+    else:
+        raise ValueError('mode must be w or a')
 
     cdef vector[gdf_column*] list_cols
 
