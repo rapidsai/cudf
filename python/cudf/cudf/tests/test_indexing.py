@@ -117,6 +117,16 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+def test_series_indexing_large_size():
+    n_elem = 100_000
+    gsr = cudf.Series(np.ones(n_elem))
+    gsr[0] = None
+    got = gsr[gsr.isna()]
+    expect = Series([None], dtype="float64")
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
 @pytest.mark.parametrize(
     "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]

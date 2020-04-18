@@ -266,11 +266,17 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            df = DataFrame()
-            for col in columns_df.columns:
-                # need Series() in case a scalar is returned
-                df[col] = Series(columns_df[col].loc[arg[0]])
-            df.columns = columns_df.columns
+            if hasattr(arg[0], "__len__"):
+                arg = (column.as_column(arg[0]), arg[1])
+
+            if pd.api.types.is_bool_dtype(arg[0]):
+                return columns_df.take(arg[0])
+            else:
+                df = DataFrame()
+                for col in columns_df.columns:
+                    # need Series() in case a scalar is returned
+                    df[col] = Series(columns_df[col].loc[arg[0]])
+                df.columns = columns_df.columns
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -320,6 +326,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
+        from cudf.core.column import column
         from cudf.core.dataframe import DataFrame, Series
         from cudf.core.index import as_index
 
@@ -344,13 +351,19 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 return self._downcast_to_series(df, arg)
             return df
         else:
-            df = DataFrame()
-            for i, col in enumerate(columns_df._columns):
-                # need Series() in case a scalar is returned
-                df[i] = Series(col[arg[0]])
+            if hasattr(arg[0], "__len__"):
+                arg = (column.as_column(arg[0]), arg[1])
 
-            df.index = as_index(columns_df.index[arg[0]])
-            df.columns = columns_df.columns
+            if pd.api.types.is_bool_dtype(arg[0]):
+                return columns_df.take(arg[0])
+            else:
+                df = DataFrame()
+                for i, col in enumerate(columns_df._columns):
+                    # need Series() in case a scalar is returned
+                    df[i] = Series(col[arg[0]])
+
+                df.index = as_index(columns_df.index[arg[0]])
+                df.columns = columns_df.columns
 
         # Iloc Step 3:
         # Reindex
