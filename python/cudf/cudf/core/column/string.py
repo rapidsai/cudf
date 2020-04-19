@@ -2086,6 +2086,13 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            Conversion to GPU array in strings is not yet supported.\nTo \
+            explicitly construct a host array, consider using .to_array()"
+        )
+
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
