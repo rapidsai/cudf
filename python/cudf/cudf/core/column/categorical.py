@@ -90,6 +90,10 @@ class CategoricalAccessor(object):
         ordered = kwargs.get("ordered", self.ordered)
         rename = kwargs.pop("rename", False)
         new_categories = column.as_column(new_categories)
+
+        if hasattr(new_categories, "categories"):
+            new_categories = new_categories.categories
+
         # when called with rename=True, the pandas behavior is
         # to replace the current category values with the new
         # categories.
