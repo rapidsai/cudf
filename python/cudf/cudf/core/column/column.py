@@ -1390,7 +1390,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 dtype=arbitrary.dtype,
             )
         if dtype is not None:
-            # print("BEF", data, dtype)
             data = data.astype(dtype)
 
     elif isinstance(arbitrary, pd.Timestamp):
@@ -1421,7 +1420,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = data.fillna(np.datetime64("NaT"))
 
     elif hasattr(arbitrary, "__array_interface__"):
-        # print("inside np")
         # CUDF assumes values are always contiguous
         desc = arbitrary.__array_interface__
         shape = desc["shape"]
@@ -1528,7 +1526,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
-    # print("out", data)
     return data
 
 
