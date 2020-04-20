@@ -23,6 +23,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/trie.cuh>
 
 #include <io/utilities/parsing_utils.cuh>
@@ -569,8 +570,8 @@ cudaError_t __host__ DetectColumnTypes(
   // Calculate actual block count to use based on records count
   int blockSize = 0;    // suggested thread count to use
   int minGridSize = 0;  // minimum block count required
-  cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
-                                     dataTypeDetection);
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
+                                     dataTypeDetection));
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
   dataTypeDetection<<<gridSize, blockSize, 0, stream>>>(
@@ -587,7 +588,7 @@ cudaError_t __host__ DecodeRowColumnData(
   // Calculate actual block count to use based on records count
   int blockSize = 0;    // suggested thread count to use
   int minGridSize = 0;  // minimum block count required
-  cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf);
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
   convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(

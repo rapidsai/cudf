@@ -102,7 +102,7 @@ struct DeviceMin {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     const char* psentinel{nullptr};
-    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
+    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
     return T(psentinel, 4);
   }
 };
@@ -123,7 +123,7 @@ struct DeviceMax {
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
   static constexpr T identity() {
     const char* psentinel{nullptr};
-    cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel);
+    CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
     return T(psentinel, 0);
   }
 

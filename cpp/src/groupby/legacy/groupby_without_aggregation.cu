@@ -38,7 +38,7 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
 
   cudf::size_type* result_end;
   cudaStream_t stream;
-  cudaStreamCreate(&stream);
+  CUDA_TRY(cudaStreamCreate(&stream));
 
   // Allocating memory for GDF column
   gdf_column unique_indices{};
@@ -68,8 +68,8 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
   // Free old column, as we have resized (implicitly)
   gdf_column_free(&unique_indices);
 
-  cudaStreamSynchronize(stream);
-  cudaStreamDestroy(stream);
+  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaStreamDestroy(stream));
 
   return resized_unique_indices;
 }

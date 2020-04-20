@@ -39,7 +39,7 @@ namespace detail {
  */
 void concatenate_masks(
     rmm::device_vector<column_device_view> const& d_views,
-    rmm::device_vector<size_type> const& d_offsets,
+    rmm::device_vector<size_t> const& d_offsets,
     bitmask_type * dest_mask,
     size_type output_size,
     cudaStream_t stream);
