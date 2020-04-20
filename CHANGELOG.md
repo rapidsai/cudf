@@ -13,6 +13,7 @@
 
 ## Improvements
 
+- PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
