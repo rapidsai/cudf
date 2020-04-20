@@ -105,6 +105,7 @@
 - PR #4927 Use stack for memory in `deviceGetName`
 - P# #4933 Enable nop annotate
 - PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
+- PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 
 ## Bug Fixes
 
