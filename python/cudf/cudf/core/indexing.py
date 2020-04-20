@@ -3,7 +3,6 @@
 import cupy
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 from cudf._lib.nvtx import annotate
@@ -103,31 +102,10 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
+        from cudf.core.column import column
         from cudf.core.series import Series
-        from cudf.core.index import Index
 
-        if isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
-            if isinstance(arg, pd.MultiIndex):
-                arg = cudf.MultiIndex.from_pandas(arg)
-
-            return indices_from_labels(self._sr, arg)
-
-        if isinstance(
-            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
-        ):
-            if len(arg) == 0:
-                arg = Series(np.array([], dtype="int32"))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
-            if arg.dtype in [np.bool, np.bool_]:
-                return arg
-            else:
-                indices = indices_from_labels(self._sr, arg)
-                if indices.null_count > 0:
-                    raise IndexError("label scalar is out of bound")
-                return indices
-        elif is_scalar(arg):
+        if is_scalar(arg):
             try:
                 found_index = self._sr.index._values.find_first_value(
                     arg, closest=False
@@ -135,17 +113,28 @@ class _SeriesLocIndexer(object):
                 return found_index
             except (TypeError, KeyError, IndexError, ValueError):
                 raise IndexError("label scalar is out of bound")
+
         elif isinstance(arg, slice):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
             )
             return slice(start_index, stop_index, arg.step)
+
+        elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+            if isinstance(arg, pd.MultiIndex):
+                arg = cudf.MultiIndex.from_pandas(arg)
+
+            return indices_from_labels(self._sr, arg)
+
         else:
-            raise NotImplementedError(
-                ".loc not implemented for label type {}".format(
-                    type(arg).__name__
-                )
-            )
+            arg = Series(column.as_column(arg))
+            if arg.dtype in [np.bool, np.bool_]:
+                return arg
+            else:
+                indices = indices_from_labels(self._sr, arg)
+                if indices.null_count > 0:
+                    raise IndexError("label scalar is out of bound")
+                return indices
 
 
 class _DataFrameIndexer(object):

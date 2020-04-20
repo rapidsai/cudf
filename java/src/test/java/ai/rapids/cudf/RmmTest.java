@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -73,7 +76,7 @@ public class RmmTest {
       }
     };
 
-    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024, -1);
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
     Rmm.setEventHandler(handler);
     DeviceMemoryBuffer addr = Rmm.alloc(1024);
     addr.close();
@@ -214,7 +217,7 @@ public class RmmTest {
     final AtomicInteger deallocInvocations = new AtomicInteger(0);
     final AtomicLong allocated = new AtomicLong(0);
 
-    Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024L, -1);
+    Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024L);
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
@@ -328,6 +331,35 @@ public class RmmTest {
     assertThrows(DeallocThresholdException.class, () -> addr.close());
     assertThrows(AllocThresholdException.class, () -> Rmm.alloc(12 * 1024));
     assertThrows(AllocFailException.class, () -> Rmm.alloc(TOO_MUCH_MEMORY));
+  }
+
+  @Test
+  public void testThreadAutoDeviceSetup() throws Exception {
+    // A smoke-test for automatic CUDA device setup for threads calling
+    // into cudf. Hard to fully test without requiring multiple CUDA devices.
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+    DeviceMemoryBuffer buff = Rmm.alloc(1024);
+    try {
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      Future<Boolean> future = executor.submit(() -> {
+        DeviceMemoryBuffer localBuffer = Rmm.alloc(2048);
+        localBuffer.close();
+        buff.close();
+        return true;
+      });
+      assertTrue(future.get());
+      executor.shutdown();
+    } catch (Exception t) {
+      buff.close();
+      throw t;
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  public void testSetDeviceThrowsAfterRmmInit(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, false, 1024 * 1024);
+    assertThrows(CudfException.class, () -> Cuda.setDevice(Cuda.getDevice() + 1));
   }
 
   private static class AllocFailException extends RuntimeException {}
