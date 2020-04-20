@@ -369,8 +369,8 @@ std::unique_ptr<column> make_strings_column(
 std::unique_ptr<cudf::column> make_lists_column(
    size_type num_lists,
    std::unique_ptr<column> offsets_column,    
-   std::unique_ptr<column> child_column, /*size_type null_count,
-   rmm::device_buffer&& null_mask, */cudaStream_t stream = 0,
+   std::unique_ptr<column> child_column, size_type null_count,
+   rmm::device_buffer&& null_mask, cudaStream_t stream = 0,
    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**

@@ -194,17 +194,7 @@ struct for_each_concatenate {
       lviews.emplace_back(v); 
     }
         
-    auto col = cudf::lists::detail::concatenate(lviews, mr, stream);
-
-    // If concatenated string column is nullable, proceed to calculate it
-    /*
-    if (col->nullable()) {
-      cudf::detail::concatenate_masks(views,
-          (col->mutable_view()).null_mask(), stream);
-    }
-    */
-
-    return col;
+    return cudf::lists::detail::concatenate(lviews, mr, stream);    
   }
 
   template <typename ColumnType,

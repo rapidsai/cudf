@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -374,13 +375,15 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {    
+  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+    lists_column_view lcv(col);
+
     std::string tmp = get_nested_type_str(col) + ":\n" +
-                      indent + "Length : " + std::to_string(col.size()) + "\n" +
-                      // OFFSET HACK
-                      indent + "Offsets : " + to_string(col.child(0), ", ") + "\n" +
+                      indent + "Length : " + std::to_string(lcv.size()) + "\n" +
+                      indent + "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
+                      (lcv.has_nulls() ? indent + "Has nulls\n" : "") + 
                       indent + "Children :\n" +
-                      to_string(col.child(1), ", ", indent + "   ") + "\n";
+                      to_string(lcv.child(), ", ", indent + "   ") + "\n";
 
     out.push_back(tmp);
   }
