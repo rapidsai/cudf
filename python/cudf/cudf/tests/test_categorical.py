@@ -466,3 +466,34 @@ def test_categorical_dataframe_slice_copy():
     gdf = gdf[1:].copy()
 
     assert_eq(exp, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([1, 2, 3, 89]),
+        pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
+        pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89], dtype="float64"),
+        pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
+        pd.Series([None, None, None]),
+        pd.Series([]),
+    ],
+)
+@pytest.mark.parametrize(
+    "cat_type",
+    [
+        pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
+        pd.CategoricalDtype(categories=[2, 4, 10, 100]),
+        pd.CategoricalDtype(categories=["aa", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=[]),
+    ],
+)
+def test_categorical_typecast(data, cat_type):
+    pd_data = data.copy()
+    gd_data = gd.from_pandas(data)
+
+    assert_eq(pd_data.astype(cat_type), gd_data.astype(cat_type))
