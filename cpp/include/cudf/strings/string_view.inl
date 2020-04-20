@@ -16,6 +16,7 @@
 
 
 #include <cstdlib>
+#include <thrust/logical.h>
 
 namespace
 {
@@ -24,6 +25,9 @@ using BYTE = uint8_t;
 // number of characters in a string computed on-demand
 // the _length member is initialized to this value as a place-holder
 constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
+// the byte-width of the characters in a string is computed on-demand
+// the _char_width member is initialized to this value as a place-holder
+constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
 
 /**
  * @brief Returns the number of bytes used to represent the provided byte.
@@ -67,11 +71,11 @@ namespace cudf
 {
 
 __host__ __device__ inline string_view::string_view()
-    : _data(""), _bytes(0), _length(0)
+    : _data(""), _bytes(0), _length(0), _char_width(0)
 {}
 
 __host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
-    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
+    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH), _char_width(UNKNOWN_CHAR_WIDTH)
 {}
 
 //
@@ -84,6 +88,16 @@ __device__ inline size_type string_view::length() const
 {
     if( _length <= UNKNOWN_STRING_LENGTH )
         _length = strings::detail::characters_in_string(_data,_bytes);
+    if( _length && (_char_width <= UNKNOWN_CHAR_WIDTH) )
+    {
+        const BYTE* bytes = reinterpret_cast<const BYTE*>(data());
+        auto chwidth = bytes_in_utf8_byte(*bytes); // see if they are all the same width
+        _char_width = (thrust::all_of( thrust::seq, bytes, bytes + size_bytes(), 
+                            [chwidth] __device__ (auto ch) {
+                                auto width = bytes_in_utf8_byte(ch);
+                                return (width==0) || (width==chwidth);
+                            })) ? chwidth : 0;
+    }
     return _length;
 }
 
@@ -239,6 +253,8 @@ __device__ inline size_type string_view::byte_offset(size_type pos) const
     size_type offset = 0;
     const char* sptr = _data;
     const char* eptr = sptr + _bytes;
+    if( _char_width > 0 )
+        return pos * _char_width;
     while( (pos > 0) && (sptr < eptr) )
     {
         size_type charbytes = bytes_in_utf8_byte((BYTE)*sptr++);
@@ -405,6 +421,8 @@ __device__ inline string_view string_view::substr(size_type pos, size_type lengt
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
 {
+    if( _char_width > 0 )
+        return bytepos / _char_width;
     return strings::detail::characters_in_string(data(), bytepos);
 }
 
