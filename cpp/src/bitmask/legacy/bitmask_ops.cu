@@ -225,19 +225,6 @@ gdf_error gdf_mask_concat(cudf::valid_type* output_mask,
   return GDF_SUCCESS;
 }
 
-gdf_error all_bitmask_on(cudf::valid_type* valid_out,
-                         cudf::size_type& out_null_count,
-                         cudf::size_type num_values, cudaStream_t stream) {
-  cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
-
-  cudf::valid_type max_char = 255;
-  thrust::fill(rmm::exec_policy(stream)->on(stream), valid_out,
-               valid_out + num_bitmask_elements, max_char);
-  // we have no nulls so set all the bits in cudf::valid_type to 1
-  out_null_count = 0;
-  return GDF_SUCCESS;
-}
-
 gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    cudf::valid_type* valid_out,
                                    const cudf::valid_type* valid_left,
