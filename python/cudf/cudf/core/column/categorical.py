@@ -115,7 +115,14 @@ class CategoricalAccessor(object):
             )
         else:
             out_col = self._column
-            if not self._categories_equal(new_categories, **kwargs):
+            if out_col.categories.dtype.kind != new_categories.dtype.kind:
+                out_col = _create_empty_categorical_column(
+                    self._column,
+                    CategoricalDtype(
+                        categories=new_categories, ordered=ordered
+                    ),
+                )
+            elif not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(new_categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
@@ -586,22 +593,7 @@ class CategoricalColumn(column.ColumnBase):
                 return self
 
         if self.categories.dtype != dtype.categories.dtype:
-            from cudf.utils import utils
-
-            return column.build_categorical_column(
-                categories=dtype.categories,
-                codes=column.as_column(
-                    utils.scalar_broadcast_to(
-                        self.default_na_value(),
-                        self.size,
-                        np.dtype(self.cat().codes),
-                    )
-                ),
-                offset=self.offset,
-                size=self.size,
-                mask=self.base_mask,
-                ordered=dtype.ordered,
-            )
+            return _create_empty_categorical_column(self, dtype)
 
         return self.cat().set_categories(
             new_categories=dtype.categories, ordered=dtype.ordered
@@ -677,6 +669,25 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col._codes
 
         return out
+
+
+def _create_empty_categorical_column(categorical_column, dtype):
+    from cudf.utils import utils
+
+    return column.build_categorical_column(
+        categories=dtype.categories,
+        codes=column.as_column(
+            utils.scalar_broadcast_to(
+                categorical_column.default_na_value(),
+                categorical_column.size,
+                np.dtype(categorical_column.cat().codes),
+            )
+        ),
+        offset=categorical_column.offset,
+        size=categorical_column.size,
+        mask=categorical_column.base_mask,
+        ordered=dtype.ordered,
+    )
 
 
 def pandas_categorical_as_column(categorical, codes=None):
