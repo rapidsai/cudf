@@ -26,6 +26,7 @@
 
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
+#include <cudf/utilities/error.hpp>
 
 // Forward declarations
 class NVStrings;
