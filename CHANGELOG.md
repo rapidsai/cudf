@@ -104,6 +104,7 @@
 - PR #4927 Use stack for memory in `deviceGetName`
 - P# #4933 Enable nop annotate
 - PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
+- PR #4956 Dropping `find_first_value` and `find_last_value`
 
 ## Bug Fixes
 
