@@ -103,7 +103,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                 objs[idx] = o.to_frame(name=name)
 
         for idx, o in enumerate(objs):
-            if idx == 0 and not ignore_index:
+            if not ignore_index and idx == 0:
                 df.index = o.index
             for col in o.columns:
                 df[col] = o[col]._column
