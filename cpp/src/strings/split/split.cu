@@ -404,6 +404,11 @@ std::unique_ptr<experimental::table> split_fn( strings_column_view const& string
 {
     std::vector<std::unique_ptr<column>> results;
     auto strings_count = strings_column.size();
+    if( strings_count == 0 )
+    {
+        results.push_back(make_empty_strings_column(mr,stream));
+        return std::make_unique<experimental::table>(std::move(results));
+    }
 
     auto execpol = rmm::exec_policy(stream);
     auto d_offsets = strings_column.offsets().data<int32_t>();
