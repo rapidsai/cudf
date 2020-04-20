@@ -182,7 +182,7 @@ def test_json_lines_basic(json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col])
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
 
 
 def test_json_lines_byte_range(json_input):
@@ -283,9 +283,9 @@ def test_json_bool_values():
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
-    np.testing.assert_array_equal(pd_df[0], cu_df["0"])
+    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_array())
     # boolean values should be converted to 0/1
-    np.testing.assert_array_equal(pd_df[1], cu_df["1"])
+    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_array())
 
     cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
@@ -300,5 +300,7 @@ def test_json_null_literal(buffer):
     # first column contains a null field, type sould be set to float
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
-    np.testing.assert_array_equal(df["0"], [None, 1.0])
-    np.testing.assert_array_equal(df["1"], [None, None])
+    np.testing.assert_array_equal(
+        df["0"].to_array(fillna=np.nan), [np.nan, 1.0]
+    )
+    np.testing.assert_array_equal(df["1"].to_array(fillna=np.nan), [-1, -1])

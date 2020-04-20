@@ -981,6 +981,14 @@ class Frame(libcudf.table.Table):
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU array, consider using \
+            cupy.asarray(...)\nTo explicitly construct a \
+            host array, consider using .to_array()"
+        )
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
