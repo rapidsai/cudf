@@ -497,3 +497,46 @@ def test_categorical_typecast(data, cat_type):
     gd_data = gd.from_pandas(data)
 
     assert_eq(pd_data.astype(cat_type), gd_data.astype(cat_type))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([1, 2, 3, 89]),
+        pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
+        pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89], dtype="float64"),
+        pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
+        pd.Series([None, None, None]),
+        pd.Series([]),
+    ],
+)
+@pytest.mark.parametrize(
+    "new_categories",
+    [
+        ["aa", "bb", "cc"],
+        [2, 4, 10, 100],
+        ["aa", "bb", "c"],
+        ["a", "bb", "c"],
+        ["a", "b", "c"],
+        [],
+    ],
+)
+def test_categorical_set_categories_categoricals(data, new_categories):
+    pd_data = data.copy().astype("category")
+    gd_data = gd.from_pandas(pd_data)
+
+    assert_eq(
+        pd_data.cat.set_categories(new_categories=new_categories),
+        gd_data.cat.set_categories(new_categories=new_categories),
+    )
+
+    assert_eq(
+        pd_data.cat.set_categories(
+            new_categories=pd.Series(new_categories, dtype="category")
+        ),
+        gd_data.cat.set_categories(
+            new_categories=gd.Series(new_categories, dtype="category")
+        ),
+    )
