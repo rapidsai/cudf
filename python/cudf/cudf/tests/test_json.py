@@ -2,6 +2,7 @@
 
 import copy
 import itertools
+import json
 import os
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -146,6 +147,11 @@ def test_json_writer(tmpdir, pdf, gdf):
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
+
+        # Make sure results align for regular strings, not just files
+        pdf_string = pdf[column].to_json()
+        gdf_string = pdf[column].to_json()
+        assert_eq(pdf_string, gdf_string)
 
 
 @pytest.fixture(
