@@ -14,6 +14,7 @@
 
 ## Improvements
 
+- PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
 - PR #4531 Add doc note on conda `channel_priority`
@@ -96,6 +97,7 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4924 Properly handle npartition argument in rearrange_by_hash
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #4943 Fix-up error handling in GPU detection
@@ -172,6 +174,7 @@
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
+- PR #4949 Fix scatter, gather benchmark constructor call
 
 
 # cuDF 0.13.0 (31 Mar 2020)
