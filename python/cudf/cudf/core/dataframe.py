@@ -702,6 +702,14 @@ class DataFrame(Frame):
         """
         return cupy.asarray(self.as_gpu_matrix())
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU matrix, consider using \
+            .as_gpu_matrix()\nTo explicitly construct a host \
+            matrix, consider using .as_matrix()"
+        )
+
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
