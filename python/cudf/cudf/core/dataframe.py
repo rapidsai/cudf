@@ -904,8 +904,16 @@ class DataFrame(Frame):
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
-            upper = cudf.concat([upper_left, upper_right], axis=1)
-            lower = cudf.concat([lower_left, lower_right], axis=1)
+            upper = cudf.concat(
+                [upper_left, upper_right],
+                axis=1,
+                ignore_duplicate_columns=True,
+            )
+            lower = cudf.concat(
+                [lower_left, lower_right],
+                axis=1,
+                ignore_duplicate_columns=True,
+            )
             output = cudf.concat([upper, lower])
 
         for col in output._data:

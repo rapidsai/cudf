@@ -13,7 +13,7 @@ from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None):
+def concat(objs, axis=0, ignore_index=False, sort=None, **kwargs):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -58,6 +58,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     else:
         axis = param_axis
 
+    ignore_duplicate_columns = kwargs.get("ignore_duplicate_columns", False)
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
         assert typs.issubset(allowed_typs)
@@ -75,8 +76,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for idx, o in enumerate(objs):
             if idx == 0:
                 df.index = o.index
-            for col in o.columns:
-                df[col] = o[col]._column
+            for col in o._data.names:
+                if not ignore_duplicate_columns and col in df._data:
+                    raise NotImplementedError(
+                        "A Column with duplicate name found: {0}, cuDF\
+                        doesn't support having multiple columns with\
+                        same names yet.".format(
+                            col
+                        )
+                    )
+                df[col] = o._data[col]
 
         result_columns = objs[0].columns
         for o in objs[1:]:
@@ -377,7 +386,9 @@ def get_dummies(
             )
             df_list.append(col_enc_df)
 
-        return concat(df_list, axis=1).drop(labels=columns)
+        return concat(df_list, axis=1, ignore_duplicate_columns=True).drop(
+            labels=columns
+        )
 
 
 def merge_sorted(
