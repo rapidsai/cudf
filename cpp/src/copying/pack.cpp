@@ -13,8 +13,9 @@ packed_table::serialized_column serialize_column(column_view const& col,
 {
   auto all_data_buffer_ptr = static_cast<uint8_t const*>(table_data.data());
   size_t data_offset = col.data<uint8_t>() - all_data_buffer_ptr;
-  // TODO: fix for non-nullable
-  size_t null_mask_offset = reinterpret_cast<uint8_t const*>(col.null_mask()) - all_data_buffer_ptr;
+  size_t null_mask_offset = col.nullable()
+                             ? reinterpret_cast<uint8_t const*>(col.null_mask()) - all_data_buffer_ptr
+                             : -1;
   return packed_table::serialized_column{col.type(), col.size(), data_offset, null_mask_offset, col.num_children()};
 }
 
@@ -62,8 +63,19 @@ column_view deserialize_column(packed_table::serialized_column serial_column,
 
   auto data_ptr = all_data_buffer_ptr + serial_column._data_offset;
 
-  auto null_mask_ptr = reinterpret_cast<bitmask_type const*>(
-    all_data_buffer_ptr + serial_column._null_mask_offset);
+  // size_t is an unsigned int so -1 is the max value of size_t. If the offset
+  // is UINT64_MAX then just assume there's no null mask instead of thinking
+  // what if there IS a null mask but the buffer is just -1u sized. This translates
+  // to 16 EB of memory. No GPU has that amount of memory and it'll be a while
+  // before anyone does. By that time, we'll have bigger problems because all code
+  // that exists will need to be re-written to consider memory > 16 EB. It'll be
+  // bigger than Y2K; and I'll be prepared with a cottage in Waknaghat and a lifetime
+  // supply of soylent and shotgun ammo.
+  // TODO: Replace above with better reasoning
+  auto null_mask_ptr = serial_column._null_mask_offset != -1
+                        ? reinterpret_cast<bitmask_type const*>(
+                            all_data_buffer_ptr + serial_column._null_mask_offset)
+                        : 0;
 
   return column_view(
     serial_column._type,
