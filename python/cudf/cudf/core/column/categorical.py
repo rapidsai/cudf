@@ -115,14 +115,16 @@ class CategoricalAccessor(object):
             )
         else:
             out_col = self._column
-            if out_col.categories.dtype.kind != new_categories.dtype.kind:
+            if not (type(out_col.categories) is type(new_categories)):
+                # If both categories are of different Column types,
+                # return a column full of Nulls.
                 out_col = _create_empty_categorical_column(
                     self._column,
                     CategoricalDtype(
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif not self._categories_equal(new_categories, **kwargs):
+            if not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(new_categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
@@ -592,7 +594,13 @@ class CategoricalColumn(column.ColumnBase):
             if (dtype.categories is None) and (dtype.ordered is None):
                 return self
 
-        if self.categories.dtype != dtype.categories.dtype:
+        dtype = CategoricalDtype(
+            categories=dtype.categories, ordered=dtype.ordered
+        )
+
+        if not isinstance(self.categories, type(dtype.categories._values)):
+            # If both categories are of different Column types,
+            # return a column full of Nulls.
             return _create_empty_categorical_column(self, dtype)
 
         return self.cat().set_categories(
