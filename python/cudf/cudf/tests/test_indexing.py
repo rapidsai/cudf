@@ -1,5 +1,6 @@
 from itertools import combinations
 
+import cupy
 import numpy as np
 import pandas as pd
 import pytest
@@ -303,6 +304,7 @@ def test_series_loc_numerical():
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
     )
+    assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
 def test_series_loc_string():
@@ -458,9 +460,9 @@ def test_series_iloc(nelem):
     np.testing.assert_allclose(gs.iloc[nelem - 1], ps.iloc[nelem - 1])
 
     # positive tests for slice
-    np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
+    np.testing.assert_allclose(gs.iloc[-1:1].to_array(), ps.iloc[-1:1])
     np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : -1], ps.iloc[nelem - 1 : -1]
+        gs.iloc[nelem - 1 : -1].to_array(), ps.iloc[nelem - 1 : -1]
     )
     np.testing.assert_allclose(
         gs.iloc[0 : nelem - 1].to_pandas(), ps.iloc[0 : nelem - 1]
@@ -565,7 +567,7 @@ def test_dataframe_take(ntake):
     assert out.ff.null_count == 0
     np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
     np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
-    np.testing.assert_array_equal(out.index, take_indices)
+    np.testing.assert_array_equal(out.index.to_array(), take_indices)
 
 
 @pytest.mark.parametrize("keep_index", [True, False])
