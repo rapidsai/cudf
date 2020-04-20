@@ -36,6 +36,7 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
+#include <cudf/strings/split/split.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -310,6 +311,22 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_slice(JNIEnv *env,
     return n_result.get_jArray();
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_stringSplit(JNIEnv *env, jclass,
+                                                                          jlong column_view,
+                                                                          jlong delimiter) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
+  try {
+    cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
+    cudf::strings_column_view scv(*cv);
+    cudf::string_scalar* ss_scalar = reinterpret_cast<cudf::string_scalar*>(delimiter);
+
+    std::unique_ptr<cudf::experimental::table> table_result = cudf::strings::split(scv, *ss_scalar);
+    return cudf::jni::convert_table_for_return(env, table_result);
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env, jclass clazz,

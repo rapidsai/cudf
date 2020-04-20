@@ -266,11 +266,10 @@ def test_assign():
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
-    out = dgf.assign(z=newcol)
+    got = dgf.assign(z=newcol)
 
-    got = out
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"], pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])

@@ -399,7 +399,7 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
     ps_result = func(random_series)
 
     # verify
-    np.testing.assert_allclose(ps_result, gs_result)
+    np.testing.assert_allclose(ps_result, gs_result.to_array())
 
 
 @pytest.mark.parametrize("binop", _binops)

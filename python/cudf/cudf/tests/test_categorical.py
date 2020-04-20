@@ -134,8 +134,8 @@ def test_categorical_compare_ordered():
     assert sr1.cat.ordered
 
     # test using ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, sr1 < sr2)
-    np.testing.assert_array_equal(pdsr1 > pdsr2, sr1 > sr2)
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_array())
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_array())
 
 
 def test_categorical_binary_add():

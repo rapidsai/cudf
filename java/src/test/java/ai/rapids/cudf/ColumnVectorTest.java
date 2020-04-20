@@ -31,6 +31,7 @@ import static ai.rapids.cudf.QuantileMethod.LOWER;
 import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
 import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1908,6 +1909,47 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(e_allParameters, substring_allParam);
       assertColumnsAreEqual(e_withoutStop, substring_NoEnd);
     }
+  }
+
+  @Test
+  void teststringSplit() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo there", "thésé", null, "", "ARé some", "test strings");
+         Table expected = new Table.TestBuilder().column("Héllo", "thésé", null, "", "ARé", "test")
+         .column("there", null, null, null, "some", "strings")
+         .build();
+         Scalar pattern = Scalar.fromString(" ");
+         Table result = v.stringSplit(pattern)) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void teststringSplitWhiteSpace() {
+    try (ColumnVector v = ColumnVector.fromStrings("Héllo thesé", null, "are\tsome", "tést\nString", " ");
+         Table expected = new Table.TestBuilder().column("Héllo", null, "are", "tést", null)
+         .column("thesé", null, "some", "String", null)
+         .build();
+         Table result = v.stringSplit()) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void teststringSplitThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Scalar delimiter = Scalar.fromString(null);
+           Table result = cv.stringSplit(delimiter)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+    try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+         Scalar delimiter = Scalar.fromInt(1);
+         Table result = cv.stringSplit(delimiter)) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("Héllo", "thésé", null, "", "ARé", "strings");
+           Table result = cv.stringSplit(null)) {}
+    });
   }
 
   @Test
