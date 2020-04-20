@@ -588,7 +588,9 @@ class CategoricalColumn(column.ColumnBase):
                 categories=dtype.categories,
                 codes=column.as_column(
                     utils.scalar_broadcast_to(
-                        -1, self.size, np.dtype(self.cat().codes),
+                        self.default_na_value(),
+                        self.size,
+                        np.dtype(self.cat().codes),
                     )
                 ),
                 offset=self.offset,
