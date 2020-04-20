@@ -121,9 +121,8 @@ __global__ void scatter_kernel(cudf::mutable_column_device_view output_view,
     // get output location using a scan of the mask result
     const cudf::size_type local_index = block_scan_mask<block_size>(mask_true,
                                                                     tmp_block_sum);
-    if (threadIdx.x == 0) {
-        block_sum += tmp_block_sum;
-    }
+    block_sum += tmp_block_sum;
+
     if (has_validity) { 
       temp_valids[threadIdx.x] = false; // init shared memory
       if (threadIdx.x < cudf::experimental::detail::warp_size) temp_valids[block_size + threadIdx.x] = false;

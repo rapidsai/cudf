@@ -119,7 +119,7 @@ def test_series_indexing(i1, i2, i3):
 
 def test_series_indexing_large_size():
     n_elem = 100_000
-    gsr = cudf.Series(np.ones(n_elem))
+    gsr = cudf.Series(cupy.ones(n_elem))
     gsr[0] = None
     got = gsr[gsr.isna()]
     expect = Series([None], dtype="float64")

@@ -270,7 +270,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 arg = (column.as_column(arg[0]), arg[1])
 
             if pd.api.types.is_bool_dtype(arg[0]):
-                return columns_df.take(arg[0])
+                df = columns_df.take(arg[0])
+            elif isinstance(arg[0], column.ColumnBase):
+                indices = (
+                    columns_df[columns_df.columns[0]].loc._loc_to_iloc(arg[0])
+                )
+                df = columns_df.take(indices)
             else:
                 df = DataFrame()
                 for col in columns_df.columns:
@@ -354,11 +359,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             if hasattr(arg[0], "__len__"):
                 arg = (column.as_column(arg[0]), arg[1])
 
-            if pd.api.types.is_bool_dtype(arg[0]):
-                return columns_df.take(arg[0])
+            if isinstance(arg[0], column.ColumnBase):
+                df = columns_df.take(arg[0])
             else:
                 df = DataFrame()
-                for i, col in enumerate(columns_df._columns):
+                for i, col in enumerate(columns_df._data.values()):
                     # need Series() in case a scalar is returned
                     df[i] = Series(col[arg[0]])
 
