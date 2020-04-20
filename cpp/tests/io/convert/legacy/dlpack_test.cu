@@ -69,9 +69,10 @@ namespace{
   void deleter(DLManagedTensor * arg) {
     if (arg->dl_tensor.ctx.device_type == kDLGPU)
       RMM_FREE(arg->dl_tensor.data, 0);
-    else if (arg->dl_tensor.ctx.device_type == kDLCPUPinned)
-      cudaFree(arg->dl_tensor.data);
-    else
+    else if (arg->dl_tensor.ctx.device_type == kDLCPUPinned) {
+      auto const result = cudaFree(arg->dl_tensor.data);
+      assert(result == cudaSuccess);
+    } else
       free(arg->dl_tensor.data);
     delete [] arg->dl_tensor.shape;
     delete [] arg->dl_tensor.strides;
@@ -116,7 +117,7 @@ namespace{
 
     if (kDLGPU == device_type) {
       EXPECT_EQ(RMM_ALLOC(&data, bytesize, 0), RMM_SUCCESS);
-      cudaMemcpy(data, init, bytesize, cudaMemcpyDefault);
+      CUDA_TRY(cudaMemcpy(data, init, bytesize, cudaMemcpyDefault));
     } else {
       data = static_cast<T*>(malloc(bytesize));
       memcpy(data, init, bytesize);
@@ -329,7 +330,7 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_SingleColumn)
   ASSERT_EQ(columns[0].size, length);
 
   T *output = new T[length];
-  cudaMemcpy(output, columns[0].data, length * sizeof(T), cudaMemcpyDefault);
+  CUDA_TRY(cudaMemcpy(output, columns[0].data, length * sizeof(T), cudaMemcpyDefault));
   for (int64_t i = 0; i < length; i++)
     EXPECT_EQ(static_cast<T>(i), output[i]);
   
@@ -360,7 +361,7 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn)
     ASSERT_EQ(columns[c].size, length);
 
     T *output = new T[length];
-    cudaMemcpy(output, columns[c].data, length * sizeof(T), cudaMemcpyDefault);
+    CUDA_TRY(cudaMemcpy(output, columns[c].data, length * sizeof(T), cudaMemcpyDefault));
     for (int64_t i = 0; i < length; i++)
       EXPECT_EQ(static_cast<T>(i * (c + 1)), output[i]);
 
@@ -391,7 +392,7 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn)
   ASSERT_EQ(tensor->dl_tensor.shape[0], length);
 
   T *output = new T[length];
-  cudaMemcpy(output, tensor->dl_tensor.data, length * sizeof(T), cudaMemcpyDefault);
+  CUDA_TRY(cudaMemcpy(output, tensor->dl_tensor.data, length * sizeof(T), cudaMemcpyDefault));
   for (int64_t i = 0; i < length; i++)
     EXPECT_EQ(static_cast<T>(i), output[i]);
   delete [] output;
@@ -425,7 +426,7 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
   ASSERT_EQ(tensor->dl_tensor.shape[1], width);
 
   T *output = new T[tensor_size(tensor->dl_tensor)/sizeof(T)];
-  cudaMemcpy(output, tensor->dl_tensor.data, width * length * sizeof(T), cudaMemcpyDefault);
+  CUDA_TRY(cudaMemcpy(output, tensor->dl_tensor.data, width * length * sizeof(T), cudaMemcpyDefault));
   for (int64_t c = 0; c < width; c++) {
     T *o = &output[c * length];
     for (int64_t i = 0; i < length; i++)
