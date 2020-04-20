@@ -7,7 +7,7 @@ from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
 
-@annotate("CUDF_READ_CSV", color="purple", domain="cudf_python")
+@annotate("READ_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -85,7 +85,7 @@ def read_csv(
     )
 
 
-@annotate("CUDF_WRITE_CSV", color="purple", domain="cudf_python")
+@annotate("WRITE_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_to_csv()
 def to_csv(
     df,
