@@ -73,11 +73,11 @@ def test_onehot_masked():
     )
 
     assert tuple(out.columns) == ("a", "a_0", "a_1", "a_2", "a_3", "a_4")
-    np.testing.assert_array_equal(out["a_0"] == 1, arr == 0)
-    np.testing.assert_array_equal(out["a_1"] == 1, arr == 1)
-    np.testing.assert_array_equal(out["a_2"] == 1, arr == 2)
-    np.testing.assert_array_equal(out["a_3"] == 1, arr == 3)
-    np.testing.assert_array_equal(out["a_4"] == 1, arr == 4)
+    np.testing.assert_array_equal((out["a_0"] == 1).to_array(), arr == 0)
+    np.testing.assert_array_equal((out["a_1"] == 1).to_array(), arr == 1)
+    np.testing.assert_array_equal((out["a_2"] == 1).to_array(), arr == 2)
+    np.testing.assert_array_equal((out["a_3"] == 1).to_array(), arr == 3)
+    np.testing.assert_array_equal((out["a_4"] == 1).to_array(), arr == 4)
 
 
 def test_onehot_generic_index():
