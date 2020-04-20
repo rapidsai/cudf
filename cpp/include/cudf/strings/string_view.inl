@@ -16,7 +16,7 @@
 
 
 #include <cstdlib>
-#include <thrust/logical.h>
+#include <thrust/find.h>
 
 namespace
 {
@@ -92,11 +92,11 @@ __device__ inline size_type string_view::length() const
     {
         const BYTE* bytes = reinterpret_cast<const BYTE*>(data());
         auto chwidth = bytes_in_utf8_byte(*bytes); // see if they are all the same width
-        _char_width = (thrust::all_of( thrust::seq, bytes, bytes + size_bytes(), 
-                            [chwidth] __device__ (auto ch) {
+        _char_width = (thrust::find_if( thrust::seq, bytes, bytes + size_bytes(), 
+                            [chwidth] (auto ch) {
                                 auto width = bytes_in_utf8_byte(ch);
-                                return (width==0) || (width==chwidth);
-                            })) ? chwidth : 0;
+                                return (width!=0) && (width!=chwidth);
+                            }))==(bytes + size_bytes()) ? chwidth : 0;
     }
     return _length;
 }
