@@ -861,7 +861,7 @@ class ColumnBase(Column):
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,
-        )
+        ).astype(dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
@@ -1096,8 +1096,6 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-    if len(categories) == 0 and len(codes):
-        raise ValueError("Cannot have nonempty codes for empty categories")
 
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
 
