@@ -45,7 +45,7 @@ packed_table pack(cudf::table_view const& input,
 
   packed_table result{{table_element}, std::move(contiguous_data.all_data)};
   
-  std::vector<column_view> table_columns(input.begin(), input.end());
+  std::vector<column_view> table_columns(contiguous_data.table.begin(), contiguous_data.table.end());
 
   add_columns(table_columns, *result.table_data, &result.table_metadata);
 

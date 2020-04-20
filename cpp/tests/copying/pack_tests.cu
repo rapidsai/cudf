@@ -32,7 +32,9 @@ TEST_F(PackUnpackTest, SingleColumnFixedWidth)
   table_view t({col1});
 
   experimental::packed_table packed = experimental::pack(t);
-  experimental::contiguous_split_result unpacked = experimental::unpack(packed);
+  experimental::packed_table packed2{
+    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
+  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
 
   expect_tables_equal(t, unpacked.table);
 }
