@@ -704,7 +704,7 @@ class ColumnBase(Column):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        from cudf import DataFrame, Series
+        from cudf import DataFrame
 
         lhs = self
         rhs = None
@@ -713,6 +713,10 @@ class ColumnBase(Column):
             # We need to convert values to same type as self,
             # hence passing dtype=self.dtype
             rhs = as_column(values, dtype=self.dtype)
+
+            # Short-circuit if rhs is all null.
+            if lhs.null_count == 0 and (rhs.null_count == len(rhs)):
+                return as_column(cupy.zeros(len(self), dtype="bool"))
         except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
@@ -722,12 +726,8 @@ class ColumnBase(Column):
         if is_categorical_dtype(lhs):
             lhs_cats = lhs.cat().categories._values
             rhs_cats = rhs.cat().categories._values
-            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
-                # if the categories are the same dtype, we can combine them
-                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
-                lhs = lhs.cat().set_categories(cats, is_unique=True)
-                rhs = rhs.cat().set_categories(cats, is_unique=True)
-            else:
+
+            if not np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
                 # If they're not the same dtype, short-circuit if the values
                 # list doesn't have any nulls. If it does have nulls, make
                 # the values list a Categorical with a single null
@@ -831,8 +831,6 @@ class ColumnBase(Column):
         return cpp_unique_count(self, ignore_nulls=dropna)
 
     def astype(self, dtype, **kwargs):
-        # print("came to as type", self, dtype)
-        # import pdb;pdb.set_trace()
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
@@ -845,7 +843,6 @@ class ColumnBase(Column):
             return self.as_numerical_column(dtype, **kwargs)
 
     def as_categorical_column(self, dtype, **kwargs):
-        # import pdb;pdb.set_trace()
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -1154,8 +1151,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     from cudf.core.series import Series
     from cudf.core.index import Index
 
-    # import pdb;pdb.set_trace()
-    # print("in", arbitrary)
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
@@ -1232,8 +1227,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         return col
 
     elif isinstance(arbitrary, pa.Array):
-        # print("came to pa array")
-        # import pdb;pdb.set_trace()
         if isinstance(arbitrary, pa.StringArray):
             pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(
                 arbitrary
@@ -1277,8 +1270,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 categories = as_column([], dtype="object")
             else:
                 categories = as_column(arbitrary.dictionary)
-            # import pdb;pdb.set_trace()
-            # print("building categorical column", dtype, arbitrary)
+
             dtype = CategoricalDtype(
                 categories=categories, ordered=arbitrary.type.ordered
             )
@@ -1466,7 +1458,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            # import pdb;pdb.set_trace()
             data = as_column(
                 pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
             )
@@ -1492,7 +1483,6 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         )
 
     else:
-        # import pdb;pdb.set_trace()
         try:
             data = as_column(
                 memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
@@ -1526,15 +1516,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 if is_categorical_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="category")
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
-                    # print("DF", data, dtype)
-                    # import pdb;pdb.set_trace()
-                    # if dtype is not None:
-                    #     data = data.astype(dtype)
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
-                    # import pdb;pdb.set_trace()
                     data = as_column(
                         np.asarray(
                             arbitrary,

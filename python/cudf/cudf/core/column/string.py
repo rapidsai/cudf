@@ -1851,6 +1851,12 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
+    # def can_cast_safely(self, to_dtype):
+    #     if self.dtype == to_dtype:
+    #         return True
+    #     else:
+    #         return False
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(

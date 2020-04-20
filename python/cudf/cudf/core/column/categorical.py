@@ -580,7 +580,24 @@ class CategoricalColumn(column.ColumnBase):
         ):
             if (dtype.categories is None) and (dtype.ordered is None):
                 return self
-        return self.cat()._set_categories(
+
+        if self.categories.dtype != dtype.categories.dtype:
+            from cudf.utils import utils
+
+            return column.build_categorical_column(
+                categories=dtype.categories,
+                codes=column.as_column(
+                    utils.scalar_broadcast_to(
+                        -1, self.size, np.dtype(self.cat().codes),
+                    )
+                ),
+                offset=self.offset,
+                size=self.size,
+                mask=self.base_mask,
+                ordered=dtype.ordered,
+            )
+
+        return self.cat().set_categories(
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 

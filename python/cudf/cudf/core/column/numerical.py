@@ -404,6 +404,8 @@ class NumericalColumn(column.ColumnBase):
                     return False
             else:
                 return False
+        # elif to_dtype.kind in ("O", "U"):
+        #     return True
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
