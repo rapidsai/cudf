@@ -270,7 +270,7 @@ def test_pandas_concat_compatibility_axis1(overlap):
         pd7 = d7.to_pandas()
         expect = pd.concat([pd1, pd2, pd3, pd4, pd5, pd6, pd7], axis=1)
         got = gd.concat([d1, d2, d3, d4, d5, d6, d7], axis=1)
-        pytest.xfail("concat does not collapes matching/overlaping columns.")
+        pytest.xfail("concat does not collapes columns with overlapping indices.")
     else:
         expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
         got = gd.concat([d1, d2, d3, d4, d5], axis=1)
