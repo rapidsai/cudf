@@ -113,7 +113,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             result_columns = result_columns.append(o.columns)
 
         df.columns = result_columns.unique()
-        return df
+        return df.sort_index()
 
     typ = list(typs)[0]
 
