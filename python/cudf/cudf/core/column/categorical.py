@@ -124,7 +124,7 @@ class CategoricalAccessor(object):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            if not self._categories_equal(new_categories, **kwargs):
+            elif not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(new_categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
