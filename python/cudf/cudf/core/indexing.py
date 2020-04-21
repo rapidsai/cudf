@@ -241,7 +241,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf.core.dataframe import Series, DataFrame
+        from cudf.core.dataframe import DataFrame
         from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf import MultiIndex
@@ -293,7 +293,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         index=as_index(tmp_arg[0]),
                     )
                     df = other_df.join(columns_df, how="inner")
-                    # as join is not assigning any names to index, update it over here
+                    # as join is not assigning any names to index,
+                    # update it over here
                     df.index.name = columns_df.index.name
                     df = df.sort_values(tmp_col_name)
                     df.drop([tmp_col_name], inplace=True)
@@ -350,7 +351,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
         from cudf.core.column import column
-        from cudf.core.dataframe import DataFrame, Series
         from cudf.core.index import as_index
 
         # Iloc Step 1:
