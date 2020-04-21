@@ -23,7 +23,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <algorithm>
@@ -230,6 +231,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
                                      string_scalar const& narep,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::concatenate(strings_columns, separator, narep, mr);
 }
 
@@ -238,6 +240,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
                                       string_scalar const& narep,
                                       rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::join_strings(strings, separator, narep, mr);
 }
 

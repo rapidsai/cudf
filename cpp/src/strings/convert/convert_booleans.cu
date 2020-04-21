@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -77,6 +78,7 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
                                      string_scalar const& true_string,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::to_booleans(strings, true_string, mr );
 }
 
@@ -149,6 +151,7 @@ std::unique_ptr<column> from_booleans( column_view const& booleans,
                                        string_scalar const& false_string,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_booleans(booleans,true_string,false_string,mr);
 }
 

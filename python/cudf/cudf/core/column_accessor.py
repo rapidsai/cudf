@@ -179,10 +179,14 @@ class ColumnAccessor(MutableMapping):
 
     def copy(self, deep=False):
         """
-        Make a (shallow) copy of this ColumnAccessor.
+        Make a copy of this ColumnAccessor.
         """
         if deep:
-            raise TypeError("Cannot deep copy a ColumnAccessor")
+            return self.__class__(
+                {k: v.copy(deep=True) for k, v in self._data.items()},
+                multiindex=self.multiindex,
+                level_names=self.level_names,
+            )
         return self.__class__(
             self._data.copy(),
             multiindex=self.multiindex,

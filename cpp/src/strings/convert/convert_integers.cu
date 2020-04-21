@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
+#include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
@@ -59,6 +60,8 @@ struct string_to_integer_fn
     {
         int64_t value = 0;
         size_type bytes = d_str.size_bytes();
+        if( bytes==0 )
+            return value;
         const char* ptr = d_str.data();
         int sign = 1;
         if( *ptr == '-' || *ptr == '+' )
@@ -151,6 +154,7 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
                                      data_type output_type,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::to_integers(strings, output_type, mr );
 }
 
@@ -177,7 +181,10 @@ struct integer_to_string_size_fn
         if( value==0 )
             return 1;
         bool is_negative = value < 0;
-        value = abs(value);
+        // abs(std::numeric_limits<IntegerType>::min()) is negative;
+        // for all integer types, the max() and min() values have the same number of digits
+        value = (value == std::numeric_limits<IntegerType>::min()) ?
+                std::numeric_limits<IntegerType>::max() : abs(value);
         // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
         size_type digits = (value < 10 ? 1 :
                            (value < 100 ? 2 :
@@ -229,15 +236,14 @@ struct integer_to_string_fn
             return;
         }
         bool is_negative = value < 0;
-        value = abs(value);
         constexpr IntegerType base = 10;
         constexpr int MAX_DIGITS = 20; // largest 64-bit integer is 20 digits
         char digits[MAX_DIGITS]; // place-holder for digit chars
         int digits_idx = 0;
-        while( value > 0 )
+        while( value != 0 )
         {
             assert( digits_idx < MAX_DIGITS );
-            digits[digits_idx++] = '0' + (value % base);
+            digits[digits_idx++] = '0' + abs(value % base);
             value = value/base;
         }
         char* ptr = d_buffer;
@@ -323,6 +329,7 @@ std::unique_ptr<column> from_integers( column_view const& integers,
 std::unique_ptr<column> from_integers( column_view const& integers,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_integers(integers,mr);
 }
 

@@ -113,7 +113,7 @@ TEST_F(DispatcherTest, DeviceDispatchFunctor) {
   thrust::device_vector<bool> result(1);
   for (auto const& t : this->supported_dtypes) {
     dispatch_test_kernel<<<1, 1>>>(t, result.data().get());
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     EXPECT_EQ(true, result[0]);
   }
 }

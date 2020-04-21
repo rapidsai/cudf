@@ -21,7 +21,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 
 #include <thrust/transform.h>
 
@@ -136,6 +137,7 @@ std::unique_ptr<column> find( strings_column_view const& strings,
                               size_type start, size_type stop,
                               rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::find( strings, target, start, stop, mr );
 }
 
@@ -144,6 +146,7 @@ std::unique_ptr<column> rfind( strings_column_view const& strings,
                                size_type start, size_type stop,
                                rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::rfind( strings, target, start, stop, mr );
 }
 
@@ -259,6 +262,7 @@ std::unique_ptr<column> contains( strings_column_view const& strings,
                                   string_scalar const& target,
                                   rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::contains( strings, target, mr );
 }
 
@@ -266,6 +270,7 @@ std::unique_ptr<column> starts_with( strings_column_view const& strings,
                                      string_scalar const& target,
                                      rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::starts_with( strings, target, mr );
 }
 
@@ -273,6 +278,7 @@ std::unique_ptr<column> ends_with( strings_column_view const& strings,
                                    string_scalar const& target,
                                    rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::ends_with( strings, target, mr );
 }
 

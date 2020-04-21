@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/contains.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
 
@@ -136,6 +138,7 @@ std::unique_ptr<column> contains_re( strings_column_view const& strings,
                                      std::string const& pattern,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::contains_re(strings, pattern, mr);
 }
 
@@ -143,6 +146,7 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
                                      std::string const& pattern,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::matches_re(strings, pattern, mr);
 }
 
@@ -236,6 +240,7 @@ std::unique_ptr<column> count_re( strings_column_view const& strings,
                                   std::string const& pattern,
                                   rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::count_re(strings, pattern, mr);
 }
 

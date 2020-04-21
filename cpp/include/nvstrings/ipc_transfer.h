@@ -17,6 +17,7 @@
 
 #include <cstdio>
 #include <cuda_runtime.h>
+#include <cudf/utilities/error.hpp>
 
 /**
  * @file ipc_transfer.h
@@ -55,7 +56,7 @@ struct nvstrings_ipc_transfer
     {
         this->count = count;
         this->base_address = base_address;
-        cudaIpcGetMemHandle(&hstrs,in_ptr);
+        CUDA_TRY(cudaIpcGetMemHandle(&hstrs,in_ptr));
     }
 
     /**
@@ -67,7 +68,7 @@ struct nvstrings_ipc_transfer
     void setMemHandle(void* in_ptr, size_t size)
     {
         this->size = size;
-        cudaIpcGetMemHandle(&hmem,in_ptr);
+        CUDA_TRY(cudaIpcGetMemHandle(&hmem,in_ptr));
     }
 
     /**
@@ -124,12 +125,18 @@ struct nvcategory_ipc_transfer
 
     ~nvcategory_ipc_transfer()
     {
-        if( strs )
-            cudaIpcCloseMemHandle(strs);
-        if( mem )
-            cudaIpcCloseMemHandle(mem);
-        if( vals )
-            cudaIpcCloseMemHandle(vals);
+        if( strs ) {
+            auto const err = cudaIpcCloseMemHandle(strs);
+            assert(err == cudaSuccess);
+        }
+        if( mem ) {
+            auto const err = cudaIpcCloseMemHandle(mem);
+            assert(err == cudaSuccess);
+        }
+        if( vals ) {
+            auto const err = cudaIpcCloseMemHandle(vals);
+            assert(err == cudaSuccess);
+        }
     }
 
     /**
@@ -143,7 +150,7 @@ struct nvcategory_ipc_transfer
     {
         keys = count;
         this->base_address = base_address;
-        cudaIpcGetMemHandle(&hstrs,in_ptr);
+        CUDA_TRY(cudaIpcGetMemHandle(&hstrs,in_ptr));
     }
 
     /**
@@ -155,7 +162,7 @@ struct nvcategory_ipc_transfer
     void setMemHandle(void* in_ptr, size_t size)
     {
         this->size = size;
-        cudaIpcGetMemHandle(&hmem,in_ptr);
+        CUDA_TRY(cudaIpcGetMemHandle(&hmem,in_ptr));
     }
 
     /**
@@ -167,7 +174,7 @@ struct nvcategory_ipc_transfer
     void setMapHandle(void* in_ptr, unsigned int count)
     {
         this->count = count;
-        cudaIpcGetMemHandle(&hmap,in_ptr);
+        CUDA_TRY(cudaIpcGetMemHandle(&hmap,in_ptr));
     }
 
     /**
@@ -176,7 +183,7 @@ struct nvcategory_ipc_transfer
     void* getStringsPtr()
     {
         if( !strs && keys )
-            cudaIpcOpenMemHandle((void**)&strs,hstrs,cudaIpcMemLazyEnablePeerAccess);
+            CUDA_TRY(cudaIpcOpenMemHandle((void**)&strs,hstrs,cudaIpcMemLazyEnablePeerAccess));
         return strs;
     }
 
@@ -186,7 +193,7 @@ struct nvcategory_ipc_transfer
     void* getMemoryPtr()
     {
         if( !mem && size )
-            cudaIpcOpenMemHandle((void**)&mem,hmem,cudaIpcMemLazyEnablePeerAccess);
+            CUDA_TRY(cudaIpcOpenMemHandle((void**)&mem,hmem,cudaIpcMemLazyEnablePeerAccess));
         return mem;
     }
 
@@ -196,7 +203,7 @@ struct nvcategory_ipc_transfer
     void* getMapPtr()
     {
         if( !vals && count )
-            cudaIpcOpenMemHandle((void**)&vals,hmap,cudaIpcMemLazyEnablePeerAccess);
+            CUDA_TRY(cudaIpcOpenMemHandle((void**)&vals,hmap,cudaIpcMemLazyEnablePeerAccess));
         return vals;
     }
 };

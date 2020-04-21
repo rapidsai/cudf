@@ -285,7 +285,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
                 if isinstance(df[name]._column, NumericalColumn):
-                    assert sr[0] == i
+                    assert sr.iloc[0] == i
         assert nrows == nelem
 
     _check_scatter_by_map(
@@ -304,7 +304,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     if map_size == 2 and nelem == 100:
         df.scatter_by_map("a")  # Auto-detect map_size
         with pytest.raises(ValueError):
-            df.scatter_by_map("a", map_size=1)  # Bad map_size
+            df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
     # Test GenericIndex
     df2 = df.set_index("c")

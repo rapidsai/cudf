@@ -6,6 +6,7 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -405,10 +406,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
@@ -420,7 +421,6 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if is_op_comparison:
         out = out.fillna(op == "ne")
 
-    libcudf.nvtx.range_pop()
     return out
 
 
@@ -453,7 +453,10 @@ def _safe_cast_to_int(col, dtype):
 
 
 def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
-    normalized_column = column.as_column(col_to_normalize)
+    normalized_column = column.as_column(
+        col_to_normalize,
+        dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
+    )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
         col_to_normalize_dtype = min_numeric_column_type(normalized_column)
