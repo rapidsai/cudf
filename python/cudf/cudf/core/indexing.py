@@ -246,6 +246,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf import MultiIndex
+        from uuid import uuid4
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):
@@ -290,11 +291,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 if pd.api.types.is_bool_dtype(arg[0]):
                     df = columns_df.take(arg[0])
                 elif isinstance(arg[0], column.ColumnBase):
-                    other_df = DataFrame()
-                    other_df.index = as_index(arg[0])
-                    df = columns_df.join(other_df, how="inner")
+                    tmp_col_name = str(uuid4())
+                    other_df = DataFrame({tmp_col_name:cupy.arange(len(arg[0]))}, index=as_index(arg[0]))
+                    df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index, update it over here
                     df.index.name = columns_df.index.name
+                    df=df.sort_values(tmp_col_name)
+                    df.drop([tmp_col_name], inplace=True)
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
