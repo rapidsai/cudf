@@ -51,8 +51,7 @@ constexpr cudf::size_type num_elements(cudf::size_type number_of_bits) {
  */
 inline gdf_error copy_bit_mask(bit_mask_t *dst, const bit_mask_t *src,
                                size_t number_of_bits, enum cudaMemcpyKind kind) {
-  CUDA_TRY(
-      cudaMemcpy(dst, src, num_elements(number_of_bits) * sizeof(bit_mask_t), kind));
+  CUDA_TRY(cudaMemcpy(dst, src, num_elements(number_of_bits) * sizeof(bit_mask_t), kind));
   return GDF_SUCCESS;
 }
 

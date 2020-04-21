@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <cmath>
@@ -107,6 +108,7 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
 std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
                                          rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::ipv4_to_integers(strings, mr);
 }
 
@@ -221,6 +223,7 @@ std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
 std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
                                           rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::integers_to_ipv4(integers,mr);
 }
 

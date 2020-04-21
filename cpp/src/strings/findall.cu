@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/findall.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.hpp>
 #include <strings/regex/regex.cuh>
 
@@ -197,6 +199,7 @@ std::unique_ptr<experimental::table> findall_re( strings_column_view const& stri
                                                  std::string const& pattern,
                                                  rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::findall_re(strings, pattern, mr);
 }
 

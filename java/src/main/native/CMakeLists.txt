@@ -83,6 +83,19 @@ option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
 ###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_STATIC_RUNTIME)
+
+###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
@@ -224,7 +237,6 @@ endif(USE_NVTX)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf rmm cudart_static cuda nvrtc)
-
+target_link_libraries(cudfjni cudf rmm ${CUDART_LIBRARY} cuda nvrtc)
 
 

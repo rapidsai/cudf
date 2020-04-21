@@ -63,8 +63,8 @@ TEST_F(gdf_json_test, SquareBrackets) {
                  0, static_cast<uint64_t *>(d_pos.data()));
 
   std::vector<uint64_t> h_pos(count);
-  cudaMemcpy(h_pos.data(), d_pos.data(), count * sizeof(uint64_t),
-             cudaMemcpyDefault);
+  CUDA_TRY(cudaMemcpy(h_pos.data(), d_pos.data(), count * sizeof(uint64_t),
+             cudaMemcpyDefault));
   for (auto pos : h_pos) {
     ASSERT_TRUE(json_file[pos] == '[' || json_file[pos] == ']');
   }

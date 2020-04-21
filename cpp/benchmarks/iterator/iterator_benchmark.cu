@@ -66,7 +66,6 @@ void raw_stream_bench_cub(cudf::column_view &col,
   int num_items = col.size();
 
   reduce_by_cub(result.begin(), begin, num_items, init);
-  // T R;  cudaMemcpy(&R, result.data().get(), sizeof(T), cudaMemcpyDeviceToHost);
 };
 
 template <typename T, bool has_null>

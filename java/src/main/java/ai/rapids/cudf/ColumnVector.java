@@ -1585,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }
@@ -1803,6 +1803,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringLocate")) {
       return new ColumnVector(substringLocate(getNativeView(), substring.getScalarHandle(),
           start, end));
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  Default of empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit(Scalar delimiter) {
+    assert type == DType.STRING : "column type must be a String";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
+      return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using whitespace as the delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit() {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplit(emptyString);
     }
   }
 
@@ -2060,6 +2092,46 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Close all non-null buffers. Exceptions that occur during the process will
+   * be aggregated into a single exception thrown at the end.
+   */
+  static void closeBuffers(MemoryBuffer data, MemoryBuffer valid, MemoryBuffer offsets) {
+    Throwable toThrow = null;
+    if (data != null) {
+      try {
+        data.close();
+      } catch (Throwable t) {
+        toThrow = t;
+      }
+    }
+    if (valid != null) {
+      try {
+        valid.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (offsets != null) {
+      try {
+        offsets.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (toThrow != null) {
+      throw new RuntimeException(toThrow);
+    }
+  }
+
+  /**
    * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
    * writing custom kernels or other cuda operations on the data.  DO NOT close this column
    * vector until you are completely done using the native column_view.  DO NOT modify the column in
@@ -2134,6 +2206,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param end character index to end the search on (exclusive).
    */
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
+
+  /**
+   * Native method which returns array of columns by splitting each string using the specified
+   * delimiter.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   */
+  private static native long[] stringSplit(long columnView, long delimiter);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -2513,34 +2593,57 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       long size = getDeviceMemorySize();
       boolean neededCleanup = false;
       long address = 0;
+
+      // Always mark the resource as freed even if an exception is thrown.
+      // We cannot know how far it progressed before the exception, and
+      // therefore it is unsafe to retry.
+      Throwable toThrow = null;
       if (viewHandle != 0) {
         address = viewHandle;
-        deleteColumnView(viewHandle);
-        viewHandle = 0;
+        try {
+          deleteColumnView(viewHandle);
+        } catch (Throwable t) {
+          toThrow = t;
+        } finally {
+          viewHandle = 0;
+        }
         neededCleanup = true;
       }
       if (columnHandle != 0) {
         if (address != 0) {
           address = columnHandle;
         }
-        deleteCudfColumn(columnHandle);
-        columnHandle = 0;
+        try {
+          deleteCudfColumn(columnHandle);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          columnHandle = 0;
+        }
         neededCleanup = true;
       }
-      if (data != null) {
-        data.close();
-        data = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          closeBuffers(data, valid, offsets);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
-        neededCleanup = true;
+      if (toThrow != null) {
+        throw new RuntimeException(toThrow);
       }
       if (neededCleanup) {
         if (logErrorIfNotClean) {

@@ -15,10 +15,18 @@
  */
 
 #include <atomic>
+#include <chrono>
+#include <ctime>
+#include <iostream>
+#include <fstream>
 #include <limits>
 #include <mutex>
 #include <unordered_map>
 #include <rmm/mr/device/default_memory_resource.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/cnmem_managed_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 
 #include "jni_utils.hpp"
 
@@ -26,12 +34,133 @@ using rmm::mr::device_memory_resource;
 
 namespace {
 
+// Alignment to which the RMM memory resource will round allocation sizes
+constexpr std::size_t RMM_ALLOC_SIZE_ALIGNMENT = 512;
+
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
+
+/**
+ * @brief Base class so we can template tracking_resource_adaptor but
+ * still hold all instances of it without issues.
+ */
+class base_tracking_resource_adaptor : public device_memory_resource {
+public:
+  virtual std::size_t get_total_allocated() = 0;
+};
+
+/**
+ * @brief An RMM device memory resource that delegates to another resource
+ * while tracking the amount of memory allocated.
+ *
+ * @tparam Upstream Type of memory resource that will be wrapped.
+ * @tparam size_align The size to which all allocation requests are
+ * aligned. Must be a value >= 1.
+ */
+template <typename Upstream>
+class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
+public:
+  /**
+   * @brief Constructs a new tracking resource adaptor that delegates to
+   * `mr` for all allocation operations while tracking the amount of memory
+   * allocated.
+   *
+   * @param mr The resource to use for memory allocation operations.
+   * @param size_alignment The alignment to which the `mr` resource will
+   * round up all memory allocation size requests.
+   */
+  tracking_resource_adaptor(Upstream* mr, std::size_t size_alignment)
+      : resource{mr}, size_align{size_alignment} {}
+
+  Upstream* get_wrapped_resource() {
+    return resource;
+  }
+
+  std::size_t get_total_allocated() override {
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+    return total_allocated;
+  }
+
+private:
+  Upstream* const resource;
+  std::size_t const size_align;
+  std::size_t total_allocated{0};
+
+  // map and associated lock to track memory sizes by address
+  // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
+  //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
+  //       should be updated to be atomic.
+  std::unordered_map<void*, std::size_t> size_map{};
+  std::mutex size_map_mutex{};
+
+
+  void* do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+    // adjust size of allocation based on specified size alignment
+    num_bytes = (num_bytes + size_align - 1) / size_align * size_align;
+
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+
+    auto result = resource->allocate(num_bytes, stream);
+    if (result) {
+      total_allocated += num_bytes;
+      size_map[result] = num_bytes;
+    }
+    return result;
+  }
+
+  void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
+    std::lock_guard<std::mutex> lock(size_map_mutex);
+
+    resource->deallocate(p, size, stream);
+
+    if (p) {
+      // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
+      //       see https://github.com/rapidsai/rmm/issues/302
+      auto it = size_map.find(p);
+      if (it != size_map.end()) {
+        total_allocated -= it->second;
+        size_map.erase(it);
+      } else {
+        // Untracked size, may be an allocation from before resource was installed.
+      }
+    }
+  }
+
+  bool supports_get_mem_info() const noexcept override {
+    return resource->supports_get_mem_info();
+  }
+
+  std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
+    return resource->get_mem_info(stream);
+  }
+
+  bool supports_streams() const noexcept override {
+    return resource->supports_streams();
+  }
+};
+
+template <typename Upstream>
+tracking_resource_adaptor<Upstream> * make_tracking_adaptor(Upstream * upstream,
+        std::size_t size_alignment) {
+    return new tracking_resource_adaptor<Upstream>{upstream, size_alignment};
+}
+
+std::unique_ptr<base_tracking_resource_adaptor> Tracking_memory_resource{};
+
+/**
+ * @brief Return the total amount of device memory allocated via RMM
+ */
+std::size_t get_total_bytes_allocated() {
+  if (Tracking_memory_resource) {
+    return Tracking_memory_resource->get_total_allocated();
+  }
+  return 0;
+}
+
 
 /**
  * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
  * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
- **/
+ */
 class java_event_handler_memory_resource final : public device_memory_resource {
 public:
   java_event_handler_memory_resource(
@@ -97,15 +226,6 @@ private:
   std::vector<std::size_t> alloc_thresholds{};
   std::vector<std::size_t> dealloc_thresholds{};
 
-  std::size_t total_allocated{0};
-
-  // map and associated lock to track memory sizes by address
-  // TODO: This should be removed when rmm::alloc and rmm::free are removed and the size parameter
-  //       for do_deallocate can be trusted. If map and mutex are removed then total_allocated
-  //       should be updated to be atomic.
-  std::unordered_map<void*, std::size_t> size_map{};
-  std::mutex size_map_mutex{};
-
 
   static void update_thresholds(JNIEnv* env, std::vector<std::size_t>& thresholds, jlongArray from_java) {
     thresholds.clear();
@@ -162,9 +282,11 @@ private:
   }
 
   void* do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+    std::size_t total_before;
     void* result;
     while (true) {
       try {
+        total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
       } catch (std::bad_alloc const& e) {
@@ -173,16 +295,8 @@ private:
         }
       }
     }
+    auto total_after = get_total_bytes_allocated();
 
-    std::size_t total_before;
-    std::size_t total_after;
-    {
-      std::lock_guard<std::mutex> lock(size_map_mutex);
-      total_before = total_allocated;
-      total_allocated += num_bytes;
-      total_after = total_allocated;
-      size_map[result] = num_bytes;
-    }
     try {
       check_for_threshold_callback(total_before, total_after, alloc_thresholds,
           on_alloc_threshold_method, "onAllocThreshold", total_after);
@@ -196,25 +310,9 @@ private:
   }
 
   void do_deallocate(void* p, std::size_t size, cudaStream_t stream) override {
+    auto total_before = get_total_bytes_allocated();
     resource->deallocate(p, size, stream);
-
-    std::size_t total_before;
-    std::size_t total_after;
-    {
-      std::lock_guard<std::mutex> lock(size_map_mutex);
-      total_before = total_allocated;
-      // TODO: size can't be trusted until rmm::alloc and rmm::free are removed,
-      //       see https://github.com/rapidsai/rmm/issues/302
-      auto it = size_map.find(p);
-      if (it != size_map.end()) {
-        total_allocated -= it->second;
-        size_map.erase(it);
-      } else {
-        // Untracked size, may be due to allocation that occurred before handler was installed.
-      }
-      total_after = total_allocated;
-    }
-
+    auto total_after = get_total_bytes_allocated();
     check_for_threshold_callback(total_after, total_before, dealloc_thresholds,
         on_dealloc_threshold_method, "onDeallocThreshold", total_after);
   }
@@ -266,62 +364,258 @@ void set_java_device_memory_resource(
   }
 }
 
+/**
+ * @brief Resource that provides logging of allocations and frees in CSV
+ * format
+ */
+class logging_resource_adaptor final : public rmm::mr::device_memory_resource {
+ public:
+
+ logging_resource_adaptor(device_memory_resource* upstream, std::ostream * out, bool close_at_end): 
+     upstream(upstream), out(out), close_at_end(close_at_end) {}
+
+ logging_resource_adaptor(logging_resource_adaptor const &) = delete;
+ logging_resource_adaptor(logging_resource_adaptor const &&) = delete;
+ void operator=(logging_resource_adaptor const &) = delete;
+ void operator=(logging_resource_adaptor &&) = delete;
+
+ /**
+  * @brief Return pointer to the upstream resource.
+  *
+  * @return pointer to the upstream resource.
+  */
+ device_memory_resource* get_wrapped_resource() {
+   return upstream;
+ }
+
+ const device_memory_resource* get_wrapped_resource() const {
+   return upstream;
+ }
+
+ /**
+  * @brief Checks whether the upstream resource supports streams.
+  *
+  * @return true The upstream resource supports streams
+  * @return false The upstream resource does not support streams.
+  */
+ bool supports_streams() const noexcept override {
+   return upstream->supports_streams();
+ }
+
+ /**
+  * @brief Query whether the resource supports the get_mem_info API.
+  * 
+  * @return bool true if the upstream resource supports get_mem_info, false otherwise.
+  */
+ bool supports_get_mem_info() const noexcept override { return upstream->supports_streams(); }
+
+ virtual ~logging_resource_adaptor() {
+   if (close_at_end) {
+     delete out;
+   }
+   out = nullptr;
+ }
+
+ private:
+
+ void* do_allocate(std::size_t bytes, cudaStream_t stream) override {
+   auto const p = upstream->allocate(bytes, stream);
+   auto time = std::chrono::system_clock::now();
+   std::time_t ttime = std::chrono::system_clock::to_time_t(time);
+   std::stringstream ss;
+   ss << std::put_time(std::localtime(&ttime), "%H:%M:%S")
+       << ",allocate,"
+       << p
+       << "," << bytes
+       << "," << std::to_string(reinterpret_cast<uintptr_t>(stream))
+       << std::endl;
+   {
+     std::lock_guard<std::mutex> guard(mutex);
+     *out << ss.str();
+     out->flush();
+   }
+   return p;
+ }
+
+ void do_deallocate(void* p, std::size_t bytes, cudaStream_t stream) override {
+   auto time = std::chrono::system_clock::now();
+   std::time_t ttime = std::chrono::system_clock::to_time_t(time);
+   std::stringstream ss;
+   ss << std::put_time(std::localtime(&ttime), "%H:%M:%S")
+       << ",free,"
+       << p
+       << "," << bytes
+       << "," << std::to_string(reinterpret_cast<uintptr_t>(stream))
+       << std::endl;
+   {
+     std::lock_guard<std::mutex> guard(mutex);
+     *out << ss.str();
+     out->flush();
+   }
+   upstream->deallocate(p, bytes, stream);
+ }
+
+ bool do_is_equal(device_memory_resource const &other) const noexcept override {
+   if (this == &other) {
+     return true;
+   } else {
+     logging_resource_adaptor const *cast =
+        dynamic_cast<logging_resource_adaptor const *>(&other);
+     if (cast != nullptr) {
+       return upstream->is_equal(*cast->get_wrapped_resource());
+     } else {
+       return upstream->is_equal(other);
+     }
+   }
+ }
+
+ std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
+   return upstream->get_mem_info(stream);
+ }
+
+ std::mutex mutex;
+ std::ostream * out;
+ device_memory_resource* upstream;
+ bool close_at_end;
+};
+
+// Need to keep both separate so we can shut them down appropriately
+std::unique_ptr<logging_resource_adaptor> Logging_memory_resource{};
+std::unique_ptr<device_memory_resource> Initialized_resource{};
 } // anonymous namespace
 
 extern "C" {
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                                   jint allocation_mode,
-                                                                  jboolean enable_logging,
+                                                                  jint log_to,
+                                                                  jstring jpath,
                                                                   jlong pool_size) {
   try {
-    if (rmmIsInitialized(nullptr)) {
-      JNI_THROW_NEW(env, "java/lang/IllegalStateException", "RMM already initialized", );
-    }
-    rmmOptions_t opts;
-    opts.allocation_mode = static_cast<rmmAllocationMode_t>(allocation_mode);
-    opts.enable_logging = enable_logging == JNI_TRUE;
-    opts.initial_pool_size = pool_size;
-    JNI_RMM_TRY(env, , rmmInitialize(&opts));
-  } CATCH_STD(env, )
-}
+    // make sure the CUDA device is setup in the context
+    cudaError_t cuda_status = cudaFree(0);
+    cudf::jni::jni_cuda_check(env, cuda_status);
+    int device_id;
+    cuda_status = cudaGetDevice(&device_id);
+    cudf::jni::jni_cuda_check(env, cuda_status);
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_isInitializedInternal(JNIEnv *env, jclass clazz) {
-  try {
-    return rmmIsInitialized(nullptr);
-  } CATCH_STD(env, false)
+    bool use_pool_alloc = allocation_mode & 1;
+    bool use_managed_mem = allocation_mode & 2;
+    if (use_pool_alloc) {
+        std::vector<int> devices; // Just do default devices for now...
+        if (use_managed_mem) {
+            auto tmp =  new rmm::mr::cnmem_managed_memory_resource(pool_size, devices);
+            Initialized_resource.reset(tmp);
+            auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+            Tracking_memory_resource.reset(wrapped);
+        } else {
+            auto tmp =  new rmm::mr::cnmem_memory_resource(pool_size, devices);
+            Initialized_resource.reset(tmp);
+            auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+            Tracking_memory_resource.reset(wrapped);
+        }
+    } else if (rmm::Manager::useManagedMemory()) {
+        auto tmp =  new rmm::mr::managed_memory_resource();
+        Initialized_resource.reset(tmp);
+        auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+    } else {
+        auto tmp =  new rmm::mr::cuda_memory_resource();
+        Initialized_resource.reset(tmp);
+        auto wrapped = make_tracking_adaptor(tmp, RMM_ALLOC_SIZE_ALIGNMENT);
+        Tracking_memory_resource.reset(wrapped);
+    }
+    auto resource = Tracking_memory_resource.get();
+    rmm::mr::set_default_resource(resource);
+
+    std::unique_ptr<logging_resource_adaptor> log_result;
+    switch (log_to) {
+      case 1: // File
+        {
+          cudf::jni::native_jstring path(env, jpath);
+          std::ofstream * out = new std::ofstream(path.get());
+          log_result.reset(new logging_resource_adaptor(resource, out, true));
+        }
+        break;
+      case 2: // stdout
+        log_result.reset(new logging_resource_adaptor(resource, &std::cout, false));
+        break;
+      case 3: // stderr
+        log_result.reset(new logging_resource_adaptor(resource, &std::cerr, false));
+        break;
+    }
+
+    if (log_result) {
+      if (Logging_memory_resource) {
+        JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS, "Internal Error logging is double enabled", )
+      }
+
+      Logging_memory_resource = std::move(log_result);
+      auto replaced_resource = rmm::mr::set_default_resource(Logging_memory_resource.get());
+      if (resource != replaced_resource) {
+        rmm::mr::set_default_resource(replaced_resource);
+        Logging_memory_resource.reset(nullptr);
+        JNI_THROW_NEW(env, RMM_EXCEPTION_CLASS,
+            "Concurrent modification detected while installing memory resource", );
+      }
+    }
+
+    // Now that RMM has successfully initialized, setup all threads calling
+    // cudf to use the same device RMM is using.
+    cudf::jni::set_cudf_device(device_id);
+  } CATCH_STD(env, )
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_shutdownInternal(JNIEnv *env, jclass clazz) {
   try {
+    cudf::jni::auto_set_device(env);
     set_java_device_memory_resource(env, nullptr, nullptr, nullptr);
-    JNI_RMM_TRY(env, , rmmFinalize());
+    // Instead of trying to undo all of the adaptors that we added in reverse order
+    // we just reset the base adaptor so the others will not be called any more
+    // and then clean them up in really any order.  There should be no interaction with
+    // RMM during this time anyways.
+    Initialized_resource.reset(new rmm::mr::cuda_memory_resource());
+    rmm::mr::set_default_resource(Initialized_resource.get());
+    Logging_memory_resource.reset(nullptr);
+    Tracking_memory_resource.reset(nullptr);
+    cudf::jni::set_cudf_device(cudaInvalidDeviceId);
   } CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_alloc(JNIEnv *env, jclass clazz, jlong size,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_getTotalBytesAllocated(JNIEnv* env, jclass) {
+  return get_total_bytes_allocated();
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclass clazz, jlong size,
                                                       jlong stream) {
   try {
-    void *ret = 0;
+    cudf::jni::auto_set_device(env);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource();
     cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
-    JNI_RMM_TRY(env, 0, RMM_ALLOC(&ret, size, c_stream));
-    return (jlong)ret;
+    void *ret = mr->allocate(size, c_stream);
+    return reinterpret_cast<jlong>(ret);
   } CATCH_STD(env, 0)
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_free(JNIEnv *env, jclass clazz, jlong ptr,
-                                                    jlong stream) {
+                                                    jlong size, jlong stream) {
   try {
+    cudf::jni::auto_set_device(env);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource();
     void *cptr = reinterpret_cast<void *>(ptr);
     cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
-    JNI_RMM_TRY(env, , RMM_FREE(cptr, c_stream));
+    mr->deallocate(cptr, size, c_stream);
   } CATCH_STD(env, )
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeDeviceBuffer(JNIEnv *env, jclass clazz,
                                                                 jlong ptr) {
-  rmm::device_buffer *cptr = reinterpret_cast<rmm::device_buffer *>(ptr);
-  delete cptr;
+  try {
+    cudf::jni::auto_set_device(env);
+    rmm::device_buffer *cptr = reinterpret_cast<rmm::device_buffer *>(ptr);
+    delete cptr;
+  }
+  CATCH_STD(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setEventHandlerInternal(
@@ -334,15 +628,4 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setEventHandlerInternal(
     set_java_device_memory_resource(env, handler_obj, jalloc_thresholds, jdealloc_thresholds);
   } CATCH_STD(env, )
 }
-
-JNIEXPORT jstring JNICALL Java_ai_rapids_cudf_Rmm_getLog(JNIEnv *env, jclass clazz, jlong size,
-                                                         jlong stream) {
-  try {
-    size_t amount = rmmLogSize();
-    std::unique_ptr<char> buffer(new char[amount]);
-    JNI_RMM_TRY(env, nullptr, rmmGetLog(buffer.get(), amount));
-    return env->NewStringUTF(buffer.get());
-  } CATCH_STD(env, nullptr)
-}
-
 }

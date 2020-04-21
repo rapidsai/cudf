@@ -203,10 +203,10 @@ struct HashPartitionTest : public GdfTest
 
     std::vector<int> host_row_partition_numbers(table_to_hash->num_rows());
 
-    cudaMemcpy(host_row_partition_numbers.data(), 
+    CUDA_TRY(cudaMemcpy(host_row_partition_numbers.data(), 
                row_partition_numbers.data().get(),
                table_to_hash->num_rows() * sizeof(int),
-               cudaMemcpyDeviceToHost);
+               cudaMemcpyDeviceToHost));
 
     if(print)
     {

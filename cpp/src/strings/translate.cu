@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/translate.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <algorithm>
@@ -127,6 +128,7 @@ std::unique_ptr<column> translate( strings_column_view const& strings,
                                    std::vector<std::pair<uint32_t,uint32_t>> const& chars_table,
                                    rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::translate(strings,chars_table);
 }
 

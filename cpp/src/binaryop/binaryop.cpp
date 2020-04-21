@@ -257,8 +257,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
-  auto out = make_numeric_column(output_type, rhs.size(), new_mask,
-                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto out = make_fixed_width_column(output_type, rhs.size(), new_mask,
+                                     cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (rhs.size() == 0) {
     return out;
@@ -289,8 +289,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
-  auto out = make_numeric_column(output_type, lhs.size(), new_mask,
-                                 cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto out = make_fixed_width_column(output_type, lhs.size(), new_mask,
+                                     cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (lhs.size() == 0) {
     return out;

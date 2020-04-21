@@ -1,4 +1,12 @@
-def validate_setup():
+def validate_setup(check_dask=True):
+    import os
+
+    # TODO: Remove the following check once we arrive at a solution for #4827
+    # This is a temporary workaround to unblock internal testing
+    # related issue: https://github.com/rapidsai/cudf/issues/4827
+    if not check_dask and "DASK_PARENT" in os.environ:
+        return
+
     from cudf._cuda.gpu import (
         getDeviceCount,
         driverGetVersion,
@@ -43,7 +51,7 @@ def validate_setup():
             )
             warnings.warn(
                 "You will need a GPU with NVIDIA Pascal™ or newer architecture"
-                "\nDetected GPU 0: " + str(device_name.decode()) + "\n"
+                "\nDetected GPU 0: " + device_name + "\n"
                 "Detected Compute Capability: "
                 + str(major_version)
                 + "."
