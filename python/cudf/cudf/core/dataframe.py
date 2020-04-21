@@ -165,7 +165,7 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
-    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
+    @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
