@@ -1144,6 +1144,44 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the first of all values in the column, returning a scalar
+   * of the same type as this column.
+   */
+  public Scalar first(boolean includeNulls) {
+    return first(type, includeNulls);
+  }
+
+  /**
+   * Returns the first of all value in the column, returning a scalar
+   * of the specified type.
+   */
+  public Scalar first(DType outType, boolean includeNulls) {
+    return reduce(includeNulls ?
+            AggregateOp.FIRST_INCLUDE_NULLS :
+            AggregateOp.FIRST_EXCLUDE_NULLS,
+            outType);
+  }
+
+  /**
+   * Returns the last of all values in the column, returning a scalar
+   * of the same type as this column.
+   */
+  public Scalar last(boolean includeNulls) {
+    return last(type, includeNulls);
+  }
+
+  /**
+   * Returns the last of all value in the column, returning a scalar
+   * of the specified type.
+   */
+  public Scalar last(DType outType, boolean includeNulls) {
+    return reduce(includeNulls ?
+            AggregateOp.LAST_INCLUDE_NULLS :
+            AggregateOp.LAST_EXCLUDE_NULLS,
+            outType);
+  }
+
+  /**
    * Returns the sum of squares of all values in the column, returning a
    * scalar of the same type as this column.
    */
