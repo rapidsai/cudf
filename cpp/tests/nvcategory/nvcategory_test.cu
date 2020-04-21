@@ -71,7 +71,7 @@ gdf_column * create_column_constant(cudf::size_type num_rows, int value){
 	bit_mask::bit_mask_t * valid;
 	bit_mask::create_bit_mask(&valid, num_rows,1);
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int) , 0), RMM_SUCCESS);
-	cudaMemset(data,value,sizeof(int) * num_rows);
+	CUDA_TRY(cudaMemset(data,value,sizeof(int) * num_rows));
 	gdf_error err = gdf_column_view(column,
 			(void *) data,
 			(cudf::valid_type *) valid,
@@ -150,7 +150,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
 	int8_t *asc_desc;
 	EXPECT_EQ(RMM_ALLOC(&asc_desc, 1, 0), RMM_SUCCESS);
 	int8_t minus_one = -1; //desc
-  cudaMemset(asc_desc, minus_one, 1);
+  CUDA_TRY(cudaMemset(asc_desc, minus_one, 1));
   
   gdf_context context;
   context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;

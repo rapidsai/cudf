@@ -3,6 +3,21 @@
 This project provides java bindings for cudf, to be able to process large amounts of data on
 a GPU. This is still a work in progress so some APIs may change until the 1.0 release.
 
+## Behavior on Systems with Multiple GPUs
+
+The cudf project currently works with a single GPU per process. The CUDA runtime
+assigns the default GPU to all new operating system threads when they start to
+interact with CUDA. This means that if you use a multi-threaded environment,
+like Java processes tend to be, and try to use a non-default GPU for cudf you
+can run into hard to debug issues including resource leaks, invalid states,
+application crashes, and poor performance.
+
+To prevent this the Java cudf API will remember the device used to initialize
+the Rapids Memory Manager (RMM), and automatically set the thread's active
+device to it, if needed. It will not set the device back when the cudf call
+completes. This is different from most CUDA libraries and can result in
+unexpected behavior if you try to mix these libraries using the same thread.
+
 ## Dependency
 
 This is a fat jar with the binary dependencies packaged in the jar.  This means the jar will only

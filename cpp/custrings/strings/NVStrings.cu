@@ -145,7 +145,7 @@ NVStrings* NVStrings::create_from_ipc( nvstrings_ipc_transfer& ipc )
     custring_view_array strings = (custring_view_array)ipc.getStringsPtr();
     // copy the pointers so they can be fixed up
     cudaError_t err = cudaMemcpy(rtn->pImpl->getStringsPtr(),strings,count*sizeof(custring_view*),cudaMemcpyDeviceToDevice);
-    cudaIpcCloseMemHandle((void *) strings);
+    CUDA_TRY(cudaIpcCloseMemHandle((void *) strings));
     if( err!=cudaSuccess )
         printCudaError(err,"nvs-create-ipc");
     // fix up the pointers for this context
@@ -418,7 +418,7 @@ int NVStrings::create_offsets( char* strs, int* offsets, unsigned char* nullbitm
         if( nullbitmask )
         {
             d_nulls = device_alloc<unsigned char>(((count+7)/8),0);
-            cudaMemset(d_nulls,0,((count+7)/8));
+            CUDA_TRY(cudaMemset(d_nulls,0,((count+7)/8)));
         }
     }
     //
@@ -469,11 +469,11 @@ int NVStrings::create_offsets( char* strs, int* offsets, unsigned char* nullbitm
     // copy memory to parameters (if necessary)
     if( !bdevmem )
     {
-        cudaMemcpyAsync(offsets,d_offsets,(count+1)*sizeof(int),cudaMemcpyDeviceToHost);
-        cudaMemcpyAsync(strs,d_strs,totalbytes,cudaMemcpyDeviceToHost);
+        CUDA_TRY(cudaMemcpyAsync(offsets,d_offsets,(count+1)*sizeof(int),cudaMemcpyDeviceToHost));
+        CUDA_TRY(cudaMemcpyAsync(strs,d_strs,totalbytes,cudaMemcpyDeviceToHost));
         if( nullbitmask )
         {
-            cudaMemcpyAsync(nullbitmask,d_nulls,((count+7)/8)*sizeof(unsigned char),cudaMemcpyDeviceToHost);
+            CUDA_TRY(cudaMemcpyAsync(nullbitmask,d_nulls,((count+7)/8)*sizeof(unsigned char),cudaMemcpyDeviceToHost));
             RMM_FREE(d_nulls,0);
         }
         RMM_FREE(d_offsets,0);

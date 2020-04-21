@@ -9,7 +9,7 @@ from cudf.tests.utils import assert_eq, gen_rand
 
 params_dtype = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]
 
-params_sizes = [1, 2, 13, 64, 100, 1000]
+params_sizes = [0, 1, 2, 5]
 
 
 def _gen_params():
@@ -34,7 +34,7 @@ def test_cumsum(dtype, nelem):
     gs = Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumsum(), ps.cumsum(), decimal=decimal
+        gs.cumsum().to_array(), ps.cumsum(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -43,7 +43,7 @@ def test_cumsum(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumsum(), pdf.a.cumsum(), decimal=decimal
+        gdf.a.cumsum().to_array(), pdf.a.cumsum(), decimal=decimal
     )
 
 
@@ -77,7 +77,7 @@ def test_cummin(dtype, nelem):
     gs = Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummin(), ps.cummin(), decimal=decimal
+        gs.cummin().to_array(), ps.cummin(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -86,7 +86,7 @@ def test_cummin(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummin(), pdf.a.cummin(), decimal=decimal
+        gdf.a.cummin().to_array(), pdf.a.cummin(), decimal=decimal
     )
 
 
@@ -120,7 +120,7 @@ def test_cummax(dtype, nelem):
     gs = Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummax(), ps.cummax(), decimal=decimal
+        gs.cummax().to_array(), ps.cummax(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -129,7 +129,7 @@ def test_cummax(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummax(), pdf.a.cummax(), decimal=decimal
+        gdf.a.cummax().to_array(), pdf.a.cummax(), decimal=decimal
     )
 
 
@@ -163,7 +163,7 @@ def test_cumprod(dtype, nelem):
     gs = Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumprod(), ps.cumprod(), decimal=decimal
+        gs.cumprod().to_array(), ps.cumprod(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -172,7 +172,7 @@ def test_cumprod(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumprod(), pdf.a.cumprod(), decimal=decimal
+        gdf.a.cumprod().to_array(), pdf.a.cumprod(), decimal=decimal
     )
 
 

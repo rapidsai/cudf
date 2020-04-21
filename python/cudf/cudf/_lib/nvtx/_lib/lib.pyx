@@ -30,6 +30,11 @@ cdef class EventAttributes:
     def message(self):
         return self._message
 
+    @message.setter
+    def message(self, value):
+        self._message = value.encode("ascii")
+        self.c_obj.message.ascii = <const char*> self._message
+
 
 cdef class DomainHandle:
     cdef dict __dict__
@@ -60,12 +65,9 @@ class Domain(metaclass=CachedInstanceMeta):
         self.handle = DomainHandle(name)
 
 
-def push_range(message, color, domain):
-    cdef EventAttributes attrs = EventAttributes(message, color)
-    cdef DomainHandle dh = Domain(domain).handle
-    nvtxDomainRangePushEx(dh.c_obj, &attrs.c_obj)
+def push_range(EventAttributes attributes, DomainHandle domain):
+    nvtxDomainRangePushEx(domain.c_obj, &attributes.c_obj)
 
 
-def pop_range(domain):
-    cdef DomainHandle dh = Domain(domain).handle
-    nvtxDomainRangePop(dh.c_obj)
+def pop_range(DomainHandle domain):
+    nvtxDomainRangePop(domain.c_obj)

@@ -141,7 +141,7 @@ int NVStrings::extract_record( const char* pattern, std::vector<NVStrings*>& res
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             extract_record_fn<RX_STACK_LARGE>{prog, d_strings, groups, d_lengths});
     //
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     // this part will be slow for large number of strings
     rmm::device_vector<custring_view_array> strings(count,nullptr);
     rmm::device_vector<char*> buffers(count,nullptr);

@@ -136,7 +136,7 @@ NVStrings* NVText::scatter_count( NVStrings& strs, unsigned int* counts, bool bd
     if( !bdevmem )
     {
         d_counts = device_alloc<unsigned int>(count,0);
-        cudaMemcpyAsync( d_counts, counts, count*sizeof(unsigned int), cudaMemcpyHostToDevice);
+        CUDA_TRY(cudaMemcpyAsync( d_counts, counts, count*sizeof(unsigned int), cudaMemcpyHostToDevice));
     }
 
     //

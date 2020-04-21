@@ -251,6 +251,8 @@ struct read_orc_args {
   size_type stripe = -1;
   /// Number of stripes to read starting from `stripe`; default is one if stripe >= 0
   size_type stripe_count = -1;
+  /// List of individual stripes to read (ignored if empty)
+  std::vector<size_type> stripe_list;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all
@@ -436,6 +438,8 @@ struct read_parquet_args {
   size_type row_group = -1;
   /// Number of row groups to read starting from row_group; default is one if row_group >= 0
   size_type row_group_count = -1;
+  /// List of individual row groups to read (ignored if empty)
+  std::vector<size_type> row_group_list;
   /// Rows to skip from the start; -1 is none
   size_type skip_rows = -1;
   /// Rows to read; -1 is all

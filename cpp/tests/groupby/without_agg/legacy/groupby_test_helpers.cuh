@@ -272,7 +272,7 @@ template <typename T>
 void copy_gdf_column(gdf_column* column, std::vector<T>& vec) {
     //TODO : Add map of sizes of gdf_dtype and assert against sizeof(T)
     vec.resize(column->size);
-    cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost));
 }
 
 //Empty terminal call
@@ -328,7 +328,7 @@ void copy_output_with_array(
     std::vector<cudf::size_type>& output_value) {
     copy_gdf_tuple(group_by_output_key, output_key);
     output_value.resize(group_by_output_value_size);
-    cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(cudf::size_type), cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(cudf::size_type), cudaMemcpyDeviceToHost));
 }
 
 //Copy device side gdf_column data to an std::vector
@@ -336,9 +336,8 @@ template <typename T>
 void copy_gdf_column_with_nulls(gdf_column* column, std::vector<T>& vec, host_valid_pointer& output_valids) {
     //TODO : Add map of sizes of gdf_dtype and assert against sizeof(T)
     vec.resize(column->size);
-    cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost);
-
-    cudaMemcpy(output_valids.get(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(vec.data(), column->data, column->size * sizeof(T), cudaMemcpyDeviceToHost));
+    CUDA_TRY(cudaMemcpy(output_valids.get(),  column->valid, gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToHost));
 }
 
 //Empty terminal call
@@ -383,7 +382,7 @@ void copy_output_with_array_with_nulls(
     std::vector<cudf::size_type>& output_value) {
     copy_gdf_tuple_with_nulls(group_by_output_key, output_key, output_valids);
     output_value.resize(group_by_output_value_size);
-    cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(cudf::size_type), cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(output_value.data(), group_by_output_value_array, group_by_output_value_size * sizeof(cudf::size_type), cudaMemcpyDeviceToHost));
 }
 
 //
