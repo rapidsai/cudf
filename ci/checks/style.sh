@@ -29,6 +29,10 @@ FLAKE_RETVAL=$?
 FLAKE_CYTHON=`flake8 --config=python/cudf/.flake8.cython`
 FLAKE_CYTHON_RETVAL=$?
 
+# Run clang-format and check for a consistent code format
+CLANG_FORMAT=`python cpp/scripts/run-clang-format.py 2>&1`
+CLANG_FORMAT_RETVAL=$?
+
 # Output results if failure otherwise show pass
 if [ "$ISORT_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: isort style check; begin output\n\n"
@@ -62,18 +66,9 @@ else
   echo -e "\n\n>>>> PASSED: flake8-cython style check\n\n"
 fi
 
-# Check for a consistent code format
-# TODO: keep adding more dirs when we add more source folders in cuml
-FORMAT=`python cpp/scripts/run-clang-format.py 2>&1`
-CLANG_FORMAT_RETVAL=$?
-if [ "$RETVAL" = "0" ]; then
-  RETVAL=$CLANG_FORMAT_RETVAL
-fi
-
-# Output results if failure otherwise show pass
 if [ "$CLANG_FORMAT_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: clang format check; begin output\n\n"
-  echo -e "$FORMAT"
+  echo -e "$CLANG_FORMAT"
   echo -e "\n\n>>>> FAILED: clang format check; end output\n\n"
 else
   echo -e "\n\n>>>> PASSED: clang format check\n\n"
