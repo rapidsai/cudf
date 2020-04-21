@@ -20,9 +20,10 @@
 #include <cudf/detail/copy_if.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.cuh>
 #include <nvtext/generate_ngrams.hpp>
 
@@ -154,6 +155,7 @@ std::unique_ptr<cudf::column> generate_ngrams( cudf::strings_column_view const& 
                                                cudf::string_scalar const& separator,
                                                rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::generate_ngrams(strings, ngrams, separator, mr);
 }
 

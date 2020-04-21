@@ -36,6 +36,7 @@ namespace {
 template <typename Transformer>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>>
 form_offsets_and_char_column (cudf::column_device_view input,
+                              size_type null_count,
                               Transformer offsets_transformer,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream) {
@@ -59,7 +60,7 @@ form_offsets_and_char_column (cudf::column_device_view input,
     auto d_offsets = offsets_column->view().template data<size_type>();
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, input.null_count(), bytes, mr, stream);
+    auto chars_column = cudf::strings::detail::create_chars_child_column( strings_count, null_count, bytes, mr, stream);
 
     return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
@@ -75,6 +76,7 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
 
     auto input_device_column = column_device_view::create(input.parent(), stream);
     auto d_input = *input_device_column;
+    size_type null_count = input.parent().null_count();
     const auto d_lo = (*lo_itr).first;
     const auto d_hi = (*hi_itr).first;
     const auto d_lo_replace = (*lo_replace_itr).first;
@@ -98,7 +100,7 @@ std::unique_ptr<cudf::column> clamp_string_column (strings_column_view const& in
         return bytes;
     };
 
-    auto offset_and_char = form_offsets_and_char_column(d_input, offsets_transformer, mr, stream);
+    auto offset_and_char = form_offsets_and_char_column(d_input, null_count, offsets_transformer, mr, stream);
     auto offsets_column(std::move(offset_and_char.first));
     auto chars_column(std::move(offset_and_char.second));
 

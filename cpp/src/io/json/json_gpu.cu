@@ -485,15 +485,22 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
     if (is_object) {
       start = seek_field_name_end(data, opts, start, stop);
     }
-    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, start, stop);
+    auto field_start = start;
+    const long field_end = cudf::experimental::io::gpu::seek_field_end(data, opts, field_start, stop);
     long field_data_last = field_end - 1;
-    trim_field_start_end(data, &start, &field_data_last);
-    const int field_len = field_data_last - start + 1;
+    trim_field_start_end(data, &field_start, &field_data_last);
+    const int field_len = field_data_last - field_start + 1;
+    // Advance the start offset
+    start = field_end + 1;
 
     // Checking if the field is empty
-    if (start > field_data_last || serializedTrieContains(opts.naValuesTrie, data + start, field_len)) {
+    if (field_start > field_data_last || serializedTrieContains(opts.naValuesTrie, data + field_start, field_len)) {
       atomicAdd(&column_infos[col].null_count, 1);
-      start = field_end + 1;
+      continue;
+    }
+    // Don't need counts to detect strings, any field in quotes is deduced to be a string
+    if (data[field_start] == opts.quotechar && data[field_data_last] == opts.quotechar){
+      atomicAdd(&column_infos[col].string_count, 1);
       continue;
     }
 
@@ -505,9 +512,14 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
     int exponent_count = 0;
     int other_count = 0;
 
-    const bool maybe_hex = ((field_len > 2 && data[start] == '0' && data[start + 1] == 'x') ||
-                            (field_len > 3 && data[start] == '-' && data[start + 1] == '0' && data[start + 2] == 'x'));
-    for (long pos = start; pos <= field_data_last; pos++) {
+    const bool maybe_hex = ((field_len > 2 && 
+                             data[field_start] == '0' && 
+                             data[field_start + 1] == 'x') ||
+                            (field_len > 3 && 
+                             data[field_start] == '-' && 
+                             data[field_start + 1] == '0' && 
+                             data[field_start + 2] == 'x'));
+    for (long pos = field_start; pos <= field_data_last; pos++) {
       if (is_digit(data[pos], maybe_hex)) {
         digit_count++;
         continue;
@@ -528,7 +540,7 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
         break;
       case 'e':
       case 'E':
-        if (!maybe_hex && pos > start && pos < field_data_last)
+        if (!maybe_hex && pos > field_start && pos < field_data_last)
           exponent_count++;
         break;
       default:
@@ -540,15 +552,15 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
     // Integers have to have the length of the string
     int int_req_number_cnt = field_len;
     // Off by one if they start with a minus sign
-    if (data[start] == '-' && field_len > 1) {
+    if (data[field_start] == '-' && field_len > 1) {
       --int_req_number_cnt;
     }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) {
       --int_req_number_cnt;
     }
-    if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len) ||
-        serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
+    if (serializedTrieContains(opts.trueValuesTrie, data + field_start, field_len) ||
+        serializedTrieContains(opts.falseValuesTrie, data + field_start, field_len)) {
       atomicAdd(&column_infos[col].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       atomicAdd(&column_infos[col].int_count, 1);
@@ -574,7 +586,6 @@ __global__ void detect_json_data_types(const char *data, size_t data_size, const
         atomicAdd(&column_infos[col].string_count, 1);
       }
     }
-    start = field_end + 1;
   }
 }
 

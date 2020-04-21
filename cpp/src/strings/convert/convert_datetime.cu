@@ -22,8 +22,9 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <strings/utilities.cuh>
 
 #include <vector>
@@ -443,6 +444,7 @@ std::unique_ptr<cudf::column> to_timestamps( strings_column_view const& strings,
                                              std::string const& format,
                                              rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::to_timestamps( strings, timestamp_type, format, mr );
 }
 
@@ -810,6 +812,7 @@ std::unique_ptr<column> from_timestamps( column_view const& timestamps,
                                          std::string const& format,
                                          rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::from_timestamps(timestamps, format, mr );
 }
 

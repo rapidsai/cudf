@@ -57,10 +57,15 @@ namespace {
    }
 }
 
-std::unique_ptr<column> concatenate(std::vector<lists_column_view> const& lists_columns,
+std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                     cudaStream_t stream = 0)
 {   
+   std::vector<lists_column_view> lists_columns;
+   std::transform(columns.begin(), columns.end(), std::back_inserter(lists_columns), [](column_view const& c){
+      return lists_column_view(c);
+   });
+
    // concatenate data. also prep data needed for offset merging
    std::vector<column_view> leaves;
    size_type total_list_count = 0;
@@ -70,7 +75,7 @@ std::unique_ptr<column> concatenate(std::vector<lists_column_view> const& lists_
       // child data. a leaf type (float, int, string, etc)
       return l.child();
    });
-   auto data = concatenate(leaves);   
+   auto data = cudf::concatenate(leaves);   
 
    // merge offsets
    auto offsets = merge_offsets(lists_columns, total_list_count, mr, stream);   

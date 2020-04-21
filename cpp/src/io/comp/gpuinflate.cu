@@ -1,24 +1,24 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-/* gpuinflate.cu
+/** @file gpuinflate.cu
 
   Derived from zlib's contrib/puff.c, original copyright notice below
 
-*/
+**/
 
 /*
 Copyright (C) 2002-2013 Mark Adler, all rights reserved
@@ -60,28 +60,37 @@ namespace io {
 #define LOG2LENLUT  10
 #define LOG2DISTLUT 8
 
+/**
+ * @brief Intermediate arrays for building huffman tables
+ **/
 struct scratch_arr
 {
-    int16_t lengths[MAXCODES];  // descriptor code lengths
-    int16_t offs[MAXBITS + 1];  // offset in symbol table for each length (scratch)
+    int16_t lengths[MAXCODES];  ///< descriptor code lengths
+    int16_t offs[MAXBITS + 1];  ///< offset in symbol table for each length (scratch)
 };
 
+/**
+ * @brief Huffman LUTs for length and distance codes
+ **/
 struct lut_arr
 {
-    int32_t lenlut[1 << LOG2LENLUT];    // LUT for length decoding
-    int32_t distlut[1 << LOG2DISTLUT];  // LUT for fast distance decoding
+    int32_t lenlut[1 << LOG2LENLUT];    ///< LUT for length decoding
+    int32_t distlut[1 << LOG2DISTLUT];  ///< LUT for fast distance decoding
 };
 
 
-// 4 batches of 32 symbols
+/// 4 batches of 32 symbols
 #define LOG2_BATCH_COUNT   2 // 1..5
 #define LOG2_BATCH_SIZE    5
 #define BATCH_COUNT        (1 << LOG2_BATCH_COUNT)
 #define BATCH_SIZE         (1 << LOG2_BATCH_SIZE)
 
+/**
+ * @brief Inter-warp communication queue
+ **/
 struct xwarp_s
 {
-    int32_t batch_len[BATCH_COUNT]; // Length of each batch - <0:end, 0:not ready, >0:symbol count
+    int32_t batch_len[BATCH_COUNT]; //< Length of each batch - <0:end, 0:not ready, >0:symbol count
     union {
         uint32_t symqueue[BATCH_COUNT * BATCH_SIZE];
         uint8_t symqueue8[BATCH_COUNT * BATCH_SIZE * 4];
@@ -95,34 +104,37 @@ struct xwarp_s
 #define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)
 
 #define PREFETCH_ADDR32(q, p)    (uint32_t *)(&q.pref_data[(PREFETCH_SIZE - 4) & (size_t)(p)])
+/// @brief Prefetcher state
 struct prefetch_queue_s
 {
-    const uint8_t *cur_p; // Prefetch location
-    int run; // prefetcher will exit when run=0
+    const uint8_t *cur_p; ///< Prefetch location
+    int run; ///< prefetcher will exit when run=0
     uint8_t pref_data[PREFETCH_SIZE];
 };
 
 #endif // ENABLE_PREFETCH
 
-
+/**
+ * @brief Inflate decompressor state
+ **/
 struct inflate_state_s {
     // output state
-    uint8_t *out;           // output buffer
-    uint8_t *outbase;       // start of output buffer
-    uint8_t *outend;        // end of output buffer
+    uint8_t *out;           ///< output buffer
+    uint8_t *outbase;       ///< start of output buffer
+    uint8_t *outend;        ///< end of output buffer
     // Input state
-    uint8_t *cur;           // input buffer
-    uint8_t *end;           // end of input buffer
+    uint8_t *cur;           ///< input buffer
+    uint8_t *end;           ///< end of input buffer
 
-    uint2    bitbuf;        // bit buffer (64-bit)
-    uint32_t bitpos;        // position in bit buffer
+    uint2    bitbuf;        ///< bit buffer (64-bit)
+    uint32_t bitpos;        ///< position in bit buffer
 
-    int32_t err;
-    int     btype;          // current block type
-    int     blast;          // last block
-    uint32_t stored_blk_len;// length of stored (uncompressed) block
+    int32_t err;            ///< Error status
+    int     btype;          ///< current block type
+    int     blast;          ///< last block
+    uint32_t stored_blk_len;///< length of stored (uncompressed) block
 
-    uint16_t first_slow_len;    // first code not in fast LUT
+    uint16_t first_slow_len;   ///< first code not in fast LUT
     uint16_t index_slow_len;
     uint16_t first_slow_dist;
     uint16_t index_slow_dist;
@@ -186,30 +198,30 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
 }
 
 
-/*
-* Decode a code from the stream s using huffman table {symbols,counts}.
-* Return the symbol or a negative value if there is an error.
-* If all of the lengths are zero, i.e. an empty code, or if the code is 
-* incomplete and an invalid code is received, then -10 is returned after
-* reading MAXBITS bits.
-*
-* Format notes:
-*
-* - The codes as stored in the compressed data are bit-reversed relative to
-*   a simple integer ordering of codes of the same lengths.  Hence below the
-*   bits are pulled from the compressed data one at a time and used to
-*   build the code value reversed from what is in the stream in order to
-*   permit simple integer comparisons for decoding.  A table-based decoding
-*   scheme (as used in zlib) does not need to do this reversal.
-*
-* - The first code for the shortest length is all zeros.  Subsequent codes of
-*   the same length are simply integer increments of the previous code.  When
-*   moving up a length, a zero bit is appended to the code.  For a complete
-*   code, the last code of the longest length will be all ones.
-*
-* - Incomplete codes are handled by this decoder, since they are permitted
-*   in the deflate format.  See the format notes for fixed() and dynamic().
-*/
+/**
+ * @brief Decode a code from the stream s using huffman table {symbols,counts}.
+ * Return the symbol or a negative value if there is an error.
+ * If all of the lengths are zero, i.e. an empty code, or if the code is 
+ * incomplete and an invalid code is received, then -10 is returned after
+ * reading MAXBITS bits.
+ *
+ * Format notes:
+ *
+ * - The codes as stored in the compressed data are bit-reversed relative to
+ *   a simple integer ordering of codes of the same lengths.  Hence below the
+ *   bits are pulled from the compressed data one at a time and used to
+ *   build the code value reversed from what is in the stream in order to
+ *   permit simple integer comparisons for decoding.  A table-based decoding
+ *   scheme (as used in zlib) does not need to do this reversal.
+ *
+ * - The first code for the shortest length is all zeros.  Subsequent codes of
+ *   the same length are simply integer increments of the previous code.  When
+ *   moving up a length, a zero bit is appended to the code.  For a complete
+ *   code, the last code of the longest length will be all ones.
+ *
+ * - Incomplete codes are handled by this decoder, since they are permitted
+ *   in the deflate format.  See the format notes for fixed() and dynamic().
+ **/
 __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
 {
     unsigned int len;            // current number of bits in code
@@ -236,38 +248,38 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
 }
 
 
-/*
-* Given the list of code lengths length[0..n-1] representing a canonical
-* Huffman code for n symbols, construct the tables required to decode those
-* codes.  Those tables are the number of codes of each length, and the symbols
-* sorted by length, retaining their original order within each length.  The
-* return value is zero for a complete code set, negative for an over-
-* subscribed code set, and positive for an incomplete code set.  The tables
-* can be used if the return value is zero or positive, but they cannot be used
-* if the return value is negative.  If the return value is zero, it is not
-* possible for decode() using that table to return an error--any stream of
-* enough bits will resolve to a symbol.  If the return value is positive, then
-* it is possible for decode() using that table to return an error for received
-* codes past the end of the incomplete lengths.
-*
-* Not used by decode(), but used for error checking, count[0] is the number
-* of the n symbols not in the code.  So n - count[0] is the number of
-* codes.  This is useful for checking for incomplete codes that have more than
-* one symbol, which is an error in a dynamic block.
-*
-* Assumption: for all i in 0..n-1, 0 <= length[i] <= MAXBITS
-* This is assured by the construction of the length arrays in dynamic() and
-* fixed() and is not verified by construct().
-*
-* Format notes:
-*
-* - Permitted and expected examples of incomplete codes are one of the fixed
-*   codes and any code with a single symbol which in deflate is coded as one
-*   bit instead of zero bits.  See the format notes for fixed() and dynamic().
-*
-* - Within a given code length, the symbols are kept in ascending order for
-*   the code bits definition.
-*/
+/**
+ * @brief Given the list of code lengths length[0..n-1] representing a canonical
+ * Huffman code for n symbols, construct the tables required to decode those
+ * codes.  Those tables are the number of codes of each length, and the symbols
+ * sorted by length, retaining their original order within each length.  The
+ * return value is zero for a complete code set, negative for an over-
+ * subscribed code set, and positive for an incomplete code set.  The tables
+ * can be used if the return value is zero or positive, but they cannot be used
+ * if the return value is negative.  If the return value is zero, it is not
+ * possible for decode() using that table to return an error--any stream of
+ * enough bits will resolve to a symbol.  If the return value is positive, then
+ * it is possible for decode() using that table to return an error for received
+ * codes past the end of the incomplete lengths.
+ *
+ * Not used by decode(), but used for error checking, count[0] is the number
+ * of the n symbols not in the code.  So n - count[0] is the number of
+ * codes.  This is useful for checking for incomplete codes that have more than
+ * one symbol, which is an error in a dynamic block.
+ *
+ * Assumption: for all i in 0..n-1, 0 <= length[i] <= MAXBITS
+ * This is assured by the construction of the length arrays in dynamic() and
+ * fixed() and is not verified by construct().
+ *
+ * Format notes:
+ *
+ * - Permitted and expected examples of incomplete codes are one of the fixed
+ *   codes and any code with a single symbol which in deflate is coded as one
+ *   bit instead of zero bits.  See the format notes for fixed() and dynamic().
+ *
+ * - Within a given code length, the symbols are kept in ascending order for
+ *   the code bits definition.
+ **/
 __device__ int construct(inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
 {
     int symbol;         // current symbol when stepping through length[]
@@ -309,11 +321,11 @@ __device__ int construct(inflate_state_s *s, int16_t *counts, int16_t *symbols, 
 
 
 
-// permutation of code length codes
+/// permutation of code length codes
 static const __device__ __constant__ uint8_t g_code_order[19 + 1] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15, 0xff };
 
 
-// Dynamic block (custom huffman tables)
+/// Dynamic block (custom huffman tables)
 __device__ int init_dynamic(inflate_state_s *s)
 {
     int nlen, ndist, ncode;             /* number of lengths in descriptor */
@@ -387,30 +399,30 @@ __device__ int init_dynamic(inflate_state_s *s)
 
 
 
-/*
-* Initializes a fixed codes block.
-*
-* Format notes:
-*
-* - This block type can be useful for compressing small amounts of data for
-*   which the size of the code descriptions in a dynamic block exceeds the
-*   benefit of custom codes for that block.  For fixed codes, no bits are
-*   spent on code descriptions.  Instead the code lengths for literal/length
-*   codes and distance codes are fixed.  The specific lengths for each symbol
-*   can be seen in the "for" loops below.
-*
-* - The literal/length code is complete, but has two symbols that are invalid
-*   and should result in an error if received.  This cannot be implemented
-*   simply as an incomplete code since those two symbols are in the "middle"
-*   of the code.  They are eight bits long and the longest literal/length\
-*   code is nine bits.  Therefore the code must be constructed with those
-*   symbols, and the invalid symbols must be detected after decoding.
-*
-* - The fixed distance codes also have two invalid symbols that should result
-*   in an error if received.  Since all of the distance codes are the same
-*   length, this can be implemented as an incomplete code.  Then the invalid
-*   codes are detected while decoding.
-*/
+/**
+ * @brief Initializes a fixed codes block.
+ *
+ * Format notes:
+ *
+ * - This block type can be useful for compressing small amounts of data for
+ *   which the size of the code descriptions in a dynamic block exceeds the
+ *   benefit of custom codes for that block.  For fixed codes, no bits are
+ *   spent on code descriptions.  Instead the code lengths for literal/length
+ *   codes and distance codes are fixed.  The specific lengths for each symbol
+ *   can be seen in the "for" loops below.
+ *
+ * - The literal/length code is complete, but has two symbols that are invalid
+ *   and should result in an error if received.  This cannot be implemented
+ *   simply as an incomplete code since those two symbols are in the "middle"
+ *   of the code.  They are eight bits long and the longest literal/length\
+ *   code is nine bits.  Therefore the code must be constructed with those
+ *   symbols, and the invalid symbols must be detected after decoding.
+ *
+ * - The fixed distance codes also have two invalid symbols that should result
+ *   in an error if received.  Since all of the distance codes are the same
+ *   length, this can be implemented as an incomplete code.  Then the invalid
+ *   codes are detected while decoding.
+ **/
 __device__ int init_fixed(inflate_state_s *s)
 {
     int16_t *lengths = s->u.scratch.lengths;
@@ -438,63 +450,63 @@ __device__ int init_fixed(inflate_state_s *s)
 }
 
 
-/*
-* Decode literal/length and distance codes until an end-of-block code.
-*
-* Format notes:
-*
-* - Compressed data that is after the block type if fixed or after the code
-*   description if dynamic is a combination of literals and length/distance
-*   pairs terminated by and end-of-block code.  Literals are simply Huffman
-*   coded bytes.  A length/distance pair is a coded length followed by a
-*   coded distance to represent a string that occurs earlier in the
-*   uncompressed data that occurs again at the current location.
-*
-* - Literals, lengths, and the end-of-block code are combined into a single
-*   code of up to 286 symbols.  They are 256 literals (0..255), 29 length
-*   symbols (257..285), and the end-of-block symbol (256).
-*
-* - There are 256 possible lengths (3..258), and so 29 symbols are not enough
-*   to represent all of those.  Lengths 3..10 and 258 are in fact represented
-*   by just a length symbol.  Lengths 11..257 are represented as a symbol and
-*   some number of extra bits that are added as an integer to the base length
-*   of the length symbol.  The number of extra bits is determined by the base
-*   length symbol.  These are in the static arrays below, lens[] for the base
-*   lengths and lext[] for the corresponding number of extra bits.
-*
-* - The reason that 258 gets its own symbol is that the longest length is used
-*   often in highly redundant files.  Note that 258 can also be coded as the
-*   base value 227 plus the maximum extra value of 31.  While a good deflate
-*   should never do this, it is not an error, and should be decoded properly.
-*
-* - If a length is decoded, including its extra bits if any, then it is
-*   followed a distance code.  There are up to 30 distance symbols.  Again
-*   there are many more possible distances (1..32768), so extra bits are added
-*   to a base value represented by the symbol.  The distances 1..4 get their
-*   own symbol, but the rest require extra bits.  The base distances and
-*   corresponding number of extra bits are below in the static arrays dist[]
-*   and dext[].
-*
-* - Literal bytes are simply written to the output.  A length/distance pair is
-*   an instruction to copy previously uncompressed bytes to the output.  The
-*   copy is from distance bytes back in the output stream, copying for length
-*   bytes.
-*
-* - Distances pointing before the beginning of the output data are not
-*   permitted.
-*
-* - Overlapped copies, where the length is greater than the distance, are
-*   allowed and common.  For example, a distance of one and a length of 258
-*   simply copies the last byte 258 times.  A distance of four and a length of
-*   twelve copies the last four bytes three times.  A simple forward copy
-*   ignoring whether the length is greater than the distance or not implements
-*   this correctly.  You should not use memcpy() since its behavior is not
-*   defined for overlapped arrays.  You should not use memmove() or bcopy()
-*   since though their behavior -is- defined for overlapping arrays, it is
-*   defined to do the wrong thing in this case.
-*/
+/**
+ * @brief Decode literal/length and distance codes until an end-of-block code.
+ *
+ * Format notes:
+ *
+ * - Compressed data that is after the block type if fixed or after the code
+ *   description if dynamic is a combination of literals and length/distance
+ *   pairs terminated by and end-of-block code.  Literals are simply Huffman
+ *   coded bytes.  A length/distance pair is a coded length followed by a
+ *   coded distance to represent a string that occurs earlier in the
+ *   uncompressed data that occurs again at the current location.
+ *
+ * - Literals, lengths, and the end-of-block code are combined into a single
+ *   code of up to 286 symbols.  They are 256 literals (0..255), 29 length
+ *   symbols (257..285), and the end-of-block symbol (256).
+ *
+ * - There are 256 possible lengths (3..258), and so 29 symbols are not enough
+ *   to represent all of those.  Lengths 3..10 and 258 are in fact represented
+ *   by just a length symbol.  Lengths 11..257 are represented as a symbol and
+ *   some number of extra bits that are added as an integer to the base length
+ *   of the length symbol.  The number of extra bits is determined by the base
+ *   length symbol.  These are in the static arrays below, lens[] for the base
+ *   lengths and lext[] for the corresponding number of extra bits.
+ *
+ * - The reason that 258 gets its own symbol is that the longest length is used
+ *   often in highly redundant files.  Note that 258 can also be coded as the
+ *   base value 227 plus the maximum extra value of 31.  While a good deflate
+ *   should never do this, it is not an error, and should be decoded properly.
+ *
+ * - If a length is decoded, including its extra bits if any, then it is
+ *   followed a distance code.  There are up to 30 distance symbols.  Again
+ *   there are many more possible distances (1..32768), so extra bits are added
+ *   to a base value represented by the symbol.  The distances 1..4 get their
+ *   own symbol, but the rest require extra bits.  The base distances and
+ *   corresponding number of extra bits are below in the static arrays dist[]
+ *   and dext[].
+ *
+ * - Literal bytes are simply written to the output.  A length/distance pair is
+ *   an instruction to copy previously uncompressed bytes to the output.  The
+ *   copy is from distance bytes back in the output stream, copying for length
+ *   bytes.
+ *
+ * - Distances pointing before the beginning of the output data are not
+ *   permitted.
+ *
+ * - Overlapped copies, where the length is greater than the distance, are
+ *   allowed and common.  For example, a distance of one and a length of 258
+ *   simply copies the last byte 258 times.  A distance of four and a length of
+ *   twelve copies the last four bytes three times.  A simple forward copy
+ *   ignoring whether the length is greater than the distance or not implements
+ *   this correctly.  You should not use memcpy() since its behavior is not
+ *   defined for overlapped arrays.  You should not use memmove() or bcopy()
+ *   since though their behavior -is- defined for overlapping arrays, it is
+ *   defined to do the wrong thing in this case.
+ **/
 
-// permutation of code length codes
+/// permutation of code length codes
 static const __device__ __constant__ uint16_t g_lens[29] = { // Size base for length codes 257..285
     3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
     35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 };
@@ -515,7 +527,7 @@ static const __device__ __constant__ uint16_t g_dext[30] = { // Extra bits for d
 
 
 
-// Thread 0 only: decode bitstreams and output symbols into the symbol queue
+/// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
 __device__ void decode_symbols(inflate_state_s *s)
 {
     uint32_t bitpos = s->bitpos;
@@ -718,8 +730,10 @@ __device__ void decode_symbols(inflate_state_s *s)
 }
 
 
-// Build lookup tables for faster decode
-// LUT format is symbols*16+length
+/**
+ * @brief Build lookup tables for faster decode
+ * LUT format is symbols*16+length
+ **/
 __device__ void init_length_lut(inflate_state_s *s, int t)
 {
     int32_t *lut = s->u.lut.lenlut;
@@ -771,8 +785,10 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
 }
 
 
-// Build lookup tables for faster decode of distance symbol
-// LUT format is symbols*16+length
+/**
+ * @brief Build lookup tables for faster decode of distance symbol
+ * LUT format is symbols*16+length
+ **/
 __device__ void init_distance_lut(inflate_state_s *s, int t)
 {
     int32_t *lut = s->u.lut.distlut;
@@ -820,7 +836,7 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
 }
 
 
-// WARP1: process symbols and output uncompressed stream
+/// @brief WARP1: process symbols and output uncompressed stream
 __device__ void process_symbols(inflate_state_s *s, int t)
 {
     uint8_t *out = s->out;
@@ -909,23 +925,23 @@ __device__ void process_symbols(inflate_state_s *s, int t)
 }
 
 
-/*
-* Initializes a stored block.
-*
-* Format notes:
-*
-* - After the two-bit stored block type (00), the stored block length and
-*   stored bytes are byte-aligned for fast copying.  Therefore any leftover
-*   bits in the byte that has the last bit of the type, as many as seven, are
-*   discarded.  The value of the discarded bits are not defined and should not
-*   be checked against any expectation.
-*
-* - The second inverted copy of the stored block length does not have to be
-*   checked, but it's probably a good idea to do so anyway.
-*
-* - A stored block can have zero length.  This is sometimes used to byte-align
-*   subsets of the compressed data for random access or partial recovery.
-*/
+/**
+ * @brief Initializes a stored block.
+ *
+ * Format notes:
+ *
+ * - After the two-bit stored block type (00), the stored block length and
+ *   stored bytes are byte-aligned for fast copying.  Therefore any leftover
+ *   bits in the byte that has the last bit of the type, as many as seven, are
+ *   discarded.  The value of the discarded bits are not defined and should not
+ *   be checked against any expectation.
+ *
+ * - The second inverted copy of the stored block length does not have to be
+ *   checked, but it's probably a good idea to do so anyway.
+ *
+ * - A stored block can have zero length.  This is sometimes used to byte-align
+ *   subsets of the compressed data for random access or partial recovery.
+ **/
 __device__ int init_stored(inflate_state_s *s)
 {
     uint32_t len, nlen;   // length of stored block
@@ -957,7 +973,7 @@ __device__ int init_stored(inflate_state_s *s)
 }
 
 
-// Copy bytes from stored block to destination
+/// Copy bytes from stored block to destination
 __device__ void copy_stored(inflate_state_s *s, int t)
 {
     int len = s->stored_blk_len;
@@ -1080,13 +1096,20 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 }
 #endif // ENABLE_PREFETCH
 
-
+/**
+ * @brief GZIP header flags
+ * See https://tools.ietf.org/html/rfc1952
+ **/
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
 #define GZ_FLG_FNAME    0x08    // Original file name present
 #define GZ_FLG_FCOMMENT 0x10    // Comment present
 
+/**
+ * @brief Parse GZIP header
+ * See https://tools.ietf.org/html/rfc1952
+ **/
 __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 {
     int hdr_len = -1;
@@ -1133,8 +1156,15 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 }
 
 
-
-// blockDim {128,1,1}
+/**
+ * @brief INFLATE decompression kernel
+ *
+ * blockDim {NUMTHREADS,1,1}
+ *
+ * @param inputs Source and destination buffer information per block
+ * @param outputs Decompression status buffer per block
+ * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
+ **/
 __global__ void __launch_bounds__(NUMTHREADS)
 inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
 {
@@ -1262,7 +1292,13 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
 }
 
 
-// blockDim {1024,1,1}
+/**
+ * @brief Copy a group of buffers
+ *
+ * blockDim {1024,1,1}
+ *
+ * @param inputs Source and destination information per block
+ **/
 __global__ void __launch_bounds__(1024)
 copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
 {

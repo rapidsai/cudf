@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include "../utilities.hpp"
-#include "../utilities.cuh"
+#include <cudf/strings/detail/utilities.hpp>
+#include <strings/utilities.hpp>
+#include <strings/utilities.cuh>
 
 namespace cudf
 {
@@ -380,6 +382,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  int32_t maxrepl,
                                  rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::replace(strings, target, repl, maxrepl, mr );
 }
 
@@ -388,6 +391,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
                                        size_type start, size_type stop,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::replace_slice(strings, repl, start, stop, mr);
 }
 
@@ -396,6 +400,7 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
                                  strings_column_view const& repls,
                                  rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::replace(strings, targets, repls, mr);
 }
 
@@ -403,6 +408,7 @@ std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
                                        string_scalar const& repl,
                                        rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::replace_nulls(strings, repl, mr);
 }
 

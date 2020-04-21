@@ -22,7 +22,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 namespace
@@ -174,6 +175,7 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
                                        numeric_scalar<size_type> const& step,
                                        rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::slice_strings(strings, start, stop, step, mr );
 }
 
@@ -242,7 +244,7 @@ struct dispatch_substring_from_fn
 
         // copy the null mask
         rmm::device_buffer null_mask;
-        size_type null_count = d_column.null_count();
+        size_type null_count = strings.null_count();
         if( d_column.nullable() )
             null_mask = rmm::device_buffer( d_column.null_mask(),
                                             cudf::bitmask_allocation_size_bytes(strings_count),
@@ -319,6 +321,7 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
                                        column_view const& starts_column, column_view const& stops_column,
                                        rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::slice_strings( strings, starts_column, stops_column, mr );
 }
 

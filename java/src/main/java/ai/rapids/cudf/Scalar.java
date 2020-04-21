@@ -489,8 +489,14 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
           LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");
           logRefCountDebug("Leaked scalar");
         }
-        closeScalar(scalarHandle);
-        scalarHandle = 0;
+        try {
+          closeScalar(scalarHandle);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          scalarHandle = 0;
+        }
         return true;
       }
       return false;

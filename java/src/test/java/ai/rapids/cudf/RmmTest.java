@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -52,11 +55,8 @@ public class RmmTest {
   public void testTotalAllocated(int rmmAllocMode) {
     Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024);
     assertEquals(0, Rmm.getTotalBytesAllocated());
-    long addr = Rmm.alloc(1024, 0);
-    try {
+    try (DeviceMemoryBuffer addr = Rmm.alloc(1024)) {
       assertEquals(1024, Rmm.getTotalBytesAllocated());
-    } finally {
-      Rmm.free(addr, 0);
     }
     assertEquals(0, Rmm.getTotalBytesAllocated());
   }
@@ -76,18 +76,18 @@ public class RmmTest {
       }
     };
 
-    Rmm.initialize(rmmAllocMode, false, 512 * 1024 * 1024);
+    Rmm.initialize(rmmAllocMode, Rmm.logToStderr(), 512 * 1024 * 1024);
     Rmm.setEventHandler(handler);
-    long addr = Rmm.alloc(1024, 0);
-    Rmm.free(addr, 0);
-    assertTrue(addr != 0);
+    DeviceMemoryBuffer addr = Rmm.alloc(1024);
+    addr.close();
+    assertTrue(addr.address != 0);
     assertEquals(0, invokedCount.get());
 
     // Try to allocate too much
     long requested = TOO_MUCH_MEMORY;
     try {
-      addr = Rmm.alloc(requested, 0);
-      Rmm.free(addr, 0);
+      addr = Rmm.alloc(requested);
+      addr.close();
       fail("should have failed to allocate");
     } catch (OutOfMemoryError | RmmException ignored) {
     }
@@ -97,8 +97,8 @@ public class RmmTest {
 
     // verify after a failure we can still allocate something more reasonable
     requested = 8192;
-    addr = Rmm.alloc(requested, 0);
-    Rmm.free(addr, 0);
+    addr = Rmm.alloc(requested);
+    addr.close();
   }
 
   @Test
@@ -141,8 +141,8 @@ public class RmmTest {
 
     // verify handler is no longer installed, alloc should fail
     try {
-      long addr = Rmm.alloc(TOO_MUCH_MEMORY, 0);
-      Rmm.free(addr, 0);
+      DeviceMemoryBuffer addr = Rmm.alloc(TOO_MUCH_MEMORY);
+      addr.close();
       fail("should have failed to allocate");
     } catch (OutOfMemoryError | RmmException ignored) {
     }
@@ -185,24 +185,24 @@ public class RmmTest {
     };
 
     Rmm.setEventHandler(handler);
-    long[] addrs = new long[5];
+    DeviceMemoryBuffer[] addrs = new DeviceMemoryBuffer[5];
     try {
-      addrs[0] = Rmm.alloc(6 * 1024, 0);
+      addrs[0] = Rmm.alloc(6 * 1024);
       assertEquals(0, allocInvocations.get());
-      addrs[1] = Rmm.alloc(2 * 1024, 0);
+      addrs[1] = Rmm.alloc(2 * 1024);
       assertEquals(1, allocInvocations.get());
       assertEquals(8 * 1024, allocated.get());
-      addrs[2] = Rmm.alloc(21 * 1024, 0);
+      addrs[2] = Rmm.alloc(21 * 1024);
       assertEquals(1, allocInvocations.get());
-      addrs[3] = Rmm.alloc(8 * 1024, 0);
+      addrs[3] = Rmm.alloc(8 * 1024);
       assertEquals(2, allocInvocations.get());
       assertEquals(37 * 1024, allocated.get());
-      addrs[4] = Rmm.alloc(8 * 1024, 0);
+      addrs[4] = Rmm.alloc(8 * 1024);
       assertEquals(2, allocInvocations.get());
     } finally {
-      for (long addr : addrs) {
-        if (addr != 0) {
-          Rmm.free(addr, 0);
+      for (DeviceMemoryBuffer addr : addrs) {
+        if (addr != null) {
+          addr.close();
         }
       }
     }
@@ -217,7 +217,7 @@ public class RmmTest {
     final AtomicInteger deallocInvocations = new AtomicInteger(0);
     final AtomicLong allocated = new AtomicLong(0);
 
-    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+    Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024L);
 
     RmmEventHandler handler = new RmmEventHandler() {
       @Override
@@ -249,44 +249,44 @@ public class RmmTest {
     };
 
     Rmm.setEventHandler(handler);
-    long[] addrs = new long[5];
+    DeviceMemoryBuffer[] addrs = new DeviceMemoryBuffer[5];
     try {
-      addrs[0] = Rmm.alloc(6 * 1024, 0);
+      addrs[0] = Rmm.alloc(6 * 1024);
       assertEquals(0, allocInvocations.get());
       assertEquals(0, deallocInvocations.get());
-      Rmm.free(addrs[0], 0);
-      addrs[0] = 0;
+      addrs[0].close();
+      addrs[0] = null;
       assertEquals(0, allocInvocations.get());
       assertEquals(1, deallocInvocations.get());
       assertEquals(0, allocated.get());
-      addrs[0] = Rmm.alloc(12 * 1024, 0);
+      addrs[0] = Rmm.alloc(12 * 1024);
       assertEquals(1, allocInvocations.get());
       assertEquals(1, deallocInvocations.get());
       assertEquals(12 * 1024, allocated.get());
-      addrs[1] = Rmm.alloc(6 * 1024, 0);
+      addrs[1] = Rmm.alloc(6 * 1024);
       assertEquals(1, allocInvocations.get());
       assertEquals(1, deallocInvocations.get());
-      Rmm.free(addrs[0], 0);
-      addrs[0] = 0;
+      addrs[0].close();
+      addrs[0] = null;
       assertEquals(1, allocInvocations.get());
       assertEquals(1, deallocInvocations.get());
-      addrs[0] = Rmm.alloc(4 * 1024, 0);
+      addrs[0] = Rmm.alloc(4 * 1024);
       assertEquals(2, allocInvocations.get());
       assertEquals(1, deallocInvocations.get());
       assertEquals(10 * 1024, allocated.get());
-      Rmm.free(addrs[1], 0);
-      addrs[1] = 0;
+      addrs[1].close();
+      addrs[1] = null;
       assertEquals(2, allocInvocations.get());
       assertEquals(2, deallocInvocations.get());
       assertEquals(4 * 1024, allocated.get());
-      Rmm.free(addrs[0], 0);
-      addrs[0] = 0;
+      addrs[0].close();
+      addrs[0] = null;
       assertEquals(2, allocInvocations.get());
       assertEquals(2, deallocInvocations.get());
     } finally {
-      for (long addr : addrs) {
-        if (addr != 0) {
-          Rmm.free(addr, 0);
+      for (DeviceMemoryBuffer addr : addrs) {
+        if (addr != null) {
+          addr.close();
         }
       }
     }
@@ -327,10 +327,39 @@ public class RmmTest {
     };
 
     Rmm.setEventHandler(handler);
-    long addr = Rmm.alloc(6 * 1024, 0);
-    assertThrows(DeallocThresholdException.class, () -> Rmm.free(addr, 0));
-    assertThrows(AllocThresholdException.class, () -> Rmm.alloc(12 * 1024, 0));
-    assertThrows(AllocFailException.class, () -> Rmm.alloc(TOO_MUCH_MEMORY, 0));
+    DeviceMemoryBuffer addr = Rmm.alloc(6 * 1024);
+    assertThrows(DeallocThresholdException.class, () -> addr.close());
+    assertThrows(AllocThresholdException.class, () -> Rmm.alloc(12 * 1024));
+    assertThrows(AllocFailException.class, () -> Rmm.alloc(TOO_MUCH_MEMORY));
+  }
+
+  @Test
+  public void testThreadAutoDeviceSetup() throws Exception {
+    // A smoke-test for automatic CUDA device setup for threads calling
+    // into cudf. Hard to fully test without requiring multiple CUDA devices.
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024L);
+    DeviceMemoryBuffer buff = Rmm.alloc(1024);
+    try {
+      ExecutorService executor = Executors.newSingleThreadExecutor();
+      Future<Boolean> future = executor.submit(() -> {
+        DeviceMemoryBuffer localBuffer = Rmm.alloc(2048);
+        localBuffer.close();
+        buff.close();
+        return true;
+      });
+      assertTrue(future.get());
+      executor.shutdown();
+    } catch (Exception t) {
+      buff.close();
+      throw t;
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {RmmAllocationMode.CUDA_DEFAULT, RmmAllocationMode.POOL})
+  public void testSetDeviceThrowsAfterRmmInit(int rmmAllocMode) {
+    Rmm.initialize(rmmAllocMode, false, 1024 * 1024);
+    assertThrows(CudfException.class, () -> Cuda.setDevice(Cuda.getDevice() + 1));
   }
 
   private static class AllocFailException extends RuntimeException {}

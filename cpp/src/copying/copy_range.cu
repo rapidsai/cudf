@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ void in_place_copy_range(
     cudaStream_t stream = 0) {
   auto p_source_device_view =
     cudf::column_device_view::create(source, stream);
-  if (p_source_device_view->has_nulls()) {
+  if (source.has_nulls()) {
     cudf::experimental::detail::copy_range(
       cudf::experimental::detail::make_null_replacement_iterator<T>(
         *p_source_device_view, T()) + source_begin,

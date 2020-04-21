@@ -23,7 +23,7 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-std::unique_ptr<column> concatenate( std::vector<lists_column_view> const& lists_columns,
+std::unique_ptr<column> concatenate( std::vector<column_view> const& columns,
                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                      cudaStream_t stream = 0 );
 
