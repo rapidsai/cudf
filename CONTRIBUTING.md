@@ -129,7 +129,7 @@ If you want to set up `clang-format` to format on save with VS Code:
 "editor.formatOnSave": true,
 ```
 
-If you are using `rapids-compose`, `clang-format` should work automatically.
+If you are using [`rapids-compose`](https://github.com/trxcllnt/rapids-compose), `clang-format` should work automatically.
 
 ### Get libcudf Dependencies
 
