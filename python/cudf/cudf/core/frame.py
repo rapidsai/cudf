@@ -1066,7 +1066,7 @@ class Frame(libcudf.table.Table):
                     offset=col.offset,
                 )
         if include_index:
-            from cudf.core.index import RangeIndex
+            from cudf.core.index import as_index, CategoricalIndex, RangeIndex
 
             # include_index will still behave as False
             # incase of self._index being a RangeIndex
@@ -1074,6 +1074,14 @@ class Frame(libcudf.table.Table):
                 not isinstance(self._index, RangeIndex)
             ):
                 self._index._copy_categories(other._index)
+                # When other._index is a CategoricalIndex, there is
+                # possibility that corresposing self._index be GenericIndex
+                # with codes. So to update even the class signature, we
+                # have to call as_index.
+                if isinstance(
+                    other._index, CategoricalIndex
+                ) and not isinstance(self._index, CategoricalIndex):
+                    self._index = as_index(self._index)
         return self
 
     def _unaryop(self, op):

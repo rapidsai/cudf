@@ -283,6 +283,13 @@ def test_dataframe_loc(scalar, step):
     )
 
 
+def test_dataframe_loc_duplicate_index_scalar():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf.loc[2], gdf.loc[2])
+
+
 @pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()

@@ -188,8 +188,7 @@ class _DataFrameIndexer(object):
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
-                if not is_scalar(arg[0]):
-                    return False
+                return False
             if isinstance(arg[1], tuple):
                 # Multiindex indexing with a slice
                 if any(isinstance(v, slice) for v in arg):
@@ -280,7 +279,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # If a scalar, there is possibility of having duplicates.
                     # Join would get all the duplicates. So, coverting it to
                     # a array kind.
-                    tmp_arg = ([tmp_arg[0]], tmp_arg[1]) 
+                    tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
                     return columns_df[0:0]
                 tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
@@ -289,11 +288,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df = columns_df._apply_boolean_mask(tmp_arg[0])
                 else:
                     tmp_col_name = str(uuid4())
-                    other_df = DataFrame({tmp_col_name:cupy.arange(len(tmp_arg[0]))}, index=as_index(tmp_arg[0]))
+                    other_df = DataFrame(
+                        {tmp_col_name: cupy.arange(len(tmp_arg[0]))},
+                        index=as_index(tmp_arg[0]),
+                    )
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index, update it over here
                     df.index.name = columns_df.index.name
-                    df=df.sort_values(tmp_col_name)
+                    df = df.sort_values(tmp_col_name)
                     df.drop([tmp_col_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:

@@ -425,6 +425,7 @@ cdef class Column:
         from cudf.core.column import build_column
 
         column_owner = isinstance(owner, Column)
+        mask_owner = owner
         if column_owner and is_categorical_dtype(owner.dtype):
             owner = owner.base_children[0]
 
@@ -459,9 +460,8 @@ cdef class Column:
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
         if mask_ptr:
-            mask_owner = owner
             if column_owner:
-                mask_owner = owner.base_mask
+                mask_owner = mask_owner.base_mask
             if mask_owner is None:
                 mask = Buffer(
                     rmm.DeviceBuffer(
