@@ -368,7 +368,7 @@ def get_dummies(
     if len(columns) == 0:
         return df.select_dtypes(exclude=encode_fallback_dtypes)
     else:
-        result_df = df.copy()
+        result_df = df.drop(labels=columns)
         for name in columns:
             if hasattr(df[name]._column, "categories"):
                 unique = df[name]._column.categories
@@ -385,7 +385,7 @@ def get_dummies(
             for col in col_enc_df.columns.difference(df._data.names):
                 result_df[col] = col_enc_df._data[col]
 
-        return result_df.drop(labels=columns)
+        return result_df
 
 
 def merge_sorted(
