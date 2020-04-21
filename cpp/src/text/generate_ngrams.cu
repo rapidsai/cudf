@@ -71,12 +71,11 @@ struct ngram_generator_fn {
 
 }  // namespace
 
-std::unique_ptr<cudf::column> generate_ngrams(
-  cudf::strings_column_view const& strings,
-  cudf::size_type ngrams               = 2,
-  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
-  cudaStream_t stream                  = 0) {
+std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
+                                              cudf::size_type ngrams               = 2,
+                                              cudf::string_scalar const& separator = cudf::string_scalar{"_"},
+                                              rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
+                                              cudaStream_t stream                  = 0) {
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
   CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
@@ -91,8 +90,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
 
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
-    cudf::column_view offsets_view(
-      cudf::data_type{cudf::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
+    cudf::column_view offsets_view(cudf::data_type{cudf::INT32}, strings_count + 1, strings.offsets().data<int32_t>());
     auto table_offsets = cudf::experimental::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
@@ -123,18 +121,16 @@ std::unique_ptr<cudf::column> generate_ngrams(
   auto const ngrams_count = strings_count - ngrams + 1;
 
   // build output offsets by computing the output bytes for each generated ngram
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                    ngram_generator_fn{d_strings, ngrams, d_separator});
-  auto offsets_column = cudf::strings::detail::make_offsets_child_column(
+  auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
+                                                                 ngram_generator_fn{d_strings, ngrams, d_separator});
+  auto offsets_column          = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + ngrams_count, mr, stream);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column
   // generate the ngrams from the input strings and copy them into the chars data buffer
   cudf::size_type const total_bytes = thrust::device_pointer_cast(d_offsets)[ngrams_count];
-  auto chars_column =
-    cudf::strings::detail::create_chars_child_column(ngrams_count, 0, total_bytes, mr, stream);
+  auto chars_column   = cudf::strings::detail::create_chars_child_column(ngrams_count, 0, total_bytes, mr, stream);
   char* const d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
@@ -143,13 +139,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
   chars_column->set_null_count(0);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(ngrams_count,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,
-                                   rmm::device_buffer{},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    ngrams_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{}, stream, mr);
 }
 
 }  // namespace detail
