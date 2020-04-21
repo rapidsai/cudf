@@ -1006,7 +1006,7 @@ def test_sliced_indexing():
     pidx = pdf.index[:75]
     gidx = gdf.index[:75]
 
-    assert_eq(pdf.loc[pidx].sort_index(), gdf.loc[gidx].sort_index())
+    assert_eq(pdf.loc[pidx], gdf.loc[gidx])
 
 
 @pytest.mark.parametrize("index", [["a"], ["a", "a"], ["a", "a", "b", "c"]])

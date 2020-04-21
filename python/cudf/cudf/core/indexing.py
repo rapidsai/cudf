@@ -274,30 +274,30 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
                 pos_slice = slice(start_index, stop_index, arg[0].step)
                 df = columns_df[pos_slice]
-            elif is_scalar(arg[0]):
-                try:
-                    index = column.as_column(
-                        columns_df.index
-                    ).find_first_value(arg[0], closest=False)
-                except (TypeError, KeyError, IndexError, ValueError):
-                    raise IndexError("label scalar is out of bound")
-
-                df = columns_df[index : index + 1]
             else:
-                if len(arg[0]) == 0:
+                tmp_arg = arg
+                if is_scalar(arg[0]):
+                    # If a scalar, there is possibility of having duplicates.
+                    # Join would get all the duplicates. So, coverting it to
+                    # a array kind.
+                    tmp_arg = ([tmp_arg[0]], tmp_arg[1]) 
+                if len(tmp_arg[0]) == 0:
                     return columns_df[0:0]
-                arg = (column.as_column(arg[0]), arg[1])
+                tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
 
-                if pd.api.types.is_bool_dtype(arg[0]):
-                    df = columns_df.take(arg[0])
-                elif isinstance(arg[0], column.ColumnBase):
+                if pd.api.types.is_bool_dtype(tmp_arg[0]):
+                    df = columns_df._apply_boolean_mask(tmp_arg[0])
+                else:
                     tmp_col_name = str(uuid4())
-                    other_df = DataFrame({tmp_col_name:cupy.arange(len(arg[0]))}, index=as_index(arg[0]))
+                    other_df = DataFrame({tmp_col_name:cupy.arange(len(tmp_arg[0]))}, index=as_index(tmp_arg[0]))
                     df = other_df.join(columns_df, how="inner")
                     # as join is not assigning any names to index, update it over here
                     df.index.name = columns_df.index.name
                     df=df.sort_values(tmp_col_name)
                     df.drop([tmp_col_name], inplace=True)
+                    # There were no indices found
+                    if len(df) == 0:
+                        raise IndexError
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -373,12 +373,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             if isinstance(arg[0], slice):
-                df = columns_df[arg[0]]
+                df = columns_df._slice(arg[0])
             elif is_scalar(arg[0]):
                 index = arg[0]
                 if index < 0:
                     index += len(columns_df)
-                df = columns_df[index : index + 1]
+                df = columns_df._slice(slice(index, index + 1, 1))
             else:
                 arg = (column.as_column(arg[0]), arg[1])
                 df = columns_df.take(arg[0])
