@@ -612,3 +612,21 @@ def test_make_meta_backends(index):
 
     # Check "non-empty" metadata types
     dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([]),
+        pd.DataFrame({"abc": [], "xyz": []}),
+        pd.Series([1, 2, 10, 11]),
+        pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
+    ],
+)
+def test_dataframe_series_replace(data):
+    pdf = data.copy()
+    gdf = cudf.from_pandas(pdf)
+
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+
+    dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))
