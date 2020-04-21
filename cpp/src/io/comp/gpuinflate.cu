@@ -1206,10 +1206,12 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         state->bitpos = prefix_bytes * 8;
     }
     __syncthreads();
+    // Main loop decoding blocks
     while (!state->err)
     {
         if (!t)
         {
+            // Thread0: read last flag, block type and custom huffman tables if any
             if (state->cur + (state->bitpos >> 3) >= state->end)
                 state->err = 2;
             else
@@ -1229,9 +1231,11 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         __syncthreads();
         if (!state->err && (state->btype == 1 || state->btype == 2))
         {
+            // Initializes lookup tables (block wide)
             init_length_lut(state, t);
             init_distance_lut(state, t);
         #if ENABLE_PREFETCH
+            // Initialize prefetcher
             init_prefetcher(state, t);
         #endif
             if (t < BATCH_COUNT)
@@ -1242,7 +1246,7 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
             // decode data until end-of-block code
             if (t < 1*32)
             {
-                // WARP0
+                // WARP0: decode variable-length symbols
                 if (!t)
                 {
                     decode_symbols(state);
@@ -1253,19 +1257,21 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
             }
             else if (t < 2*32)
             {
-                // WARP1
+                // WARP1: perform LZ77 using length and distance codes from WARP0
                 process_symbols(state, t & 0x1f);
             }
         #if ENABLE_PREFETCH
             else if (t < 3*32)
             {
-                // WARP3: Prefetcher
+                // WARP2: Prefetcher: prefetch data for WARP0
                 prefetch_warp(state, t & 0x1f);
             }
         #endif
+            // else WARP3: idle
         }
         else if (!state->err && state->btype == 0)
         {
+            // Uncompressed block (block-wide memcpy)
             copy_stored(state, t);
         }
         if (state->blast)
@@ -1273,6 +1279,7 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         __syncthreads();
     }
     __syncthreads();
+    // Output decompression status and length
     if (!t)
     {
         if (state->err == 0 && state->cur + ((state->bitpos + 7) >> 3) > state->end)
@@ -1287,7 +1294,7 @@ inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int p
         }
         outputs[z].bytes_written = state->out - state->outbase;
         outputs[z].status = state->err;
-        outputs[z].reserved = (int)(state->end - state->cur);
+        outputs[z].reserved = (int)(state->end - state->cur); // Here mainly for debug purposes
     }
 }
 
