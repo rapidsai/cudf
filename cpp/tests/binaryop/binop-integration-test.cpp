@@ -473,7 +473,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS) {
 
   using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(1, 10);
+  cudf::test::UniformRandomGenerator<long> rand_gen(1, 10, detail::random_generator_incrementing_seed());
   auto itr = cudf::test::make_counting_transform_iterator(
       0, [&rand_gen](auto row) { return rand_gen.generate() * 1000; });
 

@@ -25,7 +25,7 @@ struct FixedWidthColumnWrapperTest
     : public cudf::test::BaseFixture,
       cudf::test::UniformRandomGenerator<cudf::size_type> {
   FixedWidthColumnWrapperTest()
-      : cudf::test::UniformRandomGenerator<cudf::size_type>{1000, 5000} {}
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{1000, 5000, cudf::test::detail::random_generator_incrementing_seed()} {}
 
   auto size() { return this->generate(); }
 

@@ -623,7 +623,7 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
+  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size, cudf::test::detail::random_generator_incrementing_seed());
   auto generator = [&](){ return window_rng.generate(); };
 
   std::vector<size_type> preceding_window(num_rows);
@@ -651,7 +651,7 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
+  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size, cudf::test::detail::random_generator_incrementing_seed());
   auto generator = [&](){ return window_rng.generate(); };
 
   std::vector<size_type> preceding_window(num_rows);

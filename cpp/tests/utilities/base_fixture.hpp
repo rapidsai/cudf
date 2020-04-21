@@ -120,7 +120,7 @@ class UniformRandomGenerator {
  public:
   using uniform_distribution = uniform_distribution_t<T>;
 
-  UniformRandomGenerator() = default;
+  UniformRandomGenerator() : rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()} {}
 
   /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
@@ -129,17 +129,17 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
+  UniformRandomGenerator(T lower, T upper, uint64_t seed) : dist{lower, upper}, 
+                                                            rng{std::mt19937_64{seed}()} {}
 
   /**
    * @brief Returns the next random number.
    */
   T generate() { return T{dist(rng)}; }
-
- private:
-  uniform_distribution dist{};         ///< Distribution
   
-  Engine rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()};    ///< Random generator
+ private:
+  uniform_distribution dist{};  ///< Distribution
+  Engine rng;                   ///< Random generator
 };
 
 /**

@@ -38,7 +38,7 @@ class RepeatTypedTestFixture
       cudf::test::UniformRandomGenerator<cudf::size_type> {
 public:
   RepeatTypedTestFixture()
-      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10, cudf::test::detail::random_generator_incrementing_seed()} {}
 
   cudf::size_type repeat_count() { return this->generate(); }
 };
@@ -195,7 +195,7 @@ class RepeatStringTestFixture
       cudf::test::UniformRandomGenerator<cudf::size_type> {
 public:
   RepeatStringTestFixture()
-      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
+      : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10, cudf::test::detail::random_generator_incrementing_seed()} {}
 
   cudf::size_type repeat_count() { return this->generate(); }
 };

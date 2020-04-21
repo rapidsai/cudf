@@ -28,7 +28,7 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture
 {
   cudf::test::UniformRandomGenerator<cudf::size_type> random;
 
-  ColumnUtilitiesTest() : random{1000, 5000} {}
+  ColumnUtilitiesTest() : random{1000, 5000, cudf::test::detail::random_generator_incrementing_seed()} {}
 
   auto size() { return random.generate(); }
 
