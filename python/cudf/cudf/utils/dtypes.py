@@ -107,6 +107,8 @@ def is_categorical_dtype(obj):
         ),
     ):
         return True
+    if isinstance(obj, np.ndarray):
+        return False
     if isinstance(
         obj,
         (
@@ -115,7 +117,6 @@ def is_categorical_dtype(obj):
             cudf.core.column.ColumnBase,
             pd.Index,
             pd.Series,
-            np.ndarray,
         ),
     ):
         return is_categorical_dtype(obj.dtype)

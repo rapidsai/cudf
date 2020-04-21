@@ -1066,15 +1066,14 @@ class Frame(libcudf.table.Table):
                     offset=col.offset,
                 )
         if include_index:
-            from cudf.core.index import RangeIndex, CategoricalIndex
-
             # include_index will still behave as False
             # incase of self._index being a RangeIndex
             if (
                 self._index is not None
-                and not isinstance(self._index, RangeIndex)
+                and not isinstance(self._index, cudf.core.index.RangeIndex)
                 and isinstance(
-                    other._index, (CategoricalIndex, cudf.MultiIndex)
+                    other._index,
+                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
                 self._index._copy_categories(other._index)
