@@ -104,9 +104,7 @@ struct ngram_builder_fn {
       {
         position_pair item = token_positions[token_index - n];
         length += item.second - item.first;
-        if (out_ptr)
-          out_ptr =
-            cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + item.first, item.second - item.first);
+        if (out_ptr) out_ptr = cudf::strings::detail::copy_and_increment(out_ptr, d_str.data() + item.first, item.second - item.first);
         if (n > 0) {  // include the separator (except for the last one)
           if (out_ptr) out_ptr = cudf::strings::detail::copy_string(out_ptr, d_separator);
           length += d_separator.size_bytes();
@@ -214,26 +212,18 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
   // size of each ngram.
-  thrust::for_each_n(execpol->on(stream),
-                     thrust::make_counting_iterator<int32_t>(0),
-                     strings_count,
-                     ngram_builder_fn{d_strings,
-                                      d_separator,
-                                      ngrams,
-                                      d_token_offsets,
-                                      d_token_positions,
-                                      d_chars_offsets,
-                                      d_chars,
-                                      d_ngram_offsets,
-                                      d_ngram_sizes});
+  thrust::for_each_n(
+    execpol->on(stream),
+    thrust::make_counting_iterator<int32_t>(0),
+    strings_count,
+    ngram_builder_fn{
+      d_strings, d_separator, ngrams, d_token_offsets, d_token_positions, d_chars_offsets, d_chars, d_ngram_offsets, d_ngram_sizes});
   // build the offsets column -- converting the ngram sizes into offsets
-  auto offsets_column =
-    cudf::strings::detail::make_offsets_child_column(ngram_sizes.begin(), ngram_sizes.end(), mr, stream);
+  auto offsets_column = cudf::strings::detail::make_offsets_child_column(ngram_sizes.begin(), ngram_sizes.end(), mr, stream);
   chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
-  return make_strings_column(
-    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{}, stream, mr);
+  return make_strings_column(total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{}, stream, mr);
 }
 
 }  // namespace detail

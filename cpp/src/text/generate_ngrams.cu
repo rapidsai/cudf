@@ -107,13 +107,8 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 
   CUDF_EXPECTS(strings_count >= ngrams, "Insufficient number of strings to generate ngrams");
   // create a temporary column view from the non-empty offsets and chars column views
-  cudf::column_view strings_view(cudf::data_type{cudf::STRING},
-                                 strings_count,
-                                 nullptr,
-                                 nullptr,
-                                 0,
-                                 0,
-                                 {non_empty_offsets_column->view(), strings.chars()});
+  cudf::column_view strings_view(
+    cudf::data_type{cudf::STRING}, strings_count, nullptr, nullptr, 0, 0, {non_empty_offsets_column->view(), strings.chars()});
   strings_column = cudf::column_device_view::create(strings_view, stream);
   d_strings      = *strings_column;
 
@@ -121,17 +116,17 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   auto const ngrams_count = strings_count - ngrams + 1;
 
   // build output offsets by computing the output bytes for each generated ngram
-  auto offsets_transformer_itr = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                                                 ngram_generator_fn{d_strings, ngrams, d_separator});
-  auto offsets_column          = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + ngrams_count, mr, stream);
+  auto offsets_transformer_itr =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0), ngram_generator_fn{d_strings, ngrams, d_separator});
+  auto offsets_column =
+    cudf::strings::detail::make_offsets_child_column(offsets_transformer_itr, offsets_transformer_itr + ngrams_count, mr, stream);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column
   // generate the ngrams from the input strings and copy them into the chars data buffer
   cudf::size_type const total_bytes = thrust::device_pointer_cast(d_offsets)[ngrams_count];
-  auto chars_column   = cudf::strings::detail::create_chars_child_column(ngrams_count, 0, total_bytes, mr, stream);
-  char* const d_chars = chars_column->mutable_view().data<char>();
+  auto chars_column                 = cudf::strings::detail::create_chars_child_column(ngrams_count, 0, total_bytes, mr, stream);
+  char* const d_chars               = chars_column->mutable_view().data<char>();
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      ngrams_count,
@@ -139,8 +134,7 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   chars_column->set_null_count(0);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(
-    ngrams_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{}, stream, mr);
+  return cudf::make_strings_column(ngrams_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{}, stream, mr);
 }
 
 }  // namespace detail
