@@ -102,6 +102,7 @@
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #4943 Fix-up error handling in GPU detection
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
+- PR #4928 Misc performance improvements for `scatter_by_map`
 - PR #4927 Use stack for memory in `deviceGetName`
 - P# #4933 Enable nop annotate
 - PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
