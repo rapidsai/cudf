@@ -84,8 +84,8 @@ struct predicate_special_chars
     char const* newline_str = "\n";
     size_type len1byte{1};//<-TODO: confirm that find() expects len==1, or 2 (including '\0')
     
-    if( (str_view.find(quote_str, len1byte) > 0) ||
-        (str_view.find(newline_str, len1byte) > 0) ||
+    if( (str_view.find(quote_str, len1byte) >= 0) ||
+        (str_view.find(newline_str, len1byte) >= 0) ||
         (str_view.find(delimiter_) > 0) ) {
       return true;
     } else {
