@@ -34,20 +34,26 @@ import java.nio.channels.FileChannel.MapMode;
  * This class holds an off-heap buffer in the host/CPU memory.
  * Please note that instances must be explicitly closed or native memory will be leaked!
  *
- * Internally this class may optionally use PinnedMemoryPool to allocate and free the memory
- * it uses. To try to use the pinned memory pool for allocations set the java system property
- * ai.rapids.cudf.prefer-pinned to true.
+ * Internally this class will try to use PinnedMemoryPool to allocate and free the memory
+ * it uses by default. To avoid using the pinned memory pool for allocations by default
+ * set the Java system property ai.rapids.cudf.prefer-pinned to false.
  *
- * Be aware that the off heap memory limits set by java do nto apply to these buffers.
+ * Be aware that the off heap memory limits set by Java do not apply to these buffers.
  */
 public class HostMemoryBuffer extends MemoryBuffer {
-  private static final boolean defaultPreferPinned = Boolean.getBoolean(
-      "ai.rapids.cudf.prefer-pinned");
+  private static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
   static {
     NativeDepsLoader.loadNativeDeps();
+
+    boolean preferPinned = true;
+    String propString = System.getProperty("ai.rapids.cudf.prefer-pinned");
+    if (propString != null) {
+      preferPinned = Boolean.parseBoolean(propString);
+    }
+    defaultPreferPinned = preferPinned;
   }
 
   /**

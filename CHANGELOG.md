@@ -112,6 +112,7 @@
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
 - PR #4968 Add CODE_OF_CONDUCT.md
+- PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 
 ## Bug Fixes
 
