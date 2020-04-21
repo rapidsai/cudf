@@ -12,7 +12,11 @@ packed_table::serialized_column serialize_column(column_view const& col,
                                                  rmm::device_buffer const& table_data)
 {
   auto all_data_buffer_ptr = static_cast<uint8_t const*>(table_data.data());
-  size_t data_offset = col.data<uint8_t>() - all_data_buffer_ptr;
+  
+  // There are columns types that don't have data in parent e.g. strings
+  size_t data_offset = col.data<uint8_t>()
+                        ? col.data<uint8_t>() - all_data_buffer_ptr
+                        : -1;
   size_t null_mask_offset = col.nullable()
                              ? reinterpret_cast<uint8_t const*>(col.null_mask()) - all_data_buffer_ptr
                              : -1;
@@ -61,7 +65,9 @@ column_view deserialize_column(packed_table::serialized_column serial_column,
 {
   auto all_data_buffer_ptr = static_cast<uint8_t const*>(table_data.data());
 
-  auto data_ptr = all_data_buffer_ptr + serial_column._data_offset;
+  auto data_ptr = serial_column._data_offset != -1
+                  ? all_data_buffer_ptr + serial_column._data_offset
+                  : 0;
 
   // size_t is an unsigned int so -1 is the max value of size_t. If the offset
   // is UINT64_MAX then just assume there's no null mask instead of thinking

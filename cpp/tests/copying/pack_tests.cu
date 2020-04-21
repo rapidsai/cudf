@@ -70,5 +70,22 @@ TEST_F(PackUnpackTest, MultiColumnFixedWidth)
   expect_tables_equal(t, unpacked.table);
 }
 
+TEST_F(PackUnpackTest, MultiColumnWithStrings)
+{
+  fixed_width_column_wrapper<int16_t> col1 ({ 1, 2, 3, 4, 5, 6, 7},
+                                            { 1, 1, 1, 0, 1, 0, 1});
+  strings_column_wrapper              col2 ({"Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing"},
+                                            {      1,       0,       1,     1,      1,             1,            1});
+  strings_column_wrapper              col3 ({"", "this", "is", "a", "column", "of", "strings"});
+  table_view t({col1, col2, col3});
+
+  experimental::packed_table packed = experimental::pack(t);
+  experimental::packed_table packed2{
+    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
+  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
+
+  expect_tables_equal(t, unpacked.table);
+}
+
 } // namespace test
 } // namespace cudf
