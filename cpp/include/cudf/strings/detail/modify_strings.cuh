@@ -46,10 +46,12 @@ namespace detail
  * @return modified strings column
  */
  template<typename device_probe_functor,
-          typename device_execute_functor>
+          typename device_execute_functor,
+          typename ...Types>
  std::unique_ptr<column> modify_strings( strings_column_view const& strings,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream = 0)
+                                         rmm::mr::device_memory_resource* mr,// = rmm::mr::get_default_resource(),
+                                         cudaStream_t stream,// = 0)
+                                         Types&& ...args)
 {
   auto strings_count = strings.size();
   if( strings_count == 0 )
@@ -65,7 +67,7 @@ namespace detail
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
   // get the lookup tables used for case conversion
 
-  device_probe_functor d_probe_fctr{d_column};
+  device_probe_functor d_probe_fctr{d_column, std::forward<Types>(args)...};
 
   // build offsets column -- calculate the size of each output string
   auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
@@ -83,7 +85,8 @@ namespace detail
 
   device_execute_functor d_execute_fctr{d_column,
       d_new_offsets,
-      d_chars};
+      d_chars,
+      std::forward<Types>(args)...};
 
   thrust::for_each_n(execpol->on(stream),
                      thrust::make_counting_iterator<size_type>(0), strings_count, d_execute_fctr);
