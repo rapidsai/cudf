@@ -122,14 +122,26 @@ python3 ./cpp/scripts/run-clang-format.py -inplace
 ##### Setting up format on save with VS Code
 
 If you want to set up `clang-format` to format on save with VS Code:
-1. [Install C/C++ (ms-vscode.cpptools)](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) VS Code extension
+
+**Option 1:**
+
+1. Install [C/C++ (ms-vscode.cpptools)](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) VS Code extension
 2. Add the following two lines to `settings.json`:
 ```
 "C_Cpp.clang_format_path": "${CONDA_PREFIX_1}/pkgs/clang-tools-8.0.1-hc9558a2_2/bin/clang-format",
 "editor.formatOnSave": true,
 ```
 
-If you are using [`rapids-compose`](https://github.com/trxcllnt/rapids-compose), `clang-format` should work automatically.
+**Option 2:**
+
+1. Install [vscode-clangd](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) VS Code extension
+2. Add the following two lines to `settings.json`:
+```
+"[cpp]": { "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd" },
+"editor.formatOnSave": true,
+```
+
+**Note:** If you are using [`rapids-compose`](https://github.com/trxcllnt/rapids-compose), `clang-format` should work automatically.
 
 ### Get libcudf Dependencies
 
