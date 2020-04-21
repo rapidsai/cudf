@@ -472,7 +472,9 @@ def test_index_where(data, condition, other, error):
         if pd.api.types.is_categorical_dtype(ps):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
-            np.testing.assert_array_equal(expect.codes, got.codes.fillna(-1))
+            np.testing.assert_array_equal(
+                expect.codes, got.codes.fillna(-1).to_array()
+            )
             assert tuple(expect.categories) == tuple(got.categories)
         else:
             assert_eq(

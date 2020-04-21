@@ -73,7 +73,12 @@ public final class Table implements AutoCloseable {
     nativeHandle = createCudfTableView(viewPointers);
   }
 
-  private Table(long[] cudfColumns) {
+  /**
+   * Table class makes a copy of the array of cudfColumns passed to it. The class will decrease the
+   * refcount on itself and all its contents when closed and free resources if refcount is zero
+   * @param cudfColumns - Array of nativeHandles
+   */
+  Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {
