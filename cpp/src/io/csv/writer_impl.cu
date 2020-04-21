@@ -86,7 +86,7 @@ struct predicate_special_chars
     
     if( (str_view.find(quote_str, len1byte) >= 0) ||
         (str_view.find(newline_str, len1byte) >= 0) ||
-        (str_view.find(delimiter_) > 0) ) {
+        (str_view.find(delimiter_) >= 0) ) {
       return true;
     } else {
       return false;
