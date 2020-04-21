@@ -10,6 +10,7 @@
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
 - PR #4906 Add Java bindings for interleave_columns
+- PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
 
 ## Improvements
