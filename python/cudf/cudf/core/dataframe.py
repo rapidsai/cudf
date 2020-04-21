@@ -900,33 +900,23 @@ class DataFrame(Frame):
             if len(self._data.names) > ncols:
                 right_cols = len(self._data.names) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
+            if right_cols > 0:
+                # Pick ncols - left_cols number of columns
+                # from the right side/from the end.
+                right_cols = -(int(ncols) - left_cols + 1)
+            else:
+                # If right_cols is 0 or negative, it means
+                # self has lesser number of columns thans ncols.
+                # Hence assign len(self._data.names) which
+                # will result in empty `*_right` quadrants.
+                # This is because `*_left` quadransts will
+                # contain all columns.
+                right_cols = len(self._data.names)
 
-            # Pick left_cols number of columns.
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
-            if right_cols > 0:
-                # Pick ncols - left_cols number of columns
-                # from the right side/from the end.
-                upper_right = self.head(upper_rows).iloc[
-                    :, -(int(ncols) - left_cols + 1) :
-                ]
-            else:
-                # If right_cols is 0 or negative, it means
-                # self has lesser number of columns thans ncols.
-                # Hence pick none as `upper_left` will contain all columns.
-                upper_right = self.head(upper_rows).iloc[:, :0]
-            # Pick left_cols number of columns.
+            upper_right = self.head(upper_rows).iloc[:, right_cols:]
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
-            if right_cols > 0:
-                # Pick ncols - left_cols number of columns
-                # from the right side/from the end.
-                lower_right = self.tail(lower_rows).iloc[
-                    :, -(int(ncols) - left_cols + 1) :
-                ]
-            else:
-                # If right_cols is 0 or negative, it means
-                # self has lesser number of columns thans ncols.
-                # Hence pick none as `lower_left` will contain all columns.
-                lower_right = self.tail(lower_rows).iloc[:, :0]
+            lower_right = self.tail(lower_rows).iloc[:, right_cols:]
 
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
