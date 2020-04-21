@@ -24,8 +24,7 @@ import tempfile
 
 EXPECTED_VERSION = "8.0.1"
 VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
-# NOTE: populate this list with more top-level dirs as we add more of them to
-#       to the cuml repo
+# NOTE: populate this list with more top-level dirs as we add more of them to the cudf repo
 DEFAULT_DIRS = ["cpp/benchmarks",
                 "cpp/custrings"
                 "cpp/include",
