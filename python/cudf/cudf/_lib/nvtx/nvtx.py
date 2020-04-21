@@ -76,7 +76,7 @@ class _annotate_nop:
         pass
 
     def __exit__(self, *args, **kwargs):
-        pass
+        return False
 
     def __call__(self, func):
         return func

@@ -165,6 +165,8 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
+    _internal_names = {"_data", "_index"}
+
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
@@ -401,7 +403,7 @@ class DataFrame(Frame):
             pass
 
         # if a column already exists, set it.
-        if key != "_data":
+        if key not in self._internal_names:
             try:
                 self[key]  # __getitem__ to verify key exists
                 self[key] = col
@@ -412,8 +414,11 @@ class DataFrame(Frame):
         object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
-        if key != "_data" and key in self._data:
-            return self[key]
+        if key in self._internal_names:
+            return object.__getattribute__(self, key)
+        else:
+            if key in self:
+                return self[key]
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
