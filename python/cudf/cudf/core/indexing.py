@@ -266,22 +266,35 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             else:
                 return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            if hasattr(arg[0], "__len__"):
+            if isinstance(arg[0], slice):
+                start_index, stop_index = columns_df.index.find_label_range(
+                    arg[0].start, arg[0].stop
+                )
+
+                pos_slice = slice(start_index, stop_index, arg[0].step)
+                df = columns_df[pos_slice]
+            elif is_scalar(arg[0]):
+                try:
+                    index = column.as_column(
+                        columns_df.index
+                    ).find_first_value(arg[0], closest=False)
+                except (TypeError, KeyError, IndexError, ValueError):
+                    raise IndexError("label scalar is out of bound")
+
+                df = columns_df[index : index + 1]
+            else:
+                if len(arg[0]) == 0:
+                    return columns_df[0:0]
                 arg = (column.as_column(arg[0]), arg[1])
 
-            if pd.api.types.is_bool_dtype(arg[0]):
-                df = columns_df.take(arg[0])
-            elif isinstance(arg[0], column.ColumnBase):
-                indices = (
-                    columns_df[columns_df.columns[0]].loc._loc_to_iloc(arg[0])
-                )
-                df = columns_df.take(indices)
-            else:
-                df = DataFrame()
-                for col in columns_df.columns:
-                    # need Series() in case a scalar is returned
-                    df[col] = Series(columns_df[col].loc[arg[0]])
-                df.columns = columns_df.columns
+                if pd.api.types.is_bool_dtype(arg[0]):
+                    df = columns_df.take(arg[0])
+                elif isinstance(arg[0], column.ColumnBase):
+                    other_df = DataFrame()
+                    other_df.index = as_index(arg[0])
+                    df = columns_df.join(other_df, how="inner")
+                    # as join is not assigning any names to index, update it over here
+                    df.index.name = columns_df.index.name
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -356,19 +369,16 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 return self._downcast_to_series(df, arg)
             return df
         else:
-            if hasattr(arg[0], "__len__"):
-                arg = (column.as_column(arg[0]), arg[1])
-
-            if isinstance(arg[0], column.ColumnBase):
-                df = columns_df.take(arg[0])
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            elif is_scalar(arg[0]):
+                index = arg[0]
+                if index < 0:
+                    index += len(columns_df)
+                df = columns_df[index : index + 1]
             else:
-                df = DataFrame()
-                for i, col in enumerate(columns_df._data.values()):
-                    # need Series() in case a scalar is returned
-                    df[i] = Series(col[arg[0]])
-
-                df.index = as_index(columns_df.index[arg[0]])
-                df.columns = columns_df.columns
+                arg = (column.as_column(arg[0]), arg[1])
+                df = columns_df.take(arg[0])
 
         # Iloc Step 3:
         # Reindex
