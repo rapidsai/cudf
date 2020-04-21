@@ -50,14 +50,76 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
+
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/modify_strings.cuh>
+
 namespace cudf {
 namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
 
-namespace {//unnammed:
+namespace {//anonym.
 //helpers:
+
+using namespace cudf::strings;
+
+//predicate to determine which are the special characters:
+//
+struct predicate_special_chars
+{
+  explicit predicate_special_chars(string_scalar const& delimiter):
+    delimiter_(delimiter)
+  {
+  }
+  
+  __device__
+  bool operator()(string_view const& str_view) const {
+    //TODO:
+    //if (any_of{"\"", "\n", <delimiter>} ) 
+    return true;
+  }
+private:
+  string_scalar const& delimiter_;
+};
+
+  
+struct probe_special_chars
+{
+  explicit probe_special_chars(predicate_special_chars const& predicate):
+    predicate_(predicate)
+  {
+  }
+
+  __device__
+  int32_t operator()(size_type idx) const {
+    //TODO:
+    //
+    return 0;
+  }
+  
+private:
+  predicate_special_chars const& predicate_; 
+};
+
+struct modify_special_chars
+{
+  explicit modify_special_chars(predicate_special_chars const& predicate):
+    predicate_(predicate)
+  {
+  }
+
+  __device__
+  int32_t operator()(size_type idx) {
+    //TODO:
+    //
+    return 0;
+  }
+  
+private:
+  predicate_special_chars const& predicate_; 
+};
   
 struct column_to_strings_fn
 {
