@@ -9,32 +9,31 @@ namespace detail {
 namespace {
 
 packed_table::serialized_column serialize_column(column_view const& col,
-                                                 rmm::device_buffer const& table_data)
+                                                 uint8_t const* base_ptr)
 {
-  auto all_data_buffer_ptr = static_cast<uint8_t const*>(table_data.data());
-  
   // There are columns types that don't have data in parent e.g. strings
   size_t data_offset = col.data<uint8_t>()
-                        ? col.data<uint8_t>() - all_data_buffer_ptr
+                        ? col.data<uint8_t>() - base_ptr
                         : -1;
   size_t null_mask_offset = col.nullable()
-                             ? reinterpret_cast<uint8_t const*>(col.null_mask()) - all_data_buffer_ptr
+                             ? reinterpret_cast<uint8_t const*>(col.null_mask()) - base_ptr
                              : -1;
+
   return packed_table::serialized_column{col.type(), col.size(), data_offset, null_mask_offset, col.num_children()};
 }
 
 void add_columns(std::vector<column_view> const& cols,
-                 rmm::device_buffer const& table_data,
+                 uint8_t const* base_ptr,
                  std::vector<packed_table::serialized_column> * table_metadata)
 {
   for (auto &&col : cols) {
-    table_metadata->emplace_back(serialize_column(col, table_data));
+    table_metadata->emplace_back(serialize_column(col, base_ptr));
     std::vector<column_view> children;
     for (size_t i = 0; i < col.num_children(); i++) {
       children.push_back(col.child(i));
     }
     
-    add_columns(children, table_data, table_metadata);
+    add_columns(children, base_ptr, table_metadata);
   }
 }
 
@@ -53,7 +52,9 @@ packed_table pack(cudf::table_view const& input,
   
   std::vector<column_view> table_columns(contiguous_data.table.begin(), contiguous_data.table.end());
 
-  add_columns(table_columns, *result.table_data, &result.table_metadata);
+  add_columns(table_columns,
+              static_cast<uint8_t const*>(result.table_data->data()),
+              &result.table_metadata);
 
   return result;
 }
@@ -62,12 +63,10 @@ namespace {
 
 column_view deserialize_column(packed_table::serialized_column serial_column,
                                std::vector<column_view> const& children,
-                               rmm::device_buffer const& table_data)
+                               uint8_t const* base_ptr)
 {
-  auto all_data_buffer_ptr = static_cast<uint8_t const*>(table_data.data());
-
   auto data_ptr = serial_column._data_offset != -1
-                  ? all_data_buffer_ptr + serial_column._data_offset
+                  ? base_ptr + serial_column._data_offset
                   : 0;
 
   // size_t is an unsigned int so -1 is the max value of size_t. If the offset
@@ -81,7 +80,7 @@ column_view deserialize_column(packed_table::serialized_column serial_column,
   // TODO: Replace above with better reasoning
   auto null_mask_ptr = serial_column._null_mask_offset != -1
                         ? reinterpret_cast<bitmask_type const*>(
-                            all_data_buffer_ptr + serial_column._null_mask_offset)
+                            base_ptr + serial_column._null_mask_offset)
                         : 0;
 
   return column_view(
@@ -96,7 +95,7 @@ column_view deserialize_column(packed_table::serialized_column serial_column,
 
 std::vector<column_view> get_columns(cudf::size_type num_columns,
                                      std::vector<packed_table::serialized_column> const& serialized_columns,
-                                     rmm::device_buffer const& table_data,
+                                     uint8_t const* base_ptr,
                                      size_t * current_index)
 {
   std::vector<column_view> cols;
@@ -108,10 +107,10 @@ std::vector<column_view> get_columns(cudf::size_type num_columns,
     std::vector<column_view> children = get_columns(
       serial_column._num_children,
       serialized_columns,
-      table_data,
+      base_ptr,
       current_index);
 
-    cols.emplace_back(deserialize_column(serial_column, children, table_data));
+    cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
   }
   
   return cols;
@@ -126,14 +125,14 @@ contiguous_split_result unpack(packed_table & input)
 
   std::vector<column_view> table_columns = get_columns(num_columns,
                                                        input.table_metadata,
-                                                       *input.table_data,
+                                                       static_cast<uint8_t const*>(input.table_data->data()),
                                                        &current_index);
 
   return contiguous_split_result{table_view(table_columns), std::move(input.table_data)};
 }
 
 } // namespace detail
-
+ 
 packed_table pack(cudf::table_view const& input,
                   rmm::mr::device_memory_resource* mr)
 {
