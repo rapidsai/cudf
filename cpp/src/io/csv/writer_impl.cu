@@ -82,10 +82,11 @@ struct predicate_special_chars
     //
     char const* quote_str = "\"";
     char const* newline_str = "\n";
+    size_type len1byte{1};//<-TODO: confirm that find() expects len==1, or 2 (including '\0')
     
-    if( str_view.find(quote_str, 1) ||
-        str_view.find(newline_str, 1) ||
-        str_view.find(delimiter_) ) {
+    if( (str_view.find(quote_str, len1byte) > 0) ||
+        (str_view.find(newline_str, len1byte) > 0) ||
+        (str_view.find(delimiter_) > 0) ) {
       return true;
     } else {
       return false;
@@ -112,7 +113,7 @@ struct probe_special_chars
       //TODO:
       //
       //count number of quotes "\""
-      size_type num_quotes;// = ?
+      size_type num_quotes{0};// = ?
       return d_str.size_bytes() + num_quotes + 2;
     } else {
       return d_str.size_bytes();
