@@ -368,7 +368,7 @@ def get_dummies(
     if len(columns) == 0:
         return df.select_dtypes(exclude=encode_fallback_dtypes)
     else:
-        result_df = df.copy()
+        result_df = df[columns].copy()
         for name in columns:
             if hasattr(df[name]._column, "categories"):
                 unique = df[name]._column.categories
