@@ -61,10 +61,8 @@ struct BinaryOp {
         nvtx::range_push("CUDF_BINARY_OP", nvtx::BINARY_OP_COLOR);
         // find optimal blocksize
         int mingridsize, blocksize;
-        CUDA_TRY(
-            cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
-                                               gpu_binary_op<T, Tout, F>)
-        );
+        CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
+                                               gpu_binary_op<T, Tout, F>));
         // find needed gridsize
         int neededgridsize = (lhs->size + blocksize - 1) / blocksize;
         int gridsize = std::min(mingridsize, neededgridsize);
@@ -81,7 +79,7 @@ struct BinaryOp {
             functor
         );
 
-        cudaDeviceSynchronize();
+        CUDA_TRY(cudaDeviceSynchronize());
 
         nvtx::range_pop();
 

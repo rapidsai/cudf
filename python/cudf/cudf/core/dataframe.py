@@ -697,6 +697,14 @@ class DataFrame(Frame):
         """
         return cupy.asarray(self.as_gpu_matrix())
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU matrix, consider using \
+            .as_gpu_matrix()\nTo explicitly construct a host \
+            matrix, consider using .as_matrix()"
+        )
+
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
@@ -2822,7 +2830,15 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace=None, value=None, inplace=False):
+    def replace(
+        self,
+        to_replace=None,
+        value=None,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=None,
+    ):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2875,7 +2891,22 @@ class DataFrame(Frame):
         4     4
         5  null
         6     6
+
+        Notes
+        -----
+        Parameters that are currently not supported are: `limit`, `regex`,
+        `method`
         """
+        if limit is not None:
+            raise NotImplementedError("limit parameter is not implemented yet")
+
+        if regex:
+            raise NotImplementedError("regex parameter is not implemented yet")
+
+        if method not in ("pad", None):
+            raise NotImplementedError(
+                "method parameter is not implemented yet"
+            )
 
         outdf = super().replace(to_replace=to_replace, replacement=value)
 
@@ -4617,7 +4648,7 @@ class DataFrame(Frame):
         """{docstring}"""
         import cudf.io.json as json
 
-        json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
+        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):

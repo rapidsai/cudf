@@ -384,7 +384,6 @@ class Index(Frame):
         return Series(self._values)
 
     @property
-    @property
     def is_unique(self):
         raise (NotImplementedError)
 
