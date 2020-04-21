@@ -81,13 +81,15 @@ struct predicate_special_chars
     return true;
   }
 private:
-  string_scalar const& delimiter_;
+  string_scalar delimiter_;
 };
 
   
 struct probe_special_chars
 {
-  explicit probe_special_chars(predicate_special_chars const& predicate):
+  probe_special_chars(column_device_view const d_column,
+                      predicate_special_chars const& predicate):
+    d_column_(d_column),
     predicate_(predicate)
   {
   }
@@ -100,12 +102,19 @@ struct probe_special_chars
   }
   
 private:
-  predicate_special_chars const& predicate_; 
+  column_device_view const d_column_;
+  predicate_special_chars predicate_; 
 };
 
 struct modify_special_chars
 {
-  explicit modify_special_chars(predicate_special_chars const& predicate):
+  explicit modify_special_chars(column_device_view const d_column,
+                                int32_t const* d_offsets,
+                                char* d_chars,
+                                predicate_special_chars const& predicate):
+    d_column_(d_column),
+    d_offsets_(d_offsets),
+    d_chars_(d_chars),
     predicate_(predicate)
   {
   }
@@ -118,7 +127,10 @@ struct modify_special_chars
   }
   
 private:
-  predicate_special_chars const& predicate_; 
+  column_device_view const d_column_;
+  int32_t const* d_offsets_;
+  char* d_chars_;
+  predicate_special_chars predicate_; 
 };
   
 struct column_to_strings_fn
