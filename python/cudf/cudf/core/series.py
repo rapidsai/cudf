@@ -3195,7 +3195,7 @@ class Series(Frame):
         """{docstring}"""
         import cudf.io.json as json
 
-        json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
+        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
