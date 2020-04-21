@@ -54,8 +54,8 @@ void BM_gather(benchmark::State& state){
     std::random_shuffle(host_map_data.begin(), host_map_data.end());
   }
    
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map{
-    host_map_data.begin(), host_map_data.end()};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map(
+    host_map_data.begin(), host_map_data.end());
  
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
   std::vector<cudf::column_view> source_columns(n_cols);

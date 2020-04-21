@@ -97,6 +97,7 @@
 - PR #4905 Get decorated function name as message when annotating
 - PR #4907 Reuse EventAttributes across NVTX annotations
 - PR #4912 Drop old `valid` check in `element_indexing`
+- PR #4924 Properly handle npartition argument in rearrange_by_hash
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #4943 Fix-up error handling in GPU detection
@@ -104,6 +105,11 @@
 - PR #4927 Use stack for memory in `deviceGetName`
 - P# #4933 Enable nop annotate
 - PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
+- PR #4962 Add missing parameters to `DataFrame.replace` & `Series.replace`
+- PR #4960 Return the result of `to_json`
+- PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
+- PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
+- PR #4968 Add CODE_OF_CONDUCT.md
 
 ## Bug Fixes
 
@@ -169,11 +175,13 @@
 - PR #4875 Fix cudf::strings::from_integer logic converting min integer to string
 - PR #4876 Mark Java cleaner objects as being cleaned even if exception is thrown
 - PR #4780 Handle nulls in Statistical column operations
+- PR #4886 Minimize regex-find calls in multi-replace cudf::strings::replace_re function
 - PR #4887 Remove `developer.rst` and any links
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
 - PR #4922 Fix cudf::strings:split logic for many columns
+- PR #4949 Fix scatter, gather benchmark constructor call
 
 
 # cuDF 0.13.0 (31 Mar 2020)
