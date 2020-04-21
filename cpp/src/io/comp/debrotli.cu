@@ -18,6 +18,9 @@
  *
  * CUDA-based brotli decompression
  *
+ * Brotli Compressed Data Format
+ * https://tools.ietf.org/html/rfc7932
+ *
  * Portions of this file are derived from Google's Brotli project at
  * https://github.com/google/brotli, original license text below.
  **/
@@ -1998,6 +2001,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
     {
         return;
     }
+    // Thread0: initializes shared state and decode stream header
     if (!t)
     {
         uint8_t *src = (uint8_t *)inputs[z].srcDevice;
@@ -2026,11 +2030,13 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
     __syncthreads();
     if (!s->error)
     {
+        // Main loop: decode meta-blocks
         do
         {
             __syncthreads();
             if (!t)
             {
+                // Thread0: Decode meta-block header
                 DecodeMetaBlockHeader(s);
                 if (!s->error && s->meta_block_len > s->bytes_left)
                 {
@@ -2042,6 +2048,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
             {
                 if (s->is_uncompressed)
                 {
+                    // Uncompressed block
                     const uint8_t *src = s->cur + ((s->bitpos + 7) >> 3);
                     uint8_t *dst = s->out;
                     if (!t)
@@ -2062,6 +2069,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                     __syncthreads();
                     if (!s->error)
                     {
+                        // Simple block-wide memcpy
                         for (int32_t i = t; i < s->meta_block_len; i += NUMTHREADS)
                         {
                             dst[i] = src[i];
@@ -2070,8 +2078,10 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                 }
                 else
                 {
+                    // Compressed block
                     if (!t)
                     {
+                        // Thread0: Reset local heap, decode huffman tables
                         s->heap_used = 0;
                         s->heap_limit = (uint16_t)(sizeof(s->heap) / sizeof(s->heap[0]));
                         s->fb_base = nullptr;
@@ -2085,6 +2095,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                     __syncthreads();
                     if (!s->error)
                     {
+                        // Warp0: Decode compressed block, warps 1..7 are all idle (!)
                         if (t < 32)
                             ProcessCommands(s, (brotli_dictionary_s *)(scratch + scratch_size), t);
                         __syncthreads();
@@ -2099,6 +2110,7 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
                         __syncthreads();
                     }
                 }
+                // Update output byte count and position
                 if (!t)
                 {
                     s->bytes_left -= s->meta_block_len;
@@ -2109,15 +2121,22 @@ gpu_debrotli_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, 
         } while (!s->error && !s->is_last && s->bytes_left != 0);
     }
     __syncthreads();
+    // Output decompression status
     if (!t)
     {
         outputs[z].bytes_written = s->out - s->outbase;
         outputs[z].status = s->error;
-        outputs[z].reserved = s->fb_size;
+        outputs[z].reserved = s->fb_size; // Return ext heap used by last block (mainly for statistics)
     }
 }
 
-
+/**
+ * @brief Computes the size of temporary memory for Brotli decompression
+ *
+ * @param[in] max_num_inputs The maximum number of compressed input chunks
+ *
+ * @return The size in bytes of required temporary memory
+ **/
 size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
     int sm_count = 0;
@@ -2140,7 +2159,7 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
     min_fb_size = 10 * 1024; // TODO: Gather some statistics for typical meta-block size
     // Allocate at least two worst-case metablocks or 1 metablock plus typical size for every other block
     fb_size = max(max_fb_size * min(max_num_inputs, 2), max_fb_size + max_num_inputs * min_fb_size);
-    // Add some room for alignment
+    // Add some room for alignment and global dictionary
     return fb_size + 16 + sizeof(brotli_dictionary_s);
 }
 
@@ -2167,7 +2186,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs, gpu_inflate_statu
     CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2*sizeof(uint32_t), stream));
     // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't page-locked
     CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size, get_brotli_dictionary(), sizeof(brotli_dictionary_s), cudaMemcpyHostToDevice, stream));
-    gpu_debrotli_kernel << < dim_grid, dim_block, 0, stream >> >(inputs, outputs, scratch_u8, fb_heap_size, count32);
+    gpu_debrotli_kernel<<< dim_grid, dim_block, 0, stream >>>(inputs, outputs, scratch_u8, fb_heap_size, count32);
 #if DUMP_FB_HEAP
     uint32_t dump[2];
     uint32_t cur = 0;
