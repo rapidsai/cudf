@@ -65,23 +65,34 @@ namespace {//anonym.
 
 using namespace cudf::strings;
 
-//predicate to determine which are the special characters:
+//predicate to determine if given string_view conatins special characters:
+//{"\"", "\n", <delimiter>}
 //
 struct predicate_special_chars
 {
-  explicit predicate_special_chars(string_scalar const& delimiter):
-    delimiter_(delimiter)
+  explicit predicate_special_chars(string_scalar const& delimiter,
+                                   cudaStream_t stream = 0):
+    delimiter_(delimiter.value(stream))
   {
   }
   
   __device__
   bool operator()(string_view const& str_view) const {
-    //TODO:
-    //if (any_of{"\"", "\n", <delimiter>} ) 
-    return true;
+    //if (any_of{"\"", "\n", <delimiter>} )
+    //
+    char const* quote_str = "\"";
+    char const* newline_str = "\n";
+    
+    if( str_view.find(quote_str, 1) ||
+        str_view.find(newline_str, 1) ||
+        str_view.find(delimiter_) ) {
+      return true;
+    } else {
+      return false;
+    }
   }
 private:
-  string_scalar delimiter_;
+  string_view delimiter_;
 };
 
   
@@ -96,9 +107,16 @@ struct probe_special_chars
 
   __device__
   int32_t operator()(size_type idx) const {
-    //TODO:
-    //
-    return 0;
+    string_view d_str = d_column_.template element<string_view>(idx);
+    if( predicate_(d_str) ) {  
+      //TODO:
+      //
+      //count number of quotes "\""
+      size_type num_quotes;// = ?
+      return d_str.size_bytes() + num_quotes + 2;
+    } else {
+      return d_str.size_bytes();
+    }
   }
   
 private:
