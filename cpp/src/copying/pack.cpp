@@ -1,4 +1,4 @@
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <jit/type.h>
 
@@ -44,7 +44,8 @@ packed_table pack(cudf::table_view const& input,
                   cudaStream_t stream,
                   rmm::mr::device_memory_resource* mr)
 {
-  contiguous_split_result contiguous_data = std::move(contiguous_split(input, {})[0]);
+  contiguous_split_result contiguous_data = 
+    std::move(detail::contiguous_split(input, {}, mr, stream).front());
 
   packed_table::serialized_column table_element = {{}, 0, 0, 0, contiguous_data.table.num_columns()};
 
@@ -118,9 +119,7 @@ std::vector<column_view> get_columns(cudf::size_type num_columns,
 
 } // namespace anonymous
 
-contiguous_split_result unpack(packed_table & input,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource* mr)
+contiguous_split_result unpack(packed_table & input)
 {
   cudf::size_type num_columns = input.table_metadata[0]._num_children;
   size_t current_index = 1;
@@ -142,11 +141,10 @@ packed_table pack(cudf::table_view const& input,
   return detail::pack(input, 0, mr);
 }
 
-contiguous_split_result unpack(packed_table & input,
-                               rmm::mr::device_memory_resource* mr)
+contiguous_split_result unpack(packed_table & input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input, 0, mr);
+  return detail::unpack(input);
 }
 
 } // namespace experimental  

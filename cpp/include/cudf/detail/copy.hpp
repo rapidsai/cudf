@@ -82,6 +82,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                                                       cudaStream_t stream = 0);
 
+packed_table pack(cudf::table_view const& input,
+                  cudaStream_t stream = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
  * Supports only fixed-width types.
