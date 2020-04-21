@@ -92,6 +92,7 @@
 - PR #4912 Drop old `valid` check in `element_indexing`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
+- PR #4928 Misc performance improvements for `scatter_by_map`
 
 ## Bug Fixes
 
