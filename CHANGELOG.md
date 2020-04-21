@@ -59,6 +59,7 @@
 - PR #4817 Fix `fixed_point` documentation
 - PR #4842 Added Java bindings for titlizing a String column
 - PR #4845 Add CUDF_FUNC_RANGE to top-level cuIO function APIs
+- PR #4968 Add CODE_OF_CONDUCT.md
 
 ## Bug Fixes
 
