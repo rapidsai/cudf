@@ -38,19 +38,25 @@ namespace detail
  * must implement `__device__ int32_t operator()(size_type idx) const` 
  * @tparam device_execute_functor Functor for executing string modification; must
  * implement `__device__ int32_t operator()(size_type idx)`
+ * @tparam ...Types Types of possible additional arguments to be forwarded
+ * to the probe / execute functors (pre-condition: must both take the same trailling pack of arguments, in addition to their required args) 
  *
  * @param strings Number Column of strings to apply the modifications on; 
  * it is not modified in place; rather a new column is returned instead
- * @param mr Memory resource to use.
+ * @param mr Memory resource to use 
+ * (cannot be a default argument because of the variadic pack);
  * @param stream Stream to use for any kernel calls.
+ * (cannot be a default argument because of the variadic pack);
+ * @param ...args Additional arguments to be forwarded to
+ * the probe / execute constructors (can be empty);
  * @return modified strings column
  */
  template<typename device_probe_functor,
           typename device_execute_functor,
           typename ...Types>
  std::unique_ptr<column> modify_strings( strings_column_view const& strings,
-                                         rmm::mr::device_memory_resource* mr,// = rmm::mr::get_default_resource(),
-                                         cudaStream_t stream,// = 0)
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream,
                                          Types&& ...args)
 {
   auto strings_count = strings.size();
