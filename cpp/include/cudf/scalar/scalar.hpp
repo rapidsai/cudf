@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -344,12 +344,7 @@ public:
    /**
    * @brief Returns the size of the string in bytes
    */
-   size_type size() const { return 0; }
-
-   /**
-   * @brief Returns a raw pointer to the string in device memory
-   */
-   const char* data() const { return nullptr; }
+   size_type size() const { return 0; }   
 
 protected:
 };

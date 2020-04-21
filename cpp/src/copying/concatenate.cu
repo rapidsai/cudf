@@ -201,7 +201,7 @@ struct for_each_concatenate {
       std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
     CUDF_FAIL("dictionary not supported yet");
-  }  
+  }
 
   template <typename ColumnType,
       std::enable_if_t<cudf::is_fixed_width<ColumnType>()>* = nullptr>

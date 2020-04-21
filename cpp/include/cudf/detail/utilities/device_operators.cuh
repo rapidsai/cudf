@@ -54,7 +54,7 @@ struct DeviceSum {
 };
 
 /* @brief `count` operator - used in rolling windows */
-struct DeviceCount {  
+struct DeviceCount {
   template <typename T>
   static constexpr T identity() {
     return T{};

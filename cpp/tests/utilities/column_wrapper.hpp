@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,7 +139,7 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
   auto num_words =
       cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
   std::vector<bitmask_type> null_mask(num_words, 0);
-  for (auto i = 0; i < size; ++i) { 
+  for (auto i = 0; i < size; ++i) {
     if (*(begin + i)) {
       set_bit_unsafe(null_mask.data(), i);
     }

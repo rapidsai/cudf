@@ -71,7 +71,7 @@ const void* get_data_ptr(scalar const& s) {
 std::string get_type_name(data_type type) {
   // TODO: Remove in JIT type utils PR
   switch(type.id()){
-  case type_id::BOOL8:    
+  case type_id::BOOL8:
     return CUDF_STRINGIFY(bool);
   
   case type_id::LIST:
