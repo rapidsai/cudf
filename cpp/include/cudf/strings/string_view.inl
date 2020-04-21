@@ -28,6 +28,9 @@ constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
 // the byte-width of the characters in a string is computed on-demand
 // the _char_width member is initialized to this value as a place-holder
 constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
+// this value is assigned to the _char_width member if the string
+// contains characters of different widths
+constexpr int8_t VARIABLE_CHAR_WIDTH{0};
 
 /**
  * @brief Returns the number of bytes used to represent the provided byte.
@@ -86,9 +89,9 @@ __host__ __device__ inline size_type string_view::size_bytes() const
 
 __device__ inline size_type string_view::length() const
 {
-    if( _length <= UNKNOWN_STRING_LENGTH )
+    if( _length == UNKNOWN_STRING_LENGTH )
         _length = strings::detail::characters_in_string(_data,_bytes);
-    if( _length && (_char_width <= UNKNOWN_CHAR_WIDTH) )
+    if( _length && (_char_width == UNKNOWN_CHAR_WIDTH) )
     {
         const BYTE* bytes = reinterpret_cast<const BYTE*>(data());
         auto chwidth = bytes_in_utf8_byte(*bytes); // see if they are all the same width
@@ -96,7 +99,7 @@ __device__ inline size_type string_view::length() const
                             [chwidth] (auto ch) {
                                 auto width = bytes_in_utf8_byte(ch);
                                 return (width!=0) && (width!=chwidth);
-                            }))==(bytes + size_bytes()) ? chwidth : 0;
+                            }))==(bytes + size_bytes()) ? chwidth : VARIABLE_CHAR_WIDTH;
     }
     return _length;
 }
