@@ -117,13 +117,14 @@ struct probe_special_chars
     if( predicate_(d_str) ) {  
       //count number of quotes "\""
       size_type num_quotes{0};
+      char const quote_char = '\"';
 
       //TODO: confirm below is correct;
       //
       num_quotes = thrust::count_if(thrust::seq,
                                     d_str.begin(), d_str.end(),
-                                    [] (char_utf8 chr) {
-                                      return chr == '\"';
+                                    [quote_char] (char_utf8 chr) {
+                                      return chr == quote_char;
                                     });
       return d_str.size_bytes() + num_quotes + 2;
     } else {
@@ -157,6 +158,8 @@ struct modify_special_chars
     string_view d_str = d_column_.template element<string_view>(idx);
     
     if( predicate_(d_str) ) {
+      char const quote_char = '\"';
+      
       //modify d_str by duplicating all 2bl quotes
       //and surrounding whole string by 2bl quotes:
       //
