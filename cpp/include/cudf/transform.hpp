@@ -46,8 +46,7 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
@@ -60,10 +59,8 @@ std::unique_ptr<column> transform(
  * @return A pair containing a `device_buffer` with the new bitmask and it's
  * null count obtained by replacing `NaN` in `input` with null.
  **/
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
-nans_to_nulls(column_view const& input,
-              rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
-
+std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a bitmask from a column of boolean elements.
@@ -80,8 +77,7 @@ nans_to_nulls(column_view const& input,
  * null count obtained from input considering `true` represent `valid`/`1` and
  * `false` represent `invalid`/`0`.
  **/
-std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>
-bools_to_mask(column_view const& input,
-                  rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource());
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
+  column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace experimental
 }  // namespace cudf

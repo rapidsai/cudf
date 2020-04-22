@@ -26,8 +26,11 @@ namespace detail {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
-rmm::device_buffer scalar_col_valid_mask_and(column_view const& col, scalar const& s, cudaStream_t stream, rmm::mr::device_memory_resource* mr);
-}
+rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
+                                             scalar const& s,
+                                             cudaStream_t stream,
+                                             rmm::mr::device_memory_resource* mr);
+}  // namespace detail
 
 namespace compiled {
 
@@ -50,12 +53,12 @@ namespace compiled {
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    scalar const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between a string column and a string
@@ -76,12 +79,12 @@ std::unique_ptr<column> binary_operation(
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    scalar const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between two string columns.
@@ -102,14 +105,14 @@ std::unique_ptr<column> binary_operation(
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace compiled
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace compiled
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf

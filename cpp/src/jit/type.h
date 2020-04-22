@@ -46,6 +46,6 @@ const void* get_data_ptr(scalar const& s);
  * @return std::string Name of the data type in string
  */
 std::string get_type_name(data_type type);
- 
-} // namespace jit
-} // namespace cudf
+
+}  // namespace jit
+}  // namespace cudf

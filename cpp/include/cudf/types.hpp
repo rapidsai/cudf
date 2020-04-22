@@ -63,17 +63,19 @@ class string_view;
 class list_view;
 
 class scalar;
-template <typename T> class numeric_scalar;
+template <typename T>
+class numeric_scalar;
 class string_scalar;
-template <typename T> class timestamp_scalar;
+template <typename T>
+class timestamp_scalar;
 
-template <typename T> class numeric_scalar_device_view;
+template <typename T>
+class numeric_scalar_device_view;
 class string_scalar_device_view;
-template <typename T> class timestamp_scalar_device_view;
+template <typename T>
+class timestamp_scalar_device_view;
 
 class list_scalar;
-
-
 
 namespace experimental {
 class table;
@@ -81,9 +83,9 @@ class table;
 class table_view;
 class mutable_table_view;
 
-using size_type = int32_t;
+using size_type    = int32_t;
 using bitmask_type = uint32_t;
-using valid_type = uint8_t;
+using valid_type   = uint8_t;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates an unknown null count.
@@ -104,10 +106,7 @@ enum class order : bool {
 /**
  * @brief Enum to specify whether to include nulls or exclude nulls
  */
-enum class include_nulls : bool {
-  NO,
-  YES 
-};
+enum class include_nulls : bool { NO, YES };
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.
@@ -120,18 +119,15 @@ enum class null_order : bool {
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether a collection of values is known to be sorted.
  *---------------------------------------------------------------------------**/
-enum class sorted : bool {
-    NO,
-    YES
-};
+enum class sorted : bool { NO, YES };
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates how a collection of values has been ordered.
  *---------------------------------------------------------------------------**/
 struct order_info {
-   sorted is_sorted;
-   order ordering;
-   null_order null_ordering;
+  sorted is_sorted;
+  order ordering;
+  null_order null_ordering;
 };
 
 /**---------------------------------------------------------------------------*
@@ -152,35 +148,35 @@ namespace experimental {
  *
  */
 enum class interpolation : int32_t {
-    LINEAR,      ///< Linear interpolation between i and j
-    LOWER,       ///< Lower data point (i)
-    HIGHER,      ///< Higher data point (j)
-    MIDPOINT,    ///< (i + j)/2
-    NEAREST      ///< i or j, whichever is nearest
+  LINEAR,    ///< Linear interpolation between i and j
+  LOWER,     ///< Lower data point (i)
+  HIGHER,    ///< Higher data point (j)
+  MIDPOINT,  ///< (i + j)/2
+  NEAREST    ///< i or j, whichever is nearest
 };
 
-} // namespace experimental
+}  // namespace experimental
 
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
  *---------------------------------------------------------------------------**/
 enum type_id {
-  EMPTY = 0,                ///< Always null with no underlying data
-  INT8,                     ///< 1 byte signed integer
-  INT16,                    ///< 2 byte signed integer
-  INT32,                    ///< 4 byte signed integer
-  INT64,                    ///< 8 byte signed integer
-  FLOAT32,                  ///< 4 byte floating point
-  FLOAT64,                  ///< 8 byte floating point
-  BOOL8,                    ///< Boolean using one byte per value, 0 == false, else true
-  TIMESTAMP_DAYS,           ///< days since Unix Epoch in int32
-  TIMESTAMP_SECONDS,        ///< duration of seconds since Unix Epoch in int64
-  TIMESTAMP_MILLISECONDS,   ///< duration of milliseconds since Unix Epoch in int64
-  TIMESTAMP_MICROSECONDS,   ///< duration of microseconds since Unix Epoch in int64
-  TIMESTAMP_NANOSECONDS,    ///< duration of nanoseconds since Unix Epoch in int64
-  DICTIONARY32,             ///< Dictionary type using int32 indices
-  STRING,                   ///< String elements
-  LIST,                     ///< List elements
+  EMPTY = 0,               ///< Always null with no underlying data
+  INT8,                    ///< 1 byte signed integer
+  INT16,                   ///< 2 byte signed integer
+  INT32,                   ///< 4 byte signed integer
+  INT64,                   ///< 8 byte signed integer
+  FLOAT32,                 ///< 4 byte floating point
+  FLOAT64,                 ///< 8 byte floating point
+  BOOL8,                   ///< Boolean using one byte per value, 0 == false, else true
+  TIMESTAMP_DAYS,          ///< days since Unix Epoch in int32
+  TIMESTAMP_SECONDS,       ///< duration of seconds since Unix Epoch in int64
+  TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
+  TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
+  TIMESTAMP_NANOSECONDS,   ///< duration of nanoseconds since Unix Epoch in int64
+  DICTIONARY32,            ///< Dictionary type using int32 indices
+  STRING,                  ///< String elements
+  LIST,                    ///< List elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
 };
@@ -193,10 +189,10 @@ enum type_id {
  *---------------------------------------------------------------------------**/
 class data_type {
  public:
-  data_type() = default;
-  ~data_type() = default;
+  data_type()                 = default;
+  ~data_type()                = default;
   data_type(data_type const&) = default;
-  data_type(data_type&&) = default;
+  data_type(data_type&&)      = default;
   data_type& operator=(data_type const&) = default;
   data_type& operator=(data_type&&) = default;
 
@@ -230,9 +226,7 @@ class data_type {
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
  *---------------------------------------------------------------------------**/
-inline bool operator==(data_type const& lhs, data_type const& rhs) {
-  return lhs.id() == rhs.id();
-}
+inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
 
 /**
  * @brief Returns the size in bytes of elements of the specified `data_type`
@@ -244,6 +238,5 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
  * @return Size in bytes of an element of the specified `data_type`
  */
 std::size_t size_of(data_type t);
-
 
 }  // namespace cudf

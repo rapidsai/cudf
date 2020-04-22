@@ -15,20 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
-enum class strip_type
-{
-    LEFT,   //<< strip characters from the beginning of the string
-    RIGHT,  //<< strip characters from the end of the string
-    BOTH    //<< strip characters from the beginning and end of the string
+enum class strip_type {
+  LEFT,   //<< strip characters from the beginning of the string
+  RIGHT,  //<< strip characters from the end of the string
+  BOTH    //<< strip characters from the beginning and end of the string
 };
 
 /**
@@ -60,11 +57,11 @@ enum class strip_type
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> strip( strings_column_view const& strings,
-                               strip_type stype = strip_type::BOTH,
-                               string_scalar const& to_strip = string_scalar(""),
-                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> strip(
+  strings_column_view const& strings,
+  strip_type stype                    = strip_type::BOTH,
+  string_scalar const& to_strip       = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

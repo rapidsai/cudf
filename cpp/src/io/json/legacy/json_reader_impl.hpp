@@ -28,8 +28,8 @@
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -49,8 +49,8 @@ struct ColumnInfo {
  *
  *---------------------------------------------------------------------------**/
 class reader::Impl {
-public:
-private:
+ public:
+ private:
   const reader_options args_{};
 
   std::unique_ptr<datasource> source_;
@@ -58,7 +58,7 @@ private:
   std::shared_ptr<arrow::Buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
-  size_t uncomp_size_ = 0;
+  size_t uncomp_size_      = 0;
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
@@ -66,7 +66,7 @@ private:
   rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
-  size_t byte_range_size_ = 0;
+  size_t byte_range_size_   = 0;
 
   std::vector<std::string> column_names_;
   std::vector<gdf_dtype> dtypes_;
@@ -168,14 +168,17 @@ private:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, cudf::valid_type *const *valid_fields,
+  void convertJsonToColumns(gdf_dtype *const dtypes,
+                            void *const *gdf_columns,
+                            cudf::valid_type *const *valid_fields,
                             cudf::size_type *num_valid_fields);
 
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<datasource> source, std::string filepath,
+  explicit Impl(std::unique_ptr<datasource> source,
+                std::string filepath,
                 reader_options const &args);
 
   /**
