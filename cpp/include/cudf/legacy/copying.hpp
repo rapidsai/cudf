@@ -29,9 +29,9 @@ namespace cudf {
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
 enum mask_allocation_policy {
-    NEVER, ///< Do not allocate a null mask, regardless of input
-    RETAIN, ///< Allocate a null mask if the input contains one
-    ALWAYS ///< Allocate a null mask, regardless of input
+  NEVER,   ///< Do not allocate a null mask, regardless of input
+  RETAIN,  ///< Allocate a null mask if the input contains one
+  ALWAYS   ///< Allocate a null mask, regardless of input
 };
 
 /*
@@ -50,8 +50,9 @@ gdf_column empty_like(gdf_column const& input);
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc = RETAIN,
-                         cudaStream_t stream = 0);
+gdf_column allocate_like(gdf_column const& input,
+                         mask_allocation_policy mask_alloc = RETAIN,
+                         cudaStream_t stream               = 0);
 
 /**
  * @brief Allocates a new column of the specified size and same type as the input.
@@ -62,9 +63,10 @@ gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_al
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
-                         cudaStream_t stream = 0);
-
+gdf_column allocate_like(gdf_column const& input,
+                         cudf::size_type size,
+                         mask_allocation_policy mask_alloc = RETAIN,
+                         cudaStream_t stream               = 0);
 
 /**
  * @brief Creates a new column that is a copy of input
@@ -105,8 +107,9 @@ table empty_like(table const& t);
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
  */
-table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
-                    cudaStream_t stream = 0);
+table allocate_like(table const& t,
+                    mask_allocation_policy mask_alloc = RETAIN,
+                    cudaStream_t stream               = 0);
 
 /**
  * @brief Creates a table of columns with the specified size and same type as
@@ -125,9 +128,10 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
-                    cudaStream_t stream = 0);
-
+table allocate_like(table const& t,
+                    cudf::size_type size,
+                    mask_allocation_policy mask_alloc = RETAIN,
+                    cudaStream_t stream               = 0);
 
 /**
  * @brief Creates a table of columns and deep copies the data from an input
@@ -163,8 +167,10 @@ table copy(table const& t, cudaStream_t stream = 0);
  * 
  * @return void
  */
-void copy_range(gdf_column *out_column, gdf_column const &in_column,
-                cudf::size_type out_begin, cudf::size_type out_end, 
+void copy_range(gdf_column* out_column,
+                gdf_column const& in_column,
+                cudf::size_type out_begin,
+                cudf::size_type out_end,
                 cudf::size_type in_begin);
 
 /**
@@ -205,8 +211,10 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * of `scatter_map` and throw an error if any of its values are out of bounds.
  * @return[out] The result of the scatter
  */
-table scatter(table const& source, gdf_column const& scatter_map,
-	      table const& target, bool check_bounds = false);
+table scatter(table const& source,
+              gdf_column const& scatter_map,
+              table const& target,
+              bool check_bounds = false);
 
 /**
  * @brief Creates a new `table` as if an in-place scatter from a `source` table
@@ -246,8 +254,10 @@ table scatter(table const& source, gdf_column const& scatter_map,
  * of `scatter_map` and throw an error if any of its values are out of bounds.
  * @return[out] The result of the scatter
  */
-table scatter(table const& source, cudf::size_type const scatter_map[],
-	      table const& target, bool check_bounds = false);
+table scatter(table const& source,
+              cudf::size_type const scatter_map[],
+              table const& target,
+              bool check_bounds = false);
 
 /**
  * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
@@ -275,8 +285,9 @@ table scatter(table const& source, cudf::size_type const scatter_map[],
  * @return[out] The result of the scatter
  */
 table scatter(std::vector<gdf_scalar> const& source,
-	      cudf::size_type const scatter_map[],
-	      cudf::size_type num_scatter_rows, table const& target);
+              cudf::size_type const scatter_map[],
+              cudf::size_type num_scatter_rows,
+              table const& target);
 
 /**
  * @brief Gathers the specified rows (including null values) of a set of source
@@ -311,8 +322,10 @@ table scatter(std::vector<gdf_scalar> const& source,
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  */
-void gather(table const* source_table, gdf_column const& gather_map,
-	    table* destination_table, bool check_bounds=false);
+void gather(table const* source_table,
+            gdf_column const& gather_map,
+            table* destination_table,
+            bool check_bounds = false);
 
 /**
  * @brief Gathers the specified rows (including null values) of a set of source
@@ -347,8 +360,10 @@ void gather(table const* source_table, gdf_column const& gather_map,
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  */
-void gather(table const* source_table, cudf::size_type const gather_map[],
-	    table* destination_table, bool check_bounds=false);
+void gather(table const* source_table,
+            cudf::size_type const gather_map[],
+            table* destination_table,
+            bool check_bounds = false);
 
 /**
  * @brief Gathers the the specified rows (including null values) of a set of columns,
@@ -371,7 +386,7 @@ void gather(table const* source_table, cudf::size_type const gather_map[],
  * of `gather_map` and throw an error if any of its values are out of bounds.
  * @return cudf::table Result of the gather
  */
-table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds=false);
+table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds = false);
 
 /**
  * @brief Slices a column (including null values) into a set of columns
@@ -409,9 +424,9 @@ table gather(table const* source_table, gdf_column const& gather_map, bool check
  * number of rows. The number of rows in each column is equal to the difference
  * of two consecutive indices in the indices array.
  */
-std::vector<gdf_column*> slice(gdf_column const &         input,
-                               cudf::size_type const*      indices,
-                               cudf::size_type              num_indices);
+std::vector<gdf_column*> slice(gdf_column const& input,
+                               cudf::size_type const* indices,
+                               cudf::size_type num_indices);
 
 /**
  * @brief Splits a column (including null values) into a set of columns
@@ -457,9 +472,9 @@ std::vector<gdf_column*> slice(gdf_column const &         input,
  * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
-std::vector<gdf_column*> split(gdf_column const &         input,
-                               cudf::size_type const*      splits,
-                               cudf::size_type              num_splits);
+std::vector<gdf_column*> split(gdf_column const& input,
+                               cudf::size_type const* splits,
+                               cudf::size_type num_splits);
 
 /**
  * @brief Scatters the rows of a table to `n` tables according to a scatter map
@@ -497,6 +512,5 @@ std::vector<gdf_column*> split(gdf_column const &         input,
  * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`. 
  *
  */
-std::vector<cudf::table>
-scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
+std::vector<cudf::table> scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
 }  // namespace cudf

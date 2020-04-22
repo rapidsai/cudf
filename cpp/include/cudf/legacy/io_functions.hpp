@@ -19,8 +19,8 @@
 #include <memory>
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 
