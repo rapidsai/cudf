@@ -1807,6 +1807,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  Default of empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit(Scalar delimiter) {
+    assert type == DType.STRING : "column type must be a String";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
+      return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using whitespace as the delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit() {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplit(emptyString);
+    }
+  }
+
+  /**
    * Returns a new strings column that contains substrings of the strings in the provided column.
    * Overloading subString to support if end index is not provided. Appending -1 to indicate to
    * read until end of string.
@@ -1905,6 +1937,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
       return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes whitespace from the beginning and end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "strip")) {
+      return new ColumnVector(stringStrip(getNativeView()));
     }
   }
 
@@ -2176,6 +2219,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
+   * Native method which returns array of columns by splitting each string using the specified
+   * delimiter.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   */
+  private static native long[] stringSplit(long columnView, long delimiter);
+
+  /**
    * Native method to calculate substring from a given string column. 0 indexing.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param start      first character index to begin the substring(inclusive).
@@ -2217,6 +2268,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Native method to strip whitespace from the start and end of a string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   */
+  private static native long stringStrip(long columnView) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the

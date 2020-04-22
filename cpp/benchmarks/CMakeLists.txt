@@ -63,6 +63,11 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+set(LEGACY_GATHER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_benchmark.cu")
+
+ConfigureBench(LEGACY_GATHER_BENCH "${LEGACY_GATHER_BENCH_SRC}")
+
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
@@ -70,6 +75,11 @@ set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+set(LEGACY_SCATTER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_benchmark.cu")
+
+ConfigureBench(LEGACY_SCATTER_BENCH "${LEGACY_SCATTER_BENCH_SRC}")
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -135,6 +145,11 @@ set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+
+set(LEGACY_TD_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/legacy/type_dispatcher_benchmark.cu")
+
+ConfigureBench(LEGACY_TYPE_DISPATCHER_BENCH "${LEGACY_TD_BENCH_SRC}")
 
 ###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------

@@ -338,24 +338,6 @@ def test_dataframe_column_drop_via_attr():
     assert tuple(df.columns) == tuple("a")
 
 
-def test_dataframe_attribute_add_drop():
-    df = DataFrame()
-
-    with pytest.warns(UserWarning) as record:
-        df.some_new_attr = 5
-
-    assert len(record) == 1
-    assert "A new attribute will be created" in str(record[0].message)
-
-    assert hasattr(df, "some_new_attr")
-    assert isinstance(df.some_new_attr, int)
-    assert df.some_new_attr == 5
-
-    del df.some_new_attr
-
-    assert not hasattr(df, "some_new_attr")
-
-
 def test_dataframe_pop():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [7.0, 8.0, 9.0]}
@@ -4913,14 +4895,15 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
 
         if pd.api.types.is_categorical_dtype(expect_where):
             np.testing.assert_array_equal(
-                expect_where.cat.codes, got_where.cat.codes.fillna(-1)
+                expect_where.cat.codes,
+                got_where.cat.codes.fillna(-1).to_array(),
             )
             assert tuple(expect_where.cat.categories) == tuple(
                 got_where.cat.categories
             )
 
             np.testing.assert_array_equal(
-                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1)
+                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1).to_array()
             )
             assert tuple(expect_mask.cat.categories) == tuple(
                 got_mask.cat.categories

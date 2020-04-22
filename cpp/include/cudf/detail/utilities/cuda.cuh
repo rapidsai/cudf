@@ -23,8 +23,8 @@
 #include <cub/cub.cuh>
 //#include <utilities/cuda_utils.hpp>
 
-#include <type_traits>
 #include <assert.h>
+#include <type_traits>
 
 namespace cudf {
 namespace experimental {
@@ -57,10 +57,9 @@ class grid_1d {
   grid_1d(cudf::size_type overall_num_elements,
           cudf::size_type num_threads_per_block_,
           cudf::size_type elements_per_thread = 1)
-      : num_threads_per_block(num_threads_per_block_),
-        num_blocks(util::div_rounding_up_safe(
-            overall_num_elements,
-            elements_per_thread * num_threads_per_block)) {
+    : num_threads_per_block(num_threads_per_block_),
+      num_blocks(util::div_rounding_up_safe(overall_num_elements,
+                                            elements_per_thread * num_threads_per_block)) {
     CUDF_EXPECTS(num_threads_per_block > 0, "num_threads_per_block must be > 0");
     CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
   }
@@ -93,9 +92,7 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
   __shared__ T lane_values[warp_size];
 
   // Load each lane's value into a shared memory array
-  if (lane_id == leader_lane) {
-    lane_values[warp_id] = lane_value;
-  }
+  if (lane_id == leader_lane) { lane_values[warp_id] = lane_value; }
   __syncthreads();
 
   // Use a single warp to do the reduction, result is only defined on
@@ -104,7 +101,7 @@ __device__ T single_lane_block_sum_reduce(T lane_value) {
   if (warp_id == 0) {
     __shared__ typename cub::WarpReduce<T>::TempStorage temp;
     lane_value = (lane_id < warps_per_block) ? lane_values[lane_id] : T{0};
-    result = cub::WarpReduce<T>(temp).Sum(lane_value);
+    result     = cub::WarpReduce<T>(temp).Sum(lane_value);
   }
   return result;
 }
@@ -122,19 +119,17 @@ template <typename Kernel>
 cudf::size_type elements_per_thread(Kernel kernel,
                                     cudf::size_type total_size,
                                     cudf::size_type block_size,
-                                    cudf::size_type max_per_thread = 32)
-{
+                                    cudf::size_type max_per_thread = 32) {
   // calculate theoretical occupancy
   int max_blocks = 0;
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel,
-                                                         block_size, 0));
+  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
 
   int device = 0;
   CUDA_TRY(cudaGetDevice(&device));
   int num_sms = 0;
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
-  return std::max(1, std::min(per_thread, max_per_thread)); // switch to std::clamp with C++17
+  return std::max(1, std::min(per_thread, max_per_thread));  // switch to std::clamp with C++17
 }
 
 /**
@@ -151,7 +146,7 @@ cudf::size_type elements_per_thread(Kernel kernel,
  */
 template <typename T>
 __device__ inline T round_up_pow2(T number_to_round, T modulus) {
-    return (number_to_round + (modulus - 1)) & -modulus;
+  return (number_to_round + (modulus - 1)) & -modulus;
 }
 
 template <class F>

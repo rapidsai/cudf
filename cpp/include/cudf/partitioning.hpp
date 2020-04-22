@@ -58,9 +58,10 @@ namespace experimental {
  * determined by `offset[i+1] - offset[i]`.
  */
 std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
-    table_view const& t, column_view const& partition_map,
-    size_type num_partitions,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& t,
+  column_view const& partition_map,
+  size_type num_partitions,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Partitions rows from the input table into multiple output tables.
@@ -79,11 +80,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  *
  * @returns An output table and a vector of row offsets to each partition
  */
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
-hash_partition(
-    table_view const& input, std::vector<size_type> const& columns_to_hash,
-    int num_partitions,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  std::vector<size_type> const& columns_to_hash,
+  int num_partitions,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Round-robin partition.
@@ -220,12 +221,11 @@ hash_partition(
  * @return A std::pair consisting of an unique_ptr to the partitioned table
  * and the partition offsets for each partition within the table.
  */
-std::pair<std::unique_ptr<cudf::experimental::table>,
-          std::vector<cudf::size_type>>
-round_robin_partition(
-    table_view const& input, cudf::size_type num_partitions,
-    cudf::size_type start_partition = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
+round_robin_partition(table_view const& input,
+                      cudf::size_type num_partitions,
+                      cudf::size_type start_partition     = 0,
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

@@ -26,8 +26,8 @@ namespace experimental {
 
 class table {
  public:
-  table() = default;
-  ~table() = default;
+  table()        = default;
+  ~table()       = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;
   table& operator=(table&&) = delete;
@@ -55,7 +55,8 @@ class table {
    * @param mr Optional, the memory resource that will be used for allocating
    * the device memory for the new columns
    *---------------------------------------------------------------------------**/
-  table(table_view view, cudaStream_t stream = 0,
+  table(table_view view,
+        cudaStream_t stream                 = 0,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*

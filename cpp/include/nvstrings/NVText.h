@@ -26,36 +26,33 @@ class NVStrings;
  * @brief This class is a collection of utilities for operating on words or tokens.
  * It uses methods on the NVStrings class to access its character arrays.
  */
-class NVText
-{
-
-public:
-
-    /**
+class NVText {
+ public:
+  /**
      * @brief Tokenize all the strings into a single instance.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens. Default is whitespace.
      * @return Just the tokens. No empty or null strings.
      */
-    static NVStrings* tokenize(NVStrings const& strs, const char* delimiter=nullptr);
+  static NVStrings* tokenize(NVStrings const& strs, const char* delimiter = nullptr);
 
-    /**
+  /**
      * @brief Tokenize all the strings into a single instance using multiple delimiters.
      * @param strs Strings to tokenize.
      * @param delimiters These are used to identify and separate the tokens.
      * @return Just the tokens. No empty or null strings.
      */
-    static NVStrings* tokenize(NVStrings& strs, NVStrings& delimiters);
+  static NVStrings* tokenize(NVStrings& strs, NVStrings& delimiters);
 
-    /**
+  /**
      * @brief Tokenize all the strings into a single instance of unique tokens only.
      * @param strs Strings to tokenize
      * @param delimiter String or character used to identify tokens.
      * @return Unique tokens only. These are also sorted.
      */
-    static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter=nullptr);
+  static NVStrings* unique_tokens(NVStrings& strs, const char* delimiter = nullptr);
 
-    /**
+  /**
      * @brief Tokenize all input strings into single-character strings.
      *
      * Example
@@ -70,9 +67,9 @@ public:
      * @param strings Strings to tokenize
      * @return Strings with single characters.
      */
-    static NVStrings* character_tokenize(NVStrings const& strings);
+  static NVStrings* character_tokenize(NVStrings const& strings);
 
-    /**
+  /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens.
@@ -80,9 +77,12 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int token_count( const NVStrings& strs, const char* delimiter, unsigned int* results, bool devmem=true );
+  static unsigned int token_count(const NVStrings& strs,
+                                  const char* delimiter,
+                                  unsigned int* results,
+                                  bool devmem = true);
 
-     /**
+  /**
      * @brief Computes the number of tokens in each string.
      * @param strs Strings to tokenize.
      * @param delimiters NVStrings object containing strings or characters used to identify tokens.
@@ -90,9 +90,12 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int token_count( const NVStrings& strs, const NVStrings& delimiters, unsigned int* results, bool devmem=true );
+  static unsigned int token_count(const NVStrings& strs,
+                                  const NVStrings& delimiters,
+                                  unsigned int* results,
+                                  bool devmem = true);
 
-    /**
+  /**
      * @brief Fills a matrix of boolean values indicating the corresponding token appears in that string.
      * @param strs Strings to process.
      * @param tokens Strings to search within each string.
@@ -100,9 +103,12 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int contains_strings( NVStrings& strs, NVStrings& tokens, bool* results, bool devmem=true );
+  static unsigned int contains_strings(NVStrings& strs,
+                                       NVStrings& tokens,
+                                       bool* results,
+                                       bool devmem = true);
 
-    /**
+  /**
      * @brief Fills a matrix of int values indicating how many times the corresponding token appears in that string.
      * @param strs Strings to process.
      * @param tokens Strings to search within each string.
@@ -110,9 +116,12 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int strings_counts( NVStrings& strs, NVStrings& tokens, unsigned int* results, bool devmem=true );
+  static unsigned int strings_counts(NVStrings& strs,
+                                     NVStrings& tokens,
+                                     unsigned int* results,
+                                     bool devmem = true);
 
-    /**
+  /**
      * @brief Fills a matrix of int values indicating how many times the corresponding token appears in that string.
      * @param strs Strings to process.
      * @param tokens Strings to check within each string.
@@ -121,9 +130,13 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int tokens_counts( NVStrings& strs, NVStrings& tokens, const char* delimiter, unsigned int* results, bool devmem=true );
+  static unsigned int tokens_counts(NVStrings& strs,
+                                    NVStrings& tokens,
+                                    const char* delimiter,
+                                    unsigned int* results,
+                                    bool devmem = true);
 
-     /**
+  /**
      * @brief Replace specified tokens with new tokens in whitespace-delimited strings.
      * @param strs Strings to search/replace.
      * @param tgts Tokens to search for in each string in strs.
@@ -133,23 +146,26 @@ public:
      * @param delimiter String or character used to identify tokens.
      * @return New instance with tokens replaced appropriately.
      */
-    static NVStrings* replace_tokens(NVStrings& strs, NVStrings& tgts, NVStrings& repls, const char* delimiter=nullptr );
+  static NVStrings* replace_tokens(NVStrings& strs,
+                                   NVStrings& tgts,
+                                   NVStrings& repls,
+                                   const char* delimiter = nullptr);
 
-    /**
+  /**
      * @brief Remove extra whitespace from the beginning, end, and between words (tokens separated by whitespace).
      * @param strs Strings to normalize.
      * @return Normalized strings
      */
-    static NVStrings* normalize_spaces(NVStrings& strs);
+  static NVStrings* normalize_spaces(NVStrings& strs);
 
-    /**
+  /**
      * @brief Edit distance algorithms
      */
-    enum distance_type {
-        levenshtein ///< Use the levenshtein algorithm
-    };
+  enum distance_type {
+    levenshtein  ///< Use the levenshtein algorithm
+  };
 
-    /**
+  /**
      * @brief Compute the edit distance between each string and the target string.
      * @param algo The edit distance algorithm to use for the computation.
      * @param strs Strings to process.
@@ -158,8 +174,12 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int edit_distance( distance_type algo, NVStrings& strs, const char* str, unsigned int* results, bool devmem=true );
-    /**
+  static unsigned int edit_distance(distance_type algo,
+                                    NVStrings& strs,
+                                    const char* str,
+                                    unsigned int* results,
+                                    bool devmem = true);
+  /**
      * @brief Compute the edit distance between each string and the target strings.
      * @param algo The edit distance algorithm to use for the computation.
      * @param strs1 Strings to process.
@@ -168,9 +188,13 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
-    static unsigned int edit_distance( distance_type algo, NVStrings& strs1, NVStrings& strs2, unsigned int* results, bool devmem=true );
+  static unsigned int edit_distance(distance_type algo,
+                                    NVStrings& strs1,
+                                    NVStrings& strs2,
+                                    unsigned int* results,
+                                    bool devmem = true);
 
-    /**
+  /**
      * @brief Compute the edit distance between each pair of strings in given nvstrings object
      * @param algorithm The edit distance algorithm to use for the computation.
         Only `levenshtein` algorithm is supported yet.
@@ -183,12 +207,12 @@ public:
      * @throws cudf::logic_error when `algorithm != levenshtein`
      * @throws cudf::logic_error when `results == nullptr`
      */
-    static unsigned int edit_distance_matrix( distance_type algorithm,
-                                              NVStrings& strings,
-                                              unsigned int* results,
-                                              bool device_memory=true );
+  static unsigned int edit_distance_matrix(distance_type algorithm,
+                                           NVStrings& strings,
+                                           unsigned int* results,
+                                           bool device_memory = true);
 
-    /**
+  /**
      * @brief Converts tokenized list of strings into instance with ngrams.
      *
      * ```
@@ -203,9 +227,9 @@ public:
      * @param separator String used to join tokens.
      * @return The tokens as ngrams.
      */
-    static NVStrings* create_ngrams(NVStrings& strs, unsigned int ngrams, const char* separator );
+  static NVStrings* create_ngrams(NVStrings& strs, unsigned int ngrams, const char* separator);
 
-    /**
+  /**
      * @brief Creates ngrams of the tokens in each string.
      *
      * ```
@@ -222,9 +246,12 @@ public:
      * @param separator String used to join tokens.
      * @return The tokens as ngrams.
      */
-    static NVStrings* ngrams_tokenize(NVStrings const& strs, const char* delimiter, int32_t ngrams, const char* separator );
+  static NVStrings* ngrams_tokenize(NVStrings const& strs,
+                                    const char* delimiter,
+                                    int32_t ngrams,
+                                    const char* separator);
 
-    /**
+  /**
      * @brief Computes Porter Stemmer measure on words in the provided NVStrings instance.
      * @param strs Words that preprocessed to lowercase with no punctuation and no whitespace.
      * @param vowels Characters to check as vowels.
@@ -233,18 +260,22 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful
      */
-    static unsigned int porter_stemmer_measure(NVStrings& strs, const char* vowels, const char* y_char, unsigned int* results, bool devmem=true );
+  static unsigned int porter_stemmer_measure(NVStrings& strs,
+                                             const char* vowels,
+                                             const char* y_char,
+                                             unsigned int* results,
+                                             bool devmem = true);
 
-    /**
+  /**
      * @brief Vowel/consonant type
      */
-    enum letter_type {
-        none,     ///< Reserved
-        vowel,    ///< Return true for vowels only
-        consonant ///< Return true for consonants only
-    };
+  enum letter_type {
+    none,      ///< Reserved
+    vowel,     ///< Return true for vowels only
+    consonant  ///< Return true for consonants only
+  };
 
-    /**
+  /**
      * @brief Returns boolean array indicating whether the specified character index is a consonant or vowel.
      * False is returned if the index is beyond the end of the string.
      *
@@ -257,11 +288,15 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful
      */
-    static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
-                                  letter_type ltype, int character_index,
-                                  bool* results, bool devmem=true );
+  static unsigned int is_letter(NVStrings& strs,
+                                const char* vowels,
+                                const char* y_char,
+                                letter_type ltype,
+                                int character_index,
+                                bool* results,
+                                bool devmem = true);
 
-    /**
+  /**
      * @brief Returns boolean array indicating whether the specified character index is a consonant or vowel.
      * False is returned if the index is beyond the end of the string.
      *
@@ -275,16 +310,20 @@ public:
      * @param devmem True if results in device memory.
      * @return 0 if successful
      */
-    static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
-                                  letter_type ltype, int* indices,
-                                  bool* results, bool devmem=true );
+  static unsigned int is_letter(NVStrings& strs,
+                                const char* vowels,
+                                const char* y_char,
+                                letter_type ltype,
+                                int* indices,
+                                bool* results,
+                                bool devmem = true);
 
-     /**
+  /**
       * @brief Creates a new strings instance duplicating each string by its associated count value.
       * @param strs Strings to scatter.
       * @param counts[in] Number of times to repeat each corresponding string. Must have the same elements as strs.
       * @param devmem Indicates if counts array is in device memory.
       * @return New strings instance with appropriate scattered elements.
       */
-     static NVStrings* scatter_count( NVStrings& strs, unsigned int* counts, bool devmem=true );
+  static NVStrings* scatter_count(NVStrings& strs, unsigned int* counts, bool devmem = true);
 };
