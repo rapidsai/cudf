@@ -18,69 +18,73 @@
 
 #include <cudf/copying.hpp>
 
-#include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/table_utilities.hpp>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
-#include <random>
 #include <algorithm>
+#include <random>
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
-class Gather: public cudf::benchmark {
-};
+class Gather : public cudf::benchmark {};
 
-template<class TypeParam, bool coalesce>
-void BM_gather(benchmark::State& state){
+template <class TypeParam, bool coalesce>
+void BM_gather(benchmark::State& state) {
   const cudf::size_type source_size{(cudf::size_type)state.range(0)};
   const cudf::size_type n_cols = (cudf::size_type)state.range(1);
 
   // Every element is valid
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i){return i;});
+  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
 
   // Gather indices
   std::vector<cudf::size_type> host_map_data(source_size);
   std::iota(host_map_data.begin(), host_map_data.end(), 0);
 
-  if(coalesce){
+  if (coalesce) {
     std::reverse(host_map_data.begin(), host_map_data.end());
-  }else{
+  } else {
     std::random_shuffle(host_map_data.begin(), host_map_data.end());
   }
-   
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map(
-    host_map_data.begin(), host_map_data.end());
- 
+
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map(host_map_data.begin(),
+                                                                     host_map_data.end());
+
   std::vector<cudf::test::fixed_width_column_wrapper<TypeParam>> source_column_wrappers;
   std::vector<cudf::column_view> source_columns(n_cols);
 
   std::generate_n(std::back_inserter(source_column_wrappers), n_cols, [=]() {
-    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data+source_size); });
-  std::transform(source_column_wrappers.begin(), source_column_wrappers.end(),
-    source_columns.begin(), [](auto const& col) { return static_cast<cudf::column_view>(col); });
+    return cudf::test::fixed_width_column_wrapper<TypeParam>(data, data + source_size);
+  });
+  std::transform(source_column_wrappers.begin(),
+                 source_column_wrappers.end(),
+                 source_columns.begin(),
+                 [](auto const& col) { return static_cast<cudf::column_view>(col); });
 
-  cudf::table_view source_table {source_columns};
+  cudf::table_view source_table{source_columns};
 
-  for(auto _ : state){
-    cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
-      cudf::experimental::gather(source_table, gather_map);
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    cudf::experimental::gather(source_table, gather_map);
   }
-  
-  state.SetBytesProcessed(
-    state.iterations()*state.range(0)*n_cols*2*sizeof(TypeParam));
+
+  state.SetBytesProcessed(state.iterations() * state.range(0) * n_cols * 2 * sizeof(TypeParam));
 }
 
-#define GBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
-BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State& state) {        \
-  BM_gather<type, coalesce>(state);                                     \
-}                                                                       \
-BENCHMARK_REGISTER_F(Gather, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
+#define GBM_BENCHMARK_DEFINE(name, type, coalesce)               \
+  BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State & state) { \
+    BM_gather<type, coalesce>(state);                            \
+  }                                                              \
+  BENCHMARK_REGISTER_F(Gather, name)                             \
+    ->RangeMultiplier(2)                                         \
+    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                       \
+    ->UseManualTime();
 
-GBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
-GBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
+GBM_BENCHMARK_DEFINE(double_coalesce_x, double, true);
+GBM_BENCHMARK_DEFINE(double_coalesce_o, double, false);
