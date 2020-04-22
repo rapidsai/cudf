@@ -154,6 +154,23 @@ __device__ inline T round_up_pow2(T number_to_round, T modulus) {
     return (number_to_round + (modulus - 1)) & -modulus;
 }
 
+template <class F>
+__global__ void single_thread_kernel(F f) {
+  f();
+}
+
+/**
+ * @brief single thread cuda kernel
+ * 
+ * @tparam Functor Device functor type
+ * @param functor device functor object or device lambda function
+ * @param stream stream to run the kernel
+ */
+template <class Functor>
+void device_single_thread(Functor functor, cudaStream_t stream = 0) {
+  single_thread_kernel<<<1, 1, 0, stream>>>(functor);
+}
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
