@@ -1291,4 +1291,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_title(JNIEnv *env, jobj
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    auto pair = cudf::experimental::nans_to_nulls(*view);
+    std::unique_ptr<cudf::column> result(new cudf::column(*view));
+    result->set_null_mask(std::move(*(pair.first)), pair.second);
+
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
 } // extern "C"

@@ -208,6 +208,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new ColumnVector based on 'this' with NaNs converted to nulls, preserving the
+   * existing null values.
+   */
+  public ColumnVector nansToNulls() {
+    return new ColumnVector(nansToNulls(this.getNativeView()));
+  }
+
+  /**
    * Returns the number of rows in this vector.
    */
   public long getRowCount() {
@@ -2349,6 +2357,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
                                            int preceding, int following,
                                            long preceding_col, long following_col);
+
+  private static native long nansToNulls(long viewHandle) throws CudfException;
 
   private static native long lengths(long viewHandle) throws CudfException;
 
