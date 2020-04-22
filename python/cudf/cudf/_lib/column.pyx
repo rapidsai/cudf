@@ -395,7 +395,7 @@ cdef class Column:
             null_count = c_col.get()[0].null_count()
         else:
             mask = None
-            null_count = None
+            null_count = 0
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = ()
@@ -473,9 +473,10 @@ cdef class Column:
                     owner=mask_owner
                 )
 
-        null_count = None
         if cv.has_nulls():
             null_count = cv.null_count()
+        else:
+            null_count = 0
 
         children = []
         for child_index in range(cv.num_children()):
