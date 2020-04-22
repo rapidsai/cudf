@@ -31,8 +31,7 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/lists/lists_column_wrapper.cpp")
+            "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
