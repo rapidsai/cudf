@@ -166,8 +166,8 @@ std::unique_ptr<cudf::column> last_day_of_month(
  * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
  */
 std::unique_ptr<cudf::column> day_of_year(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace datetime
 }  // namespace cudf
