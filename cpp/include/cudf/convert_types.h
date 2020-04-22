@@ -1,5 +1,9 @@
 
 #pragma once
+
+#include <cudf/types.h>
+#include <cudf/types.hpp>
+
 //
 // Compressed Saprse Row - see https://en.wikipedia.org/wiki/Sparse_matrix
 //

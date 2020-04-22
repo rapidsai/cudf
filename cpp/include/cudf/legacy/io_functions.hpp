@@ -19,6 +19,7 @@
 #include <memory>
 
 #include <cudf/cudf.h>
+#include <cudf/legacy/io_types.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
 

@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 
-/*#include <cudf/cudf.h>
-#include <cudf/legacy/copying.hpp>
-#include <cudf/legacy/stream_compaction.hpp>
-#include <cudf/table.hpp>
-#include <cudf/types.hpp>
-#include <table/device_table_row_operators.cuh>*/
-#include "table/device_table.cuh"
-
 #include <cudf/legacy/table.hpp>
 #include <cudf/legacy/transform.hpp>
 #include <table/legacy/device_table.cuh>

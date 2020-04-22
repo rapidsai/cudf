@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
