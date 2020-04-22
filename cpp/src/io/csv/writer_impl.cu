@@ -44,6 +44,7 @@
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
@@ -110,10 +111,15 @@ struct probe_special_chars
   int32_t operator()(size_type idx) const {
     string_view d_str = d_column_.template element<string_view>(idx);
     if( predicate_(d_str) ) {  
-      //TODO:
-      //
       //count number of quotes "\""
-      size_type num_quotes{0};// = ?
+      size_type num_quotes{0};
+
+      //TODO: confirm below is correct;
+      //
+      num_quotes = thrust::count_if(d_str.begin(), d_str.end(),
+                                    [] __device__ (char_utf8 chr) {
+                                      return chr == '\"';
+                                    });
       return d_str.size_bytes() + num_quotes + 2;
     } else {
       return d_str.size_bytes();
