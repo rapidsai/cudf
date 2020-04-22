@@ -26,6 +26,7 @@
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
 
+// clang-format off
 namespace cudf {
 
 // Create a strings-type column from vector of pointer/size pairs
@@ -217,3 +218,4 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 }
 
 }  // namespace cudf
+// clang-format on TODO fix
