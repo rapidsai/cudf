@@ -171,9 +171,7 @@ class column_view_base {
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    *---------------------------------------------------------------------------**/
-  bool has_nulls(size_type begin, size_type end) const {
-    return null_count(begin, end) > 0;
-  }
+  bool has_nulls(size_type begin, size_type end) const { return null_count(begin, end) > 0; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -191,9 +189,9 @@ class column_view_base {
   size_type offset() const noexcept { return _offset; }
 
  protected:
-  data_type _type{EMPTY};   ///< Element type
-  size_type _size{};  ///< Number of elements
-  void const* _data{};      ///< Pointer to device memory containing elements
+  data_type _type{EMPTY};            ///< Element type
+  size_type _size{};                 ///< Number of elements
+  void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
                                      ///< Optional if `null_count() == 0`
@@ -201,10 +199,10 @@ class column_view_base {
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
-  column_view_base() = default;
-  ~column_view_base() = default;
+  column_view_base()                        = default;
+  ~column_view_base()                       = default;
   column_view_base(column_view_base const&) = default;
-  column_view_base(column_view_base&&) = default;
+  column_view_base(column_view_base&&)      = default;
   column_view_base& operator=(column_view_base const&) = default;
   column_view_base& operator=(column_view_base&&) = default;
 
@@ -238,10 +236,12 @@ class column_view_base {
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
-  column_view_base(data_type type, size_type size, void const* data,
+  column_view_base(data_type type,
+                   size_type size,
+                   void const* data,
                    bitmask_type const* null_mask = nullptr,
-                   size_type null_count = UNKNOWN_NULL_COUNT,
-                   size_type offset = 0);
+                   size_type null_count          = UNKNOWN_NULL_COUNT,
+                   size_type offset              = 0);
 };
 
 class mutable_column_view_base : public column_view_base {
@@ -271,10 +271,10 @@ class mutable_column_view_base : public column_view_base {
  *---------------------------------------------------------------------------**/
 class column_view : public detail::column_view_base {
  public:
-  column_view() = default;
-  ~column_view() = default;
+  column_view()                   = default;
+  ~column_view()                  = default;
   column_view(column_view const&) = default;
-  column_view(column_view&&) = default;
+  column_view(column_view&&)      = default;
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
@@ -308,9 +308,12 @@ class column_view : public detail::column_view_base {
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
-  column_view(data_type type, size_type size, void const* data,
-              bitmask_type const* null_mask = nullptr,
-              size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
+  column_view(data_type type,
+              size_type size,
+              void const* data,
+              bitmask_type const* null_mask            = nullptr,
+              size_type null_count                     = UNKNOWN_NULL_COUNT,
+              size_type offset                         = 0,
               std::vector<column_view> const& children = {});
 
   /**---------------------------------------------------------------------------*
@@ -319,9 +322,7 @@ class column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    *---------------------------------------------------------------------------**/
-  column_view child(size_type child_index) const noexcept {
-    return _children[child_index];
-  }
+  column_view child(size_type child_index) const noexcept { return _children[child_index]; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of child columns.
@@ -393,10 +394,12 @@ class mutable_column_view : public detail::column_view_base {
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
-  mutable_column_view(data_type type, size_type size, void* data,
-                      bitmask_type* null_mask = nullptr,
-                      size_type null_count = cudf::UNKNOWN_NULL_COUNT,
-                      size_type offset = 0,
+  mutable_column_view(data_type type,
+                      size_type size,
+                      void* data,
+                      bitmask_type* null_mask                          = nullptr,
+                      size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
+                      size_type offset                                 = 0,
                       std::vector<mutable_column_view> const& children = {});
 
   /**---------------------------------------------------------------------------*
@@ -510,4 +513,4 @@ class mutable_column_view : public detail::column_view_base {
  *---------------------------------------------------------------------------**/
 size_type count_descendants(column_view parent);
 
-}// namespace cudf
+}  // namespace cudf

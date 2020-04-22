@@ -15,13 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 /**
  * @brief Wraps strings onto multiple lines shorter than `width` by replacing appropriate white space with new-line characters (ASCII 0x0A).
  *
@@ -54,9 +52,9 @@ namespace strings
  * @param[in] mr Resource for allocating device memory.
  * @return Column of wrapped strings.
  */
-std::unique_ptr<column> wrap( strings_column_view const& strings,
-                              size_type width,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-  
-}//namespace strings
-}//namespace cudf
+std::unique_ptr<column> wrap(strings_column_view const& strings,
+                             size_type width,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+}  //namespace strings
+}  //namespace cudf

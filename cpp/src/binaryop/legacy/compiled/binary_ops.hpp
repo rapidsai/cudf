@@ -17,8 +17,8 @@
 #ifndef COMPILED_BINARY_OPS_H
 #define COMPILED_BINARY_OPS_H
 
-#include <cudf/types.hpp>
 #include <cudf/legacy/binaryop.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace binops {
@@ -29,9 +29,8 @@ gdf_error binary_operation(gdf_column* out,
                            gdf_column* rhs,
                            gdf_binary_operator ope);
 
-} // namespace compiled
-} // namespace binops
-} // namespace cudf
+}  // namespace compiled
+}  // namespace binops
+}  // namespace cudf
 
-
-#endif // COMPILED_BINARY_OPS_H
+#endif  // COMPILED_BINARY_OPS_H

@@ -17,7 +17,7 @@
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <cudf/cudf.h>
+#include <cudf/types.h>
 #include <cudf/types.hpp>
 
 #include <cassert>
@@ -25,7 +25,7 @@
 #include <vector>
 
 // Forward declaration
-typedef struct CUstream_st* cudaStream_t;
+using cudaStream_t = struct CUstream_st*;
 
 namespace cudf {
 
@@ -73,8 +73,9 @@ struct table {
   table(cudf::size_type num_rows,
         std::vector<gdf_dtype> const& dtypes,
         std::vector<gdf_dtype_extra_info> const& dtype_infos,
-        bool allocate_bitmasks = false, bool all_valid = false,
-        cudaStream_t stream = 0);
+        bool allocate_bitmasks = false,
+        bool all_valid         = false,
+        cudaStream_t stream    = 0);
 
   table() = default;
 
@@ -137,9 +138,7 @@ struct table {
    *
    *---------------------------------------------------------------------------**/
   cudf::size_type num_rows() const {
-    if (not _columns.empty()) {
-      return this->get_column(0)->size;
-    }
+    if (not _columns.empty()) { return this->get_column(0)->size; }
     return 0;
   }
 
@@ -204,7 +203,7 @@ bool has_nulls(cudf::table const& table);
  * @return A single table having all the columns from `table1` and `table2`
  * respectively in the same order.
  *---------------------------------------------------------------------------**/
-table concat(cudf::table const& table1, cudf::table const&table2);
+cudf::table concat(cudf::table const& table1, cudf::table const& table2);
 
 }  // namespace cudf
 

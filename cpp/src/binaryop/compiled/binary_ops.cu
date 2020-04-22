@@ -52,12 +52,24 @@ struct apply_binop {
       default: return Out{};
     }
   }
-  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x == y); }
-  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x != y); }
-  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x < y); }
-  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x > y); }
-  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x <= y); }
-  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const { return static_cast<Out>(x >= y); }
+  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x == y);
+  }
+  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x != y);
+  }
+  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x < y);
+  }
+  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x > y);
+  }
+  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x <= y);
+  }
+  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const {
+    return static_cast<Out>(x >= y);
+  }
   CUDA_DEVICE_CALLABLE Out null_equal(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const {
     if (!x.second && !y.second) return Out{true};
     if (x.second && y.second) return this->equal(x.first, y.first);
@@ -67,8 +79,10 @@ struct apply_binop {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
-  apply_binop_scalar_lhs_rhs(binary_operator op)
-    : apply_binop<Lhs, Rhs, Out>(op) {}
+  cudf::experimental::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_lhs_rhs(binary_operator op,
+                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
   CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const &y) const {
     return apply_binop<Lhs, Rhs, Out>::operator()(x, y);
   }
@@ -76,8 +90,10 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Lhs, Rhs, Out> {
-  apply_binop_scalar_rhs_lhs(binary_operator op)
-    : apply_binop<Lhs, Rhs, Out>(op) {}
+  cudf::experimental::scalar_device_type_t<Rhs> scalar;
+  apply_binop_scalar_rhs_lhs(binary_operator op,
+                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
+    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
   CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const &y) const {
     return apply_binop<Lhs, Rhs, Out>::operator()(y, x);
   }
@@ -85,34 +101,62 @@ struct apply_binop_scalar_rhs_lhs : apply_binop<Lhs, Rhs, Out> {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct binary_op {
-
-  std::unique_ptr<column> operator()(column_view const& lhs, scalar const& rhs, binary_operator op, data_type out_type, bool const reversed, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  std::unique_ptr<column> operator()(column_view const& lhs, 
+                                     scalar const& rhs, 
+                                     binary_operator op, 
+                                     data_type out_type, 
+                                     bool const reversed, 
+                                     rmm::mr::device_memory_resource* mr, 
+                                     cudaStream_t stream) {
     std::unique_ptr<column> out;
     if (null_using_binop(op)) {
-      out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID,
-                                stream, mr);
+      out = make_numeric_column(
+        data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID, stream, mr);
     } else {
       auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
-      out = make_fixed_width_column(out_type, lhs.size(), new_mask,
-                                    rhs.is_valid(stream) ? cudf::UNKNOWN_NULL_COUNT : lhs.size(),
-                                    stream, mr);
+      out           = make_fixed_width_column(out_type, 
+                                       lhs.size(), 
+                                       new_mask,
+                                       rhs.is_valid(stream) ? cudf::UNKNOWN_NULL_COUNT : lhs.size(),
+                                       stream, 
+                                       mr);
     }
 
     if (lhs.size() > 0 && (null_using_binop(op) || rhs.is_valid(stream))) {
-      auto out_view = out->mutable_view();
-      auto out_itr = out_view.begin<Out>();
+      auto out_view        = out->mutable_view();
+      auto out_itr         = out_view.begin<Out>();
       auto lhs_device_view = column_device_view::create(lhs, stream);
-      auto rhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(rhs);
+      auto rhs_itr         = cudf::experimental::detail::make_pair_iterator<Lhs, true>(rhs);
       if (lhs.has_nulls()) {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(*lhs_device_view);
-        reversed ?
-          thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op}) :
-          thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop_scalar_lhs_rhs<Lhs, Rhs, Out>{op}) ;
+        reversed 
+          ? thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                              lhs_itr, 
+                              lhs_itr + lhs.size(), 
+                              rhs_itr, 
+                              out_itr, 
+                              apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op}) 
+          : thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                              lhs_itr, 
+                              lhs_itr + lhs.size(), 
+                              rhs_itr, 
+                              out_itr, 
+                              apply_binop_scalar_lhs_rhs<Lhs, Rhs, Out>{op}) ;
       } else {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, false>(*lhs_device_view);
-        reversed ?
-          thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op}) :
-          thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop_scalar_lhs_rhs<Lhs, Rhs, Out>{op}) ;
+        reversed 
+          ? thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                              lhs_itr, 
+                              lhs_itr + lhs.size(), 
+                              rhs_itr, 
+                              out_itr, 
+                              apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op}) 
+          : thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                              lhs_itr, 
+                              lhs_itr + lhs.size(), 
+                              rhs_itr, 
+                              out_itr, 
+                              apply_binop_scalar_lhs_rhs<Lhs, Rhs, Out>{op}) ;
       }
     }
 
@@ -121,38 +165,67 @@ struct binary_op {
     return out;
   }
 
-  std::unique_ptr<column> operator()(column_view const& lhs, column_view const& rhs, binary_operator op, data_type out_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  std::unique_ptr<column> operator()(column_view const& lhs, 
+                                     column_view const& rhs, 
+                                     binary_operator op, 
+                                     data_type out_type, 
+                                     rmm::mr::device_memory_resource* mr, 
+                                     cudaStream_t stream) {
     std::unique_ptr<column> out;
     if (null_using_binop(op)) {
-      out = make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID,
-                                stream, mr);
+      out = make_numeric_column(
+        data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID, stream, mr);
     } else {
       auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-      out = make_fixed_width_column(out_type, lhs.size(), new_mask,
-                                    cudf::UNKNOWN_NULL_COUNT, stream, mr);
+      out           = make_fixed_width_column(out_type, 
+                                              lhs.size(), 
+                                              new_mask,
+                                              cudf::UNKNOWN_NULL_COUNT, 
+                                              stream, 
+                                              mr);
     }
 
     if (lhs.size() > 0) {
-      auto out_view = out->mutable_view();
-      auto out_itr = out_view.begin<Out>();
+      auto out_view        = out->mutable_view();
+      auto out_itr         = out_view.begin<Out>();
       auto lhs_device_view = column_device_view::create(lhs, stream);
       auto rhs_device_view = column_device_view::create(rhs, stream);
       if (lhs.has_nulls() && rhs.has_nulls()) {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(*lhs_device_view);
         auto rhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(*rhs_device_view);
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop<Lhs, Rhs, Out>{op});
+        thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                          lhs_itr, 
+                          lhs_itr + lhs.size(), 
+                          rhs_itr, 
+                          out_itr, 
+                          apply_binop<Lhs, Rhs, Out>{op});
       } else if (lhs.has_nulls()) {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(*lhs_device_view);
         auto rhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, false>(*rhs_device_view);
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop<Lhs, Rhs, Out>{op});
+        thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                          lhs_itr, 
+                          lhs_itr + lhs.size(), 
+                          rhs_itr, 
+                          out_itr, 
+                          apply_binop<Lhs, Rhs, Out>{op});
       } else if (rhs.has_nulls()) {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, false>(*lhs_device_view);
         auto rhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, true>(*rhs_device_view);
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop<Lhs, Rhs, Out>{op});
+        thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                          lhs_itr, 
+                          lhs_itr + lhs.size(), 
+                          rhs_itr, 
+                          out_itr, 
+                          apply_binop<Lhs, Rhs, Out>{op});
       } else {
         auto lhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, false>(*lhs_device_view);
         auto rhs_itr = cudf::experimental::detail::make_pair_iterator<Lhs, false>(*rhs_device_view);
-        thrust::transform(rmm::exec_policy(stream)->on(stream), lhs_itr, lhs_itr + lhs.size(), rhs_itr, out_itr, apply_binop<Lhs, Rhs, Out>{op});
+        thrust::transform(rmm::exec_policy(stream)->on(stream), 
+                          lhs_itr, 
+                          lhs_itr + lhs.size(), 
+                          rhs_itr, 
+                          out_itr, 
+                          apply_binop<Lhs, Rhs, Out>{op});
       }
     }
 
@@ -164,28 +237,46 @@ struct binary_op {
 
 }  // namespace
 
-std::unique_ptr<column> binary_operation(scalar const& lhs, column_view const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, bool>{}(rhs, lhs, op, output_type, true, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(
+    rhs, lhs, op, output_type, true, mr, stream);
 }
 
-std::unique_ptr<column> binary_operation(column_view const& lhs, scalar const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, false, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(
+    lhs, rhs, op, output_type, false, mr, stream);
 }
 
-std::unique_ptr<column> binary_operation(column_view const& lhs, column_view const& rhs, binary_operator op, data_type output_type, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr,
+                                         cudaStream_t stream) {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
   CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-  return binary_op<cudf::string_view, cudf::string_view, bool>{}(lhs, rhs, op, output_type, mr, stream);
+  return binary_op<cudf::string_view, cudf::string_view, bool>{}(
+    lhs, rhs, op, output_type, mr, stream);
 }
 
 }  // namespace compiled

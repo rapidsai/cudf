@@ -26,18 +26,17 @@ namespace cudf {
 
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-    : detail::column_device_view_base{source.type(),       source.size(),
-                                      source.head(),       source.null_mask(),
-                                      source.offset()},
-      _num_children{source.num_children()} {}
+  : detail::column_device_view_base{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset()},
+    _num_children{source.num_children()} {}
 
 // Free device memory allocated for children
-void column_device_view::destroy() {
-  delete this;
-}
+void column_device_view::destroy() { delete this; }
 
-namespace
-{
+namespace {
 
 /**
  * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
@@ -63,13 +62,13 @@ namespace
  * @param d_ptr The device pointer for calculating the d_children member of any child data
  * @return The device pointer to be used for the d_children member of the given column
  */
-template<typename ColumnView, typename ColumnDeviceView>
-ColumnDeviceView* child_columns_to_device_array( ColumnView const& source, void* h_ptr, void* d_ptr )
-{
+template <typename ColumnView, typename ColumnDeviceView>
+ColumnDeviceView* child_columns_to_device_array(ColumnView const& source,
+                                                void* h_ptr,
+                                                void* d_ptr) {
   ColumnDeviceView* d_children = nullptr;
-  size_type num_children = source.num_children();
-  if( num_children > 0 )
-  {
+  size_type num_children       = source.num_children();
+  if (num_children > 0) {
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // struct objects in order for d_children to be used as an array.
     auto h_column = reinterpret_cast<ColumnDeviceView*>(h_ptr);
@@ -77,13 +76,12 @@ ColumnDeviceView* child_columns_to_device_array( ColumnView const& source, void*
     // Any child data is assigned past the end of this array: h_end and d_end.
     auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
     auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
-    d_children = d_column; // set children pointer for return
-    for( size_type idx=0; idx < num_children; ++idx )
-    {
+    d_children = d_column;  // set children pointer for return
+    for (size_type idx = 0; idx < num_children; ++idx) {
       // inplace-new each child into host memory
       auto child = source.child(idx);
       new (h_column) ColumnDeviceView(child, h_end, d_end);
-      h_column++; // advance to next child
+      h_column++;  // advance to next child
       // update the pointers for holding this child column's child data
       auto col_child_data_size = ColumnDeviceView::extent(child) - sizeof(ColumnDeviceView);
       h_end += col_child_data_size;
@@ -94,20 +92,19 @@ ColumnDeviceView* child_columns_to_device_array( ColumnView const& source, void*
 }
 
 // helper function for column_device_view::create and mutable_column_device::create methods
-template<typename ColumnView, typename ColumnDeviceView>
+template <typename ColumnView, typename ColumnDeviceView>
 std::unique_ptr<ColumnDeviceView, std::function<void(ColumnDeviceView*)>>
-create_device_view_from_view( ColumnView const& source, cudaStream_t stream )
-{
+create_device_view_from_view(ColumnView const& source, cudaStream_t stream) {
   size_type num_children = source.num_children();
   // First calculate the size of memory needed to hold the
   // child columns. This is done by calling extent()
   // for each of the children.
   auto get_extent = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [&source](auto i) { return ColumnDeviceView::extent(source.child(i)); });
+    thrust::make_counting_iterator(0),
+    [&source](auto i) { return ColumnDeviceView::extent(source.child(i)); });
 
   auto const descendant_storage_bytes =
-      std::accumulate(get_extent, get_extent + num_children, std::size_t{0});
+    std::accumulate(get_extent, get_extent + num_children, std::size_t{0});
 
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
@@ -118,7 +115,7 @@ create_device_view_from_view( ColumnView const& source, cudaStream_t stream )
   // require setting some internal device pointers before being copied
   // from CPU to device.
   rmm::device_buffer* const descendant_storage =
-      new rmm::device_buffer(descendant_storage_bytes, stream);
+    new rmm::device_buffer(descendant_storage_bytes, stream);
 
   auto deleter = [descendant_storage](ColumnDeviceView* v) {
     v->destroy();
@@ -126,13 +123,13 @@ create_device_view_from_view( ColumnView const& source, cudaStream_t stream )
   };
 
   std::unique_ptr<ColumnDeviceView, decltype(deleter)> result{
-      new ColumnDeviceView(source, staging_buffer.data(),
-                           descendant_storage->data()),
-      deleter};
+    new ColumnDeviceView(source, staging_buffer.data(), descendant_storage->data()), deleter};
 
   // copy the CPU memory with all the children into device memory
-  CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(), staging_buffer.data(),
-                           descendant_storage->size(), cudaMemcpyDefault,
+  CUDA_TRY(cudaMemcpyAsync(descendant_storage->data(),
+                           staging_buffer.data(),
+                           descendant_storage->size(),
+                           cudaMemcpyDefault,
                            stream));
 
   CUDA_TRY(cudaStreamSynchronize(stream));
@@ -140,76 +137,80 @@ create_device_view_from_view( ColumnView const& source, cudaStream_t stream )
   return result;
 }
 
-} // namespace
+}  // namespace
 
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
-column_device_view::column_device_view( column_view source, void * h_ptr, void* d_ptr )
-    : detail::column_device_view_base{source.type(),       source.size(),
-                                      source.head(),       source.null_mask(),
-                                      source.offset()},
-      _num_children{source.num_children()}
-{
-  d_children = child_columns_to_device_array<column_view,column_device_view>(source,h_ptr,d_ptr);
+column_device_view::column_device_view(column_view source, void* h_ptr, void* d_ptr)
+  : detail::column_device_view_base{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset()},
+    _num_children{source.num_children()} {
+  d_children = child_columns_to_device_array<column_view, column_device_view>(source, h_ptr, d_ptr);
 }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>
 column_device_view::create(column_view source, cudaStream_t stream) {
-
   size_type num_children = source.num_children();
   if (num_children == 0) {
     // Can't use make_unique since the ctor is protected
     return std::unique_ptr<column_device_view>(new column_device_view(source));
   }
 
-  return create_device_view_from_view<column_view,column_device_view>(source,stream);
+  return create_device_view_from_view<column_view, column_device_view>(source, stream);
 }
 
 std::size_t column_device_view::extent(column_view const& source) {
   auto get_extent = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [&source](auto i) { return extent(source.child(i)); });
+    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
 
-  return std::accumulate(get_extent, get_extent + source.num_children(),
-                         sizeof(column_device_view));
+  return std::accumulate(
+    get_extent, get_extent + source.num_children(), sizeof(column_device_view));
 }
 
 // For use with inplace-new to pre-fill memory to be copied to device
-mutable_column_device_view::mutable_column_device_view( mutable_column_view source )
-    : detail::column_device_view_base{source.type(),       source.size(),
-                                      source.head(),       source.null_mask(),
-                                      source.offset()},
-      _num_children{source.num_children()} {}
+mutable_column_device_view::mutable_column_device_view(mutable_column_view source)
+  : detail::column_device_view_base{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset()},
+    _num_children{source.num_children()} {}
 
-mutable_column_device_view::mutable_column_device_view(
-    mutable_column_view source, void* h_ptr, void* d_ptr)
-    : detail::column_device_view_base{source.type(),       source.size(),
-                                      source.head(),       source.null_mask(),
-                                      source.offset()},
-      _num_children{source.num_children()} {
-  d_children = child_columns_to_device_array<mutable_column_view,mutable_column_device_view>(source,h_ptr,d_ptr);
+mutable_column_device_view::mutable_column_device_view(mutable_column_view source,
+                                                       void* h_ptr,
+                                                       void* d_ptr)
+  : detail::column_device_view_base{source.type(),
+                                    source.size(),
+                                    source.head(),
+                                    source.null_mask(),
+                                    source.offset()},
+    _num_children{source.num_children()} {
+  d_children = child_columns_to_device_array<mutable_column_view, mutable_column_device_view>(
+    source, h_ptr, d_ptr);
 }
 
 // Handle freeing children
-void mutable_column_device_view::destroy() {
-  delete this;
-}
+void mutable_column_device_view::destroy() { delete this; }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
-  mutable_column_device_view::create(mutable_column_view source, cudaStream_t stream) {
-  return source.num_children() == 0 ? std::unique_ptr<mutable_column_device_view>(new mutable_column_device_view(source))
-        : create_device_view_from_view<mutable_column_view,mutable_column_device_view>(source,stream);
+mutable_column_device_view::create(mutable_column_view source, cudaStream_t stream) {
+  return source.num_children() == 0
+           ? std::unique_ptr<mutable_column_device_view>(new mutable_column_device_view(source))
+           : create_device_view_from_view<mutable_column_view, mutable_column_device_view>(source,
+                                                                                           stream);
 }
 
 std::size_t mutable_column_device_view::extent(mutable_column_view source) {
   auto get_extent = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [&source](auto i) { return extent(source.child(i)); });
+    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
 
-  return std::accumulate(get_extent, get_extent + source.num_children(),
-                         sizeof(mutable_column_device_view));
+  return std::accumulate(
+    get_extent, get_extent + source.num_children(), sizeof(mutable_column_device_view));
 }
 
 }  // namespace cudf
