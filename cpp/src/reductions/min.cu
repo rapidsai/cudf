@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for reduction `min`
+// The translation unit for reduction `min`
 
 #include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::min(
-    column_view const& col, data_type const output_dtype,
-    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
-{
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher< cudf::experimental::reduction::op::min>;
+  column_view const& col,
+  data_type const output_dtype,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream) {
+  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<
+    cudf::experimental::reduction::op::min>;
   return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }

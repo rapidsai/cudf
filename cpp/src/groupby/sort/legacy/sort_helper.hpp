@@ -19,16 +19,15 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
 #include <cudf/legacy/groupby.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-
 
 namespace cudf {
 namespace groupby {
 namespace sort {
-namespace detail { 
+namespace detail {
 
 /**
  * @brief Helper class for computing sort-based groupby
@@ -42,13 +41,12 @@ namespace detail {
  *   value column
  */
 struct helper {
-  using index_vector = rmm::device_vector<cudf::size_type>;
-  using bitmask_vector = rmm::device_vector<bit_mask::bit_mask_t>;
-  using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-  using index_vec_pointer = std::unique_ptr<index_vector>;
+  using index_vector        = rmm::device_vector<cudf::size_type>;
+  using bitmask_vector      = rmm::device_vector<bit_mask::bit_mask_t>;
+  using gdf_col_pointer     = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+  using index_vec_pointer   = std::unique_ptr<index_vector>;
   using bitmask_vec_pointer = std::unique_ptr<bitmask_vector>;
-  using null_order = cudf::groupby::sort::null_order;
-
+  using null_order          = cudf::groupby::sort::null_order;
 
   /**
    * @brief Construct a new helper object
@@ -63,22 +61,22 @@ struct helper {
    * @param keys_pre_sorted if the keys are already sorted
    * @param stream used for all the computation in this helper object
    */
-  helper(cudf::table const& keys, bool include_nulls = false,
-          null_order null_sort_behavior = null_order::AFTER,
-          bool keys_pre_sorted = false,
-          cudaStream_t stream = 0)
-  : _keys(keys)
-  , _num_keys(-1)
-  , _include_nulls(include_nulls)
-  , _null_sort_behavior(null_sort_behavior)
-  , _keys_pre_sorted(keys_pre_sorted)
-  , _stream(stream)
-  {};
+  helper(cudf::table const& keys,
+         bool include_nulls            = false,
+         null_order null_sort_behavior = null_order::AFTER,
+         bool keys_pre_sorted          = false,
+         cudaStream_t stream           = 0)
+    : _keys(keys),
+      _num_keys(-1),
+      _include_nulls(include_nulls),
+      _null_sort_behavior(null_sort_behavior),
+      _keys_pre_sorted(keys_pre_sorted),
+      _stream(stream){};
 
-  ~helper() = default;
+  ~helper()             = default;
   helper(helper const&) = delete;
   helper& operator=(helper const&) = delete;
-  helper(helper&&) = default;
+  helper(helper&&)                 = default;
   helper& operator=(helper&&) = default;
 
   /**
@@ -93,8 +91,7 @@ struct helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column and per-group valid count
    */
-  std::pair<gdf_column, rmm::device_vector<cudf::size_type> >
-  sort_values(gdf_column const& values);
+  std::pair<gdf_column, rmm::device_vector<cudf::size_type>> sort_values(gdf_column const& values);
 
   /**
    * @brief Get a table of sorted unique keys
@@ -182,20 +179,19 @@ struct helper {
   bitmask_vector& keys_row_bitmask();
 
  private:
+  gdf_col_pointer _key_sorted_order;
+  gdf_col_pointer _unsorted_keys_labels;
+  cudf::table const& _keys;
 
-  gdf_col_pointer     _key_sorted_order;
-  gdf_col_pointer     _unsorted_keys_labels;
-  cudf::table const&  _keys;
+  index_vec_pointer _group_offsets;
+  index_vec_pointer _group_labels;
 
-  index_vec_pointer   _group_offsets;
-  index_vec_pointer   _group_labels;
+  cudf::size_type _num_keys;
+  bool _keys_pre_sorted;
+  bool _include_nulls;
+  null_order _null_sort_behavior;
 
-  cudf::size_type       _num_keys;
-  bool                _keys_pre_sorted;
-  bool                _include_nulls;
-  null_order          _null_sort_behavior;
-
-  cudaStream_t        _stream;
+  cudaStream_t _stream;
 
   bitmask_vec_pointer _keys_row_bitmask;
 };

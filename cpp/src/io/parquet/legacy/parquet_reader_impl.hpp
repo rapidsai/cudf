@@ -23,8 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
@@ -43,8 +43,7 @@ class reader::Impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<datasource> source,
-                reader_options const &options);
+  explicit Impl(std::unique_ptr<datasource> source, reader_options const &options);
 
   /**
    * @brief Returns the PANDAS-specific index column derived from the metadata.
@@ -83,8 +82,7 @@ class reader::Impl {
    *
    * @return size_t The total number of pages
    **/
-  size_t count_page_headers(
-      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks);
+  size_t count_page_headers(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks);
 
   /**
    * @brief Returns the page information from the given column chunks.
@@ -92,9 +90,8 @@ class reader::Impl {
    * @param[in] chunks List of column chunk descriptors
    * @param[in] pages List of page information
    **/
-  void decode_page_headers(
-      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      hostdevice_vector<parquet::gpu::PageInfo> &pages);
+  void decode_page_headers(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+                           hostdevice_vector<parquet::gpu::PageInfo> &pages);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -104,9 +101,8 @@ class reader::Impl {
    *
    * @return rmm::device_buffer Device buffer to decompressed page data
    **/
-  rmm::device_buffer decompress_page_data(
-      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      hostdevice_vector<parquet::gpu::PageInfo> &pages);
+  rmm::device_buffer decompress_page_data(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+                                          hostdevice_vector<parquet::gpu::PageInfo> &pages);
 
   /**
    * @brief Converts the page data and outputs to gdf_columns.
@@ -117,11 +113,11 @@ class reader::Impl {
    * @param[in] min_row Minimum number of rows to read from start
    * @param[in] total_rows Total number of rows to output
    **/
-  void decode_page_data(
-      hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-      hostdevice_vector<parquet::gpu::PageInfo> &pages,
-      const std::vector<gdf_column *> &chunk_map, size_t min_row,
-      size_t total_rows);
+  void decode_page_data(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
+                        hostdevice_vector<parquet::gpu::PageInfo> &pages,
+                        const std::vector<gdf_column *> &chunk_map,
+                        size_t min_row,
+                        size_t total_rows);
 
  private:
   std::unique_ptr<datasource> source_;
@@ -129,7 +125,7 @@ class reader::Impl {
 
   std::string pandas_index_col_;
   std::vector<std::pair<int, std::string>> selected_cols_;
-  bool strings_to_categorical_ = false;
+  bool strings_to_categorical_  = false;
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 

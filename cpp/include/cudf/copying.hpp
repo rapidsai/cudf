@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 
 #include <memory>
 
@@ -52,9 +52,11 @@ namespace experimental {
  * @param[in] mr The resource to use for all allocations
  * @return std::unique_ptr<table> Result of the gather
  */
-std::unique_ptr<table> gather(table_view const& source_table, column_view const& gather_map,
-                              bool check_bounds = false,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> gather(
+  table_view const& source_table,
+  column_view const& gather_map,
+  bool check_bounds                   = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
@@ -92,9 +94,11 @@ std::unique_ptr<table> gather(table_view const& source_table, column_view const&
  * @return Result of scattering values from source to target
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> scatter(
-    table_view const& source, column_view const& scatter_map,
-    table_view const& target, bool check_bounds = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& source,
+  column_view const& scatter_map,
+  table_view const& target,
+  bool check_bounds                   = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -128,17 +132,19 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> scatter(
-    std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
-    table_view const& target, bool check_bounds = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  std::vector<std::unique_ptr<scalar>> const& source,
+  column_view const& indices,
+  table_view const& target,
+  bool check_bounds                   = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** ---------------------------------------------------------------------------*
 * @brief Indicates when to allocate a mask, based on an existing mask.
 * ---------------------------------------------------------------------------**/
-enum class  mask_allocation_policy {
-    NEVER, ///< Do not allocate a null mask, regardless of input
-    RETAIN, ///< Allocate a null mask if the input contains one
-    ALWAYS ///< Allocate a null mask, regardless of input
+enum class mask_allocation_policy {
+  NEVER,   ///< Do not allocate a null mask, regardless of input
+  RETAIN,  ///< Allocate a null mask if the input contains one
+  ALWAYS   ///< Allocate a null mask, regardless of input
 };
 
 /*
@@ -158,10 +164,10 @@ std::unique_ptr<column> empty_like(column_view const& input);
  * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view const& input,
-                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
-                                      rmm::mr::device_memory_resource *mr =
-                                          rmm::mr::get_default_resource());
+std::unique_ptr<column> allocate_like(
+  column_view const& input,
+  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -173,10 +179,11 @@ std::unique_ptr<column> allocate_like(column_view const& input,
  * @param[in] mr Optional, The resource to use for all allocations
  * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view const& input, size_type size,
-                                      mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
-                                      rmm::mr::device_memory_resource *mr =
-                                          rmm::mr::get_default_resource());
+std::unique_ptr<column> allocate_like(
+  column_view const& input,
+  size_type size,
+  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a table of empty columns with the same types as the `input_table`
@@ -222,7 +229,8 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
-                         size_type source_begin, size_type source_end,
+                         size_type source_begin,
+                         size_type source_end,
                          size_type target_begin);
 
 /**
@@ -253,12 +261,13 @@ void copy_range_in_place(column_view const& source,
  * @param mr Memory resource to allocate the result target column.
  * @return std::unique_ptr<column> The result target column
  */
-std::unique_ptr<column> copy_range(column_view const& source,
-                                   column_view const& target,
-                                   size_type source_begin, size_type source_end,
-                                   size_type target_begin,
-                                   rmm::mr::device_memory_resource* mr =
-                                       rmm::mr::get_default_resource());
+std::unique_ptr<column> copy_range(
+  column_view const& source,
+  column_view const& target,
+  size_type source_begin,
+  size_type source_end,
+  size_type target_begin,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
@@ -286,8 +295,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
  * @param indices A vector of indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<column_view> slice(column_view const& input,
-                               std::vector<size_type> const& indices);
+std::vector<column_view> slice(column_view const& input, std::vector<size_type> const& indices);
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -318,8 +326,7 @@ std::vector<column_view> slice(column_view const& input,
  * @param indices A vector of indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<table_view> slice(table_view const& input,
-                               std::vector<size_type> const& indices);
+std::vector<table_view> slice(table_view const& input, std::vector<size_type> const& indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -349,8 +356,7 @@ std::vector<table_view> slice(table_view const& input,
  * @param splits A vector of indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<column_view> split(column_view const& input,
-                               std::vector<size_type> const& splits);
+std::vector<column_view> split(column_view const& input, std::vector<size_type> const& splits);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -383,8 +389,7 @@ std::vector<column_view> split(column_view const& input,
  * @param splits A vector of indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<table_view> split(table_view const& input,
-                               std::vector<size_type> const& splits);
+std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
 
 /**
  * @brief The result(s) of a `contiguous_split`
@@ -399,8 +404,8 @@ std::vector<table_view> split(table_view const& input,
  * not outlive the memory owned by `all_data`
  */
 struct contiguous_split_result {
-   cudf::table_view                    table;
-   std::unique_ptr<rmm::device_buffer> all_data;   
+  cudf::table_view table;
+  std::unique_ptr<rmm::device_buffer> all_data;
 };
 
 /**
@@ -440,9 +445,10 @@ struct contiguous_split_result {
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory buffer.
  */
-std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
-                                                      std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::vector<contiguous_split_result> contiguous_split(
+  cudf::table_view const& input,
+  std::vector<size_type> const& splits,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
@@ -463,8 +469,11 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
  *
  * @returns new column with the selected elements
  */
-std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& rhs, column_view const& boolean_mask,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> copy_if_else(
+  column_view const& lhs,
+  column_view const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
 * @brief Creates a new column by shifting all values by an offset.
@@ -498,9 +507,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, column_view const& 
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              rmm::mr::device_memory_resource *mr =
-                                rmm::mr::get_default_resource(),
-                              cudaStream_t stream = 0);
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream                 = 0);
 
 /*
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
@@ -520,8 +528,11 @@ std::unique_ptr<column> shift(column_view const& input,
  *
  * @returns new column with the selected elements
  */
-std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, column_view const& boolean_mask,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> copy_if_else(
+  scalar const& lhs,
+  column_view const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
@@ -541,9 +552,12 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs, column_view const& rhs, 
  *
  * @returns new column with the selected elements
  */
-std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, column_view const& boolean_mask,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-                                    
+std::unique_ptr<column> copy_if_else(
+  column_view const& lhs,
+  scalar const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
  *          @p rhs based on the value of the corresponding element in @p boolean_mask
@@ -560,8 +574,11 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs, scalar const& rhs, 
  *
  * @returns new column with the selected elements
  */
-std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, column_view const& boolean_mask,
-                                    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> copy_if_else(
+  scalar const& lhs,
+  scalar const& rhs,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Scatters rows from the input table to rows of the output corresponding
@@ -596,9 +613,10 @@ std::unique_ptr<column> copy_if_else( scalar const& lhs, scalar const& rhs, colu
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
 std::unique_ptr<table> boolean_mask_scatter(
-    table_view const& input, table_view const& target,
-    column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  table_view const& input,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Scatters scalar values to rows of the output corresponding
@@ -627,10 +645,11 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @returns Returns a table by scattering `input` into `target` as per `boolean_mask`.
  */
- std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::reference_wrapper<scalar>> const& input, table_view const& target,
-    column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> boolean_mask_scatter(
+  std::vector<std::reference_wrapper<scalar>> const& input,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

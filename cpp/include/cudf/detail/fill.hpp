@@ -54,8 +54,11 @@ namespace detail {
  * @param stream CUDA stream to run this function
  * @return void
  *---------------------------------------------------------------------------**/
-void fill_in_place(mutable_column_view& destination, size_type begin, size_type end,
-                   scalar const& value, cudaStream_t stream = 0);
+void fill_in_place(mutable_column_view& destination,
+                   size_type begin,
+                   size_type end,
+                   scalar const& value,
+                   cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in a column out-of-place with
@@ -81,12 +84,13 @@ void fill_in_place(mutable_column_view& destination, size_type begin, size_type 
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result output column
  *---------------------------------------------------------------------------**/
-std::unique_ptr<column> fill(
-    column_view const& input, size_type begin, size_type end,
-    scalar const& value,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
-                            
+std::unique_ptr<column> fill(column_view const& input,
+                             size_type begin,
+                             size_type end,
+                             scalar const& value,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf

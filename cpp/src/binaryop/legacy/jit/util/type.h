@@ -27,10 +27,10 @@ namespace cudf {
 namespace binops {
 namespace jit {
 
-    std::string getOperatorName(gdf_binary_operator ope);
+std::string getOperatorName(gdf_binary_operator ope);
 
 }
-}
-}
+}  // namespace binops
+}  // namespace cudf
 
 #endif

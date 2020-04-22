@@ -23,39 +23,33 @@ namespace cudf {
 namespace rolling {
 namespace jit {
 
-    /**---------------------------------------------------------------------------*
+/**---------------------------------------------------------------------------*
      * @brief Get the Operator Name
      * 
      * @param ope (enum) The aggregation operator as enum of type gdf_agg_op
      * @return std::string The name of the operator as string
      *---------------------------------------------------------------------------**/
-    std::string get_operator_name(gdf_agg_op ope) {
-        switch (ope) {
-            case GDF_CUDA_GENERIC_AGG_OPS:
-                return "cuda_generic_aggregator";
-            case GDF_NUMBA_GENERIC_AGG_OPS:
-                return "numba_generic_aggregator";
-            default:
-                return "None";
-        }
-    }
-   
-    /**---------------------------------------------------------------------------*
+std::string get_operator_name(gdf_agg_op ope) {
+  switch (ope) {
+    case GDF_CUDA_GENERIC_AGG_OPS: return "cuda_generic_aggregator";
+    case GDF_NUMBA_GENERIC_AGG_OPS: return "numba_generic_aggregator";
+    default: return "None";
+  }
+}
+
+/**---------------------------------------------------------------------------*
      * @brief Get the Function Name
      * 
      * @param ope (enum) The aggregation funtion as enum of type gdf_agg_op
      * @return std::string The name of the operator as string
      *---------------------------------------------------------------------------**/
-    std::string get_function_name(gdf_agg_op ope) {
-        switch (ope) {
-            case GDF_CUDA_GENERIC_AGG_OPS:
-                return "CUDA_GENERIC_AGGREGATOR";
-            case GDF_NUMBA_GENERIC_AGG_OPS:
-                return "NUMBA_GENERIC_AGGREGATOR";
-            default:
-                return "None";
-        }
-    }
-} // namespace jit
-} // namespace rolling
-} // namespace cudf
+std::string get_function_name(gdf_agg_op ope) {
+  switch (ope) {
+    case GDF_CUDA_GENERIC_AGG_OPS: return "CUDA_GENERIC_AGGREGATOR";
+    case GDF_NUMBA_GENERIC_AGG_OPS: return "NUMBA_GENERIC_AGGREGATOR";
+    default: return "None";
+  }
+}
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf

@@ -24,7 +24,7 @@ namespace jit {
 namespace code {
 
 const char* kernel =
-R"***(
+  R"***(
     #include <cudf/types.h>
     #include <cudf/types.hpp>
     #include "operation.h"
@@ -64,7 +64,7 @@ R"***(
     }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf
