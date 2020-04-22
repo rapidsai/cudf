@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <memory>
 
@@ -62,10 +62,12 @@ namespace detail {
  * @return Result of scattering values from source to target
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> scatter(
-    table_view const& source, column_view const& scatter_map,
-    table_view const& target, bool check_bounds = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view const& source,
+  column_view const& scatter_map,
+  table_view const& target,
+  bool check_bounds                   = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -100,10 +102,12 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> scatter(
-    std::vector<std::unique_ptr<scalar>> const& source, column_view const& indices,
-    table_view const& target, bool check_bounds = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  std::vector<std::unique_ptr<scalar>> const& source,
+  column_view const& indices,
+  table_view const& target,
+  bool check_bounds                   = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::experimental::boolean_mask_scatter(
@@ -113,11 +117,11 @@ std::unique_ptr<table> scatter(
  *
  * @param stream The stream to use for CUDA operations
  */
-std::unique_ptr<table> boolean_mask_scatter(
-    table_view const& source, table_view const& target,
-    column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
+                                            table_view const& target,
+                                            column_view const& boolean_mask,
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream = 0);
 
 /**
  * @copydoc cudf::experimental::boolean_mask_scatter(
@@ -129,11 +133,11 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @param stream The stream to use for CUDA operations
  */
 std::unique_ptr<table> boolean_mask_scatter(
-    std::vector<std::reference_wrapper<scalar>> const& source,
-    table_view const& target,
-    column_view const& boolean_mask,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  std::vector<std::reference_wrapper<scalar>> const& source,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace experimental

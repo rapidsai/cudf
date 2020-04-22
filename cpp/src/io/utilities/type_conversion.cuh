@@ -31,7 +31,6 @@ namespace io {
  */
 data_type convert_string_to_dtype(const std::string &dtype);
 
-} // namespace io
-} // namespace experimental
-} // namespace cudf
-
+}  // namespace io
+}  // namespace experimental
+}  // namespace cudf

@@ -42,7 +42,8 @@ std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::strin
  * @return std::string Compression type
  */
 std::string infer_compression_type(
-    const std::string &compression_arg, const std::string &filename,
-    const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map);
+  const std::string &compression_arg,
+  const std::string &filename,
+  const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map);
 
 }  // namespace cudf

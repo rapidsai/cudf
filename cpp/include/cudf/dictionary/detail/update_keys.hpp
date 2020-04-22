@@ -18,12 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 
 /**
  * @copydoc cudf::dictionary::add_keys(dictionary_column_view const&,column_view const&,mm::mr::device_memory_resource*)
@@ -34,10 +31,11 @@ namespace detail
  * @param stream Stream to use for any CUDA calls.
  * @return New dictionary column.
  */
-std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_column,
-                                  column_view const& new_keys,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                  cudaStream_t stream = 0);
+std::unique_ptr<column> add_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& new_keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::dictionary::remove_keys(dictionary_column_view const&,column_view const&,mm::mr::device_memory_resource*)
@@ -48,10 +46,11 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * @param stream Stream to use for any CUDA calls.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
-                                     column_view const& keys_to_remove,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                     cudaStream_t stream = 0);
+std::unique_ptr<column> remove_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& keys_to_remove,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view const&,mm::mr::device_memory_resource*)
@@ -61,9 +60,10 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
  * @param stream Stream to use for any CUDA calls.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictionary_column,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                            cudaStream_t stream = 0);
+std::unique_ptr<column> remove_unused_keys(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view const&,mm::mr::device_memory_resource*)
@@ -74,11 +74,12 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * @param stream Stream to use for any CUDA calls.
  * @return New dictionary column.
  */
-std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_column,
-                                  column_view const& keys,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                  cudaStream_t stream = 0);
+std::unique_ptr<column> set_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace dictionary
-} // namespace cudf
+}  // namespace detail
+}  // namespace dictionary
+}  // namespace cudf

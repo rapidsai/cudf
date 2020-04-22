@@ -15,12 +15,9 @@
  */
 #pragma once
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 
 /**
  * @brief Regenerates the special case mapping tables used to handle non-trivial unicode
@@ -33,6 +30,6 @@ namespace detail
  */
 void generate_special_mapping_hash_table();
 
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

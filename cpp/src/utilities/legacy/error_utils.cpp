@@ -1,9 +1,10 @@
 #include <cudf/cudf.h>
 
-#define GETNAME(x) case x: return #x;
+#define GETNAME(x) \
+  case x: return #x;
 
-const char * gdf_error_get_name(gdf_error errcode) {
-    switch (errcode) {
+const char* gdf_error_get_name(gdf_error errcode) {
+  switch (errcode) {
     // There must be one entry per enum values in gdf_error.
     GETNAME(GDF_SUCCESS)
     GETNAME(GDF_CUDA_ERROR)
@@ -32,7 +33,7 @@ const char * gdf_error_get_name(gdf_error errcode) {
     GETNAME(GDF_NOTIMPLEMENTED_ERROR)
     GETNAME(GDF_TABLES_SIZE_MISMATCH)
     default:
-        // This means we are missing an entry above for a gdf_error value.
-        return "Internal error. Unknown error code.";
-    }
+      // This means we are missing an entry above for a gdf_error value.
+      return "Internal error. Unknown error code.";
+  }
 }
