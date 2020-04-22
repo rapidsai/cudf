@@ -1,11 +1,7 @@
 import numpy as np
 
-from dask.dataframe.core import (
-    categoricalDtype_dispatch,
-    get_parallel_type,
-    make_meta,
-    meta_nonempty,
-)
+from dask.dataframe.categorical import categorical_dtype_dispatch
+from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
 
 import cudf
@@ -55,6 +51,9 @@ def _nonempty_index(idx):
     )
 
 
+UNKNOWN_CATEGORIES = "__UNKNOWN_CATEGORIES__"
+
+
 @meta_nonempty.register(cudf.Series)
 def _nonempty_series(s, idx=None):
     if idx is None:
@@ -62,7 +61,9 @@ def _nonempty_series(s, idx=None):
     dtype = s.dtype
     if is_categorical_dtype(dtype):
         categories = (
-            s._column.categories if len(s._column.categories) else ["a"]
+            s._column.categories
+            if len(s._column.categories)
+            else [UNKNOWN_CATEGORIES]
         )
         codes = [0, 0]
         ordered = s._column.ordered
@@ -117,8 +118,8 @@ def concat_cudf(
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
-@categoricalDtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def categoricalDtype_cudf(categories=None, ordered=None):
+@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
