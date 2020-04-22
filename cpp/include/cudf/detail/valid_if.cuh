@@ -17,13 +17,13 @@
 #pragma once
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/utilities/error.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
 
-#include <thrust/distance.h>
 #include <thrust/device_vector.h>
+#include <thrust/distance.h>
 #include <rmm/device_scalar.hpp>
 
 namespace cudf {
@@ -44,9 +44,8 @@ namespace detail {
  * @param[out] valid_count The count of set bits in the output bitmask
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
-__global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
-                                size_type size, Predicate p,
-                                size_type* valid_count) {
+__global__ void valid_if_kernel(
+  bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count) {
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -63,11 +62,8 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
     active_mask = __ballot_sync(active_mask, i < size);
   }
 
-  size_type block_count =
-      single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
-  if (threadIdx.x == 0) {
-    atomicAdd(valid_count, block_count);
-  }
+  size_type block_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
+  if (threadIdx.x == 0) { atomicAdd(valid_count, block_count); }
 }  // namespace detail
 
 /**
@@ -90,15 +86,16 @@ __global__ void valid_if_kernel(bitmask_type* output, InputIterator begin,
  */
 template <typename InputIterator, typename Predicate>
 std::pair<rmm::device_buffer, size_type> valid_if(
-    InputIterator begin, InputIterator end, Predicate p,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  InputIterator begin,
+  InputIterator end,
+  Predicate p,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
   size_type size = thrust::distance(begin, end);
 
-  auto null_mask =
-      create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
+  auto null_mask = create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
   size_type null_count{0};
   if (size > 0) {
@@ -107,10 +104,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};
 
-    valid_if_kernel<block_size>
-        <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-            static_cast<bitmask_type*>(null_mask.data()), begin, size, p,
-            valid_count.data());
+    valid_if_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+      static_cast<bitmask_type*>(null_mask.data()), begin, size, p, valid_count.data());
 
     null_count = size - valid_count.value(stream);
   }
@@ -161,29 +156,24 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
                                   bitmask_type* masks[],
                                   size_type mask_count,
                                   size_type mask_num_bits,
-                                  size_type* valid_counts)
-{
+                                  size_type* valid_counts) {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
-    if (mask == nullptr) {
-      continue;
-    }
+    if (mask == nullptr) { continue; }
 
-    auto block_offset = blockIdx.x * blockDim.x;
+    auto block_offset     = blockIdx.x * blockDim.x;
     auto warp_valid_count = static_cast<size_type>(0);
 
     while (block_offset < mask_num_bits) {
-      auto const thread_idx = block_offset + threadIdx.x;
+      auto const thread_idx    = block_offset + threadIdx.x;
       auto const thread_active = thread_idx < mask_num_bits;
-      auto const arg_1 = *(begin1 + mask_idx);
-      auto const arg_2 = *(begin2 + thread_idx);
-      auto const bit_is_valid = thread_active && p(arg_1, arg_2);
+      auto const arg_1         = *(begin1 + mask_idx);
+      auto const arg_2         = *(begin2 + thread_idx);
+      auto const bit_is_valid  = thread_active && p(arg_1, arg_2);
       auto const warp_validity = __ballot_sync(0xffffffff, bit_is_valid);
-      auto const mask_idx = word_index(thread_idx);
+      auto const mask_idx      = word_index(thread_idx);
 
-      if (thread_active && threadIdx.x % warp_size == 0) {
-        mask[mask_idx] = warp_validity;
-      }
+      if (thread_active && threadIdx.x % warp_size == 0) { mask[mask_idx] = warp_validity; }
 
       warp_valid_count += __popc(warp_validity);
       block_offset += blockDim.x * gridDim.x;
@@ -191,9 +181,7 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
 
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
-    if (threadIdx.x == 0) {
-      atomicAdd(valid_counts + mask_idx, block_valid_count);
-    }
+    if (threadIdx.x == 0) { atomicAdd(valid_counts + mask_idx, block_valid_count); }
   }
 }
 

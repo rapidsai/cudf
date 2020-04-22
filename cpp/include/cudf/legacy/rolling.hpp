@@ -65,16 +65,16 @@ namespace cudf {
  * @returns   gdf_column The output column
  *
  * --------------------------------------------------------------------------*/
-gdf_column* rolling_window(const gdf_column &input_col,
+gdf_column* rolling_window(const gdf_column& input_col,
                            cudf::size_type window,
                            cudf::size_type min_periods,
                            cudf::size_type forward_window,
                            gdf_agg_op agg_type,
-                           const cudf::size_type *window_col,
-                           const cudf::size_type *min_periods_col,
-                           const cudf::size_type *forward_window_col);
+                           const cudf::size_type* window_col,
+                           const cudf::size_type* min_periods_col,
+                           const cudf::size_type* forward_window_col);
 
- /* --------------------------------------------------------------------------*
+/* --------------------------------------------------------------------------*
  * @brief  Applies a user defined rolling window function to the values in a column.
  *
  * This function aggregates values in a window around each element i of the input

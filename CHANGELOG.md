@@ -10,6 +10,7 @@
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
 - PR #4906 Add Java bindings for interleave_columns
+- PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
 
 ## Improvements
@@ -100,6 +101,7 @@
 - PR #4924 Properly handle npartition argument in rearrange_by_hash
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #3259 Add .clang-format file & format all files
 - PR #4943 Fix-up error handling in GPU detection
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
 - PR #4928 Misc performance improvements for `scatter_by_map`
@@ -111,6 +113,7 @@
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
 - PR #4968 Add CODE_OF_CONDUCT.md
+- PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 
 ## Bug Fixes
 
