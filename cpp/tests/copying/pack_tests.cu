@@ -22,22 +22,20 @@
 namespace cudf {
 namespace test {
 
-
 struct PackUnpackTest : public BaseFixture {
-
   void run_test(table_view const& t) {
-    auto packed = experimental::pack(t);
+    auto packed  = experimental::pack(t);
     auto packed2 = std::make_unique<experimental::packed_table>(
-      std::vector<uint8_t>(packed.table_metadata),
+      std::make_unique<std::vector<uint8_t>>(*packed.table_metadata),
       std::make_unique<rmm::device_buffer>(*packed.table_data));
 
     experimental::contiguous_split_result unpacked = experimental::unpack(std::move(packed2));
 
     expect_tables_equal(t, unpacked.table);
   }
-
 };
 
+// clang-format off
 TEST_F(PackUnpackTest, SingleColumnFixedWidth)
 {
   fixed_width_column_wrapper<int64_t> col1 ({ 1, 2, 3, 4, 5, 6, 7},
@@ -79,6 +77,7 @@ TEST_F(PackUnpackTest, MultiColumnWithStrings)
 
   this->run_test(t);
 }
+// clang-format on
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

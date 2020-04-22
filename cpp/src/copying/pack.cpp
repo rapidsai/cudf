@@ -55,14 +55,16 @@ packed_table pack(table_view const& input,
 
   serialized_column table_element = {{}, 0, 0, 0, contiguous_data.table.num_columns()};
 
-  auto result = packed_table({}, std::move(contiguous_data.all_data));
-  add_column_to_vector(table_element, &result.table_metadata);
+  auto result =
+    packed_table(std::make_unique<std::vector<uint8_t>>(), std::move(contiguous_data.all_data));
+  add_column_to_vector(table_element, result.table_metadata.get());
 
   std::vector<column_view> table_columns(contiguous_data.table.begin(),
                                          contiguous_data.table.end());
 
-  add_columns(
-    table_columns, static_cast<uint8_t const*>(result.table_data->data()), &result.table_metadata);
+  add_columns(table_columns,
+              static_cast<uint8_t const*>(result.table_data->data()),
+              result.table_metadata.get());
 
   return result;
 }
@@ -119,7 +121,7 @@ std::vector<column_view> get_columns(size_type num_columns,
 
 contiguous_split_result unpack(std::unique_ptr<packed_table> input) {
   auto serialized_columns =
-    reinterpret_cast<serialized_column const*>(input->table_metadata.data());
+    reinterpret_cast<serialized_column const*>(input->table_metadata->data());
   size_type num_columns = serialized_columns[0]._num_children;
   size_t current_index  = 1;
 
