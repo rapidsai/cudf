@@ -330,7 +330,9 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop and (stride is None or stride == 1):
+        if (start > stop and (stride is None or stride == 1)) or (
+            len(self._data) == 0 and keep_index is False
+        ):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start

@@ -272,7 +272,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
 
                 pos_slice = slice(start_index, stop_index, arg[0].step)
-                df = columns_df[pos_slice]
+                df = columns_df._slice(pos_slice)
             else:
                 tmp_arg = arg
                 if is_scalar(arg[0]):
@@ -281,7 +281,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     # a array kind.
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
-                    return columns_df[0:0]
+                    return columns_df._empty_like(keep_index=True)
                 tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
 
                 if pd.api.types.is_bool_dtype(tmp_arg[0]):
@@ -383,7 +383,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 df = columns_df._slice(slice(index, index + 1, 1))
             else:
                 arg = (column.as_column(arg[0]), arg[1])
-                df = columns_df.take(arg[0])
+                if pd.api.types.is_bool_dtype(arg[0]):
+                    df = columns_df._apply_boolean_mask(arg[0])
+                else:
+                    df = columns_df._gather(arg[0])
 
         # Iloc Step 3:
         # Reindex
