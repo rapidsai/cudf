@@ -154,10 +154,13 @@ struct modify_special_chars
 
   __device__
   int32_t operator()(size_type idx) {
+    using namespace cudf::strings::detail;
+    
     if( d_column_.is_null(idx) )
       return 0; // null string
 
     string_view d_str = d_column_.template element<string_view>(idx);
+    size_type str_size_bytes = d_str.size_bytes();
     
     if( predicate_(d_str) ) {
       char const quote_char = '\"';
@@ -170,16 +173,44 @@ struct modify_special_chars
       char* d_buffer = get_output_ptr(idx);
       //assert( d_buffer != nullptr );
 
-      d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote prefix
+
+      //Assumption: d_str is _not_ modified by d_buffer manipulation
+      //
+      d_buffer = copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote prefix
       
-      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        auto the_chr = *itr;
-        
-        if( the_chr == quote_char )
-          d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add another quote
+      bool done{false};
+      size_type old_str_pos = 0;
+      size_type str_pos = 0;
+      
+      while( !done ) {
+        str_pos = d_str.find(quote_str, len1byte, str_pos);
+        if( str_pos >=0 ) {
+          auto delta = str_pos - old_str_pos;
+          auto relative_buffer_pos = delta + 1;//???? (+1)
+          
+          d_buffer = copy_and_increment(d_buffer + relative_buffer_pos, quote_str, len1byte);  // add another quote;
+
+          old_str_pos = str_pos;
+          ++str_pos;//start next search from character next to found
+        } else {
+          done = true;
+        }
       }
+      auto last_delta = str_size_bytes - old_str_pos;
+      copy_and_increment(d_buffer + last_delta, quote_str, len1byte);  // add the quote suffix;
       
-      d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote suffix
+
+      //TODO: Fix{
+      //?????
+      // for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+      //   auto the_chr = *itr;
+        
+      //   if( the_chr == quote_char )
+      //     d_buffer = copy_and_increment(d_buffer, quote_str, len1byte);  // add another quote; PROBLEM: d_buffer was not incremented properly!
+      // }
+       
+      // d_buffer = copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote suffix; PROBLEM: d_buffer was not incremented properly!
+      //}Fix
     }
     return 0;
   }
