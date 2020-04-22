@@ -3,6 +3,7 @@ import numpy as np
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
 
 import cudf
 from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype
@@ -49,9 +50,6 @@ def _nonempty_index(idx):
     raise TypeError(
         "Don't know how to handle index of type {0}".format(type(idx))
     )
-
-
-UNKNOWN_CATEGORIES = "__UNKNOWN_CATEGORIES__"
 
 
 @meta_nonempty.register(cudf.Series)
