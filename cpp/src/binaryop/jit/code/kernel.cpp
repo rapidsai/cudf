@@ -27,8 +27,8 @@ namespace code {
 const char* kernel =
   R"***(
     #include <cudf/types.hpp>
-    #include <cudf/wrappers/timestamps.hpp>
     #include <simt/limits>
+    #include <cudf/wrappers/timestamps.hpp>
     #include "operation.h"
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
