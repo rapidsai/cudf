@@ -24,6 +24,7 @@ namespace binops {
 namespace jit {
 namespace code {
 
+// clang-format off
 const char* kernel =
   R"***(
     #include <cudf/types.hpp>
@@ -65,6 +66,7 @@ const char* kernel =
         }
     }
 )***";
+// clang-format on
 
 }  // namespace code
 }  // namespace jit
