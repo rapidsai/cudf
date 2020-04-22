@@ -34,6 +34,8 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/combine.hpp>
 
+#include <strings/utilities.cuh>
+
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -138,7 +140,7 @@ private:
 };
 
 struct modify_special_chars
-{
+{ 
   explicit modify_special_chars(column_device_view const d_column,
                                 int32_t const* d_offsets,
                                 char* d_chars,
@@ -159,16 +161,25 @@ struct modify_special_chars
     
     if( predicate_(d_str) ) {
       char const quote_char = '\"';
+      char const* quote_str = "\"";
+      size_type len1byte{1};//<-TODO: confirm!
       
       //modify d_str by duplicating all 2bl quotes
       //and surrounding whole string by 2bl quotes:
       //
       char* d_buffer = get_output_ptr(idx);
+      //assert( d_buffer != nullptr );
+
+      d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote prefix
       
       for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        //TODO:
-        //
+        auto the_chr = *itr;
+        
+        if( the_chr == quote_char )
+          d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add another quote
       }
+      
+      d_buffer = cudf::strings::detail::copy_and_increment(d_buffer, quote_str, len1byte);  // add the quote suffix
     }
     return 0;
   }
