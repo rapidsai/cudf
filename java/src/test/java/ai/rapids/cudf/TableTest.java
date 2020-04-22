@@ -2274,9 +2274,9 @@ public class TableTest extends CudfTestBase {
             .build();
          Table expected = new Table.TestBuilder()
                  .column(1, 2)
-                 .column((Integer)null, null)
+                 .column(12, null)
                  .build();
-         Table found = input.groupBy(0).aggregate(first(1, true))) {
+         Table found = input.groupBy(0).aggregate(last(1, true))) {
       assertTablesAreEqual(expected, found);
     }
   }
