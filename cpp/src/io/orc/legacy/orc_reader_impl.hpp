@@ -22,11 +22,11 @@
 #include <string>
 #include <vector>
 
-#include <cudf/legacy/table.hpp>
+#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace io {
@@ -44,8 +44,7 @@ class reader::Impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<datasource> source,
-                reader_options const &options);
+  explicit Impl(std::unique_ptr<datasource> source, reader_options const &options);
 
   /**
    * @brief Read an entire set or a subset of data from the source and returns
@@ -82,7 +81,8 @@ class reader::Impl {
                             const std::vector<int> &orc2gdf,
                             const std::vector<int> &gdf2orc,
                             const std::vector<orc::SchemaType> types,
-                            bool use_index, size_t *num_dictionary_entries,
+                            bool use_index,
+                            size_t *num_dictionary_entries,
                             hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
                             std::vector<OrcStreamInfo> &stream_info);
 
@@ -99,13 +99,13 @@ class reader::Impl {
    *
    * @return rmm::device_buffer Device buffer to decompressed page data
    **/
-  rmm::device_buffer decompress_stripe_data(
-      hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-      const std::vector<rmm::device_buffer> &stripe_data,
-      const orc::OrcDecompressor *decompressor,
-      std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
-      rmm::device_vector<orc::gpu::RowGroup> &row_groups,
-      size_t row_index_stride);
+  rmm::device_buffer decompress_stripe_data(hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
+                                            const std::vector<rmm::device_buffer> &stripe_data,
+                                            const orc::OrcDecompressor *decompressor,
+                                            std::vector<OrcStreamInfo> &stream_info,
+                                            size_t num_stripes,
+                                            rmm::device_vector<orc::gpu::RowGroup> &row_groups,
+                                            size_t row_index_stride);
 
   /**
    * @brief Converts the stripe column data and outputs to gdf_columns
@@ -119,7 +119,8 @@ class reader::Impl {
    * @param[in,out] columns List of gdf_columns
    **/
   void decode_stream_data(hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-                          size_t num_dicts, size_t skip_rows,
+                          size_t num_dicts,
+                          size_t skip_rows,
                           const std::vector<int64_t> &timezone_table,
                           rmm::device_vector<orc::gpu::RowGroup> &row_groups,
                           size_t row_index_stride,
@@ -140,11 +141,11 @@ class reader::Impl {
   std::unique_ptr<OrcMetadata> md_;
 
   std::vector<int> selected_cols_;
-  bool has_timestamp_column_ = false;
-  bool use_index_ = true;
-  bool use_np_dtypes_ = true;
-  bool decimals_as_float_ = true;
-  int decimals_as_int_scale_ = -1;
+  bool has_timestamp_column_    = false;
+  bool use_index_               = true;
+  bool use_np_dtypes_           = true;
+  bool decimals_as_float_       = true;
+  int decimals_as_int_scale_    = -1;
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 

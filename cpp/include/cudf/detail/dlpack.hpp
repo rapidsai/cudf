@@ -39,9 +39,9 @@ namespace detail {
  * @return Table with a copy of the tensor data
  */
 std::unique_ptr<experimental::table> from_dlpack(
-    DLManagedTensor const* managed_tensor,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  DLManagedTensor const* managed_tensor,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Convert a cudf table into a DLPack DLTensor
@@ -63,8 +63,8 @@ std::unique_ptr<experimental::table> from_dlpack(
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
 DLManagedTensor* to_dlpack(table_view const& input,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                           cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

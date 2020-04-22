@@ -40,7 +40,7 @@ namespace detail {
 void group_quantiles(gdf_column const& values,
                      rmm::device_vector<cudf::size_type> const& group_offsets,
                      rmm::device_vector<cudf::size_type> const& group_sizes,
-                     gdf_column * result,
+                     gdf_column* result,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
                      cudaStream_t stream = 0);
@@ -57,8 +57,8 @@ void group_quantiles(gdf_column const& values,
 void group_medians(gdf_column const& values,
                    rmm::device_vector<cudf::size_type> const& group_offsets,
                    rmm::device_vector<cudf::size_type> const& group_sizes,
-                   gdf_column * result,
+                   gdf_column* result,
                    cudaStream_t stream = 0);
 
-} // namespace detail
-} // namespace cudf
+}  // namespace detail
+}  // namespace cudf

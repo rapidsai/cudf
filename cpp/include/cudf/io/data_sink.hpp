@@ -16,10 +16,9 @@
 
 #pragma once
 
-
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -65,7 +64,7 @@ class data_sink {
    * a custom sink instance and use it across multiple write() calls.
    *   
    **/
-  static std::unique_ptr<data_sink> create(cudf::io::data_sink *const user_sink);
+  static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
 
   /**
    * @brief Base class destructor
@@ -114,7 +113,7 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) { 
+  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
     CUDF_FAIL("data_sink classes that support device_write must override this function.");
   }
 
@@ -124,7 +123,7 @@ class data_sink {
    * @return void
    */
   virtual void flush() = 0;
-  
+
   /**
    * @brief Returns the total number of bytes written into this sink
    *

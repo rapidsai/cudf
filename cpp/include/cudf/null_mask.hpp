@@ -76,10 +76,12 @@ size_type num_bitmask_words(size_type number_of_bits);
  * satisfying the desired size and state
  *---------------------------------------------------------------------------**/
 rmm::device_buffer create_null_mask(
-    size_type size, mask_state state, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  size_type size,
+  mask_state state,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
- /**---------------------------------------------------------------------------*
+/**---------------------------------------------------------------------------*
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range 
  *  `[begin_bit, end_bit)`
  *
@@ -93,8 +95,11 @@ rmm::device_buffer create_null_mask(
  * @param stream Optional, stream on which all memory allocations/operations
  * will be submitted
  *---------------------------------------------------------------------------**/
-void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
-                   size_type end_bit, bool valid, cudaStream_t stream = 0);
+void set_null_mask(bitmask_type* bitmask,
+                   size_type begin_bit,
+                   size_type end_bit,
+                   bool valid,
+                   cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
  * @brief Given a bitmask, counts the number of set (1) bits in the range
@@ -110,8 +115,7 @@ void set_null_mask(bitmask_type *bitmask, size_type begin_bit,
  * @param stop_bit Index of the last bit to count (exclusive)
  * @return The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
-cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start,
-                               size_type stop);
+cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, size_type stop);
 
 /**---------------------------------------------------------------------------*
  * @brief Given a bitmask, counts the number of unset (0) bits  in the range
@@ -127,8 +131,7 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start,
  * @param stop_bit Index of the last bit to count (exclusive)
  * @return The number of zero bits in the specified range
  *---------------------------------------------------------------------------**/
-cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start,
-                                 size_type stop);
+cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, size_type stop);
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in every range
@@ -146,9 +149,8 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start,
  * @return std::vector<size_type> A vector storing the number of non-zero bits
  * in the specified ranges
  */
-std::vector<size_type>
-segmented_count_set_bits(bitmask_type const* bitmask,
-                         std::vector<cudf::size_type> const& indices);
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                std::vector<cudf::size_type> const& indices);
 
 /**
  * @brief Given a bitmask, counts the number of unset (0) bits in every range
@@ -166,9 +168,8 @@ segmented_count_set_bits(bitmask_type const* bitmask,
  * @return std::vector<size_type> A vector storing the number of zero bits in
  * the specified ranges
  */
-std::vector<size_type>
-segmented_count_unset_bits(bitmask_type const* bitmask,
-                           std::vector<cudf::size_type> const& indices);
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  std::vector<cudf::size_type> const& indices);
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range
@@ -190,9 +191,11 @@ segmented_count_unset_bits(bitmask_type const* bitmask,
  * `[begin_bit, end_bit)` from `mask`.
  *---------------------------------------------------------------------------**/
 rmm::device_buffer copy_bitmask(
-    bitmask_type const* mask, size_type begin_bit, size_type end_bit,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  bitmask_type const* mask,
+  size_type begin_bit,
+  size_type end_bit,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Copies `view`'s bitmask from the bits
@@ -208,9 +211,10 @@ rmm::device_buffer copy_bitmask(
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  *---------------------------------------------------------------------------**/
-rmm::device_buffer copy_bitmask(column_view const& view,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+rmm::device_buffer copy_bitmask(
+  column_view const& view,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a bitwise AND of the bitmasks of columns of a table
@@ -224,8 +228,8 @@ rmm::device_buffer copy_bitmask(column_view const& view,
  * @return rmm::device_buffer Output bitmask
  */
 rmm::device_buffer bitmask_and(
-    table_view const& view,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view const& view,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace cudf

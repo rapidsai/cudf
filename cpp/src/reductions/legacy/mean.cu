@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for reduction `mean`
+// The translation unit for reduction `mean`
 
-#include "reduction_functions.cuh"
 #include "compound.cuh"
+#include "reduction_functions.cuh"
 
-gdf_scalar cudf::reduction::mean(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
-{
-    using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
-    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype,  /* ddof is not used for mean*/ 1, stream);
+gdf_scalar cudf::reduction::mean(gdf_column const& col,
+                                 gdf_dtype const output_dtype,
+                                 cudaStream_t stream) {
+  using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
+  return cudf::type_dispatcher(
+    col.dtype, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream);
 }
-
-

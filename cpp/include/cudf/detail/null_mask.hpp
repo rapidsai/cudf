@@ -28,20 +28,18 @@ namespace detail {
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::vector<size_type>
-segmented_count_set_bits(bitmask_type const* bitmask,
-                         std::vector<size_type> const& indices,
-                         cudaStream_t stream = 0);
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                std::vector<size_type> const& indices,
+                                                cudaStream_t stream = 0);
 
 /**
  * @copydoc cudf::segmented_count_unset_bits
  *
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
-std::vector<size_type>
-segmented_count_unset_bits(bitmask_type const* bitmask,
-                           std::vector<size_type> const& indices,
-                           cudaStream_t stream = 0);
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  std::vector<size_type> const& indices,
+                                                  cudaStream_t stream = 0);
 
 }  // namespace detail
 

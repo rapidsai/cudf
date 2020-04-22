@@ -24,7 +24,7 @@
 namespace cudf {
 namespace jit {
 
-    /**---------------------------------------------------------------------------*
+/**---------------------------------------------------------------------------*
      * @brief Functor to get type name in string
      * 
      * This functor uses the unofficial compiler macro __PRETTY_FUNCTION__
@@ -43,35 +43,31 @@ namespace jit {
      * also skipped to get the underlying wrapped type.
      * 
      *---------------------------------------------------------------------------**/
-    struct type_name {
-        template <class T>
-        CUDA_HOST_DEVICE_CALLABLE
-        std::string operator()() {
+struct type_name {
+  template <class T>
+  CUDA_HOST_DEVICE_CALLABLE std::string operator()() {
 #if defined(__clang__) || defined(__GNUC__)
-            std::string p = __PRETTY_FUNCTION__;
-            std::string search_str = "T = ";
-            size_t start_pos = p.find(search_str) + search_str.size();
-            std::string wrapper_str = "wrapper<";
-            size_t wrapper_pos = p.find(wrapper_str, start_pos);
-            if (wrapper_pos != std::string::npos)
-                start_pos = wrapper_pos + wrapper_str.size();
-            size_t end_pos = p.find_first_of(",;]", start_pos);
-            return p.substr(start_pos, end_pos - start_pos);
+    std::string p           = __PRETTY_FUNCTION__;
+    std::string search_str  = "T = ";
+    size_t start_pos        = p.find(search_str) + search_str.size();
+    std::string wrapper_str = "wrapper<";
+    size_t wrapper_pos      = p.find(wrapper_str, start_pos);
+    if (wrapper_pos != std::string::npos) start_pos = wrapper_pos + wrapper_str.size();
+    size_t end_pos = p.find_first_of(",;]", start_pos);
+    return p.substr(start_pos, end_pos - start_pos);
 #else
-#   error Only clang and gcc supported
+#error Only clang and gcc supported
 #endif
-        }
-    };
+  }
+};
 
-    /**---------------------------------------------------------------------------*
+/**---------------------------------------------------------------------------*
      * @brief Get the Type Name
      * 
      * @param type The data type
      * @return std::string Name of the data type in string
      *---------------------------------------------------------------------------**/
-    std::string getTypeName(gdf_dtype type) {
-        return type_dispatcher(type, type_name());
-    }
- 
-} // namespace jit
-} // namespace cudf
+std::string getTypeName(gdf_dtype type) { return type_dispatcher(type, type_name()); }
+
+}  // namespace jit
+}  // namespace cudf

@@ -338,24 +338,6 @@ def test_dataframe_column_drop_via_attr():
     assert tuple(df.columns) == tuple("a")
 
 
-def test_dataframe_attribute_add_drop():
-    df = DataFrame()
-
-    with pytest.warns(UserWarning) as record:
-        df.some_new_attr = 5
-
-    assert len(record) == 1
-    assert "A new attribute will be created" in str(record[0].message)
-
-    assert hasattr(df, "some_new_attr")
-    assert isinstance(df.some_new_attr, int)
-    assert df.some_new_attr == 5
-
-    del df.some_new_attr
-
-    assert not hasattr(df, "some_new_attr")
-
-
 def test_dataframe_pop():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [7.0, 8.0, 9.0]}
