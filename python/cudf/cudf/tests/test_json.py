@@ -147,6 +147,11 @@ def test_json_writer(tmpdir, pdf, gdf):
 
         assert_eq(expect_series, got_series)
 
+        # Make sure results align for regular strings, not just files
+        pdf_string = pdf[column].to_json()
+        gdf_string = pdf[column].to_json()
+        assert_eq(pdf_string, gdf_string)
+
 
 @pytest.fixture(
     params=["string", "filepath", "pathobj", "bytes_io", "string_io", "url"]

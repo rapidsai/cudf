@@ -1060,11 +1060,11 @@ class Frame(libcudf.table.Table):
         to `self`.
         """
         for name, col, other_col in zip(
-            self._column_names, self._columns, other._columns
+            self._data.keys(), self._data.values(), other._data.values()
         ):
-            if is_categorical_dtype(other_col) and not is_categorical_dtype(
-                col
-            ):
+            if isinstance(
+                other_col, cudf.core.column.CategoricalColumn
+            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=as_column(col.base_data, dtype=col.dtype),
@@ -1074,12 +1074,15 @@ class Frame(libcudf.table.Table):
                     offset=col.offset,
                 )
         if include_index:
-            from cudf.core.index import RangeIndex
-
             # include_index will still behave as False
             # incase of self._index being a RangeIndex
-            if (self._index is not None) and (
-                not isinstance(self._index, RangeIndex)
+            if (
+                self._index is not None
+                and not isinstance(self._index, cudf.core.index.RangeIndex)
+                and isinstance(
+                    other._index,
+                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
+                )
             ):
                 self._index._copy_categories(other._index)
         return self
@@ -1490,7 +1493,7 @@ class Frame(libcudf.table.Table):
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-        to_frame_data = OrderedDict()
+        to_frame_data = cudf.core.column_accessor.ColumnAccessor()
         for name, col in result:
             if is_string_dtype(col):
                 to_frame_data[name] = col
