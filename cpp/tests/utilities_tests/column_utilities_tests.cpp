@@ -21,7 +21,6 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
-
 #include <thrust/iterator/constant_iterator.h>
 
 template <typename T>
@@ -174,16 +173,18 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
-  std::ostringstream tmp;
+  std::stringstream tmp;
+  auto string_iter = thrust::make_transform_iterator(
+    std::begin(std_col), [] (auto e) { return std::to_string(e); });
 
-  int index = 0;
-  for (auto x : std_col) {
-    tmp << ((index == 0) ? "" : delimiter);
-    tmp << std::to_string(x);
-    ++index;
-  }
+  std::copy(
+    string_iter,
+    string_iter + std_col.size() - 1,
+    std::ostream_iterator<std::string>(tmp, delimiter));
+
+  tmp << std::to_string(std_col.back());
 
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
@@ -193,7 +194,7 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{ {1, 2, 3, 4, 5},
                                                               {1, 0, 1, 0, 1} };
-  std::vector<TypeParam>                            std_col({1, 2, 3, 4, 5});
+  auto std_col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
 
   std::ostringstream tmp;
   tmp << std::to_string(std_col[0])
@@ -224,3 +225,5 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
   
   EXPECT_EQ(cudf::test::to_string(strings, delimiter), tmp.str());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

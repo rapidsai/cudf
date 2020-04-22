@@ -355,7 +355,7 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks,
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk const* chunks,
                                     uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
 
 

@@ -5,7 +5,8 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -51,7 +52,7 @@ class NumericalColumn(column.ColumnBase):
         except Exception:
             return False
         # TODO: Use `scalar`-based `contains` wrapper
-        return libcudfxx.search.contains(
+        return libcudf.search.contains(
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
@@ -86,7 +87,7 @@ class NumericalColumn(column.ColumnBase):
         )
 
     def _apply_scan_op(self, op):
-        return libcudfxx.reduce.scan(op, self, True)
+        return libcudf.reduce.scan(op, self, True)
 
     def normalize_binop_value(self, other):
         if other is None:
@@ -139,7 +140,7 @@ class NumericalColumn(column.ColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudfxx.unary.cast(self, dtype)
+        return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
         if self.has_nulls and self.dtype == np.bool:
@@ -172,28 +173,28 @@ class NumericalColumn(column.ColumnBase):
             return out
 
     def min(self, dtype=None):
-        return libcudfxx.reduce.reduce("min", self, dtype=dtype)
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudfxx.reduce.reduce("max", self, dtype=dtype)
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudfxx.reduce.reduce("sum", self, dtype=dtype)
+        return libcudf.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudfxx.reduce.reduce("product", self, dtype=dtype)
+        return libcudf.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudfxx.reduce.reduce("mean", self, dtype=dtype)
+        return libcudf.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudfxx.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudfxx.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudfxx.reduce.reduce("sum_of_squares", self, dtype=dtype)
+        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         if decimals < 0:
@@ -265,7 +266,7 @@ class NumericalColumn(column.ColumnBase):
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
         )
-        return libcudfxx.replace.replace(
+        return libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
 
@@ -290,7 +291,7 @@ class NumericalColumn(column.ColumnBase):
                 fill_value = _safe_cast_to_int(fill_value, self.dtype)
             else:
                 fill_value = fill_value.astype(self.dtype)
-        result = libcudfxx.replace.replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
         result = column.build_column(
             result.base_data,
             result.dtype,
@@ -405,31 +406,30 @@ class NumericalColumn(column.ColumnBase):
                 return False
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
-    libcudfxx.nvtx.range_push("CUDF_BINARY_OP", "orange")
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
     if is_op_comparison:
         out_dtype = "bool"
 
-    out = libcudfxx.binaryop.binaryop(lhs, rhs, op, out_dtype)
+    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     if is_op_comparison:
         out = out.fillna(op == "ne")
 
-    libcudfxx.nvtx.range_pop()
     return out
 
 
 def _numeric_column_unaryop(operand, op):
     if callable(op):
-        return libcudfxx.transform.transform(operand, op)
+        return libcudf.transform.transform(operand, op)
 
-    op = libcudfxx.unary.UnaryOp[op.upper()]
-    return libcudfxx.unary.unary_operation(operand, op)
+    op = libcudf.unary.UnaryOp[op.upper()]
+    return libcudf.unary.unary_operation(operand, op)
 
 
 def _safe_cast_to_int(col, dtype):
@@ -453,7 +453,10 @@ def _safe_cast_to_int(col, dtype):
 
 
 def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
-    normalized_column = column.as_column(col_to_normalize)
+    normalized_column = column.as_column(
+        col_to_normalize,
+        dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
+    )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
         col_to_normalize_dtype = min_numeric_column_type(normalized_column)
@@ -508,5 +511,5 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(bins)
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return as_column(
-        libcudfxx.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
+        libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
     )

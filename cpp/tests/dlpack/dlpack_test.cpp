@@ -258,9 +258,12 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
 TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 {
+  using T = TypeParam;
+  auto const col1_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  auto const col2_tmp = cudf::test::make_type_param_vector<T>({4, 5, 6, 7});
   std::vector<fixed_width_column_wrapper<TypeParam>> cols;
-  cols.push_back(fixed_width_column_wrapper<TypeParam>{1, 2, 3, 4});
-  cols.push_back(fixed_width_column_wrapper<TypeParam>{4, 5, 6, 7});
+  cols.push_back(fixed_width_column_wrapper<TypeParam>(col1_tmp.cbegin(), col1_tmp.cend()));
+  cols.push_back(fixed_width_column_wrapper<TypeParam>(col2_tmp.cbegin(), col2_tmp.cend()));
 
   std::vector<cudf::column_view> col_views;
   std::transform(cols.begin(), cols.end(), std::back_inserter(col_views),
@@ -307,9 +310,12 @@ TYPED_TEST(DLPackNumericTests, FromDlpack1D)
 TYPED_TEST(DLPackNumericTests, FromDlpack2D)
 {
   // Use to_dlpack to generate an input tensor
+  using T = TypeParam;
+  auto const col1 = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
+  auto const col2 = cudf::test::make_type_param_vector<T>({4, 5, 6, 7});
   std::vector<fixed_width_column_wrapper<TypeParam>> cols;
-  cols.push_back(fixed_width_column_wrapper<TypeParam>{1, 2, 3, 4});
-  cols.push_back(fixed_width_column_wrapper<TypeParam>{4, 5, 6, 7});
+  cols.push_back(fixed_width_column_wrapper<T>(col1.cbegin(), col1.cend()));
+  cols.push_back(fixed_width_column_wrapper<T>(col2.cbegin(), col2.cend()));
 
   std::vector<cudf::column_view> col_views;
   std::transform(cols.begin(), cols.end(), std::back_inserter(col_views),
@@ -326,19 +332,22 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D)
 TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
 {
   // Host buffer with stride > rows and byte_offset > 0
-  std::vector<TypeParam> data{0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0};
-  uint64_t const offset{sizeof(TypeParam)};
+  using T = TypeParam;
+  auto const data = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0});
+  uint64_t const offset{sizeof(T)};
   int64_t shape[2] = {4, 2};
   int64_t strides[2] = {1, 5};
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.ctx.device_type = kDLCPU;
-  tensor.dl_tensor.dtype = get_dtype<TypeParam>();
-  tensor.dl_tensor.ndim = 2;
-  tensor.dl_tensor.byte_offset = offset;
-  tensor.dl_tensor.shape = shape;
-  tensor.dl_tensor.strides = strides;
-  tensor.dl_tensor.data = data.data();
+  tensor.dl_tensor.dtype           = get_dtype<T>();
+  tensor.dl_tensor.ndim            = 2;
+  tensor.dl_tensor.byte_offset     = offset;
+  tensor.dl_tensor.shape           = shape;
+  tensor.dl_tensor.strides         = strides;
+
+  thrust::host_vector<T> host_vector(data.begin(), data.end());
+  tensor.dl_tensor.data            = host_vector.data();
 
   fixed_width_column_wrapper<TypeParam> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<TypeParam> col2({5, 6, 7, 8});
@@ -357,3 +366,5 @@ TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
   // Verify that from_dlpack(to_dlpack(input)) == input
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
+
+CUDF_TEST_PROGRAM_MAIN()

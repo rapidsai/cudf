@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <thrust/transform.h>
@@ -128,6 +129,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    size_type null_count = strings.null_count();
 
     // copy null mask
     rmm::device_buffer null_mask = copy_bitmask(strings.parent(),stream,mr);
@@ -143,7 +145,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
 
     // build the chars column -- convert characters based on case_flag parameter
     size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column = create_chars_child_column( strings_count, d_column.null_count(), bytes, mr, stream );
+    auto chars_column = create_chars_child_column( strings_count, null_count, bytes, mr, stream );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream),
@@ -151,7 +153,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
         strip_fn<ExecuteOp>{d_column, stype, d_to_strip, d_offsets, d_chars} );
     //
     return make_strings_column(strings_count, std::move(offsets_column), std::move(chars_column),
-                               d_column.null_count(), std::move(null_mask), stream, mr);
+                               null_count, std::move(null_mask), stream, mr);
 }
 
 } // namespace detail
@@ -163,6 +165,7 @@ std::unique_ptr<column> strip( strings_column_view const& strings,
                                string_scalar const& to_strip,
                                rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::strip(strings, stype, to_strip, mr);
 }
 

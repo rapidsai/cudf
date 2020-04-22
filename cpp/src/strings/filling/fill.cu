@@ -17,12 +17,13 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 namespace cudf
@@ -47,11 +48,7 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
         return std::make_unique<column>( strings.parent() );
 
     // string_scalar.data() is null for valid, empty strings
-    string_view const d_value = [&] {
-        if( !value.is_valid() )
-            return string_view(nullptr,0);
-        return value.size()==0 ? string_view("",0) : string_view(value.data(),value.size());
-    } ();
+    auto d_value = get_scalar_device_view(const_cast<string_scalar&>(value));
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
@@ -61,19 +58,16 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         [d_strings, begin, end, d_value] __device__ (size_type idx) {
-            return ((begin <= idx) && (idx < end)) ? !d_value.is_null() : !d_strings.is_null(idx);
+            return ((begin <= idx) && (idx < end)) ? d_value.is_valid() : !d_strings.is_null(idx);
         }, stream, mr );
     auto null_count = valid_mask.second;
     rmm::device_buffer& null_mask = valid_mask.first;
 
     // build offsets column
     auto offsets_transformer = [d_strings, begin, end, d_value] __device__ (size_type idx) {
-            if( ((begin <= idx) && (idx < end)) ? d_value.is_null() : d_strings.is_null(idx) )
+            if( ((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx) )
                 return 0;
-            int32_t bytes = d_value.size_bytes();
-            if( (idx < begin) || (idx >= end) )
-                bytes = d_strings.element<string_view>(idx).size_bytes();
-            return bytes;
+            return ((begin <= idx) && (idx < end)) ? d_value.size() : d_strings.element<string_view>(idx).size_bytes();
         };
     auto offsets_transformer_itr = thrust::make_transform_iterator( thrust::make_counting_iterator<size_type>(0), offsets_transformer );
     auto offsets_column = detail::make_offsets_child_column(offsets_transformer_itr,
@@ -88,11 +82,10 @@ std::unique_ptr<column> fill( strings_column_view const& strings,
     auto d_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator<size_type>(0), strings_count,
         [d_strings, begin, end, d_value, d_offsets, d_chars] __device__(size_type idx){
-            if( ((begin <= idx) && (idx < end)) ? d_value.is_null() : d_strings.is_null(idx) )
+            if( ((begin <= idx) && (idx < end)) ? !d_value.is_valid() : d_strings.is_null(idx) )
                 return;
-            string_view d_str = d_value;
-            if( (idx < begin) || (idx >= end) )
-                d_str = d_strings.element<string_view>(idx);
+            string_view const d_str = ((begin <= idx) && (idx < end)) ? d_value.value() 
+                                      : d_strings.element<string_view>(idx);
             memcpy( d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 

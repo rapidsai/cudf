@@ -56,6 +56,7 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp) {
   EXPECT_THROW(extract_hour(col), cudf::logic_error);
   EXPECT_THROW(extract_minute(col), cudf::logic_error);
   EXPECT_THROW(extract_second(col), cudf::logic_error);
+  EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
@@ -266,3 +267,82 @@ TYPED_TEST(TypedDatetimeOpsTest,
   expect_columns_equal(*extract_minute(timestamps), expected_minutes);
   expect_columns_equal(*extract_second(timestamps), expected_seconds);
 }
+
+TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds) {
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s = fixed_width_column_wrapper<cudf::timestamp_s>{
+       662688000L,   // 1991-01-01 00:00:00 GMT
+       949496401L,   // 2000-02-02 13:00:01 GMT - leap year
+       4106854801L,  // 2100-02-21 01:00:01 GMT - not a leap year
+       1582391837L,  // 2020-02-22 17:17:17 GMT - leap year
+       1363046401L,  // 2013-03-12 00:00:01 GMT
+       1302696000L,  // 2011-04-13 12:00:00 GMT
+       1495800001L,  // 2017-05-26 12:00:01 GMT
+       1056931201L,  // 2003-06-30 00:00:01 GMT - already last day
+       1031961599L,  // 2002-09-13 23:59:59 GMT
+       0L,           // This is the UNIX epoch - 1970-01-01
+      -131968728L,   // 1965-10-26 14:01:12 GMT
+  };
+
+  expect_columns_equal(*last_day_of_month(timestamps_s),
+                       fixed_width_column_wrapper<cudf::timestamp_D>{
+                           7700,  // 1991-01-31
+                          11016,  // 2000-02-29
+                          47540,  // 2100-02-28
+                          18321,  // 2020-02-29
+                          15795,  // 2013-03-31
+                          15094,  // 2011-04-30
+                          17317,  // 2017-05-31
+                          12233,  // 2003-06-30
+                          11960,  // 2002-09-30
+                          30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
+                          -1523   // 1965-10-31
+                       },
+                       true);
+}
+
+TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate) {
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace simt::std::chrono;
+
+  // Time in days since epoch
+  // Dates converted using epochconverter.com
+  // Make some nullable fields as well
+  auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_D>{
+      {
+       999,     // Random nullable field
+       0,       // This is the UNIX epoch - 1970-01-01
+       44376,   // 2091-07-01 00:00:00 GMT
+       47695,   // 2100-08-02 00:00:00 GMT
+       3,       // Random nullable field
+       66068,   // 2150-11-21 00:00:00 GMT
+       22270,   // 2030-12-22 00:00:00 GMT
+       111,     // Random nullable field
+      },
+      { false, true, true, true, false, true, true, false },
+  };
+
+  expect_columns_equal(*last_day_of_month(timestamps_d),
+                       fixed_width_column_wrapper<cudf::timestamp_D>{
+                         {
+                          999,    // Random nullable field
+                          30,     // This is the UNIX epoch - when rounded up becomes 1970-01-31
+                          44406,  // 2091-07-31
+                          47724,  // 2100-08-31
+                          3,      // Random nullable field
+                          66077,  // 2150-11-30
+                          22279,  // 2030-12-31
+                          111,    // Random nullable field
+                         },
+                         { false, true, true, true, false, true, true, false },
+                       },
+                       true);
+}
+
+CUDF_TEST_PROGRAM_MAIN()

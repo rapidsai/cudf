@@ -153,10 +153,10 @@ namespace detail{
     void external_function(..., cudaStream_t stream){
         // implementation uses stream w/ async APIs
         RMM_ALLOC(...,stream);
-        cudaMemcpyAsync(...,stream);
+        CUDA_TRY(cudaMemcpyAsync(...,stream));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream)->on(stream), ...);
-        cudaStreamSynchronize(stream);
+        CUDA_TRY(cudaStreamSynchronize(stream));
         RMM_FREE(...,stream);
     }
 } // namespace detail

@@ -14,14 +14,7 @@
  * limitations under the License.
  */
 
-#include "./utilities.h"
-
-#include <cudf/column/column_factories.hpp>
-#include <tests/utilities/column_utilities.hpp>
-
-#include <cstring>
-#include <thrust/execution_policy.h>
-#include <thrust/equal.h>
+#include <tests/strings/utilities.h>
 
 #include <gmock/gmock.h>
 

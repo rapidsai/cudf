@@ -72,7 +72,7 @@ TYPED_TEST(Sort, WithNullMax)
     // Sorted order
     auto got = experimental::sorted_order(input, column_order, null_precedence);
 
-    if (!std::is_same<T, experimental::bool8>::value) {
+    if (!std::is_same<T, bool>::value) {
         expect_columns_equal(expected, got->view());
 
         // Run test for experimental::sort and sort_by_key
@@ -81,16 +81,16 @@ TYPED_TEST(Sort, WithNullMax)
         // for bools only validate that the null element landed at the back, since
         // the rest of the values are equivalent and yields random sorted order.
         auto to_host = [](column_view const& col) {
-            std::vector<int32_t> h_data(col.size());
-            cudaMemcpy(h_data.data(), col.data<int32_t>(),
+            thrust::host_vector<int32_t> h_data(col.size());
+            CUDA_TRY(cudaMemcpy(h_data.data(), col.data<int32_t>(),
                        h_data.size() * sizeof(int32_t),
-                       cudaMemcpyDefault);
+                       cudaMemcpyDefault));
             return h_data;
         };
-        std::vector<int32_t> h_exp = to_host(expected);
-        std::vector<int32_t> h_got = to_host(got->view());
-        EXPECT_EQ(h_exp.at(h_exp.size() - 1),
-                  h_got.at(h_got.size() - 1));
+        thrust::host_vector<int32_t> h_exp = to_host(expected);
+        thrust::host_vector<int32_t> h_got = to_host(got->view());
+        EXPECT_EQ(h_exp[h_exp.size() - 1],
+                  h_got[h_got.size() - 1]);
 
         // Run test for experimental::sort and sort_by_key
         fixed_width_column_wrapper<int32_t> expected_for_bool{{0, 3, 5, 1, 4, 2}};
@@ -114,8 +114,8 @@ TYPED_TEST(Sort, WithNullMin)
 
     auto got = experimental::sorted_order(input, column_order);
 
-    if (!std::is_same<T, experimental::bool8>::value) {
-        expect_columns_equal(expected, got->view());
+    if (!std::is_same<T, bool>::value) {
+        cudf::test::expect_columns_equal(expected, got->view());
 
         // Run test for experimental::sort and sort_by_key
         run_sort_test(input, expected, column_order);
@@ -123,16 +123,16 @@ TYPED_TEST(Sort, WithNullMin)
         // for bools only validate that the null element landed at the front, since
         // the rest of the values are equivalent and yields random sorted order.
         auto to_host = [](column_view const& col) {
-            std::vector<int32_t> h_data(col.size());
-            cudaMemcpy(h_data.data(), col.data<int32_t>(),
+            thrust::host_vector<int32_t> h_data(col.size());
+            CUDA_TRY(cudaMemcpy(h_data.data(), col.data<int32_t>(),
                        h_data.size() * sizeof(int32_t),
-                       cudaMemcpyDefault);
+                       cudaMemcpyDefault));
             return h_data;
         };
-        std::vector<int32_t> h_exp = to_host(expected);
-        std::vector<int32_t> h_got = to_host(got->view());
-        EXPECT_EQ(h_exp.at(0),
-                  h_got.at(0));
+        thrust::host_vector<int32_t> h_exp = to_host(expected);
+        thrust::host_vector<int32_t> h_got = to_host(got->view());
+        EXPECT_EQ(h_exp.front(),
+                  h_got.front());
 
         // Run test for experimental::sort and sort_by_key
         fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
@@ -155,22 +155,21 @@ TYPED_TEST(Sort, WithMixedNullOrder)
 
     auto got = experimental::sorted_order(input, column_order, null_precedence);
 
-    if (!std::is_same<T, experimental::bool8>::value) {
-        expect_columns_equal(expected, got->view());
+    if (!std::is_same<T, bool>::value) {
+        cudf::test::expect_columns_equal(expected, got->view());
     } else {
         // for bools only validate that the null element landed at the front, since
         // the rest of the values are equivalent and yields random sorted order.
         auto to_host = [](column_view const& col) {
-            std::vector<int32_t> h_data(col.size());
-            cudaMemcpy(h_data.data(), col.data<int32_t>(),
+            thrust::host_vector<int32_t> h_data(col.size());
+            CUDA_TRY(cudaMemcpy(h_data.data(), col.data<int32_t>(),
                        h_data.size() * sizeof(int32_t),
-                       cudaMemcpyDefault);
+                       cudaMemcpyDefault));
             return h_data;
         };
-        std::vector<int32_t> h_exp = to_host(expected);
-        std::vector<int32_t> h_got = to_host(got->view());
-        EXPECT_EQ(h_exp.at(0),
-                  h_got.at(0));
+        thrust::host_vector<int32_t> h_exp = to_host(expected);
+        thrust::host_vector<int32_t> h_got = to_host(got->view());
+        EXPECT_EQ(h_exp.front(), h_got.front());
     }
 
     // Run test for experimental::sort and sort_by_key
@@ -193,8 +192,8 @@ TYPED_TEST(Sort, WithAllValid)
 
     // Skip validating bools order. Valid true bools are all
     // equivalent, and yield random order after thrust::sort
-    if (!std::is_same<T, experimental::bool8>::value) {
-        expect_columns_equal(expected, got->view());
+    if (!std::is_same<T, bool>::value) {
+        cudf::test::expect_columns_equal(expected, got->view());
 
         // Run test for experimental::sort and sort_by_key
         run_sort_test(input, expected, column_order);
@@ -298,3 +297,5 @@ TEST_F(SortByKey, ValueKeysSizeMismatch) {
 
 } // namespace test
 } // namespace cudf
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -115,13 +115,13 @@ run each time you commit changes.
 Compiler requirements:
 
 * `gcc`     version 5.4+
-* `nvcc`    version 9.2+
+* `nvcc`    version 10.0+
 * `cmake`   version 3.12.4+
 
 CUDA/GPU requirements:
 
-* CUDA 9.2+
-* NVIDIA driver 396.44+
+* CUDA 10.0+
+* NVIDIA driver 410.48+
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -157,11 +157,12 @@ git submodule update --init --remote --recursive
 - Create the conda development environment `cudf_dev`:
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
+# note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
 conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 9.2, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
+- If using CUDA 10.0, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
@@ -290,8 +291,8 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 ### Prerequisites
 
 * Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
-* Verify NVIDIA driver is `396.44` or higher
-* Ensure CUDA 9.2+ is installed
+* Verify NVIDIA driver is `410.48` or higher
+* Ensure CUDA 10.0+ is installed
 
 ### Usage
 
@@ -318,7 +319,7 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 9.2 | 10.0 | set CUDA version |
+| `CUDA_VERSION` | 10.0 | 10.1, 10.2 | set CUDA version |
 | `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
 | `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |

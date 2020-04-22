@@ -26,6 +26,7 @@
 #include <stdexcept>
 
 namespace cudf {
+//! Utility functions
 namespace util {
 
 /**

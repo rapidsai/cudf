@@ -20,12 +20,10 @@ build:
 
 requirements:
   build:
-    - librdkafka 1.3.0
     - setuptools
     - libcudf {{ version }}
     - cudf {{ version }}
   run:
-    - librdkafka 1.3.0
     - libcudf {{ version }}
     - cudf {{ version }}
 

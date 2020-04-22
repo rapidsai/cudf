@@ -36,14 +36,14 @@
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
-using float_wrapper = wrapper<float>;
-using float64_wrapper = wrapper<double>;
-using int_wrapper = wrapper<int>;
-using int8_wrapper = wrapper<int8_t>;
-using int16_wrapper = wrapper<int16_t>;
-using int64_wrapper = wrapper<int64_t>;
+using float_wrapper        = wrapper<float>;
+using float64_wrapper      = wrapper<double>;
+using int_wrapper          = wrapper<int>;
+using int8_wrapper         = wrapper<int8_t>;
+using int16_wrapper        = wrapper<int16_t>;
+using int64_wrapper        = wrapper<int64_t>;
 using timestamp_ms_wrapper = wrapper<cudf::timestamp_ms>;
-using bool_wrapper = wrapper<cudf::experimental::bool8>;
+using bool_wrapper         = wrapper<bool>;
 
 namespace cudf_io = cudf::experimental::io;
 
@@ -75,11 +75,14 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range") {
           std::get<0>(arg) < std::get<1>(arg) + tolerance);
 }
 
-template <typename T>
-void expect_float_column_data_equal(std::vector<T> const& lhs,
-                                    cudf::column_view const& rhs) {
-  EXPECT_THAT(cudf::test::to_host<T>(rhs).first,
-              ::testing::Pointwise(FloatNearPointwise(1e-6), lhs));
+// temporary method to verify the float columns until 
+// cudf::test::expect_columns_equal supports floating point
+template <typename T, typename valid_t>
+void check_float_column(cudf::column_view const& col, std::vector<T> const& data, valid_t const& validity){
+  cudf::test::expect_column_properties_equal(col, wrapper<T>{data.begin(), data.end(), validity});
+  CUDF_EXPECTS(col.null_count() == 0, "All elements should be valid");
+  EXPECT_THAT(cudf::test::to_host<T>(col).first,
+              ::testing::Pointwise(FloatNearPointwise(1e-6), data));
 }
 
 /**
@@ -130,7 +133,7 @@ TEST_F(JsonReaderTest, FloatingPoint) {
       0, [](auto i) { return true; });
 
   cudf::test::expect_columns_equal(result.tbl->get_column(0), 
-              float_wrapper{{5.6, 56.79, 12000000000, 0.7, 3.000, 12.34, 0.31, -73.98007199999998}, validity});
+              float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998}, validity});
     
   const auto bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
   ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
@@ -218,18 +221,10 @@ TEST_F(JsonReaderTest, MultiColumn) {
   cudf::test::expect_columns_equal(view.column(4), int_wrapper{int32_values.begin(), int32_values.end(), validity});
   cudf::test::expect_columns_equal(view.column(5), int64_wrapper{int64_values.begin(), int64_values.end(), validity});
   cudf::test::expect_columns_equal(view.column(6), int64_wrapper{int64_values.begin(), int64_values.end(), validity});  
-  
-  cudf::test::expect_column_properties_equal(view.column(7), float_wrapper{float32_values.begin(), float32_values.end(), validity});
-  expect_float_column_data_equal(float32_values, view.column(7));
-  
-  cudf::test::expect_column_properties_equal(view.column(8), float_wrapper{float32_values.begin(), float32_values.end(), validity});
-  expect_float_column_data_equal(float32_values, view.column(8));
-
-  cudf::test::expect_column_properties_equal(view.column(9), float64_wrapper{float64_values.begin(), float64_values.end(), validity});
-  expect_float_column_data_equal(float64_values, view.column(9));
-  
-  cudf::test::expect_column_properties_equal(view.column(10), float64_wrapper{float64_values.begin(), float64_values.end(), validity});
-  expect_float_column_data_equal(float64_values, view.column(10));
+  check_float_column(view.column(7), float32_values, validity);
+  check_float_column(view.column(8), float32_values, validity);
+  check_float_column(view.column(9), float64_values, validity);
+  check_float_column(view.column(10), float64_values, validity);
 }
 
 TEST_F(JsonReaderTest, Booleans) {
@@ -279,7 +274,7 @@ TEST_F(JsonReaderTest, Dates) {
       0, [](auto i) { return true; });
 
   cudf::test::expect_columns_equal(result.tbl->get_column(0), 
-                timestamp_ms_wrapper{{983750400000, 1288483200000, 782611200000, 656208000000, 0,
+                timestamp_ms_wrapper{{983750400000, 1288483200000, 782611200000, 656208000000, 0L,
           798163200000, 774144000000, 1149679230400, 1126875750400, 2764800000}, validity});  
 }
 
@@ -496,3 +491,15 @@ TEST_F(JsonReaderTest, InvalidFloatingPoint) {
   // col_data.second contains the bitmasks
   ASSERT_EQ(0u, col_data.second[0]);
 }
+
+TEST_F(JsonReaderTest, StringInference) {
+  std::string buffer = "[\"-1\"]";
+  cudf_io::read_json_args in_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};  
+  in_args.lines = true; 
+  cudf_io::table_with_metadata result = cudf_io::read_json(in_args);
+
+  EXPECT_EQ(result.tbl->num_columns(), 1);  
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);  
+}
+
+CUDF_TEST_PROGRAM_MAIN()

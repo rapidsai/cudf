@@ -176,7 +176,7 @@ class orc_column_view {
             view.offsets().data<size_type>(), view.chars().data<char>(),
             _nulls, _data_count);
       _data = _indexes.data();
-      cudaStreamSynchronize(stream);
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
     // Generating default name if name isn't present in metadata
     if (metadata && _id < metadata->column_names.size()) {
@@ -718,7 +718,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       case TypeKind::LONG:      desc->stats_dtype = dtype_int64; break;
       case TypeKind::FLOAT:     desc->stats_dtype = dtype_float32; break;
       case TypeKind::DOUBLE:    desc->stats_dtype = dtype_float64; break;
-      case TypeKind::BOOLEAN:   desc->stats_dtype = dtype_bool8; break;
+      case TypeKind::BOOLEAN:   desc->stats_dtype = dtype_bool; break;
       case TypeKind::DATE:      desc->stats_dtype = dtype_int32; break;
       case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
       case TypeKind::STRING:    desc->stats_dtype = dtype_string; break;

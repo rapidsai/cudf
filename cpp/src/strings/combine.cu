@@ -16,13 +16,15 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <algorithm>
@@ -58,11 +60,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
 
     CUDF_EXPECTS( separator.is_valid(), "Parameter separator must be a valid string_scalar");
     string_view d_separator(separator.data(),separator.size());
-    string_view const d_narep = [&narep] {
-        if( !narep.is_valid() )
-            return string_view(nullptr,0);
-        return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
-    } ();
+    auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
     // Create device views from the strings columns.
     auto table = table_device_view::create(strings_columns,stream);
@@ -75,7 +73,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
         [d_table, d_narep] __device__ (size_type idx) {
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
                [idx] (auto col) { return col.is_null(idx);});
-            return( !null_element || !d_narep.is_null() );
+            return( !null_element || d_narep.is_valid() );
         }, stream, mr );
     rmm::device_buffer null_mask = valid_mask.first;
     auto null_count = valid_mask.second;
@@ -85,12 +83,12 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
             // for this row (idx), iterate over each column and add up the bytes
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
                 [row_idx] (auto const& d_column) { return d_column.is_null(row_idx);});
-            if( null_element && d_narep.is_null() )
+            if( null_element && !d_narep.is_valid() )
                 return 0;
             size_type bytes = thrust::transform_reduce( thrust::seq, d_table.begin(), d_table.end(),
                 [row_idx, d_separator, d_narep] __device__ (column_device_view const& d_column) {
                     return d_separator.size_bytes() +
-                           (d_column.is_null(row_idx) ? d_narep.size_bytes()
+                           (d_column.is_null(row_idx) ? d_narep.size()
                                                       : d_column.element<string_view>(row_idx).size_bytes());
                 }, 0, thrust::plus<size_type>());
             // separator goes only in between elements
@@ -113,7 +111,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
         [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
             bool null_element = thrust::any_of( thrust::seq, d_table.begin(), d_table.end(),
                                                 [idx] (column_device_view const& col) { return col.is_null(idx);});
-            if( null_element && d_narep.is_null() )
+            if( null_element && !d_narep.is_valid() )
                 return; // do not write to buffer at all if any column element for this row is null
             size_type offset = d_results_offsets[idx];
             char* d_buffer = d_results_chars + offset;
@@ -121,7 +119,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
             for( size_type col_idx=0; col_idx < num_columns; ++col_idx )
             {
                 auto d_column = d_table.column(col_idx);
-                string_view d_str = d_column.is_null(idx) ? d_narep : d_column.element<string_view>(idx);
+                string_view d_str = d_column.is_null(idx) ? d_narep.value() : d_column.element<string_view>(idx);
                 d_buffer = detail::copy_string(d_buffer, d_str);
                 // separator goes only in between elements
                 if( col_idx+1 < num_columns )
@@ -148,11 +146,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
 
     auto execpol = rmm::exec_policy(stream);
     string_view d_separator(separator.data(),separator.size());
-    string_view const d_narep = [&narep] {
-        if( !narep.is_valid() )
-            return string_view(nullptr,0);
-        return narep.size()==0 ? string_view("",0) : string_view(narep.data(),narep.size());
-    } ();
+    auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_strings = *strings_column;
@@ -169,9 +163,9 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
             size_type bytes = 0;
             if( d_strings.is_null(idx) )
             {
-                if( d_narep.is_null() )
+                if( !d_narep.is_valid() )
                     return 0; // skip nulls
-                bytes += d_narep.size_bytes();
+                bytes += d_narep.size();
             }
             else
                 bytes += d_strings.element<string_view>(idx).size_bytes();
@@ -197,7 +191,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
     // only one entry so it is either all valid or all null
     size_type null_count = 0;
     rmm::device_buffer null_mask; // init to null null-mask
-    if( strings.null_count()==strings_count && d_narep.is_null() )
+    if( strings.null_count()==strings_count && !narep.is_valid() )
     {
         null_mask = create_null_mask(1,cudf::mask_state::ALL_NULL,stream,mr);
         null_count = 1;
@@ -211,9 +205,9 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
             char* d_buffer = d_chars + offset;
             if( d_strings.is_null(idx) )
             {
-                if( d_narep.is_null() )
+                if( !d_narep.is_valid() )
                     return; // do not write to buffer if element is null (including separator)
-                d_buffer = detail::copy_string(d_buffer, d_narep);
+                d_buffer = detail::copy_string(d_buffer, d_narep.value());
             }
             else
             {
@@ -237,6 +231,7 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
                                      string_scalar const& narep,
                                      rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     return detail::concatenate(strings_columns, separator, narep, mr);
 }
 
@@ -245,6 +240,7 @@ std::unique_ptr<column> join_strings( strings_column_view const& strings,
                                       string_scalar const& narep,
                                       rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::join_strings(strings, separator, narep, mr);
 }
 

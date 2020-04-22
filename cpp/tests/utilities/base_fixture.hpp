@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@
 #pragma once
 
 #include <tests/utilities/cudf_gtest.hpp>
-#include <cudf/wrappers/bool.hpp>
+#include <tests/utilities/cxxopts.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/default_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/cnmem_memory_resource.hpp>
+#include <rmm/mr/device/cuda_memory_resource.hpp>
+#include <rmm/mr/device/managed_memory_resource.hpp>
 
 #include <ftw.h>
 #include <random>
@@ -29,27 +31,23 @@
 namespace cudf {
 namespace test {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
  * Example:
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- *---------------------------------------------------------------------------**/
+ */
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource* _mr{rmm::mr::get_default_resource()};
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheritng from this fixture
-   *---------------------------------------------------------------------------**/
+   */
   rmm::mr::device_memory_resource* mr() { return _mr; }
-
-  static void SetUpTestCase() { ASSERT_EQ(rmmInitialize(nullptr), RMM_SUCCESS); }
-
-  static void TearDownTestCase() { ASSERT_EQ(rmmFinalize(), RMM_SUCCESS); }
 };
 
 template <typename T, typename Enable = void>
@@ -78,7 +76,7 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>() > >
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides uniform random number generation.
  *
  * It is often useful in testing to have a convenient source of random numbers.
@@ -93,7 +91,7 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- *---------------------------------------------------------------------------**/
+ */
 template <typename T = cudf::size_type,
           typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
@@ -102,18 +100,18 @@ class UniformRandomGenerator {
 
   UniformRandomGenerator() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
    * random numbers in the range `[upper,lower]`
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
-   *---------------------------------------------------------------------------**/
+   */
   UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the next random number.
-   *---------------------------------------------------------------------------**/
+   */
   T generate() { return T{dist(rng)}; }
 
  private:
@@ -121,7 +119,7 @@ class UniformRandomGenerator {
   Engine rng{std::random_device{}()};  ///< Random generator
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Provides temporary directory for temporary test files.
  *
  * Example:
@@ -129,7 +127,7 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- *---------------------------------------------------------------------------**/
+ */
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
@@ -167,5 +165,75 @@ class TempDirTestEnvironment : public ::testing::Environment {
   }
 };
 
+/**
+ * @brief Creates a memory resource for the unit test environment
+ * given the name of the allocation mode.
+ * 
+ * The returned resource instance must be kept alive for the duration of
+ * the tests. Attaching the resource to a TestEnvironment causes
+ * issues since the environment objects are not destroyed until
+ * after the runtime is shutdown.
+ * 
+ * @throw cudf::logic_error if the `allocation_mode` is unsupported.
+ *
+ * @param allocation_mode String identifies which resource type.
+ *        Accepted types are "pool", "cuda", and "managed" only.
+ * @return Memory resource instance
+ */
+inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& allocation_mode)
+{
+    if( allocation_mode == "cuda" )
+        return std::make_unique<rmm::mr::cuda_memory_resource>();
+    if( allocation_mode == "pool" )
+        return std::make_unique<rmm::mr::cnmem_memory_resource>();
+    if( allocation_mode == "managed" )
+        return std::make_unique<rmm::mr::managed_memory_resource>();
+    CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
+}
+
 }  // namespace test
 }  // namespace cudf
+
+/**
+ * @brief Parses the cuDF test command line options.
+ *
+ * Currently only supports 'rmm_mode' string paramater, which set the rmm
+ * allocation mode. The default value of the parameter is 'pool'.
+ * 
+ * @return Parsing results in the form of unordered map
+ */
+inline auto parse_cudf_test_opts(int argc, char **argv) {
+  try {
+    cxxopts::Options options(argv[0], " - cuDF tests command line options");
+    options
+      .allow_unrecognised_options()
+      .add_options()
+      ("rmm_mode", "RMM allocation mode",
+        cxxopts::value<std::string>()->default_value("pool"));
+
+    return options.parse(argc, argv);
+  }
+  catch (const cxxopts::OptionException& e) {
+    CUDF_FAIL("Error parsing command line options");
+  }
+}
+
+/**
+ * @brief Macro that defines main function for gtest programs that use rmm
+ * 
+ * Should be included in every test program that uses rmm allocators since
+ * it maintains the lifespan of the rmm default memory resource.
+ * This `main` function is a wrapper around the google test generated `main`,
+ * maintaining the original functionality. In addition, this custom `main`
+ * function parses the command line to customize test behavior, like the
+ * allocation mode used for creating the default memory resource.
+ * 
+ */
+#define CUDF_TEST_PROGRAM_MAIN() int main(int argc, char **argv) {  \
+  ::testing::InitGoogleTest(&argc, argv);                           \
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);           \
+  auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();     \
+  auto resource = cudf::test::create_memory_resource(rmm_mode);     \
+  rmm::mr::set_default_resource(resource.get());                    \
+  return RUN_ALL_TESTS();                                           \
+}

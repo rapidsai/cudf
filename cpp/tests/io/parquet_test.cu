@@ -412,6 +412,55 @@ TEST_F(ParquetWriterTest, Strings) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+TEST_F(ParquetWriterTest, MultiIndex) {
+  constexpr auto num_rows = 100;
+
+  auto col1_data = random_values<int8_t>(num_rows);
+  auto col2_data = random_values<int16_t>(num_rows);
+  auto col3_data = random_values<int32_t>(num_rows);
+  auto col4_data = random_values<float>(num_rows);
+  auto col5_data = random_values<double>(num_rows);
+  auto validity = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return true; });
+
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("int8s");
+  expected_metadata.column_names.emplace_back("int16s");
+  expected_metadata.column_names.emplace_back("int32s");
+  expected_metadata.column_names.emplace_back("floats");
+  expected_metadata.column_names.emplace_back("doubles");
+  expected_metadata.user_data.insert(
+    {"pandas", "\"index_columns\": [\"floats\", \"doubles\"], \"column1\": [\"int8s\"]"});
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col1.release());
+  cols.push_back(col2.release());
+  cols.push_back(col3.release());
+  cols.push_back(col4.release());
+  cols.push_back(col5.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(5, expected->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");
+  cudf_io::write_parquet_args out_args{cudf_io::sink_info{filepath},
+                                       expected->view(), &expected_metadata};
+  cudf_io::write_parquet(out_args);
+
+  cudf_io::read_parquet_args in_args{cudf_io::source_info{filepath}};
+  in_args.use_pandas_metadata = true;
+  in_args.columns = {"int8s", "int16s", "int32s"};
+  auto result = cudf_io::read_parquet(in_args);
+
+  expect_tables_equal(expected->view(), result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
 TEST_F(ParquetWriterTest, HostBuffer) {
   constexpr auto num_rows = 100 << 10;
   const auto seq_col = random_values<int>(num_rows);
@@ -479,7 +528,7 @@ public:
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
     outfile_.write(reinterpret_cast<char const*>(ptr), size);
-    cudaFreeHost(ptr);
+    CUDA_TRY(cudaFreeHost(ptr));
   }
 
   void flush() override {
@@ -692,6 +741,46 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
   cudf_io::write_parquet_chunked_end(state);    
 }
 
+TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
+
+  auto full_table = cudf::experimental::concatenate({*table2, *table1, *table2});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedRowGroups.parquet");
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+  read_args.row_group_list = {1, 0, 1};
+  auto result = cudf_io::read_parquet(read_args);
+
+  expect_tables_equal(*result.tbl, *full_table);
+}
+
+TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedRowGroupsError.parquet");
+  cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::read_parquet_args read_args{cudf_io::source_info{filepath}};
+  read_args.row_group_list = {0, 1};
+  EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+  read_args.row_group_list = {-1};
+  EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
+}
+
 TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
@@ -804,7 +893,7 @@ public:
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
     mm_writer->host_write(reinterpret_cast<char const*>(ptr), size);
-    cudaFreeHost(ptr);
+    CUDA_TRY(cudaFreeHost(ptr));
   }
 
   void flush() override {
@@ -944,3 +1033,5 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
   auto custom_tbl = cudf_io::read_parquet(custom_args);
   expect_tables_equal(custom_tbl.tbl->view(), expected->view()); 
 }
+
+CUDF_TEST_PROGRAM_MAIN()

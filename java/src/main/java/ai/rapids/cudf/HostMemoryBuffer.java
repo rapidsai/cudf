@@ -34,20 +34,26 @@ import java.nio.channels.FileChannel.MapMode;
  * This class holds an off-heap buffer in the host/CPU memory.
  * Please note that instances must be explicitly closed or native memory will be leaked!
  *
- * Internally this class may optionally use PinnedMemoryPool to allocate and free the memory
- * it uses. To try to use the pinned memory pool for allocations set the java system property
- * ai.rapids.cudf.prefer-pinned to true.
+ * Internally this class will try to use PinnedMemoryPool to allocate and free the memory
+ * it uses by default. To avoid using the pinned memory pool for allocations by default
+ * set the Java system property ai.rapids.cudf.prefer-pinned to false.
  *
- * Be aware that the off heap memory limits set by java do nto apply to these buffers.
+ * Be aware that the off heap memory limits set by Java do not apply to these buffers.
  */
 public class HostMemoryBuffer extends MemoryBuffer {
-  private static final boolean defaultPreferPinned = Boolean.getBoolean(
-      "ai.rapids.cudf.prefer-pinned");
+  private static final boolean defaultPreferPinned;
   private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
 
   // Make sure we loaded the native dependencies so we have a way to create a ByteBuffer
   static {
     NativeDepsLoader.loadNativeDeps();
+
+    boolean preferPinned = true;
+    String propString = System.getProperty("ai.rapids.cudf.prefer-pinned");
+    if (propString != null) {
+      preferPinned = Boolean.parseBoolean(propString);
+    }
+    defaultPreferPinned = preferPinned;
   }
 
   /**
@@ -72,17 +78,29 @@ public class HostMemoryBuffer extends MemoryBuffer {
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
-        UnsafeMemoryAccessor.free(address);
-        MemoryListener.hostDeallocation(length, getId());
-        address = 0;
+        try {
+          UnsafeMemoryAccessor.free(address);
+          MemoryListener.hostDeallocation(length, id);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("A HOST BUFFER WAS LEAKED!!!!");
+        log.error("A HOST BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked host buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -99,8 +117,14 @@ public class HostMemoryBuffer extends MemoryBuffer {
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (address != 0) {
-        munmap(address, length);
-        address = 0;
+        try {
+          munmap(address, length);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -108,6 +132,11 @@ public class HostMemoryBuffer extends MemoryBuffer {
         logRefCountDebug("Leaked mmap buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -220,7 +249,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param length     number of bytes to copy
    */
   public final void copyFromHostBuffer(long destOffset, HostMemoryBuffer srcData, long srcOffset,
-      long length) {
+                                       long length) {
     addressOutOfBoundsCheck(address + destOffset, length, "copy from dest");
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
@@ -536,10 +565,24 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param stream CUDA stream to use
    */
   public final void copyFromDeviceBuffer(BaseDeviceMemoryBuffer deviceMemoryBuffer,
-      Cuda.Stream stream) {
+                                         Cuda.Stream stream) {
     addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
     assert !deviceMemoryBuffer.closed;
     Cuda.memcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
+        CudaMemcpyKind.DEVICE_TO_HOST, stream);
+  }
+
+  /**
+   * Copy from a DeviceMemoryBuffer to a HostMemoryBuffer using the specified stream.
+   * The copy is async and may not have completed when this returns.
+   * @param deviceMemoryBuffer buffer to copy data from
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromDeviceBufferAsync(BaseDeviceMemoryBuffer deviceMemoryBuffer,
+                                              Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address, deviceMemoryBuffer.length, "copy range dest");
+    assert !deviceMemoryBuffer.closed;
+    Cuda.asyncMemcpy(address, deviceMemoryBuffer.address, deviceMemoryBuffer.length,
         CudaMemcpyKind.DEVICE_TO_HOST, stream);
   }
 
@@ -549,6 +592,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param len how many bytes to slice
    * @return a host buffer that will need to be closed independently from this buffer.
    */
+  @Override
   public final synchronized HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;

@@ -67,7 +67,7 @@ TYPED_TEST(TypedDispatcherTest, DeviceDispatch) {
   thrust::device_vector<bool> result(1, false);
   dispatch_test_kernel<<<1, 1>>>(cudf::experimental::type_to_id<TypeParam>(),
                                  result.data().get());
-  cudaDeviceSynchronize();
+  CUDA_TRY(cudaDeviceSynchronize());
   EXPECT_EQ(true, result[0]);
 }
 
@@ -82,3 +82,5 @@ TEST_P(IdDispatcherTest, IdToType) {
   EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t},
                                          verify_dispatched_type{}, t));
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -3,10 +3,10 @@
 import functools
 
 import cupy
-from numba import cuda, six
-from numba.utils import exec_, pysignature
+from numba import cuda
+from numba.utils import pysignature
 
-import cudf._libxx as libcudfxx
+import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
 from cudf.utils import utils
@@ -116,7 +116,7 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
             )
             continue
 
-        out_mask = libcudfxx.binaryop.binaryop(
+        out_mask = libcudf.binaryop.binaryop(
             column.as_column(nullmask), out_mask, op, out_mask.dtype
         )
 
@@ -167,7 +167,7 @@ class ApplyKernelCompilerBase(object):
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = Series(outputs[k], nan_as_null=False)
+            outdf[k] = Series(outputs[k], index=outdf.index, nan_as_null=False)
             if out_mask is not None:
                 outdf[k] = outdf[k].set_mask(out_mask.data_array_view)
 
@@ -205,7 +205,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
-        if isinstance(chunks, six.integer_types):
+        if isinstance(chunks, int):
             # *chunks* is the chunksize
             return cupy.arange(0, size, chunks)
         else:
@@ -254,7 +254,7 @@ def row_wise_kernel({args}):
     concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
     glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
-    exec_(concrete, glbs)
+    exec(concrete, glbs)
     # Compile as CUDA kernel
     kernel = cuda.jit(glbs["row_wise_kernel"])
     return kernel
@@ -317,7 +317,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
     glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
-    exec_(concrete, glbs)
+    exec(concrete, glbs)
     # Compile as CUDA kernel
     kernel = cuda.jit(glbs["chunk_wise_kernel"])
     return kernel

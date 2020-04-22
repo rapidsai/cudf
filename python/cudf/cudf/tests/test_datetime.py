@@ -33,6 +33,36 @@ def timeseries_us_data():
     )
 
 
+def timestamp_ms_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333",
+            "2019-07-16 00:00:00.666",
+            "2019-07-16 00:00:00.888",
+        ]
+    )
+
+
+def timestamp_us_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333",
+            "2019-07-16 00:00:00.666666",
+            "2019-07-16 00:00:00.888888",
+        ]
+    )
+
+
+def timestamp_ns_data():
+    return pd.Series(
+        [
+            "2019-07-16 00:00:00.333333333",
+            "2019-07-16 00:00:00.666666666",
+            "2019-07-16 00:00:00.888888888",
+        ]
+    )
+
+
 def numerical_data():
     return np.arange(1, 10)
 
@@ -92,22 +122,24 @@ def test_datetime_series_binops_numpy(lhs_dtype, rhs_dtype):
     gdf_data_2 = Series(pd_data_2).astype(rhs_dtype)
     np_data_1 = np.array(pd_data_1).astype(lhs_dtype)
     np_data_2 = np.array(pd_data_2).astype(rhs_dtype)
-    np.testing.assert_equal(np_data_1, np.array(gdf_data_1))
-    np.testing.assert_equal(np_data_2, np.array(gdf_data_2))
+    np.testing.assert_equal(np_data_1, gdf_data_1.to_array())
+    np.testing.assert_equal(np_data_2, gdf_data_2.to_array())
     np.testing.assert_equal(
-        np.less(np_data_1, np_data_2), gdf_data_1 < gdf_data_2
+        np.less(np_data_1, np_data_2), (gdf_data_1 < gdf_data_2).to_array()
     )
     np.testing.assert_equal(
-        np.greater(np_data_1, np_data_2), gdf_data_1 > gdf_data_2
+        np.greater(np_data_1, np_data_2), (gdf_data_1 > gdf_data_2).to_array()
     )
     np.testing.assert_equal(
-        np.equal(np_data_1, np_data_2), gdf_data_1 == gdf_data_2
+        np.equal(np_data_1, np_data_2), (gdf_data_1 == gdf_data_2).to_array()
     )
     np.testing.assert_equal(
-        np.less_equal(np_data_1, np_data_2), gdf_data_1 <= gdf_data_2
+        np.less_equal(np_data_1, np_data_2),
+        (gdf_data_1 <= gdf_data_2).to_array(),
     )
     np.testing.assert_equal(
-        np.greater_equal(np_data_1, np_data_2), gdf_data_1 >= gdf_data_2
+        np.greater_equal(np_data_1, np_data_2),
+        (gdf_data_1 >= gdf_data_2).to_array(),
     )
 
 
@@ -222,7 +254,7 @@ def test_typecast_from_datetime(data, dtype):
     np_casted = np_data.astype(dtype)
     gdf_casted = gdf_data.astype(dtype)
 
-    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+    np.testing.assert_equal(np_casted, gdf_casted.to_array())
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -238,7 +270,7 @@ def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
     np_casted = np_data.astype(np.int64).astype(dtype)
     gdf_casted = gdf_data.astype(np.int64).astype(dtype)
 
-    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+    np.testing.assert_equal(np_casted, gdf_casted.to_array())
 
 
 @pytest.mark.parametrize("data", [timeseries_us_data()])
@@ -250,7 +282,26 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data).astype(dtype)
     gdf_series = Series(pd_data).astype(dtype)
-    np.testing.assert_equal(np_data, np.array(gdf_series))
+    np.testing.assert_equal(np_data, gdf_series.to_array())
+
+
+@pytest.mark.parametrize(
+    "data", [timestamp_ms_data(), timestamp_us_data(), timestamp_ns_data()]
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_string_timstamp_typecast_to_different_datetime_resolutions(
+    data, dtype
+):
+    pd_sr = data
+    gdf_sr = cudf.Series.from_pandas(pd_sr)
+
+    expect = pd_sr.values.astype(dtype)
+    got = gdf_sr.astype(dtype).values_host
+
+    np.testing.assert_equal(expect, got)
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -268,7 +319,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype)
     gdf_casted = gdf_data.astype(to_dtype)
 
-    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+    np.testing.assert_equal(np_casted, gdf_casted.to_array())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -286,7 +337,7 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype).astype(from_dtype)
     gdf_casted = gdf_data.astype(to_dtype).astype(from_dtype)
 
-    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+    np.testing.assert_equal(np_casted, gdf_casted.to_array())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -347,10 +398,7 @@ def test_datetime_to_arrow(dtype):
     [
         [],
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
-        pytest.param(
-            pd.Series([None, None], dtype="datetime64[ns]"),
-            marks=pytest.mark.xfail,
-        ),
+        pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
 @pytest.mark.parametrize(
@@ -456,3 +504,29 @@ def test_datetime_has_null_test_pyarrow():
 
     assert_eq(expected, data.has_nulls)
     assert_eq(expected_count, data.null_count)
+
+
+def test_datetime_dataframe():
+    data = {
+        "timearray": np.array(
+            [0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]"
+        )
+    }
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+    assert_eq(pdf.dropna(), gdf.dropna())
+
+    assert_eq(pdf.isnull(), gdf.isnull())
+
+    data = np.array([0, 1, None, 2, 20, None, 897], dtype="datetime64[ms]")
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(ps, gs)
+
+    assert_eq(ps.dropna(), gs.dropna())
+
+    assert_eq(ps.isnull(), gs.isnull())
