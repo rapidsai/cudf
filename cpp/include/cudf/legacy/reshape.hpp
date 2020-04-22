@@ -38,4 +38,4 @@ namespace cudf {
  */
 gdf_column stack(const cudf::table &input);
 
-}; // namespace cudf
+};  // namespace cudf

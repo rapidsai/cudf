@@ -74,19 +74,18 @@
 #include <cudf/cudf.h>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
 
-#include <bitmask/legacy/bit_mask.cuh>         // need for bit_mask::bit_mask_t
-#include <utilities/legacy/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
+#include <utilities/legacy/cudf_utils.h>  // need for CUDA_DEVICE_CALLABLE
+#include <bitmask/legacy/bit_mask.cuh>    // need for bit_mask::bit_mask_t
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
-#include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 
 /** -------------------------------------------------------------------------*
  * @brief value accessor with/without null bitmask
@@ -113,22 +112,20 @@ struct value_accessor;
  * @brief specialization for columns that contain null values
  * -------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType>
-struct value_accessor<ElementType, ResultType, true>
-{
+struct value_accessor<ElementType, ResultType, true> {
   ElementType const* elements{};          ///< pointer of cudf data array
   bit_mask::bit_mask_t const* bitmask{};  ///< pointer of cudf bitmask (null) array
   ResultType const identity{};            ///< identity value used when the validity is false
 
-/** -------------------------------------------------------------------------*
+  /** -------------------------------------------------------------------------*
  * @brief constructor
  * @param[in] e pointer of cudf data array
  * @param[in] b pointer of cudf bitmask (null) array
  * @param[in] i identity value used when the validity is false at operator()
  * -------------------------------------------------------------------------**/
   value_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
-    : elements{e}, bitmask{b}, identity{i}
-  {
-#if  !defined(__CUDA_ARCH__)
+    : elements{e}, bitmask{b}, identity{i} {
+#if !defined(__CUDA_ARCH__)
     // verify valid is non-null, otherwise, is_valid() will crash
     CUDF_EXPECTS(b != nullptr, "non-null bit mask is required");
 #endif
@@ -145,11 +142,10 @@ struct value_accessor<ElementType, ResultType, true>
  * @brief specialization for columns that don't contain null values
  * -------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType>
-struct value_accessor<ElementType, ResultType, false>
-{
-  ElementType const* elements{};         ///< pointer of cudf data array
+struct value_accessor<ElementType, ResultType, false> {
+  ElementType const* elements{};  ///< pointer of cudf data array
 
-/** -------------------------------------------------------------------------*
+  /** -------------------------------------------------------------------------*
  * @brief constructor
  * @param[in] e pointer of cudf data array
  * @param[in] bit_mask::bit_mask_t   not used
@@ -187,22 +183,22 @@ struct pair_accessor;
  * @brief specialization for columns that contain null values
  * -------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType>
-struct pair_accessor<ElementType, ResultType, true> : public value_accessor<ElementType, ResultType, true>
-{
-/** -------------------------------------------------------------------------*
+struct pair_accessor<ElementType, ResultType, true>
+  : public value_accessor<ElementType, ResultType, true> {
+  /** -------------------------------------------------------------------------*
  * @brief constructor
  * @param[in] e pointer of cudf data array
  * @param[in] b pointer of cudf bitmask (null) array
  * @param[in] i identity value used when the validity is false at operator()
  * -------------------------------------------------------------------------**/
   pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
-    : value_accessor<ElementType, ResultType, true>(e, b, i) {};
+    : value_accessor<ElementType, ResultType, true>(e, b, i){};
 
   CUDA_DEVICE_CALLABLE
   thrust::pair<ResultType, bool> operator()(cudf::size_type i) const {
-    return bit_mask::is_valid(this->bitmask, i) ?
-        thrust::make_pair(static_cast<ResultType>(this->elements[i]), true) :
-        thrust::make_pair(this->identity, false) ;
+    return bit_mask::is_valid(this->bitmask, i)
+             ? thrust::make_pair(static_cast<ResultType>(this->elements[i]), true)
+             : thrust::make_pair(this->identity, false);
   }
 };
 
@@ -211,16 +207,16 @@ struct pair_accessor<ElementType, ResultType, true> : public value_accessor<Elem
  * @brief specialization for columns that don't contain null values
  * -------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType>
-struct pair_accessor<ElementType, ResultType, false> : public value_accessor<ElementType, ResultType, false>
-{
-/** -------------------------------------------------------------------------*
+struct pair_accessor<ElementType, ResultType, false>
+  : public value_accessor<ElementType, ResultType, false> {
+  /** -------------------------------------------------------------------------*
  * @brief constructor
  * @param[in] e pointer of cudf data array
  * @param[in] b not used
  * @param[in] i not used
  * -------------------------------------------------------------------------**/
-  pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b , ResultType i)
-    : value_accessor<ElementType, ResultType, false>(e, b, i) {};
+  pair_accessor(ElementType const* e, bit_mask::bit_mask_t const* b, ResultType i)
+    : value_accessor<ElementType, ResultType, false>(e, b, i){};
 
   CUDA_DEVICE_CALLABLE
   thrust::pair<ResultType, bool> operator()(cudf::size_type i) const {
@@ -259,17 +255,19 @@ struct pair_accessor<ElementType, ResultType, false> : public value_accessor<Ele
  * @param[in] identity The identity value used when the mask value is false
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
-auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    CUDF_EXPECTS(data != nullptr, "non-null data is required");
-    CUDF_EXPECTS(not ( has_nulls && valid == nullptr), 
-        "non-null bit mask is required");
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
+auto make_iterator(const ElementType* data,
+                   const bit_mask::bit_mask_t* valid = nullptr,
+                   ResultType identity               = ResultType{0},
+                   Iterator_Index const it           = Iterator_Index(0)) {
+  CUDF_EXPECTS(data != nullptr, "non-null data is required");
+  CUDF_EXPECTS(not(has_nulls && valid == nullptr), "non-null bit mask is required");
 
-    return thrust::make_transform_iterator(
-      it, value_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
+  return thrust::make_transform_iterator(
+    it, value_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
@@ -279,13 +277,16 @@ auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = 
  *
  * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
-auto make_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
-        (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
+auto make_iterator(const ElementType* data,
+                   const cudf::valid_type* valid = nullptr,
+                   ResultType identity           = ResultType{0},
+                   Iterator_Index const it       = Iterator_Index(0)) {
+  return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>(
+    data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
@@ -294,17 +295,21 @@ auto make_iterator(const ElementType *data, const cudf::valid_type *valid = null
  *
  * make iterator from a column
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
 auto make_iterator(const gdf_column& column,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
+                   ResultType identity     = ResultType{0},
+                   Iterator_Index const it = Iterator_Index(0)) {
+  // check the data type
+  CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
 
-    return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
-        (static_cast<const ElementType*>(column.data),
-        reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
+  return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>(
+    static_cast<const ElementType*>(column.data),
+    reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid),
+    identity,
+    it);
 }
 
 /** -------------------------------------------------------------------------*
@@ -328,17 +333,19 @@ auto make_iterator(const gdf_column& column,
  * @param[in] identity The identity value used when the mask value is false
  * @param[in] it       The index iterator, `thrust::counting_iterator` by default
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
-auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = nullptr,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    CUDF_EXPECTS(data != nullptr, "non-null data is required");
-    CUDF_EXPECTS(not ( has_nulls && valid == nullptr), 
-        "non-null bit mask is required");
-	
-    return thrust::make_transform_iterator(
-      it, pair_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
+auto make_pair_iterator(const ElementType* data,
+                        const bit_mask::bit_mask_t* valid = nullptr,
+                        ResultType identity               = ResultType{0},
+                        Iterator_Index const it           = Iterator_Index(0)) {
+  CUDF_EXPECTS(data != nullptr, "non-null data is required");
+  CUDF_EXPECTS(not(has_nulls && valid == nullptr), "non-null bit mask is required");
+
+  return thrust::make_transform_iterator(
+    it, pair_accessor<ElementType, ResultType, has_nulls>{data, valid, identity});
 }
 
 /** -------------------------------------------------------------------------*
@@ -348,13 +355,16 @@ auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *val
  *
  * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
-auto make_pair_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
-        (data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
+auto make_pair_iterator(const ElementType* data,
+                        const cudf::valid_type* valid = nullptr,
+                        ResultType identity           = ResultType{0},
+                        Iterator_Index const it       = Iterator_Index(0)) {
+  return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>(
+    data, reinterpret_cast<const bit_mask::bit_mask_t*>(valid), identity, it);
 }
 
 /** -------------------------------------------------------------------------*
@@ -363,20 +373,23 @@ auto make_pair_iterator(const ElementType *data, const cudf::valid_type *valid =
  *
  * make iterator from a column
  * -------------------------------------------------------------------------**/
-template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
-    typename Iterator_Index=thrust::counting_iterator<cudf::size_type> >
+template <bool has_nulls,
+          typename ElementType,
+          typename ResultType     = ElementType,
+          typename Iterator_Index = thrust::counting_iterator<cudf::size_type>>
 auto make_pair_iterator(const gdf_column& column,
-    ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
-{
-    // check the data type
-    CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
+                        ResultType identity     = ResultType{0},
+                        Iterator_Index const it = Iterator_Index(0)) {
+  // check the data type
+  CUDF_EXPECTS(gdf_dtype_of<ElementType>() == column.dtype, "the data type mismatch");
 
-    return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
-        (static_cast<const ElementType*>(column.data),
-        reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid), identity, it);
+  return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>(
+    static_cast<const ElementType*>(column.data),
+    reinterpret_cast<const bit_mask::bit_mask_t*>(column.valid),
+    identity,
+    it);
 }
 
-
-} // namespace cudf
+}  // namespace cudf
 
 #endif

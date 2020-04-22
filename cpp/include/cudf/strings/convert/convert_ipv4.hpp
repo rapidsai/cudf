@@ -15,13 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
 /**
  * @brief Converts IPv4 addresses into integers.
@@ -47,8 +45,9 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New INT64 column converted from strings.
  */
-std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> ipv4_to_integers(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Converts integers into IPv4 addresses as strings.
@@ -69,8 +68,9 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> integers_to_ipv4(
+  column_view const& integers,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

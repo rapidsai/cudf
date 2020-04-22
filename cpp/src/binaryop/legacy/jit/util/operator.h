@@ -26,25 +26,22 @@ namespace cudf {
 namespace binops {
 namespace jit {
 
-    class Operator {
-    public:
-        enum class Type {
-            Direct,
-            Reverse
-        };
+class Operator {
+ public:
+  enum class Type { Direct, Reverse };
 
-    public:
-        Operator();
+ public:
+  Operator();
 
-    public:
-        char* getOperatorName(gdf_binary_operator ope, Operator::Type type);
+ public:
+  char* getOperatorName(gdf_binary_operator ope, Operator::Type type);
 
-    private:
-        char buffer[16];
-    };
+ private:
+  char buffer[16];
+};
 
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf
 
 #endif

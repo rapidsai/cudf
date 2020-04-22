@@ -17,7 +17,7 @@
 
 #if defined(NVTX3_MINOR_VERSION) and NVTX3_MINOR_VERSION < 0
 #error \
-    "Trying to #include NVTX version 3 in a source file where an older NVTX version has already been included.  If you are not directly using NVTX (the NVIDIA Tools Extension library), you are getting this error because libraries you are using have included different versions of NVTX.  Suggested solutions are: (1) reorder #includes so the newest NVTX version is included first, (2) avoid using the conflicting libraries in the same .c/.cpp file, or (3) update the library using the older NVTX version to use the newer version instead."
+  "Trying to #include NVTX version 3 in a source file where an older NVTX version has already been included.  If you are not directly using NVTX (the NVIDIA Tools Extension library), you are getting this error because libraries you are using have included different versions of NVTX.  Suggested solutions are: (1) reorder #includes so the newest NVTX version is included first, (2) avoid using the conflicting libraries in the same .c/.cpp file, or (3) update the library using the older NVTX version to use the newer version instead."
 #endif
 
 /**
@@ -527,10 +527,8 @@ namespace detail {
  */
 template <typename T>
 constexpr auto has_name_member() noexcept -> decltype(T::name, bool()) {
-  return (std::is_same<char const*,
-                       typename std::decay<decltype(T::name)>::type>::value or
-          std::is_same<wchar_t const*,
-                       typename std::decay<decltype(T::name)>::type>::value);
+  return (std::is_same<char const*, typename std::decay<decltype(T::name)>::type>::value or
+          std::is_same<wchar_t const*, typename std::decay<decltype(T::name)>::type>::value);
 }
 }  // namespace detail
 
@@ -592,7 +590,7 @@ class domain {
  public:
   domain(domain const&) = delete;
   domain& operator=(domain const&) = delete;
-  domain(domain&&) = delete;
+  domain(domain&&)                 = delete;
   domain& operator=(domain&&) = delete;
 
   /**
@@ -678,8 +676,7 @@ class domain {
    *
    * @param name A unique name identifying the domain
    */
-  explicit domain(char const* name) noexcept
-      : _domain{nvtxDomainCreateA(name)} {}
+  explicit domain(char const* name) noexcept : _domain{nvtxDomainCreateA(name)} {}
 
   /**
    * @brief Construct a new domain with the specified `name`.
@@ -689,8 +686,7 @@ class domain {
    *
    * @param name A unique name identifying the domain
    */
-  explicit domain(wchar_t const* name) noexcept
-      : _domain{nvtxDomainCreateW(name)} {}
+  explicit domain(wchar_t const* name) noexcept : _domain{nvtxDomainCreateW(name)} {}
 
   /**
    * @brief Construct a new domain with the specified `name`.
@@ -770,9 +766,8 @@ struct rgb {
    * @param green_ Value of the green channel
    * @param blue_ Value of the blue channel
    */
-  constexpr rgb(component_type red_, component_type green_,
-                component_type blue_) noexcept
-      : red{red_}, green{green_}, blue{blue_} {}
+  constexpr rgb(component_type red_, component_type green_, component_type blue_) noexcept
+    : red{red_}, green{green_}, blue{blue_} {}
 
   component_type const red{};    ///< Red channel value
   component_type const green{};  ///< Green channel value
@@ -797,9 +792,11 @@ struct argb final : rgb {
    * @param blue_  Value of the blue channel
    *
    */
-  constexpr argb(component_type alpha_, component_type red_,
-                 component_type green_, component_type blue_) noexcept
-      : rgb{red_, green_, blue_}, alpha{alpha_} {}
+  constexpr argb(component_type alpha_,
+                 component_type red_,
+                 component_type green_,
+                 component_type blue_) noexcept
+    : rgb{red_, green_, blue_}, alpha{alpha_} {}
 
   component_type const alpha{};  ///< Alpha channel value
 };
@@ -844,8 +841,7 @@ class color {
    * @param argb The alpha, red, green, blue components of the desired `color`
    */
   constexpr color(argb argb) noexcept
-      : color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green,
-                                    argb.blue)} {}
+    : color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green, argb.blue)} {}
 
   /**
    * @brief Construct a `color` using the red, green, blue components in
@@ -856,7 +852,7 @@ class color {
    * @param rgb The red, green, blue components of the desired `color`
    */
   constexpr color(rgb rgb) noexcept
-      : color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)} {}
+    : color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)} {}
 
   /**
    * @brief Returns the `color`s argb hex code
@@ -870,11 +866,11 @@ class color {
    */
   constexpr nvtxColorType_t get_type() const noexcept { return _type; }
 
-  color() = delete;
-  ~color() = default;
+  color()             = delete;
+  ~color()            = default;
   color(color const&) = default;
   color& operator=(color const&) = default;
-  color(color&&) = default;
+  color(color&&)                 = default;
   color& operator=(color&&) = default;
 
  private:
@@ -887,8 +883,7 @@ class color {
                                                     uint8_t byte2,
                                                     uint8_t byte1,
                                                     uint8_t byte0) noexcept {
-    return uint32_t{byte3} << 24 | uint32_t{byte2} << 16 |
-           uint32_t{byte1} << 8 | uint32_t{byte0};
+    return uint32_t{byte3} << 24 | uint32_t{byte2} << 16 | uint32_t{byte1} << 8 | uint32_t{byte0};
   }
 
   value_type const _value{};                     ///< color's argb color code
@@ -938,11 +933,11 @@ class category {
    */
   constexpr id_type get_id() const noexcept { return id_; }
 
-  category() = delete;
-  ~category() = default;
+  category()                = delete;
+  ~category()               = default;
   category(category const&) = default;
   category& operator=(category const&) = default;
-  category(category&&) = default;
+  category(category&&)                 = default;
   category& operator=(category&&) = default;
 
  private:
@@ -1171,7 +1166,7 @@ class registered_message {
    * @param msg The contents of the message
    */
   explicit registered_message(char const* msg) noexcept
-      : handle_{nvtxDomainRegisterStringA(domain::get<D>(), msg)} {}
+    : handle_{nvtxDomainRegisterStringA(domain::get<D>(), msg)} {}
 
   /**
    * @brief Constructs a `registered_message` from the specified `msg` string.
@@ -1184,8 +1179,7 @@ class registered_message {
    *
    * @param msg The contents of the message
    */
-  explicit registered_message(std::string const& msg) noexcept
-      : registered_message{msg.c_str()} {}
+  explicit registered_message(std::string const& msg) noexcept : registered_message{msg.c_str()} {}
 
   /**
    * @brief Constructs a `registered_message` from the specified `msg` string.
@@ -1199,7 +1193,7 @@ class registered_message {
    * @param msg The contents of the message
    */
   explicit registered_message(wchar_t const* msg) noexcept
-      : handle_{nvtxDomainRegisterStringW(domain::get<D>(), msg)} {}
+    : handle_{nvtxDomainRegisterStringW(domain::get<D>(), msg)} {}
 
   /**
    * @brief Constructs a `registered_message` from the specified `msg` string.
@@ -1212,8 +1206,7 @@ class registered_message {
    *
    * @param msg The contents of the message
    */
-  explicit registered_message(std::wstring const& msg) noexcept
-      : registered_message{msg.c_str()} {}
+  explicit registered_message(std::wstring const& msg) noexcept : registered_message{msg.c_str()} {}
 
   /**
    * @brief Returns the registered message's handle
@@ -1221,11 +1214,11 @@ class registered_message {
    */
   nvtxStringHandle_t get_handle() const noexcept { return handle_; }
 
-  registered_message() = delete;
-  ~registered_message() = default;
+  registered_message()                          = delete;
+  ~registered_message()                         = default;
   registered_message(registered_message const&) = default;
   registered_message& operator=(registered_message const&) = default;
-  registered_message(registered_message&&) = default;
+  registered_message(registered_message&&)                 = default;
   registered_message& operator=(registered_message&&) = default;
 
  private:
@@ -1279,8 +1272,7 @@ class message {
    *
    * @param msg The contents of the message
    */
-  NVTX3_RELAXED_CONSTEXPR message(char const* msg) noexcept
-      : type_{NVTX_MESSAGE_TYPE_ASCII} {
+  NVTX3_RELAXED_CONSTEXPR message(char const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_ASCII} {
     value_.ascii = msg;
   }
 
@@ -1306,8 +1298,7 @@ class message {
    *
    * @param msg The contents of the message
    */
-  NVTX3_RELAXED_CONSTEXPR message(wchar_t const* msg) noexcept
-      : type_{NVTX_MESSAGE_TYPE_UNICODE} {
+  NVTX3_RELAXED_CONSTEXPR message(wchar_t const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_UNICODE} {
     value_.unicode = msg;
   }
 
@@ -1337,8 +1328,7 @@ class message {
    * @param msg The message that has already been registered with NVTX.
    */
   template <typename D>
-  message(registered_message<D> const& msg) noexcept
-      : type_{NVTX_MESSAGE_TYPE_REGISTERED} {
+  message(registered_message<D> const& msg) noexcept : type_{NVTX_MESSAGE_TYPE_REGISTERED} {
     value_.registered = msg.get_handle();
   }
 
@@ -1346,17 +1336,13 @@ class message {
    * @brief Return the union holding the value of the message.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept {
-    return value_;
-  }
+  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
 
   /**
    * @brief Return the type information about the value the union holds.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR nvtxMessageType_t get_type() const noexcept {
-    return type_;
-  }
+  NVTX3_RELAXED_CONSTEXPR nvtxMessageType_t get_type() const noexcept { return type_; }
 
  private:
   nvtxMessageType_t const type_{};  ///< message type
@@ -1390,7 +1376,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(int64_t value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_INT64}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_INT64}, value_{} {
     value_.llValue = value;
   }
 
@@ -1400,7 +1386,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(int32_t value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_INT32}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_INT32}, value_{} {
     value_.iValue = value;
   }
 
@@ -1410,7 +1396,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(uint64_t value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT64}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT64}, value_{} {
     value_.ullValue = value;
   }
 
@@ -1420,7 +1406,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(uint32_t value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT32}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT32}, value_{} {
     value_.uiValue = value;
   }
 
@@ -1431,7 +1417,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(float value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_FLOAT}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_FLOAT}, value_{} {
     value_.fValue = value;
   }
 
@@ -1442,7 +1428,7 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(double value) noexcept
-      : type_{NVTX_PAYLOAD_TYPE_DOUBLE}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_DOUBLE}, value_{} {
     value_.dValue = value;
   }
 
@@ -1450,17 +1436,13 @@ class payload {
    * @brief Return the union holding the value of the payload
    *
    */
-  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept {
-    return value_;
-  }
+  NVTX3_RELAXED_CONSTEXPR value_type get_value() const noexcept { return value_; }
 
   /**
    * @brief Return the information about the type the union holds.
    *
    */
-  NVTX3_RELAXED_CONSTEXPR nvtxPayloadType_t get_type() const noexcept {
-    return type_;
-  }
+  NVTX3_RELAXED_CONSTEXPR nvtxPayloadType_t get_type() const noexcept { return type_; }
 
  private:
   nvtxPayloadType_t const type_;  ///< Type of the payload value
@@ -1537,17 +1519,17 @@ class event_attributes {
    * category, color, payload, nor message.
    */
   constexpr event_attributes() noexcept
-      : attributes_{
-            NVTX_VERSION,                   // version
-            sizeof(nvtxEventAttributes_t),  // size
-            0,                              // category
-            NVTX_COLOR_UNKNOWN,             // color type
-            0,                              // color value
-            NVTX_PAYLOAD_UNKNOWN,           // payload type
-            {},                             // payload value (union)
-            NVTX_MESSAGE_UNKNOWN,           // message type
-            {}                              // message value (union)
-        } {}
+    : attributes_{
+        NVTX_VERSION,                   // version
+        sizeof(nvtxEventAttributes_t),  // size
+        0,                              // category
+        NVTX_COLOR_UNKNOWN,             // color type
+        0,                              // color value
+        NVTX_PAYLOAD_UNKNOWN,           // payload type
+        {},                             // payload value (union)
+        NVTX_MESSAGE_UNKNOWN,           // message type
+        {}                              // message value (union)
+      } {}
 
   /**
    * @brief Variadic constructor where the first argument is a `category`.
@@ -1557,9 +1539,8 @@ class event_attributes {
    *
    */
   template <typename... Args>
-  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(
-      category const& c, Args const&... args) noexcept
-      : event_attributes(args...) {
+  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(category const& c, Args const&... args) noexcept
+    : event_attributes(args...) {
     attributes_.category = c.get_id();
   }
 
@@ -1571,10 +1552,9 @@ class event_attributes {
    *
    */
   template <typename... Args>
-  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(
-      color const& c, Args const&... args) noexcept
-      : event_attributes(args...) {
-    attributes_.color = c.get_value();
+  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(color const& c, Args const&... args) noexcept
+    : event_attributes(args...) {
+    attributes_.color     = c.get_value();
     attributes_.colorType = c.get_type();
   }
 
@@ -1586,10 +1566,9 @@ class event_attributes {
    *
    */
   template <typename... Args>
-  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(
-      payload const& p, Args const&... args) noexcept
-      : event_attributes(args...) {
-    attributes_.payload = p.get_value();
+  NVTX3_RELAXED_CONSTEXPR explicit event_attributes(payload const& p, Args const&... args) noexcept
+    : event_attributes(args...) {
+    attributes_.payload     = p.get_value();
     attributes_.payloadType = p.get_type();
   }
 
@@ -1601,17 +1580,16 @@ class event_attributes {
    *
    */
   template <typename... Args>
-  explicit event_attributes(
-      message const& m, Args const&... args) noexcept
-      : event_attributes(args...) {
-    attributes_.message = m.get_value();
+  explicit event_attributes(message const& m, Args const&... args) noexcept
+    : event_attributes(args...) {
+    attributes_.message     = m.get_value();
     attributes_.messageType = m.get_type();
   }
 
-  ~event_attributes() = default;
+  ~event_attributes()                       = default;
   event_attributes(event_attributes const&) = default;
   event_attributes& operator=(event_attributes const&) = default;
-  event_attributes(event_attributes&&) = default;
+  event_attributes(event_attributes&&)                 = default;
   event_attributes& operator=(event_attributes&&) = default;
 
   /**
@@ -1720,11 +1698,12 @@ class domain_thread_range {
    * forward.
    *
    */
-  template <typename First, typename... Args,
-            typename = typename std::enable_if<not std::is_same<
-                event_attributes, typename std::decay<First>>::value>>
+  template <typename First,
+            typename... Args,
+            typename = typename std::enable_if<
+              not std::is_same<event_attributes, typename std::decay<First>>::value>>
   explicit domain_thread_range(First const& first, Args const&... args) noexcept
-      : domain_thread_range{event_attributes{first, args...}} {}
+    : domain_thread_range{event_attributes{first, args...}} {}
 
   /**
    * @brief Default constructor creates a `domain_thread_range` with no
@@ -1735,7 +1714,7 @@ class domain_thread_range {
 
   domain_thread_range(domain_thread_range const&) = delete;
   domain_thread_range& operator=(domain_thread_range const&) = delete;
-  domain_thread_range(domain_thread_range&&) = delete;
+  domain_thread_range(domain_thread_range&&)                 = delete;
   domain_thread_range& operator=(domain_thread_range&&) = delete;
 
   /**
@@ -1778,7 +1757,7 @@ class domain_process_range {
    * @param attr
    */
   explicit domain_process_range(event_attributes const& attr) noexcept
-      : range_id_{nvtxDomainRangeStartEx(domain::get<D>(), attr.get())} {}
+    : range_id_{nvtxDomainRangeStartEx(domain::get<D>(), attr.get())} {}
 
   /**
    * @brief Construct a new domain process range object
@@ -1786,40 +1765,36 @@ class domain_process_range {
    * @param first
    * @param args
    */
-  template <typename First, typename... Args,
-            typename = typename std::enable_if<not std::is_same<
-                event_attributes, typename std::decay<First>>::value>>
-  explicit domain_process_range(First const& first,
-                                Args const&... args) noexcept
-      : domain_process_range{event_attributes{first, args...}} {}
+  template <typename First,
+            typename... Args,
+            typename = typename std::enable_if<
+              not std::is_same<event_attributes, typename std::decay<First>>::value>>
+  explicit domain_process_range(First const& first, Args const&... args) noexcept
+    : domain_process_range{event_attributes{first, args...}} {}
 
   /**
    * @brief Construct a new domain process range object
    *
    */
-  constexpr domain_process_range() noexcept
-      : domain_process_range{event_attributes{}} {}
+  constexpr domain_process_range() noexcept : domain_process_range{event_attributes{}} {}
 
   /**
    * @brief Destroy the `domain_process_range` ending the range.
    *
    */
   ~domain_process_range() noexcept {
-    if (not moved_from_) {
-      nvtxRangeEnd(range_id_);
-    }
+    if (not moved_from_) { nvtxRangeEnd(range_id_); }
   }
 
   domain_process_range(domain_process_range const&) = delete;
   domain_process_range& operator=(domain_process_range const&) = delete;
 
-  domain_process_range(domain_process_range&& other) noexcept
-      : range_id_{other.range_id_} {
+  domain_process_range(domain_process_range&& other) noexcept : range_id_{other.range_id_} {
     other.moved_from_ = true;
   }
 
   domain_process_range& operator=(domain_process_range&& other) noexcept {
-    range_id_ = other.range_id_;
+    range_id_         = other.range_id_;
     other.moved_from_ = true;
   }
 

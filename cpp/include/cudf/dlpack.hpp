@@ -40,8 +40,8 @@ namespace cudf {
  * @return Table with a copy of the tensor data
  */
 std::unique_ptr<experimental::table> from_dlpack(
-    DLManagedTensor const* managed_tensor,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  DLManagedTensor const* managed_tensor,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Convert a cudf table into a DLPack DLTensor
@@ -62,6 +62,6 @@ std::unique_ptr<experimental::table> from_dlpack(
  * @return 1D or 2D DLPack tensor with a copy of the table data, or nullptr
  */
 DLManagedTensor* to_dlpack(table_view const& input,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

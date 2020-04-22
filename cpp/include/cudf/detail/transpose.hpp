@@ -31,9 +31,9 @@ namespace detail {
  * @return Newly allocated output table with (nrows) columns each of size (ncols)
  */
 std::pair<std::unique_ptr<column>, table_view> transpose(
-    table_view const& input,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

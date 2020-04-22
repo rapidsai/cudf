@@ -16,11 +16,11 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <type_traits>
 
@@ -39,18 +39,17 @@ template <typename L, typename R>
 using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
 
 template <typename L, typename R>
-struct is_relationally_comparable_impl<
-    L, R, void_t<less_comparable<L, R>, greater_comparable<L, R> > >
-    : std::true_type {};
+struct is_relationally_comparable_impl<L,
+                                       R,
+                                       void_t<less_comparable<L, R>, greater_comparable<L, R>>>
+  : std::true_type {};
 
 template <typename T>
-using is_timestamp_t = simt::std::disjunction<
-  std::is_same<cudf::timestamp_D, T>,
-  std::is_same<cudf::timestamp_s, T>,
-  std::is_same<cudf::timestamp_ms, T>,
-  std::is_same<cudf::timestamp_us, T>,
-  std::is_same<cudf::timestamp_ns, T>
->;
+using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
+                                              std::is_same<cudf::timestamp_s, T>,
+                                              std::is_same<cudf::timestamp_ms, T>,
+                                              std::is_same<cudf::timestamp_us, T>,
+                                              std::is_same<cudf::timestamp_ns, T>>;
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether objects of types `L` and `R` can be relationally
@@ -215,9 +214,7 @@ constexpr inline bool is_fixed_width(data_type type) {
  */
 template <typename T>
 constexpr inline bool is_compound() {
-  return std::is_same<T, cudf::string_view>::value or 
-         std::is_same<T, cudf::dictionary32>::value or
-         std::is_same<T, cudf::list_view>::value;
+  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or std::is_same<T, cudf::list_view>::value;
 }
 
 struct is_compound_impl {
@@ -275,9 +272,7 @@ struct is_simple_impl {
  * @return true `type` is a simple type
  * @return false `type` is a compound type
  *---------------------------------------------------------------------------**/
-constexpr inline bool is_simple(data_type type) {
-  return not is_compound(type);
-}
+constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 template <typename T>
 constexpr inline bool is_nested() {

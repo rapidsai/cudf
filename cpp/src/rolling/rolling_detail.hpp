@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@
 #ifndef ROLLING_DETAIL_HPP
 #define ROLLING_DETAIL_HPP
 
-#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf
-{
+namespace cudf {
 
 // helper functions - used in the rolling window implementation and tests
 namespace detail
@@ -124,4 +123,3 @@ namespace detail
 } // namespace cudf
 
 #endif
-
