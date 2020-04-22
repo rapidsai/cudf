@@ -76,15 +76,12 @@ def _nonempty_series(s, idx=None):
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
     dt_s_dict = dict()
-    data = dict()
-    for i, c in enumerate(x.columns):
-        series = x[c]
-        dt = str(series.dtype)
+    res = cudf.DataFrame(index=idx)
+    for col in x.columns:
+        dt = str(x[col]._column.dtype)
         if dt not in dt_s_dict:
-            dt_s_dict[dt] = _nonempty_series(series, idx=idx)
-        data[i] = dt_s_dict[dt]
-    res = cudf.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
-    res.columns = x.columns
+            dt_s_dict[dt] = _nonempty_series(x[col])
+        res[col] = dt_s_dict[dt]._column
     return res
 
 

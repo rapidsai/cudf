@@ -739,10 +739,10 @@ class ColumnBase(Column):
         lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
         rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
-        res = res["bool"].fillna(False)
+        res = res.drop_duplicates(subset="orig_order")
+        res = res._data["bool"].fillna(False)
 
-        return res._column
+        return res
 
     def as_mask(self):
         """Convert booleans to bitmask

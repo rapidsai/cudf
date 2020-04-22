@@ -176,13 +176,14 @@ def rearrange_by_hash(
             for inp in inputs
         }
 
+        k_list = list(range(k))
         split = {  # Get out each individual dataframe piece from the dicts
             ("shuffle-split-" + token, stage, i, inp): (
                 getitem,
                 ("shuffle-group-" + token, stage, inp),
                 i,
             )
-            for i in range(k)
+            for i in k_list
             for inp in inputs
         }
 
@@ -196,7 +197,7 @@ def rearrange_by_hash(
                         inp[stage - 1],
                         insert(inp, stage - 1, j),
                     )
-                    for j in range(k)
+                    for j in k_list
                 ],
                 ignore_index,
             )
@@ -218,7 +219,8 @@ def rearrange_by_hash(
     df2 = df.__class__(graph, "shuffle-" + token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
-        parts = [i % df.npartitions for i in range(npartitions)]
+        npartitions_list = list(range(npartitions))
+        parts = [i % df.npartitions for i in npartitions_list]
         token = tokenize(df2, npartitions)
 
         dsk = {
@@ -231,7 +233,7 @@ def rearrange_by_hash(
             )
             for i, k in enumerate(df2.__dask_keys__())
         }
-        for p in range(npartitions):
+        for p in npartitions_list:
             dsk[("repartition-get-" + token, p)] = (
                 shuffle_group_get,
                 ("repartition-group-" + token, parts[p]),

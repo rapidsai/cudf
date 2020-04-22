@@ -23,7 +23,7 @@ class CudfEngine(ArrowEngine):
 
         meta = cudf.DataFrame.from_pandas(meta)
         for col, dtype in dtypes.items():
-            meta[col] = meta[col].astype(dtype)
+            meta[col] = meta._data[col].astype(dtype)
 
         return (meta, stats, parts)
 

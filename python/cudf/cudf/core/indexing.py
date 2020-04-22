@@ -320,7 +320,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
-        from cudf.core.dataframe import DataFrame, Series
+        from cudf.core.dataframe import DataFrame
         from cudf.core.index import as_index
 
         # Iloc Step 1:
@@ -345,9 +345,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for i, col in enumerate(columns_df._columns):
-                # need Series() in case a scalar is returned
-                df[i] = Series(col[arg[0]])
+            for i, column in enumerate(columns_df._columns):
+                # need as_column() in case a scalar is returned
+                df[i] = cudf.core.column.as_column(column[arg[0]])
 
             df.index = as_index(columns_df.index[arg[0]])
             df.columns = columns_df.columns
