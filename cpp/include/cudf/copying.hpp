@@ -445,15 +445,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 struct packed_table {
-    struct serialized_column {
-        cudf::data_type _type;
-        cudf::size_type _size;
-        size_t _data_offset;
-        size_t _null_mask_offset;
-        cudf::size_type _num_children;
-    };
-
-    std::vector<serialized_column> table_metadata;
+    packed_table(std::vector<uint8_t>&& table_metadata,
+                 std::unique_ptr<rmm::device_buffer>&& table_data)
+        : table_metadata(table_metadata), table_data(std::move(table_data)) {};
+    std::vector<uint8_t> table_metadata;
     std::unique_ptr<rmm::device_buffer> table_data;
 };
 

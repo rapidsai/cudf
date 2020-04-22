@@ -8,7 +8,22 @@ namespace detail {
 
 namespace {
 
-packed_table::serialized_column serialize_column(column_view const& col,
+struct serialized_column {
+  cudf::data_type _type;
+  cudf::size_type _size;
+  size_t _data_offset;
+  size_t _null_mask_offset;
+  cudf::size_type _num_children;
+};
+
+inline void add_column_to_vector(serialized_column const& column,
+                                 std::vector<uint8_t> * table_metadata)
+{
+  auto bytes = reinterpret_cast<uint8_t const*>(&column);
+  std::copy(bytes, bytes + sizeof(serialized_column), std::back_inserter(*table_metadata));
+}
+
+serialized_column serialize_column(column_view const& col,
                                                  uint8_t const* base_ptr)
 {
   // There are columns types that don't have data in parent e.g. strings
@@ -19,15 +34,15 @@ packed_table::serialized_column serialize_column(column_view const& col,
                              ? reinterpret_cast<uint8_t const*>(col.null_mask()) - base_ptr
                              : -1;
 
-  return packed_table::serialized_column{col.type(), col.size(), data_offset, null_mask_offset, col.num_children()};
+  return serialized_column{col.type(), col.size(), data_offset, null_mask_offset, col.num_children()};
 }
 
 void add_columns(std::vector<column_view> const& cols,
                  uint8_t const* base_ptr,
-                 std::vector<packed_table::serialized_column> * table_metadata)
+                 std::vector<uint8_t> * table_metadata)
 {
   for (auto &&col : cols) {
-    table_metadata->emplace_back(serialize_column(col, base_ptr));
+    add_column_to_vector(serialize_column(col, base_ptr), table_metadata);
     std::vector<column_view> children;
     for (size_t i = 0; i < col.num_children(); i++) {
       children.push_back(col.child(i));
@@ -46,9 +61,10 @@ packed_table pack(cudf::table_view const& input,
   contiguous_split_result contiguous_data = 
     std::move(detail::contiguous_split(input, {}, mr, stream).front());
 
-  packed_table::serialized_column table_element = {{}, 0, 0, 0, contiguous_data.table.num_columns()};
+  serialized_column table_element = {{}, 0, 0, 0, contiguous_data.table.num_columns()};
 
-  packed_table result{{table_element}, std::move(contiguous_data.all_data)};
+  auto result = packed_table({}, std::move(contiguous_data.all_data));
+  add_column_to_vector(table_element, &result.table_metadata);
   
   std::vector<column_view> table_columns(contiguous_data.table.begin(), contiguous_data.table.end());
 
@@ -61,7 +77,7 @@ packed_table pack(cudf::table_view const& input,
 
 namespace {
 
-column_view deserialize_column(packed_table::serialized_column serial_column,
+column_view deserialize_column(serialized_column serial_column,
                                std::vector<column_view> const& children,
                                uint8_t const* base_ptr)
 {
@@ -94,7 +110,7 @@ column_view deserialize_column(packed_table::serialized_column serial_column,
 }
 
 std::vector<column_view> get_columns(cudf::size_type num_columns,
-                                     std::vector<packed_table::serialized_column> const& serialized_columns,
+                                     serialized_column const* serialized_columns,
                                      uint8_t const* base_ptr,
                                      size_t * current_index)
 {
@@ -120,11 +136,12 @@ std::vector<column_view> get_columns(cudf::size_type num_columns,
 
 contiguous_split_result unpack(packed_table & input)
 {
-  cudf::size_type num_columns = input.table_metadata[0]._num_children;
+  auto serialized_columns = reinterpret_cast<serialized_column const*>(input.table_metadata.data());
+  cudf::size_type num_columns = serialized_columns[0]._num_children;
   size_t current_index = 1;
 
   std::vector<column_view> table_columns = get_columns(num_columns,
-                                                       input.table_metadata,
+    serialized_columns,
                                                        static_cast<uint8_t const*>(input.table_data->data()),
                                                        &current_index);
 
