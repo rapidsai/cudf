@@ -47,11 +47,14 @@ cdef class Column:
             object dtype,
             object mask=None,
             int offset=0,
+            object null_count=None,
             object children=()
     ):
-        self._offset = offset
+
         self._size = size
         self._dtype = dtype
+        self._offset = offset
+        self._null_count = null_count
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -377,6 +380,7 @@ cdef class Column:
 
         size = c_col.get()[0].size()
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
+
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
@@ -388,8 +392,10 @@ cdef class Column:
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
             mask = Buffer(mask)
+            null_count = c_col.get()[0].null_count()
         else:
             mask = None
+            null_count = None
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = ()
@@ -401,6 +407,7 @@ cdef class Column:
             data,
             dtype=dtype,
             mask=mask,
+            null_count=null_count,
             children=children
         )
 
@@ -466,6 +473,10 @@ cdef class Column:
                     owner=mask_owner
                 )
 
+        null_count = None
+        if cv.has_nulls():
+            null_count = cv.null_count()
+
         children = []
         for child_index in range(cv.num_children()):
             child_owner = owner
@@ -485,6 +496,7 @@ cdef class Column:
             mask,
             size,
             offset,
+            null_count,
             tuple(children)
         )
 
