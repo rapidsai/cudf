@@ -24,7 +24,7 @@ inline void add_column_to_vector(serialized_column const& column,
 }
 
 serialized_column serialize_column(column_view const& col,
-                                                 uint8_t const* base_ptr)
+                                   uint8_t const* base_ptr)
 {
   // There are columns types that don't have data in parent e.g. strings
   size_t data_offset = col.data<uint8_t>()
@@ -134,18 +134,18 @@ std::vector<column_view> get_columns(cudf::size_type num_columns,
 
 } // namespace anonymous
 
-contiguous_split_result unpack(packed_table & input)
+contiguous_split_result unpack(std::unique_ptr<packed_table> input)
 {
-  auto serialized_columns = reinterpret_cast<serialized_column const*>(input.table_metadata.data());
+  auto serialized_columns = reinterpret_cast<serialized_column const*>(input->table_metadata.data());
   cudf::size_type num_columns = serialized_columns[0]._num_children;
   size_t current_index = 1;
 
   std::vector<column_view> table_columns = get_columns(num_columns,
     serialized_columns,
-                                                       static_cast<uint8_t const*>(input.table_data->data()),
-                                                       &current_index);
+    static_cast<uint8_t const*>(input->table_data->data()),
+    &current_index);
 
-  return contiguous_split_result{table_view(table_columns), std::move(input.table_data)};
+  return contiguous_split_result{table_view(table_columns), std::move(input->table_data)};
 }
 
 } // namespace detail
@@ -157,10 +157,10 @@ packed_table pack(cudf::table_view const& input,
   return detail::pack(input, 0, mr);
 }
 
-contiguous_split_result unpack(packed_table & input)
+contiguous_split_result unpack(std::unique_ptr<packed_table> input)
 {
   CUDF_FUNC_RANGE();
-  return detail::unpack(input);
+  return detail::unpack(std::move(input));
 }
 
 } // namespace experimental  

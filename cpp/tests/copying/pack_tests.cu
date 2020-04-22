@@ -23,7 +23,20 @@ namespace cudf {
 namespace test {
 
 
-struct PackUnpackTest : public BaseFixture {};
+struct PackUnpackTest : public BaseFixture {
+
+  void run_test(table_view const& t) {
+    auto packed = experimental::pack(t);
+    auto packed2 = std::make_unique<experimental::packed_table>(
+      std::vector<uint8_t>(packed.table_metadata),
+      std::make_unique<rmm::device_buffer>(*packed.table_data));
+
+    experimental::contiguous_split_result unpacked = experimental::unpack(std::move(packed2));
+
+    expect_tables_equal(t, unpacked.table);
+  }
+
+};
 
 TEST_F(PackUnpackTest, SingleColumnFixedWidth)
 {
@@ -31,12 +44,7 @@ TEST_F(PackUnpackTest, SingleColumnFixedWidth)
                                             { 1, 1, 1, 0, 1, 0, 1});
   table_view t({col1});
 
-  experimental::packed_table packed = experimental::pack(t);
-  experimental::packed_table packed2{
-    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
-  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
-
-  expect_tables_equal(t, unpacked.table);
+  this->run_test(t);
 }
 
 TEST_F(PackUnpackTest, SingleColumnFixedWidthNonNullable)
@@ -44,12 +52,7 @@ TEST_F(PackUnpackTest, SingleColumnFixedWidthNonNullable)
   fixed_width_column_wrapper<int64_t> col1 ({ 1, 2, 3, 4, 5, 6, 7});
   table_view t({col1});
 
-  experimental::packed_table packed = experimental::pack(t);
-  experimental::packed_table packed2{
-    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
-  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
-
-  expect_tables_equal(t, unpacked.table);
+  this->run_test(t);
 }
 
 TEST_F(PackUnpackTest, MultiColumnFixedWidth)
@@ -62,12 +65,7 @@ TEST_F(PackUnpackTest, MultiColumnFixedWidth)
                                             { 0, 1, 1, 1, 1, 1, 1});
   table_view t({col1, col2, col3});
 
-  experimental::packed_table packed = experimental::pack(t);
-  experimental::packed_table packed2{
-    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
-  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
-
-  expect_tables_equal(t, unpacked.table);
+  this->run_test(t);
 }
 
 TEST_F(PackUnpackTest, MultiColumnWithStrings)
@@ -79,12 +77,7 @@ TEST_F(PackUnpackTest, MultiColumnWithStrings)
   strings_column_wrapper              col3 ({"", "this", "is", "a", "column", "of", "strings"});
   table_view t({col1, col2, col3});
 
-  experimental::packed_table packed = experimental::pack(t);
-  experimental::packed_table packed2{
-    packed.table_metadata, std::make_unique<rmm::device_buffer>(*packed.table_data)};
-  experimental::contiguous_split_result unpacked = experimental::unpack(packed2);
-
-  expect_tables_equal(t, unpacked.table);
+  this->run_test(t);
 }
 
 } // namespace test
