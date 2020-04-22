@@ -80,8 +80,7 @@ gdf_column replace_nulls(const gdf_column& input,
   *
   * @returns gdf_column Column with nulls replaced
   */
-gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_column& replacement);
+gdf_column replace_nulls(const gdf_column& input, const gdf_column& replacement);
 
 /**
   * @brief Replaces all null values in a column with a scalar.
@@ -96,9 +95,7 @@ gdf_column replace_nulls(const gdf_column& input,
   *
   * @returns gdf_column Column with nulls replaced
   */
-gdf_column replace_nulls(const gdf_column& input,
-                         const gdf_scalar& replacement);
-
+gdf_column replace_nulls(const gdf_column& input, const gdf_scalar& replacement);
 
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
@@ -112,11 +109,10 @@ gdf_column replace_nulls(const gdf_column& input,
  * @return output gdf_column with the modified data
  *
  */
-gdf_column find_and_replace_all(const gdf_column &input_col,
-                                const gdf_column &values_to_replace,
-                                const gdf_column &replacement_values);
+gdf_column find_and_replace_all(const gdf_column& input_col,
+                                const gdf_column& values_to_replace,
+                                const gdf_column& replacement_values);
 
+}  // namespace cudf
 
-} // namespace cudf
-
-#endif // REPLACE_HPP
+#endif  // REPLACE_HPP

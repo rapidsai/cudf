@@ -16,28 +16,27 @@
  */
 
 #include <cudf/cudf.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/fill.h>
 #include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/groupby.hpp>
-#include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
+#include <type_traits>
 #include <utilities/legacy/column_utils.hpp>
 #include <utilities/legacy/cuda_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "groupby_kernels.cuh"
+#include <vector>
 #include "groupby/common/legacy/aggregation_requests.hpp"
 #include "groupby/common/legacy/type_info.hpp"
 #include "groupby/common/legacy/utils.hpp"
-#include <rmm/thrust_rmm_allocator.h>
-#include <thrust/fill.h>
-#include <type_traits>
-#include <vector>
-#include <cudf/detail/utilities/integer_utils.hpp>
+#include "groupby_kernels.cuh"
 
 namespace cudf {
 namespace groupby {
@@ -46,52 +45,54 @@ namespace hash {
 namespace {
 
 template <bool keys_have_nulls, bool values_have_nulls>
-auto build_aggregation_map(table const& input_keys, table const& input_values,
+auto build_aggregation_map(table const& input_keys,
+                           table const& input_values,
                            device_table const& d_input_keys,
                            device_table const& d_input_values,
-                           std::vector<operators> const& ops, Options options,
+                           std::vector<operators> const& ops,
+                           Options options,
                            cudaStream_t stream) {
   cudf::size_type constexpr unused_key{std::numeric_limits<cudf::size_type>::max()};
-  cudf::size_type constexpr unused_value{
-      std::numeric_limits<cudf::size_type>::max()};
-  CUDF_EXPECTS(input_keys.num_rows() < unused_key,
-               "Groupby input size too large.");
+  cudf::size_type constexpr unused_value{std::numeric_limits<cudf::size_type>::max()};
+  CUDF_EXPECTS(input_keys.num_rows() < unused_key, "Groupby input size too large.");
 
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound.
   cudf::size_type const output_size_estimate{input_keys.num_rows()};
 
-  cudf::table sparse_output_values{
-      output_size_estimate,
-      target_dtypes(column_dtypes(input_values), ops),
-      column_dtype_infos(input_values),
-      values_have_nulls,
-      false,
-      stream};
+  cudf::table sparse_output_values{output_size_estimate,
+                                   target_dtypes(column_dtypes(input_values), ops),
+                                   column_dtype_infos(input_values),
+                                   values_have_nulls,
+                                   false,
+                                   stream};
 
   initialize_with_identity(sparse_output_values, ops, stream);
 
-  auto d_sparse_output_values =
-      device_table::create(sparse_output_values, stream);
+  auto d_sparse_output_values = device_table::create(sparse_output_values, stream);
   rmm::device_vector<operators> d_ops(ops);
 
   // If we ignore null keys, then nulls are not equivalent
   bool const null_keys_are_equal{not options.ignore_null_keys};
-  bool const skip_key_rows_with_nulls{keys_have_nulls and
-                                      not null_keys_are_equal};
+  bool const skip_key_rows_with_nulls{keys_have_nulls and not null_keys_are_equal};
 
   row_hasher<keys_have_nulls> hasher{d_input_keys};
   row_equality_comparator<keys_have_nulls> rows_equal{
-      d_input_keys, d_input_keys, null_keys_are_equal};
+    d_input_keys, d_input_keys, null_keys_are_equal};
 
-  using map_type =
-      concurrent_unordered_map<cudf::size_type, cudf::size_type, decltype(hasher),
-                               decltype(rows_equal)>;
+  using map_type       = concurrent_unordered_map<cudf::size_type,
+                                            cudf::size_type,
+                                            decltype(hasher),
+                                            decltype(rows_equal)>;
   using allocator_type = typename map_type::allocator_type;
 
   auto map = map_type::create(compute_hash_table_size(input_keys.num_rows()),
-                              unused_key, unused_value, hasher, rows_equal,
-                              allocator_type(), stream);
+                              unused_key,
+                              unused_value,
+                              hasher,
+                              rows_equal,
+                              allocator_type(),
+                              stream);
 
   // TODO: Explore optimal block size and work per thread.
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
@@ -99,15 +100,17 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{cudf::row_bitmask(input_keys, stream)};
     build_aggregation_map<true, values_have_nulls>
-        <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
-           stream>>>(*map, d_input_keys, d_input_values,
-                     *d_sparse_output_values, d_ops.data().get(),
-                     row_bitmask.data().get());
+      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
+        *map,
+        d_input_keys,
+        d_input_values,
+        *d_sparse_output_values,
+        d_ops.data().get(),
+        row_bitmask.data().get());
   } else {
     build_aggregation_map<false, values_have_nulls>
-        <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
-           stream>>>(*map, d_input_keys, d_input_values,
-                     *d_sparse_output_values, d_ops.data().get(), nullptr);
+      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
+        *map, d_input_keys, d_input_values, *d_sparse_output_values, d_ops.data().get(), nullptr);
   }
   CHECK_CUDA(stream);
 
@@ -115,26 +118,20 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
 }
 
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
-auto extract_results(table const& input_keys, table const& input_values,
+auto extract_results(table const& input_keys,
+                     table const& input_values,
                      device_table const& d_input_keys,
-                     table const& sparse_output_values, Map const& map,
+                     table const& sparse_output_values,
+                     Map const& map,
                      cudaStream_t stream) {
-
   cudf::table output_keys{
-      cudf::allocate_like(
-        input_keys,
-        keys_have_nulls ? RETAIN : NEVER,
-        stream)};
+    cudf::allocate_like(input_keys, keys_have_nulls ? RETAIN : NEVER, stream)};
   cudf::table output_values{
-      cudf::allocate_like(
-        sparse_output_values,
-        values_have_nulls ? RETAIN : NEVER,
-        stream)};
+    cudf::allocate_like(sparse_output_values, values_have_nulls ? RETAIN : NEVER, stream)};
 
-  auto d_sparse_output_values =
-      device_table::create(sparse_output_values, stream);
+  auto d_sparse_output_values = device_table::create(sparse_output_values, stream);
 
-  auto d_output_keys = device_table::create(output_keys, stream);
+  auto d_output_keys   = device_table::create(output_keys, stream);
   auto d_output_values = device_table::create(output_values, stream);
 
   cudf::size_type* d_result_size{nullptr};
@@ -144,15 +141,14 @@ auto extract_results(table const& input_keys, table const& input_values,
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
   extract_groupby_result<keys_have_nulls, values_have_nulls>
-      <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0,
-         stream>>>(map, d_input_keys, *d_output_keys, *d_sparse_output_values,
-                   *d_output_values, d_result_size);
+    <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
+      map, d_input_keys, *d_output_keys, *d_sparse_output_values, *d_output_values, d_result_size);
 
   CHECK_CUDA(stream);
 
   cudf::size_type result_size{-1};
-  CUDA_TRY(cudaMemcpyAsync(&result_size, d_result_size, sizeof(cudf::size_type),
-                           cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    &result_size, d_result_size, sizeof(cudf::size_type), cudaMemcpyDeviceToHost, stream));
 
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
@@ -162,10 +158,8 @@ auto extract_results(table const& input_keys, table const& input_values,
     return col;
   };
 
-  std::transform(output_keys.begin(), output_keys.end(), output_keys.begin(),
-                 update_column);
-  std::transform(output_values.begin(), output_values.end(),
-                 output_values.begin(), update_column);
+  std::transform(output_keys.begin(), output_keys.end(), output_keys.begin(), update_column);
+  std::transform(output_values.begin(), output_values.end(), output_values.begin(), update_column);
 
   return std::make_pair(std::move(output_keys), std::move(output_values));
 }
@@ -209,8 +203,10 @@ auto extract_results(table const& input_keys, table const& input_values,
  * @return A pair of the output keys table and output values table
  *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls>
-auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
-                          std::vector<operators> const& ops, Options options,
+auto compute_hash_groupby(cudf::table const& keys,
+                          cudf::table const& values,
+                          std::vector<operators> const& ops,
+                          Options options,
                           cudaStream_t stream) {
   CUDF_EXPECTS(values.num_columns() == static_cast<cudf::size_type>(ops.size()),
                "Size mismatch between number of value columns and number of "
@@ -220,7 +216,9 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // of values, and an aggregation operation enum indicating the aggregation
   // requested to be performed on the column
   std::vector<AggRequestType> original_requests(values.num_columns());
-  std::transform(values.begin(), values.end(), ops.begin(),
+  std::transform(values.begin(),
+                 values.end(),
+                 ops.begin(),
                  original_requests.begin(),
                  [](gdf_column const* col, operators op) {
                    return std::make_pair(const_cast<gdf_column*>(col), op);
@@ -232,27 +230,24 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple
   // requests back to compound request results.
-  std::vector<SimpleAggRequestCounter> simple_agg_columns =
-      compound_to_simple(original_requests);
+  std::vector<SimpleAggRequestCounter> simple_agg_columns = compound_to_simple(original_requests);
 
   std::vector<gdf_column*> simple_values_columns;
   std::vector<operators> simple_operators;
   for (auto const& p : simple_agg_columns) {
     const AggRequestType& agg_req_type = p.first;
-    simple_values_columns.push_back(
-        const_cast<gdf_column*>(agg_req_type.first));
+    simple_values_columns.push_back(const_cast<gdf_column*>(agg_req_type.first));
     simple_operators.push_back(agg_req_type.second);
   }
 
   cudf::table simple_values_table{simple_values_columns};
 
-  auto const d_input_keys = device_table::create(keys);
+  auto const d_input_keys   = device_table::create(keys);
   auto const d_input_values = device_table::create(simple_values_table);
 
   // Step 1: Build hash map
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
-      keys, simple_values_table, *d_input_keys, *d_input_values,
-      simple_operators, options, stream);
+    keys, simple_values_table, *d_input_keys, *d_input_values, simple_operators, options, stream);
 
   auto const map{std::move(result.first)};
   cudf::table sparse_output_values{result.second};
@@ -260,17 +255,16 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // Step 2: Extract non-empty entries
   cudf::table output_keys;
   cudf::table simple_output_values;
-  std::tie(output_keys, simple_output_values) =
-      extract_results<keys_have_nulls, values_have_nulls>(
-          keys, values, *d_input_keys, sparse_output_values, *map, stream);
+  std::tie(output_keys, simple_output_values) = extract_results<keys_have_nulls, values_have_nulls>(
+    keys, values, *d_input_keys, sparse_output_values, *map, stream);
 
   // Delete intermediate results storage
   sparse_output_values.destroy();
 
   // If any of the original requests were compound, compute them from the
   // results of simple aggregation requests
-  cudf::table final_output_values = compute_original_requests(
-      original_requests, simple_agg_columns, simple_output_values, stream);
+  cudf::table final_output_values =
+    compute_original_requests(original_requests, simple_agg_columns, simple_output_values, stream);
 
   return std::make_pair(std::move(output_keys), std::move(final_output_values));
 }
@@ -314,17 +308,15 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
   // Empty inputs
   if (keys.num_rows() == 0) {
     return std::make_pair(
-        cudf::empty_like(keys),
-        cudf::table(0, target_dtypes(column_dtypes(values), ops),
-                    column_dtype_infos(values)));
+      cudf::empty_like(keys),
+      cudf::table(0, target_dtypes(column_dtypes(values), ops), column_dtype_infos(values)));
   }
 
   auto compute_groupby = groupby_null_specialization(keys, values);
 
   cudf::table output_keys;
   cudf::table output_values;
-  std::tie(output_keys, output_values) =
-      compute_groupby(keys, values, ops, options, stream);
+  std::tie(output_keys, output_values) = compute_groupby(keys, values, ops, options, stream);
 
   update_nvcategories(keys, output_keys, values, output_values);
 

@@ -24,11 +24,11 @@
 #include "json.h"
 #include "json_gpu.h"
 
-#include <rmm/device_buffer.hpp>
 #include <thrust/device_vector.h>
+#include <rmm/device_buffer.hpp>
 
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/column_buffer.hpp>
+#include <io/utilities/datasource.hpp>
 
 #include <cudf/io/readers.hpp>
 
@@ -46,8 +46,8 @@ using namespace cudf::io;
  *
  **/
 class reader::impl {
-public:
-private:
+ public:
+ private:
   const reader_options args_{};
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
@@ -57,7 +57,7 @@ private:
   std::shared_ptr<arrow::Buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
-  size_t uncomp_size_ = 0;
+  size_t uncomp_size_      = 0;
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
@@ -65,12 +65,12 @@ private:
   rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
-  size_t byte_range_size_ = 0;
-  bool load_whole_file_ = true;
-  
-  table_metadata         metadata;
+  size_t byte_range_size_   = 0;
+  bool load_whole_file_     = true;
+
+  table_metadata metadata;
   std::vector<data_type> dtypes_;
-  //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;  
+  //std::vector<gdf_dtype_extra_info> dtypes_extra_info_;
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
@@ -152,12 +152,13 @@ private:
    * @return table_with_metadata struct
    **/
   table_with_metadata convert_data_to_table(cudaStream_t stream);
-  
+
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit impl(std::unique_ptr<datasource> source, std::string filepath,
+  explicit impl(std::unique_ptr<datasource> source,
+                std::string filepath,
                 reader_options const &args,
                 rmm::mr::device_memory_resource *mr);
 
@@ -173,8 +174,8 @@ private:
   table_with_metadata read(size_t range_offset, size_t range_size, cudaStream_t stream);
 };
 
-} // namespace json
-} // namespace detail
-} // namespace io
-} // namespace experimental
-} // namespace cudf
+}  // namespace json
+}  // namespace detail
+}  // namespace io
+}  // namespace experimental
+}  // namespace cudf

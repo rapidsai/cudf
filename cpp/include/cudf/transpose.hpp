@@ -34,7 +34,6 @@ namespace cudf {
  *                  respectively.
  */
 std::pair<std::unique_ptr<column>, table_view> transpose(
-    table_view const& input,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

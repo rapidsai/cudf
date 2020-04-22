@@ -17,13 +17,13 @@
 #ifndef CUDF_JIT_CACHE_H_
 #define CUDF_JIT_CACHE_H_
 
+#include <boost/filesystem.hpp>
 #include <cudf/utilities/error.hpp>
 #include <jitify.hpp>
-#include <unordered_map>
-#include <string>
 #include <memory>
 #include <mutex>
-#include <boost/filesystem.hpp>
+#include <string>
+#include <unordered_map>
 
 namespace cudf {
 namespace jit {
@@ -45,25 +45,23 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  **/
 boost::filesystem::path getCacheDir();
 
-class cudfJitCache
-{
-public:
-
-    /**---------------------------------------------------------------------------*
+class cudfJitCache {
+ public:
+  /**---------------------------------------------------------------------------*
      * @brief Get a process wide singleton cache object
      * 
      *---------------------------------------------------------------------------**/
-    static cudfJitCache& Instance() {
-        // Meyers' singleton is thread safe in C++11
-        // Link: https://stackoverflow.com/a/1661564
-        static cudfJitCache cache;
-        return cache;
-    }
+  static cudfJitCache& Instance() {
+    // Meyers' singleton is thread safe in C++11
+    // Link: https://stackoverflow.com/a/1661564
+    static cudfJitCache cache;
+    return cache;
+  }
 
-    cudfJitCache();
-    ~cudfJitCache();
+  cudfJitCache();
+  ~cudfJitCache();
 
-    /**---------------------------------------------------------------------------*
+  /**---------------------------------------------------------------------------*
      * @brief Get the Kernel Instantiation object
      * 
      * Searches an internal in-memory cache and file based cache for the kernel
@@ -74,12 +72,12 @@ public:
      * @param arguments [in] template arguments for kernel in vector of strings
      * @return  Pair of string kernel identifier and compiled kernel object
      *---------------------------------------------------------------------------**/
-    named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
-        std::string const& kern_name,
-        named_prog<jitify::experimental::Program> const& program,
-        std::vector<std::string> const& arguments);
+  named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
+    std::string const& kern_name,
+    named_prog<jitify::experimental::Program> const& program,
+    std::vector<std::string> const& arguments);
 
-    /**---------------------------------------------------------------------------*
+  /**---------------------------------------------------------------------------*
      * @brief Get the Jitify preprocessed Program object
      * 
      * Searches an internal in-memory cache and file based cache for the Jitify
@@ -94,21 +92,21 @@ public:
      *  header needs to be loaded
      * @return named_prog<jitify::experimental::Program> 
      *---------------------------------------------------------------------------**/
-    named_prog<jitify::experimental::Program> getProgram(
-        std::string const& prog_file_name, 
-        std::string const& cuda_source = "",
-        std::vector<std::string> const& given_headers = {},
-        std::vector<std::string> const& given_options = {},
-        jitify::experimental::file_callback_type file_callback = nullptr);
+  named_prog<jitify::experimental::Program> getProgram(
+    std::string const& prog_file_name,
+    std::string const& cuda_source                         = "",
+    std::vector<std::string> const& given_headers          = {},
+    std::vector<std::string> const& given_options          = {},
+    jitify::experimental::file_callback_type file_callback = nullptr);
 
-private:
-    template <typename Tv>
-    using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
+ private:
+  template <typename Tv>
+  using umap_str_shptr = std::unordered_map<std::string, std::shared_ptr<Tv>>;
 
-    umap_str_shptr<jitify::experimental::KernelInstantiation>  kernel_inst_map;
-    umap_str_shptr<jitify::experimental::Program>              program_map;
+  umap_str_shptr<jitify::experimental::KernelInstantiation> kernel_inst_map;
+  umap_str_shptr<jitify::experimental::Program> program_map;
 
-    /*
+  /*
     Even though this class can be used as a non-singleton, the file cache
     access should remain limited to one thread per process. The lockf locks can
     prevent multiple processes from accessing the file but are ineffective in
@@ -116,98 +114,92 @@ private:
     entire process.
     Therefore the mutexes are static.
     */
-    static std::mutex _kernel_cache_mutex;
-    static std::mutex _program_cache_mutex;
+  static std::mutex _kernel_cache_mutex;
+  static std::mutex _program_cache_mutex;
 
-private:
-    /**---------------------------------------------------------------------------*
+ private:
+  /**---------------------------------------------------------------------------*
      * @brief Class to allow process wise exclusive access to cache files
      * 
      *---------------------------------------------------------------------------**/
-    class cacheFile
-    {
-    private:
-        std::string _file_name;
-        bool successful_read = false;
-        bool successful_write = false;
-    public:
-        cacheFile(std::string file_name);
-        ~cacheFile();
+  class cacheFile {
+   private:
+    std::string _file_name;
+    bool successful_read  = false;
+    bool successful_write = false;
 
-        /**---------------------------------------------------------------------------*
+   public:
+    cacheFile(std::string file_name);
+    ~cacheFile();
+
+    /**---------------------------------------------------------------------------*
          * @brief Read this file and return the contents as a std::string
          * 
          *---------------------------------------------------------------------------**/
-        std::string read();
+    std::string read();
 
-        /**---------------------------------------------------------------------------*
+    /**---------------------------------------------------------------------------*
          * @brief Write the passed string to this file
          * 
          *---------------------------------------------------------------------------**/
-        void write(std::string);
+    void write(std::string);
 
-        /**---------------------------------------------------------------------------*
+    /**---------------------------------------------------------------------------*
          * @brief Check whether the read() operation on the file completed successfully
          * 
          * @return true Read was successful. String returned by `read()` is valid
          * @return false Read was unsuccessful. String returned by `read()` is empty
          *---------------------------------------------------------------------------**/
-        bool is_read_successful() { return successful_read; }
+    bool is_read_successful() { return successful_read; }
 
-        /**---------------------------------------------------------------------------*
+    /**---------------------------------------------------------------------------*
          * @brief Check whether the write() operation on the file completed successfully
          * 
          * @return true Write was successful.
          * @return false Write was unsuccessful. File state is undefined
          *---------------------------------------------------------------------------**/
-        bool is_write_successful() { return successful_write; }
-    };
+    bool is_write_successful() { return successful_write; }
+  };
 
-private:
-    template <typename T, typename FallbackFunc>
-    named_prog<T> getCached(
-        std::string const& name,
-        umap_str_shptr<T>& map,
-        FallbackFunc func) {
-
-        // Find memory cached T object
-        auto it = map.find(name);
-        if ( it != map.end()) {
-            return std::make_pair(name, it->second);
+ private:
+  template <typename T, typename FallbackFunc>
+  named_prog<T> getCached(std::string const& name, umap_str_shptr<T>& map, FallbackFunc func) {
+    // Find memory cached T object
+    auto it = map.find(name);
+    if (it != map.end()) {
+      return std::make_pair(name, it->second);
+    } else {  // Find file cached T object
+      bool successful_read = false;
+      std::string serialized;
+#if defined(JITIFY_USE_CACHE)
+      boost::filesystem::path cache_dir = getCacheDir();
+      if (not cache_dir.empty()) {
+        boost::filesystem::path file_name = cache_dir / name;
+        cacheFile file{file_name.string()};
+        serialized      = file.read();
+        successful_read = file.is_read_successful();
+      }
+#endif
+      if (not successful_read) {
+        // JIT compile and write to file if possible
+        serialized = func().serialize();
+#if defined(JITIFY_USE_CACHE)
+        if (not cache_dir.empty()) {
+          boost::filesystem::path file_name = cache_dir / name;
+          cacheFile file{file_name.string()};
+          file.write(serialized);
         }
-        else { // Find file cached T object
-            bool successful_read = false;
-            std::string serialized;
-            #if defined(JITIFY_USE_CACHE)
-                boost::filesystem::path cache_dir = getCacheDir();
-                if (not cache_dir.empty()) {
-                    boost::filesystem::path file_name = cache_dir / name;
-                    cacheFile file{file_name.string()};
-                    serialized = file.read();
-                    successful_read = file.is_read_successful();
-                }
-            #endif
-            if (not successful_read) {
-                // JIT compile and write to file if possible
-                serialized = func().serialize();
-                #if defined(JITIFY_USE_CACHE)
-                    if (not cache_dir.empty()) {
-                        boost::filesystem::path file_name = cache_dir / name;
-                        cacheFile file{file_name.string()};
-                        file.write(serialized);
-                    }
-                #endif
-            }
-            // Add deserialized T to cache and return
-            auto program = std::make_shared<T>(T::deserialize(serialized));
-            map[name] = program;
-            return std::make_pair(name, program);
-        }
+#endif
+      }
+      // Add deserialized T to cache and return
+      auto program = std::make_shared<T>(T::deserialize(serialized));
+      map[name]    = program;
+      return std::make_pair(name, program);
     }
+  }
 };
 
-} // namespace jit
-} // namespace cudf
+}  // namespace jit
+}  // namespace cudf
 
-
-#endif // CUDF_JIT_CACHE_H_
+#endif  // CUDF_JIT_CACHE_H_
