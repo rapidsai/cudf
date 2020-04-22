@@ -1,6 +1,11 @@
 import numpy as np
 
-from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.core import (
+    categoricalDtype_dispatch,
+    get_parallel_type,
+    make_meta,
+    meta_nonempty,
+)
 from dask.dataframe.methods import concat_dispatch
 
 import cudf
@@ -110,6 +115,11 @@ def concat_cudf(
 ):
     assert join == "outer"
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
+
+
+@categoricalDtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def categoricalDtype_cudf(categories=None, ordered=None):
+    return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
 try:
