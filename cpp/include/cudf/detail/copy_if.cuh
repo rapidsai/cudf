@@ -112,7 +112,6 @@ __launch_bounds__(block_size) __global__
   for (int i = 0; i < per_thread; i++) {
     bool mask_true = (tid < size) && filter(tid);
 
-
     cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
     const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
@@ -139,7 +138,8 @@ __launch_bounds__(block_size) __global__
     __syncthreads();  // wait for shared data and validity mask to be complete
 
     // Copy output data coalesced from shared to global
-    if (threadIdx.x < tmp_block_sum) output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
+    if (threadIdx.x < tmp_block_sum)
+      output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
 
     if (has_validity) {
       // Since the valid bools are contiguous in shared memory now, we can use
@@ -150,10 +150,11 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::experimental::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = tmp_block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::experimental::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::experimental::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::experimental::detail::warp_size;
+      const int last_index =
+        tmp_block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
+      const int last_warp = min(num_warps, last_index / cudf::experimental::detail::warp_size);
+      const int wid       = threadIdx.x / cudf::experimental::detail::warp_size;
+      const int lane      = threadIdx.x % cudf::experimental::detail::warp_size;
 
       if (tmp_block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / cudf::experimental::detail::warp_size) + wid;
