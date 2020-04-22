@@ -18,28 +18,26 @@
  */
 
 #include "operator.h"
-#include "type.h"
 #include <cstring>
+#include "type.h"
 
 namespace cudf {
 namespace binops {
 namespace jit {
 
-    Operator::Operator()
-     : buffer{'\0'}
-    { }
+Operator::Operator() : buffer{'\0'} {}
 
-    char* Operator::getOperatorName(gdf_binary_operator ope, Operator::Type type) {
-        if (type == Operator::Type::Direct) {
-            buffer[0] = '\0';
-        } else {
-            buffer[0] = 'R';
-            buffer[1] = '\0';
-        }
-        strcat(buffer, cudf::binops::jit::getOperatorName(ope).data());
-        return buffer;
-    }
+char* Operator::getOperatorName(gdf_binary_operator ope, Operator::Type type) {
+  if (type == Operator::Type::Direct) {
+    buffer[0] = '\0';
+  } else {
+    buffer[0] = 'R';
+    buffer[1] = '\0';
+  }
+  strcat(buffer, cudf::binops::jit::getOperatorName(ope).data());
+  return buffer;
+}
 
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf

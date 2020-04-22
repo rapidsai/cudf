@@ -20,7 +20,7 @@
 namespace cudf {
 namespace io {
 
- /**
+/**
   * @brief Creates a transition table to convert ORC timestanps to UTC
   *
   * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
@@ -30,7 +30,5 @@ namespace io {
   **/
 bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
 
-
-} // namespace io
-} // namespace cudf
-
+}  // namespace io
+}  // namespace cudf

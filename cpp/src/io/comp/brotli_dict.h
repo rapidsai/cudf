@@ -55,7 +55,7 @@ namespace cudf {
 namespace io {
 
 struct brotli_dictionary_s {
-    /**
+  /**
     * Number of bits to encode index of dictionary word in a bucket.
     *
     * Specification: Appendix A. Static Dictionary Data
@@ -65,15 +65,15 @@ struct brotli_dictionary_s {
     * Dictionary consists of words with length of [4..24] bytes.
     * Values at [0..3] and [25..31] indices should not be addressed.
     */
-    uint8_t size_bits_by_length[32];
+  uint8_t size_bits_by_length[32];
 
-    /* assert(offset[i + 1] == offset[i] + (bits[i] ? (i << bits[i]) : 0)) */
-    uint32_t offsets_by_length[32];
+  /* assert(offset[i + 1] == offset[i] + (bits[i] ? (i << bits[i]) : 0)) */
+  uint32_t offsets_by_length[32];
 
-    /* Data array should obey to size_bits_by_length values.
+  /* Data array should obey to size_bits_by_length values.
     Specified size matches default (RFC 7932) dictionary.
     Its size is also equal to offsets_by_length[31] */
-    uint8_t data[122784];
+  uint8_t data[122784];
 };
 
 #define BROTLI_MIN_DICTIONARY_WORD_LENGTH 4
@@ -81,7 +81,7 @@ struct brotli_dictionary_s {
 
 const brotli_dictionary_s *get_brotli_dictionary(void);
 
-} // namespace io
-} // namespace cudf
+}  // namespace io
+}  // namespace cudf
 
-#endif // __BROTLI_DICT_H__
+#endif  // __BROTLI_DICT_H__

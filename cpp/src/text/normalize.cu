@@ -59,16 +59,13 @@ struct normalize_spaces_fn {
     // this will retrieve tokens automatically skipping runs of whitespace
     while (tokenizer.next_token()) {
       auto token_pos = tokenizer.token_byte_positions();
-      nbytes += token_pos.second - token_pos.first +
-                1;  // token size plus a single space
+      nbytes += token_pos.second - token_pos.first + 1;  // token size plus a single space
       if (optr) {
-        cudf::string_view token(d_str.data() + token_pos.first,
-                                token_pos.second - token_pos.first);
+        cudf::string_view token(d_str.data() + token_pos.first, token_pos.second - token_pos.first);
         if (optr != buffer)  // prepend space unless we are at the beginning
           optr = cudf::strings::detail::copy_string(optr, single_space);
         // write token to output buffer
-        optr = cudf::strings::detail::copy_string(
-          optr, token);  // copy token to output
+        optr = cudf::strings::detail::copy_string(optr, token);  // copy token to output
       }
     }
     return (nbytes > 0) ? nbytes - 1 : 0;  // remove trailing space
@@ -83,25 +80,20 @@ std::unique_ptr<cudf::column> normalize_spaces(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0) {
   cudf::size_type strings_count = strings.size();
-  if (strings_count == 0)
-    return cudf::make_empty_column(cudf::data_type{cudf::STRING});
+  if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
 
   // create device column
-  auto strings_column =
-    cudf::column_device_view::create(strings.parent(), stream);
-  auto d_strings = *strings_column;
+  auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
+  auto d_strings      = *strings_column;
   // copy bitmask
   rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
 
   // create offsets by calculating size of each string for output
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0),
-    normalize_spaces_fn{d_strings});  // this does size-only calc
+  auto offsets_transformer_itr =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
+                                    normalize_spaces_fn{d_strings});  // this does size-only calc
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr,
-    offsets_transformer_itr + strings_count,
-    mr,
-    stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column
@@ -130,9 +122,8 @@ std::unique_ptr<cudf::column> normalize_spaces(
 
 // external APIs
 
-std::unique_ptr<cudf::column> normalize_spaces(
-  cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
+                                               rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::normalize_spaces(strings, mr);
 }

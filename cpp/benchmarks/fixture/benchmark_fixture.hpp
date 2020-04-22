@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
+#include <benchmark/benchmark.h>
 #include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <benchmark/benchmark.h>
-
 
 namespace cudf {
 
- /**
+/**
  * @brief Google Benchmark fixture for libcudf benchmarks
  * 
  * libcudf benchmarks should use a fixture derived from this fixture class to
@@ -53,23 +52,19 @@ namespace cudf {
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
 class benchmark : public ::benchmark::Fixture {
-public:
+ public:
   virtual void SetUp(const ::benchmark::State& state) {
     rmmOptions_t options{PoolAllocation, 0, false};
     rmmInitialize(&options);
   }
 
-  virtual void TearDown(const ::benchmark::State& state) {
-    rmmFinalize();
-  }
+  virtual void TearDown(const ::benchmark::State& state) { rmmFinalize(); }
 
-   // eliminate partial override warnings (see benchmark/benchmark.h)
-  virtual void SetUp(::benchmark::State& st) {
-    SetUp(const_cast<const ::benchmark::State&>(st));
-  }
+  // eliminate partial override warnings (see benchmark/benchmark.h)
+  virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }
   virtual void TearDown(::benchmark::State& st) {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
 };
 
-};
+};  // namespace cudf

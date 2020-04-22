@@ -25,10 +25,10 @@ namespace jit {
 namespace code {
 
 const char* kernel =
-R"***(
+  R"***(
     #include <cudf/types.hpp>
-    #include <simt/limits>
     #include <cudf/wrappers/timestamps.hpp>
+    #include <simt/limits>
     #include "operation.h"
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
@@ -66,8 +66,8 @@ R"***(
     }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf
