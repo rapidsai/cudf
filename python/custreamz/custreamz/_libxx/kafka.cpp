@@ -14,35 +14,34 @@
             "../../cpp/include/cudf/table/table.hpp",
             "../../cpp/include/cudf/table/table_view.hpp",
             "../../cpp/include/cudf/types.hpp",
-            "../../cpp/include/cudf/wrappers/bool.hpp",
             "../../external/kafka/include/kafka_datasource.hpp",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/array/concatenate.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/builder.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/compute/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/csv/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/extension_type.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/io/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/ipc/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/json/options.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/json/reader.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/api.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/benchmark.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/common.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/config.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/extension_type.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/inference.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/init.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/platform.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/python/pyarrow.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/result.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/compression.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/key_value_metadata.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/arrow/util/thread_pool.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/device_buffer.hpp",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/rmm.h",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include/rmm/rmm.hpp",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages/numpy/core/include/numpy/halffloat.h"
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/array/concatenate.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/builder.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/compute/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/csv/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/extension_type.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/io/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/ipc/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/json/options.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/json/reader.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/api.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/benchmark.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/common.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/config.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/extension_type.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/inference.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/init.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/platform.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/python/pyarrow.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/result.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/compression.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/key_value_metadata.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/arrow/util/thread_pool.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/device_buffer.hpp",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/rmm.h",
+            "/home/jdyer/anaconda3/envs/cudf_dev/include/rmm/rmm.hpp",
+            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages/numpy/core/include/numpy/halffloat.h"
         ],
         "extra_compile_args": [
             "-std=c++14"
@@ -55,9 +54,9 @@
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
             "../../external/kafka/include",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/include",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages/numpy/core/include",
-            "/usr/local/cuda-10.1/include"
+            "/home/jdyer/anaconda3/envs/cudf_dev/include",
+            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages/numpy/core/include",
+            "/usr/local/cuda-10.2/include"
         ],
         "language": "c++",
         "libraries": [
@@ -65,9 +64,9 @@
             "cudf_kafka"
         ],
         "library_dirs": [
-            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/python3.7/site-packages",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/lib",
-            "/home/jdyer/anaconda3/envs/custreamz_dev/lib/external"
+            "/home/jdyer/anaconda3/envs/cudf_dev/lib/python3.7/site-packages",
+            "/home/jdyer/anaconda3/envs/cudf_dev/lib",
+            "/home/jdyer/anaconda3/envs/cudf_dev/lib/external"
         ],
         "name": "custreamz._libxx.kafka",
         "sources": [
@@ -709,7 +708,6 @@ static CYTHON_INLINE float __PYX_NAN() {
 #include "cudf/table/table_view.hpp"
 #include "cudf/table/table.hpp"
 #include "cudf/aggregation.hpp"
-#include "cudf/wrappers/bool.hpp"
 #include "cudf/scalar/scalar.hpp"
 #include "cudf/groupby.hpp"
 #include <unordered_map>
@@ -1072,7 +1070,7 @@ typedef struct {
 
 /*--- Type declarations ---*/
 struct __pyx_obj_3rmm_4_lib_13device_buffer_DeviceBuffer;
-struct __pyx_obj_4cudf_6_libxx_5table_Table;
+struct __pyx_obj_4cudf_4_lib_5table_Table;
 struct __pyx_obj_9custreamz_6_libxx_5kafka_librdkafka;
 struct __pyx_array_obj;
 struct __pyx_MemviewEnum_obj;
@@ -1228,29 +1226,29 @@ struct __pyx_opt_args_3rmm_4_lib_13device_buffer_copy_device_to_ptr {
   int __pyx_n;
   uintptr_t stream;
 };
-struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_unique_ptr;
-struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_table_view;
+struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_unique_ptr;
+struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_table_view;
 
-/* "cudf/_libxx/table.pxd":22
+/* "cudf/_lib/table.pxd":22
  * 
  *     @staticmethod
  *     cdef Table from_unique_ptr(             # <<<<<<<<<<<<<<
  *         unique_ptr[table] c_tbl,
  *         column_names,
  */
-struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_unique_ptr {
+struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_unique_ptr {
   int __pyx_n;
   PyObject *index_names;
 };
 
-/* "cudf/_libxx/table.pxd":29
+/* "cudf/_lib/table.pxd":29
  * 
  *     @staticmethod
  *     cdef Table from_table_view(             # <<<<<<<<<<<<<<
  *         table_view,
  *         owner,
  */
-struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_table_view {
+struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_table_view {
   int __pyx_n;
   PyObject *index_names;
 };
@@ -1378,22 +1376,22 @@ struct __pyx_obj_3rmm_4_lib_13device_buffer_DeviceBuffer {
 };
 
 
-/* "cudf/_libxx/table.pxd":11
+/* "cudf/_lib/table.pxd":11
  * 
  * 
  * cdef class Table:             # <<<<<<<<<<<<<<
  *     cdef dict __dict__
  * 
  */
-struct __pyx_obj_4cudf_6_libxx_5table_Table {
+struct __pyx_obj_4cudf_4_lib_5table_Table {
   PyObject_HEAD
-  struct __pyx_vtabstruct_4cudf_6_libxx_5table_Table *__pyx_vtab;
+  struct __pyx_vtabstruct_4cudf_4_lib_5table_Table *__pyx_vtab;
   PyObject *__dict__;
 };
 
 
 /* "custreamz/_libxx/kafka.pyx":24
- * cimport cudf._libxx.cpp.io.types as cudf_io_types
+ * cimport cudf._lib.cpp.io.types as cudf_io_types
  * 
  * cdef class librdkafka:             # <<<<<<<<<<<<<<
  * 
@@ -1507,7 +1505,7 @@ struct __pyx_vtabstruct_3rmm_4_lib_13device_buffer_DeviceBuffer {
 static struct __pyx_vtabstruct_3rmm_4_lib_13device_buffer_DeviceBuffer *__pyx_vtabptr_3rmm_4_lib_13device_buffer_DeviceBuffer;
 
 
-/* "cudf/_libxx/table.pxd":11
+/* "cudf/_lib/table.pxd":11
  * 
  * 
  * cdef class Table:             # <<<<<<<<<<<<<<
@@ -1515,21 +1513,21 @@ static struct __pyx_vtabstruct_3rmm_4_lib_13device_buffer_DeviceBuffer *__pyx_vt
  * 
  */
 
-struct __pyx_vtabstruct_4cudf_6_libxx_5table_Table {
-  cudf::table_view (*view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  cudf::mutable_table_view (*mutable_view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  cudf::table_view (*data_view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  cudf::mutable_table_view (*mutable_data_view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  cudf::table_view (*index_view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  cudf::mutable_table_view (*mutable_index_view)(struct __pyx_obj_4cudf_6_libxx_5table_Table *);
-  struct __pyx_obj_4cudf_6_libxx_5table_Table *(*from_unique_ptr)(std::unique_ptr<cudf::experimental::table> , PyObject *, struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_unique_ptr *__pyx_optional_args);
-  struct __pyx_obj_4cudf_6_libxx_5table_Table *(*from_table_view)(cudf::table_view, PyObject *, PyObject *, struct __pyx_opt_args_4cudf_6_libxx_5table_5Table_from_table_view *__pyx_optional_args);
+struct __pyx_vtabstruct_4cudf_4_lib_5table_Table {
+  cudf::table_view (*view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  cudf::mutable_table_view (*mutable_view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  cudf::table_view (*data_view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  cudf::mutable_table_view (*mutable_data_view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  cudf::table_view (*index_view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  cudf::mutable_table_view (*mutable_index_view)(struct __pyx_obj_4cudf_4_lib_5table_Table *);
+  struct __pyx_obj_4cudf_4_lib_5table_Table *(*from_unique_ptr)(std::unique_ptr<cudf::experimental::table> , PyObject *, struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_unique_ptr *__pyx_optional_args);
+  struct __pyx_obj_4cudf_4_lib_5table_Table *(*from_table_view)(cudf::table_view, PyObject *, PyObject *, struct __pyx_opt_args_4cudf_4_lib_5table_5Table_from_table_view *__pyx_optional_args);
 };
-static struct __pyx_vtabstruct_4cudf_6_libxx_5table_Table *__pyx_vtabptr_4cudf_6_libxx_5table_Table;
+static struct __pyx_vtabstruct_4cudf_4_lib_5table_Table *__pyx_vtabptr_4cudf_4_lib_5table_Table;
 
 
 /* "custreamz/_libxx/kafka.pyx":24
- * cimport cudf._libxx.cpp.io.types as cudf_io_types
+ * cimport cudf._lib.cpp.io.types as cudf_io_types
  * 
  * cdef class librdkafka:             # <<<<<<<<<<<<<<
  * 
@@ -2336,33 +2334,31 @@ static PyObject *__pyx_memoryviewslice_assign_item_from_object(struct __pyx_memo
 
 /* Module declarations from 'libcpp.memory' */
 
-/* Module declarations from 'cudf._libxx.cpp.types' */
+/* Module declarations from 'cudf._lib.cpp.types' */
 
 /* Module declarations from 'rmm._lib.lib' */
 
 /* Module declarations from 'rmm._lib.device_buffer' */
 static PyTypeObject *__pyx_ptype_3rmm_4_lib_13device_buffer_DeviceBuffer = 0;
 
-/* Module declarations from 'cudf._libxx.cpp.column.column_view' */
+/* Module declarations from 'cudf._lib.cpp.column.column_view' */
 
-/* Module declarations from 'cudf._libxx.cpp.column.column' */
+/* Module declarations from 'cudf._lib.cpp.column.column' */
 
-/* Module declarations from 'cudf._libxx.cpp.table.table_view' */
+/* Module declarations from 'cudf._lib.cpp.table.table_view' */
 
-/* Module declarations from 'cudf._libxx.cpp.table.table' */
+/* Module declarations from 'cudf._lib.cpp.table.table' */
 
-/* Module declarations from 'cudf._libxx.table' */
-static PyTypeObject *__pyx_ptype_4cudf_6_libxx_5table_Table = 0;
+/* Module declarations from 'cudf._lib.table' */
+static PyTypeObject *__pyx_ptype_4cudf_4_lib_5table_Table = 0;
 
 /* Module declarations from 'libcpp.pair' */
 
-/* Module declarations from 'cudf._libxx.cpp.aggregation' */
+/* Module declarations from 'cudf._lib.cpp.aggregation' */
 
-/* Module declarations from 'cudf._libxx.cpp.wrappers.bool' */
+/* Module declarations from 'cudf._lib.cpp.scalar.scalar' */
 
-/* Module declarations from 'cudf._libxx.cpp.scalar.scalar' */
-
-/* Module declarations from 'cudf._libxx.cpp.groupby' */
+/* Module declarations from 'cudf._lib.cpp.groupby' */
 
 /* Module declarations from 'libcpp.unordered_map' */
 
@@ -2453,11 +2449,11 @@ static PyTypeObject *__pyx_ptype_7cpython_7complex_complex = 0;
 
 /* Module declarations from 'pyarrow.includes.libarrow' */
 
-/* Module declarations from 'cudf._libxx.cpp.io.types' */
+/* Module declarations from 'cudf._lib.cpp.io.types' */
 
-/* Module declarations from 'cudf._libxx.move' */
+/* Module declarations from 'cudf._lib.move' */
 
-/* Module declarations from 'cudf._libxx.cpp.io.functions' */
+/* Module declarations from 'cudf._lib.cpp.io.functions' */
 
 /* Module declarations from 'custreamz._libxx.kafka' */
 static PyTypeObject *__pyx_ptype_9custreamz_6_libxx_5kafka_librdkafka = 0;
@@ -3577,7 +3573,7 @@ static PyObject *__pyx_f_9custreamz_6_libxx_5kafka_10librdkafka_read_gdf(struct 
  *         else:
  *             return None
  */
-    __pyx_t_1 = ((PyObject *)__pyx_vtabptr_4cudf_6_libxx_5table_Table->from_unique_ptr(std::move(__pyx_v_c_out_table.tbl), __pyx_v_column_names, NULL)); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 69, __pyx_L1_error)
+    __pyx_t_1 = ((PyObject *)__pyx_vtabptr_4cudf_4_lib_5table_Table->from_unique_ptr(std::move(__pyx_v_c_out_table.tbl), __pyx_v_column_names, NULL)); if (unlikely(!__pyx_t_1)) __PYX_ERR(1, 69, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __pyx_r = __pyx_t_1;
     __pyx_t_1 = 0;
@@ -20908,11 +20904,11 @@ static int __Pyx_modinit_type_import_code(void) {
    if (!__pyx_ptype_3rmm_4_lib_13device_buffer_DeviceBuffer) __PYX_ERR(2, 41, __pyx_L1_error)
   __pyx_vtabptr_3rmm_4_lib_13device_buffer_DeviceBuffer = (struct __pyx_vtabstruct_3rmm_4_lib_13device_buffer_DeviceBuffer*)__Pyx_GetVtable(__pyx_ptype_3rmm_4_lib_13device_buffer_DeviceBuffer->tp_dict); if (unlikely(!__pyx_vtabptr_3rmm_4_lib_13device_buffer_DeviceBuffer)) __PYX_ERR(2, 41, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-  __pyx_t_1 = PyImport_ImportModule("cudf._libxx.table"); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 11, __pyx_L1_error)
+  __pyx_t_1 = PyImport_ImportModule("cudf._lib.table"); if (unlikely(!__pyx_t_1)) __PYX_ERR(3, 11, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
-  __pyx_ptype_4cudf_6_libxx_5table_Table = __Pyx_ImportType(__pyx_t_1, "cudf._libxx.table", "Table", sizeof(struct __pyx_obj_4cudf_6_libxx_5table_Table), __Pyx_ImportType_CheckSize_Warn);
-   if (!__pyx_ptype_4cudf_6_libxx_5table_Table) __PYX_ERR(3, 11, __pyx_L1_error)
-  __pyx_vtabptr_4cudf_6_libxx_5table_Table = (struct __pyx_vtabstruct_4cudf_6_libxx_5table_Table*)__Pyx_GetVtable(__pyx_ptype_4cudf_6_libxx_5table_Table->tp_dict); if (unlikely(!__pyx_vtabptr_4cudf_6_libxx_5table_Table)) __PYX_ERR(3, 11, __pyx_L1_error)
+  __pyx_ptype_4cudf_4_lib_5table_Table = __Pyx_ImportType(__pyx_t_1, "cudf._lib.table", "Table", sizeof(struct __pyx_obj_4cudf_4_lib_5table_Table), __Pyx_ImportType_CheckSize_Warn);
+   if (!__pyx_ptype_4cudf_4_lib_5table_Table) __PYX_ERR(3, 11, __pyx_L1_error)
+  __pyx_vtabptr_4cudf_4_lib_5table_Table = (struct __pyx_vtabstruct_4cudf_4_lib_5table_Table*)__Pyx_GetVtable(__pyx_ptype_4cudf_4_lib_5table_Table->tp_dict); if (unlikely(!__pyx_vtabptr_4cudf_4_lib_5table_Table)) __PYX_ERR(3, 11, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_t_1 = PyImport_ImportModule(__Pyx_BUILTIN_MODULE_NAME); if (unlikely(!__pyx_t_1)) __PYX_ERR(4, 9, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);

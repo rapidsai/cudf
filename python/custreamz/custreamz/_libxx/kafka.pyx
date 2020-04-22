@@ -8,9 +8,9 @@
 from custreamz._libxx.includes.kafka cimport (
     kafka_datasource,
 )
-from cudf._libxx.table cimport Table
-from cudf._libxx.cpp.table.table cimport table
-from cudf._libxx.move cimport move
+from cudf._lib.table cimport Table
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.move cimport move
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
@@ -18,8 +18,8 @@ from libcpp.vector cimport vector
 from libcpp.map cimport map
 from cython.operator cimport dereference, postincrement
 from libc.stdint cimport uint32_t, int64_t
-cimport cudf._libxx.cpp.io.functions as libcudf
-cimport cudf._libxx.cpp.io.types as cudf_io_types
+cimport cudf._lib.cpp.io.functions as libcudf
+cimport cudf._lib.cpp.io.types as cudf_io_types
 
 cdef class librdkafka:
 
