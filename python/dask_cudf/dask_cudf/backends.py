@@ -139,7 +139,7 @@ try:
         col = column.as_column(ind)
         return safe_hash(cudf.Series(col))
 
-    @group_split_dispatch.register(cudf.DataFrame)
+    @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
     def group_split_cudf(df, c, k, ignore_index=False):
         return dict(
             zip(
