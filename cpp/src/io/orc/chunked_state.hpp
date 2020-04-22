@@ -23,10 +23,10 @@
 
 #include "orc.h"
 
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/io/data_sink.hpp>
 
 #include <memory>
 #include <string>
@@ -44,24 +44,23 @@ namespace orc {
  */
 struct orc_chunked_state {
   /// The writer to be used
-  std::unique_ptr<writer>             wp;
+  std::unique_ptr<writer> wp;
   /// Cuda stream to be used
-  cudaStream_t                        stream;
+  cudaStream_t stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  cudf::io::orc::FileFooter           ff;
-  cudf::io::orc::Metadata             md;
+  cudf::io::orc::FileFooter ff;
+  cudf::io::orc::Metadata md;
   /// current write position for rowgroups/chunks
-  size_t                              current_chunk_offset;
+  size_t current_chunk_offset;
   /// optional user metadata
-  table_metadata const*               user_metadata = nullptr;
+  table_metadata const* user_metadata = nullptr;
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_chunked_begin()
-  table_metadata_with_nullability     user_metadata_with_nullability;
+  table_metadata_with_nullability user_metadata_with_nullability;
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
-  bool                                single_write_mode = false;
+  bool single_write_mode = false;
 };
-
 
 }  // namespace orc
 }  // namespace detail

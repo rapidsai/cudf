@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include <vector>
 #include "cudf/cudf.h"
 #include "cudf/types.hpp"
-#include <vector>
 
 namespace cudf {
 
@@ -121,5 +121,4 @@ gdf_column upper_bound(table const& t,
  * @return bool    If `value` is found in `column` true, else false.
  *---------------------------------------------------------------------------**/
 bool contains(gdf_column const& column, gdf_scalar const& value);
-} // namespace cudf
-
+}  // namespace cudf

@@ -10,7 +10,7 @@ The documentation is generated from the source files and available on
 
 ### Dependencies
 
-Modules only depend on Python 3.6+ and CUDA 9.2+ installed.
+Modules only depend on Python 3.6+ and CUDA 10.0+ installed.
 There are currently no other python packages required to use or build these modules.
 
 ### Build

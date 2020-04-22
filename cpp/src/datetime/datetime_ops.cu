@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
-#include <cudf/datetime.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/datetime.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -38,11 +38,9 @@ struct extract_component_operator {
 
     auto time_since_midnight = ts - days_since_epoch;
 
-    if (time_since_midnight.count() < 0) {
-      time_since_midnight += days(1);
-    }
+    if (time_since_midnight.count() < 0) { time_since_midnight += days(1); }
 
-    auto hrs_ = duration_cast<hours>(time_since_midnight);
+    auto hrs_  = duration_cast<hours>(time_since_midnight);
     auto mins_ = duration_cast<minutes>(time_since_midnight - hrs_);
     auto secs_ = duration_cast<seconds>(time_since_midnight - hrs_ - mins_);
 
@@ -55,14 +53,10 @@ struct extract_component_operator {
         return static_cast<unsigned>(year_month_day(days_since_epoch).day());
       case datetime_component::WEEKDAY:
         return year_month_weekday(days_since_epoch).weekday().iso_encoding();
-      case datetime_component::HOUR:
-        return hrs_.count();
-      case datetime_component::MINUTE:
-        return mins_.count();
-      case datetime_component::SECOND:
-        return secs_.count();
-      default:
-        return 0;
+      case datetime_component::HOUR: return hrs_.count();
+      case datetime_component::MINUTE: return mins_.count();
+      case datetime_component::SECOND: return secs_.count();
+      default: return 0;
     }
   }
 };
@@ -70,25 +64,25 @@ struct extract_component_operator {
 // Round up the date to the last day of the month and return the
 // date only (without the time component)
 struct extract_last_day_of_month {
-  CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon,
-                                          bool is_leap_year) const -> uint8_t {
+  CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon, bool is_leap_year) const
+    -> uint8_t {
     using namespace simt::std::chrono;
     // The expression in switch has to be integral/enumerated type.
     // The constexpr in case has to match the switch type
     switch (unsigned{mon}) {
-      case unsigned{January}   : return 31;
-      case unsigned{February}  : return is_leap_year ? 29 : 28;
-      case unsigned{March}     : return 31;
-      case unsigned{April}     : return 30;
-      case unsigned{May}       : return 31;
-      case unsigned{June}      : return 30;
-      case unsigned{July}      : return 31;
-      case unsigned{August}    : return 31;
-      case unsigned{September} : return 30;
-      case unsigned{October}   : return 31;
-      case unsigned{November}  : return 30;
-      case unsigned{December}  : return 31;
-      default                  : return 0;
+      case unsigned{January}: return 31;
+      case unsigned{February}: return is_leap_year ? 29 : 28;
+      case unsigned{March}: return 31;
+      case unsigned{April}: return 30;
+      case unsigned{May}: return 31;
+      case unsigned{June}: return 30;
+      case unsigned{July}: return 31;
+      case unsigned{August}: return 31;
+      case unsigned{September}: return 30;
+      case unsigned{October}: return 31;
+      case unsigned{November}: return 30;
+      case unsigned{December}: return 31;
+      default: return 0;
     }
   }
 
@@ -116,20 +110,20 @@ struct launch_functor {
   column_view input;
   mutable_column_view output;
 
-  launch_functor(column_view inp, mutable_column_view out)
-      : input(inp), output(out) {}
+  launch_functor(column_view inp, mutable_column_view out) : input(inp), output(out) {}
 
   template <typename Element>
-  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void>
-  operator()(cudaStream_t stream) const {
+  typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
+    cudaStream_t stream) const {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
-  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void>
-  operator()(cudaStream_t stream) const {
+  typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
+    cudaStream_t stream) const {
     thrust::transform(rmm::exec_policy(stream)->on(stream),
-                      input.begin<Timestamp>(), input.end<Timestamp>(),
+                      input.begin<Timestamp>(),
+                      input.end<Timestamp>(),
                       output.begin<OutputColT>(),
                       TransformFunctor{});
   }
@@ -140,17 +134,20 @@ template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                           cudaStream_t stream,
                                           rmm::mr::device_memory_resource* mr) {
-  auto size = column.size();
+  auto size            = column.size();
   auto output_col_type = data_type{OutputColCudfT};
-  auto null_mask = copy_bitmask(column, stream, mr);
-  auto output = std::make_unique<cudf::column>(
-      output_col_type, size, rmm::device_buffer{size * cudf::size_of(output_col_type), stream, mr},
-      null_mask, column.null_count(),
-      std::vector<std::unique_ptr<cudf::column>>{});
+  auto null_mask       = copy_bitmask(column, stream, mr);
+  auto output          = std::make_unique<cudf::column>(
+    output_col_type,
+    size,
+    rmm::device_buffer{size * cudf::size_of(output_col_type), stream, mr},
+    null_mask,
+    column.null_count(),
+    std::vector<std::unique_ptr<cudf::column>>{});
 
   auto launch = launch_functor<TransformFunctor,
-                               typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>
-      {column, static_cast<mutable_column_view>(*output)};
+                               typename cudf::experimental::id_to_type_impl<OutputColCudfT>::type>{
+    column, static_cast<mutable_column_view>(*output)};
 
   experimental::type_dispatcher(column.type(), launch, stream);
 
@@ -163,8 +160,8 @@ std::unique_ptr<column> extract_year(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::YEAR>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::YEAR>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
@@ -172,55 +169,55 @@ std::unique_ptr<column> extract_month(column_view const& column,
   CUDF_FUNC_RANGE();
 
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::MONTH>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::MONTH>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_day(column_view const& column,
                                     rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::DAY>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::DAY>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
                                         rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::WEEKDAY>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::WEEKDAY>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_hour(column_view const& column,
                                      rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::HOUR>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::HOUR>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::MINUTE>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::MINUTE>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
                                        rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
-      detail::extract_component_operator<detail::datetime_component::SECOND>, cudf::INT16>
-      (column, 0, mr);
+    detail::extract_component_operator<detail::datetime_component::SECOND>,
+    cudf::INT16>(column, 0, mr);
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
                                           rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
-  return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>
-      (column, 0, mr);
+  return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>(
+    column, 0, mr);
 }
 
 }  // namespace datetime

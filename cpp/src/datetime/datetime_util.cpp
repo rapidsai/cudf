@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <iostream>
 #include <cudf/cudf.h>
-#include <cudf/legacy/unary.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/datetime.hpp>
+#include <cudf/legacy/unary.hpp>
+#include <iostream>
 
 namespace cudf {
 namespace datetime {
@@ -48,27 +48,21 @@ gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit) 
   return TIME_UNIT_NONE;
 }
 
-} // namespace detail
+}  // namespace detail
 
 std::pair<gdf_column, gdf_column> cast_to_common_resolution(gdf_column const& lhs,
                                                             gdf_column const& rhs) {
-
   gdf_column lhs_out = cudf::empty_like(lhs);
   gdf_column rhs_out = cudf::empty_like(rhs);
 
   if ((lhs.dtype == GDF_TIMESTAMP || lhs.dtype == GDF_DATE64) &&
       (rhs.dtype == GDF_TIMESTAMP || rhs.dtype == GDF_DATE64)) {
-
     gdf_time_unit lhs_unit = lhs.dtype_info.time_unit;
     gdf_time_unit rhs_unit = rhs.dtype_info.time_unit;
 
     // GDF_DATE64 and TIME_UNIT_NONE are always int64_t milliseconds
-    if (lhs.dtype == GDF_DATE64 || lhs_unit == TIME_UNIT_NONE) {
-      lhs_unit = TIME_UNIT_ms;
-    }
-    if (rhs.dtype == GDF_DATE64 || rhs_unit == TIME_UNIT_NONE) {
-      rhs_unit = TIME_UNIT_ms;
-    }
+    if (lhs.dtype == GDF_DATE64 || lhs_unit == TIME_UNIT_NONE) { lhs_unit = TIME_UNIT_ms; }
+    if (rhs.dtype == GDF_DATE64 || rhs_unit == TIME_UNIT_NONE) { rhs_unit = TIME_UNIT_ms; }
     if (lhs_unit != rhs_unit) {
       auto lcd_unit = detail::common_resolution(lhs_unit, rhs_unit);
       if (lcd_unit == lhs_unit) {

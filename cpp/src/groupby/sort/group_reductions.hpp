@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/column/column.hpp>
 #include <cudf/aggregation.hpp>
+#include <cudf/column/column.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -37,12 +37,11 @@ namespace detail {
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_sum(
-    column_view const& values,
-    size_type num_groups,
-    rmm::device_vector<size_type> const& group_labels,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_sum(column_view const& values,
+                                  size_type num_groups,
+                                  rmm::device_vector<size_type> const& group_labels,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate groupwise minimum value
@@ -53,12 +52,11 @@ std::unique_ptr<column> group_sum(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_min(
-    column_view const& values,
-    size_type num_groups,
-    rmm::device_vector<size_type> const& group_labels,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_min(column_view const& values,
+                                  size_type num_groups,
+                                  rmm::device_vector<size_type> const& group_labels,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate groupwise maximum value
@@ -69,12 +67,11 @@ std::unique_ptr<column> group_min(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_max(
-    column_view const& values,
-    size_type num_groups,
-    rmm::device_vector<size_type> const& group_labels,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_max(column_view const& values,
+                                  size_type num_groups,
+                                  rmm::device_vector<size_type> const& group_labels,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate group-wise indices of maximum values.
@@ -86,13 +83,12 @@ std::unique_ptr<column> group_max(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_argmax(
-    column_view const& values,
-    size_type num_groups,
-    rmm::device_vector<size_type> const& group_labels,
-    column_view const& key_sort_order,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_argmax(column_view const& values,
+                                     size_type num_groups,
+                                     rmm::device_vector<size_type> const& group_labels,
+                                     column_view const& key_sort_order,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate group-wise indices of minimum values.
@@ -104,13 +100,12 @@ std::unique_ptr<column> group_argmax(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_argmin(
-    column_view const& values,
-    size_type num_groups,
-    rmm::device_vector<size_type> const& group_labels,
-    column_view const& key_sort_order,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_argmin(column_view const& values,
+                                     size_type num_groups,
+                                     rmm::device_vector<size_type> const& group_labels,
+                                     column_view const& key_sort_order,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate number of non-null values in each group of
@@ -122,13 +117,11 @@ std::unique_ptr<column> group_argmin(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_count_valid(
-    column_view const& values,
-    rmm::device_vector<size_type> const& group_labels,
-    size_type num_groups,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
-
+std::unique_ptr<column> group_count_valid(column_view const& values,
+                                          rmm::device_vector<size_type> const& group_labels,
+                                          size_type num_groups,
+                                          rmm::mr::device_memory_resource* mr,
+                                          cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate number of values in each group of @p values
@@ -138,11 +131,10 @@ std::unique_ptr<column> group_count_valid(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_count_all(
-    rmm::device_vector<size_type> const& group_offsets,
-    size_type num_groups,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& group_offsets,
+                                        size_type num_groups,
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate groupwise variance
@@ -156,14 +148,13 @@ std::unique_ptr<column> group_count_all(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_var(
-    column_view const& values,
-    column_view const& group_means,
-    column_view const& group_sizes,
-    rmm::device_vector<size_type> const& group_labels,
-    size_type ddof,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_var(column_view const& values,
+                                  column_view const& group_means,
+                                  column_view const& group_sizes,
+                                  rmm::device_vector<size_type> const& group_labels,
+                                  size_type ddof,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate groupwise quantiles
@@ -176,15 +167,14 @@ std::unique_ptr<column> group_var(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_quantiles(
-    column_view const& values,
-    column_view const& group_sizes,
-    rmm::device_vector<size_type> const& group_offsets,
-    size_type const num_groups,
-    std::vector<double> const& quantiles,
-    interpolation interp,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_quantiles(column_view const& values,
+                                        column_view const& group_sizes,
+                                        rmm::device_vector<size_type> const& group_offsets,
+                                        size_type const num_groups,
+                                        std::vector<double> const& quantiles,
+                                        interpolation interp,
+                                        rmm::mr::device_memory_resource* mr,
+                                        cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate number of unique values in each group of
@@ -200,14 +190,13 @@ std::unique_ptr<column> group_quantiles(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_nunique(
-    column_view const& values,
-    rmm::device_vector<size_type> const& group_labels,
-    size_type const num_groups,
-    rmm::device_vector<size_type> const& group_offsets,
-    include_nulls _include_nulls,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_nunique(column_view const& values,
+                                      rmm::device_vector<size_type> const& group_labels,
+                                      size_type const num_groups,
+                                      rmm::device_vector<size_type> const& group_offsets,
+                                      include_nulls _include_nulls,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate nth values in each group of  @p values
@@ -223,16 +212,15 @@ std::unique_ptr<column> group_nunique(
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
-std::unique_ptr<column> group_nth_element(
-    column_view const& values,
-    column_view const& group_sizes,
-    rmm::device_vector<size_type> const& group_labels,
-    rmm::device_vector<size_type> const& group_offsets,
-    size_type num_groups,
-    size_type n,
-    include_nulls _include_nulls,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0);
+std::unique_ptr<column> group_nth_element(column_view const& values,
+                                          column_view const& group_sizes,
+                                          rmm::device_vector<size_type> const& group_labels,
+                                          rmm::device_vector<size_type> const& group_offsets,
+                                          size_type num_groups,
+                                          size_type n,
+                                          include_nulls _include_nulls,
+                                          rmm::mr::device_memory_resource* mr,
+                                          cudaStream_t stream = 0);
 }  // namespace detail
 }  // namespace groupby
 }  // namespace experimental
