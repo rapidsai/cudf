@@ -116,8 +116,9 @@ struct probe_special_chars
 
       //TODO: confirm below is correct;
       //
-      num_quotes = thrust::count_if(d_str.begin(), d_str.end(),
-                                    [] __device__ (char_utf8 chr) {
+      num_quotes = thrust::count_if(thrust::seq,
+                                    d_str.begin(), d_str.end(),
+                                    [] (char_utf8 chr) {
                                       return chr == '\"';
                                     });
       return d_str.size_bytes() + num_quotes + 2;
