@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,9 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <iterator>
 #include <memory>
+
+#include <tests/utilities/column_utilities.hpp>
+#include <cudf/concatenate.hpp>
 
 namespace cudf {
 namespace test {
@@ -473,6 +476,65 @@ class strings_column_wrapper : public detail::column_wrapper {
                          std::initializer_list<bool> validity)
       : strings_column_wrapper(std::cbegin(strings), std::cend(strings),
                                std::cbegin(validity)) {}
+};
+
+class list_column_wrapper : public detail::column_wrapper {
+public:
+  // fixed-width
+  template<typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
+  {
+    wrapped = cudf::test::fixed_width_column_wrapper<T>(t).release();
+  }  
+  template<typename InputIterator, std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
+  list_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
+  {
+    wrapped = cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end).release();
+  }  
+  // fixed-width + validity
+  template<typename T, typename ValidityIterator, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  list_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
+  {
+    wrapped = cudf::test::fixed_width_column_wrapper<T>(t, v).release();
+  }  
+  template<typename InputIterator, typename ValidityIterator, std::enable_if_t<is_fixed_width<typename InputIterator::value_type>()>* = nullptr>
+  list_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator valids) : column_wrapper{}
+  {
+    wrapped = cudf::test::fixed_width_column_wrapper<typename InputIterator::value_type>(begin, end, valids).release();
+  }
+      
+  // strings
+  template<typename T, std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
+  list_column_wrapper(std::initializer_list<T> t) : column_wrapper{}
+  {    
+    wrapped = cudf::test::strings_column_wrapper(t.begin(), t.end()).release();
+  }
+  // strings + validity
+  template<typename T, typename ValidityIterator, std::enable_if_t<std::is_convertible<T, std::string>::value>* = nullptr>
+  list_column_wrapper(std::initializer_list<T> t, ValidityIterator v) : column_wrapper{}
+  {    
+    wrapped = cudf::test::strings_column_wrapper(t.begin(), t.end(), v).release();
+  }
+
+  // list
+  list_column_wrapper(std::initializer_list<list_column_wrapper> t) : column_wrapper{}
+  {
+    std::vector<bool> valids;
+    wrapped = build_wrapper(t, valids);
+  }
+  
+  // list + validity
+  template<typename ValidityIterator>
+  list_column_wrapper(std::initializer_list<list_column_wrapper> t, ValidityIterator v) : column_wrapper{}
+  {
+    // doing this so I can avoid making build_wrapper a template
+    std::vector<bool> validity;
+    std::transform(t.begin(), t.end(), v, std::back_inserter(validity), [](list_column_wrapper const& l, bool valid) { return valid; });
+    wrapped = build_wrapper(t, validity);
+  }
+
+private:
+  std::unique_ptr<column> build_wrapper(std::initializer_list<list_column_wrapper> t, std::vector<bool> const& v);
 };
 
 }  // namespace test

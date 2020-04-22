@@ -22,6 +22,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <thrust/binary_search.h>
@@ -341,11 +342,11 @@ struct concatenate_dispatch {
   std::unique_ptr<column> operator()() {
     return cudf::strings::detail::concatenate(views, mr, stream);
   }
-
+  
   template <typename T,
       std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
   std::unique_ptr<column> operator()() {
-    CUDF_FAIL("list_view concatenate not yet supported");
+    return cudf::lists::detail::concatenate(views, mr, stream);
   }
 };
 
