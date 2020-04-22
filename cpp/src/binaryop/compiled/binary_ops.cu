@@ -79,10 +79,8 @@ struct apply_binop {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_lhs_rhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
-    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
+  apply_binop_scalar_lhs_rhs(binary_operator op)
+    : apply_binop<Lhs, Rhs, Out>(op) {}
   CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const &y) const {
     return apply_binop<Lhs, Rhs, Out>::operator()(x, y);
   }
@@ -90,10 +88,8 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Lhs, Rhs, Out> {
-  cudf::experimental::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_rhs_lhs(binary_operator op,
-                             cudf::experimental::scalar_device_type_t<Rhs> scalar)
-    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
+  apply_binop_scalar_rhs_lhs(binary_operator op)
+    : apply_binop<Lhs, Rhs, Out>(op) {}
   CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const &y) const {
     return apply_binop<Lhs, Rhs, Out>::operator()(y, x);
   }
