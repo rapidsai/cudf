@@ -51,6 +51,8 @@ THE SOFTWARE.
 #ifndef __BROTLI_DICT_H__
 #define __BROTLI_DICT_H__
 
+#include <cstdint>
+
 namespace cudf {
 namespace io {
 

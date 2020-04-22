@@ -17,6 +17,8 @@
 #ifndef HELPER_FUNCTIONS_CUH
 #define HELPER_FUNCTIONS_CUH
 
+#include <thrust/pair.h>
+
 constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 
 /**---------------------------------------------------------------------------*

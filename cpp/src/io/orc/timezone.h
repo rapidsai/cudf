@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #pragma once
+
 #include <stdint.h>
 #include <vector>
+#include <string>
 
 namespace cudf {
 namespace io {
