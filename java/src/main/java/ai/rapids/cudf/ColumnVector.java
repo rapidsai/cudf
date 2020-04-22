@@ -1654,7 +1654,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
-    assert separator.isValid() == true  : "separator string scalar may not contain a null value";
+    assert separator.isValid() == true : "separator string scalar may not contain a null value";
     assert narep != null : "narep scalar provided may not be null";
     assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
