@@ -38,7 +38,7 @@ def test_series(data):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
 
-    np.testing.assert_equal(np.array(pdsr), np.array(dsr.compute()))
+    np.testing.assert_equal(np.array(pdsr), dsr.compute().to_array())
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -193,8 +193,12 @@ def test_categorical_compare_ordered(data):
     assert pdsr1.cat.ordered
 
     # Test ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, (dsr1 < dsr2).compute())
-    np.testing.assert_array_equal(pdsr1 > pdsr2, (dsr1 > dsr2).compute())
+    np.testing.assert_array_equal(
+        pdsr1 < pdsr2, (dsr1 < dsr2).compute().to_array()
+    )
+    np.testing.assert_array_equal(
+        pdsr1 > pdsr2, (dsr1 > dsr2).compute().to_array()
+    )
 
 
 #############################################################################

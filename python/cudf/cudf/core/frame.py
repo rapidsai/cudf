@@ -981,6 +981,14 @@ class Frame(libcudf.table.Table):
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU array, consider using \
+            cupy.asarray(...)\nTo explicitly construct a \
+            host array, consider using .to_array()"
+        )
+
     def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
@@ -1052,11 +1060,11 @@ class Frame(libcudf.table.Table):
         to `self`.
         """
         for name, col, other_col in zip(
-            self._column_names, self._columns, other._columns
+            self._data.keys(), self._data.values(), other._data.values()
         ):
-            if is_categorical_dtype(other_col) and not is_categorical_dtype(
-                col
-            ):
+            if isinstance(
+                other_col, cudf.core.column.CategoricalColumn
+            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=as_column(col.base_data, dtype=col.dtype),
@@ -1066,22 +1074,27 @@ class Frame(libcudf.table.Table):
                     offset=col.offset,
                 )
         if include_index:
-            from cudf.core.index import as_index, CategoricalIndex, RangeIndex
-
             # include_index will still behave as False
             # incase of self._index being a RangeIndex
-            if (self._index is not None) and (
-                not isinstance(self._index, RangeIndex)
+            if (
+                self._index is not None
+                and not isinstance(self._index, cudf.core.index.RangeIndex)
+                and isinstance(
+                    other._index,
+                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
+                )
             ):
-                self._index._copy_categories(other._index)
+                self._index._copy_categories(other._index, include_index=False)
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
                 # have to call as_index.
                 if isinstance(
-                    other._index, CategoricalIndex
-                ) and not isinstance(self._index, CategoricalIndex):
-                    self._index = as_index(self._index)
+                    other._index, cudf.core.index.CategoricalIndex
+                ) and not isinstance(
+                    self._index, cudf.core.index.CategoricalIndex
+                ):
+                    self._index = cudf.core.index.as_index(self._index)
         return self
 
     def _unaryop(self, op):
@@ -1490,7 +1503,7 @@ class Frame(libcudf.table.Table):
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-        to_frame_data = OrderedDict()
+        to_frame_data = cudf.core.column_accessor.ColumnAccessor()
         for name, col in result:
             if is_string_dtype(col):
                 to_frame_data[name] = col
