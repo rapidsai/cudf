@@ -451,11 +451,11 @@ std::vector<contiguous_split_result> contiguous_split(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 struct packed_table {
-    packed_table(std::vector<uint8_t>&& table_metadata,
-                 std::unique_ptr<rmm::device_buffer>&& table_data)
-        : table_metadata(table_metadata), table_data(std::move(table_data)) {};
-    std::vector<uint8_t> table_metadata;
-    std::unique_ptr<rmm::device_buffer> table_data;
+  packed_table(std::vector<uint8_t>&& table_metadata,
+               std::unique_ptr<rmm::device_buffer>&& table_data)
+    : table_metadata(table_metadata), table_data(std::move(table_data)){};
+  std::vector<uint8_t> table_metadata;
+  std::unique_ptr<rmm::device_buffer> table_data;
 };
 
 packed_table pack(cudf::table_view const& input,

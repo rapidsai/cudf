@@ -85,7 +85,7 @@ std::vector<contiguous_split_result> contiguous_split(
   cudaStream_t stream                 = 0);
 
 packed_table pack(cudf::table_view const& input,
-                  cudaStream_t stream = 0,
+                  cudaStream_t stream                 = 0,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
