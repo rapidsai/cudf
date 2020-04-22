@@ -50,7 +50,7 @@ void BM_stack(benchmark::State& state){
 
   std::vector<wrapper> columns;
 
-  auto make_table = [&] (std::vector<wrapper>& cols,
+  auto make_table = [num_columns] (std::vector<wrapper>& cols,
                          gdf_size_type col_size) -> cudf::table
   {
     cudf::test::column_wrapper_factory<T> factory;

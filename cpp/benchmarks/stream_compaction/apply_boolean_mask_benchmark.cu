@@ -103,7 +103,7 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
   }
 
   mask_wrapper mask { column_size,
-    [&](cudf::size_type row) { 
+    [percent_true](cudf::size_type row) { 
       return cudf::bool8{random_int(0, 100) < percent_true}; 
     },
     [](cudf::size_type row)  { return true; }
