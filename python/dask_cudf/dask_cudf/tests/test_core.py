@@ -266,11 +266,10 @@ def test_assign():
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
-    out = dgf.assign(z=newcol)
+    got = dgf.assign(z=newcol)
 
-    got = out
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"], pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -381,7 +380,8 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
-def test_repartition_hash_staged():
+@pytest.mark.parametrize("npartitions", [2, 17, 20])
+def test_repartition_hash_staged(npartitions):
     by = ["b"]
     datarange = 35
     size = 100
@@ -393,8 +393,11 @@ def test_repartition_hash_staged():
     )
     # WARNING: Specific npartitions-max_branch combination
     # was specifically chosen to cover changes in #4676
-    ddf = dgd.from_cudf(gdf, npartitions=17)
-    ddf_new = ddf.repartition(columns=by, max_branch=4)
+    npartitions_initial = 17
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=4
+    )
 
     # Make sure we are getting a dask_cudf dataframe
     assert type(ddf_new) == type(ddf)
@@ -416,8 +419,9 @@ def test_repartition_hash_staged():
 
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
-@pytest.mark.parametrize("npartitions", [4, 5])
-def test_repartition_hash(by, npartitions):
+@pytest.mark.parametrize("npartitions", [3, 4, 5])
+@pytest.mark.parametrize("max_branch", [3, 32])
+def test_repartition_hash(by, npartitions, max_branch):
     npartitions_i = 4
     datarange = 26
     size = 100
@@ -431,7 +435,9 @@ def test_repartition_hash(by, npartitions):
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
     ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
-    ddf_new = ddf.repartition(columns=by, npartitions=npartitions)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=max_branch
+    )
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)
@@ -606,3 +612,21 @@ def test_make_meta_backends(index):
 
     # Check "non-empty" metadata types
     dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([]),
+        pd.DataFrame({"abc": [], "xyz": []}),
+        pd.Series([1, 2, 10, 11]),
+        pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
+    ],
+)
+def test_dataframe_series_replace(data):
+    pdf = data.copy()
+    gdf = cudf.from_pandas(pdf)
+
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+
+    dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))

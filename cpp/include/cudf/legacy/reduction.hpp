@@ -24,10 +24,10 @@
  * performed on a column
  */
 typedef enum {
-  GDF_SCAN_SUM = 0,             ///< Computes the prefix scan of sum operation of all values for the column
-  GDF_SCAN_MIN,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_MAX,                 ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_PRODUCT,             ///< Computes the prefix scan of multiplicative product operation of all values for the column
+  GDF_SCAN_SUM = 0,  ///< Computes the prefix scan of sum operation of all values for the column
+  GDF_SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
+  GDF_SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
+  GDF_SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
 } gdf_scan_op;
 
 namespace cudf {
@@ -38,19 +38,18 @@ namespace reduction {
  * performed on a column
  */
 enum operators {
-  SUM = 0,        ///< Computes the sum of all values in the column
-  MIN,            ///< Computes the minimum of all values in the column
-  MAX,            ///< Computes the maximum of all values in the column
-  PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-  MEAN,           ///< Computes the arithmetic mean of the values in the column
-  VAR,            ///< Computes the variance of the values in the column
-  STD,            ///< Computes the standard deviation of the values in the column
-  ANY,            ///< Computes to true if any of the values are non-zero/true
-  ALL,            ///< Computes to true if all of the values are non-zero/true
+  SUM = 0,       ///< Computes the sum of all values in the column
+  MIN,           ///< Computes the minimum of all values in the column
+  MAX,           ///< Computes the maximum of all values in the column
+  PRODUCT,       ///< Computes the multiplicative product of all values in the column
+  SUMOFSQUARES,  ///< Computes the sum of squares of the values in the column
+  MEAN,          ///< Computes the arithmetic mean of the values in the column
+  VAR,           ///< Computes the variance of the values in the column
+  STD,           ///< Computes the standard deviation of the values in the column
+  ANY,           ///< Computes to true if any of the values are non-zero/true
+  ALL,           ///< Computes to true if all of the values are non-zero/true
 };
 }  // namespace reduction
-
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column
@@ -77,9 +76,10 @@ enum operators {
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
-                        gdf_dtype output_dtype,
-                        cudf::size_type ddof = 1);
+gdf_scalar reduce(const gdf_column* col,
+                  cudf::reduction::operators op,
+                  gdf_dtype output_dtype,
+                  cudf::size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.
@@ -92,8 +92,7 @@ gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
  * @param[in] inclusive The flag for applying an inclusive scan if true,
  * an exclusive scan if false.
  * ----------------------------------------------------------------------------**/
-void scan(const gdf_column *input, gdf_column *output,
-                   gdf_scan_op op, bool inclusive);
+void scan(const gdf_column* input, gdf_column* output, gdf_scan_op op, bool inclusive);
 
 /**
  * @brief Computes a group wise standard deviation
@@ -118,10 +117,9 @@ void scan(const gdf_column *input, gdf_column *output,
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group standard deviation
  */
-std::pair<cudf::table, cudf::table>
-group_std(cudf::table const& keys,
-          cudf::table const& values,
-          cudf::size_type ddof = 1);
+std::pair<cudf::table, cudf::table> group_std(cudf::table const& keys,
+                                              cudf::table const& values,
+                                              cudf::size_type ddof = 1);
 
 /**
  * @brief Computes a group wise variance
@@ -146,10 +144,9 @@ group_std(cudf::table const& keys,
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group variance
  */
-std::pair<cudf::table, cudf::table>
-group_var(cudf::table const& keys,
-          cudf::table const& values,
-          cudf::size_type ddof = 1);
+std::pair<cudf::table, cudf::table> group_var(cudf::table const& keys,
+                                              cudf::table const& values,
+                                              cudf::size_type ddof = 1);
 
 }  // namespace cudf
 

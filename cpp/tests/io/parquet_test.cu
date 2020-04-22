@@ -528,7 +528,7 @@ public:
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
     outfile_.write(reinterpret_cast<char const*>(ptr), size);
-    cudaFreeHost(ptr);
+    CUDA_TRY(cudaFreeHost(ptr));
   }
 
   void flush() override {
@@ -893,7 +893,7 @@ public:
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
     mm_writer->host_write(reinterpret_cast<char const*>(ptr), size);
-    cudaFreeHost(ptr);
+    CUDA_TRY(cudaFreeHost(ptr));
   }
 
   void flush() override {

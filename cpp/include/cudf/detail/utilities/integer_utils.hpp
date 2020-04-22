@@ -22,10 +22,11 @@
  *
  */
 
-#include <type_traits>
 #include <stdexcept>
+#include <type_traits>
 
 namespace cudf {
+//! Utility functions
 namespace util {
 
 /**
@@ -35,13 +36,13 @@ namespace util {
 */
 template <typename S>
 inline S round_up_safe(S number_to_round, S modulus) {
-    auto remainder = number_to_round % modulus;
-    if (remainder == 0) { return number_to_round; }
-    auto rounded_up = number_to_round - remainder + modulus;
-    if (rounded_up < number_to_round) {
-        throw std::invalid_argument("Attempt to round up beyond the type's maximum value");
-    }
-    return rounded_up;
+  auto remainder = number_to_round % modulus;
+  if (remainder == 0) { return number_to_round; }
+  auto rounded_up = number_to_round - remainder + modulus;
+  if (rounded_up < number_to_round) {
+    throw std::invalid_argument("Attempt to round up beyond the type's maximum value");
+  }
+  return rounded_up;
 }
 
 /**
@@ -51,11 +52,10 @@ inline S round_up_safe(S number_to_round, S modulus) {
 */
 template <typename S>
 inline S round_down_safe(S number_to_round, S modulus) {
-    auto remainder = number_to_round % modulus;
-    auto rounded_down = number_to_round - remainder;
-    return rounded_down;
+  auto remainder    = number_to_round % modulus;
+  auto rounded_down = number_to_round - remainder;
+  return rounded_down;
 }
-
 
 /**
 * Divides the left-hand-side by the right-hand-side, rounding up
@@ -71,32 +71,30 @@ inline S round_down_safe(S number_to_round, S modulus) {
 */
 template <typename S, typename T>
 constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept {
-    return (dividend + divisor - 1) / divisor;
+  return (dividend + divisor - 1) / divisor;
 }
 
 namespace detail {
 
 template <typename I>
-constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>, I dividend, I divisor) noexcept
-{
-    // TODO: This could probably be implemented faster
-    return (dividend > divisor) ?
-        1 + div_rounding_up_unsafe(dividend - divisor, divisor) :
-        (dividend > 0);
+constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
+                                        I dividend,
+                                        I divisor) noexcept {
+  // TODO: This could probably be implemented faster
+  return (dividend > divisor) ? 1 + div_rounding_up_unsafe(dividend - divisor, divisor)
+                              : (dividend > 0);
 }
-
 
 template <typename I>
-constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>, I dividend, I divisor) noexcept
-{
-    auto quotient = dividend / divisor;
-    auto remainder = dividend % divisor;
-    return quotient + (remainder != 0);
+constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
+                                        I dividend,
+                                        I divisor) noexcept {
+  auto quotient  = dividend / divisor;
+  auto remainder = dividend % divisor;
+  return quotient + (remainder != 0);
 }
 
-
-
-} // namespace detail
+}  // namespace detail
 
 /**
 * Divides the left-hand-side by the right-hand-side, rounding up
@@ -111,21 +109,17 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>, I di
 * approach of using (dividend + divisor - 1) / divisor
 */
 template <typename I>
-constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept
-{
-    using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;
-    return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
+constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept {
+  using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;
+  return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 
 template <typename I>
-constexpr inline bool
-is_a_power_of_two(I val) noexcept
-{
-    static_assert(std::is_integral<I>::value, "This function only applies to integral types");
-    return ((val - 1) & val) == 0;
+constexpr inline bool is_a_power_of_two(I val) noexcept {
+  static_assert(std::is_integral<I>::value, "This function only applies to integral types");
+  return ((val - 1) & val) == 0;
 }
 
+}  // namespace util
 
-} // namespace util
-
-} // namespace cudf
+}  // namespace cudf

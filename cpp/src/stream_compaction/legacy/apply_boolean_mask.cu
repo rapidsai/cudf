@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "copy_if.cuh"
 #include <cudf/legacy/table.hpp>
- 
+#include "copy_if.cuh"
+
 namespace {
 
 // Returns true if the mask is true and valid (non-null) for index i
@@ -24,23 +24,19 @@ namespace {
 // Note we use a functor here so we can cast to a bitmask_t __restrict__
 // pointer on the host side, which we can't do with a lambda.
 template <bool has_data, bool has_nulls>
-struct boolean_mask_filter
-{
-  boolean_mask_filter(gdf_column const & boolean_mask) :
-    data{static_cast<bool *>(boolean_mask.data)},
-    bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)}
-    {}
+struct boolean_mask_filter {
+  boolean_mask_filter(gdf_column const &boolean_mask)
+    : data{static_cast<bool *>(boolean_mask.data)},
+      bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)} {}
 
-  __device__ inline 
-  bool operator()(cudf::size_type i)
-  {
-    bool valid = !has_nulls || bit_mask::is_valid(bitmask, i);
+  __device__ inline bool operator()(cudf::size_type i) {
+    bool valid   = !has_nulls || bit_mask::is_valid(bitmask, i);
     bool is_true = !has_data || data[i];
     return is_true && valid;
   }
 
-  bool const * __restrict__ data;
-  bit_mask_t const  * __restrict__ bitmask;
+  bool const *__restrict__ data;
+  bit_mask_t const *__restrict__ bitmask;
 };
 
 }  // namespace
@@ -52,13 +48,11 @@ namespace cudf {
  *
  * calls copy_if() with the `boolean_mask_filter` functor.
  */
-table apply_boolean_mask(table const &input,
-                         gdf_column const &boolean_mask) {
+table apply_boolean_mask(table const &input, gdf_column const &boolean_mask) {
   if (boolean_mask.size == 0) return empty_like(input);
 
   CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
-  CUDF_EXPECTS(boolean_mask.data != nullptr ||
-               boolean_mask.valid != nullptr, "Null boolean_mask");
+  CUDF_EXPECTS(boolean_mask.data != nullptr || boolean_mask.valid != nullptr, "Null boolean_mask");
   // zero-size inputs are OK, but otherwise input size must match mask size
   CUDF_EXPECTS(input.num_rows() == 0 || input.num_rows() == boolean_mask.size,
                "Column size mismatch");

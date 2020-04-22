@@ -24,8 +24,9 @@ namespace binops {
 namespace jit {
 namespace code {
 
+// clang-format off
 const char* kernel =
-R"***(
+  R"***(
     #include <cudf/types.hpp>
     #include <simt/limits>
     #include <cudf/wrappers/timestamps.hpp>
@@ -65,9 +66,10 @@ R"***(
         }
     }
 )***";
+// clang-format on
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf

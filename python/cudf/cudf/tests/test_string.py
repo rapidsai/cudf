@@ -854,11 +854,11 @@ def test_string_index():
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
 

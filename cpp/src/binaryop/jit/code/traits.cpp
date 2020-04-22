@@ -24,7 +24,7 @@ namespace jit {
 namespace code {
 
 const char* traits =
-R"***(
+  R"***(
 #pragma once
     #include <cstdint>
     #include <simt/type_traits>
@@ -61,8 +61,8 @@ R"***(
     constexpr bool isDouble<double> = true;
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf

@@ -137,7 +137,7 @@ int NVStrings::findall_record( const char* pattern, std::vector<NVStrings*>& res
     else
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             findall_record_fn<RX_STACK_LARGE>{prog, d_strings, d_counts, d_sizes});
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     //
     // create rows of buffers
     thrust::host_vector<int> hcounts(counts); // copies counts from device

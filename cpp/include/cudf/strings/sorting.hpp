@@ -15,23 +15,20 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf 
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief Sort types for the sort method.
  *---------------------------------------------------------------------------**/
 enum sort_type {
-    none=0,    ///< no sorting
-    length=1,  ///< sort by string length
-    name=2     ///< sort by characters code-points
+  none   = 0,  ///< no sorting
+  length = 1,  ///< sort by string length
+  name   = 2   ///< sort by characters code-points
 };
 
 /**---------------------------------------------------------------------------*
@@ -46,15 +43,14 @@ enum sort_type {
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> sort( strings_column_view strings,
-                                    sort_type stype,
-                                    cudf::order order=cudf::order::ASCENDING,
-                                    cudf::null_order null_order=cudf::null_order::BEFORE,
-                                    cudaStream_t stream=0,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+std::unique_ptr<cudf::column> sort(
+  strings_column_view strings,
+  sort_type stype,
+  cudf::order order                   = cudf::order::ASCENDING,
+  cudf::null_order null_order         = cudf::null_order::BEFORE,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

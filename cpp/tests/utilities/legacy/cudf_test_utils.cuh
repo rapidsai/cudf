@@ -84,13 +84,13 @@ void print_typed_column(
   }
   std::vector<Element> h_data(size_in_elements);
 
-  cudaMemcpy(h_data.data(), col_data, size_in_elements * sizeof(Element), cudaMemcpyDefault);
+  CUDA_TRY(cudaMemcpy(h_data.data(), col_data, size_in_elements * sizeof(Element), cudaMemcpyDefault));
 
   const size_t num_valid_type_elements = gdf_valid_allocation_size(size_in_elements);
   std::vector<cudf::valid_type> h_mask(num_valid_type_elements );
   if(nullptr != validity_mask)
   {
-    cudaMemcpy(h_mask.data(), validity_mask, num_valid_type_elements, cudaMemcpyDefault);
+    CUDA_TRY(cudaMemcpy(h_mask.data(), validity_mask, num_valid_type_elements, cudaMemcpyDefault));
   }
 
   for(size_t i = 0; i < size_in_elements; ++i)
@@ -187,7 +187,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
 
   // Allocate device storage for gdf_column and copy contents from host_vector
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(ColumnType), 0);
-  cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(ColumnType), cudaMemcpyHostToDevice);
+  CUDA_TRY(cudaMemcpy(the_column->data, host_vector.data(), host_vector.size() * sizeof(ColumnType), cudaMemcpyHostToDevice));
 
   // Fill the gdf_column members
   the_column->size = host_vector.size();
@@ -201,7 +201,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   if(valid_vector.size() > 0)
   {
     RMM_ALLOC((void**)&(the_column->valid), valid_vector.size() * sizeof(cudf::valid_type), 0);
-    cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(cudf::valid_type), cudaMemcpyHostToDevice);
+    CUDA_TRY(cudaMemcpy(the_column->valid, valid_vector.data(), valid_vector.size() * sizeof(cudf::valid_type), cudaMemcpyHostToDevice));
     the_column->null_count = (host_vector.size() - count_valid_bits_host(valid_vector, host_vector.size()));
   }
   else

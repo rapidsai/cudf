@@ -15,13 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
 /**
  * @brief Decodes each string using URL encoding.
@@ -38,8 +36,9 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> url_encode( strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> url_encode(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Encodes each string using URL encoding.
@@ -57,8 +56,9 @@ std::unique_ptr<column> url_encode( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> url_decode( strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> url_decode(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

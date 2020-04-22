@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,11 @@ TEST_F(StringsConcatenateTest, Concatenate)
     cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
 
-    std::vector<cudf::strings_column_view> strings_columns;
-    strings_columns.push_back(cudf::strings_column_view(strings1));
-    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
-    strings_columns.push_back(cudf::strings_column_view(strings2));
-    strings_columns.push_back(cudf::strings_column_view(strings3));
+    std::vector<cudf::column_view> strings_columns;
+    strings_columns.push_back(strings1);
+    strings_columns.push_back(zero_size_strings_column);
+    strings_columns.push_back(strings2);
+    strings_columns.push_back(strings3);
 
     auto results = cudf::strings::detail::concatenate(strings_columns);
 
@@ -51,10 +51,10 @@ TEST_F(StringsConcatenateTest, Concatenate)
 TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    std::vector<cudf::strings_column_view> strings_columns;
-    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
-    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
-    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
+    std::vector<cudf::column_view> strings_columns;
+    strings_columns.push_back(zero_size_strings_column);
+    strings_columns.push_back(zero_size_strings_column);
+    strings_columns.push_back(zero_size_strings_column);
     auto results = cudf::strings::detail::concatenate(strings_columns);
     cudf::test::expect_strings_empty(results->view());
 }
@@ -62,12 +62,12 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
 TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
 {
     cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    std::vector<cudf::strings_column_view> strings_columns;
-    strings_columns.push_back(cudf::strings_column_view(zero_size_strings_column));
+    std::vector<cudf::column_view> strings_columns;
+    strings_columns.push_back(zero_size_strings_column);
 
     std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
     cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+h_strings.size() );
-    strings_columns.push_back(cudf::strings_column_view(strings1));
+    strings_columns.push_back(strings1);
 
     auto results = cudf::strings::detail::concatenate(strings_columns);
     cudf::test::expect_columns_equal(*results,strings1);

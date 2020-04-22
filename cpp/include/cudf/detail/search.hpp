@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 
 #include <vector>
 
@@ -61,12 +61,13 @@ namespace detail {
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  */
-std::unique_ptr<column> lower_bound(table_view const& t,
-                                    table_view const& values,
-                                    std::vector<order> const& column_order,
-                                    std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t steam = 0);
+std::unique_ptr<column> lower_bound(
+  table_view const& t,
+  table_view const& values,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t steam                  = 0);
 
 /**
  * @brief Find largest indices in a sorted table where values should be 
@@ -101,12 +102,13 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  */
-std::unique_ptr<column> upper_bound(table_view const& t,
-                                    table_view const& values,
-                                    std::vector<order> const& column_order,
-                                    std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                    cudaStream_t stream = 0);
+std::unique_ptr<column> upper_bound(
+  table_view const& t,
+  table_view const& values,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Find if the `value` is present in the `col`
@@ -129,9 +131,10 @@ std::unique_ptr<column> upper_bound(table_view const& t,
  * @param stream   Stream to use for any kernel launches.
  * @return bool    If `value` is found in `column` true, else false.
  */
-bool contains(column_view const& col, scalar const& value,
+bool contains(column_view const& col,
+              scalar const& value,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-              cudaStream_t stream = 0);
+              cudaStream_t stream                 = 0);
 
 /**
  * @brief  Returns a new column of type bool identifying for each element of @p haystack column,
@@ -158,10 +161,12 @@ bool contains(column_view const& col, scalar const& value,
  * true if the corresponding entry in haystack is contained in needles and false
  * if it is not.
  */
-std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0);
+std::unique_ptr<column> contains(
+  column_view const& haystack,
+  column_view const& needles,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

@@ -15,14 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
@@ -38,11 +36,12 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    string_scalar const& repl = string_scalar(""),
-                                    size_type maxrepl = -1,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  string_scalar const& repl           = string_scalar(""),
+  size_type maxrepl                   = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
@@ -56,10 +55,11 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_re( strings_column_view const& strings,
-                                    std::vector<std::string> const& patterns,
-                                    strings_column_view const& repls,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_re(
+  strings_column_view const& strings,
+  std::vector<std::string> const& patterns,
+  strings_column_view const& repls,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
@@ -73,10 +73,11 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_with_backrefs( strings_column_view const& strings,
-                                               std::string const& pattern,
-                                               std::string const& repl,
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_with_backrefs(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  std::string const& repl,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

@@ -78,94 +78,96 @@ template <>
 struct corresponding_operator<aggregation::COUNT_ALL> {
   using type = DeviceCount;
 };
- 
+
 template <aggregation::Kind k>
 using corresponding_operator_t = typename corresponding_operator<k>::type;
 
-template <typename Source, aggregation::Kind k, bool target_has_nulls,
-          bool source_has_nulls, typename Enable = void>
+template <typename Source,
+          aggregation::Kind k,
+          bool target_has_nulls,
+          bool source_has_nulls,
+          typename Enable = void>
 struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    release_assert(false and
-                   "Invalid source type and aggregation combination.");
+    release_assert(false and "Invalid source type and aggregation combination.");
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source, aggregation::MIN, target_has_nulls,
+struct update_target_element<Source,
+                             aggregation::MIN,
+                             target_has_nulls,
                              source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MIN>;
     atomicMin(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target.is_null(target_index)) {
-      target.set_valid(target_index);
-    }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source, aggregation::MAX, target_has_nulls,
+struct update_target_element<Source,
+                             aggregation::MAX,
+                             target_has_nulls,
                              source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MAX>;
     atomicMax(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target.is_null(target_index)) {
-      target.set_valid(target_index);
-    }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source, aggregation::SUM, target_has_nulls,
+struct update_target_element<Source,
+                             aggregation::SUM,
+                             target_has_nulls,
                              source_has_nulls,
                              std::enable_if_t<is_fixed_width<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::SUM>;
     atomicAdd(&target.element<Target>(target_index),
               static_cast<Target>(source.element<Source>(source_index)));
 
-    if (target_has_nulls and target.is_null(target_index)) {
-      target.set_valid(target_index);
-    }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::COUNT_VALID, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_VALID>()>> {
+  Source,
+  aggregation::COUNT_VALID,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_VALID>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
@@ -176,10 +178,14 @@ struct update_target_element<
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::COUNT_ALL, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_ALL>()>> {
+  Source,
+  aggregation::COUNT_ALL,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::COUNT_ALL>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
@@ -190,57 +196,51 @@ struct update_target_element<
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::ARGMAX, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>()>> {
+  Source,
+  aggregation::ARGMAX,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMAX>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMAX>;
-    auto old = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL,
-                         source_index);
-    if (old == ARGMAX_SENTINEL) {
-      return;
-    }
+    auto old     = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
+    if (old == ARGMAX_SENTINEL) { return; }
 
     while (source.element<Source>(source_index) > source.element<Source>(old)) {
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
 
-    if (target_has_nulls and target.is_null(target_index)) {
-      target.set_valid(target_index);
-    }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
-    Source, aggregation::ARGMIN, target_has_nulls, source_has_nulls,
-    std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>()>> {
+  Source,
+  aggregation::ARGMIN,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_valid_aggregation<Source, aggregation::ARGMIN>()>> {
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
-    if (source_has_nulls and source.is_null(source_index)) {
-      return;
-    }
+    if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMIN>;
-    auto old = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL,
-                         source_index);
-    if (old == ARGMIN_SENTINEL) {
-      return;
-    }
+    auto old     = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
+    if (old == ARGMIN_SENTINEL) { return; }
 
     while (source.element<Source>(source_index) < source.element<Source>(old)) {
       old = atomicCAS(&target.element<Target>(target_index), old, source_index);
     }
 
-    if (target_has_nulls and target.is_null(target_index)) {
-      target.set_valid(target_index);
-    }
+    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
@@ -256,10 +256,11 @@ template <bool target_has_nulls = true, bool source_has_nulls = true>
 struct elementwise_aggregator {
   template <typename Source, aggregation::Kind k>
   __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index, column_device_view source,
+                             size_type target_index,
+                             column_device_view source,
                              size_type source_index) const noexcept {
     update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
-        target, target_index, source, source_index);
+      target, target_index, source, source_index);
   }
 };
 
@@ -314,10 +315,13 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type source_index,
                                      aggregation::Kind const* aggs) {
   for (auto i = 0; i < target.num_columns(); ++i) {
-    dispatch_type_and_aggregation(
-        source.column(i).type(), aggs[i],
-        elementwise_aggregator<target_has_nulls, source_has_nulls>{},
-        target.column(i), target_index, source.column(i), source_index);
+    dispatch_type_and_aggregation(source.column(i).type(),
+                                  aggs[i],
+                                  elementwise_aggregator<target_has_nulls, source_has_nulls>{},
+                                  target.column(i),
+                                  target_index,
+                                  source.column(i),
+                                  source_index);
   }
 }
 
@@ -345,8 +349,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported() {
     return cudf::is_fixed_width<T>() and
-           (k == aggregation::SUM or k == aggregation::MIN or 
-            k == aggregation::MAX or
+           (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN);
   }
@@ -373,18 +376,18 @@ struct identity_initializer {
       // In C++17, we can use compile time if and not make this function SFINAE
       return identity_from_operator<T, k>();
   }
- 
+
  public:
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<is_supported<T, k>(), void>
-  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
-    thrust::fill(rmm::exec_policy(stream)->on(stream), col.begin<T>(),
-                 col.end<T>(), get_identity<T, k>());
+  std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
+                                                          cudaStream_t stream = 0) {
+    thrust::fill(
+      rmm::exec_policy(stream)->on(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
   }
 
   template <typename T, aggregation::Kind k>
-  std::enable_if_t<not is_supported<T, k>(), void>
-  operator()(mutable_column_view const& col, cudaStream_t stream = 0) {
+  std::enable_if_t<not is_supported<T, k>(), void> operator()(mutable_column_view const& col,
+                                                              cudaStream_t stream = 0) {
     CUDF_FAIL("Unsupported aggregation for initializing values");
   }
 };
@@ -403,7 +406,7 @@ struct identity_initializer {
  * @param aggs A vector of aggregation operations corresponding to the table 
  * columns. The aggregations determine the identity value for each column.
  */
-void initialize_with_identity(mutable_table_view & table,
+void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
                               cudaStream_t stream = 0);
 

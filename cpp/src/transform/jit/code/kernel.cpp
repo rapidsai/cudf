@@ -21,7 +21,7 @@ namespace jit {
 namespace code {
 
 const char* kernel =
-    R"***(
+  R"***(
     #include <cudf/types.hpp>
 
     template <typename TypeOut, typename TypeIn>
