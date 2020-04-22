@@ -2223,74 +2223,61 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupByFirstExcludeNulls() {
-    try (Table t1 = new Table.TestBuilder()
+    try (Table input = new Table.TestBuilder()
             .column(  1,   1,    1,  1,  2,    2,  2,    2)
             .column(null, 13, null, 12, 14, null, 15, null)
-            .build()) {
-
-      try(Table t2 = t1.groupBy(0)
-              .aggregate(
-                      first(1, false));
-          HostColumnVector firstExcludeNulls = t2.getColumn(1).copyToHost()) {
-
-        assertEquals(2, firstExcludeNulls.getRowCount());
-        assertEquals(13, firstExcludeNulls.getInt(0));
-        assertEquals(14, firstExcludeNulls.getInt(1));
-      }
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(13, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, false))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
   @Test
   void testGroupByLastExcludeNulls() {
-    try (Table t1 = new Table.TestBuilder()
+    try (Table input = new Table.TestBuilder()
             .column(  1,   1,    1,  1,  2,    2,  2,    2)
             .column(null, 13, null, 12, 14, null, 15, null)
-            .build()) {
-
-      try(Table t2 = t1.groupBy(0)
-              .aggregate(last(1, false));
-          HostColumnVector lastExcludeNulls = t2.getColumn(1).copyToHost()) {
-
-        assertEquals(2, lastExcludeNulls.getRowCount());
-        assertEquals(12, lastExcludeNulls.getInt(0));
-        assertEquals(15, lastExcludeNulls.getInt(1));
-      }
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, 15)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, false))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
   @Test
   void testGroupByFirstIncludeNulls() {
-    try (Table t1 = new Table.TestBuilder()
+    try (Table input = new Table.TestBuilder()
             .column(  1,   1,    1,  1,  2,    2,  2,    2)
             .column(null, 13, null, 12, 14, null, 15, null)
-            .build()) {
-
-      try(Table t2 = t1.groupBy(0)
-              .aggregate(first(1, true));
-          HostColumnVector firstIncludeNulls = t2.getColumn(1).copyToHost()) {
-
-        assertEquals(2, firstIncludeNulls.getRowCount());
-        assert(firstIncludeNulls.isNull(0));
-        assertEquals(14, firstIncludeNulls.getInt(1));
-      }
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(null, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
   @Test
   void testGroupByLastIncludeNulls() {
-    try (Table t1 = new Table.TestBuilder()
+    try (Table input = new Table.TestBuilder()
             .column(  1,   1,    1,  1,  2,    2,  2,    2)
             .column(null, 13, null, 12, 14, null, 15, null)
-            .build()) {
-
-      try(Table t2 = t1.groupBy(0)
-              .aggregate(last(1, true));
-          HostColumnVector lastIncludeNulls = t2.getColumn(1).copyToHost()) {
-
-        assertEquals(2, lastIncludeNulls.getRowCount());
-        assertEquals(12, lastIncludeNulls.getInt(0));
-        assert(lastIncludeNulls.isNull(1));
-      }
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column((Integer)null, null)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
