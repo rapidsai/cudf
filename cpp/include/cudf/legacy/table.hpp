@@ -17,15 +17,15 @@
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/types.h>
 
 #include <cassert>
 #include <initializer_list>
 #include <vector>
 
 // Forward declaration
-typedef struct CUstream_st* cudaStream_t;
+using cudaStream_t = struct CUstream_st*;
 
 namespace cudf {
 
@@ -203,7 +203,7 @@ bool has_nulls(cudf::table const& table);
  * @return A single table having all the columns from `table1` and `table2`
  * respectively in the same order.
  *---------------------------------------------------------------------------**/
-table concat(cudf::table const& table1, cudf::table const& table2);
+cudf::table concat(cudf::table const& table1, cudf::table const& table2);
 
 }  // namespace cudf
 
