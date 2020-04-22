@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
 #include <cuda_runtime.h>
+#include <cudf/cudf.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <tests/io/legacy/io_test_utils.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/io/legacy/io_test_utils.hpp>
 
 TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
-    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 struct avro_test : GdfTest {};
 
 TEST_F(avro_test, DISABLED_Basic) {

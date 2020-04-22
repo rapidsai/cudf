@@ -17,29 +17,32 @@
  * limitations under the License.
  */
 
-
 #ifndef CUDF_NVCATEGORY_UTILS_CUH_
 #define CUDF_NVCATEGORY_UTILS_CUH_
 
 #include <cudf/types.h>
-#include <vector>
-#include <tuple>
 #include <string>
+#include <tuple>
+#include <vector>
 
 namespace cudf {
 namespace test {
 
-std::string random_string(size_t len = 15, std::string const &allowed_chars = "abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
+std::string random_string(size_t len = 15,
+                          std::string const &allowed_chars =
+                            "abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
 
-gdf_column * create_nv_category_column(cudf::size_type num_rows, bool repeat_strings);
+gdf_column *create_nv_category_column(cudf::size_type num_rows, bool repeat_strings);
 
-gdf_column * create_nv_category_column_strings(const char ** string_host_data, cudf::size_type num_rows);
+gdf_column *create_nv_category_column_strings(const char **string_host_data,
+                                              cudf::size_type num_rows);
 
-const char ** generate_string_data(cudf::size_type num_rows, size_t length, bool print=false);
+const char **generate_string_data(cudf::size_type num_rows, size_t length, bool print = false);
 
-std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(gdf_column * column);
+std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(
+  gdf_column *column);
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf
 
 #endif

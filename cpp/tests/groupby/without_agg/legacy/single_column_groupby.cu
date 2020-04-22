@@ -15,19 +15,21 @@
  * limitations under the License.
  */
 
-#include <cudf/legacy/groupby.hpp>
-#include <cudf/legacy/table.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <cudf/legacy/groupby.hpp>
+#include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <random>
 
-template <typename T> using column_wrapper = cudf::test::column_wrapper<T>;
+template <typename T>
+using column_wrapper = cudf::test::column_wrapper<T>;
 
-template <typename KeyType> struct SingleColumnGroupby : public GdfTest {
+template <typename KeyType>
+struct SingleColumnGroupby : public GdfTest {
   using Key = KeyType;
 
   struct column_equality {
@@ -45,31 +47,30 @@ template <typename KeyType> struct SingleColumnGroupby : public GdfTest {
   void expect_tables_are_equal(cudf::table const &lhs, cudf::table const &rhs) {
     EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
     EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
-    EXPECT_TRUE(
-        std::equal(lhs.begin(), lhs.end(), rhs.begin(),
-                   [](gdf_column const *lhs_col, gdf_column const *rhs_col) {
-                     return cudf::type_dispatcher(
-                         lhs_col->dtype, column_equality{}, *lhs_col, *rhs_col);
-                   }));
+    EXPECT_TRUE(std::equal(lhs.begin(),
+                           lhs.end(),
+                           rhs.begin(),
+                           [](gdf_column const *lhs_col, gdf_column const *rhs_col) {
+                             return cudf::type_dispatcher(
+                               lhs_col->dtype, column_equality{}, *lhs_col, *rhs_col);
+                           }));
   }
 
   std::pair<cudf::table, gdf_column> gdf_solution(cudf::table const &input_keys,
                                                   bool ignore_null_keys) {
     gdf_context context;
-    if (not ignore_null_keys) { // SQL
+    if (not ignore_null_keys) {  // SQL
       context.flag_groupby_include_nulls = true;
-      context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-    } else { // PANDAS
+      context.flag_null_sort_behavior    = GDF_NULL_AS_LARGEST;
+    } else {  // PANDAS
       context.flag_groupby_include_nulls = false;
-      context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+      context.flag_null_sort_behavior    = GDF_NULL_AS_LARGEST;
     }
     std::vector<int> groupby_col_indices;
-    for (cudf::size_type i = 0; i < input_keys.num_columns(); i++)
-      groupby_col_indices.push_back(i);
+    for (cudf::size_type i = 0; i < input_keys.num_columns(); i++) groupby_col_indices.push_back(i);
 
     return gdf_group_by_without_aggregations(
-        input_keys, groupby_col_indices.size(), groupby_col_indices.data(),
-        &context);
+      input_keys, groupby_col_indices.size(), groupby_col_indices.data(), &context);
   }
 
   inline void destroy_table(cudf::table *t) {
@@ -89,29 +90,25 @@ template <typename KeyType> struct SingleColumnGroupby : public GdfTest {
 
     cudf::table actual_keys_table;
     gdf_column column_offsets_output;
-    std::tie(actual_keys_table, column_offsets_output) =
-        gdf_solution(input_keys, ignore_null_keys);
+    std::tie(actual_keys_table, column_offsets_output) = gdf_solution(input_keys, ignore_null_keys);
 
     EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
     cudf::table sorted_expected_keys{sorted_keys.get()};
     cudf::table expected_column_offsets{column_offsets.get()};
-    cudf::table actual_column_offsets({&column_offsets_output}); 
-    
-    CUDF_EXPECT_NO_THROW(
-        expect_tables_are_equal(actual_keys_table, sorted_expected_keys));
+    cudf::table actual_column_offsets({&column_offsets_output});
 
-    CUDF_EXPECT_NO_THROW(expect_tables_are_equal(actual_column_offsets,
-                                                 expected_column_offsets));
+    CUDF_EXPECT_NO_THROW(expect_tables_are_equal(actual_keys_table, sorted_expected_keys));
+
+    CUDF_EXPECT_NO_THROW(expect_tables_are_equal(actual_column_offsets, expected_column_offsets));
 
     destroy_table(&actual_keys_table);
     gdf_column_free(&column_offsets_output);
   }
 };
 
-using TestingTypes =
-    ::testing::Types<int8_t, int32_t, int64_t, float, double, cudf::category,
-                     cudf::date32, cudf::date64>;
+using TestingTypes = ::testing::
+  Types<int8_t, int32_t, int64_t, float, double, cudf::category, cudf::date32, cudf::date64>;
 
 TYPED_TEST_CASE(SingleColumnGroupby, TestingTypes);
 
@@ -121,10 +118,10 @@ TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsPandasStyle) {
 
   T key{42};
   bool ignore_null_keys = true;
-  this->evaluate_test(
-      column_wrapper<T>(size, [key](auto index) { return key; }),
-      column_wrapper<T>(size, [key](auto index) { return key; }),
-      column_wrapper<cudf::size_type>({0}), ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>(size, [key](auto index) { return key; }),
+                      column_wrapper<T>(size, [key](auto index) { return key; }),
+                      column_wrapper<cudf::size_type>({0}),
+                      ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsSqlStyle) {
@@ -133,10 +130,10 @@ TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsSqlStyle) {
 
   T key{42};
   bool ignore_null_keys = false;
-  this->evaluate_test(
-      column_wrapper<T>(size, [key](auto index) { return key; }),
-      column_wrapper<T>(size, [key](auto index) { return key; }),
-      column_wrapper<cudf::size_type>({0}), ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>(size, [key](auto index) { return key; }),
+                      column_wrapper<T>(size, [key](auto index) { return key; }),
+                      column_wrapper<cudf::size_type>({0}),
+                      ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysPandasStyle) {
@@ -146,11 +143,11 @@ TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysPandasStyle) {
   T key{42};
   bool ignore_null_keys = true;
   this->evaluate_test(
-      column_wrapper<T>(size, [key](auto index) { return key; },
-                        [](auto index) { return index % 2; }),
-      column_wrapper<T>({T(key), T(key), T(key), T(key), T(key)},
-                        [&](auto index) { return true; }),
-      column_wrapper<cudf::size_type>({0}), ignore_null_keys);
+    column_wrapper<T>(
+      size, [key](auto index) { return key; }, [](auto index) { return index % 2; }),
+    column_wrapper<T>({T(key), T(key), T(key), T(key), T(key)}, [&](auto index) { return true; }),
+    column_wrapper<cudf::size_type>({0}),
+    ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysSqlStyle) {
@@ -159,56 +156,54 @@ TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysSqlStyle) {
 
   T key{42};
   bool ignore_null_keys = false;
-  this->evaluate_test(column_wrapper<T>(size, [key](auto index) { return key; },
-                                        [](auto index) { return index % 2; }),
-                      column_wrapper<T>({T(key), T(key), T(key), T(key), T(key),
-                                         T(0), T(0), T(0), T(0), T(0)},
-                                        [&](auto index) { return index < 5; }),
-                      column_wrapper<cudf::size_type>({0, 5}), ignore_null_keys);
+  this->evaluate_test(
+    column_wrapper<T>(
+      size, [key](auto index) { return key; }, [](auto index) { return index % 2; }),
+    column_wrapper<T>({T(key), T(key), T(key), T(key), T(key), T(0), T(0), T(0), T(0), T(0)},
+                      [&](auto index) { return index < 5; }),
+    column_wrapper<cudf::size_type>({0, 5}),
+    ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, EightKeysAllUniquePandasStyle) {
-  using T = typename SingleColumnGroupby<TypeParam>::Key;
+  using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = true;
 
-  this->evaluate_test(
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
-      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7}),
-      ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+                      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+                      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7}),
+                      ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueSqlStyle) {
-  using T = typename SingleColumnGroupby<TypeParam>::Key;
+  using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = false;
 
-  this->evaluate_test(
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
-      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7}),
-      ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+                      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)}),
+                      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7}),
+                      ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullPandasStyle) {
-  using T = typename SingleColumnGroupby<TypeParam>::Key;
+  using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = true;
 
-  this->evaluate_test(
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
-                        [](auto index) { return index % 2; }),
-      column_wrapper<T>({T(1), T(3), T(5), T(7)},
-                        [](auto index) { return true; }),
-      column_wrapper<cudf::size_type>({0, 1, 2, 3}), ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
+                                        [](auto index) { return index % 2; }),
+                      column_wrapper<T>({T(1), T(3), T(5), T(7)}, [](auto index) { return true; }),
+                      column_wrapper<cudf::size_type>({0, 1, 2, 3}),
+                      ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullSqlStyle) {
-  using T = typename SingleColumnGroupby<TypeParam>::Key;
+  using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = false;
 
-  this->evaluate_test(
-      column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
-                        [](auto index) { return index % 2; }),
-      column_wrapper<T>({T(1), T(3), T(5), T(7), T(0), T(0), T(0), T(0)},
-                        [](auto index) { return index < 4; }), /*  */
-      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4}), ignore_null_keys);
+  this->evaluate_test(column_wrapper<T>({T(0), T(1), T(2), T(3), T(4), T(5), T(6), T(7)},
+                                        [](auto index) { return index % 2; }),
+                      column_wrapper<T>({T(1), T(3), T(5), T(7), T(0), T(0), T(0), T(0)},
+                                        [](auto index) { return index < 4; }), /*  */
+                      column_wrapper<cudf::size_type>({0, 1, 2, 3, 4}),
+                      ignore_null_keys);
 }

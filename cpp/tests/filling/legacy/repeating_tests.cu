@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/filling.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <numeric>
 #include <random>
@@ -30,8 +30,7 @@ template <typename T>
 using scalar_wrapper = cudf::test::scalar_wrapper<T>;
 
 template <typename T>
-T random_int(T min, T max)
-{
+T random_int(T min, T max) {
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -42,139 +41,135 @@ T random_int(T min, T max)
 template <typename T>
 struct RepeatTest : GdfTest {};
 
-using test_types =
-  ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                   cudf::bool8, cudf::nvstring_category>;
+using test_types = ::testing::
+  Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(RepeatTest, test_types);
 
-TYPED_TEST(RepeatTest, RepeatScalarCount)
-{
+TYPED_TEST(RepeatTest, RepeatScalarCount) {
   using T = TypeParam;
 
   cudf::size_type repeat_count = 10;
-  cudf::size_type num_values = 10;
+  cudf::size_type num_values   = 10;
 
   // set your expectations
   cudf::size_type column_size = num_values * repeat_count;
   std::vector<int> expect_vals;
   for (cudf::size_type i = 0; i < num_values; i++) {
-    for (cudf::size_type j = 0; j < repeat_count; j++) {
-      expect_vals.push_back(i);
-    }
+    for (cudf::size_type j = 0; j < repeat_count; j++) { expect_vals.push_back(i); }
   }
 
   cudf::test::column_wrapper_factory<T> factory;
 
-  column_wrapper<T> values = factory.make(num_values,
-    [&](cudf::size_type i) { return i; });
+  column_wrapper<T> values = factory.make(num_values, [&](cudf::size_type i) { return i; });
 
   scalar_wrapper<cudf::size_type> count{repeat_count};
 
-  column_wrapper<T> expected = factory.make(column_size,
-    [&](cudf::size_type row) { return expect_vals[row]; });
+  column_wrapper<T> expected =
+    factory.make(column_size, [&](cudf::size_type row) { return expect_vals[row]; });
 
   cudf::table result = cudf::repeat({values.get()}, *count.get());
   column_wrapper<T> actual(*result.get_column(0));
 
-  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
-                              << "Expected:" << expected.to_str();
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, Repeat)
-{
+TYPED_TEST(RepeatTest, Repeat) {
   using T = TypeParam;
 
   // Making the ranges that will be filled
   cudf::size_type num_counts = 10;
-  cudf::size_type max_count = 10;
+  cudf::size_type max_count  = 10;
 
   std::vector<cudf::size_type> counts_data(num_counts);
-  std::transform(counts_data.begin(), counts_data.end(), counts_data.begin(),
-    [&](cudf::size_type i) { return random_int(0, max_count); });
+  std::transform(
+    counts_data.begin(), counts_data.end(), counts_data.begin(), [&](cudf::size_type i) {
+      return random_int(0, max_count);
+    });
 
   std::vector<int> values_data(num_counts);
   std::iota(values_data.begin(), values_data.end(), 0);
-  std::transform(values_data.begin(), values_data.end(), values_data.begin(),
-    [](cudf::size_type i) { return i * 2; });
+  std::transform(
+    values_data.begin(), values_data.end(), values_data.begin(), [](cudf::size_type i) {
+      return i * 2;
+    });
 
   // set your expectations
   cudf::size_type column_size = std::accumulate(counts_data.begin(), counts_data.end(), 0);
   std::vector<int> expect_vals;
   for (size_t i = 0; i < counts_data.size(); i++) {
-    for (cudf::size_type j = 0; j < counts_data[i]; j++) {
-      expect_vals.push_back(values_data[i]);
-    }
+    for (cudf::size_type j = 0; j < counts_data[i]; j++) { expect_vals.push_back(values_data[i]); }
   }
 
   cudf::test::column_wrapper_factory<T> factory;
 
-  column_wrapper<T> values = factory.make(num_counts,
-    [&](cudf::size_type i) { return values_data[i]; });
+  column_wrapper<T> values =
+    factory.make(num_counts, [&](cudf::size_type i) { return values_data[i]; });
 
   column_wrapper<cudf::size_type> counts(counts_data);
 
-  column_wrapper<T> expected = factory.make(column_size,
-    [&](cudf::size_type row) { return expect_vals[row]; });
+  column_wrapper<T> expected =
+    factory.make(column_size, [&](cudf::size_type row) { return expect_vals[row]; });
 
   cudf::table result = cudf::repeat({values.get()}, *counts.get());
   column_wrapper<T> actual(*result.get_column(0));
 
-  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
-                              << "Expected:" << expected.to_str();
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, RepeatNullable)
-{
+TYPED_TEST(RepeatTest, RepeatNullable) {
   using T = TypeParam;
 
   // Making the ranges that will be filled
   cudf::size_type num_counts = 10;
-  cudf::size_type max_count = 10;
+  cudf::size_type max_count  = 10;
 
   std::vector<cudf::size_type> counts_data(num_counts);
-  std::transform(counts_data.begin(), counts_data.end(), counts_data.begin(),
-    [&](cudf::size_type i) { return random_int(0, max_count); });
-  
+  std::transform(
+    counts_data.begin(), counts_data.end(), counts_data.begin(), [&](cudf::size_type i) {
+      return random_int(0, max_count);
+    });
+
   std::vector<cudf::size_type> offsets(num_counts);
   std::partial_sum(counts_data.begin(), counts_data.end(), offsets.begin());
 
   std::vector<int> values_data(num_counts);
   std::iota(values_data.begin(), values_data.end(), 0);
-  std::transform(values_data.begin(), values_data.end(), values_data.begin(),
-    [](cudf::size_type i) { return i * 2; });
+  std::transform(
+    values_data.begin(), values_data.end(), values_data.begin(), [](cudf::size_type i) {
+      return i * 2;
+    });
 
   // set your expectations
   cudf::size_type column_size = std::accumulate(counts_data.begin(), counts_data.end(), 0);
   std::vector<int> expect_vals;
   for (size_t i = 0; i < counts_data.size(); i++) {
-    for (cudf::size_type j = 0; j < counts_data[i]; j++) {
-      expect_vals.push_back(values_data[i]);
-    }
+    for (cudf::size_type j = 0; j < counts_data[i]; j++) { expect_vals.push_back(values_data[i]); }
   }
 
   cudf::test::column_wrapper_factory<T> factory;
 
-  column_wrapper<T> values = factory.make(num_counts,
+  column_wrapper<T> values = factory.make(
+    num_counts,
     [&](cudf::size_type i) { return values_data[i]; },
     [&](cudf::size_type i) { return i % 2; });
 
   column_wrapper<cudf::size_type> counts(counts_data);
 
-  column_wrapper<T> expected = factory.make(column_size,
+  column_wrapper<T> expected = factory.make(
+    column_size,
     [&](cudf::size_type row) { return expect_vals[row]; },
-    [&](cudf::size_type row) { 
+    [&](cudf::size_type row) {
       auto corresponding_value_it = std::upper_bound(offsets.begin(), offsets.end(), row);
-      return (corresponding_value_it - offsets.begin()) % 2; });
+      return (corresponding_value_it - offsets.begin()) % 2;
+    });
 
   cudf::table result = cudf::repeat({values.get()}, *counts.get());
   column_wrapper<T> actual(*result.get_column(0));
 
-  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
-                              << "Expected:" << expected.to_str();
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, ZeroSizeInput)
-{
+TYPED_TEST(RepeatTest, ZeroSizeInput) {
   using T = TypeParam;
 
   auto values = column_wrapper<T>{};
@@ -185,6 +180,5 @@ TYPED_TEST(RepeatTest, ZeroSizeInput)
   cudf::table result = cudf::repeat({values.get()}, *counts.get());
   column_wrapper<T> actual(*result.get_column(0));
 
-  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
-                              << "Expected:" << expected.to_str();
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }

@@ -55,8 +55,7 @@ namespace test {
  *---------------------------------------------------------------------------**/
 template <typename UnaryFunction>
 auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f) {
-  return thrust::make_transform_iterator(thrust::make_counting_iterator(start),
-                                         f);
+  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
 namespace detail {
@@ -110,8 +109,7 @@ class column_wrapper {
  *---------------------------------------------------------------------------**/
 template <typename Element, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
-    static_assert(cudf::is_fixed_width<Element>(),
-                  "Unexpected non-fixed width type.");
+  static_assert(cudf::is_fixed_width<Element>(), "Unexpected non-fixed width type.");
   thrust::host_vector<Element> elements(begin, end);
   return rmm::device_buffer{elements.data(), elements.size() * sizeof(Element)};
 }
@@ -130,16 +128,12 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end) {
  * element in `[begin,end)` that evaluated to `true`.
  *---------------------------------------------------------------------------**/
 template <typename ValidityIterator>
-std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
-                                                ValidityIterator end) {
+std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, ValidityIterator end) {
   cudf::size_type size = std::distance(begin, end);
-  auto num_words =
-      cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
+  auto num_words       = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
   std::vector<bitmask_type> null_mask(num_words, 0);
   for (auto i = 0; i < size; ++i) {
-    if (*(begin + i)) {
-      set_bit_unsafe(null_mask.data(), i);
-    }
+    if (*(begin + i)) { set_bit_unsafe(null_mask.data(), i); }
   }
   return null_mask;
 }
@@ -158,11 +152,10 @@ std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin,
  * element in `[begin,end)` that evaluated to `true`.
  *---------------------------------------------------------------------------**/
 template <typename ValidityIterator>
-rmm::device_buffer make_null_mask(ValidityIterator begin,
-                                  ValidityIterator end) {
+rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end) {
   auto null_mask = make_null_mask_vector(begin, end);
-  return rmm::device_buffer{
-      null_mask.data(), null_mask.size() * sizeof(decltype(null_mask.front()))};
+  return rmm::device_buffer{null_mask.data(),
+                            null_mask.size() * sizeof(decltype(null_mask.front()))};
 }
 
 /**---------------------------------------------------------------------------*
@@ -180,11 +173,10 @@ rmm::device_buffer make_null_mask(ValidityIterator begin,
  * @return std::pair containing the vector of chars and offsets
  *---------------------------------------------------------------------------**/
 template <typename StringsIterator, typename ValidityIterator>
-auto make_chars_and_offsets(StringsIterator begin, StringsIterator end,
-                            ValidityIterator v) {
+auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, ValidityIterator v) {
   std::vector<char> chars{};
   std::vector<int32_t> offsets(1, 0);
-  for( auto str = begin; str < end; ++str) {
+  for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
     offsets.push_back(offsets.back() + tmp.length());
@@ -207,10 +199,9 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   fixed_width_column_wrapper() : column_wrapper{} {
     std::vector<ElementTo> empty;
-    wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
-        0,
-        detail::make_elements<ElementTo>(empty.begin(), empty.end())});
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+                                   0,
+                                   detail::make_elements<ElementTo>(empty.begin(), empty.end())});
   }
 
   /**---------------------------------------------------------------------------*
@@ -232,12 +223,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param end The end of the sequence of elements
    *---------------------------------------------------------------------------**/
   template <typename InputIterator>
-  fixed_width_column_wrapper(InputIterator begin, InputIterator end)
-      : column_wrapper{} {
+  fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{} {
     cudf::size_type size = std::distance(begin, end);
-    wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()}, size,
-        detail::make_elements<ElementTo>(begin, end)});
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+                                   size,
+                                   detail::make_elements<ElementTo>(begin, end)});
   }
 
   /**---------------------------------------------------------------------------*
@@ -264,15 +254,15 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
   template <typename InputIterator, typename ValidityIterator>
-  fixed_width_column_wrapper(InputIterator begin, InputIterator end,
-                             ValidityIterator v)
-      : column_wrapper{} {
+  fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+    : column_wrapper{} {
     cudf::size_type size = std::distance(begin, end);
 
-    wrapped.reset(new cudf::column{
-        cudf::data_type{cudf::experimental::type_to_id<ElementTo>()}, size,
-        detail::make_elements<ElementTo>(begin, end),
-        detail::make_null_mask(v, v + size), cudf::UNKNOWN_NULL_COUNT});
+    wrapped.reset(new cudf::column{cudf::data_type{cudf::experimental::type_to_id<ElementTo>()},
+                                   size,
+                                   detail::make_elements<ElementTo>(begin, end),
+                                   detail::make_null_mask(v, v + size),
+                                   cudf::UNKNOWN_NULL_COUNT});
   }
 
   /**---------------------------------------------------------------------------*
@@ -289,8 +279,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
-      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {
-  }
+    : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements
@@ -312,8 +301,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
                              std::initializer_list<bool> validity)
-      : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements),
-                                   std::cbegin(validity)) {}
+    : fixed_width_column_wrapper(
+        std::cbegin(elements), std::cend(elements), std::cbegin(validity)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column from a list of fixed-width elements and
@@ -333,10 +322,8 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
   template <typename ValidityIterator, typename ElementFrom>
-  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list,
-                             ValidityIterator v)
-      : fixed_width_column_wrapper(std::cbegin(element_list),
-                                   std::cend(element_list), v) {}
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
+    : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -365,15 +352,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param end The end of the sequence
    *---------------------------------------------------------------------------**/
   template <typename StringsIterator>
-  strings_column_wrapper(StringsIterator begin, StringsIterator end)
-      : column_wrapper{} {
+  strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{} {
     std::vector<char> chars;
     std::vector<int32_t> offsets;
-    auto all_valid =
-        make_counting_transform_iterator(0, [](auto i) { return true; });
-    std::tie(chars, offsets) =
-        detail::make_chars_and_offsets(begin, end, all_valid);
-    wrapped = cudf::make_strings_column(chars, offsets);
+    auto all_valid           = make_counting_transform_iterator(0, [](auto i) { return true; });
+    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
+    wrapped                  = cudf::make_strings_column(chars, offsets);
   }
 
   /**---------------------------------------------------------------------------*
@@ -405,15 +389,14 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
   template <typename StringsIterator, typename ValidityIterator>
-  strings_column_wrapper(StringsIterator begin, StringsIterator end,
-                         ValidityIterator v)
-      : column_wrapper{} {
+  strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
+    : column_wrapper{} {
     size_type num_strings = std::distance(begin, end);
     std::vector<char> chars;
     std::vector<int32_t> offsets;
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    wrapped = cudf::make_strings_column(
-        chars, offsets, detail::make_null_mask_vector(v, v + num_strings));
+    wrapped =
+      cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings));
   }
 
   /**---------------------------------------------------------------------------*
@@ -429,7 +412,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param strings The list of strings
    *---------------------------------------------------------------------------**/
   strings_column_wrapper(std::initializer_list<std::string> strings)
-      : strings_column_wrapper(std::cbegin(strings), std::cend(strings)) {}
+    : strings_column_wrapper(std::cbegin(strings), std::cend(strings)) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of strings from a list of strings and
@@ -450,9 +433,8 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param v The beginning of the sequence of validity indicators
    *---------------------------------------------------------------------------**/
   template <typename ValidityIterator>
-  strings_column_wrapper(std::initializer_list<std::string> strings,
-                         ValidityIterator v)
-      : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v) {}
+  strings_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator v)
+    : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v) {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a nullable column of strings from a list of strings and
@@ -471,8 +453,7 @@ class strings_column_wrapper : public detail::column_wrapper {
    *---------------------------------------------------------------------------**/
   strings_column_wrapper(std::initializer_list<std::string> strings,
                          std::initializer_list<bool> validity)
-      : strings_column_wrapper(std::cbegin(strings), std::cend(strings),
-                               std::cbegin(validity)) {}
+    : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity)) {}
 };
 
 }  // namespace test
