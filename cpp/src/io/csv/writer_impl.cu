@@ -109,7 +109,11 @@ struct probe_special_chars
 
   __device__
   int32_t operator()(size_type idx) const {
+    if( d_column_.is_null(idx) )
+      return 0; // null string
+
     string_view d_str = d_column_.template element<string_view>(idx);
+    
     if( predicate_(d_str) ) {  
       //count number of quotes "\""
       size_type num_quotes{0};
@@ -147,9 +151,29 @@ struct modify_special_chars
 
   __device__
   int32_t operator()(size_type idx) {
-    //TODO:
-    //
+    if( d_column_.is_null(idx) )
+      return 0; // null string
+
+    string_view d_str = d_column_.template element<string_view>(idx);
+    
+    if( predicate_(d_str) ) {
+      //modify d_str by duplicating all 2bl quotes
+      //and surrounding whole string by 2bl quotes:
+      //
+      char* d_buffer = get_output_ptr(idx);
+      
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+        //TODO:
+        //
+      }
+    }
     return 0;
+  }
+
+  __device__
+  char* get_output_ptr(size_type idx)
+  {
+    return d_chars_ && d_offsets_ ? d_chars_ + d_offsets_[idx] : nullptr;
   }
   
 private:
