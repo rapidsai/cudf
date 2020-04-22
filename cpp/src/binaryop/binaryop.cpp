@@ -35,6 +35,7 @@
 
 #include "compiled/binary_ops.hpp"
 
+#include <bit.hpp.jit>
 #include <libcudacxx/details/__config.jit>
 #include <libcudacxx/libcxx/include/__config.jit>
 #include <libcudacxx/libcxx/include/__undef_macros.jit>
@@ -52,7 +53,6 @@
 #include <libcudacxx/simt/type_traits.jit>
 #include <libcudacxx/simt/version.jit>
 #include <string>
-#include <bit.hpp.jit>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
 
@@ -155,10 +155,10 @@ void binary_operation(mutable_column_view& out,
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                       cudf::jit::get_type_name(rhs.type()),
-                       cudf::jit::get_type_name(lhs.type()),
-                       get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(), 
+                        cudf::jit::get_type_name(rhs.type()),
+                        cudf::jit::get_type_name(lhs.type()),
+                        get_operator_name(op, OperatorType::Reverse)})
+      .launch(out.size(),
               cudf::jit::get_data_ptr(out),
               cudf::jit::get_data_ptr(rhs),
               cudf::jit::get_data_ptr(lhs),
@@ -171,10 +171,10 @@ void binary_operation(mutable_column_view& out,
       .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                       cudf::jit::get_type_name(rhs.type()),
-                       cudf::jit::get_type_name(lhs.type()),
-                       get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(), 
+                        cudf::jit::get_type_name(rhs.type()),
+                        cudf::jit::get_type_name(lhs.type()),
+                        get_operator_name(op, OperatorType::Reverse)})
+      .launch(out.size(),
               cudf::jit::get_data_ptr(out),
               cudf::jit::get_data_ptr(rhs),
               cudf::jit::get_data_ptr(lhs));
@@ -191,10 +191,10 @@ void binary_operation(mutable_column_view& out,
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                       cudf::jit::get_type_name(lhs.type()),
-                       cudf::jit::get_type_name(rhs.type()),
-                       get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(), 
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
               cudf::jit::get_data_ptr(out),
               cudf::jit::get_data_ptr(lhs),
               cudf::jit::get_data_ptr(rhs),
@@ -227,9 +227,9 @@ void binary_operation(mutable_column_view& out,
       .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                       cudf::jit::get_type_name(lhs.type()),
-                       cudf::jit::get_type_name(rhs.type()),
-                       get_operator_name(op, OperatorType::Direct)})
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
       .launch(out.size(),
               cudf::jit::get_data_ptr(out),
               cudf::jit::get_data_ptr(lhs),
@@ -244,9 +244,9 @@ void binary_operation(mutable_column_view& out,
       .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                       cudf::jit::get_type_name(lhs.type()),
-                       cudf::jit::get_type_name(rhs.type()),
-                       get_operator_name(op, OperatorType::Direct)})
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
       .launch(out.size(),
               cudf::jit::get_data_ptr(out),
               cudf::jit::get_data_ptr(lhs),
@@ -303,8 +303,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
 
   std::unique_ptr<column> out;
   if (binops::null_using_binop(op)) {
-    out = make_numeric_column(
-      data_type{type_id::BOOL8}, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    out =
+      make_numeric_column(data_type{type_id::BOOL8}, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
     out           = make_fixed_width_column(
@@ -336,8 +336,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   std::unique_ptr<column> out;
   if (binops::null_using_binop(op)) {
-    out = make_numeric_column(
-      data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID, stream, mr);
+    out =
+      make_numeric_column(data_type{type_id::BOOL8}, lhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     out           = make_fixed_width_column(
@@ -371,8 +371,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   std::unique_ptr<column> out;
   if (binops::null_using_binop(op)) {
-    out = make_numeric_column(
-      data_type{type_id::BOOL8}, rhs.size(), mask_state::ALL_VALID, stream, mr);
+    out =
+      make_numeric_column(data_type{type_id::BOOL8}, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
     auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
     out           = make_fixed_width_column(

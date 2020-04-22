@@ -59,10 +59,10 @@ enum class binary_operator : int32_t {
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
 
-  LOG_BASE,       ///< logarithm to the base
-  NULL_EQUALS,    ///< Returns true when both operands are null; false when one is null; or result
-                  ///< of comparison
-  
+  LOG_BASE,     ///< logarithm to the base
+  NULL_EQUALS,  ///< Returns true when both operands are null; false when one is null; or result
+                ///< of comparison
+
   INVALID_BINARY  ///< invalid operation
 };
 
