@@ -53,12 +53,12 @@ def fill(Column destination, int begin, int end, Scalar value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def repeat(Table input, object count, bool check_count=False):
+def repeat(Table inp, object count, bool check_count=False):
     if isinstance(count, Column):
-        return _repeat_via_column(input, count, check_count)
+        return _repeat_via_column(inp, count, check_count)
 
     if isinstance(count, Scalar):
-        return _repeat_via_scalar(input, count)
+        return _repeat_via_scalar(inp, count)
 
     raise TypeError(
         "Expected `count` to be Column or Scalar but got {}"
@@ -66,39 +66,39 @@ def repeat(Table input, object count, bool check_count=False):
     )
 
 
-def _repeat_via_column(Table input, Column count, bool check_count):
-    cdef table_view c_input = input.view()
+def _repeat_via_column(Table inp, Column count, bool check_count):
+    cdef table_view c_inp = inp.view()
     cdef column_view c_count = count.view()
     cdef bool c_check_count = check_count
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_filling.repeat(
-            c_input,
+            c_inp,
             c_count,
             c_check_count
         ))
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=input._column_names,
-        index_names=input._index_names
+        column_names=inp._column_names,
+        index_names=inp._index_names
     )
 
 
-def _repeat_via_scalar(Table input, Scalar count):
-    cdef table_view c_input = input.view()
+def _repeat_via_scalar(Table inp, Scalar count):
+    cdef table_view c_inp = inp.view()
     cdef scalar* c_count = count.c_value.get()
     cdef unique_ptr[table] c_result
 
     with nogil:
         c_result = move(cpp_filling.repeat(
-            c_input,
+            c_inp,
             c_count[0]
         ))
 
     return Table.from_unique_ptr(
         move(c_result),
-        column_names=input._column_names,
-        index_names=input._index_names
+        column_names=inp._column_names,
+        index_names=inp._index_names
     )

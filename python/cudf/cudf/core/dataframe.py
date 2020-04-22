@@ -165,7 +165,9 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
-    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
+    _internal_names = {"_data", "_index"}
+
+    @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -219,9 +221,6 @@ class DataFrame(Frame):
         if dtype:
             self._data = self.astype(dtype)._data
 
-        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
-        self._allow_setattr_to_setitem = True
-
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
@@ -244,7 +243,6 @@ class DataFrame(Frame):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
-
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
@@ -284,7 +282,12 @@ class DataFrame(Frame):
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
-        return cls(data=table._data, index=index)
+            else:
+                index = RangeIndex(table._num_rows)
+        out = cls.__new__(cls)
+        out._data = table._data
+        out._index = index
+        return out
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -390,16 +393,17 @@ class DataFrame(Frame):
         return list(o)
 
     def __setattr__(self, key, col):
-        if getattr(self, "_allow_setattr_to_setitem", False):
-            # if an attribute already exists, set it.
-            try:
-                object.__getattribute__(self, key)
-                object.__setattr__(self, key, col)
-                return
-            except AttributeError:
-                pass
 
-            # if a column already exists, set it.
+        # if an attribute already exists, set it.
+        try:
+            object.__getattribute__(self, key)
+            object.__setattr__(self, key, col)
+            return
+        except AttributeError:
+            pass
+
+        # if a column already exists, set it.
+        if key not in self._internal_names:
             try:
                 self[key]  # __getitem__ to verify key exists
                 self[key] = col
@@ -407,18 +411,14 @@ class DataFrame(Frame):
             except KeyError:
                 pass
 
-            warnings.warn(
-                "Columns may not be added to a DataFrame using a new "
-                + "attribute name. A new attribute will be created: '%s'"
-                % key,
-                UserWarning,
-            )
-
         object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
-        if key != "_data" and key in self._data:
-            return self[key]
+        if key in self._internal_names:
+            return object.__getattribute__(self, key)
+        else:
+            if key in self:
+                return self[key]
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
@@ -900,10 +900,24 @@ class DataFrame(Frame):
             if len(self._data.names) > ncols:
                 right_cols = len(self._data.names) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
+            if right_cols > 0:
+                # Pick ncols - left_cols number of columns
+                # from the right side/from the end.
+                right_cols = -(int(ncols) - left_cols + 1)
+            else:
+                # If right_cols is 0 or negative, it means
+                # self has lesser number of columns thans ncols.
+                # Hence assign len(self._data.names) which
+                # will result in empty `*_right` quadrants.
+                # This is because `*_left` quadransts will
+                # contain all columns.
+                right_cols = len(self._data.names)
+
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
+
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
@@ -2835,7 +2849,15 @@ class DataFrame(Frame):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace=None, value=None, inplace=False):
+    def replace(
+        self,
+        to_replace=None,
+        value=None,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=None,
+    ):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -2888,7 +2910,22 @@ class DataFrame(Frame):
         4     4
         5  null
         6     6
+
+        Notes
+        -----
+        Parameters that are currently not supported are: `limit`, `regex`,
+        `method`
         """
+        if limit is not None:
+            raise NotImplementedError("limit parameter is not implemented yet")
+
+        if regex:
+            raise NotImplementedError("regex parameter is not implemented yet")
+
+        if method not in ("pad", None):
+            raise NotImplementedError(
+                "method parameter is not implemented yet"
+            )
 
         outdf = super().replace(to_replace=to_replace, replacement=value)
 
@@ -4680,6 +4717,7 @@ class DataFrame(Frame):
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
 
+    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
     def scatter_by_map(
         self, map_index, map_size=None, keep_index=True, **kwargs
     ):
@@ -4705,7 +4743,7 @@ class DataFrame(Frame):
         # map_index might be a column name or array,
         # make it a Column
         if isinstance(map_index, str):
-            map_index = self[map_index]._column
+            map_index = self._data[map_index]
         elif isinstance(map_index, Series):
             map_index = map_index._column
         else:
