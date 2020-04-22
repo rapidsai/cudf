@@ -241,9 +241,7 @@ struct orc_write_arg {
 
   cudf::table table;  ///< Table of columns to write
 
-  explicit orc_write_arg(sink_info const & snk, cudf::table const& tbl) :
-    sink(snk),
-    table(tbl) {}
+  explicit orc_write_arg(sink_info const& snk, cudf::table const& tbl) : sink(snk), table(tbl) {}
 };
 
 /**---------------------------------------------------------------------------*

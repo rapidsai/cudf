@@ -17,8 +17,8 @@
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <cudf/types.hpp>
 #include <cudf/types.h>
+#include <cudf/types.hpp>
 
 #include <cassert>
 #include <initializer_list>
