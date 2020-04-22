@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <cudf/utilities/error.hpp>
 
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>

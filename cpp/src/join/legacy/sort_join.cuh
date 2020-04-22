@@ -19,17 +19,17 @@
 
 #include <cudf/legacy/functions.h>
 #include <cudf/types.h>
-#include "join_compute_api.h"
 #include "full_join.cuh"
+#include "join_compute_api.h"
 
-#include <utility>
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
+#include <utility>
 
 template <typename index_type>
 struct JoinBounds {
-    rmm::device_vector<index_type> lower;
-    rmm::device_vector<index_type> upper;
+  rmm::device_vector<index_type> lower;
+  rmm::device_vector<index_type> upper;
 };
 
 /* --------------------------------------------------------------------------*/
@@ -48,30 +48,27 @@ struct JoinBounds {
  * @Returns JoinBounds struct containing the lower and upper bound search results
  */
 /* ----------------------------------------------------------------------------*/
-template<typename T,
-    typename index_type,
-    typename size_type>
-JoinBounds<index_type>
-compute_join_bounds(
-        T const * const l, size_type l_count,
-        T const * const r, size_type r_count,
-        cudaStream_t stream) {
-    JoinBounds<index_type> bounds;
-    bounds.lower.resize(l_count);
-    bounds.upper.resize(l_count);
-    thrust::lower_bound(
-            rmm::exec_policy(stream)->on(stream),
-            r, r + r_count,
-            l, l + l_count,
-            bounds.lower.begin(),
-            thrust::less<T>());
-    thrust::upper_bound(
-            rmm::exec_policy(stream)->on(stream),
-            r, r + r_count,
-            l, l + l_count,
-            bounds.upper.begin(),
-            thrust::less<T>());
-    return bounds;
+template <typename T, typename index_type, typename size_type>
+JoinBounds<index_type> compute_join_bounds(
+  T const* const l, size_type l_count, T const* const r, size_type r_count, cudaStream_t stream) {
+  JoinBounds<index_type> bounds;
+  bounds.lower.resize(l_count);
+  bounds.upper.resize(l_count);
+  thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                      r,
+                      r + r_count,
+                      l,
+                      l + l_count,
+                      bounds.lower.begin(),
+                      thrust::less<T>());
+  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                      r,
+                      r + r_count,
+                      l,
+                      l + l_count,
+                      bounds.upper.begin(),
+                      thrust::less<T>());
+  return bounds;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -86,16 +83,16 @@ compute_join_bounds(
 /* ----------------------------------------------------------------------------*/
 template <typename index_type, JoinType join_type>
 struct Diff {
-    __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
-        return (thrust::get<0>(t) - thrust::get<1>(t)) + (thrust::get<0>(t) == thrust::get<1>(t));
-    }
+  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
+    return (thrust::get<0>(t) - thrust::get<1>(t)) + (thrust::get<0>(t) == thrust::get<1>(t));
+  }
 };
 
 template <typename index_type>
 struct Diff<index_type, JoinType::INNER_JOIN> {
-    __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
-        return thrust::get<0>(t) - thrust::get<1>(t);
-    }
+  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
+    return thrust::get<0>(t) - thrust::get<1>(t);
+  }
 };
 
 /* --------------------------------------------------------------------------*/
@@ -110,20 +107,18 @@ struct Diff<index_type, JoinType::INNER_JOIN> {
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
 struct JoinConditionalAdd {
-    index_type none;
+  index_type none;
 
-    __host__ __device__
-    JoinConditionalAdd(const index_type NoneValue) : none(NoneValue) {}
+  __host__ __device__ JoinConditionalAdd(const index_type NoneValue) : none(NoneValue) {}
 
-    __device__ index_type operator()(
-            index_type r_ptr,
-            thrust::tuple<const index_type, const index_type> lower_upper) {
-        if (thrust::get<0>(lower_upper) == thrust::get<1>(lower_upper)) {
-            return none;
-        } else {
-            return r_ptr + thrust::get<0>(lower_upper);
-        }
+  __device__ index_type operator()(index_type r_ptr,
+                                   thrust::tuple<const index_type, const index_type> lower_upper) {
+    if (thrust::get<0>(lower_upper) == thrust::get<1>(lower_upper)) {
+      return none;
+    } else {
+      return r_ptr + thrust::get<0>(lower_upper);
     }
+  }
 };
 
 /* --------------------------------------------------------------------------*/
@@ -137,19 +132,18 @@ struct JoinConditionalAdd {
  * @Returns thrust::device_vector containing the scanned differences
  */
 /* ----------------------------------------------------------------------------*/
-template<JoinType join_type,
-    typename index_type>
-rmm::device_vector<index_type>
-scan_join_bounds(const JoinBounds<index_type>& bounds, cudaStream_t stream) {
-    rmm::device_vector<index_type> scanned_sizes(bounds.lower.size() + 1, 0);
-    thrust::transform_inclusive_scan(
-            rmm::exec_policy(stream)->on(stream),
-            thrust::make_zip_iterator(thrust::make_tuple(bounds.upper.begin(), bounds.lower.begin())),
-            thrust::make_zip_iterator(thrust::make_tuple(  bounds.upper.end(),   bounds.lower.end())),
-            scanned_sizes.begin() + 1,
-            Diff<index_type, join_type>(),
-            thrust::plus<index_type>());
-    return scanned_sizes;
+template <JoinType join_type, typename index_type>
+rmm::device_vector<index_type> scan_join_bounds(const JoinBounds<index_type>& bounds,
+                                                cudaStream_t stream) {
+  rmm::device_vector<index_type> scanned_sizes(bounds.lower.size() + 1, 0);
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_zip_iterator(thrust::make_tuple(bounds.upper.begin(), bounds.lower.begin())),
+    thrust::make_zip_iterator(thrust::make_tuple(bounds.upper.end(), bounds.lower.end())),
+    scanned_sizes.begin() + 1,
+    Diff<index_type, join_type>(),
+    thrust::plus<index_type>());
+  return scanned_sizes;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -167,31 +161,29 @@ scan_join_bounds(const JoinBounds<index_type>& bounds, cudaStream_t stream) {
  */
 /* ----------------------------------------------------------------------------*/
 template <typename index_type>
-void
-create_load_balanced_tuple(const rmm::device_vector<index_type>& scanned_sizes,
-        index_type * const seg, index_type * const rank, const index_type segment_length,
-        cudaStream_t stream) {
-    thrust::upper_bound(
-            rmm::exec_policy(stream)->on(stream),
-            scanned_sizes.begin(),
-            scanned_sizes.end(),
-            thrust::make_counting_iterator(static_cast<index_type>(0)),
-            thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
-            seg);
-    thrust::transform(
-            rmm::exec_policy(stream)->on(stream),
-            seg,
-            seg + segment_length,
-            thrust::make_constant_iterator(static_cast<index_type>(1)),
-            seg,
-            thrust::minus<index_type>());
-    thrust::transform(
-            rmm::exec_policy(stream)->on(stream),
-            thrust::make_counting_iterator(static_cast<index_type>(0)),
-            thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
-            thrust::make_permutation_iterator(scanned_sizes.begin(), seg),
-            rank,
-            thrust::minus<index_type>());
+void create_load_balanced_tuple(const rmm::device_vector<index_type>& scanned_sizes,
+                                index_type* const seg,
+                                index_type* const rank,
+                                const index_type segment_length,
+                                cudaStream_t stream) {
+  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                      scanned_sizes.begin(),
+                      scanned_sizes.end(),
+                      thrust::make_counting_iterator(static_cast<index_type>(0)),
+                      thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
+                      seg);
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    seg,
+                    seg + segment_length,
+                    thrust::make_constant_iterator(static_cast<index_type>(1)),
+                    seg,
+                    thrust::minus<index_type>());
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    thrust::make_counting_iterator(static_cast<index_type>(0)),
+                    thrust::make_counting_iterator(static_cast<index_type>(segment_length)),
+                    thrust::make_permutation_iterator(scanned_sizes.begin(), seg),
+                    rank,
+                    thrust::minus<index_type>());
 }
 
 /* --------------------------------------------------------------------------*/
@@ -207,60 +199,53 @@ create_load_balanced_tuple(const rmm::device_vector<index_type>& scanned_sizes,
  * @Returns Pair of gdf columns containing the join result indices
  */
 /* ----------------------------------------------------------------------------*/
-template<JoinType join_type,
-    typename index_type>
-gdf_error
-compute_joined_indices(const JoinBounds<index_type>& bounds,
-        gdf_column * const leftcol, gdf_column * const rightcol,
-        rmm::device_vector<index_type>& scanned_sizes,
-        std::pair<gdf_column, gdf_column>& join_result,
-        cudaStream_t stream) {
-    index_type join_size = scanned_sizes[scanned_sizes.size() - 1];
-    scanned_sizes.resize(scanned_sizes.size() - 1);
+template <JoinType join_type, typename index_type>
+gdf_error compute_joined_indices(const JoinBounds<index_type>& bounds,
+                                 gdf_column* const leftcol,
+                                 gdf_column* const rightcol,
+                                 rmm::device_vector<index_type>& scanned_sizes,
+                                 std::pair<gdf_column, gdf_column>& join_result,
+                                 cudaStream_t stream) {
+  index_type join_size = scanned_sizes[scanned_sizes.size() - 1];
+  scanned_sizes.resize(scanned_sizes.size() - 1);
 
-    index_type * l_ptr;
-    index_type * r_ptr;
-    RMM_TRY( RMM_ALLOC((void**)&l_ptr, join_size*sizeof(index_type), stream));
-    RMM_TRY( RMM_ALLOC((void**)&r_ptr, join_size*sizeof(index_type), stream));
-    create_load_balanced_tuple(scanned_sizes, l_ptr, r_ptr, join_size,
-            stream);
-    CHECK_CUDA(stream);
-    if (join_type == JoinType::INNER_JOIN) {
-        thrust::transform(
-                rmm::exec_policy(stream)->on(stream),
-                r_ptr,
-                r_ptr + join_size,
-                thrust::make_permutation_iterator(bounds.lower.begin(), l_ptr),
-                r_ptr,
-                thrust::plus<index_type>());
-    } else {
-        thrust::transform(
-                rmm::exec_policy(stream)->on(stream),
-                r_ptr,
-                r_ptr + join_size,
-                thrust::make_zip_iterator(thrust::make_tuple(
-                    thrust::make_permutation_iterator(bounds.lower.begin(), l_ptr),
-                    thrust::make_permutation_iterator(bounds.upper.begin(), l_ptr))),
-                r_ptr,
-                JoinConditionalAdd<index_type>(static_cast<index_type>(JoinNoneValue)));
-    }
-    CHECK_CUDA(stream);
-    cudf::size_type final_join_size = static_cast<cudf::size_type>(join_size);
-    if (join_type == JoinType::FULL_JOIN) {
-        cudf::size_type join_column_capacity = final_join_size;
-        gdf_error err = append_full_join_indices(
-                &l_ptr, &r_ptr,
-                join_column_capacity,
-                final_join_size, rightcol->size,
-                stream);
-        if (GDF_SUCCESS != err) return err;
-    }
-    gdf_column output_l, output_r;
-    gdf_column_view(&output_l, l_ptr, nullptr, final_join_size, GDF_INT32);
-    gdf_column_view(&output_r, r_ptr, nullptr, final_join_size, GDF_INT32);
-    join_result.first = output_l;
-    join_result.second = output_r;
-    return GDF_SUCCESS;
+  index_type* l_ptr;
+  index_type* r_ptr;
+  RMM_TRY(RMM_ALLOC((void**)&l_ptr, join_size * sizeof(index_type), stream));
+  RMM_TRY(RMM_ALLOC((void**)&r_ptr, join_size * sizeof(index_type), stream));
+  create_load_balanced_tuple(scanned_sizes, l_ptr, r_ptr, join_size, stream);
+  CHECK_CUDA(stream);
+  if (join_type == JoinType::INNER_JOIN) {
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      r_ptr,
+                      r_ptr + join_size,
+                      thrust::make_permutation_iterator(bounds.lower.begin(), l_ptr),
+                      r_ptr,
+                      thrust::plus<index_type>());
+  } else {
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      r_ptr,
+                      r_ptr + join_size,
+                      thrust::make_zip_iterator(thrust::make_tuple(
+                        thrust::make_permutation_iterator(bounds.lower.begin(), l_ptr),
+                        thrust::make_permutation_iterator(bounds.upper.begin(), l_ptr))),
+                      r_ptr,
+                      JoinConditionalAdd<index_type>(static_cast<index_type>(JoinNoneValue)));
+  }
+  CHECK_CUDA(stream);
+  cudf::size_type final_join_size = static_cast<cudf::size_type>(join_size);
+  if (join_type == JoinType::FULL_JOIN) {
+    cudf::size_type join_column_capacity = final_join_size;
+    gdf_error err                        = append_full_join_indices(
+      &l_ptr, &r_ptr, join_column_capacity, final_join_size, rightcol->size, stream);
+    if (GDF_SUCCESS != err) return err;
+  }
+  gdf_column output_l, output_r;
+  gdf_column_view(&output_l, l_ptr, nullptr, final_join_size, GDF_INT32);
+  gdf_column_view(&output_r, r_ptr, nullptr, final_join_size, GDF_INT32);
+  join_result.first  = output_l;
+  join_result.second = output_r;
+  return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
@@ -280,38 +265,34 @@ compute_joined_indices(const JoinBounds<index_type>& bounds,
  * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
 /* ----------------------------------------------------------------------------*/
-template<JoinType join_type,
-    typename column_type,
-    typename index_type>
-gdf_error sort_join_typed(
-        gdf_column * const output_l,
-        gdf_column * const output_r,
-        gdf_column * const leftcol,
-        gdf_column * const rightcol,
-        bool flip_results = false) {
-    cudaStream_t stream = 0;
-    JoinBounds<index_type> bounds =
-        compute_join_bounds<column_type, index_type>(
-                static_cast<column_type*>(leftcol->data), leftcol->size,
-                static_cast<column_type*>(rightcol->data), rightcol->size,
-                stream);
-    CHECK_CUDA(stream);
-    rmm::device_vector<index_type> scanned_sizes =
-        scan_join_bounds<join_type, index_type>(bounds, stream);
-    CHECK_CUDA(stream);
-    std::pair<gdf_column, gdf_column> join_result;
-    gdf_error err = compute_joined_indices<join_type, index_type>(
-            bounds, leftcol, rightcol,
-            scanned_sizes, join_result,
-            stream);
-    if (GDF_SUCCESS != err) return err;
+template <JoinType join_type, typename column_type, typename index_type>
+gdf_error sort_join_typed(gdf_column* const output_l,
+                          gdf_column* const output_r,
+                          gdf_column* const leftcol,
+                          gdf_column* const rightcol,
+                          bool flip_results = false) {
+  cudaStream_t stream = 0;
+  JoinBounds<index_type> bounds =
+    compute_join_bounds<column_type, index_type>(static_cast<column_type*>(leftcol->data),
+                                                 leftcol->size,
+                                                 static_cast<column_type*>(rightcol->data),
+                                                 rightcol->size,
+                                                 stream);
+  CHECK_CUDA(stream);
+  rmm::device_vector<index_type> scanned_sizes =
+    scan_join_bounds<join_type, index_type>(bounds, stream);
+  CHECK_CUDA(stream);
+  std::pair<gdf_column, gdf_column> join_result;
+  gdf_error err = compute_joined_indices<join_type, index_type>(
+    bounds, leftcol, rightcol, scanned_sizes, join_result, stream);
+  if (GDF_SUCCESS != err) return err;
+  *output_l = join_result.first;
+  *output_r = join_result.second;
+  if (flip_results) {
     *output_l = join_result.first;
     *output_r = join_result.second;
-    if (flip_results) {
-        *output_l = join_result.first;
-        *output_r = join_result.second;
-    }
-    return GDF_SUCCESS;
+  }
+  return GDF_SUCCESS;
 }
 
 /* ----------------------------------------------------------------------------*/
@@ -329,19 +310,17 @@ gdf_error sort_join_typed(
  *
  * @Returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
  */
-template<JoinType join_type,
-    typename index_type>
+template <JoinType join_type, typename index_type>
 struct compute_sort_join {
-    template <typename column_type>
-    gdf_error operator()(
-        gdf_column * const output_l,
-        gdf_column * const output_r,
-        gdf_column * const lcol,
-        gdf_column * const rcol,
-        bool flip = false) {
-        using T = typename std::decay<decltype(cudf::detail::unwrap(column_type{}) )>::type;
-        return sort_join_typed<join_type, T, index_type>(output_l, output_r, lcol, rcol, flip);
-    }
+  template <typename column_type>
+  gdf_error operator()(gdf_column* const output_l,
+                       gdf_column* const output_r,
+                       gdf_column* const lcol,
+                       gdf_column* const rcol,
+                       bool flip = false) {
+    using T = typename std::decay<decltype(cudf::detail::unwrap(column_type{}))>::type;
+    return sort_join_typed<join_type, T, index_type>(output_l, output_r, lcol, rcol, flip);
+  }
 };
 
 #endif

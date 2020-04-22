@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/filling.hpp>
 #include <cudf/detail/sequence.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf {
@@ -30,9 +30,12 @@ namespace detail {
  *
  * @param stream CUDA stream to run this function
  **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0);
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  scalar const& step,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::experimental::sequence(size_type size, scalar const& init,
@@ -40,9 +43,11 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
  *
  * @param stream CUDA stream to run this function
  **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                 cudaStream_t stream = 0);
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace experimental

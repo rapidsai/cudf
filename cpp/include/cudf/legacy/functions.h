@@ -13,7 +13,7 @@
  * 
  * @returns   
  */
-gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
+gdf_error gdf_nvtx_range_push(char const *const name, gdf_color color);
 
 /** 
  * @brief  Start a NVTX range with a custom ARGB color code.
@@ -28,7 +28,7 @@ gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
  * 
  * @returns   
  */
-gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
+gdf_error gdf_nvtx_range_push_hex(char const *const name, unsigned int color);
 
 /** 
  * @brief Ends the inner-most NVTX range.
@@ -40,7 +40,6 @@ gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
  * @returns   
  */
 gdf_error gdf_nvtx_range_pop();
-
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
@@ -75,7 +74,6 @@ cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size);
  */
 cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);
 
-
 /* context operations */
 
 /**
@@ -94,11 +92,14 @@ cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace,
-			   bool flag_groupby_include_nulls,
+gdf_error gdf_context_view(gdf_context *context,
+                           int flag_sorted,
+                           gdf_method flag_method,
+                           int flag_distinct,
+                           int flag_sort_result,
+                           int flag_sort_inplace,
+                           bool flag_groupby_include_nulls,
                            gdf_null_sort_behavior flag_null_sort_behavior);
-
 
 /* error handling */
 
@@ -109,7 +110,7 @@ gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method fla
  *
  * @returns  name of the error
  */
-const char * gdf_error_get_name(gdf_error errcode);
+const char *gdf_error_get_name(gdf_error errcode);
 
 /**
  * @brief  returns the last error from a runtime call.
@@ -125,7 +126,7 @@ int gdf_cuda_last_error();
  *
  * @returns  description string for an error code.
  */
-const char * gdf_cuda_error_string(int cuda_error);
+const char *gdf_cuda_error_string(int cuda_error);
 
 /**
  * @brief  returns the string representation of an error code enum name.
@@ -134,7 +135,7 @@ const char * gdf_cuda_error_string(int cuda_error);
  *
  * @returns  string representation of an error code enum name.
  */
-const char * gdf_cuda_error_name(int cuda_error);
+const char *gdf_cuda_error_name(int cuda_error);
 
 // transpose
 /**
@@ -145,10 +146,7 @@ const char * gdf_cuda_error_name(int cuda_error);
  * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
  * @returns gdf_error GDF_SUCCESS if successful, else appropriate error code
  */
-gdf_error gdf_transpose(cudf::size_type ncols,
-                        gdf_column** in_cols,
-                        gdf_column** out_cols);
-
+gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols);
 
 /* partioning */
 
@@ -172,15 +170,14 @@ gdf_error gdf_transpose(cudf::size_type ncols,
  * 
  * @returns  If the operation was successful, returns GDF_SUCCESS
  */
-gdf_error gdf_hash_partition(int num_input_cols, 
-                             gdf_column * input[], 
+gdf_error gdf_hash_partition(int num_input_cols,
+                             gdf_column *input[],
                              int columns_to_hash[],
                              int num_cols_to_hash,
-                             int num_partitions, 
-                             gdf_column * partitioned_output[],
+                             int num_partitions,
+                             gdf_column *partitioned_output[],
                              int partition_offsets[],
                              gdf_hash_func hash);
-
 
 /* unary operators */
 
@@ -204,7 +201,6 @@ gdf_error gdf_hash(int num_cols,
                    gdf_hash_func hash,
                    uint32_t *initial_hash_values,
                    gdf_column *output);
-
 
 /* datetime extract*/
 
@@ -278,7 +274,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-
 /** 
  * @brief Sorts an array of gdf_column.
  * 
@@ -295,11 +290,11 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column const* const* input_columns,
-                       int8_t*      asc_desc,
-                       size_t       num_inputs,
-                       gdf_column*  output_indices,
-                       gdf_context * context);
+gdf_error gdf_order_by(gdf_column const *const *input_columns,
+                       int8_t *asc_desc,
+                       size_t num_inputs,
+                       gdf_column *output_indices,
+                       gdf_context *context);
 
 /**
  * @brief Finds the indices of the bins in which each value of the column
@@ -322,8 +317,8 @@ gdf_error gdf_order_by(gdf_column const* const* input_columns,
  * @returns GDF_SUCCESS upon successful completion, otherwise an
  *         appropriate error code.
  */
-gdf_error gdf_digitize(gdf_column* col,
-                       gdf_column* bins,   // same type as col
+gdf_error gdf_digitize(gdf_column *col,
+                       gdf_column *bins,  // same type as col
                        bool right,
                        cudf::size_type out_indices[]);
 
@@ -354,9 +349,9 @@ typedef struct DLManagedTensor DLManagedTensor_;
  * @param[in] tensor The input DLPack DLTensor
  * @return gdf_error GDF_SUCCESS if conversion is successful
  */
-gdf_error gdf_from_dlpack(gdf_column** columns,
+gdf_error gdf_from_dlpack(gdf_column **columns,
                           cudf::size_type *num_columns,
-                          DLManagedTensor_ const * tensor);
+                          DLManagedTensor_ const *tensor);
 
 /**
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
@@ -376,7 +371,5 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
  * @return gdf_error GDF_SUCCESS if conversion is successful
  */
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
-                        gdf_column const * const * columns,
+                        gdf_column const *const *columns,
                         cudf::size_type num_columns);
-
-

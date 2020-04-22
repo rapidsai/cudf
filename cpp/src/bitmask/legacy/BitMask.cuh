@@ -17,20 +17,20 @@
 #ifndef _BIT_MASK_H_
 #define _BIT_MASK_H_
 
-#include "bit_mask.cuh"
-#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
+#include <cudf/utilities/error.hpp>
+#include "bit_mask.cuh"
 
 using bit_mask_t = bit_mask::bit_mask_t;
-
 
 /* ---------------------------------------------------------------------------- *
  * @brief  Class for managing bit containers on the device
  * ---------------------------------------------------------------------------- */
 class BitMask {
-public:
-   __host__ __device__ BitMask(bit_mask_t *valid, int bitlength): valid_(valid), bitlength_(bitlength) {}
+ public:
+  __host__ __device__ BitMask(bit_mask_t *valid, int bitlength)
+    : valid_(valid), bitlength_(bitlength) {}
 
   /**
    * @brief Check to see if a record is Valid (aka not null)
@@ -54,7 +54,6 @@ public:
     bit_mask::set_bit_unsafe(valid_, record_idx);
   }
 
-
   /**
    * @brief Clear a bit (not thread-safe)
    *
@@ -75,7 +74,6 @@ public:
     bit_mask::set_bit_safe(valid_, record_idx);
   }
 
-
   /**
    * @brief Clear a bit in a thread-safe manner
    *
@@ -91,9 +89,7 @@ public:
    *
    * @return the number of elements
    */
-  __device__ cudf::size_type num_elements() const {
-    return bit_mask::num_elements(bitlength_);
-  }
+  __device__ cudf::size_type num_elements() const { return bit_mask::num_elements(bitlength_); }
 
   /**
    * @brief Get a reference to a specific element (device only)
@@ -134,22 +130,18 @@ public:
    *
    * @return pointer to valid bit container
    */
-  __host__ __device__ bit_mask_t *get_valid() const {
-    return valid_;
-  }
+  __host__ __device__ bit_mask_t *get_valid() const { return valid_; }
 
   /**
    * @brief Get length
    *
    * @return length of bit container in bits
    */
-  __host__ __device__ cudf::size_type length() const {
-    return bitlength_;
-  }
+  __host__ __device__ cudf::size_type length() const { return bitlength_; }
 
-private:
-  bit_mask_t      *valid_;
-  cudf::size_type    bitlength_;
+ private:
+  bit_mask_t *valid_;
+  cudf::size_type bitlength_;
 };
 
 #endif

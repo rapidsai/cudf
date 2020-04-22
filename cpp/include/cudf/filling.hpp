@@ -49,8 +49,10 @@ namespace experimental {
  * @param value The scalar value to fill
  * @return void
  *---------------------------------------------------------------------------**/
-void fill_in_place(mutable_column_view& destination, size_type begin,
-                   size_type end, scalar const& value);
+void fill_in_place(mutable_column_view& destination,
+                   size_type begin,
+                   size_type end,
+                   scalar const& value);
 
 /**---------------------------------------------------------------------------*
  * @brief Fills a range of elements in a column out-of-place with a scalar
@@ -74,10 +76,11 @@ void fill_in_place(mutable_column_view& destination, size_type begin,
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result output column
  *---------------------------------------------------------------------------**/
-std::unique_ptr<column> fill(
-    column_view const& input, size_type begin, size_type end,
-    scalar const& value,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> fill(column_view const& input,
+                             size_type begin,
+                             size_type end,
+                             scalar const& value,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Repeat rows of a Table.
@@ -110,9 +113,10 @@ std::unique_ptr<column> fill(
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(
-    table_view const& input_table, column_view const& count,
-    bool check_count = false,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& input_table,
+  column_view const& count,
+  bool check_count                    = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Repeat rows of a Table.
@@ -135,8 +139,9 @@ std::unique_ptr<table> repeat(
  * @return std::unique_ptr<table> The result table containing the repetitions
  *---------------------------------------------------------------------------**/
 std::unique_ptr<table> repeat(
-    table_view const& input_table, scalar const& count,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& input_table,
+  scalar const& count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step.
@@ -161,8 +166,11 @@ std::unique_ptr<table> repeat(
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar const& step,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  scalar const& step,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step of 1.
@@ -184,8 +192,10 @@ std::unique_ptr<column> sequence(size_type size, scalar const& init, scalar cons
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
-std::unique_ptr<column> sequence(size_type size, scalar const& init,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> sequence(
+  size_type size,
+  scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

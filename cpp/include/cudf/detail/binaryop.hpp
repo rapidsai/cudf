@@ -39,12 +39,13 @@ namespace detail {
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation( scalar const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+std::unique_ptr<column> binary_operation(
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
@@ -63,12 +64,13 @@ std::unique_ptr<column> binary_operation( scalar const& lhs,
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          scalar const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between two columns.
@@ -87,12 +89,13 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          column_view const& rhs,
-                                          binary_operator op,
-                                          data_type output_type,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Performs a binary operation between two columns using a
@@ -115,13 +118,14 @@ std::unique_ptr<column> binary_operation( column_view const& lhs,
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation( column_view const& lhs,
-                                          column_view const& rhs,
-                                          std::string const& ptx,
-                                          data_type output_type,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+std::unique_ptr<column> binary_operation(
+  column_view const& lhs,
+  column_view const& rhs,
+  std::string const& ptx,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

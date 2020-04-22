@@ -18,10 +18,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
 /**
  * @brief Returns a table of strings columns for each matching occurrence of the
@@ -37,9 +35,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> findall_re( strings_column_view const& strings,
-                                                 std::string const& pattern,
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> findall_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

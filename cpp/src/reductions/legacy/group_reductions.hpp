@@ -38,8 +38,8 @@ namespace detail {
 void group_std(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,
-               gdf_column * result,
-               size_type ddof = 1,
+               gdf_column* result,
+               size_type ddof      = 1,
                cudaStream_t stream = 0);
 
 /**
@@ -55,9 +55,9 @@ void group_std(gdf_column const& values,
 void group_var(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,
-               gdf_column * result,
-               size_type ddof = 1,
+               gdf_column* result,
+               size_type ddof      = 1,
                cudaStream_t stream = 0);
 
-} // namespace detail
-} // namespace cudf
+}  // namespace detail
+}  // namespace cudf

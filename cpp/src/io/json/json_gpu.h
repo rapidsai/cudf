@@ -25,7 +25,6 @@ namespace io {
 namespace json {
 namespace gpu {
 
-
 /**
  * @brief Convert a buffer of input data (text) into raw cuDF column data. 
  *
@@ -42,13 +41,16 @@ namespace gpu {
  *
  * @returns void
  **/
-void convert_json_to_columns(rmm::device_buffer const& input_data, 
-                          data_type *const dtypes, void *const *output_columns,
-                          cudf::size_type num_records, cudf::size_type num_columns,  
-                          const uint64_t *rec_starts,                        
-                          bitmask_type *const *valid_fields, cudf::size_type *num_valid_fields,
-                          ParseOptions const& opts,
-                          cudaStream_t stream = 0);
+void convert_json_to_columns(rmm::device_buffer const &input_data,
+                             data_type *const dtypes,
+                             void *const *output_columns,
+                             cudf::size_type num_records,
+                             cudf::size_type num_columns,
+                             const uint64_t *rec_starts,
+                             bitmask_type *const *valid_fields,
+                             cudf::size_type *num_valid_fields,
+                             ParseOptions const &opts,
+                             cudaStream_t stream = 0);
 
 /**
  * @brief Process a buffer of data and determine information about the column types within.  
@@ -65,10 +67,13 @@ void convert_json_to_columns(rmm::device_buffer const& input_data,
  * @returns void
  **/
 void detect_data_types(ColumnInfo *column_infos,
-                     const char *data, size_t data_size, 
-                     const ParseOptions &options, int num_columns,
-                     const uint64_t *rec_starts, cudf::size_type num_records,
-                     cudaStream_t stream = 0);
+                       const char *data,
+                       size_t data_size,
+                       const ParseOptions &options,
+                       int num_columns,
+                       const uint64_t *rec_starts,
+                       cudf::size_type num_records,
+                       cudaStream_t stream = 0);
 
 }  // namespace gpu
 }  // namespace json

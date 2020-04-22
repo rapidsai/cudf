@@ -25,12 +25,12 @@ namespace cudf {
  * two data points i and j
  * 
  */
-enum interpolation{
-  LINEAR =0,      ///< Linear interpolation between i and j
-  LOWER,          ///< Lower data point (i)
-  HIGHER,         ///< Higher data point (j)
-  MIDPOINT,       ///< (i + j)/2
-  NEAREST,        ///< i or j, whichever is nearest
+enum interpolation {
+  LINEAR = 0,  ///< Linear interpolation between i and j
+  LOWER,       ///< Lower data point (i)
+  HIGHER,      ///< Higher data point (j)
+  MIDPOINT,    ///< (i + j)/2
+  NEAREST,     ///< i or j, whichever is nearest
 };
 
 /**
@@ -47,11 +47,8 @@ enum interpolation{
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error quantile_exact(gdf_column* col_in,
-                         interpolation prec,
-                         double q,
-                         gdf_scalar*  result,
-                         gdf_context* ctxt);
+gdf_error quantile_exact(
+  gdf_column* col_in, interpolation prec, double q, gdf_scalar* result, gdf_context* ctxt);
 
 /**
  * @brief  Computes approximate quantile
@@ -66,10 +63,7 @@ gdf_error quantile_exact(gdf_column* col_in,
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error quantile_approx(gdf_column* col_in,
-                          double q,
-                          gdf_scalar*  result,
-                          gdf_context* ctxt);
+gdf_error quantile_approx(gdf_column* col_in, double q, gdf_scalar* result, gdf_context* ctxt);
 
 /**
  * @brief Find values at given quantiles within groups
@@ -111,12 +105,10 @@ gdf_error quantile_approx(gdf_column* col_in,
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group values at quantiles
  */
-std::pair<cudf::table, cudf::table>
-group_quantiles(cudf::table const& keys,
-                cudf::table const& values,
-                std::vector<double> const& quantiles,
-                interpolation interpolation = LINEAR,
-                bool include_nulls = false);
+std::pair<cudf::table, cudf::table> group_quantiles(cudf::table const& keys,
+                                                    cudf::table const& values,
+                                                    std::vector<double> const& quantiles,
+                                                    interpolation interpolation = LINEAR,
+                                                    bool include_nulls          = false);
 
-
-} // namespace cudf
+}  // namespace cudf

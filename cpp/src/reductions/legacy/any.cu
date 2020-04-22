@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for reduction `max`
+// The translation unit for reduction `max`
 
 #include "reduction_functions.cuh"
 #include "simple.cuh"
 
-gdf_scalar cudf::reduction::any(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
-{
-    using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::max>;
-    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
+gdf_scalar cudf::reduction::any(gdf_column const& col,
+                                gdf_dtype const output_dtype,
+                                cudaStream_t stream) {
+  using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::max>;
+  return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
 }
