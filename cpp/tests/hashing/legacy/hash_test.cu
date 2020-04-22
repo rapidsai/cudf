@@ -19,6 +19,7 @@
 #include <cudf/cudf.h>
 #include <thrust/device_vector.h>
 
+
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <gtest/gtest.h>
@@ -31,39 +32,41 @@
 struct gdf_hashing_test : public GdfTest {};
 
 TEST_F(gdf_hashing_test, allDtypesTest) {
+
   int nrows = 5;
   int ncols = 7;
 
   gdf_column **inputCol;
-  inputCol = (gdf_column **)malloc(sizeof(gdf_column *) * ncols);
-  for (int i = 0; i < ncols; i++) inputCol[i] = (gdf_column *)malloc(sizeof(gdf_column));
+  inputCol = (gdf_column**) malloc(sizeof(gdf_column*)* ncols);
+  for(int i=0;i<ncols;i++)
+  	 inputCol[i] = (gdf_column*) malloc(sizeof(gdf_column));
 
   gdf_column *outputCol;
-  outputCol = (gdf_column *)malloc(sizeof(gdf_column));
+  outputCol = (gdf_column*) malloc(sizeof(gdf_column));
 
   inputCol[0]->dtype = GDF_BOOL8;
-  inputCol[0]->size  = nrows;
+  inputCol[0]->size = nrows;
 
   inputCol[1]->dtype = GDF_INT8;
-  inputCol[1]->size  = nrows;
+  inputCol[1]->size = nrows;
 
   inputCol[2]->dtype = GDF_INT16;
-  inputCol[2]->size  = nrows;
+  inputCol[2]->size = nrows;
 
   inputCol[3]->dtype = GDF_INT32;
-  inputCol[3]->size  = nrows;
+  inputCol[3]->size = nrows;
 
   inputCol[4]->dtype = GDF_INT64;
-  inputCol[4]->size  = nrows;
+  inputCol[4]->size = nrows;
 
   inputCol[5]->dtype = GDF_FLOAT32;
-  inputCol[5]->size  = nrows;
+  inputCol[5]->size = nrows;
 
   inputCol[6]->dtype = GDF_FLOAT64;
-  inputCol[6]->size  = nrows;
+  inputCol[6]->size = nrows;
 
   outputCol->dtype = GDF_INT32;
-  outputCol->size  = nrows;
+  outputCol->size = nrows;
 
   // Input Data
   std::vector<int8_t> inputData0(nrows);
@@ -117,7 +120,7 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   inputData6[3] = 786.34;
   inputData6[4] = 343.01;
 
-  rmm::device_vector<cudf::valid_type> inputValidDev(1, 0xFF);
+  rmm::device_vector<cudf::valid_type> inputValidDev(1,0xFF);
 
   rmm::device_vector<int8_t> intputDataDev0(inputData0);
   rmm::device_vector<int8_t> intputDataDev1(inputData1);
@@ -128,49 +131,49 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   rmm::device_vector<double> intputDataDev6(inputData6);
 
   rmm::device_vector<int32_t> outDataDev(nrows);
-  rmm::device_vector<cudf::valid_type> outputValidDev(1, 0);
+  rmm::device_vector<cudf::valid_type> outputValidDev(1,0);
 
-  inputCol[0]->data  = thrust::raw_pointer_cast(intputDataDev0.data());
+  inputCol[0]->data = thrust::raw_pointer_cast(intputDataDev0.data());
   inputCol[0]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[1]->data  = thrust::raw_pointer_cast(intputDataDev1.data());
+  inputCol[1]->data = thrust::raw_pointer_cast(intputDataDev1.data());
   inputCol[1]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[2]->data  = thrust::raw_pointer_cast(intputDataDev2.data());
+  inputCol[2]->data = thrust::raw_pointer_cast(intputDataDev2.data());
   inputCol[2]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[3]->data  = thrust::raw_pointer_cast(intputDataDev3.data());
+  inputCol[3]->data = thrust::raw_pointer_cast(intputDataDev3.data());
   inputCol[3]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[4]->data  = thrust::raw_pointer_cast(intputDataDev4.data());
+  inputCol[4]->data = thrust::raw_pointer_cast(intputDataDev4.data());
   inputCol[4]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[5]->data  = thrust::raw_pointer_cast(intputDataDev5.data());
+  inputCol[5]->data = thrust::raw_pointer_cast(intputDataDev5.data());
   inputCol[5]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  inputCol[6]->data  = thrust::raw_pointer_cast(intputDataDev6.data());
+  inputCol[6]->data = thrust::raw_pointer_cast(intputDataDev6.data());
   inputCol[6]->valid = thrust::raw_pointer_cast(inputValidDev.data());
 
-  outputCol->data  = thrust::raw_pointer_cast(outDataDev.data());
+  outputCol->data = thrust::raw_pointer_cast(outDataDev.data());
   outputCol->valid = thrust::raw_pointer_cast(outputValidDev.data());
 
   std::vector<int32_t> resultsNoInitialHash(nrows);
   std::vector<int32_t> resultsInitialHash(nrows);
   {
-    gdf_hash_func hash = GDF_HASH_MURMUR3;
-    gdf_error gdfError = gdf_hash(ncols, inputCol, hash, nullptr, outputCol);
+  	 gdf_hash_func hash = GDF_HASH_MURMUR3;
+  	 gdf_error gdfError = gdf_hash(ncols, inputCol, hash, nullptr, outputCol);
 
-    EXPECT_TRUE(gdfError == GDF_SUCCESS);
-    EXPECT_FALSE(gdfError == GDF_CUDA_ERROR);
-    EXPECT_FALSE(gdfError == GDF_UNSUPPORTED_DTYPE);
-    EXPECT_FALSE(gdfError == GDF_COLUMN_SIZE_MISMATCH);
+  	 EXPECT_TRUE( gdfError == GDF_SUCCESS );
+  	 EXPECT_FALSE( gdfError == GDF_CUDA_ERROR );
+  	 EXPECT_FALSE( gdfError == GDF_UNSUPPORTED_DTYPE );
+  	 EXPECT_FALSE( gdfError == GDF_COLUMN_SIZE_MISMATCH );
 
-    thrust::copy(outDataDev.begin(), outDataDev.end(), resultsNoInitialHash.begin());
+  	 thrust::copy(outDataDev.begin(), outDataDev.end(), resultsNoInitialHash.begin());
 
-    // Ensure the same values hash consistently (including GDF_BOOL8 false)
-    EXPECT_TRUE(resultsNoInitialHash[0] == resultsNoInitialHash[nrows - 1]);
-    // And again to ensure different GDF_BOOL8 "truthy" values hash consistently
-    EXPECT_TRUE(resultsNoInitialHash[1] == resultsNoInitialHash[nrows - 2]);
+     // Ensure the same values hash consistently (including GDF_BOOL8 false)
+     EXPECT_TRUE( resultsNoInitialHash[0] == resultsNoInitialHash[nrows-1]);
+     // And again to ensure different GDF_BOOL8 "truthy" values hash consistently
+  	 EXPECT_TRUE( resultsNoInitialHash[1] == resultsNoInitialHash[nrows-2]);
   }
   std::vector<uint32_t> initialHashValues(ncols);
   initialHashValues[0] = 1;
@@ -179,25 +182,25 @@ TEST_F(gdf_hashing_test, allDtypesTest) {
   initialHashValues[3] = 100;
   initialHashValues[4] = 0;
   initialHashValues[5] = 1073741824;
-
+  
   rmm::device_vector<uint32_t> initialHashValuesDev(initialHashValues);
 
   {
-    gdf_hash_func hash             = GDF_HASH_MURMUR3;
+    gdf_hash_func hash = GDF_HASH_MURMUR3;
     uint32_t *initialHashValuesPtr = initialHashValuesDev.data().get();
     gdf_error gdfError = gdf_hash(ncols, inputCol, hash, initialHashValuesPtr, outputCol);
 
-    EXPECT_TRUE(gdfError == GDF_SUCCESS);
-    EXPECT_FALSE(gdfError == GDF_CUDA_ERROR);
-    EXPECT_FALSE(gdfError == GDF_UNSUPPORTED_DTYPE);
-    EXPECT_FALSE(gdfError == GDF_COLUMN_SIZE_MISMATCH);
+    EXPECT_TRUE( gdfError == GDF_SUCCESS );
+    EXPECT_FALSE( gdfError == GDF_CUDA_ERROR );
+    EXPECT_FALSE( gdfError == GDF_UNSUPPORTED_DTYPE );
+    EXPECT_FALSE( gdfError == GDF_COLUMN_SIZE_MISMATCH );
 
     thrust::copy(outDataDev.begin(), outDataDev.end(), resultsInitialHash.begin());
 
     // Ensure the same values hash consistently (including GDF_BOOL8 false)
-    EXPECT_TRUE(resultsInitialHash[0] == resultsInitialHash[nrows - 1]);
+    EXPECT_TRUE( resultsInitialHash[0] == resultsInitialHash[nrows-1]);
     // And again to ensure different GDF_BOOL8 "truthy" values hash consistently
-    EXPECT_TRUE(resultsInitialHash[1] == resultsInitialHash[nrows - 2]);
+    EXPECT_TRUE( resultsInitialHash[1] == resultsInitialHash[nrows-2]);
   }
   EXPECT_TRUE(resultsInitialHash[0] != resultsNoInitialHash[0]);
 }

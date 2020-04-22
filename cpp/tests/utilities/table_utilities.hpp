@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/table/table_view.hpp>
 
 namespace cudf {
 namespace test {
@@ -29,7 +29,7 @@ namespace test {
  * @param rhs The second table
  */
 void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
-
+  
 /**
  * @brief Verifies the equality of two tables.
  *

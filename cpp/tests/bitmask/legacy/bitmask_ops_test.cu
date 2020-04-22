@@ -40,9 +40,11 @@ TEST_F(ValidsTest, NoValids) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(0, count);
 }
@@ -52,17 +54,20 @@ TEST_F(ValidsTest, NullValids) {
   const cudf::size_type size{100};
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, size, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
   EXPECT_EQ(size, count);
 }
 
 TEST_F(ValidsTest, NullCount) {
   std::vector<int> data(0);
   std::vector<cudf::valid_type> valid{0x0};
-  auto input_gdf_col   = create_gdf_column(data, valid);
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 1, nullptr);
+  auto input_gdf_col = create_gdf_column(data, valid);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, 1, nullptr);
 
-  ASSERT_EQ(GDF_DATASET_EMPTY, error_code) << "Expected failure for null input.";
+  ASSERT_EQ(GDF_DATASET_EMPTY, error_code)
+      << "Expected failure for null input.";
 }
 
 TEST_F(ValidsTest, FirstRowValid) {
@@ -72,9 +77,11 @@ TEST_F(ValidsTest, FirstRowValid) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 1, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, 1, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(1, count);
 }
@@ -86,9 +93,11 @@ TEST_F(ValidsTest, EightRowsValid) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(8, count);
 }
@@ -100,9 +109,11 @@ TEST_F(ValidsTest, EveryOtherBit) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(4, count);
 }
@@ -114,9 +125,11 @@ TEST_F(ValidsTest, OtherEveryOtherBit) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, 8, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(4, count);
 }
@@ -130,9 +143,11 @@ TEST_F(ValidsTest, 15rows) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(2, count);
 }
@@ -146,9 +161,11 @@ TEST_F(ValidsTest, 5rows) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(1, count);
 }
@@ -162,9 +179,11 @@ TEST_F(ValidsTest, 10ValidRows) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(10, count);
 }
@@ -179,9 +198,11 @@ TEST_F(ValidsTest, MultipleOfEight) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(128, count);
 }
@@ -196,9 +217,11 @@ TEST_F(ValidsTest, NotMultipleOfEight) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(127, count);
 }
@@ -213,9 +236,11 @@ TEST_F(ValidsTest, TenThousandRows) {
   auto input_gdf_col = create_gdf_column(data, valid);
 
   int count{-1};
-  gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+  gdf_error error_code =
+      gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
 
-  ASSERT_EQ(GDF_SUCCESS, error_code) << "GDF Operation did not complete successfully.";
+  ASSERT_EQ(GDF_SUCCESS, error_code)
+      << "GDF Operation did not complete successfully.";
 
   EXPECT_EQ(10000, count);
 }
@@ -234,18 +259,21 @@ TEST_F(ValidsTest, DISABLED_PerformanceTest) {
   auto start = std::chrono::system_clock::now();
   CUDA_TRY(cudaProfilerStart());
   for (int i = 0; i < 1000; ++i)
-    gdf_error error_code = gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
+    gdf_error error_code =
+        gdf_count_nonzero_mask(input_gdf_col->valid, num_rows, &count);
   CUDA_TRY(cudaProfilerStop());
-  auto end                                      = std::chrono::system_clock::now();
+  auto end = std::chrono::system_clock::now();
   std::chrono::duration<double> elapsed_seconds = end - start;
-  std::cout << "Elapsed time (ms): " << elapsed_seconds.count() * 1000 << std::endl;
+  std::cout << "Elapsed time (ms): " << elapsed_seconds.count() * 1000
+            << std::endl;
 }
 
 struct RowBitmaskTest : public GdfTest {};
 
 template <typename Predicate>
 struct validity_checker {
-  validity_checker(Predicate _p, bit_mask::bit_mask_t* _bitmask) : p{_p}, bitmask{_bitmask} {}
+  validity_checker(Predicate _p, bit_mask::bit_mask_t* _bitmask)
+      : p{_p}, bitmask{_bitmask} {}
 
   __device__ inline bool operator()(cudf::size_type index) {
     return p(index) == bit_mask::is_valid(bitmask, index);
@@ -256,11 +284,15 @@ struct validity_checker {
 };
 
 struct all_valid {
-  __host__ __device__ inline bool operator()(cudf::size_type index) { return true; }
+  __host__ __device__ inline bool operator()(cudf::size_type index) {
+    return true;
+  }
 };
 
 struct all_null {
-  __host__ __device__ inline bool operator()(cudf::size_type index) { return false; }
+  __host__ __device__ inline bool operator()(cudf::size_type index) {
+    return false;
+  }
 };
 
 TEST_F(RowBitmaskTest, NoBitmasks) {
@@ -269,14 +301,15 @@ TEST_F(RowBitmaskTest, NoBitmasks) {
   cudf::test::column_wrapper<float> col1(size);
   cudf::test::column_wrapper<double> col2(size);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
-  cudf::table table{gdf_cols.data(), static_cast<cudf::size_type>(gdf_cols.size())};
+  cudf::table table{gdf_cols.data(),
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
-  bool result = thrust::all_of(thrust::device,
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(size),
-                               validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
+  bool result = thrust::all_of(
+      thrust::device, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size),
+      validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
 
   EXPECT_TRUE(result);
 }
@@ -287,35 +320,37 @@ TEST_F(RowBitmaskTest, BitmasksAllNull) {
   cudf::test::column_wrapper<float> col1(size, true);
   cudf::test::column_wrapper<double> col2(size, true);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
-  cudf::table table{gdf_cols.data(), static_cast<cudf::size_type>(gdf_cols.size())};
+  cudf::table table{gdf_cols.data(),
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
-  bool result = thrust::all_of(thrust::device,
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(size),
-                               validity_checker<all_null>(all_null{}, row_mask.data().get()));
+  bool result = thrust::all_of(
+      thrust::device, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size),
+      validity_checker<all_null>(all_null{}, row_mask.data().get()));
 
   EXPECT_TRUE(result);
 }
 
 TEST_F(RowBitmaskTest, BitmasksAllValid) {
   cudf::size_type const size{1000};
-  cudf::test::column_wrapper<int> col0(
-    size, [](cudf::size_type i) { return i; }, all_valid{});
-  cudf::test::column_wrapper<int> col1(
-    size, [](cudf::size_type i) { return i; }, all_valid{});
-  cudf::test::column_wrapper<int> col2(
-    size, [](cudf::size_type i) { return i; }, all_valid{});
+  cudf::test::column_wrapper<int> col0(size, [](cudf::size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col2(size, [](cudf::size_type i) { return i; },
+                                       all_valid{});
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
-  cudf::table table{gdf_cols.data(), static_cast<cudf::size_type>(gdf_cols.size())};
+  cudf::table table{gdf_cols.data(),
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
-  bool result = thrust::all_of(thrust::device,
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(size),
-                               validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
+  bool result = thrust::all_of(
+      thrust::device, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size),
+      validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
 
   EXPECT_TRUE(result);
 }
@@ -323,19 +358,20 @@ TEST_F(RowBitmaskTest, BitmasksAllValid) {
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid) {
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
-  cudf::test::column_wrapper<int> col1(
-    size, [](cudf::size_type i) { return i; }, all_valid{});
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
+                                       all_valid{});
   cudf::test::column_wrapper<int> col2(size);
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
-  cudf::table table{gdf_cols.data(), static_cast<cudf::size_type>(gdf_cols.size())};
+  cudf::table table{gdf_cols.data(),
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
-  bool result = thrust::all_of(thrust::device,
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(size),
-                               validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
+  bool result = thrust::all_of(
+      thrust::device, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size),
+      validity_checker<all_valid>(all_valid{}, row_mask.data().get()));
 
   EXPECT_TRUE(result);
 }
@@ -347,21 +383,21 @@ struct odds_are_null {
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskOddsNull) {
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
-  cudf::test::column_wrapper<int> col1(
-    size, [](cudf::size_type i) { return i; }, all_valid{});
-  cudf::test::column_wrapper<int> col2(
-    size, [](cudf::size_type i) { return i; }, [](cudf::size_type i) { return i % 2; });
+  cudf::test::column_wrapper<int> col1(size, [](cudf::size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col2(size, [](cudf::size_type i) { return i; },
+                                       [](cudf::size_type i) { return i % 2; });
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
-  cudf::table table{gdf_cols.data(), static_cast<cudf::size_type>(gdf_cols.size())};
+  cudf::table table{gdf_cols.data(),
+                    static_cast<cudf::size_type>(gdf_cols.size())};
 
   rmm::device_vector<bit_mask::bit_mask_t> row_mask = cudf::row_bitmask(table);
 
-  bool result =
-    thrust::all_of(thrust::device,
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(size),
-                   validity_checker<odds_are_null>(odds_are_null{}, row_mask.data().get()));
+  bool result = thrust::all_of(
+      thrust::device, thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(size),
+      validity_checker<odds_are_null>(odds_are_null{}, row_mask.data().get()));
 
   EXPECT_TRUE(result);
 }

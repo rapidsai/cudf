@@ -18,10 +18,10 @@
 #define SCALAR_WRAPPER_H
 
 #include <cudf/cudf.h>
-#include <rmm/rmm.h>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <rmm/rmm.h>
 #include <utilities/legacy/bit_util.cuh>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
@@ -54,6 +54,7 @@ struct scalar_wrapper {
 
   operator gdf_scalar&() { return the_scalar; };
 
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
    *
@@ -63,10 +64,10 @@ struct scalar_wrapper {
    * @param is_valid is the scalar valid
    *---------------------------------------------------------------------------**/
   scalar_wrapper(ScalarType value, bool is_valid = true) {
-    auto dataptr        = reinterpret_cast<ScalarType*>(&(the_scalar.data));
-    *dataptr            = value;
+    auto dataptr = reinterpret_cast<ScalarType*>(&(the_scalar.data));
+    *dataptr = value;
     the_scalar.is_valid = is_valid;
-    the_scalar.dtype    = gdf_dtype_of<ScalarType>();
+    the_scalar.dtype = gdf_dtype_of<ScalarType>();
   }
 
   /**---------------------------------------------------------------------------*
@@ -89,7 +90,9 @@ struct scalar_wrapper {
    *
    * @return ScalarType
    *---------------------------------------------------------------------------**/
-  ScalarType value() const { return *reinterpret_cast<ScalarType const*>(&(the_scalar.data)); }
+  ScalarType value() const {
+    return *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief returns the validity of the scalar
@@ -117,7 +120,8 @@ struct scalar_wrapper {
    * @return false The two scalars are not equal
    *---------------------------------------------------------------------------**/
   bool operator==(scalar_wrapper<ScalarType> const& rhs) const {
-    return (the_scalar.dtype == rhs.the_scalar.dtype and this->is_valid() == rhs.is_valid() and
+    return (the_scalar.dtype == rhs.the_scalar.dtype and
+            this->is_valid() == rhs.is_valid() and
             this->value() == rhs.value());
   }
 

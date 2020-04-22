@@ -15,8 +15,8 @@
  */
 
 #include <cudf/utilities/traits.hpp>
-#include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
+#include <tests/utilities/base_fixture.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -25,14 +25,16 @@
 #include <tuple>
 
 template <typename Tuple, typename F, std::size_t... Indices>
-void tuple_for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>) {
+void tuple_for_each_impl(Tuple&& tuple, F&& f,
+                         std::index_sequence<Indices...>) {
   (void)std::initializer_list<int>{
-    ((void)(f(std::get<Indices>(std::forward<Tuple>(tuple)))), int{})...};
+      ((void)(f(std::get<Indices>(std::forward<Tuple>(tuple)))), int{})...};
 }
 
 template <typename F, typename... Args>
 void tuple_for_each(const std::tuple<Args...>& tuple, F&& f) {
-  tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
+  tuple_for_each_impl(tuple, std::forward<F>(f),
+                      std::index_sequence_for<Args...>{});
 }
 
 class TraitsTest : public ::testing::Test {};
@@ -44,17 +46,17 @@ TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);
 
 TEST_F(TraitsTest, NumericDataTypesAreNumeric) {
   using namespace cudf::test;
-  EXPECT_TRUE(std::all_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
-    return cudf::is_numeric(cudf::data_type{type});
-  }));
+  EXPECT_TRUE(std::all_of(numeric_type_ids.begin(), numeric_type_ids.end(),
+                          [](cudf::type_id type) {
+                            return cudf::is_numeric(cudf::data_type{type});
+                          }));
 }
 
 TEST_F(TraitsTest, TimestampDataTypesAreNotNumeric) {
   using namespace cudf::test;
-  EXPECT_TRUE(
-    std::none_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_numeric(cudf::data_type{type});
-    }));
+  EXPECT_TRUE(std::none_of(
+      timestamp_type_ids.begin(), timestamp_type_ids.end(),
+      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
 }
 
 /*
@@ -69,18 +71,17 @@ TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
 
 TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps) {
   using namespace cudf::test;
-  EXPECT_TRUE(
-    std::none_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_timestamp(cudf::data_type{type});
-    }));
+  EXPECT_TRUE(std::none_of(numeric_type_ids.begin(), numeric_type_ids.end(),
+                          [](cudf::type_id type) {
+                            return cudf::is_timestamp(cudf::data_type{type});
+                          }));
 }
 
 TEST_F(TraitsTest, TimestampDataTypesAreTimestamps) {
   using namespace cudf::test;
-  EXPECT_TRUE(
-    std::all_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
-      return cudf::is_timestamp(cudf::data_type{type});
-    }));
+  EXPECT_TRUE(std::all_of(
+      timestamp_type_ids.begin(), timestamp_type_ids.end(),
+      [](cudf::type_id type) { return cudf::is_timestamp(cudf::data_type{type}); }));
 }
 
 TYPED_TEST(TypedTraitsTest, RelationallyComparable) {

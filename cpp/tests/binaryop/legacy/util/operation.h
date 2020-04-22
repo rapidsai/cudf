@@ -21,105 +21,127 @@
 #define GDF_TESTS_BINARY_OPERATION_UTIL_OPERATION_H
 
 #include <cmath>
-#include <cstdint>
 #include <type_traits>
+#include <cstdint>
 
 namespace cudf {
 namespace library {
 namespace operation {
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Add {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-    using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-    return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
-  }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Add {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Sub {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-    using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-    return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
-  }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Sub {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mul {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-    using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-    return (TypeOut)((TypeCommon)lhs * (TypeCommon)rhs);
-  }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mul {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs * (TypeCommon)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Div {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
-    using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
-    return (TypeOut)((TypeCommon)lhs / (TypeCommon)rhs);
-  }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Div {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+            return (TypeOut)((TypeCommon)lhs / (TypeCommon)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct TrueDiv {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (TypeOut)((double)lhs / (double)rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct TrueDiv {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)((double)lhs / (double)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct FloorDiv {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (TypeOut)floor((double)lhs / (double)rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct FloorDiv {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)floor((double)lhs / (double)rhs);
+        }
+    };
 
-template <typename TypeOut,
-          typename TypeLhs,
-          typename TypeRhs,
-          typename Common = typename std::common_type<TypeLhs, TypeRhs>::type>
-struct Mod;
+    template <typename TypeOut,
+              typename TypeLhs,
+              typename TypeRhs,
+              typename Common = typename std::common_type<TypeLhs, TypeRhs>::type>
+    struct Mod;
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mod<TypeOut, TypeLhs, TypeRhs, int64_t> {
-  TypeOut operator()(TypeLhs x, TypeRhs y) { return (TypeOut)((int64_t)x % (int64_t)y); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, int64_t> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (TypeOut)((int64_t)x % (int64_t)y);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mod<TypeOut, TypeLhs, TypeRhs, float> {
-  TypeOut operator()(TypeLhs x, TypeRhs y) { return (TypeOut)fmod((float)x, (float)y); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, float> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (TypeOut)fmod((float)x, (float)y);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Mod<TypeOut, TypeLhs, TypeRhs, double> {
-  TypeOut operator()(TypeLhs x, TypeRhs y) { return (TypeOut)fmod((double)x, (double)y); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Mod<TypeOut, TypeLhs, TypeRhs, double> {
+        TypeOut operator()(TypeLhs x, TypeRhs y) {
+            return (TypeOut)fmod((double)x, (double)y);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct Pow {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (TypeOut)pow((double)lhs, (double)rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct Pow {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (TypeOut)pow((double)lhs, (double)rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct BitwiseAnd {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (lhs & rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseAnd {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs & rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct BitwiseOr {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (lhs | rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseOr {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs | rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct BitwiseXor {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return (lhs ^ rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct BitwiseXor {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return (lhs ^ rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct LogicalAnd {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return TypeOut(lhs && rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogicalAnd {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs && rhs);
+        }
+    };
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct LogicalOr {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) { return TypeOut(lhs || rhs); }
-};
+    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+    struct LogicalOr {
+        TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+            return TypeOut(lhs || rhs);
+        }
+    };
 
 }  // namespace operation
 }  // namespace library

@@ -25,8 +25,8 @@
 #include <cuda_runtime.h>
 #include <cudf/utilities/error.hpp>
 
-#include <cudf/cudf.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <cudf/cudf.h>
 
 // Forward declarations
 class NVStrings;
@@ -50,12 +50,11 @@ inline auto random_values(size_t size) {
   std::vector<T> values(size);
 
   using T1 = cudf::detail::unwrapped_type_t<T>;
-  using uniform_distribution =
-    typename std::conditional_t<std::is_same<T1, bool>::value,
-                                std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point<T1>::value,
-                                                   std::uniform_real_distribution<T1>,
-                                                   std::uniform_int_distribution<T1>>>;
+  using uniform_distribution = typename std::conditional_t<
+      std::is_same<T1, bool>::value, std::bernoulli_distribution,
+      std::conditional_t<std::is_floating_point<T1>::value,
+                         std::uniform_real_distribution<T1>,
+                         std::uniform_int_distribution<T1>>>;
 
   static constexpr auto seed = 0xf00d;
   static std::mt19937 engine{seed};
@@ -69,14 +68,12 @@ inline auto random_values(size_t size) {
  * @brief Simple test internal helper class to transfer cudf column data
  * from device to host for test comparisons and debugging/development.
  *---------------------------------------------------------------------------**/
-template <typename T>
-class gdf_host_column {
- public:
+template <typename T> class gdf_host_column {
+public:
   gdf_host_column() = delete;
   explicit gdf_host_column(const gdf_column *col) {
     m_hostdata = std::vector<T>(col->size);
-    CUDA_TRY(
-      cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost));
+    CUDA_TRY(cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost));
   }
 
   auto hostdata() const -> const auto & { return m_hostdata; }
@@ -87,7 +84,7 @@ class gdf_host_column {
     }
   }
 
- private:
+private:
   std::vector<T> m_hostdata;
 };
 

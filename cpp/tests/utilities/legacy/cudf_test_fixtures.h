@@ -18,8 +18,8 @@
 #define CUDF_TEST_FIXTURES_H
 
 #include <cudf/cudf.h>
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <rmm/rmm.h>
 
@@ -28,10 +28,15 @@
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
-struct GdfTest : public ::testing::Test {
-  static void SetUpTestCase() { ASSERT_RMM_SUCCEEDED(rmmInitialize(nullptr)); }
+struct GdfTest : public ::testing::Test
+{
+    static void SetUpTestCase() {
+        ASSERT_RMM_SUCCEEDED( rmmInitialize(nullptr) );
+    }
 
-  static void TearDownTestCase() { ASSERT_RMM_SUCCEEDED(rmmFinalize()); }
+    static void TearDownTestCase() {
+        ASSERT_RMM_SUCCEEDED( rmmFinalize() );
+    }
 };
 
 /**
@@ -41,36 +46,41 @@ struct GdfTest : public ::testing::Test {
 * TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
 *   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 */
-struct TempDirTestEnvironment : public ::testing::Environment {
-  std::string tmpdir;
+struct TempDirTestEnvironment : public ::testing::Environment
+{
+    std::string tmpdir;
 
-  void SetUp() {
-    char tmp_format[] = "/tmp/gtest.XXXXXX";
-    tmpdir            = mkdtemp(tmp_format);
-    tmpdir += "/";
-  }
+    void SetUp() {
+        char tmp_format[]="/tmp/gtest.XXXXXX";
+        tmpdir = mkdtemp(tmp_format);
+        tmpdir += "/";
+    }
 
-  void TearDown() {
-    //TODO: should use std::filesystem instead, once C++17 support added
-    nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-  }
+    void TearDown() {
+        //TODO: should use std::filesystem instead, once C++17 support added
+        nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH|FTW_MOUNT|FTW_PHYS);
+    }
 
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb) {
-    return remove(pathname);
-  }
+    static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+    {
+        return remove(pathname);
+    }
 
-  /**
+    /**
      * @brief Get directory path to use for temporary files
      *
      * @return std::string The temporary directory path
      */
-  std::string get_temp_dir() { return tmpdir; }
+    std::string get_temp_dir() { return tmpdir; }
 
-  /**
+    /**
      * @brief Get a temporary filepath to use for the specified filename
      *
      * @return std::string The temporary filepath
      */
-  std::string get_temp_filepath(std::string filename) { return tmpdir + filename; }
+    std::string get_temp_filepath(std::string filename)
+    {
+        return tmpdir + filename;
+    }
 };
-#endif  // CUDF_TEST_FIXTURES_H
+#endif // CUDF_TEST_FIXTURES_H

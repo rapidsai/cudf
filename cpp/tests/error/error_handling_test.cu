@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
@@ -35,10 +35,13 @@ TEST(ExpectsTest, FalseCondition) {
   EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"), cudf::logic_error);
 }
 
-TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
+TEST(ExpectsTest, TrueCondition) {
+  EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true"));
+}
 
 TEST(ExpectsTest, TryCatch) {
-  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), "test reason");
+  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), 
+                            "test reason");
 }
 
 TEST(CudaTryTest, Error) {
@@ -52,7 +55,9 @@ TEST(CudaTryTest, TryCatch) {
                             "cudaErrorMemoryAllocation out of memory");
 }
 
-TEST(StreamCheck, success) { EXPECT_NO_THROW(CHECK_CUDA(0)); }
+TEST(StreamCheck, success) {
+  EXPECT_NO_THROW(CHECK_CUDA(0));
+}
 
 namespace {
 // Some silly kernel that will cause an error

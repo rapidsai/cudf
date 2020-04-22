@@ -17,22 +17,23 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>
-#include "../../../common/legacy/type_info.hpp"
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "../../legacy/single_column_groupby_test.cuh"
+#include "../../../common/legacy/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::operators op{cudf::groupby::operators::QUANTILE};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::QUANTILE};
 
 template <typename KV>
 struct SingleColumnQuantile : public GdfTest {
-  using KeyType   = typename KV::Key;
+  using KeyType = typename KV::Key;
   using ValueType = typename KV::Value;
 };
 
@@ -41,51 +42,48 @@ using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename K, typename V>
 struct KV {
-  using Key   = K;
+  using Key = K;
   using Value = V;
 };
 
-using TestingTypes = ::testing::Types<KV<int32_t, int32_t>>;
+using TestingTypes =
+    ::testing::Types< KV<int32_t, int32_t> >;
 
-using quantile_args = cudf::groupby::sort::quantile_args;
+using quantile_args =  cudf::groupby::sort::quantile_args;
 
 // TODO: tests for cudf::bool8
 TYPED_TEST_CASE(SingleColumnQuantile, TestingTypes);
-
+ 
 TYPED_TEST(SingleColumnQuantile, TestQuantile0) {
-  using Key                     = typename SingleColumnQuantile<TypeParam>::KeyType;
-  using Value                   = typename SingleColumnQuantile<TypeParam>::ValueType;
-  using ResultValue             = cudf::test::expected_result_t<Value, op>;
-  using T                       = Key;
-  using R                       = ResultValue;
+  using Key = typename SingleColumnQuantile<TypeParam>::KeyType;
+  using Value = typename SingleColumnQuantile<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using R = ResultValue;
   std::vector<double> quantiles = {0.5};
-  auto method                   = cudf::interpolation::LINEAR;
-  cudf::groupby::sort::operation operation_with_args{
-    op, std::make_unique<quantile_args>(quantiles, method)};
-
-  cudf::test::single_column_groupby_test<op>(
-    std::move(operation_with_args),
-    column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
-    column_wrapper<Value>(8, [](auto index) { return Value(index); }),
-    column_wrapper<Key>{T(1), T(2)},
-    column_wrapper<ResultValue>{R(1), R(5)});
+  auto method = cudf::interpolation::LINEAR;
+  cudf::groupby::sort::operation operation_with_args {op,  std::make_unique<quantile_args>(quantiles, method)}; 
+      
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
+      column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+      column_wrapper<Value>(8, [](auto index) { return Value(index); }),
+      column_wrapper<Key>{T(1), T(2)},
+      column_wrapper<ResultValue>{R(1), R(5)});
 }
 
 TYPED_TEST(SingleColumnQuantile, TestQuantile1) {
-  using Key                     = typename SingleColumnQuantile<TypeParam>::KeyType;
-  using Value                   = typename SingleColumnQuantile<TypeParam>::ValueType;
-  using ResultValue             = cudf::test::expected_result_t<Value, op>;
-  using T                       = Key;
-  using R                       = ResultValue;
-  std::vector<double> quantiles = {0.25, 0.75};
-  auto method                   = cudf::interpolation::LINEAR;
-  cudf::groupby::sort::operation operation_with_args{
-    op, std::make_unique<quantile_args>(quantiles, method)};
-
-  cudf::test::single_column_groupby_test<op>(
-    std::move(operation_with_args),
-    column_wrapper<Key>{T(1), T(2), T(3), T(1), T(2), T(2), T(1), T(3), T(3), T(2)},
-    column_wrapper<Value>(10, [](auto index) { return Value(index); }),
-    column_wrapper<Key>{T(1), T(2), T{3}},
-    column_wrapper<ResultValue>{R(1.5), R(4.5), R(3.25), R(6), R(4.5), R(7.5)});
+  using Key = typename SingleColumnQuantile<TypeParam>::KeyType;
+  using Value = typename SingleColumnQuantile<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using R = ResultValue;
+  std::vector<double> quantiles ={0.25, 0.75};
+  auto method = cudf::interpolation::LINEAR;
+  cudf::groupby::sort::operation operation_with_args {op,  std::make_unique<quantile_args>(quantiles, method)}; 
+      
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
+      column_wrapper<Key>{T(1), T(2), T(3), T(1), T(2), T(2), T(1), T(3), T(3), T(2)},
+      column_wrapper<Value>(10, [](auto index) { return Value(index); }),
+      column_wrapper<Key>{T(1), T(2), T{3}},
+      column_wrapper<ResultValue>{R(1.5), R(4.5), R( 3.25), R( 6), R(4.5), R(7.5)});
 }

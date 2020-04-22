@@ -17,8 +17,8 @@
 #include <cudf/legacy/replace.hpp>
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
@@ -31,56 +31,68 @@
 #include <iostream>
 #include <vector>
 
-struct ReplaceErrorTest : public GdfTest {};
+struct ReplaceErrorTest : public GdfTest{};
+
 
 // Error: old-values and new-values size mismatch
-TEST_F(ReplaceErrorTest, SizeMismatch) {
-  cudf::test::column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}};
-  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
+TEST_F(ReplaceErrorTest, SizeMismatch)
+{
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column),
-    "values_to_replace and replacement_values size mismatch.");
+  cudf::test::column_wrapper<int32_t> gdf_input_column{ {7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::column_wrapper<int32_t> gdf_values_to_replace_column{ {10, 11, 12, 13}};
+  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{ {15, 16, 17}};
+
+  CUDF_EXPECT_THROW_MESSAGE(cudf::find_and_replace_all(gdf_input_column,
+                                                           gdf_values_to_replace_column,
+                                                           gdf_replacement_values_column),
+                            "values_to_replace and replacement_values size mismatch.");
 }
 
 // Error: column type mismatch
-TEST_F(ReplaceErrorTest, TypeMismatch) {
-  cudf::test::column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::column_wrapper<float> gdf_values_to_replace_column{{10, 11, 12}};
-  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
+TEST_F(ReplaceErrorTest, TypeMismatch)
+{
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column),
-    "Columns type mismatch.");
+  cudf::test::column_wrapper<int32_t> gdf_input_column{ {7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::column_wrapper<float> gdf_values_to_replace_column{ {10, 11, 12}};
+  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{ {15, 16, 17}};
+
+  CUDF_EXPECT_THROW_MESSAGE(cudf::find_and_replace_all(gdf_input_column,
+                                                           gdf_values_to_replace_column,
+                                                           gdf_replacement_values_column),
+                            "Columns type mismatch.");
 }
 
 // Error: nulls in old-values
-TEST_F(ReplaceErrorTest, NullInOldValues) {
+TEST_F(ReplaceErrorTest, NullInOldValues)
+{
   std::vector<cudf::valid_type> old_valid(gdf_valid_allocation_size(4), 0xA);
-  cudf::test::column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
-  cudf::test::column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}, old_valid};
-  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17, 18}};
+  cudf::test::column_wrapper<int32_t> gdf_input_column{ {7, 5, 6, 3, 1, 2, 8, 4}};
+  cudf::test::column_wrapper<int32_t> gdf_values_to_replace_column{ {10, 11, 12, 13}, old_valid};
+  cudf::test::column_wrapper<int32_t> gdf_replacement_values_column{ {15, 16, 17, 18}};
 
-  CUDF_EXPECT_THROW_MESSAGE(
-    cudf::find_and_replace_all(
-      gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column),
-    "Nulls are in values_to_replace column.");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::find_and_replace_all(gdf_input_column,
+                                                           gdf_values_to_replace_column,
+                                                           gdf_replacement_values_column),
+                            "Nulls are in values_to_replace column.");
 }
+
 
 // This is the main test feature
 template <class T>
-struct ReplaceTest : public GdfTest {
-  ReplaceTest() {
+struct ReplaceTest : public GdfTest
+{
+
+  ReplaceTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);
   }
 
-  ~ReplaceTest() {}
+  ~ReplaceTest()
+  {
+  }
 };
 
 /* --------------------------------------------------------------------------*
@@ -97,102 +109,120 @@ struct ReplaceTest : public GdfTest {
    * @param print Optionally print the set of columns for debug
    * -------------------------------------------------------------------------*/
 template <typename T>
-void test_replace(
-  std::vector<T> const &input_column,
-  std::vector<T> const &values_to_replace_column,
-  std::vector<T> const &replacement_values_column,
-  std::vector<cudf::valid_type> const &input_column_valid       = std::vector<cudf::valid_type>{},
-  std::vector<cudf::valid_type> const &replacement_values_valid = std::vector<cudf::valid_type>{},
-  bool print                                                    = false) {
-  cudf::test::column_wrapper<T> gdf_input_column{input_column, input_column_valid};
-  cudf::test::column_wrapper<T> gdf_values_to_replace_column{values_to_replace_column};
-  cudf::test::column_wrapper<T> gdf_replacement_values_column{replacement_values_column,
-                                                              replacement_values_valid};
+void test_replace(std::vector<T> const &input_column,
+                  std::vector<T> const &values_to_replace_column,
+                  std::vector<T> const &replacement_values_column,
+                  std::vector<cudf::valid_type> const& input_column_valid =
+                     std::vector<cudf::valid_type>{},
+                  std::vector<cudf::valid_type> const& replacement_values_valid =
+                     std::vector<cudf::valid_type>{},
+                  bool print = false) {
 
-  if (print) {
-    std::cout << "replace column: \n";
-    gdf_input_column.print();
-    std::cout << "values_to_replace column: \n";
-    gdf_values_to_replace_column.print();
-    std::cout << "replacement_values column: \n";
-    gdf_replacement_values_column.print();
-    std::cout << "\n";
-  }
-  /* getting the actual result*/
-  gdf_column actual_result;
-  EXPECT_NO_THROW(actual_result = cudf::find_and_replace_all(
-                    gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column));
-  if (print) {
-    std::cout << "printing result:\n";
-    print_gdf_column(&actual_result);
-  }
-  /* computing the expected result */
-  std::vector<T> reference_result(input_column);
-  std::vector<bool> isReplaced(reference_result.size(), false);
-  std::vector<cudf::valid_type> expected_valid(input_column_valid);
+    cudf::test::column_wrapper<T> gdf_input_column{ input_column, input_column_valid};
+    cudf::test::column_wrapper<T> gdf_values_to_replace_column{ values_to_replace_column};
+    cudf::test::column_wrapper<T> gdf_replacement_values_column{replacement_values_column,
+                                                                replacement_values_valid};
 
-  if (replacement_values_valid.size() > 0 && 0 == input_column_valid.size()) {
-    expected_valid.assign(gdf_valid_allocation_size(input_column.size()), 0xFF);
-  }
+    if(print)
+    {
+      std::cout << "replace column: \n";
+      gdf_input_column.print();
+      std::cout << "values_to_replace column: \n";
+      gdf_values_to_replace_column.print();
+      std::cout << "replacement_values column: \n";
+      gdf_replacement_values_column.print();
+      std::cout << "\n";
+    }
+    /* getting the actual result*/
+    gdf_column actual_result;
+    EXPECT_NO_THROW( actual_result = cudf::find_and_replace_all(gdf_input_column,
+                                                                gdf_values_to_replace_column,
+                                                                gdf_replacement_values_column));
+    if(print)
+    {
+      std::cout<<"printing result:\n";
+      print_gdf_column(&actual_result);
+    }
+    /* computing the expected result */
+    std::vector<T> reference_result(input_column);
+    std::vector<bool> isReplaced(reference_result.size(), false);
+    std::vector<cudf::valid_type> expected_valid(input_column_valid);
 
-  bit_mask::bit_mask_t *typed_expected_valid =
-    reinterpret_cast<bit_mask::bit_mask_t *>(expected_valid.data());
-  const bit_mask::bit_mask_t *typed_new_valid =
-    reinterpret_cast<const bit_mask::bit_mask_t *>(replacement_values_valid.data());
+    if (replacement_values_valid.size() > 0 && 0==input_column_valid.size()){
+        expected_valid.assign(gdf_valid_allocation_size(input_column.size()),
+                                                   0xFF);
+    }
 
-  const bool input_has_nulls       = (typed_expected_valid != nullptr);
-  const bool replacement_has_nulls = (typed_new_valid != nullptr);
+    bit_mask::bit_mask_t *typed_expected_valid =
+                    reinterpret_cast<bit_mask::bit_mask_t*>(expected_valid.data());
+    const bit_mask::bit_mask_t *typed_new_valid =
+                    reinterpret_cast<const bit_mask::bit_mask_t*>(replacement_values_valid.data());
 
-  for (size_t i = 0; i < values_to_replace_column.size(); i++) {
-    size_t k  = 0;
-    auto pred = [=, &k, &typed_expected_valid, &isReplaced](T element) {
-      bool toBeReplaced = false;
-      if (!isReplaced[k]) {
-        if (!input_has_nulls || bit_mask::is_valid(typed_expected_valid, k)) {
-          if (element == values_to_replace_column[i]) {
-            toBeReplaced  = true;
-            isReplaced[k] = toBeReplaced;
-            if (replacement_has_nulls && !bit_mask::is_valid(typed_new_valid, i)) {
-              if (print) std::cout << "clearing bit at: " << k << "\n";
+    const bool input_has_nulls = (typed_expected_valid != nullptr);
+    const bool replacement_has_nulls = (typed_new_valid != nullptr);
+
+    for(size_t i = 0; i < values_to_replace_column.size(); i++)
+    {
+      size_t k = 0;
+      auto pred = [=, &k, &typed_expected_valid, &isReplaced](T element) {
+        bool toBeReplaced = false;
+        if(!isReplaced[k])
+        {
+        if(!input_has_nulls || bit_mask::is_valid(typed_expected_valid, k)){
+          if(element == values_to_replace_column[i]) {
+          toBeReplaced = true;
+          isReplaced[k] = toBeReplaced;
+            if(replacement_has_nulls && !bit_mask::is_valid(typed_new_valid, i)){
+              if(print)std::cout << "clearing bit at: "<<k<<"\n";
               bit_mask::clear_bit_unsafe(typed_expected_valid, (int)k);
             }
           }
+         }
         }
-      }
 
-      ++k;
-      return toBeReplaced;
-    };
-    std::replace_if(
-      reference_result.begin(), reference_result.end(), pred, replacement_values_column[i]);
-  }
+        ++k;
+        return toBeReplaced;
+      };
+      std::replace_if(reference_result.begin(), reference_result.end(),
+                      pred, replacement_values_column[i]);
+    }
 
-  cudf::test::column_wrapper<T> expected{reference_result, expected_valid};
+    cudf::test::column_wrapper<T> expected{reference_result, expected_valid};
 
-  if (print) {
-    std::cout << "Expected result: \n";
-    expected.print();
-    std::cout << "\n";
-  }
+    if(print)
+    {
+      std::cout << "Expected result: \n";
+      expected.print();
+      std::cout << "\n";
+    }
 
-  EXPECT_TRUE(expected == actual_result);
-  gdf_column_free(&actual_result);
+    EXPECT_TRUE(expected == actual_result);
+    gdf_column_free(&actual_result);
 }
 
-using Types = testing::Types<int8_t, int16_t, int, int64_t, float, double>;
+
+using Types = testing::Types<int8_t,
+                             int16_t,
+                             int, 
+                             int64_t,
+                             float,
+                             double>;
 
 TYPED_TEST_CASE(ReplaceTest, Types);
 
 // This test is used for debugging purposes and is disabled by default.
 // The input sizes are small and has a large amount of debug printing enabled.
-TYPED_TEST(ReplaceTest, DISABLED_DebugTest) {
+TYPED_TEST(ReplaceTest, DISABLED_DebugTest)
+{
+
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<cudf::valid_type> input_column_valid(gdf_valid_allocation_size(input_column.size()),
-                                                   0xFE);
+                                                                             0xFE);
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
   std::vector<cudf::valid_type> replacement_values_valid(
-    gdf_valid_allocation_size(replacement_values_column.size()), 0xA);
+                                    gdf_valid_allocation_size(replacement_values_column.size()),
+                                    0xA);
 
   test_replace<TypeParam>(input_column,
                           values_to_replace_column,
@@ -202,70 +232,96 @@ TYPED_TEST(ReplaceTest, DISABLED_DebugTest) {
                           true);
 }
 
+
 // Simple test, replacing all even gdf_replacement_values_column
-TYPED_TEST(ReplaceTest, ReplaceEvenPosition) {
+TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
+{
+
   std::vector<TypeParam> input_column{1, 2, 3, 4, 5, 6, 7, 8};
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
 
-  test_replace<TypeParam>(input_column, values_to_replace_column, replacement_values_column);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column);
 }
 
 // Similar test as ReplaceEvenPosition, but with unordered data
-TYPED_TEST(ReplaceTest, Unordered) {
+TYPED_TEST(ReplaceTest, Unordered)
+{
+
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
 
-  test_replace<TypeParam>(input_column, values_to_replace_column, replacement_values_column);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column);
 }
 
 // Testing with Nothing To Replace
-TYPED_TEST(ReplaceTest, NothingToReplace) {
+TYPED_TEST(ReplaceTest, NothingToReplace)
+{
+
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<TypeParam> values_to_replace_column{10, 11, 12};
   std::vector<TypeParam> replacement_values_column{15, 16, 17};
 
-  test_replace<TypeParam>(input_column, values_to_replace_column, replacement_values_column);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column);
 }
 
 // Testing with empty Data
-TYPED_TEST(ReplaceTest, EmptyData) {
-  std::vector<TypeParam> input_column{{}};
+TYPED_TEST(ReplaceTest, EmptyData)
+{
+
+  std::vector<TypeParam> input_column{ {}};
   std::vector<TypeParam> values_to_replace_column{10, 11, 12};
   std::vector<TypeParam> replacement_values_column{15, 16, 17};
 
-  test_replace<TypeParam>(input_column, values_to_replace_column, replacement_values_column);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column);
 }
 
 // Testing with empty Replace
-TYPED_TEST(ReplaceTest, EmptyReplace) {
+TYPED_TEST(ReplaceTest, EmptyReplace)
+{
+
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<TypeParam> values_to_replace_column{};
   std::vector<TypeParam> replacement_values_column{};
 
-  test_replace<TypeParam>(input_column, values_to_replace_column, replacement_values_column);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column);
 }
 
 // Testing with input column containing nulls
-TYPED_TEST(ReplaceTest, NullsInData) {
+TYPED_TEST(ReplaceTest, NullsInData)
+{
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<cudf::valid_type> input_column_valid(gdf_valid_allocation_size(input_column.size()),
-                                                   0xFE);
+                                                                             0xFE);
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
 
-  test_replace<TypeParam>(
-    input_column, values_to_replace_column, replacement_values_column, input_column_valid);
+  test_replace<TypeParam>(input_column,
+                          values_to_replace_column,
+                          replacement_values_column,
+                          input_column_valid);
 }
 
 // Testing with replacement column containing nulls
-TYPED_TEST(ReplaceTest, NullsInNewValues) {
+TYPED_TEST(ReplaceTest, NullsInNewValues)
+{
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
   std::vector<cudf::valid_type> replacement_values_valid(
-    gdf_valid_allocation_size(replacement_values_column.size()), 0xA);
+                                    gdf_valid_allocation_size(replacement_values_column.size()),
+                                    0xA);
 
   test_replace<TypeParam>(input_column,
                           values_to_replace_column,
@@ -274,15 +330,18 @@ TYPED_TEST(ReplaceTest, NullsInNewValues) {
                           replacement_values_valid);
 }
 
+
 // Testing with both replacement and input column containing nulls
-TYPED_TEST(ReplaceTest, NullsInBoth) {
+TYPED_TEST(ReplaceTest, NullsInBoth)
+{
   std::vector<TypeParam> input_column{7, 5, 6, 3, 1, 2, 8, 4};
   std::vector<cudf::valid_type> input_column_valid(gdf_valid_allocation_size(input_column.size()),
-                                                   0xFE);
+                                                                             0xFE);
   std::vector<TypeParam> values_to_replace_column{2, 6, 4, 8};
   std::vector<TypeParam> replacement_values_column{0, 4, 2, 6};
   std::vector<cudf::valid_type> replacement_values_valid(
-    gdf_valid_allocation_size(replacement_values_column.size()), 0xA);
+                                    gdf_valid_allocation_size(replacement_values_column.size()),
+                                    0xA);
 
   test_replace<TypeParam>(input_column,
                           values_to_replace_column,
@@ -292,12 +351,15 @@ TYPED_TEST(ReplaceTest, NullsInBoth) {
 }
 
 // Test with much larger data sets
-TYPED_TEST(ReplaceTest, LargeScaleReplaceTest) {
+TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
+{
   const size_t DATA_SIZE    = 1000000;
   const size_t REPLACE_SIZE = 10000;
 
   std::vector<TypeParam> input_column(DATA_SIZE);
-  for (size_t i = 0; i < DATA_SIZE; i++) { input_column[i] = std::rand() % (REPLACE_SIZE); }
+  for (size_t i = 0; i < DATA_SIZE; i++) {
+      input_column[i] = std::rand() % (REPLACE_SIZE);
+  }
 
   std::vector<TypeParam> values_to_replace_column(REPLACE_SIZE);
   std::vector<TypeParam> replacement_values_column(REPLACE_SIZE);
@@ -311,15 +373,16 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest) {
       }
     }
   }
-  cudf::test::column_wrapper<TypeParam> gdf_input_column{input_column};
-  cudf::test::column_wrapper<TypeParam> gdf_values_to_replace_column{values_to_replace_column};
+  cudf::test::column_wrapper<TypeParam> gdf_input_column{ input_column};
+  cudf::test::column_wrapper<TypeParam> gdf_values_to_replace_column{ values_to_replace_column};
   cudf::test::column_wrapper<TypeParam> gdf_replacement_values_column{replacement_values_column};
 
   gdf_column actual_result;
-  EXPECT_NO_THROW(actual_result = cudf::find_and_replace_all(
-                    gdf_input_column, gdf_values_to_replace_column, gdf_replacement_values_column));
+  EXPECT_NO_THROW( actual_result = cudf::find_and_replace_all(gdf_input_column,
+                                                                   gdf_values_to_replace_column,
+                                                                   gdf_replacement_values_column));
 
-  std::for_each(input_column.begin(), input_column.end(), [](TypeParam &d) { d += 1; });
-  cudf::test::column_wrapper<TypeParam> expected{input_column};
+  std::for_each(input_column.begin(), input_column.end(), [](TypeParam& d) { d+=1;});
+  cudf::test::column_wrapper<TypeParam> expected{input_column };
   EXPECT_TRUE(expected == actual_result);
 }
