@@ -32,7 +32,8 @@ DEFAULT_DIRS = ["cpp/benchmarks",
                 "cpp/include/nvtext",
                 "cpp/include/nvstrings",
                 "cpp/src",
-                "cpp/tests"]
+                # "cpp/tests" TODO in follow up
+                ]
 
 
 def parse_args():
