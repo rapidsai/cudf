@@ -185,6 +185,7 @@
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 
 
 # cuDF 0.13.0 (31 Mar 2020)
