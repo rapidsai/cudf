@@ -305,11 +305,11 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
                                size_type const* d_indexes,
                                size_type* d_counts) const
   {
-    size_type str_idx = d_indexes[idx]; // 1-based string index created by upper_bound()
+    size_type str_idx = d_indexes[idx];  // 1-based string index created by upper_bound()
     if ((idx > 0) && d_indexes[idx - 1] == str_idx)
       return;  // first delimiter found handles all of them for this string
     auto const delim_length    = d_delimiter.size_bytes();
-    string_view const d_str    = get_string(str_idx - 1); // -1 for 0-based index
+    string_view const d_str    = get_string(str_idx - 1);  // -1 for 0-based index
     const char* const base_ptr = get_base_ptr();
     size_type delim_count      = 0;
     size_type last_pos         = d_positions[idx] - delim_length;
@@ -354,10 +354,10 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
  * according to their position in each string. The first token from each string goes
  * into the first output column, the 2nd token from each string goes into the 2nd
  * output column, etc.
- * 
+ *
  * Output should be comparable to Pandas `split()` with `expand=True` but the
  * rows/columns are transposed.
- * 
+ *
  * ```
  *   import pandas as pd
  *   pd_series = pd.Series(['', None, 'a_b', '_a_b_', '__aa__bb__', '_a__bbb___c', '_aa_b__ccc__'])
@@ -700,7 +700,7 @@ struct whitespace_split_tokenizer_fn : base_whitespace_split_tokenizer {
         string_index_pair{d_str.data() + token.first, (token.second - token.first)};
     }
     if (token_count == max_tokens)
-      d_tokens[--token_idx] =
+      d_tokens[token_idx - 1] =
         string_index_pair{d_str.data() + token.first, (d_str.size_bytes() - token.first)};
   }
 
@@ -805,7 +805,7 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
  *      4    aa    bb   None
  *      5     a   bbb      c
  *      6    aa     b  ccc
- * 
+ *
  * @tparam Tokenizer provides unique functions for split/rsplit.
  * @param strings_count The number of strings in the column
  * @param tokenizer Tokenizer for counting and producing tokens
