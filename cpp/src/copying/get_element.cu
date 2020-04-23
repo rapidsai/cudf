@@ -30,8 +30,7 @@ namespace {
 
 struct get_element_functor {
   template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>>
-  operator()(
+  std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
@@ -54,8 +53,7 @@ struct get_element_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<scalar>>
-  operator()(
+  std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<scalar>> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
@@ -79,8 +77,7 @@ struct get_element_functor {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<scalar>>
-  operator()(
+  std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<scalar>> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,

@@ -68,9 +68,9 @@ std::unique_ptr<scalar> make_timestamp_scalar(
  *           allocation of the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_fixed_width_scalar(
-    data_type type,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  data_type type,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Construct STRING type scalar given a `std::string`.
