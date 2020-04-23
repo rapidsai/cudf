@@ -65,11 +65,11 @@ TEST_F(StringsSplitTest, Split)
 TEST_F(StringsSplitTest, SplitWithMax)
 {
   cudf::test::strings_column_wrapper strings(
-    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::"});
+    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::", "x::::y"});
   cudf::strings_column_view strings_view(strings);
 
-  cudf::test::strings_column_wrapper expected1({"Héllo", "are", "tést", ":last", ""});
-  cudf::test::strings_column_wrapper expected2({"thesé::world", "some", "String:", "one", ":"});
+  cudf::test::strings_column_wrapper expected1({"Héllo", "are", "tést", ":last", "", "x"});
+  cudf::test::strings_column_wrapper expected2({"thesé::world", "some", "String:", "one", ":", "::y"});
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -170,11 +170,11 @@ TEST_F(StringsSplitTest, RSplit)
 TEST_F(StringsSplitTest, RSplitWithMax)
 {
   cudf::test::strings_column_wrapper strings(
-    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::"});
+    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::", "x::::y"});
   cudf::strings_column_view strings_view(strings);
 
-  cudf::test::strings_column_wrapper expected1({"Héllo::thesé", "are", "tést", ":last", ":"});
-  cudf::test::strings_column_wrapper expected2({"world", "some", "String:", "one", ""});
+  cudf::test::strings_column_wrapper expected1({"Héllo::thesé", "are", "tést", ":last", ":", "x::"});
+  cudf::test::strings_column_wrapper expected2({"world", "some", "String:", "one", "", "y"});
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
