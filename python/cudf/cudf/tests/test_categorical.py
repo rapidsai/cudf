@@ -472,6 +472,7 @@ def test_categorical_dataframe_slice_copy():
     "data",
     [
         pd.Series([1, 2, 3, 89]),
+        pd.Series([1, 2, 3, 89, 3, 1, 89], dtype="category"),
         pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
         pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
         pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
@@ -540,3 +541,33 @@ def test_categorical_set_categories_categoricals(data, new_categories):
             new_categories=gd.Series(new_categories, dtype="category")
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        ["a", "1", "2", "1", "a"],
+        pd.Series(["a", "1", "22", "1", "aa"]),
+        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
+        [None, 1, None, 2, None],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "category",
+        pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
+        pd.CategoricalDtype(categories=[2, 4, 10, 100]),
+        pd.CategoricalDtype(categories=["aa", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["22", "b", "c"]),
+        pd.CategoricalDtype(categories=[]),
+    ],
+)
+def test_categorical_creation(data, dtype):
+    expected = pd.Series(data, dtype=dtype)
+    got = gd.Series(data, dtype=dtype)
+    assert_eq(expected, got)
