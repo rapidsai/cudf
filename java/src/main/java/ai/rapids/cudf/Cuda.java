@@ -136,8 +136,14 @@ public class Cuda {
       boolean neededCleanup = false;
       long origAddress = event;
       if (event != 0) {
-        destroyEvent(event);
-        event = 0;
+        try {
+          destroyEvent(event);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          event = 0;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -292,11 +298,13 @@ public class Cuda {
 
   /**
    * Set the id of the current device.
-   * Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
+   * <p>Note this is relative to CUDA_SET_VISIBLE_DEVICES, e.g. if
    * CUDA_SET_VISIBLE_DEVICES=1,0, and you call setDevice(0), you will get device 1.
+   * <p>Note if RMM has been initialized and the requested device ID does not
+   * match the device used to initialize RMM then this will throw an error.
    * @throws CudaException on any error
    */
-  public static native void setDevice(int device) throws CudaException;
+  public static native void setDevice(int device) throws CudaException, CudfException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()

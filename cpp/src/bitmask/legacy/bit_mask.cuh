@@ -19,10 +19,10 @@
 
 #include <cuda_runtime.h>
 #include <utilities/legacy/cudf_utils.h>
-#include <cudf/types.hpp>
-#include <utilities/legacy/bit_util.cuh>
-#include <cudf/utilities/error.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <utilities/legacy/bit_util.cuh>
 
 namespace bit_mask {
 enum { bits_per_element = cudf::util::size_in_bits<bit_mask_t>() };
@@ -49,10 +49,11 @@ constexpr cudf::size_type num_elements(cudf::size_type number_of_bits) {
  *
  *  @return GDF_SUCCESS on success, the CUDA error on failure
  */
-inline gdf_error copy_bit_mask(bit_mask_t *dst, const bit_mask_t *src,
-                               size_t number_of_bits, enum cudaMemcpyKind kind) {
-  CUDA_TRY(
-      cudaMemcpy(dst, src, num_elements(number_of_bits) * sizeof(bit_mask_t), kind));
+inline gdf_error copy_bit_mask(bit_mask_t *dst,
+                               const bit_mask_t *src,
+                               size_t number_of_bits,
+                               enum cudaMemcpyKind kind) {
+  CUDA_TRY(cudaMemcpy(dst, src, num_elements(number_of_bits) * sizeof(bit_mask_t), kind));
   return GDF_SUCCESS;
 }
 
@@ -77,10 +78,8 @@ inline gdf_error destroy_bit_mask(bit_mask_t *valid) {
  *
  *  @return GDF_SUCCESS on success, the CUDA error on failure
  */
-inline gdf_error get_element(bit_mask_t *element,
-                             const bit_mask_t *device_element) {
-  CUDA_TRY(cudaMemcpy(element, device_element, sizeof(bit_mask_t),
-                      cudaMemcpyDeviceToHost));
+inline gdf_error get_element(bit_mask_t *element, const bit_mask_t *device_element) {
+  CUDA_TRY(cudaMemcpy(element, device_element, sizeof(bit_mask_t), cudaMemcpyDeviceToHost));
   return GDF_SUCCESS;
 }
 
@@ -94,31 +93,28 @@ inline gdf_error get_element(bit_mask_t *element,
  *  @return GDF_SUCCESS on success, the CUDA error on failure
  */
 inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element) {
-  CUDA_TRY(cudaMemcpy(device_element, &element, sizeof(bit_mask_t),
-                      cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpy(device_element, &element, sizeof(bit_mask_t), cudaMemcpyHostToDevice));
   return GDF_SUCCESS;
 }
 
 namespace detail {
 
 template <typename T>
-constexpr inline T gcd(T u, T v) noexcept
-{
-    while (v != 0) {
-        auto remainder = u % v;
-        u = v;
-        v = remainder;
-    }
-    return u;
+constexpr inline T gcd(T u, T v) noexcept {
+  while (v != 0) {
+    auto remainder = u % v;
+    u              = v;
+    v              = remainder;
+  }
+  return u;
 }
 
 template <typename T>
-constexpr inline T lcm(T u, T v) noexcept
-{
-        return (u / gcd(u,v)) * v;
+constexpr inline T lcm(T u, T v) noexcept {
+  return (u / gcd(u, v)) * v;
 }
 
-} // namespace detail
+}  // namespace detail
 
 /**
  *  @brief Allocate device space for the valid bit mask.
@@ -135,9 +131,8 @@ constexpr inline T lcm(T u, T v) noexcept
  */
 inline gdf_error create_bit_mask(bit_mask_t **mask,
                                  cudf::size_type number_of_bits,
-                                 int fill_value = -1,
-                                 cudf::size_type padding_boundary = 64)
-{
+                                 int fill_value                   = -1,
+                                 cudf::size_type padding_boundary = 64) {
   // We assume RMM_ALLOC satisfies the allocation alignment for the beginning
   // of the allocated space; we ensure its end also has that allocation.
   //
@@ -145,8 +140,7 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
 
   padding_boundary = detail::lcm<cudf::size_type>(sizeof(bit_mask_t), padding_boundary);
   cudf::size_type num_quanta_to_allocate =
-      cudf::util::div_rounding_up_safe<cudf::size_type>(
-          number_of_bits, CHAR_BIT * padding_boundary);
+    cudf::util::div_rounding_up_safe<cudf::size_type>(number_of_bits, CHAR_BIT * padding_boundary);
 
   RMM_TRY(RMM_ALLOC(mask, padding_boundary * num_quanta_to_allocate, 0));
 
@@ -178,9 +172,8 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
  *  @return which bit within the bit mask
  */
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE bool is_valid(bit_mask_t const * valid, T bit_index) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
+CUDA_HOST_DEVICE_CALLABLE bool is_valid(bit_mask_t const *valid, T bit_index) {
+  static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
   return cudf::util::bit_is_set<bit_mask_t, T>(valid, bit_index);
 }
@@ -200,8 +193,7 @@ CUDA_HOST_DEVICE_CALLABLE bool is_valid(bit_mask_t const * valid, T bit_index) {
  */
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bit_mask_t *valid, T bit_index) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
+  static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
   cudf::util::turn_bit_on(valid, bit_index);
 }
@@ -220,10 +212,8 @@ CUDA_HOST_DEVICE_CALLABLE void set_bit_unsafe(bit_mask_t *valid, T bit_index) {
  *
  */
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bit_mask_t *valid,
-                                                T bit_index) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
+CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bit_mask_t *valid, T bit_index) {
+  static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
   return cudf::util::turn_bit_off(valid, bit_index);
 }
@@ -241,13 +231,10 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bit_mask_t *valid,
  */
 template <typename T>
 CUDA_DEVICE_CALLABLE void set_bit_safe(bit_mask_t *valid, T bit_index) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
+  static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-  const cudf::size_type rec{
-      cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
-  const cudf::size_type bit{
-      cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
+  const cudf::size_type rec{cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
+  const cudf::size_type bit{cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicOr(&valid[rec], (bit_mask_t{1} << bit));
 }
@@ -265,13 +252,10 @@ CUDA_DEVICE_CALLABLE void set_bit_safe(bit_mask_t *valid, T bit_index) {
  */
 template <typename T>
 CUDA_DEVICE_CALLABLE void clear_bit_safe(bit_mask_t *valid, T bit_index) {
-  static_assert(std::is_integral<T>::value,
-                "Record index must be of an integral type");
+  static_assert(std::is_integral<T>::value, "Record index must be of an integral type");
 
-  const cudf::size_type rec{
-      cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
-  const cudf::size_type bit{
-      cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
+  const cudf::size_type rec{cudf::util::detail::bit_container_index<bit_mask_t, T>(bit_index)};
+  const cudf::size_type bit{cudf::util::detail::intra_container_index<bit_mask_t, T>(bit_index)};
 
   atomicAnd(&valid[rec], ~(bit_mask_t{1} << bit));
 }

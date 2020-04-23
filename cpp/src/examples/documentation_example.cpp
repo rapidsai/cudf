@@ -65,7 +65,8 @@ class example_class {
    *
    * @return The result of the complex function
    *---------------------------------------------------------------------------**/
-  T complicated_function(int const first_parameter, double* second_parameter,
+  T complicated_function(int const first_parameter,
+                         double* second_parameter,
                          float* third_parameter) {
     // DESCRIPTION: Notice the use of *human readable* variable names. Human
     // readable variable names are vastly prefered to short, hard to read names.

@@ -179,7 +179,8 @@ class CategoricalAccessor(object):
         df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
         df = cur_df.merge(df, on="old_codes", how="left")
-        df = df.sort_values(by="order").reset_index(True)
+        df = df.sort_values(by="order")
+        df.reset_index(drop=True, inplace=True)
 
         ordered = kwargs.get("ordered", self.ordered)
         new_codes = df["new_codes"]._column
@@ -219,7 +220,15 @@ class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
-    def __init__(self, dtype, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self,
+        dtype,
+        mask=None,
+        size=None,
+        offset=0,
+        null_count=None,
+        children=(),
+    ):
         """
         Parameters
         ----------
@@ -248,6 +257,7 @@ class CategoricalColumn(column.ColumnBase):
             dtype=dtype,
             mask=mask,
             offset=offset,
+            null_count=null_count,
             children=children,
         )
 

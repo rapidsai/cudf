@@ -6,6 +6,7 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -18,7 +19,9 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -34,7 +37,12 @@ class NumericalColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
 
     def __contains__(self, item):
@@ -405,10 +413,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
@@ -420,7 +428,6 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if is_op_comparison:
         out = out.fillna(op == "ne")
 
-    libcudf.nvtx.range_pop()
     return out
 
 

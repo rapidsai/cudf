@@ -49,6 +49,9 @@ public interface RmmEventHandler {
   /**
    * Invoked after an RMM memory allocate operation when an allocate threshold is crossed.
    * See {@link #getAllocThresholds()} for details on allocate threshold crossing.
+   * <p>NOTE: Any exception thrown by this method will cause the corresponding allocation
+   * that triggered the threshold callback to be released before the exception is
+   * propagated to the application.
    * @param totalAllocSize total amount of memory allocated after the crossing
    */
   void onAllocThreshold(long totalAllocSize);
@@ -56,6 +59,8 @@ public interface RmmEventHandler {
   /**
    * Invoked after an RMM memory deallocation operation when a deallocate threshold is crossed.
    * See {@link #getDeallocThresholds()} for details on deallocate threshold crossing.
+   * <p>NOTE: Any exception thrown by this method will be propagated to the application
+   * after the resource that triggered the threshold was released.
    * @param totalAllocSize total amount of memory allocated after the crossing
    */
   void onDeallocThreshold(long totalAllocSize);

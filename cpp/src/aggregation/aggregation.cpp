@@ -40,10 +40,9 @@ std::unique_ptr<aggregation> make_max_aggregation() {
   return std::make_unique<aggregation>(aggregation::MAX);
 }
 /// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation>
-make_count_aggregation(include_nulls _include_nulls) {
-  auto kind = (_include_nulls == include_nulls::YES) ? aggregation::COUNT_ALL
-                                                     : aggregation::COUNT_VALID;
+std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls) {
+  auto kind =
+    (_include_nulls == include_nulls::YES) ? aggregation::COUNT_ALL : aggregation::COUNT_VALID;
   return std::make_unique<aggregation>(kind);
 }
 /// Factory to create a ANY aggregation
@@ -76,8 +75,8 @@ std::unique_ptr<aggregation> make_median_aggregation() {
   return std::make_unique<aggregation>(aggregation::MEDIAN);
 }
 /// Factory to create a QUANTILE aggregation
-std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i) {
+std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
+                                                       interpolation i) {
   return std::make_unique<detail::quantile_aggregation>(q, i);
 }
 /// Factory to create a ARGMAX aggregation
@@ -93,17 +92,20 @@ std::unique_ptr<aggregation> make_nunique_aggregation(include_nulls _include_nul
   return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, _include_nulls);
 }
 /// Factory to create a NTH_ELEMENT aggregation
-std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, include_nulls _include_nulls) {
-  return std::make_unique<detail::nth_element_aggregation>(aggregation::NTH_ELEMENT, n, _include_nulls);
+std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n,
+                                                          include_nulls _include_nulls) {
+  return std::make_unique<detail::nth_element_aggregation>(
+    aggregation::NTH_ELEMENT, n, _include_nulls);
 }
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
                                                   data_type output_type) {
-  aggregation* a = new detail::udf_aggregation{type == udf_type::PTX? aggregation::PTX : aggregation::CUDA,
-                                               user_defined_aggregator,
-                                               output_type};
- return std::unique_ptr<aggregation>(a);
+  aggregation* a =
+    new detail::udf_aggregation{type == udf_type::PTX ? aggregation::PTX : aggregation::CUDA,
+                                user_defined_aggregator,
+                                output_type};
+  return std::unique_ptr<aggregation>(a);
 }
 
 namespace detail {

@@ -16,18 +16,17 @@
 
 #pragma once
 
-#include <cudf/table/table_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
-
 namespace cudf {
 namespace experimental {
 namespace groupby {
-namespace detail { 
+namespace detail {
 namespace sort {
 
 /**
@@ -42,12 +41,11 @@ namespace sort {
  *   value column
  */
 struct sort_groupby_helper {
-  using index_vector = rmm::device_vector<size_type>;
-  using bitmask_vector = rmm::device_vector<bitmask_type>;
-  using column_ptr = std::unique_ptr<column>;
-  using index_vector_ptr = std::unique_ptr<index_vector>;
+  using index_vector       = rmm::device_vector<size_type>;
+  using bitmask_vector     = rmm::device_vector<bitmask_type>;
+  using column_ptr         = std::unique_ptr<column>;
+  using index_vector_ptr   = std::unique_ptr<index_vector>;
   using bitmask_vector_ptr = std::unique_ptr<bitmask_vector>;
-
 
   /**
    * @brief Construct a new helper object
@@ -61,26 +59,23 @@ struct sort_groupby_helper {
    * @param keys_pre_sorted Indicate if the keys are already sorted. Enables
    *                        optimizations to help skip re-sorting keys.
    */
-  sort_groupby_helper(table_view const& keys, 
+  sort_groupby_helper(table_view const& keys,
                       include_nulls include_null_keys = include_nulls::NO,
-                      sorted keys_pre_sorted = sorted::NO)
-  : _keys(keys),
-    _num_keys(-1),
-    _include_null_keys(include_null_keys),
-    _keys_pre_sorted(keys_pre_sorted)
-  {
-    if (keys_pre_sorted == sorted::YES and
-        include_null_keys == include_nulls::NO and
-        has_nulls(keys))
-    {
+                      sorted keys_pre_sorted          = sorted::NO)
+    : _keys(keys),
+      _num_keys(-1),
+      _include_null_keys(include_null_keys),
+      _keys_pre_sorted(keys_pre_sorted) {
+    if (keys_pre_sorted == sorted::YES and include_null_keys == include_nulls::NO and
+        has_nulls(keys)) {
       _keys_pre_sorted = sorted::NO;
     }
   };
 
-  ~sort_groupby_helper() = default;
+  ~sort_groupby_helper()                          = default;
   sort_groupby_helper(sort_groupby_helper const&) = delete;
   sort_groupby_helper& operator=(sort_groupby_helper const&) = delete;
-  sort_groupby_helper(sort_groupby_helper&&) = default;
+  sort_groupby_helper(sort_groupby_helper&&)                 = default;
   sort_groupby_helper& operator=(sort_groupby_helper&&) = default;
 
   /**
@@ -96,9 +91,10 @@ struct sort_groupby_helper {
    * @param values The value column to group and sort
    * @return the sorted and grouped column
    */
-  std::unique_ptr<column> sorted_values(column_view const& values, 
+  std::unique_ptr<column> sorted_values(
+    column_view const& values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    cudaStream_t stream                 = 0);
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -110,9 +106,10 @@ struct sort_groupby_helper {
    * @param values The value column to group
    * @return the grouped column
    */
-  std::unique_ptr<column> grouped_values(column_view const& values, 
+  std::unique_ptr<column> grouped_values(
+    column_view const& values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    cudaStream_t stream                 = 0);
 
   /**
    * @brief Get a table of sorted unique keys
@@ -120,8 +117,7 @@ struct sort_groupby_helper {
    * @return a new table in which each row is a unique row in the sorted key table.
    */
   std::unique_ptr<table> unique_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), cudaStream_t stream = 0);
 
   /**
    * @brief Get a table of sorted keys
@@ -129,8 +125,7 @@ struct sort_groupby_helper {
    * @return a new table containing the sorted keys.
    */
   std::unique_ptr<table> sorted_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), cudaStream_t stream = 0);
 
   /**
    * @brief Get the number of groups in `keys`
@@ -221,18 +216,18 @@ struct sort_groupby_helper {
   column_view keys_bitmask_column(cudaStream_t stream = 0);
 
  private:
+  column_ptr _key_sorted_order;      ///< Indices to produce _keys in sorted order
+  column_ptr _unsorted_keys_labels;  ///< Group labels for unsorted _keys
+  column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
+  table_view _keys;                  ///< Input keys to sort by
 
-  column_ptr          _key_sorted_order;      ///< Indices to produce _keys in sorted order
-  column_ptr          _unsorted_keys_labels;  ///< Group labels for unsorted _keys
-  column_ptr          _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
-  table_view          _keys;                  ///< Input keys to sort by
+  index_vector_ptr
+    _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups
+  index_vector_ptr _group_labels;  ///< Group labels for sorted _keys
 
-  index_vector_ptr    _group_offsets;         ///< Indices into sorted _keys indicating starting index of each groups
-  index_vector_ptr    _group_labels;          ///< Group labels for sorted _keys
-
-  size_type           _num_keys;              ///< Number of effective rows in _keys (adjusted for _include_null_keys)
-  sorted              _keys_pre_sorted;       ///< Whether _keys are pre-sorted
-  include_nulls       _include_null_keys;      ///< Whether to use rows with nulls in _keys for grouping
+  size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
+  sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
+  include_nulls _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
 };
 
 }  // namespace sort

@@ -23,7 +23,7 @@ namespace jit {
 namespace code {
 
 const char* operation =
-R"***(
+  R"***(
 #pragma once
     #include "traits.h"
 
@@ -337,7 +337,7 @@ R"***(
 
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf

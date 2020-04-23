@@ -24,10 +24,7 @@ from cudf._lib.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.nvtx import (
-    range_pop as nvtx_range_pop,
-    range_push as nvtx_range_push,
-)
+from cudf._lib.nvtx import annotate
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -311,7 +308,7 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out[0]
+            out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -1807,7 +1804,9 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self, mask=None, size=None, offset=0, null_count=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -1836,7 +1835,13 @@ class StringColumn(column.ColumnBase):
             size = size - offset
 
         super().__init__(
-            None, size, dtype, mask=mask, offset=offset, children=children
+            None,
+            size,
+            dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
@@ -2089,6 +2094,13 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            Conversion to GPU array in strings is not yet supported.\nTo \
+            explicitly construct a host array, consider using .to_array()"
+        )
+
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
@@ -2212,10 +2224,9 @@ class StringColumn(column.ColumnBase):
         return out
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _string_column_binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    nvtx_range_pop()
     return out
 
 

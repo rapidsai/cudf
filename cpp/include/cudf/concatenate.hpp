@@ -36,8 +36,9 @@ namespace cudf {
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
  *---------------------------------------------------------------------------**/
-rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+rmm::device_buffer concatenate_masks(
+  std::vector<column_view> const& views,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates multiple columns into a single column.
@@ -51,9 +52,9 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const &views,
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<column>
-concatenate(std::vector<column_view> const& columns_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> concatenate(
+  std::vector<column_view> const& columns_to_concat,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 namespace experimental {
 
@@ -82,8 +83,9 @@ namespace experimental {
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> concatenate(
+  std::vector<table_view> const& tables_to_concat,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 

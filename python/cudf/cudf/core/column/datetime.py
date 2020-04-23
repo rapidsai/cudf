@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
@@ -21,7 +22,9 @@ _numpy_to_pandas_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -39,7 +42,12 @@ class DatetimeColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
@@ -222,10 +230,9 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.is_unique
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    libcudf.nvtx.range_pop()
     return out
 
 

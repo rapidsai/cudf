@@ -31,7 +31,7 @@ namespace cudf {
  * @returns true - if sorted , false - if not.
  */
 bool is_sorted(cudf::table const& table,
-                       std::vector<int8_t> const& descending,
-                       bool nulls_are_smallest);
+               std::vector<int8_t> const& descending,
+               bool nulls_are_smallest);
 
-} // namespace cudf
+}  // namespace cudf
