@@ -31,6 +31,7 @@ struct groupby_min_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(groupby_min_test, cudf::test::FixedWidthTypes);
 
+// clang-format off
 TYPED_TEST(groupby_min_test, basic)
 {
     using K = int32_t;
@@ -167,6 +168,7 @@ TEST_F(groupby_min_string_test, zero_valid_values)
     auto agg2 = cudf::experimental::make_min_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
+// clang-format on
 
 } // namespace test
 } // namespace cudf

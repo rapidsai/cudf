@@ -32,6 +32,7 @@ struct groupby_nth_element_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(groupby_nth_element_test, cudf::test::AllTypes);
 
+// clang-format off
 TYPED_TEST(groupby_nth_element_test, basic)
 {
     using K = int32_t;
@@ -302,6 +303,7 @@ TYPED_TEST(groupby_nth_element_test, basic_string)
     strings_column_wrapper expect_vals7 { {"", "1", ""}, {0, 1, 0} };
     test_single_agg(keys, vals, expect_keys, expect_vals7, std::move(agg));
 }
+// clang-format on
 
 } // namespace test
 } // namespace cudf
