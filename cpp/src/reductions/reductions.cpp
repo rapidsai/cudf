@@ -51,10 +51,6 @@ struct reduce_dispatch_functor {
       case aggregation::MAX: return reduction::max(col, output_dtype, mr, stream); break;
       case aggregation::ANY: return reduction::any(col, output_dtype, mr, stream); break;
       case aggregation::ALL: return reduction::all(col, output_dtype, mr, stream); break;
-      case aggregation::COUNT_VALID:
-        return make_fixed_width_scalar(col.size() - col.null_count(), stream, mr);
-        break;
-      case aggregation::COUNT_ALL: return make_fixed_width_scalar(col.size(), stream, mr); break;
       case aggregation::SUM_OF_SQUARES:
         return reduction::sum_of_squares(col, output_dtype, mr, stream);
         break;
@@ -90,7 +86,7 @@ struct reduce_dispatch_functor {
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
-          detail::unique_count(col, nunique_agg->_include_nulls, false), stream, mr);
+          detail::unique_count(col, nunique_agg->_include_nulls, false, stream), stream, mr);
       } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
