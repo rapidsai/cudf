@@ -676,7 +676,7 @@ class CategoricalColumn(column.ColumnBase):
             return self.__sizeof__()
         else:
             return (
-                self._categories._memory_usage()
+                self.categories._memory_usage()
                 + self.cat().codes.memory_usage()
             )
 
