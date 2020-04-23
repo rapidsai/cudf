@@ -39,7 +39,8 @@ class derived_aggregation : public aggregation {
   derived_aggregation(aggregation::Kind a) : aggregation(a) {}
 
   bool is_equal(aggregation const& other) const override {
-    if (this->aggregation::operator==(other)) {
+    if (this->aggregation::is_equal(other)) {
+      // Derived aggregations are required to implement operator==()
       return static_cast<Derived const&>(*this) == static_cast<Derived const&>(other);
     } else {
       return false;
@@ -47,7 +48,8 @@ class derived_aggregation : public aggregation {
   }
 
   size_t do_hash() const override {
-    return this->aggregation::hash_impl() ^ static_cast<Derived const&>(*this).hash_impl();
+    // Derived aggregations are required to implement hash_impl()
+    return this->aggregation::do_hash() ^ static_cast<Derived const&>(*this).hash_impl();
   }
 
   std::unique_ptr<aggregation> clone() const override {
