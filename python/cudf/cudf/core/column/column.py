@@ -616,10 +616,8 @@ class ColumnBase(Column):
         """
         Returns offset of first value that matches
         """
-        from cudf.core.index import RangeIndex
-
         # FIXME: Inefficient, may be need a libcudf api
-        index = RangeIndex(0, stop=len(self))
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
         indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
@@ -629,10 +627,8 @@ class ColumnBase(Column):
         """
         Returns offset of last value that matches
         """
-        from cudf.core.index import RangeIndex
-
         # FIXME: Inefficient, may be need a libcudf api
-        index = RangeIndex(0, stop=len(self))
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
         indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
