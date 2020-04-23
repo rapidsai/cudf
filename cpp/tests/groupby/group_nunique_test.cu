@@ -31,6 +31,7 @@ struct groupby_nunique_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(groupby_nunique_test, cudf::test::AllTypes);
 
+// clang-format off
 TYPED_TEST(groupby_nunique_test, basic)
 {
     using K = int32_t;
@@ -196,6 +197,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
+// clang-format on
 
 
 } // namespace test

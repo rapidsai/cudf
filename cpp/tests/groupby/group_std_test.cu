@@ -33,6 +33,7 @@ using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, flo
 
 TYPED_TEST_CASE(groupby_std_test, supported_types);
 
+// clang-format off
 TYPED_TEST(groupby_std_test, basic)
 {
     using K = int32_t;
@@ -140,6 +141,7 @@ TYPED_TEST(groupby_std_test, ddof_non_default)
     auto agg = cudf::experimental::make_std_aggregation(2);
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
+// clang-format on
 
 
 } // namespace test
