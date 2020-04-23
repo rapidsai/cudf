@@ -35,6 +35,7 @@
 
 namespace cudf {
 namespace test {
+
 // Property comparison
 template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs)
@@ -165,6 +166,7 @@ class corresponding_rows_not_equivalent {
 };
 
 namespace {
+
 template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs,
                        cudf::column_view const& rhs,
@@ -340,9 +342,10 @@ struct column_view_printer {
     std::transform(thrust::make_counting_iterator(size_type{0}),
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
-                   [&h_data](auto idx) {
-                     return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx]
-                                                                  : std::string("NULL");
+                   [&h_data, &col](auto idx) {
+                     return (!col.nullable() || bit_is_set(h_data.second.data(), idx))
+                              ? h_data.first[idx]
+                              : std::string("NULL");
                    });
   }
 

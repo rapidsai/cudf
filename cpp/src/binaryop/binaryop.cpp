@@ -35,6 +35,7 @@
 
 #include "compiled/binary_ops.hpp"
 
+#include <bit.hpp.jit>
 #include <libcudacxx/details/__config.jit>
 #include <libcudacxx/libcxx/include/__config.jit>
 #include <libcudacxx/libcxx/include/__undef_macros.jit>
@@ -57,6 +58,7 @@
 
 namespace cudf {
 namespace experimental {
+
 namespace binops {
 namespace detail {
 /**
@@ -80,6 +82,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 }  // namespace detail
 
 namespace jit {
+
 const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
@@ -102,7 +105,7 @@ const std::vector<std::string> compiler_flags{
   "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
 };
 const std::vector<std::string> header_names{
-  "operation.h", "traits.h", cudf_types_hpp, cudf_wrappers_timestamps_hpp};
+  "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
 
 const std::unordered_map<std::string, char const*> stringified_headers{
   {"details/../../libcxx/include/__config", libcxx_config},
@@ -151,17 +154,35 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
-    .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                             // launching
-                     {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                      cudf::jit::get_type_name(rhs.type()),
-                      cudf::jit::get_type_name(lhs.type()),
-                      get_operator_name(op, OperatorType::Reverse)})
-    .launch(out.size(),
-            cudf::jit::get_data_ptr(out),
-            cudf::jit::get_data_ptr(rhs),
-            cudf::jit::get_data_ptr(lhs));
+  if (null_using_binop(op)) {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(rhs.type()),
+                        cudf::jit::get_type_name(lhs.type()),
+                        get_operator_name(op, OperatorType::Reverse)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(rhs),
+              cudf::jit::get_data_ptr(lhs),
+              out.null_mask(),
+              rhs.null_mask(),
+              rhs.offset(),
+              lhs.is_valid());
+  } else {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(rhs.type()),
+                        cudf::jit::get_type_name(lhs.type()),
+                        get_operator_name(op, OperatorType::Reverse)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(rhs),
+              cudf::jit::get_data_ptr(lhs));
+  }
 }
 
 void binary_operation(mutable_column_view& out,
@@ -170,17 +191,35 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
-    .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                             // launching
-                     {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                      cudf::jit::get_type_name(lhs.type()),
-                      cudf::jit::get_type_name(rhs.type()),
-                      get_operator_name(op, OperatorType::Direct)})
-    .launch(out.size(),
-            cudf::jit::get_data_ptr(out),
-            cudf::jit::get_data_ptr(lhs),
-            cudf::jit::get_data_ptr(rhs));
+  if (null_using_binop(op)) {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs),
+              cudf::jit::get_data_ptr(rhs),
+              out.null_mask(),
+              lhs.null_mask(),
+              lhs.offset(),
+              rhs.is_valid());
+  } else {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs),
+              cudf::jit::get_data_ptr(rhs));
+  }
 }
 
 void binary_operation(mutable_column_view& out,
@@ -189,17 +228,36 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       cudaStream_t stream)
 {
-  cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
-    .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
-                                                             // launching
-                     {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                      cudf::jit::get_type_name(lhs.type()),
-                      cudf::jit::get_type_name(rhs.type()),
-                      get_operator_name(op, OperatorType::Direct)})
-    .launch(out.size(),
-            cudf::jit::get_data_ptr(out),
-            cudf::jit::get_data_ptr(lhs),
-            cudf::jit::get_data_ptr(rhs));
+  if (null_using_binop(op)) {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs),
+              cudf::jit::get_data_ptr(rhs),
+              out.null_mask(),
+              lhs.null_mask(),
+              rhs.offset(),
+              rhs.null_mask(),
+              rhs.offset());
+  } else {
+    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+      .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
+                                                               // launching
+                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
+                        cudf::jit::get_type_name(lhs.type()),
+                        cudf::jit::get_type_name(rhs.type()),
+                        get_operator_name(op, OperatorType::Direct)})
+      .launch(out.size(),
+              cudf::jit::get_data_ptr(out),
+              cudf::jit::get_data_ptr(lhs),
+              cudf::jit::get_data_ptr(rhs));
+  }
 }
 
 void binary_operation(mutable_column_view& out,
@@ -233,6 +291,7 @@ void binary_operation(mutable_column_view& out,
 }  // namespace binops
 
 namespace detail {
+
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
@@ -240,19 +299,24 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
-  // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
   }
 
+  // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
-  auto out      = make_fixed_width_column(
-    output_type, rhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  std::unique_ptr<column> out;
+  if (binops::null_using_binop(op)) {
+    out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+  } else {
+    auto new_mask = binops::detail::scalar_col_valid_mask_and(rhs, lhs, stream, mr);
+    out           = make_fixed_width_column(
+      output_type, rhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  }
 
   if (rhs.size() == 0) { return out; }
 
@@ -268,19 +332,24 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
-  // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
   }
 
+  // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
-  auto out      = make_fixed_width_column(
-    output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  std::unique_ptr<column> out;
+  if (binops::null_using_binop(op)) {
+    out = make_fixed_width_column(output_type, lhs.size(), mask_state::ALL_VALID, stream, mr);
+  } else {
+    auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
+    out           = make_fixed_width_column(
+      output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  }
 
   if (lhs.size() == 0) { return out; }
 
@@ -298,19 +367,24 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 {
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
   }
 
+  // Check for datatype
+  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+
   CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
-  auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-  auto out      = make_fixed_width_column(
-    output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  std::unique_ptr<column> out;
+  if (binops::null_using_binop(op)) {
+    out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
+  } else {
+    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    out           = make_fixed_width_column(
+      output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  }
 
   // Check for 0 sized data
   if (lhs.size() == 0 || rhs.size() == 0) { return out; }
