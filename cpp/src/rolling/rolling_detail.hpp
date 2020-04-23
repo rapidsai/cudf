@@ -22,7 +22,6 @@
 #include <cudf/utilities/traits.hpp>
 
 namespace cudf {
-
 // helper functions - used in the rolling window implementation and tests
 namespace detail
 {

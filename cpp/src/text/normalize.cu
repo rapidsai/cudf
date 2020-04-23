@@ -32,7 +32,6 @@
 namespace nvtext {
 namespace detail {
 namespace {
-
 /**
  * @brief Normalize spaces in a strings column.
  *
@@ -47,7 +46,8 @@ struct normalize_spaces_fn {
   int32_t const* d_offsets{};                // offsets into d_buffer
   char* d_buffer{};                          // output buffer for characters
 
-  __device__ int32_t operator()(cudf::size_type idx) {
+  __device__ int32_t operator()(cudf::size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view single_space(" ", 1);
     auto const d_str = d_strings.element<cudf::string_view>(idx);
@@ -78,7 +78,8 @@ struct normalize_spaces_fn {
 std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::STRING});
 
@@ -123,7 +124,8 @@ std::unique_ptr<cudf::column> normalize_spaces(
 // external APIs
 
 std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
-                                               rmm::mr::device_memory_resource* mr) {
+                                               rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::normalize_spaces(strings, mr);
 }

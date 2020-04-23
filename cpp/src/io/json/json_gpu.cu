@@ -35,13 +35,11 @@ namespace experimental {
 namespace io {
 namespace json {
 namespace gpu {
-
 using namespace ::cudf;
 
 using string_pair = std::pair<const char *, size_t>;
 
 namespace {
-
 /**
  * @brief CUDA Kernel that modifies the start and stop offsets to exclude
  * the sections outside of the top level brackets.
@@ -56,7 +54,8 @@ namespace {
  *
  * @return void
  **/
-__device__ void limit_range_to_brackets(const char *data, long &start, long &stop) {
+__device__ void limit_range_to_brackets(const char *data, long &start, long &stop)
+{
   while (start < stop && data[start] != '[' && data[start] != '{') { start++; }
   start++;
 
@@ -80,7 +79,8 @@ __device__ void limit_range_to_brackets(const char *data, long &start, long &sto
 __device__ long seek_field_name_end(const char *data,
                                     const ParseOptions opts,
                                     long start,
-                                    long stop) {
+                                    long stop)
+{
   bool quotation = false;
   for (auto pos = start; pos < stop; ++pos) {
     // Ignore escaped quotes
@@ -96,126 +96,133 @@ __device__ long seek_field_name_end(const char *data,
 /**
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed numeric value
  **/
 template <typename T, int base>
 __inline__ __device__ T
-decode_value(const char *data, long start, long end, ParseOptions const &opts) {
+decode_value(const char *data, long start, long end, ParseOptions const &opts)
+{
   return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
 }
 
 /**
  * @brief Decodes a numeric value base on templated cudf type T
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed numeric value
  **/
 template <typename T>
 __inline__ __device__ T
-decode_value(const char *data, long start, long end, ParseOptions const &opts) {
+decode_value(const char *data, long start, long end, ParseOptions const &opts)
+{
   return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 /**
  * @brief Decodes a timestamp_D
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_D
  **/
 template <>
 __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
                                                      long start,
                                                      long end,
-                                                     ParseOptions const &opts) {
+                                                     ParseOptions const &opts)
+{
   return parseDateFormat(data, start, end, opts.dayfirst);
 }
 
 /**
  * @brief Decodes a timestamp_s
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_s
  **/
 template <>
 __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
                                                      long start,
                                                      long end,
-                                                     ParseOptions const &opts) {
+                                                     ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli / 1000;
 }
 
 /**
  * @brief Decodes a timestamp_ms
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_ms
  **/
 template <>
 __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
                                                       long start,
                                                       long end,
-                                                      ParseOptions const &opts) {
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli;
 }
 
 /**
  * @brief Decodes a timestamp_us
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_us
  **/
 template <>
 __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
                                                       long start,
                                                       long end,
-                                                      ParseOptions const &opts) {
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000;
 }
 
 /**
  * @brief Decodes a timestamp_ns
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_ns
  **/
 template <>
 __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
                                                       long start,
                                                       long end,
-                                                      ParseOptions const &opts) {
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000000;
 }
@@ -225,14 +232,16 @@ template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
                                                      long end,
-                                                     ParseOptions const &opts) {
+                                                     ParseOptions const &opts)
+{
   return cudf::string_view{};
 }
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
                                                       long end,
-                                                      ParseOptions const &opts) {
+                                                      ParseOptions const &opts)
+{
   return cudf::dictionary32{};
 }
 template <>
@@ -260,7 +269,8 @@ struct ConvertFunctor {
                                                       long row,
                                                       long start,
                                                       long end,
-                                                      const ParseOptions &opts) {
+                                                      const ParseOptions &opts)
+  {
     T &value{static_cast<T *>(output_columns)[row]};
 
     // Check for user-specified true/false values first, where the output is
@@ -278,16 +288,13 @@ struct ConvertFunctor {
   }
 
   /**
-   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(const char *data,
-                                                      void *out_buffer,
-                                                      size_t row,
-                                                      long start,
-                                                      long end,
-                                                      ParseOptions const &opts) {
+  __host__ __device__ __forceinline__ bool operator()(
+    const char *data, void *out_buffer, size_t row, long start, long end, ParseOptions const &opts)
+  {
     auto &value{static_cast<T *>(out_buffer)[row]};
     value = decode_value<T>(data, start, end, opts);
     return !std::isnan(value);
@@ -305,7 +312,8 @@ struct ConvertFunctor {
                                                       long row,
                                                       long start,
                                                       long end,
-                                                      const ParseOptions &opts) {
+                                                      const ParseOptions &opts)
+  {
     T &value{static_cast<T *>(output_columns)[row]};
     value = decode_value<T>(data, start, end, opts);
 
@@ -315,9 +323,9 @@ struct ConvertFunctor {
 
 /**
  * @brief Checks whether the given character is a whitespace character.
- * 
+ *
  * @param[in] ch The character to check
- * 
+ *
  * @return True if the input is whitespace, False otherwise
  **/
 __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
@@ -325,18 +333,19 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
 /**
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
- * 
+ *
  * @param[in] data The character stream to scan
  * @param[in,out] start The start index to adjust
  * @param[in,out] end The end index to adjust
  * @param[in] quotechar The character used to denote quotes
- * 
+ *
  * @return Adjusted or unchanged start_idx and end_idx
  **/
 __inline__ __device__ void trim_field_start_end(const char *data,
                                                 long *start,
                                                 long *end,
-                                                char quotechar = '\0') {
+                                                char quotechar = '\0')
+{
   while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
   if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
   while ((*start <= *end) && is_whitespace(data[*end])) { (*end)--; }
@@ -352,7 +361,8 @@ __inline__ __device__ void trim_field_start_end(const char *data,
  *
  * @return `true` if it is digit-like, `false` otherwise
  */
-__device__ __inline__ bool is_digit(char c, bool is_hex = false) {
+__device__ __inline__ bool is_digit(char c, bool is_hex = false)
+{
   if (c >= '0' && c <= '9') return true;
 
   if (is_hex) {
@@ -369,7 +379,8 @@ __device__ __inline__ bool is_digit(char c, bool is_hex = false) {
  * For example, field "e.123-" would match the pattern.
  */
 __device__ __inline__ bool is_like_float(
-  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt)
+{
   // Can't have more than one exponent and one decimal point
   if (decimal_cnt > 1) return false;
   if (exponent_cnt > 1) return false;
@@ -415,7 +426,8 @@ __global__ void convert_json_to_columns_kernel(const char *data,
                                                void *const *output_columns,
                                                int num_columns,
                                                bitmask_type *const *valid_fields,
-                                               cudf::size_type *num_valid_fields) {
+                                               cudf::size_type *num_valid_fields)
+{
   const long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
@@ -469,18 +481,18 @@ __global__ void convert_json_to_columns_kernel(const char *data,
 }
 
 /**
- * @brief CUDA kernel that processes a buffer of data and determines information about the 
+ * @brief CUDA kernel that processes a buffer of data and determines information about the
  * column types within.
  *
  * Data is processed in one row/record at a time, so the number of total
  * threads (tid) is equal to the number of rows.
- * 
+ *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data 
+ * @param[in] num_records The number of lines/rows of input data
  * @param[out] column_infos The count for each column data type
  *
  * @returns void
@@ -491,7 +503,8 @@ __global__ void detect_json_data_types(const char *data,
                                        int num_columns,
                                        const uint64_t *rec_starts,
                                        cudf::size_type num_records,
-                                       ColumnInfo *column_infos) {
+                                       ColumnInfo *column_infos)
+{
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
@@ -575,8 +588,9 @@ __global__ void detect_json_data_types(const char *data,
     else if (other_count > 3 || decimal_count > 1) {
       atomicAdd(&column_infos[col].string_count, 1);
     } else {
-      // A date field can have either one or two '-' or '\'; A legal combination will only have one of them
-      // To simplify the process of auto column detection, we are not covering all the date-time formation permutations
+      // A date field can have either one or two '-' or '\'; A legal combination will only have one
+      // of them To simplify the process of auto column detection, we are not covering all the
+      // date-time formation permutations
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {
@@ -607,7 +621,8 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              bitmask_type *const *valid_fields,
                              cudf::size_type *num_valid_fields,
                              ParseOptions const &opts,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+{
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
@@ -641,7 +656,8 @@ void detect_data_types(ColumnInfo *column_infos,
                        int num_columns,
                        const uint64_t *rec_starts,
                        cudf::size_type num_records,
-                       cudaStream_t stream) {
+                       cudaStream_t stream)
+{
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_json_data_types));

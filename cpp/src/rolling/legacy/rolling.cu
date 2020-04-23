@@ -91,7 +91,8 @@ __launch_bounds__(block_size) __global__
                    cudf::size_type forward_window,
                    const cudf::size_type *window_col,
                    const cudf::size_type *min_periods_col,
-                   const cudf::size_type *forward_window_col) {
+                   const cudf::size_type *forward_window_col)
+{
   // we're going to be using bit utils a lot in the kernel
   using namespace bit_mask;
   const bool is_nullable = (in_col_valid != nullptr);
@@ -107,7 +108,8 @@ __launch_bounds__(block_size) __global__
   while (i < nrows) {
     ColumnType val = agg_op::template identity<ColumnType>();
     volatile cudf::size_type count =
-      0;  // declare this as volatile to avoid some compiler optimizations that lead to incorrect results for CUDA 10.0 and below (fixed in CUDA 10.1)
+      0;  // declare this as volatile to avoid some compiler optimizations that lead to incorrect
+          // results for CUDA 10.0 and below (fixed in CUDA 10.1)
 
     // dynamic window handling
     if (window_col != nullptr) window = window_col[i];
@@ -172,7 +174,8 @@ struct rolling_window_launcher {
   void dispatch_aggregation_type(cudf::size_type nrows,
                                  gdf_size_type &null_count,
                                  cudaStream_t stream,
-                                 TArgs... FArgs) {
+                                 TArgs... FArgs)
+  {
     cudf::nvtx::range_push("CUDF_ROLLING", cudf::nvtx::color::ORANGE);
 
     constexpr cudf::size_type block = 256;
@@ -203,7 +206,8 @@ struct rolling_window_launcher {
   void dispatch_aggregation_type(cudf::size_type nrows,
                                  gdf_size_type &null_count,
                                  cudaStream_t stream,
-                                 TArgs... FArgs) {
+                                 TArgs... FArgs)
+  {
     CUDF_FAIL(
       "Unsupported column type/operation combo. Only `min` and `max` are supported for "
       "non-arithmetic types for aggregations.");
@@ -228,7 +232,8 @@ struct rolling_window_launcher {
                   const cudf::size_type *window_col,
                   const cudf::size_type *min_periods_col,
                   const cudf::size_type *forward_window_col,
-                  cudaStream_t stream) {
+                  cudaStream_t stream)
+  {
     ColumnType *typed_out_data = static_cast<ColumnType *>(out_col_data_ptr);
     bit_mask::bit_mask_t *typed_out_valid =
       reinterpret_cast<bit_mask::bit_mask_t *>(out_col_valid_ptr);
@@ -325,7 +330,6 @@ struct rolling_window_launcher {
 }  // anonymous namespace
 
 namespace cudf {
-
 // see rolling.hpp for declaration
 gdf_column *rolling_window(const gdf_column &input_col,
                            cudf::size_type window,
@@ -334,7 +338,8 @@ gdf_column *rolling_window(const gdf_column &input_col,
                            gdf_agg_op agg_type,
                            const cudf::size_type *window_col,
                            const cudf::size_type *min_periods_col,
-                           const cudf::size_type *forward_window_col) {
+                           const cudf::size_type *forward_window_col)
+{
   CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
                "Window size and min periods must be non-negative");
 
@@ -388,7 +393,8 @@ gdf_column rolling_window(gdf_column const &input,
                           gdf_dtype output_type,
                           cudf::size_type const *window_col,
                           cudf::size_type const *min_periods_col,
-                          cudf::size_type const *forward_window_col) {
+                          cudf::size_type const *forward_window_col)
+{
   CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
                "Window size and min periods must be non-negative");
 

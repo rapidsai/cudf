@@ -20,13 +20,13 @@
 #include "copy_if.cuh"
 
 namespace {
-
 using bit_mask_t = bit_mask::bit_mask_t;
 
 // Returns true if the valid mask is true for index i in at least keep_threshold
 // columns
 struct valid_table_filter {
-  __device__ inline bool operator()(cudf::size_type i) {
+  __device__ inline bool operator()(cudf::size_type i)
+  {
     auto valid = [i](auto mask) { return (mask == nullptr) || bit_mask::is_valid(mask, i); };
 
     auto count = thrust::count_if(thrust::seq, d_masks, d_masks + num_columns, valid);
@@ -36,7 +36,8 @@ struct valid_table_filter {
 
   static auto create(cudf::table const &table,
                      cudf::size_type keep_threshold,
-                     cudaStream_t stream = 0) {
+                     cudaStream_t stream = 0)
+  {
     std::vector<bit_mask_t *> h_masks(table.num_columns());
 
     std::transform(std::cbegin(table), std::cend(table), std::begin(h_masks), [](auto col) {
@@ -60,7 +61,8 @@ struct valid_table_filter {
     return p;
   }
 
-  __host__ void destroy(cudaStream_t stream = 0) {
+  __host__ void destroy(cudaStream_t stream = 0)
+  {
     RMM_FREE(d_masks, stream);
     delete this;
   }
@@ -72,7 +74,9 @@ struct valid_table_filter {
   valid_table_filter(bit_mask_t **masks,
                      cudf::size_type num_columns,
                      cudf::size_type keep_threshold)
-    : keep_threshold(keep_threshold), num_columns(num_columns), d_masks(masks) {}
+    : keep_threshold(keep_threshold), num_columns(num_columns), d_masks(masks)
+  {
+  }
 
   cudf::size_type keep_threshold;
   cudf::size_type num_columns;
@@ -82,11 +86,11 @@ struct valid_table_filter {
 }  // namespace
 
 namespace cudf {
-
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input, table const &keys, cudf::size_type keep_threshold) {
+table drop_nulls(table const &input, table const &keys, cudf::size_type keep_threshold)
+{
   if (keys.num_columns() == 0 || keys.num_rows() == 0 || not cudf::has_nulls(keys))
     return cudf::copy(input);
 
@@ -100,7 +104,8 @@ table drop_nulls(table const &input, table const &keys, cudf::size_type keep_thr
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input, table const &keys) {
+table drop_nulls(table const &input, table const &keys)
+{
   return drop_nulls(input, keys, keys.num_columns());
 }
 

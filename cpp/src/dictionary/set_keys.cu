@@ -30,9 +30,9 @@ namespace cudf {
 namespace dictionary {
 namespace detail {
 namespace {
-
 /**
- * @brief Type-dispatch functor for remapping the old indices to new values based on the new key-set.
+ * @brief Type-dispatch functor for remapping the old indices to new values based on the new
+ * key-set.
  *
  * The dispatch is based on the key type.
  * The output column is the new indices column for the new dictionary column.
@@ -43,7 +43,8 @@ struct dispatch_compute_indices {
   operator()(dictionary_column_view const& input,
                                      column_view const& new_keys,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto d_dictionary    = *dictionary_view;
     auto dictionary_itr  = thrust::make_transform_iterator(
@@ -93,7 +94,8 @@ std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
   CUDF_EXPECTS(keys.type() == new_keys.type(), "keys types must match");
@@ -145,7 +147,8 @@ std::unique_ptr<column> set_keys(
 
 std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::set_keys(dictionary_column, keys, mr);
 }
 

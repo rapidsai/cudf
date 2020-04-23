@@ -21,9 +21,9 @@
 
 namespace nvtext {
 namespace detail {
-
 /**
- * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column tokenize.
  * @param delimiter UTF-8 characters used to separate each string into tokens.
@@ -39,7 +39,8 @@ std::unique_ptr<cudf::column> tokenize(
   cudaStream_t stream                  = 0);
 
 /**
- * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::tokenize(strings_column_view const&,strings_column_view
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to tokenize.
  * @param delimiters Strings used to separate individual strings into tokens.
@@ -54,7 +55,8 @@ std::unique_ptr<cudf::column> tokenize(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc nvtext::count_tokens(strings_column_view const&, string_scalar const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::count_tokens(strings_column_view const&, string_scalar
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to use for this operation.
  * @param delimiter Strings used to separate each string into tokens.
@@ -70,7 +72,8 @@ std::unique_ptr<cudf::column> count_tokens(
   cudaStream_t stream                  = 0);
 
 /**
- * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view const&,rmm::mr::device_memory_resource*)
+ * @copydoc nvtext::count_tokens(strings_column_view const&,strings_column_view
+ * const&,rmm::mr::device_memory_resource*)
  *
  * @param strings Strings column to use for this operation.
  * @param delimiters Strings used to separate each string into tokens.

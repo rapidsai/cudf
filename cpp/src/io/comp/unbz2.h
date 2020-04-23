@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -80,9 +80,9 @@ For more information on these sources, see the manual.
 
 namespace cudf {
 namespace io {
-
-// If BZ_OUTBUFF_FULL is returned and block_start is non-NULL, dstlen will be updated to point to the end of the last valid block,
-// and block_start will contain the offset in bits of the beginning of the block, so it can be passed in to resume decoding later on.
+// If BZ_OUTBUFF_FULL is returned and block_start is non-NULL, dstlen will be updated to point to
+// the end of the last valid block, and block_start will contain the offset in bits of the beginning
+// of the block, so it can be passed in to resume decoding later on.
 #define BZ_OK 0
 #define BZ_RUN_OK 1
 #define BZ_FLUSH_OK 2

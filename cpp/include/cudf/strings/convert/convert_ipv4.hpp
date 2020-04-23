@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Converts IPv4 addresses into integers.
  *
