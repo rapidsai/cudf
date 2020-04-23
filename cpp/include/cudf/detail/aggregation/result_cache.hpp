@@ -26,35 +26,21 @@ namespace experimental {
 namespace detail {
 
 struct aggregation_equality {
-  struct typed_aggregation_equality
+  bool operator()(std::unique_ptr<aggregation> const& lhs,
+                  std::unique_ptr<aggregation> const& rhs) const
   {
-    std::shared_ptr<aggregation> const& lhs;
-    std::shared_ptr<aggregation> const& rhs;
-
-    template <aggregation::Kind k>
-    bool operator()() const {
-      using agg_type = experimental::detail::kind_to_type<k>;
-      auto typed_lhs = static_cast<agg_type const*>(lhs.get());
-      auto typed_rhs = static_cast<agg_type const*>(rhs.get());
-      return *typed_lhs == *typed_rhs;
-    }
-  };
-
-  bool operator()(std::shared_ptr<aggregation> const& lhs,
-                  std::shared_ptr<aggregation> const& rhs) const
-  {
-    if (lhs->kind != rhs->kind)
+    if (lhs and rhs) {
+      return lhs->is_equal(*rhs);
+    } else {
       return false;
-    
-    return experimental::detail::aggregation_dispatcher(lhs->kind,
-              typed_aggregation_equality{lhs, rhs});
+    }
   }
 };
 
 struct aggregation_hash {
-  size_t operator()(std::shared_ptr<aggregation> const& key) const noexcept {
+  size_t operator()(std::unique_ptr<aggregation> const& key) const noexcept {
     if (key) {
-      return key->kind;
+      return key->do_hash();
     } else {
       return 0;
     }
@@ -86,7 +72,7 @@ class result_cache {
  private:
   std::vector<
     std::unordered_map<
-      std::shared_ptr<aggregation>,
+      std::unique_ptr<aggregation>,
       std::unique_ptr<column>,
       aggregation_hash,
       aggregation_equality

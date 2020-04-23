@@ -72,9 +72,19 @@ class aggregation {
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  virtual bool is_equal(aggregation const& other) const { return *this == other; }
 
-  virtual ~aggregation() = default; 
+  virtual size_t do_hash() const { return hash_impl(); }
+
+  virtual std::unique_ptr<aggregation> clone() const {
+    return std::make_unique<aggregation>(*this);
+  }
+
+  virtual ~aggregation() = default;
+
+ protected:
+  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  size_t hash_impl() const { return std::hash<decltype(kind)>{}(kind); }
 };
 
 enum class udf_type : bool {
