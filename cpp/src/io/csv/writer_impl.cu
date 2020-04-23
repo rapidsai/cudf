@@ -121,8 +121,6 @@ struct probe_special_chars
       size_type num_quotes{0};
       char const quote_char = '\"';
 
-      //TODO: confirm below is correct;
-      //
       num_quotes = thrust::count_if(thrust::seq,
                                     d_str.begin(), d_str.end(),
                                     [quote_char] (char_utf8 chr) {
@@ -141,10 +139,10 @@ private:
 
 struct modify_special_chars
 { 
-  explicit modify_special_chars(column_device_view const d_column,
-                                int32_t const* d_offsets,
-                                char* d_chars,
-                                predicate_special_chars const& predicate):
+  modify_special_chars(column_device_view const d_column,
+                       int32_t const* d_offsets,
+                       char* d_chars,
+                       predicate_special_chars const& predicate):
     d_column_(d_column),
     d_offsets_(d_offsets),
     d_chars_(d_chars),
@@ -167,8 +165,8 @@ struct modify_special_chars
       char const* quote_str = "\"";
       char const* str_2quotes = "\"\"";
       
-      size_type len1quote{1};//<-TODO: confirm!
-      size_type len2quotes{2};//<-TODO: confirm!
+      size_type len1quote{1};
+      size_type len2quotes{2};
       
       //modify d_str by duplicating all 2bl quotes
       //and surrounding whole string by 2bl quotes:
@@ -232,9 +230,11 @@ struct column_to_strings_fn
   }
   
   explicit column_to_strings_fn(writer_options const& options,
-                                rmm::mr::device_memory_resource* mr = nullptr):
+                                rmm::mr::device_memory_resource* mr = nullptr,
+                                cudaStream_t stream = nullptr):
     options_(options),
-    mr_(mr)
+    mr_(mr),
+    stream_(stream)
   {
   }
 
@@ -274,26 +274,26 @@ struct column_to_strings_fn
                    std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
-    //_not_ just pass through:
-    //TODO: must handle special characters: {delimiter, '\n', "} in row:
+    using namespace cudf::strings::detail;
+    
+    //handle special characters: {delimiter, '\n', "} in row:
     //
     // algorithm outline:
     //
     // target = "\"";
     // repl = ""\"\";
     //
-    // /* "slice" the part of interest: */
     // str_column_ref = {};
     // for each str_row: column_v {
     //    if ((not null str_row) &&
-    //        (str_row.find("\n") || str_row.find("\"") || str_row.find(delimiter) ))        str_column_ref.append(ref(str_row));
-    // cudf::strings::replace(str_column_ref, target, repl);
-    // prepend(str_column_ref, target); //?
-    // append(str_column_ref, target);  //?
+    //        (str_row.find("\n") || str_row.find("\"") || str_row.find(delimiter) ))        str_column_modified = modify(str_row);
+    // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
     //}
     //
-    column col{column_v};
-    return std::make_unique<column>(std::move(col));//TODO: look at more efficient way to return a unique_ptr<column> from a column_view...
+    std::string delimiter{options_.inter_column_delimiter()};
+    predicate_special_chars  pred{delimiter, stream_};
+    
+    return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);
     
     //null replacement could be done here, but probably more efficient
     //to defer it until concatenate() call:
@@ -382,6 +382,7 @@ struct column_to_strings_fn
 private:
   writer_options const& options_;
   rmm::mr::device_memory_resource* mr_;
+  cudaStream_t stream_;
 };
 } // unnamed namespace
 
