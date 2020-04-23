@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
 #include <cudf/copying.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -22,6 +21,8 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <tests/utilities/type_lists.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
