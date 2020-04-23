@@ -119,6 +119,7 @@
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
+- PR #4260 added mvn wrapper for the user to build Java bindings with
 
 ## Bug Fixes
 
@@ -253,7 +254,6 @@
 
 ## Improvements
 
-- PR #4260 added mvn wrapper for the user to build Java bindings with
 - PR #4641 Add replace example in dataframe.py and update 10min.ipynb
 - PR #4140 Add cudf series examples and corr() method for dataframe in dataframe.py
 - PR #4187 exposed getNativeView method in Java bindings
