@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cudf/types.h>
+#include <cudf/types.hpp>
+
 /** 
  * @brief  Start a NVTX range with predefined color.
  *

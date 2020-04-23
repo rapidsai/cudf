@@ -1,5 +1,5 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_gtest.hpp>
+#include <gtest/gtest.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/cudf.h>
