@@ -17,13 +17,12 @@
 #include <bitmask/legacy/valid_if.cuh>
 
 namespace cudf {
-
 namespace detail {
-
 template <typename T>
 struct predicate_not_nan {
   CUDA_HOST_DEVICE_CALLABLE
-  bool operator()(cudf::size_type index) const {
+  bool operator()(cudf::size_type index) const
+  {
     return !isnan(static_cast<T*>(input.data)[index]);
   }
 
@@ -36,7 +35,8 @@ struct predicate_not_nan {
 
 }  // namespace detail
 
-std::pair<bit_mask_t*, cudf::size_type> nans_to_nulls(gdf_column const& input) {
+std::pair<bit_mask_t*, cudf::size_type> nans_to_nulls(gdf_column const& input)
+{
   if (input.size == 0) { return std::pair<bit_mask_t*, cudf::size_type>(nullptr, 0); }
 
   const bit_mask_t* source_mask = reinterpret_cast<bit_mask_t*>(input.valid);

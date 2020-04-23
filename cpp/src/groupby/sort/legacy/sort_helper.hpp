@@ -28,10 +28,9 @@ namespace cudf {
 namespace groupby {
 namespace sort {
 namespace detail {
-
 /**
  * @brief Helper class for computing sort-based groupby
- * 
+ *
  * This class serves the purpose of sorting the keys and values and provides
  * building blocks for aggregations. It can provide:
  * 1. On-demand grouping and sorting of a value column based on `keys`
@@ -50,10 +49,10 @@ struct helper {
 
   /**
    * @brief Construct a new helper object
-   * 
+   *
    * If `include_nulls == false`, then any row in `keys` containing a null value
    * will effectively be discarded. I.e., any values corresponding to discarded
-   * rows in `keys` will not contribute to any aggregation. 
+   * rows in `keys` will not contribute to any aggregation.
    *
    * @param keys table to group by
    * @param include_nulls whether to include null keys in groupby
@@ -81,13 +80,13 @@ struct helper {
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each group.
-   * 
+   *
    * Groups the @p values where the groups are dictated by key table
-   * and each group is sorted in ascending order, with NULL elements positioned at the end of each group. Calculates and
-   * returns the number of valid values within each group. 
-   * 
+   * and each group is sorted in ascending order, with NULL elements positioned at the end of each
+   * group. Calculates and returns the number of valid values within each group.
+   *
    * @throws cudf::logic_error if `values.size != keys.num_rows()`
-   * 
+   *
    * @param values The value column to group and sort
    * @return the sorted and grouped column and per-group valid count
    */
@@ -95,20 +94,20 @@ struct helper {
 
   /**
    * @brief Get a table of sorted unique keys
-   * 
+   *
    * @return a new table in which each row is a unique row in the sorted key table.
    */
   cudf::table unique_keys();
 
   /**
    * @brief Get the number of groups in `keys`
-   * 
+   *
    */
   cudf::size_type num_groups() { return group_offsets().size(); }
 
   /**
    * @brief Return the effective number of keys
-   * 
+   *
    * When include_nulls = true, returned value is same as `keys.num_rows()`
    * When include_nulls = false, returned value is the number of rows in `keys`
    *  in which no element is null
@@ -119,33 +118,34 @@ struct helper {
    * @brief Get the sorted order of `keys`.
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
-   * 
+   *
    * Computes and stores the key sorted order on first invocation, and returns the
    * stored order on subsequent calls.
-   * 
+   *
    * @return the sort order indices for `keys`.
    */
   gdf_column const& key_sort_order();
 
   /**
-   * @brief Get each group's offset into the sorted order of `keys`. 
-   * 
+   * @brief Get each group's offset into the sorted order of `keys`.
+   *
    * Computes and stores the group offsets on first invocation and returns
    * the stored group offsets on subsequent calls.
-   * 
+   *
    * @return vector of offsets of the starting point of each group in the sorted key table
    */
   index_vector const& group_offsets();
 
   /**
-   * @brief Get the group labels corresponding to the sorted order of `keys`. 
-   * 
-   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
-   * For a row in sorted `keys`, its corresponding group label indicates which group it belongs to. 
-   * 
+   * @brief Get the group labels corresponding to the sorted order of `keys`.
+   *
+   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1,
+   * num_groups())`. For a row in sorted `keys`, its corresponding group label indicates which group
+   * it belongs to.
+   *
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
-   * 
+   *
    * @return vector of group labels for each row in the sorted key column
    */
   index_vector const& group_labels();
@@ -153,15 +153,16 @@ struct helper {
  private:
   /**
    * @brief Get the group labels for unsorted keys
-   * 
+   *
    * Returns the group label for every row in the original `keys` table. For a given unique key row,
-   * it's group label is equivalent to what is returned by `group_labels()`. However, 
-   * if a row contains a null value, and `include_nulls == false`, then it's label is NULL. 
-   * 
+   * it's group label is equivalent to what is returned by `group_labels()`. However,
+   * if a row contains a null value, and `include_nulls == false`, then it's label is NULL.
+   *
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
-   * 
-   * @return A nullable column of `GDF_INT32` containing group labels in the order of the unsorted key table
+   *
+   * @return A nullable column of `GDF_INT32` containing group labels in the order of the unsorted
+   * key table
    */
   gdf_column const& unsorted_keys_labels();
 
@@ -169,10 +170,10 @@ struct helper {
    * @brief Get the row bitmask for the `keys`
    *
    * Computes a bitmask corresponding to the rows of `keys` where if bit `i` is zero,
-   * then row `i` contains one or more null values. If bit `i` is one, then row `i` does not 
-   * contain null values. 
+   * then row `i` contains one or more null values. If bit `i` is one, then row `i` does not
+   * contain null values.
    *
-   * 
+   *
    * Computes and stores bitmask on first invocation and returns stored bitmask on
    * subsequent calls.
    */

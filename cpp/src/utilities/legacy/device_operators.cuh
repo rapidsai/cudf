@@ -31,23 +31,25 @@
 #include <type_traits>
 
 namespace cudf {
-
 // ------------------------------------------------------------------------
 // Binary operators
 /* @brief binary `sum` operator */
 struct DeviceSum {
   template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return T{DeviceSum{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return lhs + rhs;
   }
 
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return T{0};
   }
 };
@@ -55,17 +57,20 @@ struct DeviceSum {
 /* @brief `count` operator - used in rolling windows */
 struct DeviceCount {
   template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return T{DeviceCount{}(lhs.time_since_epoch(), rhs.time_since_epoch())};
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T&, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T&, const T& rhs)
+  {
     return rhs + T{1};
   }
 
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return T{0};
   }
 };
@@ -73,12 +78,14 @@ struct DeviceCount {
 /* @brief binary `min` operator */
 struct DeviceMin {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return std::min(lhs, rhs);
   }
 
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return std::numeric_limits<T>::max();
   }
 };
@@ -86,12 +93,14 @@ struct DeviceMin {
 /* @brief binary `max` operator */
 struct DeviceMax {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return std::max(lhs, rhs);
   }
 
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return std::numeric_limits<T>::lowest();
   }
 };
@@ -99,17 +108,20 @@ struct DeviceMax {
 /* @brief binary `product` operator */
 struct DeviceProduct {
   template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return T{DeviceProduct{}(lhs.time_since_epoch().count(), rhs.time_since_epoch().count())};
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return lhs * rhs;
   }
 
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return T{1};
   }
 };
@@ -117,7 +129,8 @@ struct DeviceProduct {
 /* @brief binary `and` operator */
 struct DeviceAnd {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return (lhs & rhs);
   }
 };
@@ -125,7 +138,8 @@ struct DeviceAnd {
 /* @brief binary `or` operator */
 struct DeviceOr {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return (lhs | rhs);
   }
 };
@@ -133,7 +147,8 @@ struct DeviceOr {
 /* @brief binary `xor` operator */
 struct DeviceXor {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs) {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  {
     return (lhs ^ rhs);
   }
 };

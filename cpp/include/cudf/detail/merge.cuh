@@ -22,7 +22,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Source table identifier to copy data from.
  */
@@ -35,7 +34,8 @@ enum class side : bool { LEFT, RIGHT };
 using index_type = thrust::tuple<side, cudf::size_type>;
 
 /**
- * @brief tagged_element_relational_comparator uses element_relational_comparator to provide "tagged-index" comparation logic.
+ * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
+ * "tagged-index" comparation logic.
  *
  * Special treatment is necessary in several thrust algorithms (e.g., merge()) where
  * the index affinity to the side is not guaranteed; i.e., the algorithms rely on
@@ -60,9 +60,9 @@ using index_type = thrust::tuple<side, cudf::size_type>;
  * where the also the containers must be changed (to just one instead of two)
  * independently of indices;
  *
- * As a result, a special comparison logic is necessary whereby the index is "tagged" with side information
- * and consequently comparator functors (predicates) must operate
- * on these tagged indices rather than on raw indices.
+ * As a result, a special comparison logic is necessary whereby the index is "tagged" with side
+ * information and consequently comparator functors (predicates) must operate on these tagged
+ * indices rather than on raw indices.
  *
  */
 template <bool has_nulls = true>
@@ -70,10 +70,13 @@ struct tagged_element_relational_comparator {
   __host__ __device__ tagged_element_relational_comparator(column_device_view lhs,
                                                            column_device_view rhs,
                                                            null_order null_precedence)
-    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence} {}
+    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
+  {
+  }
 
   __device__ weak_ordering compare(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept {
+    noexcept
+  {
     side l_side = thrust::get<0>(lhs_tagged_index);
     side r_side = thrust::get<0>(rhs_tagged_index);
 
@@ -105,13 +108,15 @@ struct row_lexicographic_tagged_comparator {
                                       table_device_view rhs,
                                       order const* column_order         = nullptr,
                                       null_order const* null_precedence = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence} {
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+  {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   __device__ bool operator()(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept {
+    noexcept
+  {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 

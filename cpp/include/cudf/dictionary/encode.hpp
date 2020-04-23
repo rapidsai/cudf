@@ -27,7 +27,6 @@
 namespace cudf {
 //! Dictionary column APIs.
 namespace dictionary {
-
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *

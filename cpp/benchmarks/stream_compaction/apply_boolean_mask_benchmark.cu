@@ -25,24 +25,26 @@
 #include <random>
 
 namespace {
-
 constexpr cudf::size_type hundredM      = 1e8;
 constexpr cudf::size_type tenM          = 1e7;
 constexpr cudf::size_type tenK          = 1e4;
 constexpr cudf::size_type fifty_percent = 50;
 
-static void percent_range(benchmark::internal::Benchmark* b) {
+static void percent_range(benchmark::internal::Benchmark* b)
+{
   b->Unit(benchmark::kMillisecond);
   for (int percent = 0; percent <= 100; percent += 10) b->Args({hundredM, percent});
 }
 
-static void size_range(benchmark::internal::Benchmark* b) {
+static void size_range(benchmark::internal::Benchmark* b)
+{
   b->Unit(benchmark::kMillisecond);
   for (int size = tenK; size <= hundredM; size *= 10) b->Args({size, fifty_percent});
 }
 
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -57,7 +59,8 @@ class ApplyBooleanMask : public cudf::benchmark {
 };
 
 template <typename T>
-void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns) {
+void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
+{
   const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
   const cudf::size_type percent_true{static_cast<cudf::size_type>(state.range(1))};
 
@@ -81,7 +84,8 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns) {
 }  // namespace
 
 template <class T>
-void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns) {
+void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
+{
   using wrapper      = cudf::test::column_wrapper<T>;
   using mask_wrapper = cudf::test::column_wrapper<cudf::bool8>;
 

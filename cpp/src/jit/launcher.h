@@ -31,10 +31,9 @@
 
 namespace cudf {
 namespace jit {
-
 /**
  * @brief Class used to handle compilation and execution of JIT kernels
- * 
+ *
  */
 class launcher {
  public:
@@ -42,11 +41,11 @@ class launcher {
 
   /**
    * @brief C'tor of the launcher class
-   * 
+   *
    * Method to generate vector containing all template types for a JIT kernel.
    *  This vector is used to get the compiled kernel for one set of types and set
    *  it as the kernel to launch using this launcher.
-   * 
+   *
    * @param hash The hash to be used as the key for caching
    * @param cuda_code The CUDA code that contains the kernel to be launched
    * @param header_names Strings of header_names or strings that contain content
@@ -69,30 +68,32 @@ class launcher {
 
   /**
    * @brief Sets the kernel to launch using this launcher
-   * 
+   *
    * Method to generate vector containing all template types for a JIT kernel.
    *  This vector is used to get the compiled kernel for one set of types and set
    *  it as the kernel to launch using this launcher.
-   * 
+   *
    * @param kernel_name The kernel to be launched
    * @param arguments   The template arguments to be used to instantiate the kernel
    * @return launcher& ref to this launcehr object
    */
   launcher& set_kernel_inst(const std::string& kernel_name,
-                            const std::vector<std::string>& arguments) {
+                            const std::vector<std::string>& arguments)
+  {
     kernel_inst = cache_instance.getKernelInstantiation(kernel_name, program, arguments);
     return *this;
   }
 
   /**
-   * @brief Handle the Jitify API to launch using information 
+   * @brief Handle the Jitify API to launch using information
    *  contained in the members of `this`
-   * 
+   *
    * @tparam All parameters to launch the kernel
    * @return Return GDF_SUCCESS if successful
    */
   template <typename... Args>
-  void launch(Args... args) {
+  void launch(Args... args)
+  {
     get_kernel().configure_1d_max_occupancy(0, 0, 0, stream).launch(args...);
   }
 

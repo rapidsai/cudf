@@ -26,12 +26,11 @@
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
 
   std::vector<column_view> result{};
@@ -64,13 +63,15 @@ std::vector<column_view> slice(column_view const& input,
 }  // namespace detail
 
 std::vector<cudf::column_view> slice(cudf::column_view const& input,
-                                     std::vector<size_type> const& indices) {
+                                     std::vector<size_type> const& indices)
+{
   CUDF_FUNC_RANGE();
   return detail::slice(input, indices, 0);
 }
 
 std::vector<cudf::table_view> slice(cudf::table_view const& input,
-                                    std::vector<size_type> const& indices) {
+                                    std::vector<size_type> const& indices)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
   std::vector<cudf::table_view> result{};

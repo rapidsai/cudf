@@ -24,14 +24,14 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 struct aggregation_equality {
   struct typed_aggregation_equality {
     std::shared_ptr<aggregation> const& lhs;
     std::shared_ptr<aggregation> const& rhs;
 
     template <aggregation::Kind k>
-    bool operator()() const {
+    bool operator()() const
+    {
       using agg_type = experimental::detail::kind_to_type<k>;
       auto typed_lhs = static_cast<agg_type const*>(lhs.get());
       auto typed_rhs = static_cast<agg_type const*>(rhs.get());
@@ -40,7 +40,8 @@ struct aggregation_equality {
   };
 
   bool operator()(std::shared_ptr<aggregation> const& lhs,
-                  std::shared_ptr<aggregation> const& rhs) const {
+                  std::shared_ptr<aggregation> const& rhs) const
+  {
     if (lhs->kind != rhs->kind) return false;
 
     return experimental::detail::aggregation_dispatcher(lhs->kind,
@@ -49,7 +50,8 @@ struct aggregation_equality {
 };
 
 struct aggregation_hash {
-  size_t operator()(std::shared_ptr<aggregation> const& key) const noexcept {
+  size_t operator()(std::shared_ptr<aggregation> const& key) const noexcept
+  {
     if (key) {
       return key->kind;
     } else {

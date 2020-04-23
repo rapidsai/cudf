@@ -21,7 +21,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -42,7 +41,8 @@ __global__ void dataTypeDetection(const char *raw_csv,
                                   int num_columns,
                                   column_parse::flags *flags,
                                   const uint64_t *recStart,
-                                  column_parse::stats *d_columnData) {
+                                  column_parse::stats *d_columnData)
+{
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -174,7 +174,8 @@ struct ConvertFunctor {
                                                       long start,
                                                       long end,
                                                       const ParseOptions &opts,
-                                                      column_parse::flags flags) {
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
 
     // Check for user-specified true/false values first, where the output is
@@ -204,7 +205,8 @@ struct ConvertFunctor {
                                                       long start,
                                                       long end,
                                                       const ParseOptions &opts,
-                                                      column_parse::flags flags) {
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
     value = convertStrToValue<T>(csvData, start, end, opts);
   }
@@ -235,7 +237,8 @@ __global__ void convertCsvToGdf(const char *raw_csv,
                                 gdf_dtype *dtype,
                                 void **data,
                                 cudf::valid_type **valid,
-                                cudf::size_type *num_valid) {
+                                cudf::size_type *num_valid)
+{
   // thread IDs range per block, so also need the block id
   long rec_id =
     threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
@@ -317,7 +320,8 @@ cudaError_t __host__ DetectCsvDataTypes(const char *data,
                                         const ParseOptions &options,
                                         column_parse::flags *flags,
                                         column_parse::stats *stats,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection));
@@ -341,7 +345,8 @@ cudaError_t __host__ DecodeCsvColumnData(const char *data,
                                          void **columns,
                                          cudf::valid_type **valids,
                                          cudf::size_type *num_valid,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));

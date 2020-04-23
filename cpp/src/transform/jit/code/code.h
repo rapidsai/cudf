@@ -22,7 +22,6 @@ namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
-
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;

@@ -31,16 +31,19 @@ namespace strings {
 namespace detail {
 namespace {  // anonym.
 
-//execute string wrap:
+// execute string wrap:
 //
 struct execute_wrap {
   execute_wrap(column_device_view const d_column,
                int32_t const* d_offsets,
                char* d_chars,
                size_type width)
-    : d_column_(d_column), d_offsets_(d_offsets), d_chars_(d_chars), width_(width) {}
+    : d_column_(d_column), d_offsets_(d_offsets), d_chars_(d_chars), width_(width)
+  {
+  }
 
-  __device__ int32_t operator()(size_type idx) {
+  __device__ int32_t operator()(size_type idx)
+  {
     if (d_column_.is_null(idx)) return 0;  // null string
 
     string_view d_str = d_column_.template element<string_view>(idx);
@@ -56,7 +59,7 @@ struct execute_wrap {
 
       auto pos = itr.position();
 
-      //execute conditions:
+      // execute conditions:
       //
       if (the_chr <= ' ') {  // convert all whitespace to space
         d_buffer[bidx]        = ' ';
@@ -88,7 +91,8 @@ template <typename device_execute_functor>
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0) {
+                             cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
@@ -126,14 +130,15 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              mr);
 }
 
-}  //namespace detail
+}  // namespace detail
 
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::wrap<detail::execute_wrap>(strings, width, mr);
 }
 
-}  //namespace strings
-}  //namespace cudf
+}  // namespace strings
+}  // namespace cudf
