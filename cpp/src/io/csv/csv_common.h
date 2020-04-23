@@ -27,12 +27,12 @@ namespace csv {
  */
 namespace column_parse {
 enum : uint8_t {
-  disabled = 0,        ///< data is not read
-  enabled = 1,         ///< data is read and parsed as usual
-  inferred = 2,        ///< infer the dtype
-  as_default = 4,      ///< no special decoding
-  as_hexadecimal = 8,  ///< decode with base-16
-  as_datetime = 16,    ///< decode as date and/or time
+  disabled       = 0,   ///< data is not read
+  enabled        = 1,   ///< data is read and parsed as usual
+  inferred       = 2,   ///< infer the dtype
+  as_default     = 4,   ///< no special decoding
+  as_hexadecimal = 8,   ///< decode with base-16
+  as_datetime    = 16,  ///< decode as date and/or time
 };
 using flags = uint8_t;
 

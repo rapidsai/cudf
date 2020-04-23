@@ -20,7 +20,6 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 
-
 namespace cudf {
 
 /**
@@ -51,8 +50,7 @@ namespace cudf {
   * @return cudf::table Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-table apply_boolean_mask(table const &input,
-                         gdf_column const &boolean_mask);
+table apply_boolean_mask(table const &input, gdf_column const &boolean_mask);
 
 /**
  * @brief Filters a table to remove null elements.
@@ -84,9 +82,7 @@ table apply_boolean_mask(table const &input,
  * @return cudf::table Table containing all rows of the input table with at 
  *                     least @p keep_threshold non-null fields in @p keys.
  */
-table drop_nulls(table const &input,
-                 table const &keys,
-                 cudf::size_type keep_threshold);
+table drop_nulls(table const &input, table const &keys, cudf::size_type keep_threshold);
 
 /**
  * @brief Filters a table to remove null elements.
@@ -101,16 +97,15 @@ table drop_nulls(table const &input,
  * @return cudf::table Table containing all rows of the input table without
  *                     nulls in the columns of @p keys.
  */
-table drop_nulls(table const &input,
-                 table const &keys);
+table drop_nulls(table const &input, table const &keys);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum duplicate_keep_option {
-  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
-  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
-  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
+  KEEP_FIRST = 0,  ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,       ///< Keeps last  duplicate row and unique rows
+  KEEP_NONE        ///< Don't keep any duplicate rows, Keeps only unique rows
 };
 
 /**
@@ -134,8 +129,8 @@ enum duplicate_keep_option {
  *
  * @return new table with only unique rows
  */
-cudf::table drop_duplicates(const cudf::table& input,
-                            const cudf::table& keys,
+cudf::table drop_duplicates(const cudf::table &input,
+                            const cudf::table &keys,
                             const duplicate_keep_option keep,
                             const bool nulls_are_equal = true);
 
@@ -155,9 +150,9 @@ cudf::table drop_duplicates(const cudf::table& input,
  *
  * @return number of unique elements
  */
-cudf::size_type unique_count(gdf_column const& input,
-                           bool const ignore_nulls,
-                           bool const nan_as_null);
+cudf::size_type unique_count(gdf_column const &input,
+                             bool const ignore_nulls,
+                             bool const nan_as_null);
 }  // namespace cudf
 
 #endif

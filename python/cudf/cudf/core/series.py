@@ -1806,20 +1806,6 @@ class Series(Frame):
             res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
 
-    # Find / Search
-
-    def find_first_value(self, value):
-        """
-        Returns offset of first value that matches
-        """
-        return self._column.find_first_value(value)
-
-    def find_last_value(self, value):
-        """
-        Returns offset of last value that matches
-        """
-        return self._column.find_last_value(value)
-
     #
     # Stats
     #

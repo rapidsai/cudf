@@ -18,10 +18,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 
 /**
  * @brief Returns a vector of strings columns for each matching group specified in the given regular expression pattern.
@@ -43,10 +41,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return Columns of strings extracted from the input column.
  */
-std::unique_ptr<experimental::table> extract( strings_column_view const& strings,
-                                              std::string const& pattern,
-                                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> extract(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

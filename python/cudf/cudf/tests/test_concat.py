@@ -237,3 +237,17 @@ def test_concat_string_index_name(myindex):
     df3 = gd.concat([df1, df2])
 
     assert df3.index.name == myindex
+
+
+def test_concat_duplicate_columns():
+    cdf = gd.DataFrame(
+        {
+            "id4": 4 * list(range(6)),
+            "id5": 4 * list(reversed(range(6))),
+            "v3": 6 * list(range(4)),
+        }
+    )
+    cdf_std = cdf.groupby(["id4", "id5"])[["v3"]].std()
+    cdf_med = cdf.groupby(["id4", "id5"])[["v3"]].quantile(q=0.5)
+    with pytest.raises(NotImplementedError):
+        gd.concat([cdf_med, cdf_std], axis=1)

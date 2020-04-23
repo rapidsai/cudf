@@ -17,14 +17,13 @@
 #define GROUPBY_KERNELS_CUH
 
 #include <cudf/legacy/groupby.hpp>
-#include "groupby/common/legacy/type_info.hpp"
 #include "groupby/common/legacy/kernel_utils.hpp"
+#include "groupby/common/legacy/type_info.hpp"
 #include "utilities/legacy/device_atomics.cuh"
 
 namespace cudf {
 namespace groupby {
 namespace sort {
-
 
 /**---------------------------------------------------------------------------*
  @brief  Compute the aggregation(s) of corresponding rows in the `values` input 
@@ -56,25 +55,24 @@ namespace sort {
  * `true` and skip_null_keys option is true.
  *---------------------------------------------------------------------------**/
 template <bool skip_rows_with_nulls, bool values_have_nulls>
-__global__ void aggregate_all_rows(
-    device_table input_values,
-    device_table output_values,
-    cudf::size_type const* key_sorted_order, 
-    cudf::size_type const* group_labels, 
-    bool skip_null_keys,
-    operators* ops,
-    bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
-
+__global__ void aggregate_all_rows(device_table input_values,
+                                   device_table output_values,
+                                   cudf::size_type const* key_sorted_order,
+                                   cudf::size_type const* group_labels,
+                                   bool skip_null_keys,
+                                   operators* ops,
+                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_values.num_rows()) {
-    if (skip_null_keys and skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
+    if (skip_null_keys and skip_rows_with_nulls and
+        not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
       i += blockDim.x * gridDim.x;
       continue;
     }
     auto group_index = group_labels[i];
-    aggregate_row<values_have_nulls>(output_values, group_index,
-                                      input_values, key_sorted_order[i], ops);
+    aggregate_row<values_have_nulls>(
+      output_values, group_index, input_values, key_sorted_order[i], ops);
     i += blockDim.x * gridDim.x;
   }
 }

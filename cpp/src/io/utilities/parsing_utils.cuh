@@ -59,8 +59,9 @@ namespace gpu {
  * @return long The position of the last character in the field, including the
  *  delimiter(s) following the field data
  */
-__device__ __inline__ long seek_field_end(const char *data,
-                                          ParseOptions const &opts, long pos,
+__device__ __inline__ long seek_field_end(const char* data,
+                                          ParseOptions const& opts,
+                                          long pos,
                                           long stop) {
   bool quotation = false;
   while (true) {
@@ -71,15 +72,11 @@ __device__ __inline__ long seek_field_end(const char *data,
       quotation = !quotation;
     } else if (quotation == false) {
       if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop &&
-               data[pos + 1] == opts.delimiter) {
-          ++pos;
-        }
+        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) { ++pos; }
         break;
       } else if (data[pos] == opts.terminator) {
         break;
-      } else if (data[pos] == '\r' &&
-                 (pos + 1 < stop && data[pos + 1] == '\n')) {
+      } else if (data[pos] == '\r' && (pos + 1 < stop && data[pos + 1] == '\n')) {
         stop--;
         break;
       }
@@ -101,8 +98,7 @@ __device__ __inline__ long seek_field_end(const char *data,
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T,
-          typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
 __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -122,8 +118,7 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T,
-          typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
 __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
   if (c >= '0' && c <= '9') return c - '0';
 
@@ -143,9 +138,9 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  * @return The parsed and converted value
  */
 template <typename T>
-__inline__ __device__ T parse_numeric(const char *data, long start, long end,
-                                      ParseOptions const &opts, int base = 10) {
-  T value = 0;
+__inline__ __device__ T
+parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10) {
+  T value               = 0;
   bool all_digits_valid = true;
 
   // Handle negative values if necessary
@@ -186,26 +181,20 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
     // Handle exponential part of the number if necessary
     if (index <= end) {
       const int32_t exponent_sign = data[index] == '-' ? -1 : 1;
-      if (data[index] == '-' || data[index] == '+') {
-        ++index;
-      }
+      if (data[index] == '-' || data[index] == '+') { ++index; }
       int32_t exponent = 0;
       while (index <= end) {
-          exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
+        exponent = (exponent * 10) + decode_digit<T>(data[index++], &all_digits_valid);
       }
-      if (exponent != 0) {
-        value *= exp10(double(exponent * exponent_sign));
-      }
+      if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
     }
   }
-  if (!all_digits_valid){
-    return std::numeric_limits<T>::quiet_NaN();
-  }
+  if (!all_digits_valid) { return std::numeric_limits<T>::quiet_NaN(); }
 
   return value * sign;
 }
 
-} // namespace gpu
+}  // namespace gpu
 
 /**
  * @brief Searches the input character array for each of characters in a set.
@@ -219,9 +208,11 @@ __inline__ __device__ T parse_numeric(const char *data, long start, long end,
  * 
  * @return cudf::size_type total number of occurrences
  **/
-template<class T>
-cudf::size_type find_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys, uint64_t result_offset,
-	T *positions);
+template <class T>
+cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
+                                  const std::vector<char>& keys,
+                                  uint64_t result_offset,
+                                  T* positions);
 
 /**
  * @brief Searches the input character array for each of characters in a set.
@@ -239,9 +230,12 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data, const std::v
  * 
  * @return cudf::size_type total number of occurrences
  **/
-template<class T>
-cudf::size_type find_all_from_set(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
-	T *positions);
+template <class T>
+cudf::size_type find_all_from_set(const char* h_data,
+                                  size_t h_size,
+                                  const std::vector<char>& keys,
+                                  uint64_t result_offset,
+                                  T* positions);
 
 /**
  * @brief Searches the input character array for each of characters in a set
@@ -267,7 +261,9 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  *
  * @return cudf::size_type total number of occurrences
  **/
-cudf::size_type count_all_from_set(const char *h_data, size_t h_size, const std::vector<char>& keys);
+cudf::size_type count_all_from_set(const char* h_data,
+                                   size_t h_size,
+                                   const std::vector<char>& keys);
 
 /**
  * @brief Infer file compression type based on user supplied arguments.
@@ -283,8 +279,9 @@ cudf::size_type count_all_from_set(const char *h_data, size_t h_size, const std:
  * @return string representing compression type ("gzip, "bz2", etc)
  **/
 std::string infer_compression_type(
-    const compression_type &compression_arg, const std::string &filename,
-    const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map);
+  const compression_type& compression_arg,
+  const std::string& filename,
+  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
 
 }  // namespace io
 }  // namespace experimental

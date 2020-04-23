@@ -38,8 +38,10 @@ namespace gpu {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DetectColumnTypes(const char *data, const uint64_t *row_starts,
-                              size_t num_rows, size_t num_columns,
+cudaError_t DetectColumnTypes(const char *data,
+                              const uint64_t *row_starts,
+                              size_t num_rows,
+                              size_t num_columns,
                               const cudf::experimental::io::ParseOptions &options,
                               column_parse::flags *flags,
                               column_parse::stats *stats,
@@ -62,11 +64,14 @@ cudaError_t DetectColumnTypes(const char *data, const uint64_t *row_starts,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeRowColumnData(const char *data, const uint64_t *row_starts,
-                                size_t num_rows, size_t num_columns,
+cudaError_t DecodeRowColumnData(const char *data,
+                                const uint64_t *row_starts,
+                                size_t num_rows,
+                                size_t num_columns,
                                 const cudf::experimental::io::ParseOptions &options,
                                 const column_parse::flags *flags,
-                                cudf::data_type *dtypes, void **columns,
+                                cudf::data_type *dtypes,
+                                void **columns,
                                 cudf::bitmask_type **valids,
                                 cudaStream_t stream = (cudaStream_t)0);
 

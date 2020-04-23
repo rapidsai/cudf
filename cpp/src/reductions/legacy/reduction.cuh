@@ -47,28 +47,30 @@ namespace detail {
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
  * ----------------------------------------------------------------------------**/
- template <typename Op, typename InputIterator, typename OutputType>
-void reduce(OutputType* dev_result, InputIterator d_in, cudf::size_type num_items,
-    OutputType init, Op op, cudaStream_t stream)
-{
-    void     *d_temp_storage = NULL;
-    size_t   temp_storage_bytes = 0;
+template <typename Op, typename InputIterator, typename OutputType>
+void reduce(OutputType* dev_result,
+            InputIterator d_in,
+            cudf::size_type num_items,
+            OutputType init,
+            Op op,
+            cudaStream_t stream) {
+  void* d_temp_storage      = NULL;
+  size_t temp_storage_bytes = 0;
 
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
-    // Allocate temporary storage
-    RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
+  cub::DeviceReduce::Reduce(
+    d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items, op, init, stream);
+  // Allocate temporary storage
+  RMM_TRY(RMM_ALLOC(&d_temp_storage, temp_storage_bytes, stream));
 
-    // Run reduction
-    cub::DeviceReduce::Reduce(d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items,
-        op, init, stream);
+  // Run reduction
+  cub::DeviceReduce::Reduce(
+    d_temp_storage, temp_storage_bytes, d_in, dev_result, num_items, op, init, stream);
 
-    // Free temporary storage
-    RMM_TRY(RMM_FREE(d_temp_storage, stream));
+  // Free temporary storage
+  RMM_TRY(RMM_FREE(d_temp_storage, stream));
 }
 
-} // namespace detail
-} // namespace reduction
-} // namespace cudf
+}  // namespace detail
+}  // namespace reduction
+}  // namespace cudf
 #endif
-

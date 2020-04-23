@@ -49,13 +49,13 @@ namespace experimental {
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> rolling_window(column_view const& input,
-                                       size_type preceding_window,
-                                       size_type following_window,
-                                       size_type min_periods,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       rmm::mr::device_memory_resource* mr =
-                                        rmm::mr::get_default_resource());
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.
@@ -125,14 +125,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
-                                               column_view const& input,
-                                               size_type preceding_window,
-                                               size_type following_window,
-                                               size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
-                                               rmm::mr::device_memory_resource* mr = 
-                                                 rmm::mr::get_default_resource());
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& aggr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a column.
@@ -209,15 +209,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
-                                                          column_view const& timestamp_column,
-                                                          column_view const& input,
-                                                          size_type preceding_window_in_days,
-                                                          size_type following_window_in_days,
-                                                          size_type min_periods,
-                                                          std::unique_ptr<aggregation> const& aggr,
-                                                          rmm::mr::device_memory_resource* mr = 
-                                                            rmm::mr::get_default_resource());
+std::unique_ptr<column> grouped_time_range_rolling_window(
+  table_view const& group_keys,
+  column_view const& timestamp_column,
+  column_view const& input,
+  size_type preceding_window_in_days,
+  size_type following_window_in_days,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& aggr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -251,13 +251,13 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
  *
  * @returns   A nullable output column containing the rolling window results
  **/
-std::unique_ptr<column> rolling_window(column_view const& input,
-                                       column_view const& preceding_window,
-                                       column_view const& following_window,
-                                       size_type min_periods,
-                                       std::unique_ptr<aggregation> const& agg,
-                                       rmm::mr::device_memory_resource* mr =
-                                        rmm::mr::get_default_resource());
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  column_view const& preceding_window,
+  column_view const& following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace experimental 
-} // namespace cudf
+}  // namespace experimental
+}  // namespace cudf

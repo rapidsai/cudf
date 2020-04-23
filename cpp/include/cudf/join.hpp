@@ -80,12 +80,12 @@ namespace experimental {
  * `left(including common columns)+right(excluding common columns)`.
  */
 std::unique_ptr<cudf::experimental::table> inner_join(
-                         cudf::table_view const& left,
-                         cudf::table_view const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Performs a left join (also known as left outer join) on the
@@ -143,12 +143,12 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * `left(including common columns)+right(excluding common columns)`.
  */
 std::unique_ptr<cudf::experimental::table> left_join(
-                         cudf::table_view const& left,
-                         cudf::table_view const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief  Performs a full join (also known as full outer join) on the
@@ -206,12 +206,12 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * `left(including common columns)+right(excluding common columns)`.
  */
 std::unique_ptr<cudf::experimental::table> full_join(
-                         cudf::table_view const& left,
-                         cudf::table_view const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /** 
  * @brief  Performs a left semi join on the specified columns of two 
  * tables (left, right)
@@ -255,12 +255,13 @@ std::unique_ptr<cudf::experimental::table> full_join(
  *                             specified by `left_on` and `right_on`. The resulting table
  *                             will contain `return_columns` from `left` that match in right.
  */
-std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const& left,
-                                                          cudf::table_view const& right,
-                                                          std::vector<cudf::size_type> const& left_on,
-                                                          std::vector<cudf::size_type> const& right_on,
-                                                          std::vector<cudf::size_type> const& return_columns,
-                                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::experimental::table> left_semi_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<cudf::size_type> const& return_columns,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** 
  * @brief  Performs a left anti join on the specified columns of two 
@@ -305,12 +306,13 @@ std::unique_ptr<cudf::experimental::table> left_semi_join(cudf::table_view const
  *                             specified by `left_on` and `right_on`. The resulting table
  *                             will contain `return_columns` from `left` that match in right.
  */
-std::unique_ptr<cudf::experimental::table> left_anti_join(cudf::table_view const& left,
-                                                          cudf::table_view const& right,
-                                                          std::vector<cudf::size_type> const& left_on,
-                                                          std::vector<cudf::size_type> const& right_on,
-                                                          std::vector<cudf::size_type> const& return_columns,
-                                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-} //namespace experimental
+std::unique_ptr<cudf::experimental::table> left_anti_join(
+  cudf::table_view const& left,
+  cudf::table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<cudf::size_type> const& return_columns,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+}  //namespace experimental
 
-} //namespace cudf
+}  //namespace cudf

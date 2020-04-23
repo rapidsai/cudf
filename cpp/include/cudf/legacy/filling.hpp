@@ -36,8 +36,7 @@ namespace cudf {
  * 
  * @return void
  */
-void fill(gdf_column *column, gdf_scalar const& value, 
-          cudf::size_type begin, cudf::size_type end);
+void fill(gdf_column *column, gdf_scalar const &value, cudf::size_type begin, cudf::size_type end);
 
 /**
  * @brief Repeat rows of a Table
@@ -56,7 +55,7 @@ void fill(gdf_column *column, gdf_scalar const& value,
  * @param count Non-nullable column of type `GDF_INT32`
  * @return cudf::table The result table containing the repetitions
  */
-cudf::table repeat(const cudf::table &in, const gdf_column& count);
+cudf::table repeat(const cudf::table &in, const gdf_column &count);
 
 /**
  * @brief Repeat rows of a Table
@@ -73,7 +72,7 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count);
  * @param count Non-null scalar of type `GDF_INT32`
  * @return cudf::table The result table containing the repetitions
  */
-cudf::table repeat(const cudf::table &in, const gdf_scalar& count);
+cudf::table repeat(const cudf::table &in, const gdf_scalar &count);
 
 /**
  * @brief Construct a new table by tiling the input table
@@ -93,6 +92,6 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar& count);
  */
 cudf::table tile(const cudf::table &in, gdf_size_type count);
 
-}; // namespace cudf
+};  // namespace cudf
 
-#endif // FILLING_HPP
+#endif  // FILLING_HPP
