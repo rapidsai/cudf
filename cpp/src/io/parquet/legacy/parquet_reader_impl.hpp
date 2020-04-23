@@ -31,7 +31,6 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-
 // Forward declare Parquet metadata parser
 class ParquetMetadata;
 

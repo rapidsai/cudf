@@ -26,7 +26,6 @@
  */
 
 namespace cudf {
-
 // UTF-8 characters are 1-4 bytes
 using char_utf8 = uint32_t;
 

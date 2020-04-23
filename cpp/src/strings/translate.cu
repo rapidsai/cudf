@@ -30,11 +30,9 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 using translate_table = thrust::pair<char_utf8, char_utf8>;
 
 namespace {
-
 /**
  * @brief This is the translate functor for replacing individual characters
  * in each string.
@@ -46,7 +44,8 @@ struct translate_fn {
   int32_t const* d_offsets{};
   char* d_chars{};
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     size_type bytes   = d_str.size_bytes();
@@ -75,7 +74,8 @@ std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -126,7 +126,8 @@ std::unique_ptr<column> translate(
 
 std::unique_ptr<column> translate(strings_column_view const& strings,
                                   std::vector<std::pair<uint32_t, uint32_t>> const& chars_table,
-                                  rmm::mr::device_memory_resource* mr) {
+                                  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::translate(strings, chars_table);
 }

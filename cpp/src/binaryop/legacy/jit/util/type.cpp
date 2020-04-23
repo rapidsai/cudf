@@ -23,14 +23,14 @@
 namespace cudf {
 namespace binops {
 namespace jit {
-
 /**---------------------------------------------------------------------------*
-     * @brief Get the Operator Name
-     * 
-     * @param ope (enum) The binary operator as enum of type gdf_binary_operator
-     * @return std::string The name of the operator as string
-     *---------------------------------------------------------------------------**/
-std::string getOperatorName(gdf_binary_operator ope) {
+ * @brief Get the Operator Name
+ *
+ * @param ope (enum) The binary operator as enum of type gdf_binary_operator
+ * @return std::string The name of the operator as string
+ *---------------------------------------------------------------------------**/
+std::string getOperatorName(gdf_binary_operator ope)
+{
   switch (ope) {
     case GDF_ADD: return "Add";
     case GDF_SUB: return "Sub";

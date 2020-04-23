@@ -31,7 +31,6 @@
 namespace cudf {
 namespace io {
 namespace orc {
-
 // Forward internal classes
 class OrcMetadata;
 class OrcStreamInfo;

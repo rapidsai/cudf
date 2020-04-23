@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 
 namespace cudf {
-
 /**
  * @brief A wrapper class for operations on a dictionary column.
  *
@@ -44,29 +43,29 @@ class dictionary_column_view : private column_view {
   using column_view::size;
 
   /**
-     * @brief Returns the parent column.
-     */
+   * @brief Returns the parent column.
+   */
   column_view parent() const noexcept;
 
   /**
-     * @brief Returns the column of indices
-     */
+   * @brief Returns the column of indices
+   */
   column_view indices() const noexcept;
 
   /**
-     * @brief Returns a column_view combining the indices data
-     * with offset, size, and nulls from the parent.
-     */
+   * @brief Returns a column_view combining the indices data
+   * with offset, size, and nulls from the parent.
+   */
   column_view get_indices_annotated() const noexcept;
 
   /**
-     * @brief Returns the column of keys
-     */
+   * @brief Returns the column of keys
+   */
   column_view keys() const noexcept;
 
   /**
-     * @brief Returns the number of rows in the keys column.
-     */
+   * @brief Returns the number of rows in the keys column.
+   */
   size_type keys_size() const noexcept;
 };
 

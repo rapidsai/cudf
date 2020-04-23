@@ -28,10 +28,9 @@ namespace experimental {
 namespace groupby {
 namespace detail {
 namespace sort {
-
 /**
  * @brief Helper class for computing sort-based groupby
- * 
+ *
  * This class serves the purpose of sorting the keys and values and provides
  * building blocks for aggregations. It can provide:
  * 1. On-demand grouping or sorting of a value column based on `keys`
@@ -49,10 +48,10 @@ struct sort_groupby_helper {
 
   /**
    * @brief Construct a new helper object
-   * 
+   *
    * If `include_null_keys == NO`, then any row in `keys` containing a null
    * value will effectively be discarded. I.e., any values corresponding to
-   * discarded rows in `keys` will not contribute to any aggregation. 
+   * discarded rows in `keys` will not contribute to any aggregation.
    *
    * @param keys table to group by
    * @param include_null_keys Include rows in keys with nulls
@@ -65,7 +64,8 @@ struct sort_groupby_helper {
     : _keys(keys),
       _num_keys(-1),
       _include_null_keys(include_null_keys),
-      _keys_pre_sorted(keys_pre_sorted) {
+      _keys_pre_sorted(keys_pre_sorted)
+  {
     if (keys_pre_sorted == sorted::YES and include_null_keys == include_nulls::NO and
         has_nulls(keys)) {
       _keys_pre_sorted = sorted::NO;
@@ -81,13 +81,13 @@ struct sort_groupby_helper {
   /**
    * @brief Groups a column of values according to `keys` and sorts within each
    *  group.
-   * 
-   * Groups the @p values where the groups are dictated by key table and each 
-   * group is sorted in ascending order, with NULL elements positioned at the 
+   *
+   * Groups the @p values where the groups are dictated by key table and each
+   * group is sorted in ascending order, with NULL elements positioned at the
    * end of each group.
-   * 
+   *
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
-   * 
+   *
    * @param values The value column to group and sort
    * @return the sorted and grouped column
    */
@@ -98,11 +98,11 @@ struct sort_groupby_helper {
 
   /**
    * @brief Groups a column of values according to `keys`
-   * 
-   * The order of values within each group is undefined. 
-   * 
+   *
+   * The order of values within each group is undefined.
+   *
    * @throw cudf::logic_error if `values.size() != keys.num_rows()`
-   * 
+   *
    * @param values The value column to group
    * @return the grouped column
    */
@@ -113,7 +113,7 @@ struct sort_groupby_helper {
 
   /**
    * @brief Get a table of sorted unique keys
-   * 
+   *
    * @return a new table in which each row is a unique row in the sorted key table.
    */
   std::unique_ptr<table> unique_keys(
@@ -134,7 +134,7 @@ struct sort_groupby_helper {
 
   /**
    * @brief Return the effective number of keys
-   * 
+   *
    * When include_null_keys = YES, returned value is same as `keys.num_rows()`
    * When include_null_keys = NO, returned value is the number of rows in `keys`
    *  in which no element is null
@@ -148,20 +148,20 @@ struct sort_groupby_helper {
    *
    * When ignore_null_keys = true, the result will not include indices
    * for null keys.
-   * 
+   *
    * Computes and stores the key sorted order on first invocation, and returns
    * the stored order on subsequent calls.
-   * 
+   *
    * @return the sort order indices for `keys`.
    */
   column_view key_sort_order(cudaStream_t stream = 0);
 
   /**
-   * @brief Get each group's offset into the sorted order of `keys`. 
-   * 
-   * Computes and stores the group offsets on first invocation and returns 
-   * the stored group offsets on subsequent calls. 
-   * This returns a vector of size `num_groups() + 1` such that the size of 
+   * @brief Get each group's offset into the sorted order of `keys`.
+   *
+   * Computes and stores the group offsets on first invocation and returns
+   * the stored group offsets on subsequent calls.
+   * This returns a vector of size `num_groups() + 1` such that the size of
    * group `i` is `group_offsets[i+1] - group_offsets[i]`
    *
    * @return vector of offsets of the starting point of each group in the sorted
@@ -170,16 +170,16 @@ struct sort_groupby_helper {
   index_vector const& group_offsets(cudaStream_t stream = 0);
 
   /**
-   * @brief Get the group labels corresponding to the sorted order of `keys`. 
-   * 
-   * Each group is assigned a unique numerical "label" in 
+   * @brief Get the group labels corresponding to the sorted order of `keys`.
+   *
+   * Each group is assigned a unique numerical "label" in
    * `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
    * For a row in sorted `keys`, its corresponding group label indicates which
-   * group it belongs to. 
-   * 
+   * group it belongs to.
+   *
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
-   * 
+   *
    * @return vector of group labels for each row in the sorted key column
    */
   index_vector const& group_labels(cudaStream_t stream = 0);
@@ -187,16 +187,16 @@ struct sort_groupby_helper {
  private:
   /**
    * @brief Get the group labels for unsorted keys
-   * 
+   *
    * Returns the group label for every row in the original `keys` table. For a
    * given unique key row, its group label is equivalent to what is returned by
    * `group_labels()`. However, if a row contains a null value, and
-   * `include_null_keys == NO`, then its label is NULL. 
-   * 
+   * `include_null_keys == NO`, then its label is NULL.
+   *
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
-   * 
-   * @return A nullable column of `INT32` containing group labels in the order 
+   *
+   * @return A nullable column of `INT32` containing group labels in the order
    *         of the unsorted key table
    */
   column_view unsorted_keys_labels(cudaStream_t stream = 0);
@@ -205,11 +205,11 @@ struct sort_groupby_helper {
    * @brief Get the column representing the row bitmask for the `keys`
    *
    * Computes a bitmask corresponding to the rows of `keys` where if bit `i` is
-   * zero, then row `i` contains one or more null values. If bit `i` is one, 
+   * zero, then row `i` contains one or more null values. If bit `i` is one,
    * then row `i` does not contain null values. This bitmask is added as null
    * mask of a column of type `INT8` where all the data values are the same and
    * the elements differ only in validity.
-   * 
+   *
    * Computes and stores bitmask on first invocation and returns stored column
    * on subsequent calls.
    */

@@ -26,7 +26,6 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 std::unique_ptr<column> group_nth_element(column_view const &values,
                                           column_view const &group_sizes,
                                           rmm::device_vector<size_type> const &group_labels,
@@ -35,7 +34,8 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                           size_type n,
                                           include_nulls _include_nulls,
                                           rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream) {
+                                          cudaStream_t stream)
+{
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 
@@ -51,12 +51,12 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
-      group_sizes.begin<size_type>(),  //stencil
+      group_sizes.begin<size_type>(),  // stencil
       nth_index.begin(),
       [n] __device__(auto group_size, auto group_offset) {
         return group_offset + ((n < 0) ? group_size + n : n);
       },
-      [n] __device__(auto group_size) {  //nth within group
+      [n] __device__(auto group_size) {  // nth within group
         return (n < 0) ? group_size >= (-n) : group_size > n;
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))

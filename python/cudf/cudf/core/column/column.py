@@ -39,7 +39,16 @@ from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
 class ColumnBase(Column):
-    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
+    def __init__(
+        self,
+        data,
+        size,
+        dtype,
+        mask=None,
+        offset=0,
+        null_count=None,
+        children=(),
+    ):
         """
         Parameters
         ----------
@@ -616,22 +625,23 @@ class ColumnBase(Column):
         """
         Returns offset of first value that matches
         """
-        # FIXME: Inefficient find in CPU code
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
+        # FIXME: Inefficient, may be need a libcudf api
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
+        indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
-        return indices[-1, 0]
+        return indices[0]
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
         """
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
+        # FIXME: Inefficient, may be need a libcudf api
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
+        indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
-        return indices[-1, 0]
+        return indices[-1]
 
     def append(self, other):
         from cudf.core.column import as_column
@@ -1028,7 +1038,9 @@ def column_empty(row_count, dtype="object", masked=False):
     return build_column(data, dtype, mask=mask, children=children)
 
 
-def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
+def build_column(
+    data, dtype, mask=None, size=None, offset=0, null_count=None, children=()
+):
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -1055,24 +1067,49 @@ def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
-            dtype=dtype, mask=mask, size=size, offset=offset, children=children
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
     elif dtype.type is np.datetime64:
         return cudf.core.column.DatetimeColumn(
-            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
     elif dtype.type in (np.object_, np.str_):
         return cudf.core.column.StringColumn(
-            mask=mask, size=size, offset=offset, children=children
+            mask=mask,
+            size=size,
+            offset=offset,
+            children=children,
+            null_count=null_count,
         )
     else:
         return cudf.core.column.NumericalColumn(
-            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
 
 
 def build_categorical_column(
-    categories, codes, mask=None, size=None, offset=0, ordered=None
+    categories,
+    codes,
+    mask=None,
+    size=None,
+    offset=0,
+    null_count=None,
+    ordered=None,
 ):
     """
     Build a CategoricalColumn
@@ -1100,6 +1137,7 @@ def build_categorical_column(
         mask=mask,
         size=size,
         offset=offset,
+        null_count=null_count,
         children=(as_column(codes),),
     )
 

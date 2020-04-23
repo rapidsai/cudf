@@ -22,12 +22,11 @@
 #include <algorithm>
 
 namespace cudf {
-
 namespace experimental {
-
 namespace {
 template <typename T>
-std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits) {
+std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
+{
   if (splits.size() == 0 or column_size == 0) { return std::vector<T>{input}; }
   CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
@@ -45,13 +44,15 @@ std::vector<T> split(T const& input, size_type column_size, std::vector<size_typ
 };  // anonymous namespace
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                     std::vector<size_type> const& splits) {
+                                     std::vector<size_type> const& splits)
+{
   CUDF_FUNC_RANGE();
   return split(input, input.size(), splits);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
-                                    std::vector<size_type> const& splits) {
+                                    std::vector<size_type> const& splits)
+{
   CUDF_FUNC_RANGE();
   std::vector<table_view> result{};
   if (input.num_columns() == 0) { return result; }

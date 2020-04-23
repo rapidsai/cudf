@@ -38,11 +38,9 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace json {
-
 using namespace cudf::io;
 
 namespace {
-
 /**
  * @brief Extract value names from a JSON object
  *
@@ -52,7 +50,8 @@ namespace {
  * @return std::vector<std::string> names of JSON object values
  **/
 std::vector<std::string> get_names_from_json_object(const std::vector<char> &json_obj,
-                                                    const ParseOptions &opts) {
+                                                    const ParseOptions &opts)
+{
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
   bool quotation = false;
@@ -96,7 +95,8 @@ std::vector<std::string> get_names_from_json_object(const std::vector<char> &jso
  *
  * @return Estimated maximum size of a row, in bytes
  **/
-constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept {
+constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept
+{
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
@@ -121,7 +121,8 @@ constexpr size_t calculate_max_row_size(int num_columns = 0) noexcept {
  *
  * @return void
  **/
-void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size) {
+void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
+{
   size_t map_range_size = 0;
   if (range_size != 0) { map_range_size = range_size + calculate_max_row_size(args_.dtype.size()); }
 
@@ -150,7 +151,8 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size) {
  *
  * @return void
  **/
-void reader::impl::decompress_input() {
+void reader::impl::decompress_input()
+{
   const auto compression_type = infer_compression_type(
     args_.compression, filepath_, {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
@@ -173,15 +175,17 @@ void reader::impl::decompress_input() {
  * @brief Finds all record starts in the file and stores them in rec_starts_
  *
  * Does not upload the entire file to the GPU
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
-void reader::impl::set_record_starts(cudaStream_t stream) {
+void reader::impl::set_record_starts(cudaStream_t stream)
+{
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
-  // and then filtering out the records that is a quotechar or a linetermination within a quotechar pair.
+  // and then filtering out the records that is a quotechar or a linetermination within a quotechar
+  // pair.
   if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
@@ -248,7 +252,8 @@ void reader::impl::set_record_starts(cudaStream_t stream) {
  *
  * @return void
  **/
-void reader::impl::upload_data_to_device() {
+void reader::impl::upload_data_to_device()
+{
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
 
@@ -289,12 +294,13 @@ void reader::impl::upload_data_to_device() {
  * @brief Parse the first row to set the column name
  *
  * Sets the column_names_ data member
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
-void reader::impl::set_column_names(cudaStream_t stream) {
+void reader::impl::set_column_names(cudaStream_t stream)
+{
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
   if (rec_starts_.size() > 1) {
@@ -342,12 +348,13 @@ void reader::impl::set_column_names(cudaStream_t stream) {
  * @brief Set the data type array data member
  *
  * If user does not pass the data types, deduces types from the file content
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
  **/
-void reader::impl::set_data_types(cudaStream_t stream) {
+void reader::impl::set_data_types(cudaStream_t stream)
+{
   if (!args_.dtype.empty()) {
     CUDF_EXPECTS(args_.dtype.size() == metadata.column_names.size(),
                  "Need to specify the type of each column.\n");
@@ -389,7 +396,8 @@ void reader::impl::set_data_types(cudaStream_t stream) {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
 
-    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{ TIME_UNIT_NONE });
+    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{
+    // TIME_UNIT_NONE });
 
     rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(
       num_columns, cudf::experimental::io::json::ColumnInfo{});
@@ -426,12 +434,13 @@ void reader::impl::set_data_types(cudaStream_t stream) {
 
 /**
  * @brief Parse the input data and store results a table
- *       
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return table_with_metadata struct
  **/
-table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream) {
+table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
+{
   const auto num_columns = dtypes_.size();
   const auto num_records = rec_starts_.size();
 
@@ -487,7 +496,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : source_(std::move(source)), filepath_(filepath), args_(options), mr_(mr) {
+  : source_(std::move(source)), filepath_(filepath), args_(options), mr_(mr)
+{
   CUDF_EXPECTS(args_.lines, "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_         = createSerializedTrie({"true"});
@@ -511,9 +521,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  *
  * @return Unique pointer to the table data
  **/
-table_with_metadata reader::impl::read(size_t range_offset,
-                                       size_t range_size,
-                                       cudaStream_t stream) {
+table_with_metadata reader::impl::read(size_t range_offset, size_t range_size, cudaStream_t stream)
+{
   ingest_raw_input(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
@@ -540,7 +549,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
 reader::reader(std::string filepath,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr)) {
+  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
+{
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
 }
@@ -550,24 +560,30 @@ reader::reader(const char *buffer,
                size_t length,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+{
+}
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream)
+{
   return table_with_metadata{_impl->read(0, 0, stream)};
 }
 
 // Forward to implementation
-table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream) {
+table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream)
+{
   return table_with_metadata{_impl->read(offset, size, stream)};
 }
 
