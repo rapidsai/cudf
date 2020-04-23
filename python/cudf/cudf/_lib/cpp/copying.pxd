@@ -107,7 +107,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
 
     cdef struct contiguous_split_result:
         table_view table
-        vector[device_buffer] all_data
+        unique_ptr[device_buffer] all_data
 
     cdef vector[contiguous_split_result] contiguous_split (
         table_view input_table,
@@ -120,6 +120,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
 
     cdef packed_table pack (
         table_view input_table
+    ) except +
+
+    cdef contiguous_split_result unpack (
+        unique_ptr[packed_table] input_packed_table
     ) except +
 
     cdef unique_ptr[column] copy_if_else (

@@ -7,7 +7,7 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
 from libc.stdint cimport int32_t
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport Scalar
@@ -552,6 +552,34 @@ def pack(Table input_table):
     metadata = np.asarray(metadata_py)
 
     return (metadata, data)
+
+
+def unpack(vector[uint8_t] input_packed_table_metadata,
+           DeviceBuffer input_packed_table_data):
+    
+    cdef unique_ptr[vector[uint8_t]] c_metadata = move(
+        make_unique[vector[uint8_t]](move(input_packed_table_metadata))
+    )
+
+    cdef unique_ptr[device_buffer] c_data = move(input_packed_table_data.c_obj)
+    cdef unique_ptr[cpp_copying.packed_table] c_packed_table = move(
+        make_unique[cpp_copying.packed_table](move(c_metadata), move(c_data))
+    )
+
+    cdef cpp_copying.contiguous_split_result c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.unpack(move(c_packed_table))
+        )
+    
+    table_data_owner = DeviceBuffer.c_from_unique_ptr(move(c_result.all_data))
+    return Table.from_table_view(
+        c_result.table,
+        owner=table_data_owner,
+        column_names=range(c_result.table.num_columns())
+    )
+
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
