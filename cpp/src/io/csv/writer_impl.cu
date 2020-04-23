@@ -195,10 +195,7 @@ struct modify_special_chars
       //copy the source string unmodified:
       //(pass-through)
       //
-      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
-        char_utf8 the_chr = *itr;
-        d_buffer += from_char_utf8(the_chr, d_buffer);
-      }
+      memcpy( d_chars_, d_str.data(), str_size_bytes );
     }
     return 0;
   }
