@@ -24,11 +24,11 @@
 #include <cudf/types.h>
 #include <table/legacy/device_table.cuh>
 
-#include "sort_join.cuh"
 #include "join_compute_api.h"
+#include "sort_join.cuh"
 
- /* --------------------------------------------------------------------------*/
- /**
+/* --------------------------------------------------------------------------*/
+/**
   * @brief  Computes the hash-based join between two sets of device_tables.
   *
   * @param left_table The left table to be joined
@@ -40,38 +40,27 @@
   *
   * @returns
   */
- /* ----------------------------------------------------------------------------*/
-template<JoinType join_type,
-         typename output_index_type>
-gdf_error join_hash(cudf::table const & left_table,
-                    cudf::table const & right_table,
-                    gdf_column * const output_l,
-                    gdf_column * const output_r,
-                    bool flip_indices = false)
-{
-
+/* ----------------------------------------------------------------------------*/
+template <JoinType join_type, typename output_index_type>
+gdf_error join_hash(cudf::table const &left_table,
+                    cudf::table const &right_table,
+                    gdf_column *const output_l,
+                    gdf_column *const output_r,
+                    bool flip_indices = false) {
   // Hash table is built on the right table.
   // For inner joins, doesn't matter which table is build/probe, so we want
   // to build the hash table on the smaller table.
-  if((join_type == JoinType::INNER_JOIN) &&
-     (right_table.num_rows() > left_table.num_rows()))
-  {
-    return join_hash<join_type, output_index_type>(right_table, 
-                                                   left_table, 
-                                                   output_l, 
-                                                   output_r, 
-                                                   true);
+  if ((join_type == JoinType::INNER_JOIN) && (right_table.num_rows() > left_table.num_rows())) {
+    return join_hash<join_type, output_index_type>(
+      right_table, left_table, output_l, output_r, true);
   }
 
-  return compute_hash_join<join_type, output_index_type>(output_l,
-                                                         output_r, 
-                                                         left_table, 
-                                                         right_table, 
-                                                         flip_indices);
+  return compute_hash_join<join_type, output_index_type>(
+    output_l, output_r, left_table, right_table, flip_indices);
 }
 
- /* --------------------------------------------------------------------------*/
- /**
+/* --------------------------------------------------------------------------*/
+/**
   * @Synopsis  Computes the sort-based join between two columns.
   *
   * @Param leftcol The left column to be joined
@@ -85,23 +74,18 @@ gdf_error join_hash(cudf::table const & left_table,
   *
   * @Returns
   */
- /* ----------------------------------------------------------------------------*/
-template <JoinType join_type, 
-          typename output_index_type>
-gdf_error sort_join(gdf_column *leftcol, gdf_column *rightcol,
-                    gdf_column * const output_l,
-                    gdf_column * const output_r,
-                    bool flip_indices = false)
-{
+/* ----------------------------------------------------------------------------*/
+template <JoinType join_type, typename output_index_type>
+gdf_error sort_join(gdf_column *leftcol,
+                    gdf_column *rightcol,
+                    gdf_column *const output_l,
+                    gdf_column *const output_r,
+                    bool flip_indices = false) {
   if ((leftcol->null_count != 0) || (rightcol->null_count != 0)) {
-      return GDF_VALIDITY_UNSUPPORTED;
+    return GDF_VALIDITY_UNSUPPORTED;
   }
 
   compute_sort_join<join_type, output_index_type> join_call;
   return cudf::type_dispatcher(
-          leftcol->dtype,
-          join_call,
-          output_l, output_r,
-          leftcol, rightcol,
-          flip_indices);
+    leftcol->dtype, join_call, output_l, output_r, leftcol, rightcol, flip_indices);
 }

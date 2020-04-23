@@ -27,8 +27,8 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/writers.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -74,7 +74,8 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
+  explicit impl(std::unique_ptr<data_sink> sink,
+                writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -84,7 +85,7 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void write(table_view const& table, const table_metadata *metadata, cudaStream_t stream);
+  void write(table_view const& table, const table_metadata* metadata, cudaStream_t stream);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -120,9 +121,11 @@ class writer::impl {
    * @param dict List of dictionary chunks
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void init_dictionaries(orc_column_view* columns, size_t num_rows,
+  void init_dictionaries(orc_column_view* columns,
+                         size_t num_rows,
                          std::vector<int> const& str_col_ids,
-                         uint32_t* dict_data, uint32_t* dict_index,
+                         uint32_t* dict_data,
+                         uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>& dict,
                          cudaStream_t stream);
 
@@ -138,7 +141,8 @@ class writer::impl {
    * @param stripe_dict List of stripe dictionaries
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void build_dictionaries(orc_column_view* columns, size_t num_rows,
+  void build_dictionaries(orc_column_view* columns,
+                          size_t num_rows,
                           std::vector<int> const& str_col_ids,
                           std::vector<uint32_t> const& stripe_list,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
@@ -158,7 +162,8 @@ class writer::impl {
    * @return The streams
    **/
   std::vector<Stream> gather_streams(orc_column_view* columns,
-                                     size_t num_columns, size_t num_rows,
+                                     size_t num_columns,
+                                     size_t num_rows,
                                      std::vector<uint32_t> const& stripe_list,
                                      std::vector<int32_t>& strm_ids,
                                      const orc_chunked_state& state);
@@ -179,12 +184,16 @@ class writer::impl {
    *
    * @return Device buffer containing encoded data
    **/
-  rmm::device_buffer encode_columns(
-      orc_column_view* columns, size_t num_columns, size_t num_rows,
-      size_t num_rowgroups, std::vector<int> const& str_col_ids,
-      std::vector<uint32_t> const& stripe_list,
-      std::vector<Stream> const& streams, std::vector<int32_t> const& strm_ids,
-      hostdevice_vector<gpu::EncChunk>& chunks, cudaStream_t stream);
+  rmm::device_buffer encode_columns(orc_column_view* columns,
+                                    size_t num_columns,
+                                    size_t num_rows,
+                                    size_t num_rowgroups,
+                                    std::vector<int> const& str_col_ids,
+                                    std::vector<uint32_t> const& stripe_list,
+                                    std::vector<Stream> const& streams,
+                                    std::vector<int32_t> const& strm_ids,
+                                    hostdevice_vector<gpu::EncChunk>& chunks,
+                                    cudaStream_t stream);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
@@ -201,11 +210,14 @@ class writer::impl {
    *
    * @return The stripes' information
    **/
-  std::vector<StripeInformation> gather_stripes(
-      size_t num_columns, size_t num_rows, size_t num_index_streams,
-      size_t num_data_streams, std::vector<uint32_t> const& stripe_list,
-      hostdevice_vector<gpu::EncChunk>& chunks,
-      hostdevice_vector<gpu::StripeStream>& strm_desc, cudaStream_t stream);
+  std::vector<StripeInformation> gather_stripes(size_t num_columns,
+                                                size_t num_rows,
+                                                size_t num_index_streams,
+                                                size_t num_data_streams,
+                                                std::vector<uint32_t> const& stripe_list,
+                                                hostdevice_vector<gpu::EncChunk>& chunks,
+                                                hostdevice_vector<gpu::StripeStream>& strm_desc,
+                                                cudaStream_t stream);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
@@ -223,12 +235,14 @@ class writer::impl {
    * @return The statistic blobs
    **/
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-      orc_column_view const *columns,
-      size_t num_columns, size_t num_rows, size_t num_rowgroups,
-      std::vector<uint32_t> const& stripe_list,
-      std::vector<StripeInformation> const& stripes,
-      hostdevice_vector<gpu::EncChunk>& chunks,
-      cudaStream_t stream);
+    orc_column_view const* columns,
+    size_t num_columns,
+    size_t num_rows,
+    size_t num_rowgroups,
+    std::vector<uint32_t> const& stripe_list,
+    std::vector<StripeInformation> const& stripes,
+    hostdevice_vector<gpu::EncChunk>& chunks,
+    cudaStream_t stream);
 
   /**
    * @brief Write the specified column's row index stream
@@ -246,14 +260,19 @@ class writer::impl {
    * @param streams List of all streams
    * @param pbw Protobuf writer
    **/
-  void write_index_stream(
-      int32_t stripe_id, int32_t stream_id, orc_column_view* columns,
-      size_t num_columns, size_t num_data_streams, size_t group,
-      size_t groups_in_stripe, hostdevice_vector<gpu::EncChunk> const& chunks,
-      hostdevice_vector<gpu::StripeStream> const& strm_desc,
-      hostdevice_vector<gpu_inflate_status_s> const& comp_out,
-      StripeInformation& stripe, std::vector<Stream>& streams,
-      ProtobufWriter* pbw);
+  void write_index_stream(int32_t stripe_id,
+                          int32_t stream_id,
+                          orc_column_view* columns,
+                          size_t num_columns,
+                          size_t num_data_streams,
+                          size_t group,
+                          size_t groups_in_stripe,
+                          hostdevice_vector<gpu::EncChunk> const& chunks,
+                          hostdevice_vector<gpu::StripeStream> const& strm_desc,
+                          hostdevice_vector<gpu_inflate_status_s> const& comp_out,
+                          StripeInformation& stripe,
+                          std::vector<Stream>& streams,
+                          ProtobufWriter* pbw);
 
   /**
    * @brief Write the specified column's data streams
@@ -268,9 +287,11 @@ class writer::impl {
    **/
   void write_data_stream(gpu::StripeStream const& strm_desc,
                          gpu::EncChunk const& chunk,
-                         uint8_t const* compressed_data, uint8_t* stream_out,
+                         uint8_t const* compressed_data,
+                         uint8_t* stream_out,
                          StripeInformation& stripe,
-                         std::vector<Stream>& streams, cudaStream_t stream);
+                         std::vector<Stream>& streams,
+                         cudaStream_t stream);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -287,8 +308,7 @@ class writer::impl {
    **/
   template <typename T = size_t>
   constexpr inline auto div_by_rowgroups(T num_rows) const {
-    return cudf::util::div_rounding_up_unsafe<T, T>(num_rows,
-                                                    row_index_stride_);
+    return cudf::util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
   }
 
   /**
@@ -305,9 +325,9 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
 
-  size_t max_stripe_size_ = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_ = DEFAULT_ROW_INDEX_STRIDE;
-  size_t compression_blocksize_ = DEFAULT_COMPRESSION_BLOCKSIZE;
+  size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
+  size_t row_index_stride_          = DEFAULT_ROW_INDEX_STRIDE;
+  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
   bool enable_dictionary_ = true;

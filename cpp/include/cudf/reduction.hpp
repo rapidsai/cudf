@@ -17,17 +17,14 @@
 #pragma once
 
 #include <cudf/cudf.h>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/aggregation.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 namespace experimental {
 
 // @brief Enum to describe scan operation type
-enum class scan_type : bool {
-   INCLUSIVE, 
-   EXCLUSIVE
-};
+enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column.
@@ -57,10 +54,10 @@ enum class scan_type : bool {
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
 std::unique_ptr<scalar> reduce(
-    const column_view& col, 
-    std::unique_ptr<aggregation> const &agg,
-    data_type output_dtype,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  const column_view &col,
+  std::unique_ptr<aggregation> const &agg,
+  data_type output_dtype,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan of a column.
@@ -79,10 +76,11 @@ std::unique_ptr<scalar> reduce(
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
  * ----------------------------------------------------------------------------**/
-std::unique_ptr<column>
-scan(const column_view &input, std::unique_ptr<aggregation> const &agg,
-     scan_type inclusive, include_nulls include_nulls_flag = include_nulls::NO,
-     rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> scan(const column_view &input,
+                             std::unique_ptr<aggregation> const &agg,
+                             scan_type inclusive,
+                             include_nulls include_nulls_flag    = include_nulls::NO,
+                             rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
