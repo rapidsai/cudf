@@ -23,7 +23,7 @@ inline void add_column_to_vector(serialized_column const& column,
   std::copy(bytes, bytes + sizeof(serialized_column), std::back_inserter(*table_metadata));
 }
 
-serialized_column serialize_column(column_view const& col, uint8_t const* base_ptr) {
+serialized_column serialize(column_view const& col, uint8_t const* base_ptr) {
   // There are columns types that don't have data in parent e.g. strings
   size_t data_offset = col.data<uint8_t>() ? col.data<uint8_t>() - base_ptr : -1;
   size_t null_mask_offset =
@@ -33,15 +33,15 @@ serialized_column serialize_column(column_view const& col, uint8_t const* base_p
     col.type(), col.size(), data_offset, null_mask_offset, col.num_children()};
 }
 
-void add_columns(std::vector<column_view> const& cols,
-                 uint8_t const* base_ptr,
-                 std::vector<uint8_t>* table_metadata) {
+void serialize_columns(std::vector<column_view> const& cols,
+                       uint8_t const* base_ptr,
+                       std::vector<uint8_t>* table_metadata) {
   for (auto&& col : cols) {
-    add_column_to_vector(serialize_column(col, base_ptr), table_metadata);
+    add_column_to_vector(serialize(col, base_ptr), table_metadata);
     std::vector<column_view> children;
     for (size_t i = 0; i < col.num_children(); i++) { children.push_back(col.child(i)); }
 
-    add_columns(children, base_ptr, table_metadata);
+    serialize_columns(children, base_ptr, table_metadata);
   }
 }
 
@@ -62,9 +62,9 @@ packed_table pack(table_view const& input,
   std::vector<column_view> table_columns(contiguous_data.table.begin(),
                                          contiguous_data.table.end());
 
-  add_columns(table_columns,
-              static_cast<uint8_t const*>(result.table_data->data()),
-              result.table_metadata.get());
+  serialize_columns(table_columns,
+                    static_cast<uint8_t const*>(result.table_data->data()),
+                    result.table_metadata.get());
 
   return result;
 }
@@ -99,37 +99,30 @@ column_view deserialize_column(serialized_column serial_column,
                      children);
 }
 
-std::vector<column_view> get_columns(size_type num_columns,
-                                     serialized_column const* serialized_columns,
-                                     uint8_t const* base_ptr,
-                                     size_t* current_index) {
-  std::vector<column_view> cols;
-  for (size_t i = 0; i < num_columns; i++) {
-    auto serial_column = serialized_columns[*current_index];
-    (*current_index)++;
-
-    std::vector<column_view> children =
-      get_columns(serial_column._num_children, serialized_columns, base_ptr, current_index);
-
-    cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
-  }
-
-  return cols;
-}
-
 }  // namespace
 
 contiguous_split_result unpack(std::unique_ptr<packed_table> input) {
   auto serialized_columns =
     reinterpret_cast<serialized_column const*>(input->table_metadata->data());
-  size_type num_columns = serialized_columns[0]._num_children;
-  size_t current_index  = 1;
+  uint8_t const* base_ptr = static_cast<uint8_t const*>(input->table_data->data());
+  size_t current_index    = 1;
 
-  std::vector<column_view> table_columns =
-    get_columns(num_columns,
-                serialized_columns,
-                static_cast<uint8_t const*>(input->table_data->data()),
-                &current_index);
+  std::function<std::vector<column_view>(size_type)> get_columns;
+  get_columns = [&serialized_columns, &current_index, base_ptr, &get_columns](size_t num_columns) {
+    std::vector<column_view> cols;
+    for (size_t i = 0; i < num_columns; i++) {
+      auto serial_column = serialized_columns[current_index];
+      current_index++;
+
+      std::vector<column_view> children = get_columns(serial_column._num_children);
+
+      cols.emplace_back(deserialize_column(serial_column, children, base_ptr));
+    }
+
+    return cols;
+  };
+
+  std::vector<column_view> table_columns = get_columns(serialized_columns[0]._num_children);
 
   return contiguous_split_result{table_view(table_columns), std::move(input->table_data)};
 }
