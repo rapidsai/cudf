@@ -34,7 +34,7 @@ bool result_cache::has_result(size_t col_idx, std::unique_ptr<aggregation> const
 void result_cache::add_result(size_t col_idx,
                               std::unique_ptr<aggregation> const& agg,
                               std::unique_ptr<column>&& col) {
-  _cache[col_idx].emplace(agg->clone(), std::move(col))
+  _cache[col_idx].emplace(agg->clone(), std::move(col));
 }
 
 column_view result_cache::get_result(size_t col_idx,
