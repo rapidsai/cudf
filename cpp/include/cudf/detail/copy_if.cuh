@@ -376,31 +376,11 @@ std::unique_ptr<experimental::table> copy_if(
     });
 
     return std::make_unique<experimental::table>(std::move(out_columns));
-
-    CHECK_CUDA(stream);
-
-    if (output_size == input.num_rows()) {
-      return std::make_unique<experimental::table>(input);
-    } else if (output_size > 0) {
-      std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
-      std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
-        return cudf::experimental::type_dispatcher(col_view.type(),
-                                                   scatter_gather_functor<Filter, block_size>{},
-                                                   col_view,
-                                                   output_size,
-                                                   thrust::raw_pointer_cast(block_offsets.data()),
-                                                   filter,
-                                                   mr,
-                                                   stream);
-      });
-
-      return std::make_unique<experimental::table>(std::move(out_columns));
-
-    } else {
-      return experimental::empty_like(input);
-    }
+  } else {
+    return experimental::empty_like(input);
   }
+}
 
-}  // namespace detail
 }  // namespace detail
 }  // namespace experimental
+}  // namespace cudf
