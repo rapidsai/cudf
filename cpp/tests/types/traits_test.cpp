@@ -100,6 +100,38 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparable) {
   EXPECT_FALSE(comparable);
 }
 
+TYPED_TEST(TypedTraitsTest, NotRelationallyComparableWithList) {  
+  bool comparable = cudf::is_relationally_comparable<TypeParam, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+
+  comparable = cudf::is_relationally_comparable<cudf::list_view, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, EqualityComparable) {
+  // All the test types should be comparable with themselves
+  bool comparable = cudf::is_equality_comparable<TypeParam, TypeParam>();
+  EXPECT_TRUE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, NotEqualityComparable) {
+  // No type should be comparable with an empty dummy type
+  struct foo {};
+  bool comparable = cudf::is_equality_comparable<foo, TypeParam>();
+  EXPECT_FALSE(comparable);
+
+  comparable = cudf::is_equality_comparable<TypeParam, foo>();
+  EXPECT_FALSE(comparable);
+}
+
+TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList) {    
+  bool comparable = cudf::is_equality_comparable<TypeParam, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+
+  cudf::is_equality_comparable<cudf::list_view, cudf::list_view>();
+  EXPECT_FALSE(comparable);
+}
+
 // TODO: Tests for is_compound/is_simple, is_fixed_width
 
 CUDF_TEST_PROGRAM_MAIN()

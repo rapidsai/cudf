@@ -30,44 +30,14 @@ public:
   /**
    * @brief Default constructor represents an empty list.
    */
-  __host__ __device__ list_view();
+  __host__ __device__ list_view(){}
   
   list_view(const list_view&) = default;
   list_view(list_view&&) = default;
   ~list_view() = default;
   list_view& operator=(const list_view&) = default;
-  list_view& operator=(list_view&&) = default;  
-
-  // construct object from type
-  // CUDA_HOST_DEVICE_CALLABLE constexpr list_view(int v){}    
-
-  /**
-   * @brief Returns true if rhs matches this list exactly.
-   */
-  __device__ bool operator==(const list_view& rhs) const;
-  /**
-   * @brief Returns true if rhs does not match this list.
-   */
-  __device__ bool operator!=(const list_view& rhs) const;
-  /**
-   * @brief Returns true if this list is ordered before rhs.
-   */
-  __device__ bool operator<(const list_view& rhs) const;
-  /**
-   * @brief Returns true if rhs is ordered before this list.
-   */
-  __device__ bool operator>(const list_view& rhs) const;
-  /**
-   * @brief Returns true if this list matches or is ordered before rhs.
-   */
-  __device__ bool operator<=(const list_view& rhs) const;
-  /**
-   * @brief Returns true if rhs matches or is ordered before this list.
-   */
-  __device__ bool operator>=(const list_view& rhs) const;
-
+  list_view& operator=(list_view&&) = default;
 };
 
 } // namespace cudf
 
-#include "./list_view.inl"

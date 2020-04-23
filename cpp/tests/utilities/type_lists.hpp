@@ -129,6 +129,18 @@ using TimestampTypes = cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms,
  *---------------------------------------------------------------------------**/
 using StringTypes = cudf::test::Types<string_view>;
 
+/**
+ * @brief Provides a list of all list types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all string types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * ```
+ */
+using ListTypes = cudf::test::Types<list_view>;
+
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all fixed-width element types for use in GTest
  * typed tests.

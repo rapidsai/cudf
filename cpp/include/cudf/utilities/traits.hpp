@@ -44,6 +44,19 @@ struct is_relationally_comparable_impl<L,
                                        void_t<less_comparable<L, R>, greater_comparable<L, R>>>
   : std::true_type {};
 
+
+template <typename L, typename R, typename = void>
+struct is_equality_comparable_impl : std::false_type {};
+
+template <typename L, typename R>
+using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
+
+template <typename L, typename R>
+struct is_equality_comparable_impl<L,
+                                   R,
+                                   void_t<equality_comparable<L, R>>>
+  : std::true_type {};
+
 template <typename T>
 using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
@@ -66,6 +79,23 @@ using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>
 template <typename L, typename R>
 constexpr inline bool is_relationally_comparable() {
   return is_relationally_comparable_impl<L, R>::value;
+}
+
+/**
+ * @brief Indicates whether objects of types `L` and `R` can be compared
+ * for equality.
+ *
+ * Given two objects `L l`, and `R r`, returns true if `l == r` and `l > r` is a
+ * well-formed expression.
+ *
+ * @tparam L Type of the first object
+ * @tparam R Type of the second object
+ * @return true Objects of types `L` and `R` can be compared for equalirt
+ * @return false Objects of types `L` and `R` cannot be compared
+ */
+template <typename L, typename R>
+constexpr inline bool is_equality_comparable() {
+  return is_equality_comparable_impl<L, R>::value;
 }
 
 /**---------------------------------------------------------------------------*

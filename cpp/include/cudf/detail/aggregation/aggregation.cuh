@@ -254,13 +254,21 @@ struct update_target_element<
  */
 template <bool target_has_nulls = true, bool source_has_nulls = true>
 struct elementwise_aggregator {
-  template <typename Source, aggregation::Kind k>
+  template <typename Source, aggregation::Kind k, std::enable_if_t<cudf::is_relationally_comparable<Source, Source>()>* = nullptr>
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
                              size_type source_index) const noexcept {
     update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
       target, target_index, source, source_index);
+  }
+
+  template <typename Source, aggregation::Kind k, std::enable_if_t<!cudf::is_relationally_comparable<Source, Source>()>* = nullptr>
+  __device__ void operator()(mutable_column_device_view target,
+                             size_type target_index,
+                             column_device_view source,
+                             size_type source_index) const noexcept {
+    release_assert(false and "list_view elementwise_aggregator not supported yet");
   }
 };
 

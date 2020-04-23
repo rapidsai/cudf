@@ -64,6 +64,12 @@ void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& 
     CUDF_FAIL("Unsupported scalar compare type: dictionary");
 }
 
+template<>
+void compare_scalar_functor::operator()<cudf::list_view>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
+    CUDF_FAIL("Unsupported scalar compare type: list_view");
+}
+
 
 } // anonymous namespace
 

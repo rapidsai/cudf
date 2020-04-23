@@ -161,7 +161,8 @@ class element_equality_comparator {
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
    *---------------------------------------------------------------------------**/
-  template <typename Element>
+  template <typename Element,
+            std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
     noexcept {
     if (has_nulls) {
@@ -176,6 +177,13 @@ class element_equality_comparator {
 
     return equality_compare(lhs.element<Element>(lhs_element_index),
                             rhs.element<Element>(rhs_element_index));
+  }
+
+  template <typename Element,
+            std::enable_if_t<not cudf::is_equality_comparable<Element, Element>()>* = nullptr>
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) {
+    release_assert(false && "Attempted to compare elements of uncomparable types.");
+    return false;
   }
 
  private:
@@ -271,6 +279,7 @@ class element_relational_comparator {
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index) {
     release_assert(false && "Attempted to compare elements of uncomparable types.");
+    return weak_ordering::LESS;
   }
 
  private:
