@@ -12,6 +12,7 @@
 - PR #4906 Add Java bindings for interleave_columns
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #5004 Added a null considering min/max binary op
 
 ## Improvements
 
