@@ -20,13 +20,11 @@
 #include <cudf/types.h>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
+namespace cudf {
 // Forward declaration
 struct table;
 
-namespace detail
-{
+namespace detail {
 /**
  * @brief Scatters a set of source columns into the rows of a set of
  * destination columns.

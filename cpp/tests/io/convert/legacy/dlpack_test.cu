@@ -34,8 +34,7 @@ struct DLPackTest : public GdfTest {
 using Types = testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(DLPackTypedTest, Types);
 
-namespace
-{
+namespace {
 static inline size_t tensor_size(const DLTensor &t)
 {
   size_t size = 1;

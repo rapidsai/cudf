@@ -25,8 +25,7 @@
 #include "cudf/sorting.hpp"
 
 template <typename T>
-class PartitionTest : public cudf::test::BaseFixture
-{
+class PartitionTest : public cudf::test::BaseFixture {
   using value_type = cudf::test::GetType<T, 0>;
   using map_type   = cudf::test::GetType<T, 1>;
 };

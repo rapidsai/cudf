@@ -25,10 +25,8 @@
 #include <utility>
 #include <vector>
 
-namespace cudf
-{
-namespace groupby
-{
+namespace cudf {
+namespace groupby {
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
 

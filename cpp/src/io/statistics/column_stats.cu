@@ -17,10 +17,8 @@
 #include <io/utilities/block_utils.cuh>
 #include "column_stats.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 /**
  * @brief shared state for statistics gather kernel
  **/

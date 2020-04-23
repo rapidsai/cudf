@@ -25,16 +25,13 @@
 #include <cudf/cudf.h>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 /**
  * @brief Implementation class for reading from an Apache Arrow file. The file
  * could be a memory-mapped file or other implementation supported by Arrow.
  **/
-class arrow_io_source : public datasource
-{
+class arrow_io_source : public datasource {
  public:
   explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
@@ -63,8 +60,7 @@ class arrow_io_source : public datasource
  * Unlike Arrow's memory mapped IO class, this implementation allows memory
  * mapping a subset of the file where the starting offset may not be zero.
  **/
-class memory_mapped_source : public datasource
-{
+class memory_mapped_source : public datasource {
   struct file_wrapper {
     const int fd = -1;
     explicit file_wrapper(const char *filepath) : fd(open(filepath, O_RDONLY)) {}

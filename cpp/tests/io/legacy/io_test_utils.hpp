@@ -71,8 +71,7 @@ inline auto random_values(size_t size)
  * from device to host for test comparisons and debugging/development.
  *---------------------------------------------------------------------------**/
 template <typename T>
-class gdf_host_column
-{
+class gdf_host_column {
  public:
   gdf_host_column() = delete;
   explicit gdf_host_column(const gdf_column *col)

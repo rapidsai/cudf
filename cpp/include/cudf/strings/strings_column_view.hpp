@@ -25,14 +25,12 @@
  * @brief Class definition for cudf::strings_column_view
  */
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Given a column-view of strings type, an instance of this class
  * provides a wrapper on this compound column for strings operations.
  */
-class strings_column_view : private column_view
-{
+class strings_column_view : private column_view {
  public:
   strings_column_view(column_view strings_column);
   strings_column_view(strings_column_view&& strings_view)      = default;
@@ -78,8 +76,7 @@ class strings_column_view : private column_view
   size_type chars_size() const noexcept;
 };
 
-namespace strings
-{
+namespace strings {
 /**
  * @brief Prints the strings to stdout.
  *

@@ -19,12 +19,9 @@
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/types.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
+namespace cudf {
+namespace experimental {
+namespace io {
 /**
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
@@ -46,8 +43,7 @@ struct ParseOptions {
   bool multi_delimiter;
 };
 
-namespace gpu
-{
+namespace gpu {
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *

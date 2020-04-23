@@ -30,10 +30,8 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 void run_rank_test(table_view input,
                    table_view expected,
                    rank_method method,

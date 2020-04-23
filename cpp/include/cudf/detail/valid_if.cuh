@@ -26,12 +26,9 @@
 #include <thrust/distance.h>
 #include <rmm/device_scalar.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
  * `true` over the elements in `[begin, begin + size)`.

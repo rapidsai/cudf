@@ -47,8 +47,7 @@ using TestingTypes = ::testing::Types<int8_t,
 
 TYPED_TEST_CASE(TableTest, TestingTypes);
 
-namespace
-{
+namespace {
 void columns_are_equal(gdf_column const* lhs, gdf_column const* rhs)
 {
   EXPECT_EQ(lhs->data, rhs->data);

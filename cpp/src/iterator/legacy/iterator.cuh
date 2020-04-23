@@ -85,8 +85,7 @@
 #include <thrust/pair.h>
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 /** -------------------------------------------------------------------------*
  * @brief value accessor with/without null bitmask
  * A unary function returns scalar value at `id`.

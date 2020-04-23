@@ -15,8 +15,7 @@
  */
 #pragma once
 
-class base_category_type
-{
+class base_category_type {
  public:
   virtual const char* get_type_name() = 0;
   virtual ~base_category_type() {}

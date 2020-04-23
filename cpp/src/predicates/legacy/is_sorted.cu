@@ -23,8 +23,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
+namespace cudf {
 bool is_sorted(cudf::table const& table,
                std::vector<int8_t> const& descending,
                bool nulls_are_smallest = false)

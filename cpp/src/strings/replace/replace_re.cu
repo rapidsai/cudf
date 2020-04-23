@@ -27,14 +27,10 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern
  * and inserting the new string within the matched range of characters.

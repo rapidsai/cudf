@@ -18,8 +18,7 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Stack rows of a Table into a single column
  *

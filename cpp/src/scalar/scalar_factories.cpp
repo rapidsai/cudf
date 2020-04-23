@@ -20,10 +20,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 struct scalar_construction_helper {
   template <typename T, typename ScalarType = experimental::scalar_type_t<T>>
   std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>> operator()(
@@ -61,8 +59,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
   return experimental::type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
-namespace
-{
+namespace {
 struct default_scalar_functor {
   template <typename T>
   std::unique_ptr<cudf::scalar> operator()()

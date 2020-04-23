@@ -27,8 +27,7 @@
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief A wrapper for a set of gdf_columns of equal number of rows.
  *

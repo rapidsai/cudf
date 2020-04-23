@@ -19,10 +19,8 @@
 #include <cudf/types.hpp>
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
  *

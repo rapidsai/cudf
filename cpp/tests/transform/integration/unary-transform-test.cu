@@ -26,12 +26,9 @@
 
 #include <cctype>
 
-namespace cudf
-{
-namespace test
-{
-namespace transformation
-{
+namespace cudf {
+namespace test {
+namespace transformation {
 struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
 };
 

@@ -21,12 +21,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
  * elements in the range `[begin,end)` in `input`.

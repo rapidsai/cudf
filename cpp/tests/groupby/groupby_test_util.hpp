@@ -27,10 +27,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 enum class force_use_sort_impl : bool { NO, YES };
 
 inline void test_groups(column_view const& keys,

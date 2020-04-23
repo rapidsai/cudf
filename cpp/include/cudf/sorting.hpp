@@ -21,8 +21,7 @@
 #include <memory>
 #include <vector>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
@@ -35,8 +34,7 @@ enum class rank_method {
   DENSE     ///< rank always increases by 1 between groups
 };
 
-namespace experimental
-{
+namespace experimental {
 /**---------------------------------------------------------------------------*
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.

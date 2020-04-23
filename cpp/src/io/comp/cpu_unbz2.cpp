@@ -85,10 +85,8 @@ For more information on these sources, see the manual.
 #include "io_uncomp.h"
 #include "unbz2.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #ifdef _MSC_VER
 #define bswap_32(v) _byteswap_ulong(v)
 #define bswap_64(v) _byteswap_uint64(v)

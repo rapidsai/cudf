@@ -22,8 +22,7 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "slice.hpp"
 
-namespace cudf
-{
+namespace cudf {
 rmm::device_vector<cudf::size_type> splits_to_slice_indices(cudf::size_type const* splits,
                                                             cudf::size_type const num_splits,
                                                             cudf::size_type const split_end)

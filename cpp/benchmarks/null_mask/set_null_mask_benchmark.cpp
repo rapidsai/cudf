@@ -20,8 +20,7 @@
 
 #include <cudf/null_mask.hpp>
 
-class SetNullmask : public cudf::benchmark
-{
+class SetNullmask : public cudf::benchmark {
 };
 
 void BM_setnullmask(benchmark::State& state)

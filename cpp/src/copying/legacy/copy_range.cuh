@@ -24,8 +24,7 @@
 
 #include <cub/cub.cuh>
 
-namespace
-{
+namespace {
 using bit_mask::bit_mask_t;
 static constexpr cudf::size_type warp_size{32};
 
@@ -161,10 +160,8 @@ struct copy_range_dispatch {
 
 };  // namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief Copies a range of values from a functor to a column
  *

@@ -23,15 +23,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 /**
  * @brief Interface class for storing the output data from the writers
  **/
-class data_sink
-{
+class data_sink {
  public:
   /**
    * @brief Create a sink from a file path

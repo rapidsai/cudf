@@ -25,8 +25,7 @@
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
-class Quantiles : public cudf::benchmark
-{
+class Quantiles : public cudf::benchmark {
 };
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max

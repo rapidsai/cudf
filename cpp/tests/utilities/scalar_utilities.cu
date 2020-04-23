@@ -27,12 +27,9 @@
 
 using cudf::experimental::scalar_type_t;
 
-namespace cudf
-{
-namespace test
-{
-namespace
-{
+namespace cudf {
+namespace test {
+namespace {
 struct compare_scalar_functor {
   template <typename T>
   void operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)

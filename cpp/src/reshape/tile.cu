@@ -26,12 +26,9 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/detail/gather.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace {
 struct tile_functor {
   size_type count;
   size_type __device__ operator()(size_type i) { return i % count; }

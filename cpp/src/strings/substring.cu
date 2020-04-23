@@ -26,8 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
-namespace
-{
+namespace {
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -41,14 +40,10 @@ enum TwoPass {
 
 }  // namespace
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Function logic for the substring API.
  *
@@ -170,10 +165,8 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   return detail::slice_strings(strings, start, stop, step, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 template <typename PositionType, TwoPass Pass = SizeOnly>
 struct substring_from_fn {
   const column_device_view d_column;

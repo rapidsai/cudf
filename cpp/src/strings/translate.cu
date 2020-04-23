@@ -27,16 +27,12 @@
 #include <thrust/find.h>
 #include <algorithm>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 using translate_table = thrust::pair<char_utf8, char_utf8>;
 
-namespace
-{
+namespace {
 /**
  * @brief This is the translate functor for replacing individual characters
  * in each string.

@@ -22,8 +22,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-namespace
-{
+namespace {
 // Returns true if the mask is true for index i in at least keep_threshold
 // columns
 struct valid_table_filter {
@@ -54,12 +53,9 @@ struct valid_table_filter {
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /*
  * Filters a table to remove null elements.
  */

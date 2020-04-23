@@ -22,12 +22,9 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,

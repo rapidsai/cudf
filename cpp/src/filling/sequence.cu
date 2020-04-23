@@ -24,14 +24,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 // This functor only exists here because using a lambda directly in the tabulate() call generates
 // the cryptic
 // __T289 link error.  This seems to be related to lambda usage within functions using SFINAE.

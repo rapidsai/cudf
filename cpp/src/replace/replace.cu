@@ -57,8 +57,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <cub/cub.cuh>
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 static constexpr int BLOCK_SIZE = 256;
 
@@ -459,10 +458,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
 
 }  // end anonymous namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& input_col,
                                                    cudf::column_view const& values_to_replace,
                                                    cudf::column_view const& replacement_values,
@@ -492,8 +489,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 
 }  // namespace detail
 
-namespace experimental
-{
+namespace experimental {
 /* --------------------------------------------------------------------------*/
 /*
  * @brief Replace elements from `input_col` according to the mapping `values_to_replace` to
@@ -518,8 +514,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 }  // namespace experimental
 }  // namespace cudf
 
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 template <int phase, bool replacement_has_nulls>
 __global__ void replace_nulls_strings(cudf::column_device_view input,
@@ -810,10 +805,8 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 
 }  // end anonymous namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr,
@@ -849,8 +842,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
 }  // namespace detail
 
-namespace experimental
-{
+namespace experimental {
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::mr::device_memory_resource* mr)
@@ -869,8 +861,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 }  // namespace experimental
 }  // namespace cudf
 
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 template <typename T>
 struct normalize_nans_and_zeros_lambda {
@@ -916,10 +907,8 @@ struct normalize_nans_and_zeros_kernel_forwarder {
 
 }  // end anonymous namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 0)
 {
   if (in_out.size() == 0) { return; }

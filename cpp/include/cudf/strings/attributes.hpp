@@ -18,11 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
+namespace cudf {
 //! Strings column APIs.
-namespace strings
-{
+namespace strings {
 /**
  * @brief Returns an integer numeric column containing the length of each string in
  * characters.

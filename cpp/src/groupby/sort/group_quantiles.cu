@@ -27,16 +27,11 @@
 
 #include <thrust/for_each.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace {
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(

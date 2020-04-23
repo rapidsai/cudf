@@ -19,12 +19,9 @@
 
 #include "type.h"
 
-namespace cudf
-{
-namespace rolling
-{
-namespace jit
-{
+namespace cudf {
+namespace rolling {
+namespace jit {
 /**---------------------------------------------------------------------------*
  * @brief Get the Operator Name
  *

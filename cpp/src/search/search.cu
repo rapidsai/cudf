@@ -33,12 +33,9 @@
 #include <thrust/binary_search.h>
 #include <thrust/logical.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace {
 template <typename DataIterator,
           typename ValuesIterator,
           typename OutputIterator,
@@ -188,8 +185,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 bool contains(column_view const& col,
               scalar const& value,
               rmm::mr::device_memory_resource* mr,

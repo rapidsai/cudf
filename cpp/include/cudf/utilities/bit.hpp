@@ -24,10 +24,8 @@
  *
  */
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 // Work around a bug in NVRTC that fails to compile assert() in constexpr
 // functions (fixed after CUDA 11.0)
 #if defined __GNUC__

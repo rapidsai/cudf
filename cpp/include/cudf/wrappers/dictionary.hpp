@@ -23,8 +23,7 @@
  * @file dictionary.hpp
  * @brief Concrete type definition for dictionary columns.
  */
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief A strongly typed wrapper for indices in a DICTIONARY type column.
  *

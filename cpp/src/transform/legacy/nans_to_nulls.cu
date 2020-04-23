@@ -16,10 +16,8 @@
 
 #include <bitmask/legacy/valid_if.cuh>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 template <typename T>
 struct predicate_not_nan {
   CUDA_HOST_DEVICE_CALLABLE

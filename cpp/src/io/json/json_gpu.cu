@@ -29,22 +29,16 @@
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace json
-{
-namespace gpu
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace json {
+namespace gpu {
 using namespace ::cudf;
 
 using string_pair = std::pair<const char *, size_t>;
 
-namespace
-{
+namespace {
 /**
  * @brief CUDA Kernel that modifies the start and stop offsets to exclude
  * the sections outside of the top level brackets.

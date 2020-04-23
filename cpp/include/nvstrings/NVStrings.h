@@ -45,8 +45,7 @@ class NVStringsImpl;
  * Use the \p destroy() method to free an instance of this class.
  * @nosubgrouping
  */
-class NVStrings
-{
+class NVStrings {
   NVStringsImpl* pImpl;
 
   // ctors/dtor are made private to control memory allocation

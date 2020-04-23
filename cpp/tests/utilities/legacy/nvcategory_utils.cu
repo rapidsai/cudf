@@ -38,10 +38,8 @@
 #include <iostream>
 #include <random>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 std::string random_string(size_t len, std::string const &allowed_chars)
 {
   std::mt19937_64 gen{std::random_device()()};

@@ -25,8 +25,7 @@
 #include <random>
 
 template <class T>
-class Reshape : public cudf::benchmark
-{
+class Reshape : public cudf::benchmark {
  public:
   using TypeParam = T;
 };
@@ -112,8 +111,7 @@ BENCHMARK_REGISTER_F(Reshape, StrStack)
 
 // #define COMPARE_CATEGORY_MERGE
 
-class String : public ::benchmark::Fixture
-{
+class String : public ::benchmark::Fixture {
 };
 
 void BM_mar(benchmark::State& state)

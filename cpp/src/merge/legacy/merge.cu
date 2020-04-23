@@ -23,8 +23,7 @@
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/legacy/cuda_utils.hpp"
 
-namespace
-{
+namespace {
 /**
  * @brief Source table identifier to copy data from.
  */
@@ -195,10 +194,8 @@ rmm::device_vector<index_type> generate_merged_indices(device_table const& left_
 
 }  // namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 table merge(table const& left_table,
             table const& right_table,
             std::vector<cudf::size_type> const& key_cols,

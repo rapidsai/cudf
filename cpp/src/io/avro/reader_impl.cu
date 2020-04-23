@@ -30,22 +30,16 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace avro
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace avro {
 // Import functionality that's independent of legacy code
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
  **/
@@ -70,8 +64,7 @@ type_id to_type_id(const avro::schema_entry *col)
  * @brief A helper wrapper for Avro file metadata. Provides some additional
  * convenience methods for initializing and accessing the metadata and schema
  **/
-class metadata : public file_metadata
-{
+class metadata : public file_metadata {
  public:
   explicit metadata(datasource *const src) : source(src) {}
 

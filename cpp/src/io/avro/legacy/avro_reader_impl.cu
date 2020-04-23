@@ -22,12 +22,9 @@
 
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
+namespace cudf {
+namespace io {
+namespace avro {
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -56,8 +53,7 @@ gdf_dtype to_dtype(const avro::schema_entry *col)
  * @brief A helper wrapper for Avro file metadata. Provides some additional
  * convenience methods for initializing and accessing the metadata and schema
  **/
-class avro_metadata : public avro::file_metadata
-{
+class avro_metadata : public avro::file_metadata {
  public:
   explicit avro_metadata(datasource *const src) : source(src) {}
 

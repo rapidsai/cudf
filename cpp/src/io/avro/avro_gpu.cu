@@ -16,14 +16,10 @@
 #include <io/utilities/block_utils.cuh>
 #include "avro_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace avro {
+namespace gpu {
 #define NWARPS 16
 #define MAX_SHARED_SCHEMA_LEN 1000
 

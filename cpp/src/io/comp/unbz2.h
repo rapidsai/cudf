@@ -78,10 +78,8 @@ For more information on these sources, see the manual.
 
 #pragma once
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 // If BZ_OUTBUFF_FULL is returned and block_start is non-NULL, dstlen will be updated to point to
 // the end of the last valid block, and block_start will contain the offset in bits of the beginning
 // of the block, so it can be passed in to resume decoding later on.

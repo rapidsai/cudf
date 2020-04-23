@@ -23,15 +23,13 @@
  * @file type_info.hpp
  * @brief Type info traits used in hash-based groupby.
  *---------------------------------------------------------------------------**/
-namespace cudf
-{
+namespace cudf {
 // forward decls
 struct DeviceMin;
 struct DeviceMax;
 struct DeviceSum;
 
-namespace groupby
-{
+namespace groupby {
 /**---------------------------------------------------------------------------*
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.

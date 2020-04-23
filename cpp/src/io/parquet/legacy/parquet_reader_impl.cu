@@ -26,12 +26,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
+namespace cudf {
+namespace io {
+namespace parquet {
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else

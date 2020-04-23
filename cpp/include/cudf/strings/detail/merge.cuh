@@ -24,12 +24,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Merges two strings columns.
  *

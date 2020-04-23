@@ -24,8 +24,7 @@
 
 #include <gmock/gmock.h>
 
-class ColumnFactoryTest : public cudf::test::BaseFixture
-{
+class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
   cudaStream_t _stream{0};
 
@@ -35,8 +34,7 @@ class ColumnFactoryTest : public cudf::test::BaseFixture
 };
 
 template <typename T>
-class NumericFactoryTest : public ColumnFactoryTest
-{
+class NumericFactoryTest : public ColumnFactoryTest {
 };
 
 TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypes);
@@ -188,8 +186,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonNumericFactoryTest : public ColumnFactoryTest,
-                              public testing::WithParamInterface<cudf::type_id>
-{
+                              public testing::WithParamInterface<cudf::type_id> {
 };
 
 // All non-numeric types should throw
@@ -210,8 +207,7 @@ INSTANTIATE_TEST_CASE_P(NonNumeric,
                         testing::ValuesIn(cudf::test::non_numeric_type_ids));
 
 template <typename T>
-class FixedWidthFactoryTest : public ColumnFactoryTest
-{
+class FixedWidthFactoryTest : public ColumnFactoryTest {
 };
 
 TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
@@ -228,8 +224,7 @@ TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 }
 
 template <typename T>
-class EmptyFactoryTest : public ColumnFactoryTest
-{
+class EmptyFactoryTest : public ColumnFactoryTest {
 };
 
 TYPED_TEST_CASE(EmptyFactoryTest, cudf::test::AllTypes);
@@ -377,8 +372,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm)
 }
 
 class NonFixedWidthFactoryTest : public ColumnFactoryTest,
-                                 public testing::WithParamInterface<cudf::type_id>
-{
+                                 public testing::WithParamInterface<cudf::type_id> {
 };
 
 // All non-fixed types should throw

@@ -26,12 +26,9 @@
 #include <memory>
 #include <numeric>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;

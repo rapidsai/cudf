@@ -19,16 +19,11 @@
 #include <cudf/types.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace json
-{
-namespace gpu
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace json {
+namespace gpu {
 /**
  * @brief Convert a buffer of input data (text) into raw cuDF column data.
  *

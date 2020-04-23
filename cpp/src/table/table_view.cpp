@@ -23,10 +23,8 @@
 #include <cassert>
 #include <vector>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 template <typename ColumnView>
 table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
 {

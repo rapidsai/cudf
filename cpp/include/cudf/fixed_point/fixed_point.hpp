@@ -21,8 +21,7 @@
 #include <limits>
 
 //! `fixed_point` and supporting types
-namespace numeric
-{
+namespace numeric {
 /** \cond HIDDEN_SYMBOLS */
 // This is a wrapper struct that enforces "strong typing"
 // at the construction site of the type. No implicit
@@ -62,8 +61,7 @@ constexpr inline auto is_supported_construction_value_type()
 }
 
 // Helper functions for `fixed_point` type
-namespace detail
-{
+namespace detail {
 /**
  * @brief A function for integer exponentiation by squaring
  *
@@ -222,8 +220,7 @@ struct scaled_integer {
  * @tparam Rad The radix/base (either `Radix::BASE_2` or `Radix::BASE_10`)
  */
 template <typename Rep, Radix Rad>
-class fixed_point
-{
+class fixed_point {
   Rep _value;
   scale_type _scale;
 

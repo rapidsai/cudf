@@ -21,12 +21,9 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/binaryop.hpp>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 struct BinaryOperationIntegrationTest : public GdfTest {
 };
 

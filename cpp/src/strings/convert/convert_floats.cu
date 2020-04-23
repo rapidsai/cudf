@@ -32,14 +32,10 @@
 #include <cmath>
 #include <limits>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief This function converts the given string into a
  * floating point double value.
@@ -200,10 +196,8 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
   return detail::to_floats(strings, output_type, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 /**
  * @brief Code logic for converting float value into a string.
  *

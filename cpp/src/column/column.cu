@@ -31,8 +31,7 @@
 #include <numeric>
 #include <vector>
 
-namespace cudf
-{
+namespace cudf {
 // Copy constructor
 column::column(column const &other)
   : _type{other._type},
@@ -169,8 +168,7 @@ void column::set_null_count(size_type new_null_count)
   if (new_null_count > 0) { CUDF_EXPECTS(nullable(), "Invalid null count."); }
   _null_count = new_null_count;
 }
-namespace
-{
+namespace {
 struct create_column_from_view {
   cudf::column_view view;
   cudaStream_t stream;

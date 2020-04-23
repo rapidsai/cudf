@@ -26,14 +26,10 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/binary_search.h>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
+namespace {
 /**
  * @brief Type-dispatch functor for remapping the old indices to new values based on the new
  * key-set.

@@ -34,8 +34,7 @@ using cudf::null_order;
 using cudf::order;
 using std::vector;
 
-namespace
-{
+namespace {
 struct q_res {
   q_res(double value, bool is_valid = true) : is_valid(is_valid), value(value) {}
 
@@ -45,8 +44,7 @@ struct q_res {
 
 // ----- test data -------------------------------------------------------------
 
-namespace testdata
-{
+namespace testdata {
 struct q_expect {
   q_expect(double quantile)
     : quantile(quantile),

@@ -27,12 +27,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
                        MapIterator scatter_map_end,

@@ -38,8 +38,7 @@
 
 using bit_mask::bit_mask_t;
 
-namespace
-{
+namespace {
 static constexpr int warp_size = 32;
 
 // Compute the count of elements that pass the mask within each block
@@ -300,10 +299,8 @@ cudf::size_type get_output_size(cudf::size_type *block_counts,
 
 }  // namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /*
  * @brief Filters a column using a Filter function object
  *

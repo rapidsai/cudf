@@ -29,12 +29,9 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 // Forward internal classes
 class ProtobufWriter;
 class orc_column;
@@ -42,8 +39,7 @@ class orc_column;
 /**
  * @brief Implementation for ORC writer
  **/
-class writer::Impl
-{
+class writer::Impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 

@@ -27,14 +27,10 @@
 #include <thrust/transform.h>
 #include <cmath>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Converts IPv4 strings into integers.
  *
@@ -110,10 +106,8 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
   return detail::ipv4_to_integers(strings, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 /**
  * @brief Converts integers into IPv4 addresses.
  *

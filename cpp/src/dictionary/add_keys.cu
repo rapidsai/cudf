@@ -26,12 +26,9 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.

@@ -27,10 +27,8 @@
 #include <thrust/logical.h>
 #include <bitset>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_scalar used for unit testing.
  *

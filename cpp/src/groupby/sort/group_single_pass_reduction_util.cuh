@@ -29,14 +29,10 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>

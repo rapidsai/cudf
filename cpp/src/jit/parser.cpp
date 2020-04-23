@@ -22,10 +22,8 @@
 
 #include "parser.h"
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 constexpr char percent_escape[] = "_";
 
 inline bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }

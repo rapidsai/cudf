@@ -26,8 +26,7 @@
 #include <memory>
 #include <random>
 
-class Groupby : public cudf::benchmark
-{
+class Groupby : public cudf::benchmark {
 };
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max

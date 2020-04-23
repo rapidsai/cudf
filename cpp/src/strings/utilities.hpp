@@ -15,12 +15,9 @@
  */
 #pragma once
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;
 

@@ -25,8 +25,7 @@
 
 #include <cmath>
 
-namespace
-{
+namespace {
 struct var_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void> operator()(
@@ -120,10 +119,8 @@ struct var_functor {
 
 }  // namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 void group_var(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,

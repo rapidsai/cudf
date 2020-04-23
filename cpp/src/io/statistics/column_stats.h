@@ -16,10 +16,8 @@
 #pragma once
 #include <stdint.h>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 enum statistics_dtype {
   dtype_none,
   dtype_bool,

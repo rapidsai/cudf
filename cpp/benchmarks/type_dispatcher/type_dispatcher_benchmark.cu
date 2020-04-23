@@ -207,8 +207,7 @@ void type_dispatcher_benchmark(benchmark::State& state)
                           sizeof(TypeParam));
 }
 
-class TypeDispatcher : public cudf::benchmark
-{
+class TypeDispatcher : public cudf::benchmark {
 };
 
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)    \

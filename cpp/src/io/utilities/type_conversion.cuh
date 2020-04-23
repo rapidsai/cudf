@@ -18,12 +18,9 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
+namespace cudf {
+namespace experimental {
+namespace io {
 /**
  * @brief Convert a string to a cuDF data_type
  *

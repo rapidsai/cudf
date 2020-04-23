@@ -39,8 +39,7 @@
  * @tparam T Template parameter for this class is used for...
  *---------------------------------------------------------------------------**/
 template <typename T>
-class example_class
-{
+class example_class {
   // DESCRIPTION: Trivial class functions should be given names that make their
   // purpose clear DESCRIPTION: If their name makes the functionality obvious,
   // no documentation is necessary

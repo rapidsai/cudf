@@ -26,16 +26,12 @@
 
 #include <vector>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 
-namespace
-{
+namespace {
 //
 // Partition splits the string at the first occurrence of delimiter, and returns 3 elements
 // containing the part before the delimiter, the delimiter itself, and the part after the delimiter.

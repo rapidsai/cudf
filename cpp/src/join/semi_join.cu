@@ -13,12 +13,9 @@
 #include <cudf/detail/gather.cuh>
 #include <join/hash_join.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief  Performs a left semi or anti join on the specified columns of two
  * tables (left, right)

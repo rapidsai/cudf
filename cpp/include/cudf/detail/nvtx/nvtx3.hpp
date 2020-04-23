@@ -514,10 +514,8 @@
 #define NVTX3_RELAXED_CONSTEXPR
 #endif
 
-namespace nvtx3
-{
-namespace detail
-{
+namespace nvtx3 {
+namespace detail {
 /**
  * @brief Verifies if a type `T` contains a member `T::name` of type `const
  * char*` or `const wchar_t*`.
@@ -588,8 +586,7 @@ constexpr auto has_name_member() noexcept -> decltype(T::name, bool())
  * nvtx3::thread_range r3{};
  * ```
  */
-class domain
-{
+class domain {
  public:
   domain(domain const&) = delete;
   domain& operator=(domain const&) = delete;
@@ -820,8 +817,7 @@ struct argb final : rgb {
  * Systems.
  *
  */
-class color
-{
+class color {
  public:
   /// Type used for the color's value
   using value_type = uint32_t;
@@ -927,8 +923,7 @@ class color
  * To associate a name string with a category id, see `named_category`.
  *
  */
-class category
-{
+class category {
  public:
   /// Type used for `category`s integer id.
   using id_type = uint32_t;
@@ -1011,8 +1006,7 @@ class category
  * that the global NVTX domain should be used.
  */
 template <typename D = domain::global>
-class named_category final : public category
-{
+class named_category final : public category {
  public:
   /**
    * @brief Returns a global instance of a `named_category` as a
@@ -1134,8 +1128,7 @@ class named_category final : public category
  * that the global NVTX domain should be used.
  */
 template <typename D = domain::global>
-class registered_message
-{
+class registered_message {
  public:
   /**
    * @brief Returns a global instance of a `registered_message` as a function
@@ -1290,8 +1283,7 @@ class registered_message
  * nvtx3::thread_range range3{"message 3"};
  * \endcode
  */
-class message
-{
+class message {
  public:
   using value_type = nvtxMessageValue_t;
 
@@ -1397,8 +1389,7 @@ class message
  * nvtx3::thread_range range1{ nvtx3::payload{3.14} };
  * ```
  */
-class payload
-{
+class payload {
  public:
   using value_type = typename nvtxEventAttributes_v2::payload_t;
 
@@ -1548,8 +1539,7 @@ class payload
  * \endcode
  *
  */
-class event_attributes
-{
+class event_attributes {
  public:
   using value_type = nvtxEventAttributes_t;
 
@@ -1695,8 +1685,7 @@ class event_attributes
  * ```
  */
 template <class D = domain::global>
-class domain_thread_range
-{
+class domain_thread_range {
  public:
   /**
    * @brief Construct a `domain_thread_range` with the specified
@@ -1798,8 +1787,7 @@ using thread_range = domain_thread_range<>;
  * indicate that the global NVTX domain should be used.
  */
 template <typename D = domain::global>
-class domain_process_range
-{
+class domain_process_range {
  public:
   /**
    * @brief Construct a new domain process range object

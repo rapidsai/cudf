@@ -26,16 +26,12 @@
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 
-namespace
-{
+namespace {
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.

@@ -54,8 +54,7 @@ template <typename Key,
           typename Equality     = equal_to<Key>,
           typename Allocator    = managed_allocator<thrust::pair<Key, Element>>,
           bool count_collisions = false>
-class concurrent_unordered_multimap
-{
+class concurrent_unordered_multimap {
  public:
   using hasher         = Hasher;
   using key_equal      = Equality;

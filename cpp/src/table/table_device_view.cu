@@ -25,10 +25,8 @@
 #include <numeric>
 #include <vector>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 {

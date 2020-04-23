@@ -12,8 +12,7 @@
 #include <utilities/legacy/error_utils.hpp>
 #include <utility>
 
-namespace
-{
+namespace {
 NVCategory* combine_column_categories(const gdf_column* const input_columns[], int num_columns)
 {
   std::vector<NVCategory*> cats;

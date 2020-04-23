@@ -29,12 +29,9 @@
 #include <thrust/logical.h>
 
 //
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 //
 std::unique_ptr<column> all_characters_of_type(
   strings_column_view const& strings,

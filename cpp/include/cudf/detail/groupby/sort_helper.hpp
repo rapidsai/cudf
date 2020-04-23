@@ -23,16 +23,11 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace sort
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace sort {
 /**
  * @brief Helper class for computing sort-based groupby
  *

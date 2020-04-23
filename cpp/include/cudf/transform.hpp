@@ -20,10 +20,8 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.

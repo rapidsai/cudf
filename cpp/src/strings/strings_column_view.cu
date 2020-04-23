@@ -25,8 +25,7 @@
 #include <thrust/transform_scan.h>
 #include <iostream>
 
-namespace cudf
-{
+namespace cudf {
 //
 strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column)
 {
@@ -53,8 +52,7 @@ size_type strings_column_view::chars_size() const noexcept
   return chars().size();
 }
 
-namespace strings
-{
+namespace strings {
 // print strings to stdout
 void print(strings_column_view const& strings,
            size_type first,

@@ -20,18 +20,15 @@
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <hash/helper_functions.cuh>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /*
  *  Device view of the unordered multiset
  */
 template <typename Element,
           typename Hasher   = default_hash<Element>,
           typename Equality = equal_to<Element>>
-class unordered_multiset_device_view
-{
+class unordered_multiset_device_view {
  public:
   unordered_multiset_device_view(size_type hash_size,
                                  const size_type *hash_begin,
@@ -66,8 +63,7 @@ class unordered_multiset_device_view
 template <typename Element,
           typename Hasher   = default_hash<Element>,
           typename Equality = equal_to<Element>>
-class unordered_multiset
-{
+class unordered_multiset {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a new unordered_multiset

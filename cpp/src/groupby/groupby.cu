@@ -34,12 +34,9 @@
 #include <memory>
 #include <utility>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
 // Constructor
 groupby::groupby(table_view const& keys,
                  include_nulls include_null_keys,
@@ -78,8 +75,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
 // Needs to be in source file because sort_groupby_helper was forward declared
 groupby::~groupby() = default;
 
-namespace
-{
+namespace {
 /// Make an empty table with appropriate types for requested aggs
 auto empty_results(std::vector<aggregation_request> const& requests)
 {

@@ -16,8 +16,7 @@
 
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf
-{
+namespace cudf {
 // Create a strings-type column from array of pointer/size pairs
 std::unique_ptr<scalar> make_string_scalar(std::string const& string,
                                            cudaStream_t stream,

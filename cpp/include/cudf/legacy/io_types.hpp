@@ -26,16 +26,13 @@
 #include <cudf/types.hpp>
 
 // Forward declarations
-namespace arrow
-{
-namespace io
-{
+namespace arrow {
+namespace io {
 class RandomAccessFile;
 }
 }  // namespace arrow
 
-namespace cudf
-{
+namespace cudf {
 /**---------------------------------------------------------------------------*
  * @brief Input source info for `xxx_read_arg` arguments
  *---------------------------------------------------------------------------**/

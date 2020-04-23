@@ -104,8 +104,7 @@ TEST_F(StringsPadTest, ZeroSizeStringsColumn)
 }
 
 class StringsPadParmsTest : public StringsPadTest,
-                            public testing::WithParamInterface<cudf::size_type>
-{
+                            public testing::WithParamInterface<cudf::size_type> {
 };
 
 TEST_P(StringsPadParmsTest, Padding)

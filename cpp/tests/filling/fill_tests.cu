@@ -34,8 +34,7 @@ auto odd_valid   = [](cudf::size_type row) { return row % 2 != 0; };
 auto all_invalid = [](cudf::size_type row) { return false; };
 
 template <typename T>
-class FillTypedTestFixture : public cudf::test::BaseFixture
-{
+class FillTypedTestFixture : public cudf::test::BaseFixture {
  public:
   static constexpr cudf::size_type column_size{1000};
 
@@ -164,8 +163,7 @@ TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillStringTestFixture : public cudf::test::BaseFixture
-{
+class FillStringTestFixture : public cudf::test::BaseFixture {
  public:
   static constexpr cudf::size_type column_size{100};
 
@@ -274,8 +272,7 @@ TEST_F(FillStringTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture
-{
+class FillErrorTestFixture : public cudf::test::BaseFixture {
 };
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)

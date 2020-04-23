@@ -18,10 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 /**
  * @brief Wraps strings onto multiple lines shorter than `width` by replacing appropriate white
  * space with new-line characters (ASCII 0x0A).

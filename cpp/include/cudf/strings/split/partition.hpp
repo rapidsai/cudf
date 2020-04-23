@@ -19,10 +19,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
  * specified delimiter.

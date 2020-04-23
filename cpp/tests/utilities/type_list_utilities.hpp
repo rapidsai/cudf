@@ -69,10 +69,8 @@
  *
  *---------------------------------------------------------------------------**/
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 // Utilities for creating parameters for typed tests on GoogleTest
 //
 // Types is used to define type list, it's just an alias to ::testing::Types:
@@ -138,8 +136,7 @@ template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
 // Concat -----------------------------------------
-namespace detail
-{
+namespace detail {
 template <class A, class B>
 struct Concat2;
 
@@ -218,8 +215,7 @@ template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
 // CrossProduct -----------------------------------------
-namespace detail
-{
+namespace detail {
 // prepend T in TUPLE
 template <class T, class TUPLE>
 struct Prepend1;
@@ -287,8 +283,7 @@ template <class... ARGS>
 using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 
 // AllSame -----------------------------------------
-namespace detail
-{
+namespace detail {
 template <class... ITEMS>
 struct AllSame : std::false_type {
 };
@@ -468,8 +463,7 @@ using Transform = typename TransformImpl<XFORM, TYPES>::type;
 
 // Repeat --------------------------------
 
-namespace detail
-{
+namespace detail {
 template <class T, int N, class RES>
 struct Repeat;
 
@@ -532,8 +526,7 @@ using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 // Remove -------------------------------------------
 // remove items from tuple given by their indices
 
-namespace detail
-{
+namespace detail {
 template <class TUPLE, int CUR, int... IDXs>
 struct Remove;
 
@@ -577,8 +570,7 @@ using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
 
 // Unique --------------------------------
 
-namespace detail
-{
+namespace detail {
 template <class... ITEMS>
 struct Unique;
 

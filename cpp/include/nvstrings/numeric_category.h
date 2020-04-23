@@ -26,8 +26,7 @@ class numeric_category_impl;
 
 //
 template <typename T>
-class numeric_category : base_category_type
-{
+class numeric_category : base_category_type {
   numeric_category_impl<T>* pImpl;
 
   numeric_category();

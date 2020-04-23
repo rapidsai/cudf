@@ -41,8 +41,7 @@
 #include <gtest/gtest.h>
 
 template <typename T>
-class MergeTest_ : public cudf::test::BaseFixture
-{
+class MergeTest_ : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);

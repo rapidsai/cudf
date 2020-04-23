@@ -28,32 +28,25 @@
 #include <vector>
 
 // Forward declarations
-namespace arrow
-{
-namespace io
-{
+namespace arrow {
+namespace io {
 class RandomAccessFile;
 }
 }  // namespace arrow
 
 // <io/utilities/data_sink.hpp>
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 class data_sink;
 }
 }  // namespace cudf
 
 //! cuDF interfaces
-namespace cudf
-{
+namespace cudf {
 //! In-development features
-namespace experimental
-{
+namespace experimental {
 //! IO interfaces
-namespace io
-{
+namespace io {
 /**
  * @brief Compression algorithms
  */

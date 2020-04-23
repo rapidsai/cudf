@@ -20,14 +20,10 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 #define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 
-namespace cudf
-{
-namespace rolling
-{
-namespace jit
-{
-namespace code
-{
+namespace cudf {
+namespace rolling {
+namespace jit {
+namespace code {
 extern const char* kernel;
 extern const char* operation_h;
 

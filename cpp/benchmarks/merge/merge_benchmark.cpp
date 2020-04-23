@@ -33,8 +33,7 @@
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 // Fixture that enables RMM pool mode
-class Merge : public cudf::benchmark
-{
+class Merge : public cudf::benchmark {
 };
 
 using IntColWrap = cudf::test::fixed_width_column_wrapper<int32_t>;

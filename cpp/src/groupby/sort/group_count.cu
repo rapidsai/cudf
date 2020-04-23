@@ -22,14 +22,10 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_count_valid(column_view const& values,
                                           rmm::device_vector<size_type> const& group_labels,
                                           size_type num_groups,

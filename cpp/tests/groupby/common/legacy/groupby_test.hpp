@@ -29,12 +29,9 @@
 #include <gtest/gtest.h>
 #include <utility>
 
-namespace cudf
-{
-namespace test
-{
-namespace detail
-{
+namespace cudf {
+namespace test {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Performs a sort-by-key on tables.
  *

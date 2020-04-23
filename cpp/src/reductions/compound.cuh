@@ -22,14 +22,10 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/device_scalar.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace reduction
-{
-namespace compound
-{
+namespace cudf {
+namespace experimental {
+namespace reduction {
+namespace compound {
 /** --------------------------------------------------------------------------*
  * @brief Multi-step reduction for operations such as mean and variance, and
  * standard deviation.

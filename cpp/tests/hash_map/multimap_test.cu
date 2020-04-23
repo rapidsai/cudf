@@ -40,8 +40,7 @@ struct KeyValueTypes {
 // A new instance of this class will be created for each *TEST(MultimapTest,
 // ...) Put all repeated stuff for each test here
 template <class T>
-class MultimapTest : public GdfTest
-{
+class MultimapTest : public GdfTest {
  public:
   using key_type   = typename T::key_type;
   using value_type = typename T::value_type;

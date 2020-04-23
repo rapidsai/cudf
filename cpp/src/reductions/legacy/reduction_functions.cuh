@@ -19,10 +19,8 @@
 
 #include "reduction.cuh"
 
-namespace cudf
-{
-namespace reduction
-{
+namespace cudf {
+namespace reduction {
 gdf_scalar sum(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream = 0);
 gdf_scalar min(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream = 0);
 gdf_scalar max(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream = 0);

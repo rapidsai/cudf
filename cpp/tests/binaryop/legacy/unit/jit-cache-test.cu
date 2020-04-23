@@ -16,10 +16,8 @@
 
 #include "jit-cache-test.hpp"
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 TEST_F(JitCacheTest, CacheExceptionTest)
 {
   EXPECT_NO_THROW(auto program = getProgram("MemoryCacheTestProg"));

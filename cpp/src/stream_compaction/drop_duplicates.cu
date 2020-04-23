@@ -35,12 +35,9 @@
 #include <algorithm>
 #include <cmath>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
  * with output, except that in a consecutive group of duplicate elements only

@@ -21,10 +21,8 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 /**---------------------------------------------------------------------------*
  * @brief Functor to get type name in string
  *

@@ -20,12 +20,9 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
-namespace cudf
-{
-namespace test
-{
-namespace transformation
-{
+namespace cudf {
+namespace test {
+namespace transformation {
 template <typename TypeOut, typename TypeIn, typename TypeOpe>
 void ASSERT_UNARY(column_view const& out, column_view const& in, TypeOpe&& ope)
 {

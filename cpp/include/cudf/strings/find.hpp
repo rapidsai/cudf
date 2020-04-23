@@ -19,10 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a column of character position values where the target
  * string is first found in each string of the provided column.

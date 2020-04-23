@@ -19,12 +19,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/unary.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
  * [`begin, `end`) `true` indicates the value is satisfies the predicate and `false` indicates it

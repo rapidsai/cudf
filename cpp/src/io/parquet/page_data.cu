@@ -26,14 +26,10 @@ inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
   return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
 };
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 struct page_state_s {
   const uint8_t *lvl_start[2];  // [def,rep]
   const uint8_t *data_start;

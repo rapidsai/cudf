@@ -30,8 +30,7 @@
 
 #include <memory>
 
-namespace
-{
+namespace {
 template <cudf::size_type block_size,
           typename SourceValueIterator,
           typename SourceValidityIterator,
@@ -108,12 +107,9 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Internal API to copy a range of values from source iterators to a
  * target column.

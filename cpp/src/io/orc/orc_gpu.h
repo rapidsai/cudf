@@ -20,14 +20,10 @@
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)

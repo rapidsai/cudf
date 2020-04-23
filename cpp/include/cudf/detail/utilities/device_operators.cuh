@@ -29,8 +29,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 // ------------------------------------------------------------------------
 // Binary operators
 /* @brief binary `sum` operator */

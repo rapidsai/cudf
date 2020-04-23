@@ -19,11 +19,9 @@
 
 #include <utilities/legacy/device_operators.cuh>
 
-namespace cudf
-{
+namespace cudf {
 // helper functions - used in the rolling window implementation and tests
-namespace detail
-{
+namespace detail {
 // return true if ColumnType is arithmetic type or
 // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
 template <typename ColumnType, class AggOp>

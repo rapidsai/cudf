@@ -25,12 +25,9 @@
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Gives an estimate of the size of the join output produced when

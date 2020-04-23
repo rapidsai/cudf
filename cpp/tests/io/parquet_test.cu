@@ -133,8 +133,7 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
 
-namespace
-{
+namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
 inline auto random_values(size_t size)
@@ -505,8 +504,7 @@ TEST_F(ParquetWriterTest, NonNullable)
 }
 
 // custom data sink that supports device writes. uses plain file io.
-class custom_test_data_sink : public cudf::io::data_sink
-{
+class custom_test_data_sink : public cudf::io::data_sink {
  public:
   explicit custom_test_data_sink(std::string const& filepath)
   {
@@ -879,8 +877,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
 
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
-class custom_test_memmap_sink : public cudf::io::data_sink
-{
+class custom_test_memmap_sink : public cudf::io::data_sink {
  public:
   explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
   {

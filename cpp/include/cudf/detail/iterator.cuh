@@ -36,12 +36,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.

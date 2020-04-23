@@ -30,8 +30,7 @@
 #include <queue>
 #include <vector>
 
-namespace
-{  // anonym.
+namespace {  // anonym.
 
 using namespace cudf;
 
@@ -224,12 +223,9 @@ rmm::device_vector<index_type> generate_merged_indices(
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 // generate merged column
 // given row order of merged tables
 //(ordered according to indices of key_cols)
@@ -347,8 +343,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
 
 using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
 
-namespace
-{
+namespace {
 table_ptr_type merge(cudf::table_view const& left_table,
                      cudf::table_view const& right_table,
                      std::vector<cudf::size_type> const& key_cols,

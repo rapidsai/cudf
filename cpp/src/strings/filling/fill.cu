@@ -26,12 +26,9 @@
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 std::unique_ptr<column> fill(strings_column_view const& strings,
                              size_type begin,
                              size_type end,

@@ -34,22 +34,16 @@
 #include <array>
 #include <regex>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace parquet
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace parquet {
 // Import functionality that's independent of legacy code
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */

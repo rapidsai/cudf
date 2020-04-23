@@ -31,8 +31,7 @@
 
 #include <memory>
 
-namespace
-{
+namespace {
 template <typename T>
 void in_place_fill(cudf::mutable_column_view& destination,
                    cudf::size_type begin,
@@ -125,12 +124,9 @@ struct out_of_place_fill_range_dispatch {
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,

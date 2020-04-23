@@ -19,8 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
+namespace nvtext {
 /**
  * @brief Returns a single column of strings by generating ngrams from
  * a strings column.

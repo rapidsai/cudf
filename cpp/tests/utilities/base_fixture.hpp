@@ -28,10 +28,8 @@
 #include <ftw.h>
 #include <random>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
@@ -40,8 +38,7 @@ namespace test
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
  */
-class BaseFixture : public ::testing::Test
-{
+class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
 
  public:
@@ -97,8 +94,7 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * @tparam T The type of values that will be generated.
  */
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
-class UniformRandomGenerator
-{
+class UniformRandomGenerator {
  public:
   using uniform_distribution = uniform_distribution_t<T>;
 
@@ -132,8 +128,7 @@ class UniformRandomGenerator
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
  */
-class TempDirTestEnvironment : public ::testing::Environment
-{
+class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
 

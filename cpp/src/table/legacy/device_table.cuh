@@ -37,8 +37,7 @@
  * size
  *
  */
-class device_table
-{
+class device_table {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Factory function to construct a device_table wrapped in a
@@ -178,8 +177,7 @@ class device_table
   }
 };
 
-namespace
-{
+namespace {
 template <bool nullable, template <typename> typename hash_function>
 struct hash_element {
   template <typename col_type>

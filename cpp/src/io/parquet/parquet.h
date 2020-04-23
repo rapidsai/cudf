@@ -25,12 +25,9 @@
 #include <string>
 #include <vector>
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
+namespace cudf {
+namespace io {
+namespace parquet {
 #define PARQUET_MAGIC (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
 
 /**
@@ -218,8 +215,7 @@ static inline int CountLeadingZeros32(uint32_t value)
  * The parser handles both V1 and V2 Parquet datasets, although not all
  * compression codecs are supported yet.
  **/
-class CompactProtocolReader
-{
+class CompactProtocolReader {
  protected:
   static const uint8_t g_list2struct[16];
 
@@ -318,8 +314,7 @@ class CompactProtocolReader
  * This class takes in the Parquet structs and outputs a Thrift-encoded binary blob
  *
  **/
-class CompactProtocolWriter
-{
+class CompactProtocolWriter {
  public:
   CompactProtocolWriter() { m_buf = nullptr; }
   CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }

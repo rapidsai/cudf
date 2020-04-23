@@ -27,10 +27,8 @@
 
 #include <thrust/tabulate.h>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
 constexpr size_type OPTIMIZED_ROWS_PER_THREAD                = 8;
@@ -46,8 +44,7 @@ constexpr size_type FALLBACK_ROWS_PER_THREAD = 1;
  * that uses the modulo operation.
  */
 template <typename hash_value_t>
-class modulo_partitioner
-{
+class modulo_partitioner {
  public:
   modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
@@ -72,8 +69,7 @@ bool is_power_two(T number)
  * n & (d - 1)
  */
 template <typename hash_value_t>
-class bitwise_partitioner
-{
+class bitwise_partitioner {
  public:
   bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)}
   {
@@ -617,8 +613,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,

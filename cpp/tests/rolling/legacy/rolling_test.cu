@@ -32,8 +32,7 @@
 #include <vector>
 
 template <typename T>
-class RollingTest : public GdfTest
-{
+class RollingTest : public GdfTest {
  protected:
   // integral types
   template <typename U                                                            = T,
@@ -759,8 +758,7 @@ TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
                      GDF_COUNT);
 }
 
-class RollingTestNumba : public GdfTest
-{
+class RollingTestNumba : public GdfTest {
 };
 TEST_F(RollingTestNumba, NumbaGeneric)
 {

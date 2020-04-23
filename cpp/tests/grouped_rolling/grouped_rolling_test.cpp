@@ -38,8 +38,7 @@ using cudf::size_type;
 using cudf::test::fixed_width_column_wrapper;
 
 template <typename T>
-class GroupedRollingTest : public cudf::test::BaseFixture
-{
+class GroupedRollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::table_view const& keys,
@@ -300,8 +299,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture
 
 // // ------------- expected failures --------------------
 
-class GroupedRollingErrorTest : public cudf::test::BaseFixture
-{
+class GroupedRollingErrorTest : public cudf::test::BaseFixture {
 };
 
 // negative sizes
@@ -482,8 +480,7 @@ TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators)
 }
 
 template <typename T>
-class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture
-{
+class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::table_view const& keys,

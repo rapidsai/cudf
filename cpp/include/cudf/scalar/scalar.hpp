@@ -28,8 +28,7 @@
 #include <utility>
 #include <vector>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief An owning class to represent a singular value
  *
@@ -38,8 +37,7 @@ namespace cudf
  * derived classes should be upcasted to this class while passing to an
  * external libcudf API.
  */
-class scalar
-{
+class scalar {
  public:
   virtual ~scalar()           = default;
   scalar(scalar&& other)      = default;
@@ -107,11 +105,9 @@ class scalar
   }
 };
 
-namespace detail
-{
+namespace detail {
 template <typename T>
-class fixed_width_scalar : public scalar
-{
+class fixed_width_scalar : public scalar {
   static_assert(is_fixed_width<T>(), "Unexpected non-fixed-width type.");
 
  public:
@@ -203,8 +199,7 @@ class fixed_width_scalar : public scalar
  * @tparam T the data type of the numerical value
  */
 template <typename T>
-class numeric_scalar : public detail::fixed_width_scalar<T>
-{
+class numeric_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
 
  public:
@@ -249,8 +244,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T>
 /**
  * @brief An owning class to represent a string in device memory
  */
-class string_scalar : public scalar
-{
+class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
@@ -351,8 +345,7 @@ class string_scalar : public scalar
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types
  */
 template <typename T>
-class timestamp_scalar : public detail::fixed_width_scalar<T>
-{
+class timestamp_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
 
  public:

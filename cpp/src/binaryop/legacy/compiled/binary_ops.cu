@@ -23,12 +23,9 @@
 #include "binary_ops.hpp"
 #include "launcher.cuh"
 
-namespace cudf
-{
-namespace binops
-{
-namespace compiled
-{
+namespace cudf {
+namespace binops {
+namespace compiled {
 // Arithmeitc
 
 struct DeviceAdd {

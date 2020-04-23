@@ -24,12 +24,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 struct dispatch_nan_to_null {
   template <typename T>
   std::enable_if_t<std::is_floating_point<T>::value,

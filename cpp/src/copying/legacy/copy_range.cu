@@ -17,10 +17,8 @@
 #include <cudf/legacy/copying.hpp>
 #include "copy_range.cuh"
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 struct column_range_factory {
   gdf_column column;
   cudf::size_type begin;

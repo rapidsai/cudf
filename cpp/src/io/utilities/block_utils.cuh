@@ -17,10 +17,8 @@
 #pragma once
 #include <stdint.h>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #if (__CUDACC_VER_MAJOR__ >= 9)
 #define SHFL0(v) __shfl_sync(~0, v, 0)
 #define SHFL(v, t) __shfl_sync(~0, v, t)

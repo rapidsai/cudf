@@ -59,8 +59,7 @@ TEST(CudaTryTest, TryCatch)
 
 TEST(StreamCheck, success) { EXPECT_NO_THROW(CHECK_CUDA(0)); }
 
-namespace
-{
+namespace {
 // Some silly kernel that will cause an error
 void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace

@@ -27,18 +27,14 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace util
-{
-namespace cuda
-{
+namespace cudf {
+namespace util {
+namespace cuda {
 /**
  * @brief A kernel grid configuration construction gadget for simple one-dimensional/linear
  * kernels, with protection against integer overflow.
  */
-class grid_config_1d
-{
+class grid_config_1d {
  public:
   const int num_threads_per_block;
   const int num_blocks;

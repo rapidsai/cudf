@@ -20,8 +20,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include "scalar.hpp"
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Construct scalar with uninitialized storage to hold a value of the
  * specified numeric `data_type` and a validity bool.

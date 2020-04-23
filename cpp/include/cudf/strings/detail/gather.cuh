@@ -23,12 +23,9 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.

@@ -23,10 +23,8 @@
 #include <exception>
 #include <vector>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 column_view_base::column_view_base(data_type type,
                                    size_type size,
                                    void const* data,

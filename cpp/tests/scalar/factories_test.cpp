@@ -22,8 +22,7 @@
 
 #include <gmock/gmock.h>
 
-class ScalarFactoryTest : public cudf::test::BaseFixture
-{
+class ScalarFactoryTest : public cudf::test::BaseFixture {
   cudaStream_t _stream{0};
 
  public:

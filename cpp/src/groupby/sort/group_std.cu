@@ -27,16 +27,11 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace {
 template <typename ResultType, typename T>
 struct var_transform {
   column_device_view d_values;

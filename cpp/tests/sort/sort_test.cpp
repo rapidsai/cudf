@@ -29,10 +29,8 @@
 #include <tests/utilities/type_lists.hpp>
 #include <vector>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 void run_sort_test(table_view input,
                    column_view expected_sorted_indices,
                    std::vector<order> column_order         = {},

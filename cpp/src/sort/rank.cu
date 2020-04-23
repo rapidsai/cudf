@@ -29,14 +29,10 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/sequence.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 // Functor to identify unique elements in a sorted order table/column
 template <bool has_nulls, typename ReturnType, typename Iterator>
 struct unique_comparator {

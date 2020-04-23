@@ -22,8 +22,7 @@
 #include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
+namespace cudf {
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
   : detail::column_device_view_base{source.type(),
@@ -38,8 +37,7 @@ column_device_view::column_device_view(column_view source)
 // Free device memory allocated for children
 void column_device_view::destroy() { delete this; }
 
-namespace
-{
+namespace {
 /**
  * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
  * to build device_views from views.

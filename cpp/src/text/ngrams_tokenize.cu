@@ -30,12 +30,9 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace nvtext
-{
-namespace detail
-{
-namespace
-{
+namespace nvtext {
+namespace detail {
+namespace {
 /**
  * @brief This records the byte positions of each token within each string.
  *

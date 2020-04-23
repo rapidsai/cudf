@@ -21,14 +21,10 @@
 #include <algorithm>
 #include <array>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 // Bitmask of all operators
 #define OPERATOR_MASK 0200
 enum OperatorType {
@@ -107,8 +103,7 @@ const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
 // Converts pattern into regex classes
-class regex_parser
-{
+class regex_parser {
   reprog& m_prog;
   const char32_t* pattern;
   const char32_t* exprp;
@@ -501,8 +496,7 @@ class regex_parser
 /**
  * @brief The compiler converts class list into instructions.
  */
-class regex_compiler
-{
+class regex_compiler {
   reprog& m_prog;
 
   struct Node {

@@ -30,12 +30,10 @@ using namespace cudf;
 using namespace cudf::test;
 
 template <typename T>
-class SequenceTypedTestFixture : public cudf::test::BaseFixture
-{
+class SequenceTypedTestFixture : public cudf::test::BaseFixture {
 };
 
-class SequenceTestFixture : public cudf::test::BaseFixture
-{
+class SequenceTestFixture : public cudf::test::BaseFixture {
 };
 
 using NumericTypesNoBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;

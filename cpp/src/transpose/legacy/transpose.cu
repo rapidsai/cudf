@@ -10,8 +10,7 @@
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <memory>
 
-namespace
-{
+namespace {
 constexpr int WARP_SIZE     = 32;
 constexpr int MAX_GRID_SIZE = (1 << 16) - 1;
 

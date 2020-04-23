@@ -17,10 +17,8 @@
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #define HASH_BITS 12
 
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal

@@ -16,8 +16,7 @@
 
 #include "reduction_functions.cuh"
 
-namespace cudf
-{
+namespace cudf {
 gdf_scalar reduce(const gdf_column *col,
                   cudf::reduction::operators op,
                   gdf_dtype output_dtype,

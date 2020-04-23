@@ -56,10 +56,8 @@ THE SOFTWARE.
 #include "brotli_dict.h"
 #include "gpuinflate.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #define HUFFTAB_LUT1_BITS 8
 #define HUFFCODE(len, sym) ((uint16_t)(((sym) << 4) + (len)))
 #define BROTLI_CODE_LENGTH_CODES 18

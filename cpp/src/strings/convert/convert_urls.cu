@@ -23,14 +23,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 //
 // This is the functor for the url_encode() method below.
 // Specific requirements are documented in custrings issue #321.
@@ -162,10 +158,8 @@ std::unique_ptr<column> url_encode(strings_column_view const& strings,
   return detail::url_encode(strings, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 //
 // This is the functor for the url_decode() method below.
 // Specific requirements are documented in custrings issue #321.

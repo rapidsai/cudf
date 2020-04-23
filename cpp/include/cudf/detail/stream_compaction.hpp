@@ -21,12 +21,9 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Filters a table to remove null elements.
  *

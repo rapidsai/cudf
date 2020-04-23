@@ -18,8 +18,7 @@
 #include "column_utils.hpp"
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Ensures a gdf_column is valid, i.e. that its fields are consistent
  * with each other, and logical in themselves, in representing a proper column.
@@ -40,8 +39,7 @@ void validate(const gdf_column* column_ptr)
   validate(*column_ptr);
 }
 
-namespace detail
-{
+namespace detail {
 bool extra_type_info_is_compatible(const gdf_dtype& common_dtype,
                                    const gdf_dtype_extra_info& lhs_extra_type_info,
                                    const gdf_dtype_extra_info& rhs_extra_type_info) noexcept

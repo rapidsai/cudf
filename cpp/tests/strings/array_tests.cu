@@ -58,8 +58,8 @@ TEST_F(StringsColumnTest, SortZeroSizeStringsColumn)
   cudf::test::expect_strings_empty(results->view());
 }
 
-class SliceParmsTest : public StringsColumnTest, public testing::WithParamInterface<cudf::size_type>
-{
+class SliceParmsTest : public StringsColumnTest,
+                       public testing::WithParamInterface<cudf::size_type> {
 };
 
 TEST_P(SliceParmsTest, Slice)

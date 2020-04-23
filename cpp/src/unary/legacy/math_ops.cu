@@ -24,10 +24,8 @@
 #include <cmath>
 #include <type_traits>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 // trig functions
 
 struct DeviceSin {

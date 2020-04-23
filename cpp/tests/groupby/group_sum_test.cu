@@ -22,10 +22,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 template <typename V>
 struct groupby_sum_test : public cudf::test::BaseFixture {
 };

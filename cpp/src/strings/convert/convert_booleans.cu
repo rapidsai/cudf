@@ -29,12 +29,9 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans(
   strings_column_view const& strings,
@@ -86,8 +83,7 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
   return detail::to_booleans(strings, true_string, mr);
 }
 
-namespace detail
-{
+namespace detail {
 // Convert boolean column to strings column
 std::unique_ptr<column> from_booleans(
   column_view const& booleans,

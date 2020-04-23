@@ -26,14 +26,10 @@
 
 #include <numeric>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 /**
  * @brief Copies contents of `in` to `out`.  Copies validity if present
  * but does not compute null count.

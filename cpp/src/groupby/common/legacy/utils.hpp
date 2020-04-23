@@ -36,10 +36,8 @@
 #include <vector>
 #include "type_info.hpp"
 
-namespace cudf
-{
-namespace groupby
-{
+namespace cudf {
+namespace groupby {
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.

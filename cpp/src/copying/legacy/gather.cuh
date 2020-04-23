@@ -27,10 +27,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
  * end).

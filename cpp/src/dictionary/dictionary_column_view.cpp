@@ -17,8 +17,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
+namespace cudf {
 //
 dictionary_column_view::dictionary_column_view(column_view const& dictionary_column)
   : column_view(dictionary_column)

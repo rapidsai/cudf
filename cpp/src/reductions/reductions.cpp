@@ -20,12 +20,9 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 struct reduce_dispatch_functor {
   column_view const col;
   data_type output_dtype;

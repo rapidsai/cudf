@@ -24,14 +24,10 @@
 #include "orc/chunked_state.hpp"
 #include "parquet/chunked_state.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& source,
                                     reader_options const& options,

@@ -29,10 +29,8 @@
 #include <gtest/gtest.h>
 #include <utility>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 template <cudf::groupby::operators const_expr_op,
           typename Key,
           typename Value,

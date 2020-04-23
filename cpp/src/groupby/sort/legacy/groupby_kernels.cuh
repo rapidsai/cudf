@@ -21,12 +21,9 @@
 #include "groupby/common/legacy/type_info.hpp"
 #include "utilities/legacy/device_atomics.cuh"
 
-namespace cudf
-{
-namespace groupby
-{
-namespace sort
-{
+namespace cudf {
+namespace groupby {
+namespace sort {
 /**---------------------------------------------------------------------------*
  @brief  Compute the aggregation(s) of corresponding rows in the `values` input
  * table using the key sorted order and the group labels.

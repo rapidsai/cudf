@@ -7,12 +7,9 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *

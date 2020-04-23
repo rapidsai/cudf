@@ -26,14 +26,10 @@
 
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Utility to return integer column indicating the postion of
  * target string within each string in a strings column.
@@ -157,10 +153,8 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
   return detail::rfind(strings, target, start, stop, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 /**
  * @brief Utility to return a bool column indicating the presence of
  * a given target string in a strings column.

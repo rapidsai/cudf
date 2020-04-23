@@ -28,10 +28,8 @@
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 template <typename DataIterator, typename ValuesIterator, typename Comparator>
 void launch_search(DataIterator it_data,
                    ValuesIterator it_vals,
@@ -63,8 +61,7 @@ void launch_search(DataIterator it_data,
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 gdf_column search_ordered(table const& t,
                           table const& values,
                           bool find_first,

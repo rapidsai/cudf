@@ -55,14 +55,10 @@
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace binops
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace binops {
+namespace detail {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
@@ -83,8 +79,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 }
 }  // namespace detail
 
-namespace jit
-{
+namespace jit {
 const std::string hash = "prog_binop.experimental";
 
 const std::vector<std::string> compiler_flags{
@@ -237,8 +232,7 @@ void binary_operation(mutable_column_view& out,
 }  // namespace jit
 }  // namespace binops
 
-namespace detail
-{
+namespace detail {
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,

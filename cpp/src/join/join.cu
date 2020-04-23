@@ -26,12 +26,9 @@
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices

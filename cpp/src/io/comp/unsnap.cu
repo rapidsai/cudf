@@ -17,10 +17,8 @@
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 // Not supporting streams longer than this (not what snappy is intended for)
 #define SNAPPY_MAX_STREAM_SIZE 0x7fffffff
 

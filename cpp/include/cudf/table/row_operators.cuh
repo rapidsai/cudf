@@ -28,10 +28,8 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**---------------------------------------------------------------------------*
  * @brief Result type of the `element_relational_comparator` function object.
  *
@@ -47,8 +45,7 @@ enum class weak_ordering {
   GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
-namespace detail
-{
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Compare the elements ordering with respect to `lhs`.
  *
@@ -144,8 +141,7 @@ __device__ bool equality_compare(Element const lhs, Element const rhs)
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class element_equality_comparator
-{
+class element_equality_comparator {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct type-dispatched function object for comparing equality
@@ -196,8 +192,7 @@ class element_equality_comparator
 };
 
 template <bool has_nulls = true>
-class row_equality_comparator
-{
+class row_equality_comparator {
  public:
   row_equality_comparator(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
     : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
@@ -230,8 +225,7 @@ class row_equality_comparator
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class element_relational_comparator
-{
+class element_relational_comparator {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct type-dispatched function object for performing a
@@ -314,8 +308,7 @@ class element_relational_comparator
  * @tparam has_nulls Indicates the potential for null values in either row.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class row_lexicographic_comparator
-{
+class row_lexicographic_comparator {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct a function object for performing a lexicographic
@@ -388,8 +381,7 @@ class row_lexicographic_comparator
  * @tparam has_nulls Indicates the potential for null values in the column.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class element_hasher
-{
+class element_hasher {
  public:
   template <typename T>
   __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
@@ -407,8 +399,7 @@ class element_hasher
  * @tparam has_nulls Indicates the potential for null values in the table.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class row_hasher
-{
+class row_hasher {
  public:
   row_hasher() = delete;
   row_hasher(table_device_view t) : _table{t} {}
@@ -448,8 +439,7 @@ class row_hasher
  * @tparam has_nulls Indicates the potential for null values in the table.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class row_hasher_initial_values
-{
+class row_hasher_initial_values {
  public:
   row_hasher_initial_values() = delete;
   row_hasher_initial_values(table_device_view t, hash_value_type* initial_hash)

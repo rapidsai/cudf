@@ -19,14 +19,10 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/null_mask.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace binops
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace binops {
+namespace detail {
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
@@ -36,8 +32,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 
-namespace compiled
-{
+namespace compiled {
 /**
  * @brief Performs a binary operation between a string scalar and a string
  * column.

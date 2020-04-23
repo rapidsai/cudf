@@ -56,8 +56,7 @@ void BM_contiguous_split_common(benchmark::State& state,
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total);
 }
 
-class ContiguousSplit : public cudf::benchmark
-{
+class ContiguousSplit : public cudf::benchmark {
 };
 
 void BM_contiguous_split(benchmark::State& state)
@@ -92,8 +91,7 @@ void BM_contiguous_split(benchmark::State& state)
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
 
-class ContiguousSplitStrings : public cudf::benchmark
-{
+class ContiguousSplitStrings : public cudf::benchmark {
 };
 
 int rand_range(int r)

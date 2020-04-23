@@ -27,14 +27,10 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{  // anonym.
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {  // anonym.
 
 // base class for probing string
 // manipulation memory load requirements;

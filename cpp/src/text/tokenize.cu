@@ -27,12 +27,9 @@
 
 #include <thrust/transform.h>
 
-namespace nvtext
-{
-namespace detail
-{
-namespace
-{
+namespace nvtext {
+namespace detail {
+namespace {
 // common pattern for token_count functions
 template <typename TokenCounter>
 std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,

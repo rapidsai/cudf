@@ -26,8 +26,7 @@
 #include "generate_input_tables.cuh"
 
 template <typename key_type, typename payload_type>
-class Join : public cudf::benchmark
-{
+class Join : public cudf::benchmark {
 };
 
 template <typename key_type, typename payload_type>

@@ -43,18 +43,12 @@
 #include <memory>
 #include <utility>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace hash
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace hash {
+namespace {
 // This is a temporary fix due to compiler bug and we can resort back to
 // constexpr once cuda 10.2 becomes RAPIDS's minimum compiler version
 #if 0

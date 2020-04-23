@@ -24,8 +24,7 @@
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/bit_util.cuh>
 
-namespace bit_mask
-{
+namespace bit_mask {
 enum { bits_per_element = cudf::util::size_in_bits<bit_mask_t>() };
 
 /**
@@ -103,8 +102,7 @@ inline gdf_error put_element(bit_mask_t element, bit_mask_t *device_element)
   return GDF_SUCCESS;
 }
 
-namespace detail
-{
+namespace detail {
 template <typename T>
 constexpr inline T gcd(T u, T v) noexcept
 {

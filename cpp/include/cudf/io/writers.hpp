@@ -32,20 +32,15 @@
 #include <utility>
 
 //! cuDF interfaces
-namespace cudf
-{
+namespace cudf {
 //! In-development features
-namespace experimental
-{
+namespace experimental {
 //! IO interfaces
-namespace io
-{
+namespace io {
 //! Inner interfaces and implementations
-namespace detail
-{
+namespace detail {
 //! ORC format
-namespace orc
-{
+namespace orc {
 /**
  * @brief Options for the ORC writer.
  */
@@ -72,8 +67,7 @@ struct writer_options {
 /**
  * @brief Class to write ORC dataset data into columns.
  */
-class writer
-{
+class writer {
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -132,8 +126,7 @@ class writer
 }  // namespace orc
 
 //! Parquet format
-namespace parquet
-{
+namespace parquet {
 /**
  * @brief Options for the parquet writer.
  */
@@ -160,8 +153,7 @@ struct writer_options {
 /**
  * @brief Class to write parquet dataset data into columns.
  */
-class writer
-{
+class writer {
  private:
   class impl;
   std::unique_ptr<impl> _impl;

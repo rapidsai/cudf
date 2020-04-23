@@ -34,8 +34,7 @@
 
 template <typename T>
 class RepeatTypedTestFixture : public cudf::test::BaseFixture,
-                               cudf::test::UniformRandomGenerator<cudf::size_type>
-{
+                               cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
   RepeatTypedTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
@@ -173,8 +172,7 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
 }
 
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
-                                cudf::test::UniformRandomGenerator<cudf::size_type>
-{
+                                cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
   RepeatStringTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
@@ -239,8 +237,7 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput)
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-class RepeatErrorTestFixture : public cudf::test::BaseFixture
-{
+class RepeatErrorTestFixture : public cudf::test::BaseFixture {
 };
 
 TEST_F(RepeatErrorTestFixture, LengthMismatch)

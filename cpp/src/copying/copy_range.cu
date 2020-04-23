@@ -34,8 +34,7 @@
 
 #include <memory>
 
-namespace
-{
+namespace {
 template <typename T>
 void in_place_copy_range(cudf::column_view const& source,
                          cudf::mutable_column_view& target,
@@ -160,12 +159,9 @@ struct out_of_place_copy_range_dispatch {
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
                          size_type source_begin,

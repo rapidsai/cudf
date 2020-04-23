@@ -21,8 +21,7 @@
 #include <cudf/types.hpp>
 #include <vector>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Merge sorted tables.
  *

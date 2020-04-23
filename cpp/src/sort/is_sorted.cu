@@ -23,12 +23,9 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 template <bool has_nulls>
 auto is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,

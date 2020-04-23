@@ -33,8 +33,7 @@
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
-class Gather : public cudf::benchmark
-{
+class Gather : public cudf::benchmark {
 };
 
 template <class TypeParam, bool coalesce>

@@ -27,14 +27,10 @@
 #include <cub/device/device_reduce.cuh>
 #include "reduction_operators.cuh"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace reduction
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace reduction {
+namespace detail {
 /** --------------------------------------------------------------------------*
  * @brief Compute the specified simple reduction over the input range of elements.
  *

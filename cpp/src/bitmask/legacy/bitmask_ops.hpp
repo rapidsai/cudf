@@ -60,8 +60,7 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    cudaStream_t stream,
                                    cudf::size_type num_values);
 
-namespace cudf
-{
+namespace cudf {
 /**---------------------------------------------------------------------------*
  * @brief Computes a bitmask indicating the presence of NULL values in rows of a
  * table.

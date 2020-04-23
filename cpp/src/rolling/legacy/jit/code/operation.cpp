@@ -17,14 +17,10 @@
  * limitations under the License.
  */
 
-namespace cudf
-{
-namespace rolling
-{
-namespace jit
-{
-namespace code
-{
+namespace cudf {
+namespace rolling {
+namespace jit {
+namespace code {
 const char* operation_h =
   R"***(operation.h
 #pragma once

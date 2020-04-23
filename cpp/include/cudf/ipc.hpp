@@ -2,8 +2,7 @@
 #include <arrow/gpu/cuda_api.h>
 #include <arrow/ipc/api.h>
 
-class CudaMessageReader : arrow::ipc::MessageReader
-{
+class CudaMessageReader : arrow::ipc::MessageReader {
  public:
   CudaMessageReader(arrow::cuda::CudaBufferReader* stream, arrow::io::BufferReader* schema);
 

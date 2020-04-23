@@ -24,12 +24,9 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace datetime
-{
-namespace detail
-{
+namespace cudf {
+namespace datetime {
+namespace detail {
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>

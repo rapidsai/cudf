@@ -23,10 +23,8 @@
 
 #include <vector>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order

@@ -51,10 +51,8 @@ THE SOFTWARE.
 #include "brotli_dict.h"
 #include <stdint.h>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 static const brotli_dictionary_s g_dictionary = {
   // size_bits_by_length
   {0, 0, 0, 0, 10, 10, 11, 11, 10, 10, 10, 10, 10, 9, 9, 8,

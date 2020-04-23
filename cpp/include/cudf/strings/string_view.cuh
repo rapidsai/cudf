@@ -25,8 +25,7 @@
  * @brief Class definition for cudf::string_view.
  */
 
-namespace cudf
-{
+namespace cudf {
 // UTF-8 characters are 1-4 bytes
 using char_utf8 = uint32_t;
 
@@ -38,8 +37,7 @@ using char_utf8 = uint32_t;
  * It provides a simple wrapper and string operations for an individual string
  * with a column of strings.
  */
-class string_view
-{
+class string_view {
  public:
   /**
    * @brief Default constructor represents an empty string.
@@ -81,8 +79,7 @@ class string_view
   /**
    * @brief Handy iterator for navigating through encoded characters.
    */
-  class const_iterator
-  {
+  class const_iterator {
    public:
     using difference_type   = ptrdiff_t;
     using value_type        = char_utf8;
@@ -295,10 +292,8 @@ class string_view
   __device__ size_type character_offset(size_type bytepos) const;
 };
 
-namespace strings
-{
-namespace detail
-{
+namespace strings {
+namespace detail {
 /**
  * @brief Returns the number of bytes in the specified character.
  *

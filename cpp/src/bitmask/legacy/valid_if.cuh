@@ -27,10 +27,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 constexpr int warp_size = 32;
 
 constexpr int block_size = 256;

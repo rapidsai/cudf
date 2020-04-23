@@ -37,13 +37,11 @@ void tuple_for_each(const std::tuple<Args...>& tuple, F&& f)
   tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
 }
 
-class TraitsTest : public ::testing::Test
-{
+class TraitsTest : public ::testing::Test {
 };
 
 template <typename T>
-class TypedTraitsTest : public TraitsTest
-{
+class TypedTraitsTest : public TraitsTest {
 };
 
 TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);

@@ -42,12 +42,9 @@
 
 #include <cub/cub.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
  * end).

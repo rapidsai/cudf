@@ -25,12 +25,10 @@
 
 #include <cudf/legacy/functions.h>
 
-namespace
-{
+namespace {
 static constexpr char null_signifier = '@';
 
-namespace detail
-{
+namespace detail {
 // When streaming char-like types, the standard library streams tend to treat
 // them as characters rather than numbers, e.g. you would get an 'a' instead of 97.
 // The following function(s) ensure we "promote" such values to integers before
@@ -236,8 +234,7 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
   }
 }
 
-namespace
-{
+namespace {
 struct columns_equal {
   template <typename T>
   bool operator()(gdf_column const& left, gdf_column const& right)

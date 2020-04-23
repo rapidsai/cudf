@@ -108,8 +108,7 @@ struct CompareApproxAbs {
 };
 
 template <typename T>
-class TransposeTest : public GdfTest
-{
+class TransposeTest : public GdfTest {
  protected:
   void make_input()
   {

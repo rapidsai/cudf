@@ -43,16 +43,12 @@
 #include <quantiles/legacy/group_quantiles.hpp>
 #include <reductions/legacy/group_reductions.hpp>
 
-namespace cudf
-{
-namespace groupby
-{
-namespace sort
-{
+namespace cudf {
+namespace groupby {
+namespace sort {
 using index_vector = rmm::device_vector<cudf::size_type>;
 
-namespace
-{
+namespace {
 /**---------------------------------------------------------------------------*
  * @brief Computes the ordered aggregation requests which were skipped
  * in a previous process (`compound_to_simple`). These ordered aggregations
@@ -319,8 +315,7 @@ auto groupby_null_specialization(table const& keys, table const& values)
 }
 }  // anonymous namespace
 
-namespace detail
-{
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the arguments of the
  * operator.

@@ -30,12 +30,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
                 !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
               "Unexpected sizeof(CompressedStreamInfo)");
@@ -130,8 +127,7 @@ constexpr std::pair<orc::gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  **/
-class OrcMetadata
-{
+class OrcMetadata {
   using OrcStripeInfo = std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:

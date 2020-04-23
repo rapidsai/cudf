@@ -27,8 +27,7 @@
 #include <vector>
 
 template <typename T, bool Nullable>
-class Concatenate : public cudf::benchmark
-{
+class Concatenate : public cudf::benchmark {
 };
 
 template <typename T, bool Nullable>
@@ -145,8 +144,7 @@ CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_non_null, int64_t, false)
 CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_nullable, int64_t, true)
 
 template <bool Nullable>
-class ConcatenateStrings : public cudf::benchmark
-{
+class ConcatenateStrings : public cudf::benchmark {
 };
 
 template <bool Nullable>

@@ -49,8 +49,8 @@ TEST_F(StringsSubstringsTest, Substring)
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-class SubstringParmsTest : public StringsSubstringsTest, public testing::WithParamInterface<int32_t>
-{
+class SubstringParmsTest : public StringsSubstringsTest,
+                           public testing::WithParamInterface<int32_t> {
 };
 
 TEST_P(SubstringParmsTest, Substring)

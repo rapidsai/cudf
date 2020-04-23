@@ -27,12 +27,9 @@
 
 #include <limits>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 template <typename TypeOut,
           typename TypeLhs,
           typename TypeRhs,

@@ -34,8 +34,7 @@ struct TypedDispatcherTest : public DispatcherTest {
 
 TYPED_TEST_CASE(TypedDispatcherTest, cudf::test::AllTypes);
 
-namespace
-{
+namespace {
 template <typename Expected>
 struct type_tester {
   template <typename Dispatched>
@@ -52,8 +51,7 @@ TYPED_TEST(TypedDispatcherTest, TypeToId)
     cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, type_tester<TypeParam>{}));
 }
 
-namespace
-{
+namespace {
 struct verify_dispatched_type {
   template <typename T>
   __host__ __device__ bool operator()(cudf::type_id id)

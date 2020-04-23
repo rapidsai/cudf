@@ -24,14 +24,10 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -141,8 +137,7 @@ std::unique_ptr<column> replace(
                              mr);
 }
 
-namespace
-{
+namespace {
 /**
  * @brief Function logic for the replace_slice API.
  *
@@ -231,8 +226,7 @@ std::unique_ptr<column> replace_slice(
                              mr);
 }
 
-namespace
-{
+namespace {
 /**
  * @brief Function logic for the replace_multi API.
  *

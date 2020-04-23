@@ -37,8 +37,7 @@
  * while still allowing direct access. Memory is automatically deallocated
  * unless ownership is transferred via releasing and assigning the raw pointer.
  **/
-class gdf_column_wrapper
-{
+class gdf_column_wrapper {
   using str_pair = std::pair<const char *, size_t>;
   using str_ptr  = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
 

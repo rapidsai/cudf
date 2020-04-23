@@ -44,14 +44,10 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{  // anonymous
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {  // anonymous
 /**
  * @brief Only count operation is executed and count is updated
  *        depending on `min_periods` and returns true if it was
@@ -801,8 +797,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     mr);
 }
 
-namespace
-{
+namespace {
 bool is_supported_range_frame_unit(cudf::data_type const& data_type)
 {
   auto id = data_type.id();

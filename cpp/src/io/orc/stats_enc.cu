@@ -17,14 +17,10 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 /**
  * @brief Initializes statistics groups
  *

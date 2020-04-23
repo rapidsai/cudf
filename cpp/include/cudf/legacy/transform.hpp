@@ -20,8 +20,7 @@
 #include "cudf/cudf.h"
 #include "cudf/types.h"
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.

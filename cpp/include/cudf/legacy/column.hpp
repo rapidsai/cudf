@@ -98,10 +98,8 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
  */
 gdf_error gdf_column_free(gdf_column *column);
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief Allocate the data fields of column
  *

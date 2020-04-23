@@ -32,10 +32,8 @@
 #include <unordered_map>
 #include <vector>
 
-namespace cudf
-{
-namespace groupby
-{
+namespace cudf {
+namespace groupby {
 std::vector<SimpleAggRequestCounter> compound_to_simple(
   std::vector<AggRequestType> const& compound_requests)
 {

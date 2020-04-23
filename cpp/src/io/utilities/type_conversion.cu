@@ -16,12 +16,9 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
+namespace cudf {
+namespace experimental {
+namespace io {
 /**
  * @copydoc cudf::experimental::io:convert_string_to_dtype
  *

@@ -27,14 +27,10 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Returns a numeric column containing lengths of each string in
  * based on the provided unary function.
@@ -106,8 +102,7 @@ std::unique_ptr<column> count_bytes(
 
 }  // namespace detail
 
-namespace
-{
+namespace {
 /**
  * @brief Sets the code-point values for each character in the output
  * integer memory for each string in the strings column.
@@ -133,8 +128,7 @@ struct code_points_fn {
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 //
 std::unique_ptr<column> code_points(
   strings_column_view const& strings,

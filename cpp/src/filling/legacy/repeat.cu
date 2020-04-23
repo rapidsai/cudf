@@ -29,10 +29,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 cudf::table repeat(const cudf::table& in, const gdf_column& count, cudaStream_t stream = 0)
 {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),

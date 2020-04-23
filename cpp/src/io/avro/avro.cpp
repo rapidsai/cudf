@@ -18,12 +18,9 @@
 #include <string.h>
 #include <unordered_map>
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
+namespace cudf {
+namespace io {
+namespace avro {
 /**
  * @Brief AVRO file metadata parser
  *

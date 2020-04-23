@@ -25,12 +25,9 @@
 #include <vector>
 #include "avro_common.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
+namespace cudf {
+namespace io {
+namespace avro {
 #define AVRO_MAGIC (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24))
 
 /**
@@ -78,8 +75,7 @@ struct file_metadata {
 /**
  * @Brief Extract AVRO schema from JSON string
  */
-class schema_parser
-{
+class schema_parser {
  protected:
   enum { MAX_SCHEMA_DEPTH = 32 };
 
@@ -100,8 +96,7 @@ class schema_parser
 /**
  * @Brief AVRO file container parsing class
  */
-class container
-{
+class container {
  public:
   container() { m_base = m_cur = m_end = nullptr; }
   container(const uint8_t *base, size_t len) { init(base, len); }

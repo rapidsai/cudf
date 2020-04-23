@@ -22,14 +22,10 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_nth_element(column_view const &values,
                                           column_view const &group_sizes,
                                           rmm::device_vector<size_type> const &group_labels,

@@ -24,8 +24,7 @@
 #include <chrono>
 #include <random>
 
-namespace
-{
+namespace {
 constexpr cudf::size_type hundredM      = 1e8;
 constexpr cudf::size_type tenM          = 1e7;
 constexpr cudf::size_type tenK          = 1e4;
@@ -54,8 +53,7 @@ T random_int(T min, T max)
 }
 
 template <class T>
-class ApplyBooleanMask : public cudf::benchmark
-{
+class ApplyBooleanMask : public cudf::benchmark {
  public:
   using TypeParam = T;
 };

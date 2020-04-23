@@ -37,8 +37,7 @@
 #include <numeric>
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
 {
   switch (state) {
@@ -137,8 +136,7 @@ void set_null_mask(
   }
 }
 
-namespace
-{
+namespace {
 /**---------------------------------------------------------------------------*
  * @brief Counts the number of non-zero bits in a bitmask in the range
  * `[first_bit_index, last_bit_index]`.
@@ -408,8 +406,7 @@ struct to_word_index : public thrust::unary_function<size_type, size_type> {
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 cudf::size_type count_set_bits(bitmask_type const *bitmask,
                                size_type start,
                                size_type stop,

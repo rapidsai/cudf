@@ -32,29 +32,22 @@
 #include <vector>
 
 // Forward declarations
-namespace arrow
-{
-namespace io
-{
+namespace arrow {
+namespace io {
 class RandomAccessFile;
 }
 }  // namespace arrow
 
 //! cuDF interfaces
-namespace cudf
-{
+namespace cudf {
 //! In-development features
-namespace experimental
-{
+namespace experimental {
 //! IO interfaces
-namespace io
-{
+namespace io {
 //! Inner interfaces and implementations
-namespace detail
-{
+namespace detail {
 //! Avro format
-namespace avro
-{
+namespace avro {
 /**
  * @brief Options for the Avro reader.
  */
@@ -75,8 +68,7 @@ struct reader_options {
 /**
  * @brief Class to read Avro dataset data into columns.
  */
-class reader
-{
+class reader {
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -147,8 +139,7 @@ class reader
 }  // namespace avro
 
 //! JSON format
-namespace json
-{
+namespace json {
 /**
  * @brief Options for the JSON reader.
  */
@@ -182,8 +173,7 @@ struct reader_options {
 /**
  * @brief Class to read JSON dataset data into columns.
  */
-class reader
-{
+class reader {
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -254,8 +244,7 @@ class reader
 }  // namespace json
 
 //! CSV format
-namespace csv
-{
+namespace csv {
 /**
  * @brief Options for the CSV reader.
  */
@@ -346,8 +335,7 @@ struct reader_options {
 /**
  * @brief Class to read CSV dataset data into columns.
  */
-class reader
-{
+class reader {
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -436,8 +424,7 @@ class reader
 }  // namespace csv
 
 //! ORC format
-namespace orc
-{
+namespace orc {
 /**
  * @brief Options for the ORC reader.
  */
@@ -479,8 +466,7 @@ struct reader_options {
 /**
  * @brief Class to read ORC dataset data into columns.
  */
-class reader
-{
+class reader {
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -578,8 +564,7 @@ class reader
 }  // namespace orc
 
 //! Parquet format
-namespace parquet
-{
+namespace parquet {
 /**
  * @brief Options for the Parquet reader.
  */
@@ -615,8 +600,7 @@ struct reader_options {
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
-class reader
-{
+class reader {
  private:
   class impl;
   std::unique_ptr<impl> _impl;

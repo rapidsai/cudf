@@ -25,8 +25,7 @@
 
 using cudf::test::fixed_width_column_wrapper;
 
-class Hashing : public cudf::benchmark
-{
+class Hashing : public cudf::benchmark {
 };
 
 template <class T>

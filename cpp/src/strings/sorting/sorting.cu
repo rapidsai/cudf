@@ -24,12 +24,9 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 // return sorted version of the given strings column
 std::unique_ptr<cudf::column> sort(strings_column_view strings,
                                    sort_type stype,

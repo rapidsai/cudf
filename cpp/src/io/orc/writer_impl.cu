@@ -31,21 +31,15 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace orc
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Helper for pinned host memory
  **/
@@ -138,8 +132,7 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 /**
  * @brief Helper class that adds ORC-specific column info
  **/
-class orc_column_view
-{
+class orc_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs

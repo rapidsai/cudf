@@ -32,11 +32,9 @@
 
 namespace cudf_io = cudf::experimental::io;
 
-class ParquetWrite : public cudf::benchmark
-{
+class ParquetWrite : public cudf::benchmark {
 };
-class ParquetWriteChunked : public cudf::benchmark
-{
+class ParquetWriteChunked : public cudf::benchmark {
 };
 
 template <typename T>

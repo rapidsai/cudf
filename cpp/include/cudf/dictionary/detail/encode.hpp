@@ -19,12 +19,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *

@@ -25,10 +25,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
@@ -41,8 +39,7 @@ namespace detail
  * is easily accessible from the associated column_view.
  *
  */
-class alignas(16) column_device_view_base
-{
+class alignas(16) column_device_view_base {
  public:
   column_device_view_base()                               = delete;
   ~column_device_view_base()                              = default;
@@ -240,8 +237,7 @@ struct mutable_value_accessor;
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
  */
-class alignas(16) column_device_view : public detail::column_device_view_base
-{
+class alignas(16) column_device_view : public detail::column_device_view_base {
  public:
   column_device_view()                          = delete;
   ~column_device_view()                         = default;
@@ -433,8 +429,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base
  * @brief A mutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
  */
-class alignas(16) mutable_column_device_view : public detail::column_device_view_base
-{
+class alignas(16) mutable_column_device_view : public detail::column_device_view_base {
  public:
   mutable_column_device_view()                                  = delete;
   ~mutable_column_device_view()                                 = default;
@@ -723,8 +718,7 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   return dictionary32{d_children[0].element<int32_t>(index)};
 }
 
-namespace detail
-{
+namespace detail {
 /**
  * @brief value accessor of column without null bitmask
  * A unary functor returns scalar value at `id`.

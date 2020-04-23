@@ -19,10 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 enum class strip_type {
   LEFT,   //<< strip characters from the beginning of the string
   RIGHT,  //<< strip characters from the end of the string

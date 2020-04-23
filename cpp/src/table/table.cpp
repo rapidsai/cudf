@@ -19,10 +19,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 // Copy the columns from another table
 table::table(table const& other) : _num_rows{other.num_rows()}
 {

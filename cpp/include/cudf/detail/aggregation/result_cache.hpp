@@ -21,12 +21,9 @@
 
 #include <unordered_map>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 struct aggregation_equality {
   struct typed_aggregation_equality {
     std::shared_ptr<aggregation> const& lhs;
@@ -63,8 +60,7 @@ struct aggregation_hash {
   }
 };
 
-class result_cache
-{
+class result_cache {
  public:
   result_cache()                    = delete;
   ~result_cache()                   = default;

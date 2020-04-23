@@ -27,12 +27,9 @@
 #include <tests/utilities/legacy/valid_vectors.h>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 
-namespace cudf
-{
-namespace test
-{
-namespace transformation
-{
+namespace cudf {
+namespace test {
+namespace transformation {
 struct UnaryOperationIntegrationTest : public GdfTest {
 };
 

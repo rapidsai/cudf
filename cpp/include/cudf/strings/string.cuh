@@ -18,12 +18,9 @@
 #include <thrust/logical.h>
 #include <cudf/strings/string_view.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace string
-{
+namespace cudf {
+namespace strings {
+namespace string {
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.

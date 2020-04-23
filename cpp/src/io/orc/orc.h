@@ -27,12 +27,9 @@
 #include "io/comp/io_uncomp.h"
 #include "orc_common.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 struct PostScript {
   uint64_t footerLength         = 0;           // the length of the footer section in bytes
   CompressionKind compression   = NONE;        // the kind of generic compression used
@@ -115,8 +112,7 @@ struct Metadata {
  *
  **/
 
-class ProtobufReader
-{
+class ProtobufReader {
  public:
   ProtobufReader() { m_base = m_cur = m_end = nullptr; }
   ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
@@ -188,8 +184,7 @@ class ProtobufReader
  * @brief Class for encoding Orc's metadata with Protocol Buffers
  *
  **/
-class ProtobufWriter
-{
+class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
   ProtobufWriter(std::vector<uint8_t> *output) { m_buf = output; }
@@ -240,8 +235,7 @@ class ProtobufWriter
  *
  **/
 
-class OrcDecompressor
-{
+class OrcDecompressor {
  public:
   OrcDecompressor(CompressionKind kind, uint32_t blockSize);
   ~OrcDecompressor();

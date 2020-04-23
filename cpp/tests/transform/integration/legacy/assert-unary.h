@@ -23,12 +23,9 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
-namespace cudf
-{
-namespace test
-{
-namespace transformation
-{
+namespace cudf {
+namespace test {
+namespace transformation {
 template <typename TypeOut, typename TypeIn, typename TypeOpe>
 void ASSERT_UNARY(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeIn>& in,

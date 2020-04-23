@@ -380,8 +380,7 @@ using result_type = typename std::pair<int, int>;
 
 // Define stream operator for a std::pair for conveinience of printing results.
 // Needs to be in the std namespace to work with std::copy
-namespace std
-{
+namespace std {
 template <typename first_t, typename second_t>
 std::ostream &operator<<(std::ostream &os, std::pair<first_t, second_t> const &p)
 {

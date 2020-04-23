@@ -21,10 +21,8 @@
 #include <memory>
 #include "cudf/types.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Interleave columns of a table into a single column.
  *

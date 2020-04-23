@@ -17,14 +17,10 @@
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 struct dict_state_s {
   uint32_t row_cnt;
   PageFragment *cur_fragment;

@@ -33,12 +33,9 @@
 #include <thrust/transform_scan.h>
 #include <algorithm>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 //
 std::unique_ptr<column> concatenate(
   table_view const& strings_columns,

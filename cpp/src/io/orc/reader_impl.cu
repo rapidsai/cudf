@@ -34,22 +34,16 @@
 #include <algorithm>
 #include <array>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace orc
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace orc {
 // Import functionality that's independent of legacy code
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  **/
@@ -131,8 +125,7 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  **/
-class metadata
-{
+class metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
  public:
@@ -303,8 +296,7 @@ class metadata
   datasource *const source;
 };
 
-namespace
-{
+namespace {
 /**
  * @brief Struct that maps ORC streams to columns
  **/

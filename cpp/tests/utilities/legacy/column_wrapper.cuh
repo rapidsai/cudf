@@ -51,8 +51,7 @@
   } while (0)
 #endif
 
-namespace
-{
+namespace {
 gdf_dtype_extra_info copy_extra_info(gdf_column const& column)
 {
   gdf_dtype_extra_info extra_info = column.dtype_info;
@@ -66,10 +65,8 @@ gdf_dtype_extra_info copy_extra_info(gdf_column const& column)
 
 };  // namespace
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_column used for unit testing.
  *

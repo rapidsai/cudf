@@ -27,12 +27,9 @@
 #include <nvtext/generate_ngrams.hpp>
 #include <strings/utilities.cuh>
 
-namespace nvtext
-{
-namespace detail
-{
-namespace
-{
+namespace nvtext {
+namespace detail {
+namespace {
 /**
  * @brief Generate ngrams from strings column.
  *

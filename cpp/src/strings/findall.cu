@@ -28,17 +28,13 @@
 
 #include <thrust/extrema.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 using findall_result    = thrust::pair<size_type, string_index_pair>;
 
-namespace
-{
+namespace {
 /**
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.

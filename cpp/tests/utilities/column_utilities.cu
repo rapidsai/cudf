@@ -33,10 +33,8 @@
 #include <gmock/gmock.h>
 #include <numeric>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 // Property comparison
 template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs)
@@ -59,8 +57,7 @@ void expect_column_properties_equivalent(column_view const& lhs, column_view con
   column_property_comparison<false>(lhs, rhs);
 }
 
-class corresponding_rows_unequal
-{
+class corresponding_rows_unequal {
   table_device_view d_lhs;
   table_device_view d_rhs;
 
@@ -116,8 +113,7 @@ class corresponding_rows_unequal
   }
 };
 
-class corresponding_rows_not_equivalent
-{
+class corresponding_rows_not_equivalent {
   table_device_view d_lhs;
   table_device_view d_rhs;
 
@@ -168,8 +164,7 @@ class corresponding_rows_not_equivalent
   }
 };
 
-namespace
-{
+namespace {
 template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs,
                        cudf::column_view const& rhs,

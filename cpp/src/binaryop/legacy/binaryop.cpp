@@ -40,10 +40,8 @@
 #include <types.h.jit>
 #include <types.hpp.jit>
 
-namespace cudf
-{
-namespace binops
-{
+namespace cudf {
+namespace binops {
 /**---------------------------------------------------------------------------*
  * @brief Computes bitwise AND of two input valid masks
  *
@@ -149,8 +147,7 @@ void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
   out_null_count = num_values - non_nulls;
 }
 
-namespace jit
-{
+namespace jit {
 const std::string hash = "prog_binop";
 
 const std::vector<std::string> compiler_flags{"-std=c++14"};

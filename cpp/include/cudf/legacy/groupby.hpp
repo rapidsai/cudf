@@ -26,20 +26,17 @@
 
 // Not possible to forward declare rmm::device_vector because it's a type alias
 // to a type with a default template arg. Therefore, this is the best we can do
-namespace thrust
-{
+namespace thrust {
 template <typename T, typename A>
 class device_vector;
 }
 template <typename T>
 class rmm_allocator;
 
-namespace cudf
-{
+namespace cudf {
 class table;
 
-namespace groupby
-{
+namespace groupby {
 /**---------------------------------------------------------------------------*
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
@@ -82,8 +79,7 @@ struct Options {
  *---------------------------------------------------------------------------**/
 enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
-namespace hash
-{
+namespace hash {
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
  *---------------------------------------------------------------------------**/
@@ -118,8 +114,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
 }  // namespace hash
 
-namespace sort
-{
+namespace sort {
 struct operation_args {
 };
 

@@ -28,8 +28,7 @@
 #include <utilities/legacy/column_utils.hpp>
 #include <utilities/legacy/error_utils.hpp>
 
-namespace
-{
+namespace {
 /** ---------------------------------------------------------------------------*
  * @brief Convert a DLPack DLDataType struct to a gdf_dtype enum value
  *

@@ -26,14 +26,10 @@
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{  // anonym.
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {  // anonym.
 
 // execute string wrap:
 //

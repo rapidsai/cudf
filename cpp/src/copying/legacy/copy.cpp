@@ -25,8 +25,7 @@
 #include <cuda_runtime.h>
 #include <algorithm>
 
-namespace cudf
-{
+namespace cudf {
 /*
  * Initializes and returns gdf_column of the same type as the input.
  */

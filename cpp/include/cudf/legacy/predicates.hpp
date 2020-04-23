@@ -16,8 +16,7 @@
 
 #pragma once
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical order.
  *

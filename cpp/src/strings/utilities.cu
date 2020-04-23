@@ -30,12 +30,9 @@
 #include <thrust/transform_scan.h>
 #include <mutex>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 // Used to build a temporary string_view object from a single host string.
 std::unique_ptr<string_view, std::function<void(string_view*)>> string_from_host(
   const char* str, cudaStream_t stream)
@@ -137,8 +134,7 @@ std::unique_ptr<column> make_empty_strings_column(rmm::mr::device_memory_resourc
                                   0);  // nulls
 }
 
-namespace
-{
+namespace {
 // The device variables are created here to avoid using a singleton that may cause issues
 // with RMM initialize/finalize. See PR #3159 for details on this approach.
 __device__ character_flags_table_type

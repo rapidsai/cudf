@@ -20,12 +20,9 @@
 #include "type.h"
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace binops
-{
-namespace jit
-{
+namespace cudf {
+namespace binops {
+namespace jit {
 /**---------------------------------------------------------------------------*
  * @brief Get the Operator Name
  *

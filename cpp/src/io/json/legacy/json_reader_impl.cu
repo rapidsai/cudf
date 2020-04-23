@@ -33,12 +33,9 @@
 #include <io/legacy/cuio_common.hpp>
 #include <io/utilities/legacy/parsing_utils.cuh>
 
-namespace cudf
-{
-namespace io
-{
-namespace json
-{
+namespace cudf {
+namespace io {
+namespace json {
 using string_pair = std::pair<const char *, size_t>;
 
 reader::Impl::Impl(std::unique_ptr<datasource> source,

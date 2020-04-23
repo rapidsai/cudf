@@ -8,8 +8,7 @@
 
 #include <cudf/types.h>
 
-namespace without_agg
-{
+namespace without_agg {
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 

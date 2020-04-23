@@ -32,14 +32,11 @@
 #include <vector>
 
 //! cuDF interfaces
-namespace cudf
-{
+namespace cudf {
 //! In-development features
-namespace experimental
-{
+namespace experimental {
 //! IO interfaces
-namespace io
-{
+namespace io {
 /**
  * @brief Settings to use for `read_avro()`
  */
@@ -375,10 +372,8 @@ struct write_orc_chunked_args {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail
-{
-namespace orc
-{
+namespace detail {
+namespace orc {
 struct orc_chunked_state;
 };
 };  // namespace detail
@@ -585,10 +580,8 @@ struct write_parquet_chunked_args {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail
-{
-namespace parquet
-{
+namespace detail {
+namespace parquet {
 struct pq_chunked_state;
 };
 };  // namespace detail

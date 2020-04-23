@@ -29,14 +29,10 @@
 
 #include <types.hpp.jit>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace transformation
-{
-namespace jit
-{
+namespace cudf {
+namespace experimental {
+namespace transformation {
+namespace jit {
 void unary_operation(mutable_column_view output,
                      column_view input,
                      const std::string& udf,
@@ -74,8 +70,7 @@ void unary_operation(mutable_column_view output,
 }  // namespace jit
 }  // namespace transformation
 
-namespace detail
-{
+namespace detail {
 std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,

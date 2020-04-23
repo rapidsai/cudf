@@ -20,16 +20,13 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 /**
  * @brief Implementation class for storing data into a local file.
  *
  */
-class file_sink : public data_sink
-{
+class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
@@ -56,8 +53,7 @@ class file_sink : public data_sink
  * @brief Implementation class for storing data into a std::vector.
  *
  */
-class host_buffer_sink : public data_sink
-{
+class host_buffer_sink : public data_sink {
  public:
   explicit host_buffer_sink(std::vector<char>* buffer) : buffer_(buffer) {}
 
@@ -81,8 +77,7 @@ class host_buffer_sink : public data_sink
  * @brief Implementation class for voiding data (no io performed)
  *
  */
-class void_sink : public data_sink
-{
+class void_sink : public data_sink {
  public:
   explicit void_sink() : bytes_written_(0) {}
 
@@ -105,8 +100,7 @@ class void_sink : public data_sink
   size_t bytes_written_;
 };
 
-class user_sink_wrapper : public data_sink
-{
+class user_sink_wrapper : public data_sink {
  public:
   explicit user_sink_wrapper(cudf::io::data_sink* const user_sink_) : user_sink(user_sink_) {}
 

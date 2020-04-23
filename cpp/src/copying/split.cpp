@@ -21,12 +21,9 @@
 
 #include <algorithm>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace {
 template <typename T>
 std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
 {

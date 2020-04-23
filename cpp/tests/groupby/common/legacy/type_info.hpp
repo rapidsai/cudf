@@ -19,15 +19,13 @@
 #include <cudf/cudf.h>
 #include <cudf/legacy/groupby.hpp>
 
-namespace cudf
-{
+namespace cudf {
 // forward decls
 struct DeviceMin;
 struct DeviceMax;
 struct DeviceSum;
 
-namespace test
-{
+namespace test {
 using namespace cudf::groupby;
 
 /**---------------------------------------------------------------------------*

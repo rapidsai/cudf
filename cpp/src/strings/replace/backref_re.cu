@@ -29,14 +29,10 @@
 
 #include <regex>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 using backref_type = thrust::pair<size_type, size_type>;
 
 /**

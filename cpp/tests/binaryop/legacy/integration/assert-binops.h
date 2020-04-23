@@ -25,12 +25,9 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::scalar_wrapper<TypeLhs>& lhs,

@@ -34,14 +34,10 @@
 #define IS_RLEv2(encoding_mode) ((encoding_mode) >= DIRECT_V2)
 #define IS_DICTIONARY(encoding_mode) ((encoding_mode)&1)
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 

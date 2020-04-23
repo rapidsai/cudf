@@ -19,14 +19,12 @@
 
 using namespace cudf::test;  // this will make reading code way easier
 
-namespace std
-{
+namespace std {
 template <class T, class U>
 constexpr bool is_same_v = std::is_same<T, U>::value;
 }
 
-namespace
-{
+namespace {
 // Work around to remove paranthesis surrounding a type
 template <typename T>
 struct argument_type;

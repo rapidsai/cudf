@@ -22,13 +22,10 @@
 #include <cassert>
 #include <memory>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
-class table_device_view_base
-{
+class table_device_view_base {
  public:
   table_device_view_base()                              = delete;
   ~table_device_view_base()                             = default;
@@ -74,8 +71,7 @@ class table_device_view_base
 };
 }  // namespace detail
 
-class table_device_view : public detail::table_device_view_base<column_device_view, table_view>
-{
+class table_device_view : public detail::table_device_view_base<column_device_view, table_view> {
  public:
   static auto create(table_view source_view, cudaStream_t stream = 0)
   {
@@ -95,8 +91,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
 };
 
 class mutable_table_device_view
-  : public detail::table_device_view_base<mutable_column_device_view, mutable_table_view>
-{
+  : public detail::table_device_view_base<mutable_column_device_view, mutable_table_view> {
  public:
   static auto create(mutable_table_view source_view, cudaStream_t stream = 0)
   {

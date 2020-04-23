@@ -44,8 +44,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <rmm/device_scalar.hpp>
 
-namespace
-{
+namespace {
 /**
  * @brief Computes the rolling window function
  *
@@ -330,8 +329,7 @@ struct rolling_window_launcher {
 
 }  // anonymous namespace
 
-namespace cudf
-{
+namespace cudf {
 // see rolling.hpp for declaration
 gdf_column *rolling_window(const gdf_column &input_col,
                            cudf::size_type window,

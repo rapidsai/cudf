@@ -22,10 +22,8 @@
 
 #include "column_wrapper.cuh"
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**
  * @brief Convenience factory for column_wrapper that can generate columns of
  * any cudf datatype from simple integer generators.

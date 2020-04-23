@@ -22,8 +22,7 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf
-{
+namespace cudf {
 /*
  * @brief Convert dtype strings into gdf_dtype enum;
  *

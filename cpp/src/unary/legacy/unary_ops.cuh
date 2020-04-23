@@ -23,10 +23,8 @@
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/column_utils.hpp>
 
-namespace cudf
-{
-namespace unary
-{
+namespace cudf {
+namespace unary {
 template <typename T, typename Tout, typename F>
 __global__ void gpu_op_kernel(const T* data, cudf::size_type size, Tout* results, F functor)
 {

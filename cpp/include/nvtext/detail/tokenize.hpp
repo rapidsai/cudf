@@ -19,10 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
-namespace detail
-{
+namespace nvtext {
+namespace detail {
 /**
  * @copydoc nvtext::tokenize(strings_column_view const&,string_scalar
  * const&,rmm::mr::device_memory_resource*)

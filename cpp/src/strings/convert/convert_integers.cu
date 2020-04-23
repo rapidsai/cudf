@@ -29,14 +29,10 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Converts strings into an integers.
  *
@@ -156,10 +152,8 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
   return detail::to_integers(strings, output_type, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 /**
  * @brief Calculate the size of the each string required for
  * converting each integer in base-10 format.

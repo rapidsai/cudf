@@ -110,8 +110,7 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
 
-namespace
-{
+namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
 inline auto random_values(size_t size)

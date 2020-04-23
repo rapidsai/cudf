@@ -22,12 +22,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 /**
  * @brief Decode a column from a dictionary.
  */

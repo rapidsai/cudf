@@ -23,12 +23,9 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/table/table_device_view.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Maps an `aggregation::Kind` value to it's corresponding binary
  * operator.

@@ -21,10 +21,8 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 enum {
   IO_UNCOMP_STREAM_TYPE_INFER   = 0,
   IO_UNCOMP_STREAM_TYPE_GZIP    = 1,
@@ -49,8 +47,7 @@ gdf_error getUncompressedHostData(const char* h_data,
                                   const std::string& compression,
                                   std::vector<char>& h_uncomp_data);
 
-class HostDecompressor
-{
+class HostDecompressor {
  public:
   virtual size_t Decompress(uint8_t* dstBytes,
                             size_t dstLen,

@@ -28,14 +28,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 template <typename Transformer>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_char_column(
   cudf::column_device_view input,

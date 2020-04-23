@@ -40,10 +40,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <type_traits>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 // TODO: remove this if C++17 is supported.
 // `static_assert` requires a string literal at C++14.
 #define errmsg_cast "`long long int` has different size to `int64_t`"

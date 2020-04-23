@@ -24,12 +24,9 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 /**---------------------------------------------------------------------------*
  * @brief Supported compression algorithms for the ORC writer
  *---------------------------------------------------------------------------**/
@@ -55,8 +52,7 @@ struct writer_options {
 /**---------------------------------------------------------------------------*
  * @brief Class to write ORC data into cuDF columns
  *---------------------------------------------------------------------------**/
-class writer
-{
+class writer {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;

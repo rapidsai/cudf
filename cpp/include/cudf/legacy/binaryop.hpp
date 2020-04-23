@@ -50,8 +50,7 @@ typedef enum {
   GDF_INVALID_BINARY   ///< invalid operation
 } gdf_binary_operator;
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
  *

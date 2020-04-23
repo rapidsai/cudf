@@ -16,12 +16,9 @@
 
 #include <cudf/detail/aggregation/aggregation.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
                               cudaStream_t stream)

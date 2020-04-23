@@ -54,8 +54,7 @@ struct OrcWriterValueParamTest : public OrcWriterTest,
 using test_types = ::testing::Types<cudf::bool8, int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(OrcWriterTypedParamTest, test_types);
 
-namespace
-{
+namespace {
 /**
  * @brief Helper function to set column name
  **/

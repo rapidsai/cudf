@@ -19,12 +19,9 @@
 
 #include "reduction_functions.cuh"
 
-namespace cudf
-{
-namespace reduction
-{
-namespace compound
-{
+namespace cudf {
+namespace reduction {
+namespace compound {
 /** --------------------------------------------------------------------------*
  * @brief Reduction for mean, var, std
  * It requires extra step after single step reduction call

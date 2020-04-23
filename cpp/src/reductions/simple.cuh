@@ -22,14 +22,10 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace reduction
-{
-namespace simple
-{
+namespace cudf {
+namespace experimental {
+namespace reduction {
+namespace simple {
 /** --------------------------------------------------------------------------*
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call

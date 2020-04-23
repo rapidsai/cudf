@@ -23,12 +23,9 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 struct BinaryOperationTest : public cudf::test::BaseFixture,
                              cudf::test::UniformRandomGenerator<uint8_t> {
   BinaryOperationTest() : cudf::test::UniformRandomGenerator<uint8_t>(1, 10) {}

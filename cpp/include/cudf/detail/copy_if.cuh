@@ -36,8 +36,7 @@
 #include <algorithm>
 #include <cub/cub.cuh>
 
-namespace
-{
+namespace {
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
 __global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
@@ -277,12 +276,9 @@ struct scatter_gather_functor {
 };
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
  *

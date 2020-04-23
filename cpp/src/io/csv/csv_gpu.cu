@@ -32,14 +32,10 @@
 
 using namespace ::cudf::experimental::io;
 
-namespace cudf
-{
-namespace io
-{
-namespace csv
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace csv {
+namespace gpu {
 /**
  * @brief Checks whether the given character is a whitespace character.
  *

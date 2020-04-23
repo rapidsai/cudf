@@ -19,12 +19,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location)
 {
@@ -37,8 +34,7 @@ CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type loca
   return static_cast<Result>(result);
 }
 
-namespace interpolate
-{
+namespace interpolate {
 template <typename Result, typename T>
 CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac)
 {

@@ -20,8 +20,7 @@
 
 #include <string>
 
-namespace cudf
-{
+namespace cudf {
 std::string string_scalar::to_string(cudaStream_t stream) const
 {
   std::string result;

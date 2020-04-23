@@ -27,10 +27,8 @@
 
 #include <cmath>
 
-namespace cudf
-{
-namespace reduction
-{
+namespace cudf {
+namespace reduction {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -71,8 +69,7 @@ struct transformer_var_std {
 // `Op`  is used to compute the reduction at device
 // `make_iterator` is used to make a iterator to be used to compute the reduction at device
 
-namespace op
-{
+namespace op {
 // `product`, `product`, `sum_of_squares`, `min`, `max`
 // are used at simple_reduction
 

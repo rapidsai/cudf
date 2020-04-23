@@ -64,8 +64,7 @@
 
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
-class cuda_event_timer
-{
+class cuda_event_timer {
  public:
   /**---------------------------------------------------------------------------*
    * @brief This c'tor clears the L2$ by cudaMemset'ing a buffer of L2$ size

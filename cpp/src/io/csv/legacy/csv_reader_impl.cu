@@ -47,12 +47,9 @@
 using std::string;
 using std::vector;
 
-namespace cudf
-{
-namespace io
-{
-namespace csv
-{
+namespace cudf {
+namespace io {
+namespace csv {
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns

@@ -31,10 +31,8 @@ typedef enum {
                      ///< for the column
 } gdf_scan_op;
 
-namespace cudf
-{
-namespace reduction
-{
+namespace cudf {
+namespace reduction {
 /**
  * @brief These enums indicate the supported reduction operations that can be
  * performed on a column

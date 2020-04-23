@@ -23,12 +23,9 @@
 
 #include <cstring>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
  * copied.

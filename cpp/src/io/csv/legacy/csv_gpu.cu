@@ -17,14 +17,10 @@
 #include <io/utilities/legacy/parsing_utils.cuh>
 #include "csv_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace csv
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace csv {
+namespace gpu {
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *

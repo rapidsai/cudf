@@ -15,12 +15,9 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Dispatcher for running Scan operation on input column
  * Dispatches scan operartion on `Op` and creates output column

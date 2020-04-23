@@ -23,10 +23,8 @@
 // Forward declaration
 typedef struct CUstream_st* cudaStream_t;
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
  *

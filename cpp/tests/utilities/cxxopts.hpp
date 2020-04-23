@@ -42,8 +42,7 @@ THE SOFTWARE.
 #define CXXOPTS__VERSION_MINOR 2
 #define CXXOPTS__VERSION_PATCH 0
 
-namespace cxxopts
-{
+namespace cxxopts {
 static constexpr struct {
   uint8_t major, minor, patch;
 } version = {CXXOPTS__VERSION_MAJOR, CXXOPTS__VERSION_MINOR, CXXOPTS__VERSION_PATCH};
@@ -58,14 +57,12 @@ static constexpr struct {
 #ifdef CXXOPTS_USE_UNICODE
 #include <unicode/unistr.h>
 
-namespace cxxopts
-{
+namespace cxxopts {
 typedef icu::UnicodeString String;
 
 inline String toLocalString(std::string s) { return icu::UnicodeString::fromUTF8(std::move(s)); }
 
-class UnicodeStringIterator : public std::iterator<std::forward_iterator_tag, int32_t>
-{
+class UnicodeStringIterator : public std::iterator<std::forward_iterator_tag, int32_t> {
  public:
   UnicodeStringIterator(const icu::UnicodeString* string, int32_t pos) : s(string), i(pos) {}
 
@@ -121,8 +118,7 @@ inline std::string toUTF8String(const String& s)
 inline bool empty(const String& s) { return s.isEmpty(); }
 }  // namespace cxxopts
 
-namespace std
-{
+namespace std {
 inline cxxopts::UnicodeStringIterator begin(const icu::UnicodeString& s)
 {
   return cxxopts::UnicodeStringIterator(&s, 0);
@@ -137,8 +133,7 @@ inline cxxopts::UnicodeStringIterator end(const icu::UnicodeString& s)
 // ifdef CXXOPTS_USE_UNICODE
 #else
 
-namespace cxxopts
-{
+namespace cxxopts {
 typedef std::string String;
 
 template <typename T>
@@ -171,10 +166,8 @@ inline bool empty(const std::string& s) { return s.empty(); }
 // ifdef CXXOPTS_USE_UNICODE
 #endif
 
-namespace cxxopts
-{
-namespace
-{
+namespace cxxopts {
+namespace {
 #ifdef _WIN32
 const std::string LQUOTE("\'");
 const std::string RQUOTE("\'");
@@ -184,8 +177,7 @@ const std::string RQUOTE("’");
 #endif
 }  // namespace
 
-class Value : public std::enable_shared_from_this<Value>
-{
+class Value : public std::enable_shared_from_this<Value> {
  public:
   virtual ~Value() = default;
 
@@ -214,8 +206,7 @@ class Value : public std::enable_shared_from_this<Value>
   virtual bool is_boolean() const = 0;
 };
 
-class OptionException : public std::exception
-{
+class OptionException : public std::exception {
  public:
   OptionException(const std::string& message) : m_message(message) {}
 
@@ -225,20 +216,17 @@ class OptionException : public std::exception
   std::string m_message;
 };
 
-class OptionSpecException : public OptionException
-{
+class OptionSpecException : public OptionException {
  public:
   OptionSpecException(const std::string& message) : OptionException(message) {}
 };
 
-class OptionParseException : public OptionException
-{
+class OptionParseException : public OptionException {
  public:
   OptionParseException(const std::string& message) : OptionException(message) {}
 };
 
-class option_exists_error : public OptionSpecException
-{
+class option_exists_error : public OptionSpecException {
  public:
   option_exists_error(const std::string& option)
     : OptionSpecException("Option " + LQUOTE + option + RQUOTE + " already exists")
@@ -246,8 +234,7 @@ class option_exists_error : public OptionSpecException
   }
 };
 
-class invalid_option_format_error : public OptionSpecException
-{
+class invalid_option_format_error : public OptionSpecException {
  public:
   invalid_option_format_error(const std::string& format)
     : OptionSpecException("Invalid option format " + LQUOTE + format + RQUOTE)
@@ -255,8 +242,7 @@ class invalid_option_format_error : public OptionSpecException
   }
 };
 
-class option_syntax_exception : public OptionParseException
-{
+class option_syntax_exception : public OptionParseException {
  public:
   option_syntax_exception(const std::string& text)
     : OptionParseException("Argument " + LQUOTE + text + RQUOTE +
@@ -265,8 +251,7 @@ class option_syntax_exception : public OptionParseException
   }
 };
 
-class option_not_exists_exception : public OptionParseException
-{
+class option_not_exists_exception : public OptionParseException {
  public:
   option_not_exists_exception(const std::string& option)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE + " does not exist")
@@ -274,8 +259,7 @@ class option_not_exists_exception : public OptionParseException
   }
 };
 
-class missing_argument_exception : public OptionParseException
-{
+class missing_argument_exception : public OptionParseException {
  public:
   missing_argument_exception(const std::string& option)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE + " is missing an argument")
@@ -283,8 +267,7 @@ class missing_argument_exception : public OptionParseException
   }
 };
 
-class option_requires_argument_exception : public OptionParseException
-{
+class option_requires_argument_exception : public OptionParseException {
  public:
   option_requires_argument_exception(const std::string& option)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE + " requires an argument")
@@ -292,8 +275,7 @@ class option_requires_argument_exception : public OptionParseException
   }
 };
 
-class option_not_has_argument_exception : public OptionParseException
-{
+class option_not_has_argument_exception : public OptionParseException {
  public:
   option_not_has_argument_exception(const std::string& option, const std::string& arg)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE +
@@ -303,8 +285,7 @@ class option_not_has_argument_exception : public OptionParseException
   }
 };
 
-class option_not_present_exception : public OptionParseException
-{
+class option_not_present_exception : public OptionParseException {
  public:
   option_not_present_exception(const std::string& option)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE + " not present")
@@ -312,8 +293,7 @@ class option_not_present_exception : public OptionParseException
   }
 };
 
-class argument_incorrect_type : public OptionParseException
-{
+class argument_incorrect_type : public OptionParseException {
  public:
   argument_incorrect_type(const std::string& arg)
     : OptionParseException("Argument " + LQUOTE + arg + RQUOTE + " failed to parse")
@@ -321,8 +301,7 @@ class argument_incorrect_type : public OptionParseException
   }
 };
 
-class option_required_exception : public OptionParseException
-{
+class option_required_exception : public OptionParseException {
  public:
   option_required_exception(const std::string& option)
     : OptionParseException("Option " + LQUOTE + option + RQUOTE + " is required but not present")
@@ -350,17 +329,14 @@ void throw_or_mimic(const std::string& text)
 #endif
 }
 
-namespace values
-{
-namespace
-{
+namespace values {
+namespace {
 std::basic_regex<char> integer_pattern("(-)?(0x)?([0-9a-zA-Z]+)|((0x)?0)");
 std::basic_regex<char> truthy_pattern("(t|T)(rue)?|1");
 std::basic_regex<char> falsy_pattern("(f|F)(alse)?|0");
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 template <typename T, bool B>
 struct SignedCheck;
 
@@ -547,8 +523,7 @@ struct type_is_container<std::vector<T>> {
 };
 
 template <typename T>
-class abstract_value : public Value
-{
+class abstract_value : public Value {
   using Self = abstract_value<T>;
 
  public:
@@ -630,8 +605,7 @@ class abstract_value : public Value
 };
 
 template <typename T>
-class standard_value : public abstract_value<T>
-{
+class standard_value : public abstract_value<T> {
  public:
   using abstract_value<T>::abstract_value;
 
@@ -639,8 +613,7 @@ class standard_value : public abstract_value<T>
 };
 
 template <>
-class standard_value<bool> : public abstract_value<bool>
-{
+class standard_value<bool> : public abstract_value<bool> {
  public:
   ~standard_value() = default;
 
@@ -675,8 +648,7 @@ std::shared_ptr<Value> value(T& t)
 
 class OptionAdder;
 
-class OptionDetails
-{
+class OptionDetails {
  public:
   OptionDetails(const std::string& short_,
                 const std::string& long_,
@@ -730,8 +702,7 @@ struct HelpGroupDetails {
   std::vector<HelpOptionDetails> options;
 };
 
-class OptionValue
-{
+class OptionValue {
  public:
   void parse(std::shared_ptr<const OptionDetails> details, const std::string& text)
   {
@@ -775,8 +746,7 @@ class OptionValue
   bool m_default = false;
 };
 
-class KeyValue
-{
+class KeyValue {
  public:
   KeyValue(std::string key_, std::string value_)
     : m_key(std::move(key_)), m_value(std::move(value_))
@@ -800,8 +770,7 @@ class KeyValue
   std::string m_value;
 };
 
-class ParseResult
-{
+class ParseResult {
  public:
   ParseResult(
     const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<OptionDetails>>>,
@@ -878,8 +847,7 @@ struct Option {
   std::string arg_help_;
 };
 
-class Options
-{
+class Options {
   typedef std::unordered_map<std::string, std::shared_ptr<OptionDetails>> OptionMap;
 
  public:
@@ -978,8 +946,7 @@ class Options
   std::map<std::string, HelpGroupDetails> m_help;
 };
 
-class OptionAdder
-{
+class OptionAdder {
  public:
   OptionAdder(Options& options, std::string group) : m_options(options), m_group(std::move(group))
   {
@@ -995,8 +962,7 @@ class OptionAdder
   std::string m_group;
 };
 
-namespace
-{
+namespace {
 constexpr int OPTION_LONGEST  = 30;
 constexpr int OPTION_DESC_GAP = 2;
 

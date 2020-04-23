@@ -16,14 +16,10 @@
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 struct typed_agg_copier {
  private:
   std::unique_ptr<aggregation> const& agg;

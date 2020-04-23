@@ -31,12 +31,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace io
-{
-namespace json
-{
+namespace cudf {
+namespace io {
+namespace json {
 struct ColumnInfo {
   cudf::size_type float_count;
   cudf::size_type datetime_count;
@@ -50,8 +47,7 @@ struct ColumnInfo {
  * @brief Class used to parse Json input and convert it into gdf columns
  *
  *---------------------------------------------------------------------------**/
-class reader::Impl
-{
+class reader::Impl {
  public:
  private:
   const reader_options args_{};

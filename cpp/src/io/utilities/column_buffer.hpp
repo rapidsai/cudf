@@ -29,14 +29,10 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
 /**
  * @brief Creates a `device_buffer` for holding `column` data.
  *
@@ -102,8 +98,7 @@ struct column_buffer {
   size_type _null_count{0};
 };
 
-namespace
-{
+namespace {
 /**
  * @brief Creates a column from an existing set of device memory buffers.
  *

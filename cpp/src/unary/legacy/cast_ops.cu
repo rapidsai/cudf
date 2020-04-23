@@ -31,10 +31,8 @@
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 static constexpr int64_t METRIC_FACTOR      = 1000;
 static constexpr int64_t METRIC_FACTOR_SQ   = METRIC_FACTOR * METRIC_FACTOR;
 static constexpr int64_t METRIC_FACTOR_CUBE = METRIC_FACTOR_SQ * METRIC_FACTOR;

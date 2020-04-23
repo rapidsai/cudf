@@ -26,12 +26,9 @@
 #include <cudf/utilities/error.hpp>
 #include <quantiles/quantiles_util.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 template <bool exact, typename SortMapIterator>
 struct quantile_functor {
   SortMapIterator ordered_indices;

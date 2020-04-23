@@ -23,12 +23,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 struct nan_dispatcher {
   template <typename T, typename Predicate>
   std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(

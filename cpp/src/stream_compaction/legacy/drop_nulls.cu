@@ -19,8 +19,7 @@
 #include <cudf/legacy/table.hpp>
 #include "copy_if.cuh"
 
-namespace
-{
+namespace {
 using bit_mask_t = bit_mask::bit_mask_t;
 
 // Returns true if the valid mask is true for index i in at least keep_threshold
@@ -86,8 +85,7 @@ struct valid_table_filter {
 
 }  // namespace
 
-namespace cudf
-{
+namespace cudf {
 /*
  * Filters a table to remove null elements.
  */

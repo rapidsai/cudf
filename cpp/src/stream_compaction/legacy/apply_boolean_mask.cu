@@ -17,8 +17,7 @@
 #include <cudf/legacy/table.hpp>
 #include "copy_if.cuh"
 
-namespace
-{
+namespace {
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
 // Note we use a functor here so we can cast to a bitmask_t __restrict__
@@ -44,8 +43,7 @@ struct boolean_mask_filter {
 
 }  // namespace
 
-namespace cudf
-{
+namespace cudf {
 /*
  * Filters a table using a column of boolean values as a mask.
  *

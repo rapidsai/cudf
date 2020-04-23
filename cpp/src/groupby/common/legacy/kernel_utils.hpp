@@ -17,10 +17,8 @@
 #ifndef _GROUPBY_KERNEL_UTILS_H
 #define _GROUPBY_KERNEL_UTILS_H
 
-namespace cudf
-{
-namespace groupby
-{
+namespace cudf {
+namespace groupby {
 /**---------------------------------------------------------------------------*
  * @brief This functor is used by elementwise_aggregator to do in-place update
  * operations.

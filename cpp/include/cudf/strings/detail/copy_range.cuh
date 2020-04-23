@@ -27,8 +27,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
-namespace
-{
+namespace {
 template <bool source_has_nulls,
           bool target_has_nulls,
           typename SourceValueIterator,
@@ -64,12 +63,9 @@ struct compute_element_size {
 
 }  // namespace
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Internal API to copy a range of string elements out-of-place from
  * source iterators to a target column.

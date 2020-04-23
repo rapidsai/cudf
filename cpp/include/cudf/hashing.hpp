@@ -18,8 +18,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
+namespace cudf {
 /** --------------------------------------------------------------------------*
  * @brief Computes the hash value of each row in the input set of columns.
  *

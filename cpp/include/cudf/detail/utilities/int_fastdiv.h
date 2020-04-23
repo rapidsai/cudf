@@ -17,8 +17,7 @@
 #ifndef _INT_FASTDIV_KJGIUHFG
 #define _INT_FASTDIV_KJGIUHFG
 
-class int_fastdiv
-{
+class int_fastdiv {
  public:
   // divisor != 0
   __host__ __device__ __forceinline__ int_fastdiv(int divisor = 0) : d(divisor)

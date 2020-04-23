@@ -29,14 +29,10 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Converts hex strings into an integers.
  *

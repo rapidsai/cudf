@@ -11,14 +11,10 @@
 
 #include <algorithm>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace {
 // When processing the input in chunks, this is the maximum size of each chunk.
 // Only one chunk is loaded on the GPU at a time, so this value is chosen to
 // be small enough to fit on the GPU in most cases.

@@ -18,8 +18,7 @@
 
 #include <algorithm>
 
-namespace cudf
-{
+namespace cudf {
 std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype)
 {
   if (dtype == "str") return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});

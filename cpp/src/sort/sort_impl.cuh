@@ -25,12 +25,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sequence.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 // Create permuted row indices that would materialize sorted order
 template <bool stable = false>
 std::unique_ptr<column> sorted_order(table_view input,

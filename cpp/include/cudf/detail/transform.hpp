@@ -18,12 +18,9 @@
 
 #include <cudf/transform.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.

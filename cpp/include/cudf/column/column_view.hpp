@@ -18,10 +18,8 @@
 #include <cudf/types.hpp>
 #include <vector>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
@@ -41,8 +39,7 @@ namespace detail
  *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class column_view_base
-{
+class column_view_base {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -251,8 +248,7 @@ class column_view_base
                    size_type offset              = 0);
 };
 
-class mutable_column_view_base : public column_view_base
-{
+class mutable_column_view_base : public column_view_base {
  public:
  protected:
 };
@@ -277,8 +273,7 @@ class mutable_column_view_base : public column_view_base
  * memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class column_view : public detail::column_view_base
-{
+class column_view : public detail::column_view_base {
  public:
   column_view()                   = default;
   ~column_view()                  = default;
@@ -362,8 +357,7 @@ class column_view : public detail::column_view_base
  *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class mutable_column_view : public detail::column_view_base
-{
+class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 

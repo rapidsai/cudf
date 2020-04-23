@@ -35,10 +35,8 @@
 #include <types.h.jit>
 #include <types.hpp.jit>
 
-namespace cudf
-{
-namespace transformation
-{
+namespace cudf {
+namespace transformation {
 /**---------------------------------------------------------------------------*
  * @brief Computes output valid mask for op between a column and a scalar
  *
@@ -48,8 +46,7 @@ namespace transformation
  * @param num_values number of values in input mask valid_col
  *---------------------------------------------------------------------------**/
 
-namespace jit
-{
+namespace jit {
 void unary_operation(gdf_column& output,
                      const gdf_column& input,
                      const std::string& udf,

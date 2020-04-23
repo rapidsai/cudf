@@ -28,10 +28,8 @@
 #include <utility>
 #include "../../common/legacy/groupby_test.hpp"
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 template <cudf::groupby::operators op, typename Key, typename Value, typename ResultValue>
 void single_column_groupby_test(column_wrapper<Key> keys,
                                 column_wrapper<Value> values,

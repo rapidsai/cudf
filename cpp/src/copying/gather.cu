@@ -14,12 +14,9 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 struct dispatch_map_type {
   template <typename map_type,
             std::enable_if_t<std::is_integral<map_type>::value and

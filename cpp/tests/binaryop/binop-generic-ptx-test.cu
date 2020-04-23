@@ -21,12 +21,9 @@
 #include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 struct BinaryOperationGenericPTXTest : public BinaryOperationTest {
 };
 

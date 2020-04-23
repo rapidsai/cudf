@@ -36,8 +36,7 @@
 #include <numeric>
 #include <tuple>
 
-namespace
-{
+namespace {
 /**
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
@@ -80,14 +79,10 @@ struct permuted_row_equality_comparator {
 
 }  // namespace
 
-namespace cudf
-{
-namespace groupby
-{
-namespace sort
-{
-namespace detail
-{
+namespace cudf {
+namespace groupby {
+namespace sort {
+namespace detail {
 cudf::size_type helper::num_keys()
 {
   if (_num_keys > -1) return _num_keys;

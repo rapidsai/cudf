@@ -18,8 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
-namespace cudf
-{
+namespace cudf {
 std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                column_view const& indices_column,
                                                rmm::mr::device_memory_resource* mr,

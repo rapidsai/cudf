@@ -22,12 +22,9 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Returns a new strings column using the specified Filter to select
  * strings from the lhs iterator or the rhs iterator.

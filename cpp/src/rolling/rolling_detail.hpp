@@ -21,11 +21,9 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf
-{
+namespace cudf {
 // helper functions - used in the rolling window implementation and tests
-namespace detail
-{
+namespace detail {
 // return true if ColumnType is arithmetic type or
 // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
 template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind op, bool is_mean>

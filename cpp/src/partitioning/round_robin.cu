@@ -42,8 +42,7 @@
 #include <utility>
 #include <vector>
 
-namespace
-{
+namespace {
 template <typename T>
 using VectorT = rmm::device_vector<T>;
 /**
@@ -170,12 +169,9 @@ degenerate_partitions(cudf::table_view const& input,
 }
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,

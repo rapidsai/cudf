@@ -24,12 +24,9 @@
 
 #include <algorithm>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
                                cudaStream_t stream)

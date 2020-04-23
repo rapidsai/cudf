@@ -19,12 +19,9 @@
 
 #include <stdint.h>
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
+namespace cudf {
+namespace io {
+namespace avro {
 struct block_desc_s {
   block_desc_s() {}
   explicit constexpr block_desc_s(size_t offset_,

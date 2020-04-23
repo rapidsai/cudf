@@ -22,14 +22,10 @@
 #include <rmm/rmm_api.h>
 #include <rmm/rmm.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
  *

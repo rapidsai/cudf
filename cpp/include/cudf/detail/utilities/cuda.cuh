@@ -26,12 +26,9 @@
 #include <assert.h>
 #include <type_traits>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Size of a warp in a CUDA kernel.
  */
@@ -41,8 +38,7 @@ static constexpr size_type warp_size{32};
  * @brief A kernel grid configuration construction gadget for simple
  * one-dimensional, with protection against integer overflow.
  */
-class grid_1d
-{
+class grid_1d {
  public:
   const int num_threads_per_block;
   const int num_blocks;

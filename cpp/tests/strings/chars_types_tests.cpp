@@ -29,8 +29,7 @@ struct StringsCharsTest : public cudf::test::BaseFixture {
 
 class StringsCharsTestTypes
   : public StringsCharsTest,
-    public testing::WithParamInterface<cudf::strings::string_character_types>
-{
+    public testing::WithParamInterface<cudf::strings::string_character_types> {
 };
 
 TEST_P(StringsCharsTestTypes, AllTypes)

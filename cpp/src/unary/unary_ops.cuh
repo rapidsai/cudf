@@ -22,12 +22,9 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace unary
-{
+namespace cudf {
+namespace experimental {
+namespace unary {
 template <typename T, typename Tout, typename F>
 struct launcher {
   static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,

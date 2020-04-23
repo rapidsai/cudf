@@ -38,8 +38,7 @@
 using output_index_type = cudf::size_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
-namespace cudf
-{
+namespace cudf {
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Allocates a buffer and fills it with a repeated value

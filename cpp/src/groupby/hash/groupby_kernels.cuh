@@ -21,16 +21,11 @@
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace hash
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace hash {
 /**
  * @brief Compute single-pass aggregations and store results into a sparse
  * `output_values` table, and populate `map` with indices of unique keys

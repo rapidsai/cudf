@@ -29,16 +29,12 @@
 #include <thrust/transform.h>
 #include <vector>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 using string_index_pair = thrust::pair<const char*, size_type>;
 
-namespace
-{
+namespace {
 /**
  * @brief Common token counter for all split methods in this file.
  */

@@ -34,8 +34,7 @@
 
 #include <algorithm>
 
-namespace cudf
-{
+namespace cudf {
 template <typename T>
 inline T* get_data(const gdf_column& column) noexcept
 {
@@ -48,8 +47,7 @@ inline T* get_data(const gdf_column* column) noexcept
   return get_data<T>(*column);
 }
 
-namespace detail
-{
+namespace detail {
 struct integral_check {
   template <typename T>
   constexpr bool operator()(void) const noexcept
@@ -84,8 +82,7 @@ constexpr inline bool has_nulls(const gdf_column& column) noexcept
   return is_nullable(column) and column.null_count > 0;
 }
 
-namespace detail
-{
+namespace detail {
 struct size_of_helper {
   template <typename T>
   constexpr int operator()() const noexcept
@@ -140,8 +137,7 @@ bool have_same_type(const gdf_column* validated_column_ptr_1,
                     const gdf_column* validated_column_ptr_2,
                     bool ignore_extra_type_info = false) noexcept;
 
-namespace detail
-{
+namespace detail {
 bool extra_type_info_is_compatible(const gdf_dtype& common_dtype,
                                    const gdf_dtype_extra_info& lhs_extra_type_info,
                                    const gdf_dtype_extra_info& rhs_extra_type_info) noexcept;

@@ -20,10 +20,8 @@
 #include <nvtx3/nvToolsExt.h>
 #endif
 
-namespace cudf
-{
-namespace nvtx
-{
+namespace cudf {
+namespace nvtx {
 void range_push(const char* name, color color)
 {
   range_push_hex(name, static_cast<uint32_t>(color));

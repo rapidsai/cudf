@@ -25,11 +25,9 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 //! Utility functions
-namespace util
-{
+namespace util {
 /**
  * Finds the smallest integer not less than `number_to_round` and modulo `S` is
  * zero. This function assumes that `number_to_round` is non-negative and
@@ -78,8 +76,7 @@ constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) n
   return (dividend + divisor - 1) / divisor;
 }
 
-namespace detail
-{
+namespace detail {
 template <typename I>
 constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
                                         I dividend,

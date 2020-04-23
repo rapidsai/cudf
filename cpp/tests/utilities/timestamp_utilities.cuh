@@ -25,10 +25,8 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 using time_point_ms =
   simt::std::chrono::time_point<simt::std::chrono::system_clock, simt::std::chrono::milliseconds>;
 

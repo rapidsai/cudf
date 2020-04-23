@@ -36,10 +36,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 template <typename index_type, typename scatter_map_type>
 __global__ void invert_map(index_type gather_map[],
                            const cudf::size_type destination_rows,

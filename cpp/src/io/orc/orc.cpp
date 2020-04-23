@@ -17,12 +17,9 @@
 #include "orc.h"
 #include <string.h>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 void ProtobufReader::skip_struct_field(int t)
 {
   switch (t) {

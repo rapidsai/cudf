@@ -22,10 +22,8 @@
 #include <chrono>
 #include <cstdint>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 launcher::launcher(const std::string& hash,
                    const std::string& cuda_source,
                    const std::vector<std::string>& header_names,

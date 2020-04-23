@@ -23,10 +23,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**
  * @brief Verifies the property equality of two columns.
  *

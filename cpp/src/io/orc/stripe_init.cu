@@ -17,14 +17,10 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 struct compressed_stream_s {
   CompressedStreamInfo info;
   gpu_inflate_input_s ctl;

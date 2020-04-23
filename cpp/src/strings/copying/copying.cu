@@ -24,12 +24,9 @@
 
 #include <thrust/sequence.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 // new strings column from subset of this strings instance
 std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
                                     size_type start,

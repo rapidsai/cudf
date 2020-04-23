@@ -17,14 +17,10 @@
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 // Minimal thrift implementation for parsing page headers
 
 static const __device__ __constant__ uint8_t g_list2struct[16] = {0,

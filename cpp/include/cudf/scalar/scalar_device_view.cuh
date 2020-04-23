@@ -19,16 +19,13 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief A non-owning view of scalar from device that is trivially copyable
  * and usable in CUDA device code.
  */
-class scalar_device_view_base
-{
+class scalar_device_view_base {
  public:
   ~scalar_device_view_base() = default;
 
@@ -66,8 +63,7 @@ class scalar_device_view_base
  * @brief A type of scalar_device_view where the value is a fixed width type
  */
 template <typename T>
-class fixed_width_scalar_device_view : public detail::scalar_device_view_base
-{
+class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
  public:
   using value_type = T;
 
@@ -118,8 +114,7 @@ class fixed_width_scalar_device_view : public detail::scalar_device_view_base
  * @brief A type of scalar_device_view that stores a pointer to a numerical value
  */
 template <typename T>
-class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T>
-{
+class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
@@ -130,8 +125,7 @@ class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view
 /**
  * @brief A type of scalar_device_view that stores a pointer to a string value
  */
-class string_scalar_device_view : public detail::scalar_device_view_base
-{
+class string_scalar_device_view : public detail::scalar_device_view_base {
  public:
   using ValueType = cudf::string_view;
 
@@ -164,8 +158,7 @@ class string_scalar_device_view : public detail::scalar_device_view_base
  * @brief A type of scalar_device_view that stores a pointer to a timestamp value
  */
 template <typename T>
-class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_view<T>
-{
+class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
  public:
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid)
     : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)

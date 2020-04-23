@@ -19,8 +19,7 @@
 #include <vector>
 
 template <typename T>
-class MergeTest : public GdfTest
-{
+class MergeTest : public GdfTest {
 };
 
 using test_types = ::testing::

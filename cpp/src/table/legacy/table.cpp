@@ -24,8 +24,7 @@
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/column_utils.hpp>
 
-namespace cudf
-{
+namespace cudf {
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols}
 {
   std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {

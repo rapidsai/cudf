@@ -17,10 +17,8 @@
 
 #include <cudf/hashing.hpp>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /** --------------------------------------------------------------------------*
  * @brief Partitions rows from the input table into multiple output tables.
  *

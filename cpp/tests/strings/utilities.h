@@ -17,10 +17,8 @@
 
 #include <cudf/column/column.hpp>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**
  * @brief Utility will verify the given strings column is empty.
  *

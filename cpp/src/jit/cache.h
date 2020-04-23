@@ -25,10 +25,8 @@
 #include <string>
 #include <unordered_map>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
@@ -46,8 +44,7 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  **/
 boost::filesystem::path getCacheDir();
 
-class cudfJitCache
-{
+class cudfJitCache {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Get a process wide singleton cache object
@@ -125,8 +122,7 @@ class cudfJitCache
    * @brief Class to allow process wise exclusive access to cache files
    *
    *---------------------------------------------------------------------------**/
-  class cacheFile
-  {
+  class cacheFile {
    private:
     std::string _file_name;
     bool successful_read  = false;

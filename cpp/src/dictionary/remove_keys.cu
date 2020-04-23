@@ -28,14 +28,10 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
+namespace {
 /**
  * @brief Return a new dictionary by removing identified keys from the provided dictionary.
  *

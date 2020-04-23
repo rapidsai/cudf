@@ -29,12 +29,9 @@
 
 #include <cub/device/device_reduce.cuh>
 
-namespace cudf
-{
-namespace reduction
-{
-namespace detail
-{
+namespace cudf {
+namespace reduction {
+namespace detail {
 /** --------------------------------------------------------------------------*
  * @brief compute reduction by the operator
  *

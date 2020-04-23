@@ -20,12 +20,9 @@
 #include <cudf/cudf.h>
 #include <functional>
 
-namespace cudf
-{
-namespace datetime
-{
-namespace detail
-{
+namespace cudf {
+namespace datetime {
+namespace detail {
 /**
  * @brief Compare the input time units and returns whichever is more granular,
  * i.e. the gdf_time_unit that can represent the highest precision timestamps.

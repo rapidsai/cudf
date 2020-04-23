@@ -153,8 +153,7 @@ struct equal_to {
 };
 
 template <typename Iterator>
-class cycle_iterator_adapter
-{
+class cycle_iterator_adapter {
  public:
   using value_type      = typename std::iterator_traits<Iterator>::value_type;
   using difference_type = typename std::iterator_traits<Iterator>::difference_type;

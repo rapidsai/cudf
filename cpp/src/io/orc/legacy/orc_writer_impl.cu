@@ -28,19 +28,15 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace
-{
+namespace {
 template <typename T>
 using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 
 }  // namespace
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 /**
  * @brief Function that translates GDF compression to ORC compression
  **/
@@ -94,8 +90,7 @@ constexpr T to_clockscale(gdf_time_unit time_unit)
 /**
  * @brief Helper class that wraps a cudf column to add ORC-specific info
  **/
-class orc_column
-{
+class orc_column {
   using str_pair = std::pair<const char *, size_t>;
 
  public:

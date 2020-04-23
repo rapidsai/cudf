@@ -30,8 +30,7 @@
  * after operating on the same data on the GPU.
  **/
 template <typename T>
-class hostdevice_vector
-{
+class hostdevice_vector {
  public:
   using value_type = T;
 

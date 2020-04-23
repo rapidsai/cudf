@@ -28,8 +28,7 @@ constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
 
-namespace
-{
+namespace {
 /**
  * @brief Kernel to count the number of set bits in a column's validity buffer
  *
@@ -264,10 +263,8 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
   return error;
 }
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 /**
  * @brief  Computes a bitmask from the bitwise AND of a set of bitmasks.
  */

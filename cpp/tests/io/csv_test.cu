@@ -66,8 +66,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
-namespace
-{
+namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
 inline auto random_values(size_t size)

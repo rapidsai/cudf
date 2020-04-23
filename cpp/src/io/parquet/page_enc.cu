@@ -16,14 +16,10 @@
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 // Spark doesn't support RLE encoding for BOOLEANs
 #define ENABLE_BOOL_RLE 0
 

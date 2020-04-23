@@ -22,12 +22,9 @@
 
 #include "join_common_utils.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /* --------------------------------------------------------------------------*/
 /**
 * @brief  Adds a pair of indices to the shared memory cache

@@ -43,10 +43,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value> * = nullptr>
   void operator()(table const *source_table,

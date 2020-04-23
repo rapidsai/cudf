@@ -28,10 +28,8 @@
 #include <utilities/legacy/column_utils.hpp>
 #include <utilities/legacy/cuda_utils.hpp>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 using bit_mask_t = bit_mask::bit_mask_t;
 
 /**
@@ -127,8 +125,7 @@ __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
   }
 }
 
-class Slice
-{
+class Slice {
  public:
   Slice(gdf_column const& input_column,
         cudf::size_type const* indices,
@@ -237,8 +234,7 @@ class Slice
 };
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 std::vector<gdf_column*> slice(gdf_column const& input_column,
                                cudf::size_type const* indices,
                                cudf::size_type num_indices,

@@ -32,10 +32,8 @@ using namespace cudf::test;
 // =============================================================================
 // ---- test data --------------------------------------------------------------
 
-namespace
-{
-namespace testdata
-{
+namespace {
+namespace testdata {
 // ----- most numerics
 
 template <typename T>

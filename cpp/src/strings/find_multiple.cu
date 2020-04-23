@@ -24,12 +24,9 @@
 
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 std::unique_ptr<column> find_multiple(
   strings_column_view const& strings,
   strings_column_view const& targets,

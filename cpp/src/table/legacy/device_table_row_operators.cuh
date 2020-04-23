@@ -21,8 +21,7 @@
 #include <cudf/cudf.h>
 #include <table/legacy/device_table.cuh>
 
-namespace
-{
+namespace {
 enum class State { False = 0, True = 1, Undecided = 2 };
 
 template <bool nullable = true>
@@ -137,8 +136,7 @@ struct row_equality_comparator {
   bool _nulls_are_equal;
 };
 
-namespace
-{
+namespace {
 template <bool nullable = true>
 struct typed_row_inequality_comparator {
   template <typename ColType>

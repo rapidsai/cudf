@@ -16,10 +16,8 @@
 
 #include <copying/legacy/copy_range.cuh>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 struct scalar_factory {
   gdf_scalar value;
 

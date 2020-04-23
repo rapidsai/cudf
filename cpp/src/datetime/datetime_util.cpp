@@ -20,12 +20,9 @@
 #include <cudf/legacy/unary.hpp>
 #include <iostream>
 
-namespace cudf
-{
-namespace datetime
-{
-namespace detail
-{
+namespace cudf {
+namespace datetime {
+namespace detail {
 gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit)
 {
   if (lhs_unit == TIME_UNIT_NONE || rhs_unit == TIME_UNIT_NONE) {

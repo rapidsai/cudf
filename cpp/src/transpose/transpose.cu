@@ -25,10 +25,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::mr::device_memory_resource* mr,
                                                          cudaStream_t stream)

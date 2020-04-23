@@ -21,14 +21,10 @@
 // Workaround replaces zero-length patch lists by a dummy zero patch
 #define ZERO_PLL_WAR 1
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 #define SCRATCH_BFRSZ (512 * 4)
 
 static __device__ __constant__ int64_t kORCTimeToUTC =

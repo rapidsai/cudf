@@ -24,12 +24,9 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace cudf
-{
-namespace library
-{
-namespace operation
-{
+namespace cudf {
+namespace library {
+namespace operation {
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Add {
   TypeOut operator()(TypeLhs lhs, TypeRhs rhs)

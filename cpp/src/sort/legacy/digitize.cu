@@ -24,8 +24,7 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/legacy/error_utils.hpp>
 
-namespace
-{  // unnamed namespace
+namespace {  // unnamed namespace
 struct binary_search_bound {
   template <typename ColumnType>
   void operator()(bool upper_bound,

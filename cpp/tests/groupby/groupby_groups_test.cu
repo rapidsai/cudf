@@ -22,10 +22,8 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 struct groupby_group_keys_test : public BaseFixture {
 };
 

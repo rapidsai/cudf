@@ -17,10 +17,8 @@
 #include <algorithm>
 #include <fstream>
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
 #define bswap_32(v) _byteswap_ulong(v)

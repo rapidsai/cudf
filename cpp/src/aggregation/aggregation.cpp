@@ -20,10 +20,8 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation()
 {
@@ -126,10 +124,8 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
   return std::unique_ptr<aggregation>(a);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 struct target_type_functor {
   template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept

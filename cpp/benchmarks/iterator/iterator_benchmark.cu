@@ -118,8 +118,7 @@ void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result
 }
 
 // -----------------------------------------------------------------------------
-class Iterator : public cudf::benchmark
-{
+class Iterator : public cudf::benchmark {
 };
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>

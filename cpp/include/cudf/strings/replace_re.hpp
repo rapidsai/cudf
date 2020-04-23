@@ -19,10 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
 /**
  * @brief For each string, replaces any character sequence matching the given pattern
  * with the provided replacement string.

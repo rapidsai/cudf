@@ -18,10 +18,8 @@
 
 #include <gmock/gmock.h>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 void expect_strings_empty(cudf::column_view strings_column)
 {
   EXPECT_EQ(STRING, strings_column.type().id());

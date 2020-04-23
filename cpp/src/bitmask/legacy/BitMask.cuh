@@ -27,8 +27,7 @@ using bit_mask_t = bit_mask::bit_mask_t;
 /* ---------------------------------------------------------------------------- *
  * @brief  Class for managing bit containers on the device
  * ---------------------------------------------------------------------------- */
-class BitMask
-{
+class BitMask {
  public:
   __host__ __device__ BitMask(bit_mask_t *valid, int bitlength)
     : valid_(valid), bitlength_(bitlength)

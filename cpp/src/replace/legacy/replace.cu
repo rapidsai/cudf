@@ -36,8 +36,7 @@
 
 using bit_mask::bit_mask_t;
 
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 static constexpr int warp_size  = 32;
 static constexpr int BLOCK_SIZE = 256;
@@ -258,10 +257,8 @@ struct replace_kernel_forwarder {
 };
 }  // end anonymous namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 gdf_column find_and_replace_all(const gdf_column& input_col,
                                 const gdf_column& values_to_replace,
                                 const gdf_column& replacement_values,
@@ -332,8 +329,7 @@ gdf_column find_and_replace_all(const gdf_column& input_col,
 
 }  // namespace cudf
 
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 using bit_mask::bit_mask_t;
 
@@ -438,10 +434,8 @@ struct replace_nulls_scalar_kernel_forwarder {
 
 }  // end anonymous namespace
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement,
                          cudaStream_t stream)

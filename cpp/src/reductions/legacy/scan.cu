@@ -9,8 +9,7 @@
 #include <cudf/legacy/reduction.hpp>
 #include <utilities/legacy/device_atomics.cuh>
 
-namespace
-{  // anonymous
+namespace {  // anonymous
 
 template <class T>
 __global__ void gpu_copy_and_replace_nulls(
@@ -180,8 +179,7 @@ struct PrefixSumDispatcher {
 
 }  // end anonymous namespace
 
-namespace cudf
-{
+namespace cudf {
 void scan(const gdf_column *input, gdf_column *output, gdf_scan_op op, bool inclusive)
 {
   CUDF_EXPECTS(input != nullptr, "Input column is null");

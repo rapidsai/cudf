@@ -18,8 +18,7 @@
 #include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Google Benchmark fixture for libcudf benchmarks
  *
@@ -51,8 +50,7 @@ namespace cudf
  *
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
-class benchmark : public ::benchmark::Fixture
-{
+class benchmark : public ::benchmark::Fixture {
  public:
   virtual void SetUp(const ::benchmark::State& state)
   {

@@ -31,14 +31,10 @@
 #include <map>
 #include <vector>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief  Units for timestamp conversion.
  * These are defined since there are more than what cudf supports.
@@ -426,10 +422,8 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
   return detail::to_timestamps(strings, timestamp_type, format, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 // converts a timestamp into date-time string
 template <typename T>
 struct datetime_formatter {

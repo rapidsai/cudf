@@ -23,16 +23,11 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace {
 struct nunique_functor {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,

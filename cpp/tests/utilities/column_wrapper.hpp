@@ -31,10 +31,8 @@
 #include <iterator>
 #include <memory>
 
-namespace cudf
-{
-namespace test
-{
+namespace cudf {
+namespace test {
 /**---------------------------------------------------------------------------*
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
  * `thrust::counting_iterator`.
@@ -61,8 +59,7 @@ auto make_counting_transform_iterator(cudf::size_type start, UnaryFunction f)
   return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
 }
 
-namespace detail
-{
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Base class for a wrapper around a `cudf::column`.
  *
@@ -71,8 +68,7 @@ namespace detail
  *
  * `column_wrapper` should not be instantiated directly.
  *---------------------------------------------------------------------------**/
-class column_wrapper
-{
+class column_wrapper {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to `column_view`.
@@ -201,8 +197,7 @@ auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, Validity
  * @tparam Element The fixed-width element type
  *---------------------------------------------------------------------------**/
 template <typename ElementTo>
-class fixed_width_column_wrapper : public detail::column_wrapper
-{
+class fixed_width_column_wrapper : public detail::column_wrapper {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Default constructor initializes an empty column with proper dtype
@@ -347,8 +342,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper
 /**---------------------------------------------------------------------------*
  * @brief `column_wrapper` derived class for wrapping columns of strings.
  *---------------------------------------------------------------------------**/
-class strings_column_wrapper : public detail::column_wrapper
-{
+class strings_column_wrapper : public detail::column_wrapper {
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct a non-nullable column of strings from the range

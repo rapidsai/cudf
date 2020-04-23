@@ -17,12 +17,9 @@
 #ifndef __IO_ORC_COMMON_H__
 #define __IO_ORC_COMMON_H__
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
+namespace cudf {
+namespace io {
+namespace orc {
 enum CompressionKind {
   NONE   = 0,
   ZLIB   = 1,

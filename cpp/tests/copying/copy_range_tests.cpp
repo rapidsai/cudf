@@ -30,8 +30,7 @@ auto all_valid  = [](cudf::size_type row) { return true; };
 auto even_valid = [](cudf::size_type row) { return (row % 2 == 0); };
 
 template <typename T>
-class CopyRangeTypedTestFixture : public cudf::test::BaseFixture
-{
+class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
  public:
   static constexpr cudf::size_type column_size{1000};
 
@@ -186,8 +185,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   this->test(source_slice, expected_slice, target_slice, source_begin, source_end, target_begin);
 }
 
-class CopyRangeStringTestFixture : public cudf::test::BaseFixture
-{
+class CopyRangeStringTestFixture : public cudf::test::BaseFixture {
 };
 
 TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
@@ -316,8 +314,7 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
   cudf::test::expect_columns_equal(*p_ret, expected_slice);
 }
 
-class CopyRangeErrorTestFixture : public cudf::test::BaseFixture
-{
+class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {
 };
 
 TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)

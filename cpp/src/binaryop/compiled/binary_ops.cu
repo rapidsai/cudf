@@ -23,16 +23,11 @@
 
 #include "binary_ops.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace binops
-{
-namespace compiled
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace binops {
+namespace compiled {
+namespace {
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop {
   binary_operator op;

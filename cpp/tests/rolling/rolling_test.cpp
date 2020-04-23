@@ -35,8 +35,7 @@ using cudf::bitmask_type;
 using cudf::size_type;
 using cudf::test::fixed_width_column_wrapper;
 
-class RollingStringTest : public cudf::test::BaseFixture
-{
+class RollingStringTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(RollingStringTest, NoNullStringMinMaxCount)
@@ -159,8 +158,7 @@ TEST_F(RollingStringTest, ZeroWindowSize)
 }
 
 template <typename T>
-class RollingTest : public cudf::test::BaseFixture
-{
+class RollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::column_view const& input,
@@ -409,8 +407,7 @@ class RollingTest : public cudf::test::BaseFixture
 
 // // ------------- expected failures --------------------
 
-class RollingErrorTest : public cudf::test::BaseFixture
-{
+class RollingErrorTest : public cudf::test::BaseFixture {
 };
 
 // negative sizes

@@ -22,14 +22,10 @@
 #include <cudf/utilities/error.hpp>
 
 //
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 struct special_case_mapping_in {
   uint16_t num_upper_chars;
   uint16_t upper[3];

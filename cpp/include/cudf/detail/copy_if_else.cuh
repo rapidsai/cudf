@@ -32,14 +32,10 @@
 #include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{  // anonymous
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {  // anonymous
 
 template <size_type block_size,
           typename T,

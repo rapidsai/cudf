@@ -22,8 +22,7 @@
 using cudf::test::column_wrapper;
 using cudf::test::scalar_wrapper;
 
-class SearchTest : public GdfTest
-{
+class SearchTest : public GdfTest {
 };
 
 TEST_F(SearchTest, empty_table)

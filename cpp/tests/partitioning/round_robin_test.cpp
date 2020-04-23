@@ -43,8 +43,7 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
-class RoundRobinTest : public cudf::test::BaseFixture
-{
+class RoundRobinTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(RoundRobinTest, cudf::test::FixedWidthTypes);

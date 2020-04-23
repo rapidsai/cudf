@@ -32,12 +32,9 @@
  * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
-namespace cudf
-{
-namespace test
-{
-namespace detail
-{
+namespace cudf {
+namespace test {
+namespace detail {
 template <typename TYPES, std::size_t... Indices>
 constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
   std::index_sequence<Indices...>)

@@ -27,10 +27,8 @@
 #include <cstdint>
 #include <string>
 
-namespace cudf
-{
-namespace util
-{
+namespace cudf {
+namespace util {
 template <typename T>
 constexpr inline std::size_t size_in_bits()
 {
@@ -43,8 +41,7 @@ constexpr inline std::size_t size_in_bits(const T&)
   return size_in_bits<T>();
 }
 
-namespace detail
-{
+namespace detail {
 template <typename BitContainer, typename Size>
 constexpr CUDA_HOST_DEVICE_CALLABLE Size intra_container_index(Size bit_index)
 {

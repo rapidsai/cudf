@@ -31,8 +31,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-namespace cudf
-{
+namespace cudf {
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.

@@ -23,10 +23,8 @@
 #include <boost/filesystem.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 // Get the directory in home to use for storing the cache
 boost::filesystem::path get_user_home_cache_dir()
 {

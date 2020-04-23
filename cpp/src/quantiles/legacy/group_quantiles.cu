@@ -29,10 +29,8 @@
 
 #include <thrust/for_each.h>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void> operator()(
@@ -79,8 +77,7 @@ struct quantiles_functor {
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 void group_quantiles(gdf_column const& values,
                      rmm::device_vector<cudf::size_type> const& group_offsets,
                      rmm::device_vector<cudf::size_type> const& group_sizes,

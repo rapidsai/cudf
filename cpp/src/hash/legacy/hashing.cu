@@ -30,8 +30,7 @@
 constexpr int BLOCK_SIZE      = 256;
 constexpr int ROWS_PER_THREAD = 1;
 
-namespace
-{
+namespace {
 /**
  * @brief  This function determines if a number is a power of 2.
  *

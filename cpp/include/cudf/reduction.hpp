@@ -20,10 +20,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 // @brief Enum to describe scan operation type
 enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
 

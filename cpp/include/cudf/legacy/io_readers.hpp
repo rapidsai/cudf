@@ -26,20 +26,15 @@
 #include <cudf/types.hpp>
 
 // Forward declarations
-namespace arrow
-{
-namespace io
-{
+namespace arrow {
+namespace io {
 class RandomAccessFile;
 }
 }  // namespace arrow
 
-namespace cudf
-{
-namespace io
-{
-namespace avro
-{
+namespace cudf {
+namespace io {
+namespace avro {
 /**---------------------------------------------------------------------------*
  * @brief Options for the Avro reader
  *---------------------------------------------------------------------------**/
@@ -60,8 +55,7 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache Avro data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader
-{
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -104,8 +98,7 @@ class reader
 
 }  // namespace avro
 
-namespace json
-{
+namespace json {
 /**---------------------------------------------------------------------------*
  * @brief Options for the JSON reader
  *---------------------------------------------------------------------------**/
@@ -133,8 +126,7 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse JSON input and convert it into a cudf::table.
  *---------------------------------------------------------------------------**/
-class reader
-{
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -181,8 +173,7 @@ class reader
 
 }  // namespace json
 
-namespace csv
-{
+namespace csv {
 /**---------------------------------------------------------------------------*
  * @brief Quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
@@ -270,8 +261,7 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse CSV input and convert it into gdf columns.
  *---------------------------------------------------------------------------**/
-class reader
-{
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -333,8 +323,7 @@ class reader
 
 }  // namespace csv
 
-namespace orc
-{
+namespace orc {
 /**---------------------------------------------------------------------------*
  * @brief Options for the ORC reader
  *---------------------------------------------------------------------------**/
@@ -376,8 +365,7 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache ORC data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader
-{
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -429,8 +417,7 @@ class reader
 
 }  // namespace orc
 
-namespace parquet
-{
+namespace parquet {
 /**---------------------------------------------------------------------------*
  * @brief Options for the Parquet reader
  *---------------------------------------------------------------------------**/
@@ -466,8 +453,7 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache Parquet data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader
-{
+class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;

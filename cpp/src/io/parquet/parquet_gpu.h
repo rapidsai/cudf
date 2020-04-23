@@ -22,14 +22,10 @@
 #include <io/statistics/column_stats.h>
 #include "parquet_common.h"
 
-namespace cudf
-{
-namespace io
-{
-namespace parquet
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 /**
  * @brief Enums for the flags in the page header
  **/

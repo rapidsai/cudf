@@ -34,14 +34,10 @@
 #include <thrust/sequence.h>
 #include <numeric>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 struct dispatch_map_type {
   template <typename MapType,
             std::enable_if_t<std::is_integral<MapType>::value and

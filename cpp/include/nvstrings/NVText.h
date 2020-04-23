@@ -26,8 +26,7 @@ class NVStrings;
  * @brief This class is a collection of utilities for operating on words or tokens.
  * It uses methods on the NVStrings class to access its character arrays.
  */
-class NVText
-{
+class NVText {
  public:
   /**
    * @brief Tokenize all the strings into a single instance.

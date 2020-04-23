@@ -20,8 +20,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Creates an empty column of the specified @p type
  *

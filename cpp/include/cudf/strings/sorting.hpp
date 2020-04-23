@@ -18,12 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Sort types for the sort method.
  *---------------------------------------------------------------------------**/

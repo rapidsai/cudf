@@ -34,8 +34,7 @@
 #include <limits>
 #include <type_traits>
 
-namespace
-{
+namespace {
 template <std::size_t N>
 struct packed {
   using type = void;
@@ -113,8 +112,7 @@ template <typename Key,
           typename Hasher    = default_hash<Key>,
           typename Equality  = equal_to<Key>,
           typename Allocator = default_allocator<thrust::pair<Key, Element>>>
-class concurrent_unordered_map
-{
+class concurrent_unordered_map {
  public:
   using size_type      = size_t;
   using hasher         = Hasher;

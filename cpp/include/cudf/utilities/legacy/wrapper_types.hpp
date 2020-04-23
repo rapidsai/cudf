@@ -57,10 +57,8 @@
  *
  */
 /* ----------------------------------------------------------------------------*/
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /**
  * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values
  * that do not correspond to fundamental types.
@@ -365,8 +363,7 @@ static constexpr bool8 false_v{bool8::value_type{0}};
 #endif
 
 // Wrapper operator overloads for cudf::bool8
-namespace detail
-{
+namespace detail {
 inline std::ostream &operator<<(std::ostream &os, cudf::bool8 const &w)
 {
   return os << static_cast<bool>(w);
@@ -470,8 +467,7 @@ CUDA_HOST_DEVICE_CALLABLE cudf::bool8 operator!(wrapper<T, type_id> const &me)
 
 }  // namespace cudf
 
-namespace std
-{
+namespace std {
 /**---------------------------------------------------------------------------*
  * @brief Specialization of std::numeric_limits for wrapper types
  *---------------------------------------------------------------------------**/
@@ -523,8 +519,7 @@ struct numeric_limits<cudf::bool8> {
 
 }  // namespace std
 
-namespace cub
-{
+namespace cub {
 template <>
 struct NumericTraits<cudf::date32>
   : BaseTraits<SIGNED_INTEGER,

@@ -31,21 +31,15 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace parquet
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Helper for pinned host memory
  **/
@@ -102,8 +96,7 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 /**
  * @brief Helper class that adds parquet-specific column info
  **/
-class parquet_column_view
-{
+class parquet_column_view {
  public:
   /**
    * @brief Constructor that extracts out the string position + length pairs

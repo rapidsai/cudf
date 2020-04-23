@@ -23,12 +23,9 @@
 #include <cmath>
 #include <type_traits>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 // trig functions
 
 template <typename T, typename Op>

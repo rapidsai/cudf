@@ -18,10 +18,8 @@
 #include <cudf/legacy/interop.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace legacy
-{
+namespace cudf {
+namespace legacy {
 data_type gdf_dtype_to_data_type(gdf_dtype dtype)
 {
   switch (dtype) {

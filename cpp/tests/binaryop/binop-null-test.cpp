@@ -21,12 +21,9 @@
 #include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
 
-namespace cudf
-{
-namespace test
-{
-namespace binop
-{
+namespace cudf {
+namespace test {
+namespace binop {
 struct BinaryOperationNullTest : public BinaryOperationTest {
   template <typename T>
   auto make_random_wrapped_column(size_type size, mask_state state)

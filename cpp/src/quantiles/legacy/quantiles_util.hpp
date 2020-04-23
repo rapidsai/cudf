@@ -23,10 +23,8 @@
 #include <cudf/legacy/quantiles.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
-namespace interpolate
-{
+namespace cudf {
+namespace interpolate {
 template <typename T_out, typename T_in>
 CUDA_HOST_DEVICE_CALLABLE void linear(T_out& result, T_in lhs, T_in rhs, double frac)
 {
@@ -83,8 +81,7 @@ CUDA_HOST_DEVICE_CALLABLE void midpoint(int64_t& result, int64_t lhs, int64_t rh
 
 }  // end of namespace interpolate
 
-namespace detail
-{
+namespace detail {
 /**
  * @brief Helper struct that calculates the values needed to get quantile values
  * by interpolation.

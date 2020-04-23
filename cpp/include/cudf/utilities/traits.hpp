@@ -23,8 +23,7 @@
 
 #include <type_traits>
 
-namespace cudf
-{
+namespace cudf {
 template <typename...>
 using void_t = void;
 

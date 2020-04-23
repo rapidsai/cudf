@@ -23,10 +23,8 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Gathers the specified rows (including null values) of a set of columns.
  *

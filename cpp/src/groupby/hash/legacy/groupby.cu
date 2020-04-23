@@ -38,14 +38,10 @@
 #include "groupby/common/legacy/utils.hpp"
 #include "groupby_kernels.cuh"
 
-namespace cudf
-{
-namespace groupby
-{
-namespace hash
-{
-namespace
-{
+namespace cudf {
+namespace groupby {
+namespace hash {
+namespace {
 template <bool keys_have_nulls, bool values_have_nulls>
 auto build_aggregation_map(table const& input_keys,
                            table const& input_values,
@@ -300,8 +296,7 @@ auto groupby_null_specialization(table const& keys, table const& values)
 }
 
 }  // namespace
-namespace detail
-{
+namespace detail {
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,

@@ -22,12 +22,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/scan.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Create an offsets column to be a child of a strings column.
  * This will set the offsets values by executing scan on the provided

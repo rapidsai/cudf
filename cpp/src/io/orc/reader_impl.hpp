@@ -35,31 +35,24 @@
 #include <utility>
 #include <vector>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace orc
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
 // Forward declarations
 class metadata;
-namespace
-{
+namespace {
 class orc_stream_info;
 }
 
 /**
  * @brief Implementation for ORC reader
  */
-class reader::impl
-{
+class reader::impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

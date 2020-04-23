@@ -19,10 +19,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <string>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 struct get_data_ptr_functor {
   /**
    * @brief Gets the data pointer from a column_view

@@ -31,10 +31,8 @@
 #include <numeric>
 #include <utility>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 // From benchmark data, the fused kernel optimization appears to perform better
 // when there are more than a trivial number of columns, or when the null mask
 // can also be computed at the same time
@@ -371,8 +369,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return detail::concatenate(columns_to_concat, mr, 0);
 }
 
-namespace experimental
-{
+namespace experimental {
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {

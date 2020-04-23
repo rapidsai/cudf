@@ -18,8 +18,7 @@
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
 
-namespace
-{
+namespace {
 // Buffers are padded to 64-byte boundaries (for SIMD) static
 static constexpr int32_t kArrowAlignment = 64;
 

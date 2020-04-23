@@ -27,14 +27,10 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 // this is a [begin,end) pair of character positions when a substring is matched
 using found_range = thrust::pair<size_type, size_type>;
 

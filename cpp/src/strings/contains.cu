@@ -26,14 +26,10 @@
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief This functor handles both contains_re and match_re to minimize the number
  * of regex calls to find() to be inlined greatly reducing compile time.
@@ -157,10 +153,8 @@ std::unique_ptr<column> matches_re(strings_column_view const& strings,
   return detail::matches_re(strings, pattern, mr);
 }
 
-namespace detail
-{
-namespace
-{
+namespace detail {
+namespace {
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
  *

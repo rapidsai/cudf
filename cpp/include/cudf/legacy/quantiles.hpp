@@ -18,8 +18,7 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf
-{
+namespace cudf {
 /**
  * @brief Interpolation method to use, when the desired quantile lies between
  * two data points i and j

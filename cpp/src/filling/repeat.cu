@@ -40,8 +40,7 @@
 #include <limits>
 #include <memory>
 
-namespace
-{
+namespace {
 struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
@@ -108,12 +107,9 @@ struct compute_offsets {
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,

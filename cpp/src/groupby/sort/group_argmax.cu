@@ -19,14 +19,10 @@
 
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
 std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
                                      rmm::device_vector<size_type> const& group_labels,

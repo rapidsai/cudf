@@ -20,12 +20,9 @@
 #include "groupby/common/legacy/kernel_utils.hpp"
 #include "groupby/common/legacy/type_info.hpp"
 
-namespace cudf
-{
-namespace groupby
-{
-namespace hash
-{
+namespace cudf {
+namespace groupby {
+namespace hash {
 template <bool nullable = true>
 struct row_hasher {
   using result_type = hash_value_type;  // TODO Remove when aggregating

@@ -27,8 +27,7 @@
 
 #include <algorithm>
 
-namespace
-{
+namespace {
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
 template <bool has_nulls = true>
@@ -53,12 +52,9 @@ struct boolean_mask_filter {
 
 }  // namespace
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
  *

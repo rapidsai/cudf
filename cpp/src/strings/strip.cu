@@ -27,14 +27,10 @@
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace strings {
+namespace detail {
+namespace {
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.

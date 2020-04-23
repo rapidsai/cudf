@@ -28,8 +28,7 @@
 
 #include <random>
 
-namespace
-{
+namespace {
 /**---------------------------------------------------------------------------*
  * @brief Return last odd index in a container containing `size` items
  *---------------------------------------------------------------------------**/

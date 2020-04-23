@@ -59,8 +59,7 @@ void validate_dtype(DLDataType const& dtype)
   EXPECT_EQ(sizeof(T) * 8, dtype.bits);
 }
 
-class DLPackUntypedTests : public BaseFixture
-{
+class DLPackUntypedTests : public BaseFixture {
 };
 
 TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
@@ -208,8 +207,7 @@ TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack)
 }
 
 template <typename T>
-class DLPackTimestampTests : public BaseFixture
-{
+class DLPackTimestampTests : public BaseFixture {
 };
 
 TYPED_TEST_CASE(DLPackTimestampTests, TimestampTypes);
@@ -222,8 +220,7 @@ TYPED_TEST(DLPackTimestampTests, TimestampTypesToDlpack)
 }
 
 template <typename T>
-class DLPackNumericTests : public BaseFixture
-{
+class DLPackNumericTests : public BaseFixture {
 };
 
 TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);

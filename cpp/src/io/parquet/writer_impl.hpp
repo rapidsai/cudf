@@ -38,16 +38,11 @@
 
 #include "chunked_state.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace parquet
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace parquet {
 // Forward internal classes
 class parquet_column_view;
 
@@ -57,8 +52,7 @@ using namespace cudf::io;
 /**
  * @brief Implementation for parquet writer
  **/
-class writer::impl
-{
+class writer::impl {
   // Parquet datasets are divided into fixed-size, independent rowgroups
   static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024;  // 128MB
   static constexpr uint32_t DEFAULT_ROWGROUP_MAXROWS = 1000000;            // Or at most 1M rows

@@ -21,10 +21,8 @@
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #define GZ_FLG_FTEXT 0x01     // ASCII text hint
 #define GZ_FLG_FHCRC 0x02     // Header CRC present
 #define GZ_FLG_FEXTRA 0x04    // Extra fields present
@@ -450,8 +448,7 @@ gdf_error getUncompressedHostData(const char *h_data,
  */
 /* ----------------------------------------------------------------------------*/
 
-class HostDecompressor_ZLIB : public HostDecompressor
-{
+class HostDecompressor_ZLIB : public HostDecompressor {
  public:
   HostDecompressor_ZLIB(bool gz_hdr_) : gz_hdr(gz_hdr_) {}
   size_t Decompress(uint8_t *dstBytes,
@@ -482,8 +479,7 @@ class HostDecompressor_ZLIB : public HostDecompressor
  */
 /* ----------------------------------------------------------------------------*/
 
-class HostDecompressor_SNAPPY : public HostDecompressor
-{
+class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
   HostDecompressor_SNAPPY() {}
   size_t Decompress(uint8_t *dstBytes,

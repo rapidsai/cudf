@@ -221,8 +221,7 @@ struct BlockSumArray {
  * times smaller than the previous one, rounded down.
  * Objects of this type own the allocated memory.
  **/
-class BlockSumPyramid
-{
+class BlockSumPyramid {
   const uint16_t aggregation_rate_ = 32;  ///< Aggregation rate between each level of the pyramid
   thrust::host_vector<BlockSumArray> h_levels_;  ///< Host: pyramid levels (lowest to highest)
   rmm::device_vector<BlockSumArray> d_levels_;   ///< Device: pyramid levels (lowest to highest)

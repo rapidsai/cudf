@@ -33,20 +33,14 @@
 
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace json
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace json {
 using namespace cudf::io;
 
-namespace
-{
+namespace {
 /**
  * @brief Extract value names from a JSON object
  *

@@ -20,10 +20,8 @@
 #include <memory>
 #include <vector>
 
-namespace cudf
-{
-namespace experimental
-{
+namespace cudf {
+namespace experimental {
 /**
  * @brief Partitions rows of `t` according to the mapping specified by
  * `partition_map`.

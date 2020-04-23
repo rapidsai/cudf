@@ -96,8 +96,7 @@ TEST_F(StringsConvertTest, EmptyStringsColumn)
 }
 
 template <typename T>
-class StringsIntegerConvertTest : public StringsConvertTest
-{
+class StringsIntegerConvertTest : public StringsConvertTest {
 };
 
 using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
@@ -140,8 +139,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 
 //
 template <typename T>
-class StringsFloatConvertTest : public StringsConvertTest
-{
+class StringsFloatConvertTest : public StringsConvertTest {
 };
 
 using FloatTypes = cudf::test::Types<float, double>;

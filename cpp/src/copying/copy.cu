@@ -20,14 +20,10 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/string_view.cuh>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
+namespace {
 /**
  * @brief Specialization of copy_if_else_functor for string_views.
  */

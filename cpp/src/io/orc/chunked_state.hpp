@@ -32,16 +32,11 @@
 #include <string>
 #include <vector>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace orc
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace orc {
 /**
  * @brief Chunked writer state struct. Contains various pieces of information
  *        needed that span the begin() / write() / end() call process.

@@ -29,16 +29,13 @@
 #include <string>
 #include <unordered_map>
 
-namespace cudf
-{
-namespace jit
-{
+namespace cudf {
+namespace jit {
 /**
  * @brief Class used to handle compilation and execution of JIT kernels
  *
  */
-class launcher
-{
+class launcher {
  public:
   launcher() = delete;
 

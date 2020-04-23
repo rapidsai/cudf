@@ -26,10 +26,8 @@
 #include <utility>
 #include <vector>
 
-namespace cudf
-{
-class column
-{
+namespace cudf {
+class column {
  public:
   column()        = default;
   ~column()       = default;

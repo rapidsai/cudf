@@ -22,12 +22,9 @@
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <utilities/legacy/error_utils.hpp>
 
-namespace cudf
-{
-namespace binops
-{
-namespace compiled
-{
+namespace cudf {
+namespace binops {
+namespace compiled {
 template <typename T, typename Tout, typename F>
 __global__ void gpu_binary_op(const T *lhs_data,
                               const cudf::valid_type *lhs_valid,

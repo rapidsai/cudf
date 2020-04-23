@@ -20,16 +20,11 @@
 #include <memory>
 #include <utility>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
-namespace hash
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
+namespace hash {
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.

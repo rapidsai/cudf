@@ -17,17 +17,13 @@
 #ifndef __IO_CSV_COMMON_H__
 #define __IO_CSV_COMMON_H__
 
-namespace cudf
-{
-namespace io
-{
-namespace csv
-{
+namespace cudf {
+namespace io {
+namespace csv {
 /**
  * @brief Per-column parsing flags used for dtype detection and data conversion
  **/
-namespace column_parse
-{
+namespace column_parse {
 enum : uint8_t {
   disabled       = 0,   ///< data is not read
   enabled        = 1,   ///< data is read and parsed as usual

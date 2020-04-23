@@ -23,14 +23,10 @@
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
 
-namespace cudf
-{
-namespace io
-{
-namespace orc
-{
-namespace gpu
-{
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 #define MAX_SHORT_DICT_ENTRIES (10 * 1024)
 #define INIT_HASH_BITS 12
 

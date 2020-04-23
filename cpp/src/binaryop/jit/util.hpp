@@ -18,14 +18,10 @@
 
 #include <string>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace binops
-{
-namespace jit
-{
+namespace cudf {
+namespace experimental {
+namespace binops {
+namespace jit {
 /**
  * @brief Orientation of lhs and rhs in operator
  */

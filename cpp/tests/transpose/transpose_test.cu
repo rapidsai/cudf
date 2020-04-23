@@ -23,8 +23,7 @@
 #include <limits>
 #include <random>
 
-namespace
-{
+namespace {
 using cudf::test::fixed_width_column_wrapper;
 
 template <typename T, typename F>
@@ -151,8 +150,7 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls)
 }  // namespace
 
 template <typename T>
-class TransposeTest : public cudf::test::BaseFixture
-{
+class TransposeTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);

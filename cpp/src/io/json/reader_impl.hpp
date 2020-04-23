@@ -32,16 +32,11 @@
 
 #include <cudf/io/readers.hpp>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace json
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace json {
 using namespace cudf::io::json;
 using namespace cudf::io;
 
@@ -49,8 +44,7 @@ using namespace cudf::io;
  * @brief Class used to parse Json input and convert it into gdf columns
  *
  **/
-class reader::impl
-{
+class reader::impl {
  public:
  private:
   const reader_options args_{};

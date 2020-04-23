@@ -21,12 +21,9 @@
 #include <memory>
 #include <vector>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.

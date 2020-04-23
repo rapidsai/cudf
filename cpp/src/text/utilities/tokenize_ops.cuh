@@ -19,10 +19,8 @@
 
 #include <thrust/logical.h>
 
-namespace nvtext
-{
-namespace detail
-{
+namespace nvtext {
+namespace detail {
 using string_index_pair = thrust::pair<const char*, cudf::size_type>;
 using position_pair     = thrust::pair<cudf::size_type, cudf::size_type>;
 

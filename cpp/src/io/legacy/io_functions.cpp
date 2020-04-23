@@ -18,8 +18,7 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf
-{
+namespace cudf {
 table read_avro(avro_read_arg const &args)
 {
   namespace avro = cudf::io::avro;

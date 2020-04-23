@@ -13,8 +13,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-class GatherTest : public cudf::test::BaseFixture
-{
+class GatherTest : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
@@ -301,8 +300,7 @@ TYPED_TEST(GatherTest, MultiColNulls)
   }
 }
 
-class GatherTestStr : public cudf::test::BaseFixture
-{
+class GatherTestStr : public cudf::test::BaseFixture {
 };
 
 TEST_F(GatherTestStr, StringColumn)

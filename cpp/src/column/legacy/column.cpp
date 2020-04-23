@@ -181,10 +181,8 @@ gdf_error gdf_column_free(gdf_column *column)
   return GDF_SUCCESS;
 }
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 void allocate_column_fields(gdf_column &column, bool allocate_mask, cudaStream_t stream)
 {
   if (column.size > 0) {
@@ -221,8 +219,7 @@ gdf_column allocate_column(gdf_dtype dtype,
 
 }  // namespace cudf
 
-namespace
-{
+namespace {
 struct get_type_size {
   template <typename T>
   auto operator()()

@@ -75,8 +75,7 @@ struct TypedDispatcherTest : DispatcherTest {
 
 TYPED_TEST_CASE(TypedDispatcherTest, TestTypes);
 
-namespace
-{
+namespace {
 template <typename ExpectedType>
 struct type_tester {
   template <typename DispatchedType>
@@ -106,8 +105,7 @@ TEST_F(DispatcherTest, NumberOfTypesTest)
     << "Number of supported types does not match what was expected.";
 }
 
-namespace
-{
+namespace {
 struct test_functor {
   template <typename T>
   __host__ __device__ bool operator()(gdf_dtype type_id)

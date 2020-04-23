@@ -45,8 +45,7 @@
 #include <utilities/legacy/cudf_utils.h>
 #include <utilities/legacy/bit_util.cuh>
 
-namespace without_agg
-{
+namespace without_agg {
 // A new instance of this class will be created for each *TEST(GroupByWoAggTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>

@@ -34,8 +34,7 @@
 #include <iostream>
 #include <tuple>
 
-namespace detail
-{
+namespace detail {
 template <typename T>
 inline std::string to_string(T val)
 {

@@ -32,12 +32,9 @@
 #include <iterator>
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace
-{
+namespace cudf {
+namespace experimental {
+namespace {
 inline bool __device__ out_of_bounds(size_type size, size_type idx)
 {
   return idx < 0 || idx >= size;

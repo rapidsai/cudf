@@ -29,12 +29,9 @@
 
 #include <thrust/for_each.h>
 
-namespace nvtext
-{
-namespace detail
-{
-namespace
-{
+namespace nvtext {
+namespace detail {
+namespace {
 /**
  * @brief Normalize spaces in a strings column.
  *

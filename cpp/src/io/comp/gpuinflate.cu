@@ -46,10 +46,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
 
-namespace cudf
-{
-namespace io
-{
+namespace cudf {
+namespace io {
 #define NUMTHREADS 128  // Threads per block
 
 #define MAXBITS 15                        // maximum bits in a code

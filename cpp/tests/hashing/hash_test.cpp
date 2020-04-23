@@ -24,8 +24,7 @@ using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
-class HashTest : public cudf::test::BaseFixture
-{
+class HashTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(HashTest, MultiValue)
@@ -114,8 +113,7 @@ TEST_F(HashTest, MultiValueNulls)
 }
 
 template <typename T>
-class HashTestTyped : public cudf::test::BaseFixture
-{
+class HashTestTyped : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
@@ -152,8 +150,7 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
 }
 
 template <typename T>
-class HashTestFloatTyped : public cudf::test::BaseFixture
-{
+class HashTestFloatTyped : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(HashTestFloatTyped, cudf::test::FloatingPointTypes);

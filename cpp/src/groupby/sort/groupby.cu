@@ -37,14 +37,10 @@
 #include <unordered_map>
 #include <utility>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace groupby
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace groupby {
+namespace detail {
 /**
  * @brief Functor to dispatch aggregation with
  *

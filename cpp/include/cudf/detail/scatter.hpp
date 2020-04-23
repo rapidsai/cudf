@@ -21,12 +21,9 @@
 
 #include <memory>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace detail
-{
+namespace cudf {
+namespace experimental {
+namespace detail {
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.

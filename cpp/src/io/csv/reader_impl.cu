@@ -44,16 +44,11 @@
 using std::string;
 using std::vector;
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace csv
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace csv {
 using namespace cudf::io::csv;
 using namespace cudf::io;
 

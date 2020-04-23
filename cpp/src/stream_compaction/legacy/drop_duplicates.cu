@@ -24,10 +24,8 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
-namespace cudf
-{
-namespace detail
-{
+namespace cudf {
+namespace detail {
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
  * with output, except that in a consecutive group of duplicate elements only

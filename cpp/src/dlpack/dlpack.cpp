@@ -22,10 +22,8 @@
 
 #include <algorithm>
 
-namespace cudf
-{
-namespace
-{
+namespace cudf {
+namespace {
 struct get_column_data_impl {
   template <typename T>
   void const* operator()(column_view const& col)
@@ -110,8 +108,7 @@ struct dltensor_context {
 
 }  // namespace
 
-namespace detail
-{
+namespace detail {
 std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_tensor,
                                                  rmm::mr::device_memory_resource* mr,
                                                  cudaStream_t stream)

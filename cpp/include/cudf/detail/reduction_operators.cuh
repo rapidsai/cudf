@@ -24,12 +24,9 @@
 #include <thrust/functional.h>
 #include <cmath>
 
-namespace cudf
-{
-namespace experimental
-{
-namespace reduction
-{
+namespace cudf {
+namespace experimental {
+namespace reduction {
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -65,8 +62,7 @@ struct transformer_var_std {
 // `transformer` is used to convert elements for computing the reduction at device.
 // By default `transformer` is static type conversion to ResultType.
 // In some cases, it could be square or abs or complex operations
-namespace op
-{
+namespace op {
 /**
  * @brief  Simple reduction operator CRTP Base class
  *

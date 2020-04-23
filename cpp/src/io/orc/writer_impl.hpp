@@ -38,16 +38,11 @@
 
 #include "chunked_state.hpp"
 
-namespace cudf
-{
-namespace experimental
-{
-namespace io
-{
-namespace detail
-{
-namespace orc
-{
+namespace cudf {
+namespace experimental {
+namespace io {
+namespace detail {
+namespace orc {
 // Forward internal classes
 class orc_column_view;
 
@@ -57,8 +52,7 @@ using namespace cudf::io;
 /**
  * @brief Implementation for ORC writer
  **/
-class writer::impl
-{
+class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 

@@ -45,8 +45,7 @@ class NVCategoryImpl;
  * All methods accept and return only UTF-8 encoded strings.
  * @nosubgrouping
  */
-class NVCategory : base_category_type
-{
+class NVCategory : base_category_type {
   NVCategoryImpl* pImpl;
   NVCategory();
   NVCategory(const NVCategory&);

@@ -22,8 +22,7 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-class ScatterUntypedTests : public cudf::test::BaseFixture
-{
+class ScatterUntypedTests : public cudf::test::BaseFixture {
 };
 
 // Throw logic error if scatter map is longer than source
@@ -164,8 +163,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 }
 
 template <typename T>
-class ScatterIndexTypeTests : public cudf::test::BaseFixture
-{
+class ScatterIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
@@ -264,8 +262,7 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
 }
 
 template <typename T>
-class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture
-{
+class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 // NOTE string types hit static assert in fixed_width_column_wrapper
@@ -314,8 +311,7 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
 }
 
 template <typename T>
-class ScatterDataTypeTests : public cudf::test::BaseFixture
-{
+class ScatterDataTypeTests : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
@@ -578,8 +574,7 @@ TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
   expect_tables_equal(result->view(), expected_table);
 }
 
-class ScatterStringsTests : public cudf::test::BaseFixture
-{
+class ScatterStringsTests : public cudf::test::BaseFixture {
 };
 
 TEST_F(ScatterStringsTests, ScatterNoNulls)
@@ -643,8 +638,7 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
 }
 
 template <typename T>
-class BooleanMaskScatter : public cudf::test::BaseFixture
-{
+class BooleanMaskScatter : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
@@ -694,8 +688,7 @@ TYPED_TEST(BooleanMaskScatter, WithNull)
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
 
-class BooleanMaskScatterString : public cudf::test::BaseFixture
-{
+class BooleanMaskScatterString : public cudf::test::BaseFixture {
 };
 
 TEST_F(BooleanMaskScatterString, NoNUll)
@@ -730,8 +723,7 @@ TEST_F(BooleanMaskScatterString, WithNUll)
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
 
-class BooleanMaskScatterFails : public cudf::test::BaseFixture
-{
+class BooleanMaskScatterFails : public cudf::test::BaseFixture {
 };
 
 TEST_F(BooleanMaskScatterFails, SourceAndTargetTypeMismatch)
@@ -875,8 +867,7 @@ TYPED_TEST(BooleanMaskScalarScatter, WithNull)
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
 
-class BooleanMaskScatterScalarString : public cudf::test::BaseFixture
-{
+class BooleanMaskScatterScalarString : public cudf::test::BaseFixture {
 };
 
 TEST_F(BooleanMaskScatterScalarString, NoNUll)
@@ -916,8 +907,7 @@ TEST_F(BooleanMaskScatterScalarString, WithNUll)
   cudf::test::expect_tables_equal(expected_table, got->view());
 }
 
-class BooleanMaskScatterScalarFails : public cudf::test::BaseFixture
-{
+class BooleanMaskScatterScalarFails : public cudf::test::BaseFixture {
 };
 
 TEST_F(BooleanMaskScatterScalarFails, SourceAndTargetTypeMismatch)

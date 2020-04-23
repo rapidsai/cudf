@@ -173,8 +173,7 @@ TEST_F(StringsFindTest, AllNull)
   cudf::test::expect_columns_equal(*results, expected8);
 }
 
-class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<int32_t>
-{
+class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<int32_t> {
 };
 
 TEST_P(FindParmsTest, Find)
