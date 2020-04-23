@@ -20,7 +20,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace nvtext {
-
 /**
  * @brief Returns a single column of strings by tokenizing the input strings
  * column using the provided characters as delimiters.

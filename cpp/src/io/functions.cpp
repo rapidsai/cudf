@@ -27,13 +27,12 @@
 namespace cudf {
 namespace experimental {
 namespace io {
-
 namespace {
-
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& source,
                                     reader_options const& options,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   if (source.type == io_type::FILEPATH) {
     return std::make_unique<reader>(source.filepath, options, mr);
   } else if (source.type == io_type::HOST_BUFFER) {
@@ -48,7 +47,8 @@ std::unique_ptr<reader> make_reader(source_info const& source,
 template <typename writer, typename writer_options>
 std::unique_ptr<writer> make_writer(sink_info const& sink,
                                     writer_options const& options,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   if (sink.type == io_type::FILEPATH) {
     return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath), options, mr);
   }
@@ -68,7 +68,8 @@ std::unique_ptr<writer> make_writer(sink_info const& sink,
 }  // namespace
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_avro(read_avro_args const& args, rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_avro(read_avro_args const& args, rmm::mr::device_memory_resource* mr)
+{
   namespace avro = cudf::experimental::io::detail::avro;
 
   CUDF_FUNC_RANGE();
@@ -83,7 +84,8 @@ table_with_metadata read_avro(read_avro_args const& args, rmm::mr::device_memory
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory_resource* mr)
+{
   namespace json = cudf::experimental::io::detail::json;
 
   CUDF_FUNC_RANGE();
@@ -98,7 +100,8 @@ table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory
 }
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_resource* mr)
+{
   namespace csv = cudf::experimental::io::detail::csv;
 
   CUDF_FUNC_RANGE();
@@ -149,7 +152,8 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
 namespace orc = cudf::experimental::io::detail::orc;
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   orc::reader_options options{args.columns,
                               args.use_index,
@@ -171,7 +175,8 @@ table_with_metadata read_orc(read_orc_args const& args, rmm::mr::device_memory_r
 }
 
 // Freeform API wraps the detail writer class API
-void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr) {
+void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   orc::writer_options options{args.compression, args.enable_statistics};
   auto writer = make_writer<orc::writer>(args.sink, options, mr);
@@ -183,8 +188,9 @@ void write_orc(write_orc_args const& args, rmm::mr::device_memory_resource* mr) 
  * @copydoc cudf::experimental::io::write_orc_chunked_begin
  *
  **/
-std::shared_ptr<orc::orc_chunked_state> write_orc_chunked_begin(
-  write_orc_chunked_args const& args, rmm::mr::device_memory_resource* mr) {
+std::shared_ptr<orc::orc_chunked_state> write_orc_chunked_begin(write_orc_chunked_args const& args,
+                                                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   orc::writer_options options{args.compression, args.enable_statistics};
 
@@ -206,7 +212,8 @@ std::shared_ptr<orc::orc_chunked_state> write_orc_chunked_begin(
  * @copydoc cudf::experimental::io::write_orc_chunked
  *
  **/
-void write_orc_chunked(table_view const& table, std::shared_ptr<orc::orc_chunked_state> state) {
+void write_orc_chunked(table_view const& table, std::shared_ptr<orc::orc_chunked_state> state)
+{
   CUDF_FUNC_RANGE();
   state->wp->write_chunked(table, *state);
 }
@@ -215,7 +222,8 @@ void write_orc_chunked(table_view const& table, std::shared_ptr<orc::orc_chunked
  * @copydoc cudf::experimental::io::write_orc_chunked_end
  *
  **/
-void write_orc_chunked_end(std::shared_ptr<orc::orc_chunked_state>& state) {
+void write_orc_chunked_end(std::shared_ptr<orc::orc_chunked_state>& state)
+{
   CUDF_FUNC_RANGE();
   state->wp->write_chunked_end(*state);
   state.reset();
@@ -225,8 +233,8 @@ using namespace cudf::experimental::io::detail::parquet;
 namespace parquet = cudf::experimental::io::detail::parquet;
 
 // Freeform API wraps the detail reader class API
-table_with_metadata read_parquet(read_parquet_args const& args,
-                                 rmm::mr::device_memory_resource* mr) {
+table_with_metadata read_parquet(read_parquet_args const& args, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   parquet::reader_options options{
     args.columns, args.strings_to_categorical, args.use_pandas_metadata, args.timestamp_type};
@@ -245,7 +253,8 @@ table_with_metadata read_parquet(read_parquet_args const& args,
 
 // Freeform API wraps the detail writer class API
 std::unique_ptr<std::vector<uint8_t>> write_parquet(write_parquet_args const& args,
-                                                    rmm::mr::device_memory_resource* mr) {
+                                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   parquet::writer_options options{args.compression, args.stats_level};
   auto writer = make_writer<parquet::writer>(args.sink, options, mr);
@@ -258,17 +267,19 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(write_parquet_args const& ar
  *
  **/
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list) {
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
+{
   CUDF_FUNC_RANGE();
   return parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
 /**
  * @copydoc cudf::experimental::io::write_parquet_chunked_begin
- * 
+ *
  **/
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr) {
+  write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   parquet::writer_options options{args.compression, args.stats_level};
 
@@ -288,18 +299,20 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
 
 /**
  * @copydoc cudf::experimental::io::write_parquet_chunked
- * 
+ *
  **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state) {
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
+{
   CUDF_FUNC_RANGE();
   state->wp->write_chunked(table, *state);
 }
 
 /**
  * @copydoc cudf::experimental::io::write_parquet_chunked_end
- * 
+ *
  **/
-void write_parquet_chunked_end(std::shared_ptr<pq_chunked_state>& state) {
+void write_parquet_chunked_end(std::shared_ptr<pq_chunked_state>& state)
+{
   CUDF_FUNC_RANGE();
   state->wp->write_chunked_end(*state);
   state.reset();

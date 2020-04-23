@@ -29,7 +29,6 @@
 
 namespace cudf {
 namespace reduction {
-
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -43,12 +42,14 @@ struct var_std {
   using this_t = cudf::reduction::var_std<ResultType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  this_t operator+(this_t const& rhs) const {
+  this_t operator+(this_t const& rhs) const
+  {
     return this_t((this->value + rhs.value), (this->value_squared + rhs.value_squared));
   };
 
   CUDA_HOST_DEVICE_CALLABLE
-  bool operator==(this_t const& rhs) const {
+  bool operator==(this_t const& rhs) const
+  {
     return ((this->value == rhs.value) && (this->value_squared == rhs.value_squared));
   };
 };
@@ -69,7 +70,6 @@ struct transformer_var_std {
 // `make_iterator` is used to make a iterator to be used to compute the reduction at device
 
 namespace op {
-
 // `product`, `product`, `sum_of_squares`, `min`, `max`
 // are used at simple_reduction
 
@@ -77,7 +77,8 @@ struct sum {
   using Op = cudf::DeviceSum;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     return cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
   }
@@ -87,7 +88,8 @@ struct product {
   using Op = cudf::DeviceProduct;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     return cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
   }
@@ -97,7 +99,8 @@ struct sum_of_squares {
   using Op = cudf::DeviceSum;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
     return thrust::make_transform_iterator(it_raw, cudf::transformer_squared<ResultType>{});
@@ -108,7 +111,8 @@ struct min {
   using Op = cudf::DeviceMin;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     return cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
   }
@@ -118,7 +122,8 @@ struct max {
   using Op = cudf::DeviceMax;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     return cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
   }
@@ -135,7 +140,8 @@ struct mean {
   using Op = cudf::DeviceSum;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     return cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
   }
@@ -147,7 +153,8 @@ struct mean {
     // compute `mean` from intermediate type `IntermediateType`
     static ResultType compute_result(const IntermediateType& input,
                                      cudf::size_type count,
-                                     cudf::size_type ddof) {
+                                     cudf::size_type ddof)
+    {
       return (input / count);
     };
   };
@@ -158,7 +165,8 @@ struct variance {
   using Op = cudf::DeviceSum;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
     auto it_raw      = cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
@@ -172,7 +180,8 @@ struct variance {
     // compute `variance` from intermediate type `IntermediateType`
     static ResultType compute_result(const IntermediateType& input,
                                      cudf::size_type count,
-                                     cudf::size_type ddof) {
+                                     cudf::size_type ddof)
+    {
       ResultType mean     = input.value / count;
       ResultType asum     = input.value_squared;
       cudf::size_type div = count - ddof;
@@ -188,7 +197,8 @@ struct standard_deviation {
   using Op = cudf::DeviceSum;
 
   template <bool has_nulls, typename ElementType, typename ResultType>
-  static auto make_iterator(gdf_column const& column) {
+  static auto make_iterator(gdf_column const& column)
+  {
     auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
     auto it_raw      = cudf::make_iterator<has_nulls, ElementType, ResultType>(
       column, Op::template identity<ResultType>());
@@ -201,7 +211,8 @@ struct standard_deviation {
     // compute `standard deviation` from intermediate type `IntermediateType`
     static ResultType compute_result(const IntermediateType& input,
                                      cudf::size_type count,
-                                     cudf::size_type ddof) {
+                                     cudf::size_type ddof)
+    {
       using intermediateOp =
         typename cudf::reduction::op::variance::template intermediate<ResultType>;
       ResultType var = intermediateOp::compute_result(input, count, ddof);

@@ -19,12 +19,14 @@
 #include "reduction_functions.cuh"
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
-//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
+//                 The divisor used in calculations is N - ddof, where N represents the number of
+//                 elements.
 
 gdf_scalar cudf::reduction::standard_deviation(gdf_column const& col,
                                                gdf_dtype const output_dtype,
                                                cudf::size_type ddof,
-                                               cudaStream_t stream) {
+                                               cudaStream_t stream)
+{
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer =

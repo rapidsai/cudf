@@ -25,11 +25,13 @@
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
-class Quantiles : public cudf::benchmark {};
+class Quantiles : public cudf::benchmark {
+};
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -37,7 +39,8 @@ T random_int(T min, T max) {
   return uniform(engine);
 }
 
-void BM_table(benchmark::State& state) {
+void BM_table(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<int64_t>;
 
   const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
@@ -76,7 +79,8 @@ void BM_table(benchmark::State& state) {
 
 BENCHMARK_DEFINE_F(Quantiles, Table)(::benchmark::State& state) { BM_table(state); }
 
-static void CustomArguments(benchmark::internal::Benchmark* b) {
+static void CustomArguments(benchmark::internal::Benchmark* b)
+{
   for (int num_cols = 1; num_cols <= 3; num_cols++)
     for (int col_size = 1000; col_size <= 100000000; col_size *= 10) b->Args({num_cols, col_size});
 }

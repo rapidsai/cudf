@@ -28,7 +28,6 @@
 namespace cudf {
 namespace io {
 namespace avro {
-
 #define AVRO_MAGIC (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24))
 
 /**
@@ -36,7 +35,9 @@ namespace avro {
  */
 struct schema_entry {
   explicit schema_entry(type_kind_e kind_, int32_t parent_idx_ = -1, int32_t num_children_ = 0)
-    : kind(kind_), parent_idx(parent_idx_), num_children(num_children_) {}
+    : kind(kind_), parent_idx(parent_idx_), num_children(num_children_)
+  {
+  }
   int32_t parent_idx   = -1;  // index of parent entry in schema array, negative if no parent
   int32_t num_children = 0;
   type_kind_e kind     = type_not_set;
@@ -99,13 +100,15 @@ class container {
  public:
   container() { m_base = m_cur = m_end = nullptr; }
   container(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len) {
+  void init(const uint8_t *base, size_t len)
+  {
     m_base = m_cur = base;
     m_end          = base + len;
   }
   ptrdiff_t bytecount() const { return m_cur - m_base; }
   unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
-  uint64_t get_u64() {
+  uint64_t get_u64()
+  {
     uint64_t v = 0;
     for (uint64_t l = 0;; l += 7) {
       uint64_t c = getb();
@@ -113,11 +116,13 @@ class container {
       if (c < 0x80) return v;
     }
   }
-  int64_t get_i64() {
+  int64_t get_i64()
+  {
     uint64_t u = get_u64();
     return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
   }
-  std::string get_str() {
+  std::string get_str()
+  {
     const char *s;
     size_t len = get_u64();
     len        = ((len & 1) || (m_cur >= m_end)) ? 0 : std::min(len >> 1, (size_t)(m_end - m_cur));

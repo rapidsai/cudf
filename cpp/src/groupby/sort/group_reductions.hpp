@@ -27,10 +27,9 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 /**
  * @brief Internal API to calculate groupwise sum
- * 
+ *
  * @param values Grouped values to get sum of
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -45,7 +44,7 @@ std::unique_ptr<column> group_sum(column_view const& values,
 
 /**
  * @brief Internal API to calculate groupwise minimum value
- * 
+ *
  * @param values Grouped values to get minimum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -60,7 +59,7 @@ std::unique_ptr<column> group_min(column_view const& values,
 
 /**
  * @brief Internal API to calculate groupwise maximum value
- * 
+ *
  * @param values Grouped values to get maximum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -75,7 +74,7 @@ std::unique_ptr<column> group_max(column_view const& values,
 
 /**
  * @brief Internal API to calculate group-wise indices of maximum values.
- * 
+ *
  * @param values Ungrouped values to get maximum value's index from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -92,7 +91,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
 
 /**
  * @brief Internal API to calculate group-wise indices of minimum values.
- * 
+ *
  * @param values Ungrouped values to get minimum value's index from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -110,7 +109,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
 /**
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
- * 
+ *
  * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
@@ -125,7 +124,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 
 /**
  * @brief Internal API to calculate number of values in each group of @p values
- * 
+ *
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param mr Memory resource to allocate output with
@@ -138,12 +137,12 @@ std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& gro
 
 /**
  * @brief Internal API to calculate groupwise variance
- * 
+ *
  * @param values Grouped values to get variance of
  * @param group_means Pre-calculated groupwise MEAN
  * @param group_sizes Number of valid elements per group
  * @param group_labels ID of group corresponding value in @p values belongs to
- * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `var` is `N - ddof`, where `N` is the group size.
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
@@ -158,7 +157,7 @@ std::unique_ptr<column> group_var(column_view const& values,
 
 /**
  * @brief Internal API to calculate groupwise quantiles
- * 
+ *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_sizes Number of valid elements per group
  * @param group_offsets Offsets of groups' starting points within @p values

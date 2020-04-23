@@ -29,40 +29,44 @@
 
 namespace cudf {
 namespace util {
-
 template <typename T>
-constexpr inline std::size_t size_in_bits() {
+constexpr inline std::size_t size_in_bits()
+{
   return sizeof(T) * CHAR_BIT;
 }
 
 template <typename T>
-constexpr inline std::size_t size_in_bits(const T&) {
+constexpr inline std::size_t size_in_bits(const T&)
+{
   return size_in_bits<T>();
 }
 
 namespace detail {
-
 template <typename BitContainer, typename Size>
-constexpr CUDA_HOST_DEVICE_CALLABLE Size intra_container_index(Size bit_index) {
+constexpr CUDA_HOST_DEVICE_CALLABLE Size intra_container_index(Size bit_index)
+{
   return bit_index % size_in_bits<BitContainer>();
 }
 
 template <typename BitContainer, typename Size>
-constexpr CUDA_HOST_DEVICE_CALLABLE Size bit_container_index(Size bit_index) {
+constexpr CUDA_HOST_DEVICE_CALLABLE Size bit_container_index(Size bit_index)
+{
   return bit_index / size_in_bits<BitContainer>();
 }
 
 }  // namespace detail
 
 template <typename BitContainer, typename Size>
-constexpr CUDA_HOST_DEVICE_CALLABLE void turn_bit_on(BitContainer* bits, Size bit_index) {
+constexpr CUDA_HOST_DEVICE_CALLABLE void turn_bit_on(BitContainer* bits, Size bit_index)
+{
   auto container_index       = detail::bit_container_index<BitContainer, Size>(bit_index);
   auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
   bits[container_index] |= (BitContainer{1} << intra_container_index);
 }
 
 template <typename BitContainer, typename Size>
-constexpr CUDA_HOST_DEVICE_CALLABLE void turn_bit_off(BitContainer* bits, Size bit_index) {
+constexpr CUDA_HOST_DEVICE_CALLABLE void turn_bit_off(BitContainer* bits, Size bit_index)
+{
   auto container_index       = detail::bit_container_index<BitContainer, Size>(bit_index);
   auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
   bits[container_index] &= ~((BitContainer{1} << intra_container_index));
@@ -78,7 +82,8 @@ constexpr CUDA_HOST_DEVICE_CALLABLE void turn_bit_off(BitContainer* bits, Size b
  */
 template <typename BitContainer, typename Size>
 constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer& bit_container,
-                                                    Size bit_index) {
+                                                    Size bit_index)
+{
   auto intra_container_index = detail::intra_container_index<BitContainer, Size>(bit_index);
   return bit_container & (BitContainer{1} << intra_container_index);
 }
@@ -92,13 +97,15 @@ constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer& bit_cont
  * @return true iff the bit is set
  */
 template <typename BitContainer, typename Size>
-constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer* bits, Size bit_index) {
+constexpr CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(const BitContainer* bits, Size bit_index)
+{
   auto container_index = detail::bit_container_index<BitContainer, Size>(bit_index);
   return bit_is_set<BitContainer, Size>(bits[container_index], bit_index);
 }
 
 template <typename BitContainer, typename Size>
-inline constexpr cudf::size_type packed_bit_sequence_size_in_bytes(Size num_bits) {
+inline constexpr cudf::size_type packed_bit_sequence_size_in_bytes(Size num_bits)
+{
   return cudf::util::div_rounding_up_safe<Size>(num_bits, size_in_bits<BitContainer>());
 }
 

@@ -32,13 +32,13 @@
 #include <memory>
 
 namespace {
-
 template <typename T>
 void in_place_fill(cudf::mutable_column_view& destination,
                    cudf::size_type begin,
                    cudf::size_type end,
                    cudf::scalar const& value,
-                   cudaStream_t stream = 0) {
+                   cudaStream_t stream = 0)
+{
   using ScalarType = cudf::experimental::scalar_type_t<T>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
@@ -58,14 +58,16 @@ struct in_place_fill_range_dispatch {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_width<T>(), void> operator()(cudf::size_type begin,
                                                                cudf::size_type end,
-                                                               cudaStream_t stream = 0) {
+                                                               cudaStream_t stream = 0)
+  {
     in_place_fill<T>(destination, begin, end, value, stream);
   }
 
   template <typename T>
   std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(cudf::size_type begin,
                                                                    cudf::size_type end,
-                                                                   cudaStream_t stream = 0) {
+                                                                   cudaStream_t stream = 0)
+  {
     CUDF_FAIL("in-place fill does not work for variable width types.");
   }
 };
@@ -79,7 +81,8 @@ struct out_of_place_fill_range_dispatch {
     cudf::size_type begin,
     cudf::size_type end,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
@@ -100,7 +103,8 @@ struct out_of_place_fill_range_dispatch {
   operator()(cudf::size_type begin,
              cudf::size_type end,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0) {
+             cudaStream_t stream                 = 0)
+  {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto p_scalar    = static_cast<ScalarType const*>(&value);
     return cudf::strings::detail::fill(
@@ -112,7 +116,8 @@ struct out_of_place_fill_range_dispatch {
   operator()(cudf::size_type begin,
              cudf::size_type end,
              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0) {
+             cudaStream_t stream                 = 0)
+  {
     CUDF_FAIL("dictionary not supported yet");
   }
 };
@@ -121,14 +126,13 @@ struct out_of_place_fill_range_dispatch {
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value,
-                   cudaStream_t stream) {
+                   cudaStream_t stream)
+{
   CUDF_EXPECTS(cudf::is_fixed_width(destination.type()) == true,
                "In-place fill does not support variable-sized types.");
   CUDF_EXPECTS((begin >= 0) && (end <= destination.size()) && (begin <= end),
@@ -150,7 +154,8 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+{
   CUDF_EXPECTS((begin >= 0) && (end <= input.size()) && (begin <= end), "Range is out of bounds.");
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
 
@@ -163,7 +168,8 @@ std::unique_ptr<column> fill(column_view const& input,
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
-                   scalar const& value) {
+                   scalar const& value)
+{
   CUDF_FUNC_RANGE();
   return detail::fill_in_place(destination, begin, end, value, 0);
 }
@@ -172,7 +178,8 @@ std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::fill(input, begin, end, value, mr, 0);
 }

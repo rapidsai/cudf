@@ -27,7 +27,8 @@ std::unique_ptr<cudf::scalar> cudf::experimental::reduction::standard_deviation(
   cudf::data_type const output_dtype,
   cudf::size_type ddof,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer = cudf::experimental::reduction::compound::element_type_dispatcher<

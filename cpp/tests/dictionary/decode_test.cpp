@@ -22,46 +22,48 @@
 
 #include <vector>
 
-struct DictionaryDecodeTest : public cudf::test::BaseFixture {};
+struct DictionaryDecodeTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(DictionaryDecodeTest, StringColumn)
 {
-    std::vector<const char*> h_strings{ "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa" };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end() );
+  std::vector<const char*> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
-    auto dictionary = cudf::dictionary::encode( strings );
-    auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
+  auto dictionary = cudf::dictionary::encode(strings);
+  auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-    cudf::test::expect_columns_equal(strings,*output);
+  cudf::test::expect_columns_equal(strings, *output);
 }
 
 TEST_F(DictionaryDecodeTest, FloatColumn)
 {
-    cudf::test::fixed_width_column_wrapper<float> input{ 4.25, 7.125, 0.5, -11.75, 7.125, 0.5 };
+  cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
 
-    auto dictionary = cudf::dictionary::encode( input );
-    auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
+  auto dictionary = cudf::dictionary::encode(input);
+  auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-    cudf::test::expect_columns_equal(input,*output);
+  cudf::test::expect_columns_equal(input, *output);
 }
 
 TEST_F(DictionaryDecodeTest, ColumnWithNull)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input{ { 444,0,333,111,222,222,222,444,000 }, {1,1,1,1,1,0,1,1,1}};
+  cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 000},
+                                                        {1, 1, 1, 1, 1, 0, 1, 1, 1}};
 
-    auto dictionary = cudf::dictionary::encode( input );
-    auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
+  auto dictionary = cudf::dictionary::encode(input);
+  auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-    cudf::test::expect_columns_equal(input,*output);
+  cudf::test::expect_columns_equal(input, *output);
 }
 
 TEST_F(DictionaryDecodeTest, EmptyColumn)
 {
-    cudf::test::fixed_width_column_wrapper<int16_t> input;
-    auto dictionary = cudf::dictionary::encode(input);
-    auto output = cudf::dictionary::decode( cudf::dictionary_column_view(dictionary->view()) );
+  cudf::test::fixed_width_column_wrapper<int16_t> input;
+  auto dictionary = cudf::dictionary::encode(input);
+  auto output     = cudf::dictionary::decode(cudf::dictionary_column_view(dictionary->view()));
 
-    // check empty
-    EXPECT_EQ( output->size(), 0 );
-    EXPECT_EQ( output->type().id(), cudf::type_id::EMPTY );
+  // check empty
+  EXPECT_EQ(output->size(), 0);
+  EXPECT_EQ(output->type().id(), cudf::type_id::EMPTY);
 }

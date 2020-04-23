@@ -21,7 +21,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-
 // Forward declaration
 struct table;
 

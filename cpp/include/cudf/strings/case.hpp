@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Converts a column of strings to lower case.
  *

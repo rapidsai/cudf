@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace io {
-
 /**
  * @brief shared state for statistics gather kernel
  **/
@@ -49,7 +48,8 @@ struct merge_state_s {
 /**
  * Warp-wide Min reduction for integer types
  **/
-inline __device__ int64_t WarpReduceMinInt(int64_t vmin) {
+inline __device__ int64_t WarpReduceMinInt(int64_t vmin)
+{
   int64_t v = SHFL_XOR(vmin, 1);
   vmin      = min(vmin, v);
   v         = SHFL_XOR(vmin, 2);
@@ -65,7 +65,8 @@ inline __device__ int64_t WarpReduceMinInt(int64_t vmin) {
 /*
  * Warp-wide Max reduction for integer types
  */
-inline __device__ int64_t WarpReduceMaxInt(int64_t vmax) {
+inline __device__ int64_t WarpReduceMaxInt(int64_t vmax)
+{
   int64_t v = SHFL_XOR(vmax, 1);
   vmax      = max(vmax, v);
   v         = SHFL_XOR(vmax, 2);
@@ -81,7 +82,8 @@ inline __device__ int64_t WarpReduceMaxInt(int64_t vmax) {
 /**
  * Warp-wide Min reduction for floating point types
  **/
-inline __device__ double WarpReduceMinFloat(double vmin) {
+inline __device__ double WarpReduceMinFloat(double vmin)
+{
   double v = SHFL_XOR(vmin, 1);
   vmin     = fmin(vmin, v);
   v        = SHFL_XOR(vmin, 2);
@@ -97,7 +99,8 @@ inline __device__ double WarpReduceMinFloat(double vmin) {
 /**
  * Warp-wide Max reduction for floating point types
  **/
-inline __device__ double WarpReduceMaxFloat(double vmax) {
+inline __device__ double WarpReduceMaxFloat(double vmax)
+{
   double v = SHFL_XOR(vmax, 1);
   vmax     = fmax(vmax, v);
   v        = SHFL_XOR(vmax, 2);
@@ -113,7 +116,8 @@ inline __device__ double WarpReduceMaxFloat(double vmax) {
 /**
  * Warp-wide Sum reduction for floating point types
  **/
-inline __device__ double WarpReduceSumFloat(double vsum) {
+inline __device__ double WarpReduceSumFloat(double vsum)
+{
   double v = SHFL_XOR(vsum, 1);
   if (!isnan(v)) vsum += v;
   v = SHFL_XOR(vsum, 2);
@@ -130,7 +134,8 @@ inline __device__ double WarpReduceSumFloat(double vsum) {
 /**
  * Warp-wide Min reduction for string types
  **/
-inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin) {
+inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
+{
   uint32_t len    = SHFL_XOR(lmin, 1);
   const char *ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 1));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
@@ -167,7 +172,8 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
 /**
  * Warp-wide Max reduction for string types
  **/
-inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax) {
+inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
+{
   uint32_t len    = SHFL_XOR(lmax, 1);
   const char *ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 1));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
@@ -208,7 +214,8 @@ inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lm
  * @param dtype data type
  * @param t thread id
  **/
-void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t) {
+void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t)
+{
   int64_t vmin = INT64_MAX;
   int64_t vmax = INT64_MIN;
   int64_t vsum = 0;
@@ -277,7 +284,8 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
     vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
-      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for 64-bit sum overflow
+      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+      // 64-bit sum overflow
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   }
@@ -290,7 +298,8 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
  * @param dtype data type
  * @param t thread id
  **/
-void __device__ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t) {
+void __device__ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t)
+{
   double vmin = CUDART_INF;
   double vmax = -CUDART_INF;
   double vsum = 0;
@@ -358,7 +367,8 @@ struct nvstrdesc_s {
  * @param s shared block state
  * @param t thread id
  **/
-void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t) {
+void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t)
+{
   uint32_t len_sum = 0;
   const char *smin = nullptr;
   const char *smax = nullptr;
@@ -439,7 +449,8 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t) {
  * @param groups Statistics source information
  **/
 __global__ void __launch_bounds__(1024, 1)
-  gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups) {
+  gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
+{
   __shared__ __align__(8) stats_state_s state_g;
 
   stats_state_s *const s = &state_g;
@@ -485,7 +496,8 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
                                     statistics_dtype dtype,
                                     const statistics_chunk *ck_in,
                                     uint32_t num_chunks,
-                                    uint32_t t) {
+                                    uint32_t t)
+{
   int64_t vmin        = INT64_MAX;
   int64_t vmax        = INT64_MIN;
   int64_t vsum        = 0;
@@ -528,7 +540,8 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
-      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for 64-bit sum overflow
+      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+      // 64-bit sum overflow
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   } else if (t < 32 * 4) {
@@ -552,7 +565,8 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
 void __device__ mergeFloatColumnStats(merge_state_s *s,
                                       const statistics_chunk *ck_in,
                                       uint32_t num_chunks,
-                                      uint32_t t) {
+                                      uint32_t t)
+{
   double vmin         = CUDART_INF;
   double vmax         = -CUDART_INF;
   double vsum         = 0;
@@ -619,7 +633,8 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
 void __device__ mergeStringColumnStats(merge_state_s *s,
                                        const statistics_chunk *ck_in,
                                        uint32_t num_chunks,
-                                       uint32_t t) {
+                                       uint32_t t)
+{
   uint32_t len_sum    = 0;
   const char *smin    = nullptr;
   const char *smax    = nullptr;
@@ -706,7 +721,8 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
 __global__ void __launch_bounds__(1024, 1)
   gpuMergeColumnStatistics(statistics_chunk *chunks_out,
                            const statistics_chunk *chunks_in,
-                           const statistics_merge_group *groups) {
+                           const statistics_merge_group *groups)
+{
   __shared__ __align__(8) merge_state_s state_g;
 
   merge_state_s *const s = &state_g;
@@ -752,7 +768,8 @@ __global__ void __launch_bounds__(1024, 1)
 cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
                                    const statistics_group *groups,
                                    uint32_t num_chunks,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   gpuGatherColumnStatistics<<<num_chunks, 1024, 0, stream>>>(chunks, groups);
   return cudaSuccess;
 }
@@ -772,7 +789,8 @@ cudaError_t MergeColumnStatistics(statistics_chunk *chunks_out,
                                   const statistics_chunk *chunks_in,
                                   const statistics_merge_group *groups,
                                   uint32_t num_chunks,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   gpuMergeColumnStatistics<<<num_chunks, 1024, 0, stream>>>(chunks_out, chunks_in, groups);
   return cudaSuccess;
 }

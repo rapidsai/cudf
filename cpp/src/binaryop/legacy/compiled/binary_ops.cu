@@ -26,40 +26,44 @@
 namespace cudf {
 namespace binops {
 namespace compiled {
-
 // Arithmeitc
 
 struct DeviceAdd {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs + rhs;
   }
 };
 
 struct DeviceSub {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs - rhs;
   }
 };
 
 struct DeviceMul {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs * rhs;
   }
 };
 
 struct DeviceFloorDiv {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return std::floor((double)lhs / (double)rhs);
   }
 };
 
 struct DeviceDiv {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs / rhs;
   }
 };
@@ -68,42 +72,48 @@ struct DeviceDiv {
 
 struct DeviceGt {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs > rhs);
   }
 };
 
 struct DeviceGe {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs >= rhs);
   }
 };
 
 struct DeviceLt {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs < rhs);
   }
 };
 
 struct DeviceLe {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs <= rhs);
   }
 };
 
 struct DeviceEq {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs == rhs);
   }
 };
 
 struct DeviceNe {
   template <typename T>
-  __device__ cudf::bool8 apply(T lhs, T rhs) {
+  __device__ cudf::bool8 apply(T lhs, T rhs)
+  {
     return static_cast<cudf::bool8>(lhs != rhs);
   }
 };
@@ -112,21 +122,24 @@ struct DeviceNe {
 
 struct DeviceBitwiseAnd {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs & rhs;
   }
 };
 
 struct DeviceBitwiseOr {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs | rhs;
   }
 };
 
 struct DeviceBitwiseXor {
   template <typename T>
-  __device__ T apply(T lhs, T rhs) {
+  __device__ T apply(T lhs, T rhs)
+  {
     return lhs ^ rhs;
   }
 };
@@ -135,7 +148,8 @@ template <typename F>
 struct ArithOp {
  private:
   template <typename T>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     if (std::is_same<F, DeviceDiv>::value)
       return std::is_floating_point<T>::value;
     else
@@ -147,7 +161,8 @@ struct ArithOp {
   template <typename T>
   typename std::enable_if_t<is_supported<T>(), gdf_error> operator()(gdf_column *lhs,
                                                                      gdf_column *rhs,
-                                                                     gdf_column *out) {
+                                                                     gdf_column *out)
+  {
     GDF_REQUIRE(out->dtype == lhs->dtype, GDF_UNSUPPORTED_DTYPE);
     return BinaryOp<T, T, F>::launch(lhs, rhs, out);
   }
@@ -155,7 +170,8 @@ struct ArithOp {
   template <typename T>
   typename std::enable_if_t<!is_supported<T>(), gdf_error> operator()(gdf_column *lhs,
                                                                       gdf_column *rhs,
-                                                                      gdf_column *out) {
+                                                                      gdf_column *out)
+  {
     return GDF_UNSUPPORTED_DTYPE;
   }
 };
@@ -164,7 +180,8 @@ template <typename F>
 struct LogicalOp {
   // static
   template <typename T>
-  gdf_error operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *out) {
+  gdf_error operator()(gdf_column *lhs, gdf_column *rhs, gdf_column *out)
+  {
     GDF_REQUIRE(out->dtype == GDF_BOOL8, GDF_UNSUPPORTED_DTYPE);
     return BinaryOp<T, cudf::bool8, F>::launch(lhs, rhs, out);
   }
@@ -176,7 +193,8 @@ struct BitwiseOp {
   template <typename T>
   typename std::enable_if_t<std::is_integral<T>::value, gdf_error> operator()(gdf_column *lhs,
                                                                               gdf_column *rhs,
-                                                                              gdf_column *out) {
+                                                                              gdf_column *out)
+  {
     GDF_REQUIRE(out->dtype == lhs->dtype, GDF_UNSUPPORTED_DTYPE);
     return BinaryOp<T, T, F>::launch(lhs, rhs, out);
   }
@@ -184,7 +202,8 @@ struct BitwiseOp {
   template <typename T>
   typename std::enable_if_t<!std::is_integral<T>::value, gdf_error> operator()(gdf_column *lhs,
                                                                                gdf_column *rhs,
-                                                                               gdf_column *out) {
+                                                                               gdf_column *out)
+  {
     return GDF_UNSUPPORTED_DTYPE;
   }
 };
@@ -192,7 +211,8 @@ struct BitwiseOp {
 gdf_error binary_operation(gdf_column *out,
                            gdf_column *lhs,
                            gdf_column *rhs,
-                           gdf_binary_operator ope) {
+                           gdf_binary_operator ope)
+{
   // Compiled ops are not made for heterogeneous input types
   GDF_REQUIRE(rhs->dtype == lhs->dtype, GDF_UNSUPPORTED_DTYPE);
   switch (ope) {

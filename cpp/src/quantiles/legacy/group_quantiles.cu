@@ -30,9 +30,7 @@
 #include <thrust/for_each.h>
 
 namespace cudf {
-
 namespace {
-
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void> operator()(
@@ -42,7 +40,8 @@ struct quantiles_functor {
     gdf_column* result_col,
     rmm::device_vector<double> const& quantile,
     cudf::interpolation interpolation,
-    cudaStream_t stream = 0) {
+    cudaStream_t stream = 0)
+  {
     // prepare args to be used by lambda below
     auto result        = static_cast<double*>(result_col->data);
     auto values        = static_cast<T*>(values_col.data);
@@ -70,7 +69,8 @@ struct quantiles_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, void> operator()(Args&&... args) {
+  std::enable_if_t<!std::is_arithmetic<T>::value, void> operator()(Args&&... args)
+  {
     CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }
 };
@@ -78,14 +78,14 @@ struct quantiles_functor {
 }  // namespace
 
 namespace detail {
-
 void group_quantiles(gdf_column const& values,
                      rmm::device_vector<cudf::size_type> const& group_offsets,
                      rmm::device_vector<cudf::size_type> const& group_sizes,
                      gdf_column* result,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
-                     cudaStream_t stream) {
+                     cudaStream_t stream)
+{
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   type_dispatcher(values.dtype,
@@ -103,7 +103,8 @@ void group_medians(gdf_column const& values,
                    rmm::device_vector<cudf::size_type> const& group_offsets,
                    rmm::device_vector<cudf::size_type> const& group_sizes,
                    gdf_column* result,
-                   cudaStream_t stream) {
+                   cudaStream_t stream)
+{
   std::vector<double> quantiles{0.5};
   cudf::interpolation interpolation = cudf::interpolation::LINEAR;
 
@@ -127,7 +128,8 @@ std::pair<cudf::table, cudf::table> group_quantiles(cudf::table const& keys,
                                                     cudf::table const& values,
                                                     std::vector<double> const& quantiles,
                                                     cudf::interpolation interpolation,
-                                                    bool include_nulls) {
+                                                    bool include_nulls)
+{
   groupby::sort::detail::helper gb_obj(keys, include_nulls);
   auto group_offsets = gb_obj.group_offsets();
 
