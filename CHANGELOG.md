@@ -116,6 +116,7 @@
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #4998 Clean up dispatch of aggregation methods in result_cache
 
 ## Bug Fixes
 
