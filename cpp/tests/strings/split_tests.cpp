@@ -65,11 +65,11 @@ TEST_F(StringsSplitTest, Split)
 TEST_F(StringsSplitTest, SplitWithMax)
 {
   cudf::test::strings_column_wrapper strings(
-    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one"});
+    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::"});
   cudf::strings_column_view strings_view(strings);
 
-  cudf::test::strings_column_wrapper expected1({"Héllo", "are", "tést", ":last"});
-  cudf::test::strings_column_wrapper expected2({"thesé::world", "some", "String:", "one"});
+  cudf::test::strings_column_wrapper expected1({"Héllo", "are", "tést", ":last", ""});
+  cudf::test::strings_column_wrapper expected2({"thesé::world", "some", "String:", "one", ":"});
   std::vector<std::unique_ptr<cudf::column>> expected_columns;
   expected_columns.push_back(expected1.release());
   expected_columns.push_back(expected2.release());
@@ -164,6 +164,24 @@ TEST_F(StringsSplitTest, RSplit)
 
   auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("_"));
   EXPECT_TRUE(results->num_columns() == 3);
+  cudf::test::expect_tables_equal(*results, *expected);
+}
+
+TEST_F(StringsSplitTest, RSplitWithMax)
+{
+  cudf::test::strings_column_wrapper strings(
+    {"Héllo::thesé::world", "are::some", "tést::String:", ":last::one", ":::"});
+  cudf::strings_column_view strings_view(strings);
+
+  cudf::test::strings_column_wrapper expected1({"Héllo::thesé", "are", "tést", ":last", ":"});
+  cudf::test::strings_column_wrapper expected2({"world", "some", "String:", "one", ""});
+  std::vector<std::unique_ptr<cudf::column>> expected_columns;
+  expected_columns.push_back(expected1.release());
+  expected_columns.push_back(expected2.release());
+  auto expected = std::make_unique<cudf::experimental::table>(std::move(expected_columns));
+
+  auto results = cudf::strings::rsplit(strings_view, cudf::string_scalar("::"), 1);
+  EXPECT_TRUE(results->num_columns() == 2);
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
