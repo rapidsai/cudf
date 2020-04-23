@@ -115,6 +115,7 @@
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
+- PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
 

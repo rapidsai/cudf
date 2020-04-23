@@ -29,7 +29,6 @@
 namespace cudf {
 namespace dictionary {
 namespace detail {
-
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
@@ -46,7 +45,8 @@ std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
@@ -90,7 +90,8 @@ std::unique_ptr<column> add_keys(
                                                           mr,
                                                           stream)
                          ->release();
-  // the result may contain nulls if the input contains nulls and the corresponding index is therefore invalid
+  // the result may contain nulls if the input contains nulls and the corresponding index is
+  // therefore invalid
   auto contents       = table_indices.front()->release();
   auto indices_column = std::make_unique<column>(data_type{INT32},
                                                  dictionary_column.size(),
@@ -109,7 +110,8 @@ std::unique_ptr<column> add_keys(
 
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::add_keys(dictionary_column, keys, mr);
 }
 

@@ -35,52 +35,58 @@
 #include <algorithm>
 
 namespace cudf {
-
 template <typename T>
-inline T* get_data(const gdf_column& column) noexcept {
+inline T* get_data(const gdf_column& column) noexcept
+{
   return static_cast<T*>(column.data);
 }
 
 template <typename T>
-inline T* get_data(const gdf_column* column) noexcept {
+inline T* get_data(const gdf_column* column) noexcept
+{
   return get_data<T>(*column);
 }
 
 namespace detail {
-
 struct integral_check {
   template <typename T>
-  constexpr bool operator()(void) const noexcept {
+  constexpr bool operator()(void) const noexcept
+  {
     return std::is_integral<T>::value;
   }
 };
 
 }  // namespace detail
 
-constexpr inline bool is_an_integer(gdf_dtype element_type) noexcept {
+constexpr inline bool is_an_integer(gdf_dtype element_type) noexcept
+{
   return cudf::type_dispatcher(element_type, detail::integral_check{});
 }
 
-constexpr inline bool is_integral(const gdf_column& column) noexcept {
+constexpr inline bool is_integral(const gdf_column& column) noexcept
+{
   return is_an_integer(column.dtype);
 }
-constexpr inline bool is_integral(const gdf_column* column) noexcept {
+constexpr inline bool is_integral(const gdf_column* column) noexcept
+{
   return is_integral(*column);
 }
 
-constexpr inline bool is_nullable(const gdf_column& column) noexcept {
+constexpr inline bool is_nullable(const gdf_column& column) noexcept
+{
   return column.valid != nullptr;
 }
 
-constexpr inline bool has_nulls(const gdf_column& column) noexcept {
+constexpr inline bool has_nulls(const gdf_column& column) noexcept
+{
   return is_nullable(column) and column.null_count > 0;
 }
 
 namespace detail {
-
 struct size_of_helper {
   template <typename T>
-  constexpr int operator()() const noexcept {
+  constexpr int operator()() const noexcept
+  {
     return sizeof(T);
   }
 };
@@ -90,7 +96,8 @@ struct size_of_helper {
 /**
  * @brief Returns the size in bytes of values of a column element type.
  */
-constexpr inline std::size_t size_of(gdf_dtype element_type) {
+constexpr inline std::size_t size_of(gdf_dtype element_type)
+{
   return type_dispatcher(element_type, detail::size_of_helper{});
 }
 
@@ -131,7 +138,6 @@ bool have_same_type(const gdf_column* validated_column_ptr_1,
                     bool ignore_extra_type_info = false) noexcept;
 
 namespace detail {
-
 bool extra_type_info_is_compatible(const gdf_dtype& common_dtype,
                                    const gdf_dtype_extra_info& lhs_extra_type_info,
                                    const gdf_dtype_extra_info& rhs_extra_type_info) noexcept;

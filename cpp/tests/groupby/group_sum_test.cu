@@ -24,15 +24,15 @@
 
 namespace cudf {
 namespace test {
-
-
 template <typename V>
-struct groupby_sum_test : public cudf::test::BaseFixture {};
+struct groupby_sum_test : public cudf::test::BaseFixture {
+};
 
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_sum_test, supported_types);
 
+// clang-format off
 TYPED_TEST(groupby_sum_test, basic)
 {
     using K = int32_t;
@@ -132,7 +132,7 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
     auto agg2 = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2), force_use_sort_impl::YES);
 }
+// clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

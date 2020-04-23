@@ -74,7 +74,8 @@ class device_table {
    *---------------------------------------------------------------------------**/
   static auto create(cudf::size_type num_columns,
                      gdf_column const* const* cols,
-                     cudaStream_t stream = 0) {
+                     cudaStream_t stream = 0)
+  {
     auto deleter = [stream](device_table* d) { d->destroy(stream); };
 
     std::unique_ptr<device_table, decltype(deleter)> p{new device_table(num_columns, cols, stream),
@@ -92,7 +93,8 @@ class device_table {
    * @param[in] stream The stream to use for allocations/frees
    * @return A unique_ptr containing a device_table object
    *---------------------------------------------------------------------------**/
-  static auto create(cudf::table const& t, cudaStream_t stream = 0) {
+  static auto create(cudf::table const& t, cudaStream_t stream = 0)
+  {
     return device_table::create(t.num_columns(), t.begin(), stream);
   }
 
@@ -105,7 +107,8 @@ class device_table {
    * unique_ptr returned from device_table::create.
    *
    *---------------------------------------------------------------------------**/
-  __host__ void destroy(cudaStream_t stream) {
+  __host__ void destroy(cudaStream_t stream)
+  {
     RMM_FREE(device_columns, stream);
     delete this;
   }
@@ -115,7 +118,8 @@ class device_table {
   device_table& operator=(device_table const& other) = default;
   ~device_table()                                    = default;
 
-  __device__ gdf_column const* get_column(cudf::size_type index) const {
+  __device__ gdf_column const* get_column(cudf::size_type index) const
+  {
     return &device_columns[index];
   }
   __device__ gdf_column const* begin() const { return device_columns; }
@@ -143,7 +147,8 @@ class device_table {
    * @param columns An array of columns to copy to device memory
    *---------------------------------------------------------------------------**/
   device_table(cudf::size_type num_cols, gdf_column const* const* columns, cudaStream_t stream = 0)
-    : _num_columns(num_cols) {
+    : _num_columns(num_cols)
+  {
     CUDF_EXPECTS(num_cols > 0, "Attempt to create table with zero columns.");
     CUDF_EXPECTS(nullptr != columns, "Attempt to create table with a null column.");
     _num_rows  = columns[0]->size;
@@ -173,11 +178,11 @@ class device_table {
 };
 
 namespace {
-
 template <bool nullable, template <typename> typename hash_function>
 struct hash_element {
   template <typename col_type>
-  __device__ inline hash_value_type operator()(gdf_column const& col, cudf::size_type row_index) {
+  __device__ inline hash_value_type operator()(gdf_column const& col, cudf::size_type row_index)
+  {
     hash_function<col_type> hasher;
 
     col_type value_to_hash{};
@@ -201,7 +206,8 @@ struct copy_element {
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index) {
+                                    cudf::size_type source_index)
+  {
     // FIXME: This will copy garbage data if the source element is null
     static_cast<T*>(target.data)[target_index] = static_cast<T const*>(source.data)[source_index];
 
@@ -253,10 +259,10 @@ struct copy_element {
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
 template <bool nullable = true, template <typename> class hash_function = default_hash>
-__device__ inline hash_value_type hash_row(
-  device_table const& t,
-  cudf::size_type row_index,
-  hash_value_type const* __restrict__ initial_hash_values) {
+__device__ inline hash_value_type hash_row(device_table const& t,
+                                           cudf::size_type row_index,
+                                           hash_value_type const* __restrict__ initial_hash_values)
+{
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
@@ -300,7 +306,8 @@ __device__ inline hash_value_type hash_row(
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
 template <bool nullable = true, template <typename> class hash_function = default_hash>
-__device__ inline hash_value_type hash_row(device_table const& t, cudf::size_type row_index) {
+__device__ inline hash_value_type hash_row(device_table const& t, cudf::size_type row_index)
+{
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
     return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
   };
@@ -345,7 +352,8 @@ template <bool update_target_bitmask = true>
 __device__ inline void copy_row(device_table const& target,
                                 cudf::size_type target_index,
                                 device_table const& source,
-                                cudf::size_type source_index) {
+                                cudf::size_type source_index)
+{
   for (cudf::size_type i = 0; i < target.num_columns(); ++i) {
     cudf::type_dispatcher(target.get_column(i)->dtype,
                           copy_element<update_target_bitmask>{},

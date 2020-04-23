@@ -19,12 +19,11 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace nvtext {
-
 /**
  * @brief Returns a new strings column by normalizing the whitespace in each
  * string in the input column.
  *
- * Normalizing a string replaces any number of whitespace character 
+ * Normalizing a string replaces any number of whitespace character
  * (character code-point <= ' ') runs with a single space ' ' and
  * trims whitespace from the beginning and end of the string.
  *

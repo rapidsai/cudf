@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace dictionary {
-
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
@@ -119,7 +118,7 @@ std::unique_ptr<column> remove_unused_keys(
  * d2 = set_keys(existing_dict, ["b","c","d"])
  * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], nulls=[1, 0, 1, 1, 1]}
  * ```
- * 
+ *
  * @throw cudf_logic_error if the keys type does not match the keys type in
  *        the dictionary_column.
  * @throw cudf_logic_error if the keys contain nulls.
