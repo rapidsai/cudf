@@ -522,6 +522,9 @@ def test_categorical_typecast(data, cat_type):
         ["a", "bb", "c"],
         ["a", "b", "c"],
         [],
+        pd.Series(["a", "b", "c"]),
+        pd.Series(["a", "b", "c"], dtype="category"),
+        pd.Series([-100, 10, 11, 0, 1, 2], dtype="category"),
     ],
 )
 def test_categorical_set_categories_categoricals(data, new_categories):
@@ -550,6 +553,8 @@ def test_categorical_set_categories_categoricals(data, new_categories):
         ["a", "1", "2", "1", "a"],
         pd.Series(["a", "1", "22", "1", "aa"]),
         pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
+        pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2.3, 3, 4], dtype="float"),
         [None, 1, None, 2, None],
         [],
     ],

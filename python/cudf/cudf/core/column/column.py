@@ -1243,7 +1243,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             col = col.astype(dtype)
 
-        if np.issubdtype(col.dtype, np.floating):
+        if is_categorical_dtype(col.dtype):
+            return col
+        elif np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
                 col = col.set_mask(mask)
@@ -1399,12 +1401,11 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif arbitrary.dtype == np.bool:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype,)
         elif arbitrary.dtype.kind in ("f"):
-            arb_dtype = check_cast_unsupported_dtype(
-                arbitrary.dtype if dtype is None else dtype
-            )
+            arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
             data = as_column(
                 cupy.asarray(arbitrary, dtype=arb_dtype),
                 nan_as_null=nan_as_null,
+                dtype=dtype,
             )
         elif arbitrary.dtype.kind in ("u", "i"):
             data = as_column(
