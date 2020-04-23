@@ -843,12 +843,10 @@ class ColumnBase(Column):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
-
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
-
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+            return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
 

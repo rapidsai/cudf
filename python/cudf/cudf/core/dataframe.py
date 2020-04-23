@@ -3161,24 +3161,29 @@ class DataFrame(Frame):
 
         df = cls()
         # Set columns
-        for i, colk in enumerate(dataframe.columns):
+        for colk in dataframe.columns:
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(vals.shape) == 1:
-                df[i] = Series(vals, nan_as_null=nan_as_null)
+                df[colk] = column.as_column(vals, nan_as_null=nan_as_null)
             else:
                 vals = vals.T
                 if vals.shape[0] == 1:
-                    df[i] = Series(vals.flatten(), nan_as_null=nan_as_null)
+                    df[colk] = column.as_column(
+                        vals.flatten(), nan_as_null=nan_as_null
+                    )
                 else:
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):
-                        df[i] = Series(vals[idx], nan_as_null=nan_as_null)
+                        df[colk] = column.as_column(
+                            vals[idx], nan_as_null=nan_as_null
+                        )
 
-        # Set columns
-        df.columns = dataframe.columns
+        # Set columns only if it is a MultiIndex
+        if isinstance(dataframe.columns, pd.MultiIndex):
+            df.columns = dataframe.columns
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
