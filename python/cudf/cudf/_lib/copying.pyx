@@ -462,7 +462,7 @@ def pack(Table input_table):
                 input_table_view
             )
         )
-    
+
     # Convert to python object and return
     # python objects needed: wrap vector of bytes, wrap rmm device vector
     data = DeviceBuffer.c_from_unique_ptr(move(c_result.table_data))
@@ -476,7 +476,7 @@ def pack(Table input_table):
 
 def unpack(vector[uint8_t] input_packed_table_metadata,
            DeviceBuffer input_packed_table_data):
-    
+
     cdef unique_ptr[vector[uint8_t]] c_metadata = move(
         make_unique[vector[uint8_t]](move(input_packed_table_metadata))
     )
@@ -492,7 +492,7 @@ def unpack(vector[uint8_t] input_packed_table_metadata,
         c_result = move(
             cpp_copying.unpack(move(c_packed_table))
         )
-    
+
     table_data_owner = DeviceBuffer.c_from_unique_ptr(move(c_result.all_data))
     return Table.from_table_view(
         c_result.table,
