@@ -665,9 +665,9 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
-    column_view const& input,
-    size_type index,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  size_type index,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

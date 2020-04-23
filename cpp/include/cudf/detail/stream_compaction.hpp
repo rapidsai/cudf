@@ -147,6 +147,6 @@ cudf::size_type unique_count(column_view const& input,
                              bool const nan_as_null,
                              cudaStream_t stream = 0);
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

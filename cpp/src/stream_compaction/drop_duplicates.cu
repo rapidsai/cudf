@@ -208,15 +208,13 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
  * @tparam T The type of `column_device_view`
  */
 template <typename T>
-struct check_for_nan
-{
+struct check_for_nan {
   /**
    * @brief Construct a structure
    *
    * @param[in] input The `column_device_view`
    */
-  check_for_nan(cudf::column_device_view input) :_input{input}{}
-
+  check_for_nan(cudf::column_device_view input) : _input{input} {}
 
   /**
    * @brief Operator to be called to check for `NAN` at `index` in `_input`
@@ -225,13 +223,11 @@ struct check_for_nan
    *
    * @returns bool true if value at `index` is `NAN` and not null, else false
    */
-  __device__
-  bool operator()(size_type index)
-  {
+  __device__ bool operator()(size_type index) {
     return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
   }
 
-protected:
+ protected:
   cudf::column_device_view _input;
 };
 
@@ -239,8 +235,7 @@ protected:
  * @brief A structure to be used along with type_dispatcher to check if a
  * `column_view` has `NAN`.
  */
-struct has_nans{
-
+struct has_nans {
   /**
    * @brief Checks if `input` has `NAN`
    *
@@ -251,16 +246,15 @@ struct has_nans{
    *
    * @returns bool true if `input` has `NAN` else false
    */
-  template <typename T,
-         std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream){
-      auto input_device_view = cudf::column_device_view::create(input, stream);
-      auto device_view = *input_device_view;
-      auto count = thrust::count_if(rmm::exec_policy(stream)->on(stream),
-                                    thrust::counting_iterator<cudf::size_type>(0),
-                                    thrust::counting_iterator<cudf::size_type>(input.size()),
-                                    check_for_nan<T>(device_view));
-      return count > 0;
+  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream) {
+    auto input_device_view = cudf::column_device_view::create(input, stream);
+    auto device_view       = *input_device_view;
+    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                                  thrust::counting_iterator<cudf::size_type>(0),
+                                  thrust::counting_iterator<cudf::size_type>(input.size()),
+                                  check_for_nan<T>(device_view));
+    return count > 0;
   }
 
   /**
@@ -275,10 +269,9 @@ struct has_nans{
    *
    * @returns bool Always false as non-floating point columns can't have `NAN`
    */
-  template <typename T,
-          std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream){
-      return false;
+  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream) {
+    return false;
   }
 };
 
@@ -305,7 +298,7 @@ cudf::size_type unique_count(column_view const& input,
   // if nan is considered null and there are already null values
   if (nan_as_null and has_nan and input.has_nulls()) --count;
 
-  if(_include_nulls==include_nulls::NO and input.has_nulls())
+  if (_include_nulls == include_nulls::NO and input.has_nulls())
     return --count;
   else
     return count;
@@ -325,7 +318,7 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
 cudf::size_type unique_count(column_view const& input,
                              include_nulls const _include_nulls,
                              bool const nan_as_null,
-                             rmm::mr::device_memory_resource *mr) {
+                             rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::unique_count(input, _include_nulls, nan_as_null);
 }
