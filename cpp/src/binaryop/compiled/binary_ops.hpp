@@ -33,7 +33,6 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 }  // namespace detail
 
 namespace compiled {
-
 /**
  * @brief Performs a binary operation between a string scalar and a string
  * column.

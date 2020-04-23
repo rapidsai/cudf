@@ -26,7 +26,6 @@
 namespace cudf {
 namespace binops {
 namespace jit {
-
 std::string getOperatorName(gdf_binary_operator ope);
 
 }

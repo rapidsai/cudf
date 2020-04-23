@@ -24,7 +24,6 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
-
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;

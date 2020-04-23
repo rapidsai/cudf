@@ -26,7 +26,6 @@
 
 namespace cudf {
 namespace detail {
-
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
  * with output, except that in a consecutive group of duplicate elements only
@@ -44,7 +43,8 @@ OutputIterator unique_copy(Exec&& exec,
                            InputIterator last,
                            OutputIterator output,
                            BinaryPredicate comp,
-                           const duplicate_keep_option keep) {
+                           const duplicate_keep_option keep)
+{
   IndexType n = (last - first) - 1;
   if (keep == duplicate_keep_option::KEEP_FIRST) {
     return thrust::copy_if(exec,
@@ -80,7 +80,8 @@ OutputIterator unique_copy(Exec&& exec,
 auto get_unique_ordered_indices(const cudf::table& keys,
                                 const duplicate_keep_option keep,
                                 const bool nulls_are_equal = true,
-                                cudaStream_t stream        = 0) {
+                                cudaStream_t stream        = 0)
+{
   cudf::size_type ncols = keys.num_columns();
   cudf::size_type nrows = keys.num_rows();
 
@@ -114,7 +115,7 @@ auto get_unique_ordered_indices(const cudf::table& keys,
                              comp,
                              keep);
   }
-  //not resizing vector to avoid copy
+  // not resizing vector to avoid copy
 
   return std::make_pair(std::move(unique_indices),
                         thrust::distance(unique_indices.begin(), result_end));
@@ -122,7 +123,8 @@ auto get_unique_ordered_indices(const cudf::table& keys,
 
 cudf::size_type unique_count(const cudf::table& keys,
                              const bool nulls_are_equal = true,
-                             cudaStream_t stream        = 0) {
+                             cudaStream_t stream        = 0)
+{
   cudf::size_type ncols = keys.num_columns();
   cudf::size_type nrows = keys.num_rows();
 
@@ -162,12 +164,13 @@ cudf::size_type unique_count(const cudf::table& keys,
   }
 }
 
-}  //namespace detail
+}  // namespace detail
 
 cudf::table drop_duplicates(const cudf::table& input,
                             const cudf::table& keys,
                             const duplicate_keep_option keep,
-                            const bool nulls_are_equal) {
+                            const bool nulls_are_equal)
+{
   CUDF_EXPECTS(input.num_rows() == keys.num_rows(),
                "number of \
 rows in input table should be equal to number of rows in key colums table");
@@ -211,11 +214,12 @@ rows in input table should be equal to number of rows in key colums table");
 
 cudf::size_type unique_count(gdf_column const& input,
                              bool const ignore_nulls,
-                             bool const nan_as_null) {
+                             bool const nan_as_null)
+{
   if (0 == input.size || input.null_count == input.size) { return 0; }
   gdf_column col{input};
-  //TODO: remove after NaN support to equality operator is added
-  //if (nan_as_null)
+  // TODO: remove after NaN support to equality operator is added
+  // if (nan_as_null)
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
     auto temp      = nans_to_nulls(col);
     col.valid      = reinterpret_cast<cudf::valid_type*>(temp.first);
@@ -227,7 +231,7 @@ cudf::size_type unique_count(gdf_column const& input,
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64))
     bit_mask::destroy_bit_mask(reinterpret_cast<bit_mask::bit_mask_t*>(col.valid));
 
-  //TODO: remove after NaN support to equality operator is added
+  // TODO: remove after NaN support to equality operator is added
   // if nan is counted as null when null is already present.
   if (not nan_as_null and has_nans and cudf::has_nulls(input)) ++count;
 

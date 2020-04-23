@@ -29,9 +29,7 @@
 #include <utilities/legacy/cuda_utils.hpp>
 
 namespace cudf {
-
 namespace {
-
 using bit_mask_t = bit_mask::bit_mask_t;
 
 /**
@@ -44,7 +42,8 @@ template <typename ColumnType>
 __global__ void slice_data_kernel(ColumnType* output_data,
                                   ColumnType const* input_data,
                                   cudf::size_type const* indices,
-                                  cudf::size_type const indices_position) {
+                                  cudf::size_type const indices_position)
+{
   cudf::size_type input_offset =
     indices[indices_position * 2]; /**< The start index position of the input data. */
   cudf::size_type row_size = indices[indices_position * 2 + 1] - input_offset;
@@ -61,19 +60,20 @@ __global__ void slice_data_kernel(ColumnType* output_data,
 }
 
 /** @brief This function copies a slice of a bitmask.
- * 
- * If the slice is from element 10 to element 40, element 10 corresponds to bit 3 of the second byte, 
- * that bit needs to become bit 0. So we are reading two adjacent blocks and bitshifting them together,
- * to then write one block. We also take care that if the last bits of a bit_mask_t block don't 
- * correspond to this slice, then we to apply a mask to clear those bits.
-*/
+ *
+ * If the slice is from element 10 to element 40, element 10 corresponds to bit 3 of the second
+ * byte, that bit needs to become bit 0. So we are reading two adjacent blocks and bitshifting them
+ * together, to then write one block. We also take care that if the last bits of a bit_mask_t block
+ * don't correspond to this slice, then we to apply a mask to clear those bits.
+ */
 __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
                                      cudf::size_type* output_null_count,
                                      bit_mask_t const* input_bitmask,
                                      cudf::size_type const input_size,
                                      cudf::size_type const* indices,
                                      cudf::size_type const indices_size,
-                                     cudf::size_type const indices_position) {
+                                     cudf::size_type const indices_position)
+{
   // Obtain the indices for copying
   cudf::size_type input_index_begin = indices[indices_position * 2];
   cudf::size_type input_index_end   = indices[indices_position * 2 + 1];
@@ -117,8 +117,8 @@ __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
 
     // Perform null bitmask null count
     std::uint32_t null_count_value =
-      __popc(output_bitmask
-               [row_index]);  // Count the number of bits that are set to 1 in a 32 bit integer.
+      __popc(output_bitmask[row_index]);  // Count the number of bits that are set to 1 in a 32 bit
+                                          // integer.
     atomicAdd(output_null_count, null_count_value);
 
     row_index += row_step;
@@ -136,11 +136,14 @@ class Slice {
       indices_(indices),
       num_indices_(num_indices),
       output_columns_(output_columns),
-      streams_(streams) {}
+      streams_(streams)
+  {
+  }
 
  public:
   template <typename ColumnType>
-  void operator()() {
+  void operator()()
+  {
     cudf::size_type columns_quantity = output_columns_.size();
 
     // Perform operation
@@ -217,7 +220,8 @@ class Slice {
   }
 
  private:
-  cudaStream_t get_stream(cudf::size_type index) {
+  cudaStream_t get_stream(cudf::size_type index)
+  {
     if (streams_.size() == 0) { return cudaStream_t{nullptr}; }
     return streams_[index % streams_.size()];
   }
@@ -231,11 +235,11 @@ class Slice {
 }  // namespace
 
 namespace detail {
-
 std::vector<gdf_column*> slice(gdf_column const& input_column,
                                cudf::size_type const* indices,
                                cudf::size_type num_indices,
-                               std::vector<cudaStream_t> const& streams) {
+                               std::vector<cudaStream_t> const& streams)
+{
   std::vector<gdf_column*> output_columns;
 
   if (num_indices == 0 || indices == nullptr) { return output_columns; }
@@ -250,7 +254,7 @@ std::vector<gdf_column*> slice(gdf_column const& input_column,
 
   // Initialize output_columns
   output_columns.resize(num_indices / 2);
-  //TODO: optimize to launch all slices in parallel
+  // TODO: optimize to launch all slices in parallel
   for (cudf::size_type i = 0; i < num_indices / 2; i++) {
     output_columns[i] = new gdf_column{};
     gdf_column_view_augmented(output_columns[i],
@@ -275,7 +279,8 @@ std::vector<gdf_column*> slice(gdf_column const& input_column,
 
 std::vector<gdf_column*> slice(gdf_column const& input_column,
                                cudf::size_type const* indices,
-                               cudf::size_type num_indices) {
+                               cudf::size_type num_indices)
+{
   return cudf::detail::slice(input_column, indices, num_indices);
 }
 

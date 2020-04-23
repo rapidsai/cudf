@@ -27,7 +27,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
 #define MAX_SHORT_DICT_ENTRIES (10 * 1024)
 #define INIT_HASH_BITS 12
 
@@ -46,7 +45,8 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len) {
+static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+{
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
   } else {
@@ -61,7 +61,8 @@ static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t l
  * @param[in] t thread id
  *
  **/
-static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t) {
+static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
+{
   if (t == 0) { s->nnz = 0; }
   for (uint32_t i = 0; i < s->chunk.num_rows; i += 512) {
     const uint32_t *valid_map = s->chunk.valid_map_base;
@@ -107,7 +108,8 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t) {
  **/
 // blockDim {512,1,1}
 extern "C" __global__ void __launch_bounds__(512, 2)
-  gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns) {
+  gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
+{
   __shared__ __align__(16) dictinit_state_s state_g;
 
   dictinit_state_s *const s = &state_g;
@@ -126,7 +128,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
-  // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when there are no nulls)
+  // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when
+  // there are no nulls)
   LoadNonNullIndices(s, t);
   // Sum the lengths of all the strings
   if (t == 0) {
@@ -208,8 +211,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
-    // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic behavior for the
-    // first row in the hash map that will be used for early duplicate detection
+    // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
+    // behavior for the first row in the hash map that will be used for early duplicate detection
     // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
     if (i + t < nnz) {
@@ -240,8 +243,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     if (collision && ck_row == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
   }
   __syncthreads();
-  // Now that the strings are ordered by hash, compare every string with the first entry in the hash map,
-  // the position of the first string can be inferred from the hash map counts
+  // Now that the strings are ordered by hash, compare every string with the first entry in the hash
+  // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
   for (uint32_t i = 0; i < nnz; i += 512) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
@@ -304,7 +307,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
 extern "C" __global__ void __launch_bounds__(1024)
   gpuCompactChunkDictionaries(StripeDictionary *stripes,
                               DictionaryChunk const *chunks,
-                              uint32_t num_columns) {
+                              uint32_t num_columns)
+{
   __shared__ __align__(16) StripeDictionary stripe_g;
   __shared__ __align__(16) DictionaryChunk chunk_g;
   __shared__ const uint32_t *volatile ck_curptr_g;
@@ -367,7 +371,8 @@ struct build_state_s {
 // NOTE: Prone to poor utilization on small datasets due to 1 block per dictionary
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-  gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns) {
+  gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
+{
   __shared__ __align__(16) build_state_s state_g;
 
   volatile build_state_s *const s = &state_g;
@@ -446,7 +451,8 @@ extern "C" __global__ void __launch_bounds__(1024)
 cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
                                   uint32_t num_columns,
                                   uint32_t num_rowgroups,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuInitDictionaryIndices<<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
@@ -472,7 +478,8 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                                     uint32_t num_stripes,
                                     uint32_t num_rowgroups,
                                     uint32_t num_columns,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
   gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream>>>(

@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace io {
-
 /**
  * @brief Input parameters for the decompression interface
  **/
@@ -60,12 +59,12 @@ cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
                        cudaStream_t stream = (cudaStream_t)0);
 
 /**
-* @brief Interface for copying uncompressed byte blocks
-*
-* @param[in] inputs List of input argument structures
-* @param[in] count Number of input structures, default 1
-* @param[in] stream CUDA stream to use, default 0
-**/
+ * @brief Interface for copying uncompressed byte blocks
+ *
+ * @param[in] inputs List of input argument structures
+ * @param[in] count Number of input structures, default 1
+ * @param[in] stream CUDA stream to use, default 0
+ **/
 cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
                                          int count           = 1,
                                          cudaStream_t stream = (cudaStream_t)0);
