@@ -118,6 +118,7 @@
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 
 ## Bug Fixes
 
