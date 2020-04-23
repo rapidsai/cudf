@@ -43,6 +43,17 @@ public class ColumnVectorTest extends CudfTestBase {
 
   public static final double PERCENTAGE = 0.0001;
 
+  // IEEE 754 NaN values
+  public static final float POSITIVE_FLOAT_NAN_LOWER_RANGE = Float.intBitsToFloat(0x7f800001);
+  public static final float POSITIVE_FLOAT_NAN_UPPER_RANGE = Float.intBitsToFloat(0x7fffffff);
+  public static final float NEGATIVE_FLOAT_NAN_LOWER_RANGE = Float.intBitsToFloat(0xff800001);
+  public static final float NEGATIVE_FLOAT_NAN_UPPER_RANGE = Float.intBitsToFloat(0xffffffff);
+
+  public static final double POSITIVE_DOUBLE_NAN_LOWER_RANGE = Double.longBitsToDouble(0x7ff0000000000001L);
+  public static final double POSITIVE_DOUBLE_NAN_UPPER_RANGE = Double.longBitsToDouble(0x7fffffffffffffffL);
+  public static final double NEGATIVE_DOUBLE_NAN_LOWER_RANGE = Double.longBitsToDouble(0xfff0000000000001L);
+  public static final double NEGATIVE_DOUBLE_NAN_UPPER_RANGE = Double.longBitsToDouble(0xffffffffffffffffL);
+
   // c = a * a - a
   static String ptx = "***(" +
       "      .func _Z1fPii(" +
@@ -2006,23 +2017,22 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testNansToNulls() {
-    Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
-        Float.NEGATIVE_INFINITY, null, -Float.NaN, Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE,
-        435243.2323f, Float.intBitsToFloat(0x7f800001), Float.intBitsToFloat(0x7fffffff),
-        Float.intBitsToFloat(0xff800001), Float.intBitsToFloat(0xffffffff)};
-
-    Double[] doubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
-        Double.NEGATIVE_INFINITY, null, Double.NaN, -Double.NaN, Double.MAX_VALUE,
-        Double.MIN_VALUE, 435243.2323d,
-        Double.longBitsToDouble(0x7ff0000000000001L), Double.longBitsToDouble(0x7fffffffffffffffL),
-        Double.longBitsToDouble(0xfff0000000000001L), Double.longBitsToDouble(0xffffffffffffffffL)};
+    Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, null,
+        Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f, POSITIVE_FLOAT_NAN_LOWER_RANGE,
+        POSITIVE_FLOAT_NAN_UPPER_RANGE, NEGATIVE_FLOAT_NAN_LOWER_RANGE,
+        NEGATIVE_FLOAT_NAN_UPPER_RANGE};
 
     Float[] expectedFloats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
-        Float.NEGATIVE_INFINITY, null, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f,
+        Float.NEGATIVE_INFINITY, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f,
         null, null, null, null};
 
-    Double[] expectedDoubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
-        Double.NEGATIVE_INFINITY, null, null, null, Double.MAX_VALUE, Double.MIN_VALUE,
+    Double[] doubles = new Double[]{1.2d, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null,
+        Double.NaN, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
+        POSITIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
+        NEGATIVE_DOUBLE_NAN_UPPER_RANGE};
+
+   Double[] expectedDoubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
+        Double.NEGATIVE_INFINITY, null, null, Double.MAX_VALUE, Double.MIN_VALUE,
         435243.2323d, null, null, null, null};
 
     try (ColumnVector cvFloat = ColumnVector.fromBoxedFloats(floats);
