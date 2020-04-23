@@ -6,7 +6,7 @@ import pytest
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
-
+from pandas.core.indexes.base import InvalidIndexError
 
 def make_frames(index=None, nulls="none"):
     df = pd.DataFrame(
@@ -239,8 +239,7 @@ def test_concat_string_index_name(myindex):
     assert df3.index.name == myindex
 
 
-@pytest.mark.parametrize("overlap", [False, True])
-def test_pandas_concat_compatibility_axis1(overlap):
+def test_pandas_concat_compatibility_axis1():
     d1 = gd.datasets.randomdata(
         3, dtypes={"a": float, "ind": float}
     ).set_index("ind")
@@ -263,19 +262,28 @@ def test_pandas_concat_compatibility_axis1(overlap):
     pd4 = d4.to_pandas()
     pd5 = d5.to_pandas()
 
-    if overlap:
-        d6 = d5.rename(columns={"e": "f"})
-        d7 = d5.rename(columns={"e": "f"})
-        pd6 = d6.to_pandas()
-        pd7 = d7.to_pandas()
-        expect = pd.concat([pd1, pd2, pd3, pd4, pd5, pd6, pd7], axis=1)
-        got = gd.concat([d1, d2, d3, d4, d5, d6, d7], axis=1)
-        pytest.xfail(
-            "concat does not collapes columns with overlapping indices."
-        )
+    expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
+    got = gd.concat([d1, d2, d3, d4, d5], axis=1)
+    
+    assert_eq(got, expect)
+
+
+@pytest.mark.xfail(raises=InvalidIndexError)
+@pytest.mark.parametrize("duplicate", [True, False])
+def test_pandas_concat_compatibility_axis1_overlap(duplicate):
+    data = [1, 2, 3]
+    s1 = gd.Series(data, index=[0, 1, 2])
+    if duplicate:
+        s2 = s1.copy()
     else:
-        expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
-        got = gd.concat([d1, d2, d3, d4, d5], axis=1)
+        s2 = gd.Series(data, index=[0, 1, 1])
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+    expect = pd.concat([ps1, ps2], axis=1)
+    got = gd.concat([s1, s2], axis=1)
+    
     print(got)
     print(expect)
+    
     assert_eq(got, expect)
+    
