@@ -283,7 +283,7 @@ class string_view {
   const char* _data{};           ///< Pointer to device memory contain char array for this string
   size_type _bytes{};            ///< Number of bytes in _data for this string
   mutable size_type _length{};   ///< Number of characters in this string (computed)
-  mutable int8_t _char_width{};  ///< Number of bytes per character if uniform width
+  mutable int8_t _char_width{};  ///< Number of bytes per character if uniform width (computed)
 
   /**
    * @brief Return the character position of the given byte offset.
