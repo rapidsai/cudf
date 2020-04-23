@@ -2007,13 +2007,23 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testNansToNulls() {
     Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
-        Float.NEGATIVE_INFINITY, null, -Float.NaN, Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f};
+        Float.NEGATIVE_INFINITY, null, -Float.NaN, Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE,
+        435243.2323f, Float.intBitsToFloat(0x7f800001), Float.intBitsToFloat(0x7fffffff),
+        Float.intBitsToFloat(0xff800001), Float.intBitsToFloat(0xffffffff)};
+
     Double[] doubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
-        Double.NEGATIVE_INFINITY, null, Double.NaN, -Double.NaN, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d};
+        Double.NEGATIVE_INFINITY, null, Double.NaN, -Double.NaN, Double.MAX_VALUE,
+        Double.MIN_VALUE, 435243.2323d,
+        Double.longBitsToDouble(0x7ff0000000000001L), Double.longBitsToDouble(0x7fffffffffffffffL),
+        Double.longBitsToDouble(0xfff0000000000001L), Double.longBitsToDouble(0xffffffffffffffffL)};
+
     Float[] expectedFloats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
-        Float.NEGATIVE_INFINITY, null, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f};
+        Float.NEGATIVE_INFINITY, null, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f,
+        null, null, null, null};
+
     Double[] expectedDoubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
-        Double.NEGATIVE_INFINITY, null, null, null, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d};
+        Double.NEGATIVE_INFINITY, null, null, null, Double.MAX_VALUE, Double.MIN_VALUE,
+        435243.2323d, null, null, null, null};
 
     try (ColumnVector cvFloat = ColumnVector.fromBoxedFloats(floats);
          ColumnVector cvDouble = ColumnVector.fromBoxedDoubles(doubles);
