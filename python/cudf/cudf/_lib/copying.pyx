@@ -7,6 +7,8 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
 from libc.stdint cimport int32_t
 
+from rmm._lib.device_buffer cimport DeviceBuffer
+
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.table cimport Table
@@ -445,6 +447,111 @@ def table_split(Table input_table, object splits, bool keep_index=True):
 
     return result
 
+import cudf
+import errno
+import os
+import pyarrow as pa
+import json
+
+from cython.operator import dereference
+import numpy as np
+
+from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from libc.stdlib cimport free
+from libc.stdint cimport uint8_t
+from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
+from libcpp.string cimport string
+from libcpp.map cimport map
+from libcpp.vector cimport vector
+
+from cudf._lib.cpp.types cimport size_type
+from cudf._lib.table cimport Table
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport (
+    table_view
+)
+from cudf._lib.move cimport move
+from cudf._lib.cpp.io.functions cimport (
+    write_parquet_args,
+    write_parquet as parquet_writer,
+    merge_rowgroup_metadata as parquet_merge_metadata,
+    read_parquet_args,
+    read_parquet as parquet_reader,
+    write_parquet_chunked_args,
+    write_parquet_chunked_begin,
+    write_parquet_chunked,
+    write_parquet_chunked_end,
+    pq_chunked_state
+)
+from cudf._lib.io.utils cimport (
+    make_source_info
+)
+
+cimport cudf._lib.cpp.types as cudf_types
+cimport cudf._lib.cpp.io.types as cudf_io_types
+
+cdef class BufferArrayFromVector:
+    cdef Py_ssize_t length
+    cdef unique_ptr[vector[uint8_t]] in_vec
+
+    # these two things declare part of the buffer interface
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
+
+    @staticmethod
+    cdef BufferArrayFromVector from_unique_ptr(
+        unique_ptr[vector[uint8_t]] in_vec
+    ):
+        cdef BufferArrayFromVector buf = BufferArrayFromVector()
+        buf.in_vec = move(in_vec)
+        buf.length = dereference(buf.in_vec).size()
+        return buf
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        cdef Py_ssize_t itemsize = sizeof(uint8_t)
+
+        self.shape[0] = self.length
+        self.strides[0] = 1
+
+        buffer.buf = dereference(self.in_vec).data()
+
+        buffer.format = NULL  # byte
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = self.length * itemsize   # product(shape) * itemsize
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
+
+
+def pack(Table input_table):
+
+    cdef table_view input_table_view = input_table.view()
+
+    cdef cpp_copying.packed_table c_result
+
+    with nogil:
+        c_result = move(
+            cpp_copying.pack(
+                input_table_view
+            )
+        )
+    
+    # Convert to python object and return
+    # python objects needed: wrap vector of bytes, wrap rmm device vector
+    data = DeviceBuffer.c_from_unique_ptr(move(c_result.table_data))
+    metadata_py = BufferArrayFromVector.from_unique_ptr(
+        move(c_result.table_metadata)
+    )
+    metadata = np.asarray(metadata_py)
+
+    return (metadata, data)
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
