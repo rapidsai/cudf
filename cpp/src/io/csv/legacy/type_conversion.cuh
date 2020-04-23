@@ -17,9 +17,9 @@
 #ifndef CONVERSION_FUNCTIONS_CUH
 #define CONVERSION_FUNCTIONS_CUH
 
-#include "datetime_parser.cuh"
-#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cuda_runtime_api.h>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
+#include "datetime_parser.cuh"
 
 #include <cudf/detail/utilities/trie.cuh>
 
@@ -30,9 +30,7 @@
  * 
  * @return True if the input is whitespace, False otherwise
  *---------------------------------------------------------------------------**/
-__inline__ __device__ bool isWhitespace(char ch) {
-  return ch == '\t' || ch == ' ';
-}
+__inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' '; }
 
 /**---------------------------------------------------------------------------*
  * @brief Scans a character stream within a range, and adjusts the start and end
@@ -45,20 +43,14 @@ __inline__ __device__ bool isWhitespace(char ch) {
  * 
  * @return Adjusted or unchanged start_idx and end_idx
  *---------------------------------------------------------------------------**/
-__inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data, long* start,
-                                             long* end, char quotechar = '\0') {
-  while ((*start < *end) && isWhitespace(data[*start])) {
-    (*start)++;
-  }
-  if ((*start < *end) && data[*start] == quotechar) {
-    (*start)++;
-  }
-  while ((*start <= *end) && isWhitespace(data[*end])) {
-    (*end)--;
-  }
-  if ((*start <= *end) && data[*end] == quotechar) {
-    (*end)--;
-  }
+__inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
+                                                        long* start,
+                                                        long* end,
+                                                        char quotechar = '\0') {
+  while ((*start < *end) && isWhitespace(data[*start])) { (*start)++; }
+  if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
+  while ((*start <= *end) && isWhitespace(data[*end])) { (*end)--; }
+  if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
 }
 
 /**---------------------------------------------------------------------------*
@@ -85,8 +77,10 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data, long* 
  * 
  * @return The hash value
  *---------------------------------------------------------------------------**/
-__inline__ __device__ int32_t convertStrToHash(const char* key, long start, long end,
-                                    uint32_t seed) {
+__inline__ __device__ int32_t convertStrToHash(const char* key,
+                                               long start,
+                                               long end,
+                                               uint32_t seed) {
   auto getblock32 = [] __device__(const uint32_t* p, int i) -> uint32_t {
     // Individual byte reads for possible unaligned accesses
     auto q = (const uint8_t*)(p + i);
@@ -106,12 +100,12 @@ __inline__ __device__ int32_t convertStrToHash(const char* key, long start, long
     return h;
   };
 
-  const int len = (end - start);
+  const int len             = (end - start);
   const uint8_t* const data = (const uint8_t*)(key + start);
-  const int nblocks = len / 4;
-  uint32_t h1 = seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
+  const int nblocks         = len / 4;
+  uint32_t h1               = seed;
+  constexpr uint32_t c1     = 0xcc9e2d51;
+  constexpr uint32_t c2     = 0x1b873593;
   //----------
   // body
   const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
@@ -127,12 +121,10 @@ __inline__ __device__ int32_t convertStrToHash(const char* key, long start, long
   //----------
   // tail
   const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
-  uint32_t k1 = 0;
+  uint32_t k1         = 0;
   switch (len & 3) {
-    case 3:
-      k1 ^= tail[2] << 16;
-    case 2:
-      k1 ^= tail[1] << 8;
+    case 3: k1 ^= tail[2] << 16;
+    case 2: k1 ^= tail[1] << 8;
     case 1:
       k1 ^= tail[0];
       k1 *= c1;
@@ -177,8 +169,7 @@ struct ParseOptions {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T,
-          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
 __device__ __forceinline__ uint8_t decode_digit(char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -195,8 +186,7 @@ __device__ __forceinline__ uint8_t decode_digit(char c) {
  *
  * @return uint8_t Numeric value of the character, or `0`
  */
-template <typename T,
-          typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
 __device__ __forceinline__ uint8_t decode_digit(char c) {
   return c - '0';
 }
@@ -213,8 +203,8 @@ __device__ __forceinline__ uint8_t decode_digit(char c) {
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__inline__ __device__ T parse_numeric(const char* data, long start, long end,
-                                      const ParseOptions& opts, int base = 10) {
+__inline__ __device__ T
+parse_numeric(const char* data, long start, long end, const ParseOptions& opts, int base = 10) {
   T value = 0;
 
   // Handle negative values if necessary
@@ -253,7 +243,7 @@ __inline__ __device__ T parse_numeric(const char* data, long start, long end,
     }
 
     // Handle exponential part of the number if necessary
-    int32_t exponent = 0;
+    int32_t exponent     = 0;
     int32_t exponentsign = 1;
     while (index <= end) {
       if (data[index] == '-') {
@@ -265,48 +255,54 @@ __inline__ __device__ T parse_numeric(const char* data, long start, long end,
       }
       ++index;
     }
-    if (exponent != 0) {
-      value *= exp10(double(exponent * exponentsign));
-    }
+    if (exponent != 0) { value *= exp10(double(exponent * exponentsign)); }
   }
 
   return value * sign;
 }
 
 template <typename T, int base>
-__inline__ __device__ T convertStrToValue(const char* data, long start,
-                                          long end, const ParseOptions& opts) {
+__inline__ __device__ T
+convertStrToValue(const char* data, long start, long end, const ParseOptions& opts) {
   return parse_numeric<T>(data, start, end, opts, base);
 }
 
 template <typename T>
-__inline__ __device__ T convertStrToValue(const char* data, long start,
-                                          long end, const ParseOptions& opts) {
+__inline__ __device__ T
+convertStrToValue(const char* data, long start, long end, const ParseOptions& opts) {
   return parse_numeric<T>(data, start, end, opts);
 }
 
 template <>
-__inline__ __device__ cudf::date32 convertStrToValue<cudf::date32>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+__inline__ __device__ cudf::date32 convertStrToValue<cudf::date32>(const char* data,
+                                                                   long start,
+                                                                   long end,
+                                                                   const ParseOptions& opts) {
   return cudf::date32{parseDateFormat(data, start, end, opts.dayfirst)};
 }
 
 template <>
-__inline__ __device__ cudf::date64 convertStrToValue<cudf::date64>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+__inline__ __device__ cudf::date64 convertStrToValue<cudf::date64>(const char* data,
+                                                                   long start,
+                                                                   long end,
+                                                                   const ParseOptions& opts) {
   return cudf::date64{parseDateTimeFormat(data, start, end, opts.dayfirst)};
 }
 
 template <>
-__inline__ __device__ cudf::category convertStrToValue<cudf::category>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+__inline__ __device__ cudf::category convertStrToValue<cudf::category>(const char* data,
+                                                                       long start,
+                                                                       long end,
+                                                                       const ParseOptions& opts) {
   constexpr int32_t HASH_SEED = 33;
   return cudf::category{convertStrToHash(data, start, end + 1, HASH_SEED)};
 }
 
 template <>
-__inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+__inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(const char* data,
+                                                                         long start,
+                                                                         long end,
+                                                                         const ParseOptions& opts) {
   return cudf::timestamp{parse_numeric<int64_t>(data, start, end, opts)};
 }
 
@@ -314,27 +310,27 @@ __inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
 //It should NOT be used
 template <>
 __inline__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+  const char* data, long start, long end, const ParseOptions& opts) {
   assert(false);
   return cudf::nvstring_category{0};
 }
 
 template <>
-__inline__ __device__ cudf::bool8 convertStrToValue<cudf::bool8>(
-    const char* data, long start, long end, const ParseOptions& opts) {
+__inline__ __device__ cudf::bool8 convertStrToValue<cudf::bool8>(const char* data,
+                                                                 long start,
+                                                                 long end,
+                                                                 const ParseOptions& opts) {
   cudf::bool8 return_value{cudf::false_v};
 
   // Check for user-specified true/false values first
-  if (serializedTrieContains(opts.trueValuesTrie, data + start,
-                             end - start + 1)) {
+  if (serializedTrieContains(opts.trueValuesTrie, data + start, end - start + 1)) {
     return_value = cudf::true_v;
-  } else if (serializedTrieContains(opts.falseValuesTrie, data + start,
-                                    end - start + 1)) {
+  } else if (serializedTrieContains(opts.falseValuesTrie, data + start, end - start + 1)) {
     return_value = cudf::false_v;
   } else {
     // Expect 'false_v' or 'true_v', but clamp any false value to 1
-    if (parse_numeric<typename cudf::bool8::value_type>(
-            data, start, end, opts) != cudf::detail::unwrap(cudf::false_v)) {
+    if (parse_numeric<typename cudf::bool8::value_type>(data, start, end, opts) !=
+        cudf::detail::unwrap(cudf::false_v)) {
       return_value = cudf::true_v;
     } else {
       return_value = cudf::false_v;

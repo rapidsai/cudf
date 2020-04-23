@@ -323,9 +323,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnVector) {
       ColumnVector cvRhs = (ColumnVector) rhs;
-      try (DevicePrediction prediction = new DevicePrediction(cvRhs.predictSizeFor(outType), "binaryOp")) {
-        return new ColumnVector(binaryOp(this, cvRhs, op, outType));
-      }
+      return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
           "Scalar");

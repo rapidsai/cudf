@@ -101,6 +101,7 @@
 - PR #4924 Properly handle npartition argument in rearrange_by_hash
 - PR #4918 Adding support for `cupy.ndarray` in `series.loc`
 - PR #4909 Added ability to transform a column using cuda method in Java bindings 
+- PR #3259 Add .clang-format file & format all files
 - PR #4943 Fix-up error handling in GPU detection
 - PR #4917 Add support for casting unsupported `dtypes` of same kind
 - PR #4928 Misc performance improvements for `scatter_by_map`
@@ -113,6 +114,8 @@
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
+- PR #4993 Remove Java memory prediction code
+- PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
 
 ## Bug Fixes
 
@@ -181,7 +184,8 @@
 - PR #4886 Minimize regex-find calls in multi-replace cudf::strings::replace_re function
 - PR #4887 Remove `developer.rst` and any links
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
-- Pr #4899 Fix series inplace handling
+- PR #4899 Fix series inplace handling
+- PR #4940 Fix boolean mask issue with large sized Dataframe
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`

@@ -20,8 +20,8 @@
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/legacy/copying.hpp>
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <utilities/legacy/column_utils.hpp>
 
@@ -49,40 +49,29 @@ namespace transformation {
 
 namespace jit {
 
-void unary_operation(gdf_column& output, const gdf_column& input,
-                     const std::string& udf, gdf_dtype output_type, bool is_ptx) {
- 
-  std::string hash = "prog_tranform." 
-    + std::to_string(std::hash<std::string>{}(udf));
+void unary_operation(gdf_column& output,
+                     const gdf_column& input,
+                     const std::string& udf,
+                     gdf_dtype output_type,
+                     bool is_ptx) {
+  std::string hash = "prog_tranform." + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source;
-  if(is_ptx){
-    cuda_source = 
-      cudf::jit::parse_single_function_ptx(
-          udf, "GENERIC_UNARY_OP", 
-          cudf::jit::getTypeName(output_type), {0}
-          ) + cudf::experimental::transformation::jit::code::kernel;
-  }else{  
-    cuda_source = 
-      cudf::jit::parse_single_function_cuda(
-          udf, "GENERIC_UNARY_OP") + cudf::experimental::transformation::jit::code::kernel;
+  if (is_ptx) {
+    cuda_source = cudf::jit::parse_single_function_ptx(
+                    udf, "GENERIC_UNARY_OP", cudf::jit::getTypeName(output_type), {0}) +
+                  cudf::experimental::transformation::jit::code::kernel;
+  } else {
+    cuda_source = cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") +
+                  cudf::experimental::transformation::jit::code::kernel;
   }
-  
-  // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash, cuda_source,
-    { cudf_types_h, cudf_types_hpp },
-    { "-std=c++14" }, nullptr
-  ).set_kernel_inst(
-    "kernel", // name of the kernel we are launching
-    { cudf::jit::getTypeName(output.dtype), // list of template arguments
-      cudf::jit::getTypeName(input.dtype) }
-  ).launch(
-    output.size,
-    output.data,
-    input.data
-  );
 
+  // Launch the jitify kernel
+  cudf::jit::launcher(hash, cuda_source, {cudf_types_h, cudf_types_hpp}, {"-std=c++14"}, nullptr)
+    .set_kernel_inst("kernel",                               // name of the kernel we are launching
+                     {cudf::jit::getTypeName(output.dtype),  // list of template arguments
+                      cudf::jit::getTypeName(input.dtype)})
+    .launch(output.size, output.data, input.data);
 }
 
 }  // namespace jit
@@ -91,25 +80,23 @@ void unary_operation(gdf_column& output, const gdf_column& input,
 
 gdf_column transform(const gdf_column& input,
                      const std::string& unary_udf,
-                     gdf_dtype output_type, bool is_ptx) {
-  
+                     gdf_dtype output_type,
+                     bool is_ptx) {
   // First create a gdf_column and then call the above function
   gdf_column output = allocate_column(output_type, input.size, input.valid != nullptr);
-  
+
   output.null_count = input.null_count;
 
   // Check for 0 sized data
-  if (input.size == 0){
-      return output;
-  }
+  if (input.size == 0) { return output; }
 
   // Check for null data pointer
   CUDF_EXPECTS((input.data != nullptr), "Input column data pointers are null");
 
   // Check for datatype
-  CUDF_EXPECTS( input.dtype != GDF_STRING && input.dtype != GDF_CATEGORY, 
-      "Invalid/Unsupported input datatype" );
-  
+  CUDF_EXPECTS(input.dtype != GDF_STRING && input.dtype != GDF_CATEGORY,
+               "Invalid/Unsupported input datatype");
+
   if (input.valid != nullptr) {
     cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
     CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));

@@ -19,13 +19,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
@@ -55,10 +51,10 @@ namespace detail
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
-    column_view const& column,
-    data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  column_view const& column,
+  data_type indices_type              = data_type{INT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -76,10 +72,11 @@ std::unique_ptr<column> encode(
  *               device kernels.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                cudaStream_t stream = 0);
+std::unique_ptr<column> decode(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace dictionary
-} // namespace cudf
+}  // namespace detail
+}  // namespace dictionary
+}  // namespace cudf
