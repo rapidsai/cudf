@@ -16,43 +16,49 @@
 
 #pragma once
 
-#include <vector>
 #include <string>
+#include <vector>
 
 #include <cudf/cudf.h>
 
 namespace cudf {
 namespace io {
 
-
 enum {
-    IO_UNCOMP_STREAM_TYPE_INFER     = 0,
-    IO_UNCOMP_STREAM_TYPE_GZIP      = 1,
-    IO_UNCOMP_STREAM_TYPE_ZIP       = 2,
-    IO_UNCOMP_STREAM_TYPE_BZIP2     = 3,
-    IO_UNCOMP_STREAM_TYPE_XZ        = 4,
-    IO_UNCOMP_STREAM_TYPE_INFLATE   = 5,
-    IO_UNCOMP_STREAM_TYPE_SNAPPY    = 6,
-    IO_UNCOMP_STREAM_TYPE_BROTLI    = 7,
-    IO_UNCOMP_STREAM_TYPE_LZ4       = 8,
-    IO_UNCOMP_STREAM_TYPE_LZO       = 9,
-    IO_UNCOMP_STREAM_TYPE_ZSTD      = 10,
+  IO_UNCOMP_STREAM_TYPE_INFER   = 0,
+  IO_UNCOMP_STREAM_TYPE_GZIP    = 1,
+  IO_UNCOMP_STREAM_TYPE_ZIP     = 2,
+  IO_UNCOMP_STREAM_TYPE_BZIP2   = 3,
+  IO_UNCOMP_STREAM_TYPE_XZ      = 4,
+  IO_UNCOMP_STREAM_TYPE_INFLATE = 5,
+  IO_UNCOMP_STREAM_TYPE_SNAPPY  = 6,
+  IO_UNCOMP_STREAM_TYPE_BROTLI  = 7,
+  IO_UNCOMP_STREAM_TYPE_LZ4     = 8,
+  IO_UNCOMP_STREAM_TYPE_LZO     = 9,
+  IO_UNCOMP_STREAM_TYPE_ZSTD    = 10,
 };
 
-gdf_error io_uncompress_single_h2d(const void *src, size_t src_size, int strm_type, std::vector<char>& dst);
+gdf_error io_uncompress_single_h2d(const void* src,
+                                   size_t src_size,
+                                   int strm_type,
+                                   std::vector<char>& dst);
 
-gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes,
-    const std::string& compression, std::vector<char>& h_uncomp_data);
+gdf_error getUncompressedHostData(const char* h_data,
+                                  size_t num_bytes,
+                                  const std::string& compression,
+                                  std::vector<char>& h_uncomp_data);
 
-class HostDecompressor
-{
-public:
-    virtual size_t Decompress(uint8_t *dstBytes, size_t dstLen, const uint8_t *srcBytes, size_t srcLen) = 0;
-    virtual ~HostDecompressor() {}
-public:
-    static HostDecompressor *Create(int stream_type);
+class HostDecompressor {
+ public:
+  virtual size_t Decompress(uint8_t* dstBytes,
+                            size_t dstLen,
+                            const uint8_t* srcBytes,
+                            size_t srcLen) = 0;
+  virtual ~HostDecompressor() {}
+
+ public:
+  static HostDecompressor* Create(int stream_type);
 };
 
-} // namespace io
-} // namespace cudf
-
+}  // namespace io
+}  // namespace cudf

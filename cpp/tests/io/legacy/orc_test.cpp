@@ -113,8 +113,7 @@ TYPED_TEST(OrcWriterTypedParamTest, SingleColumn) {
   auto filepath =
       temp_env->get_temp_filepath("OrcWriterSingleColumn") + gdf_col->col_name;
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};
@@ -142,8 +141,7 @@ TYPED_TEST(OrcWriterTypedParamTest, SingleColumnWithNulls) {
       temp_env->get_temp_filepath("OrcWriterSingleColumnWithNulls") +
       gdf_col->col_name;
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};
@@ -187,8 +185,7 @@ TEST_F(OrcWriterTest, MultiColumn) {
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterMultiColumn.orc");
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};
@@ -243,8 +240,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   auto filepath =
       temp_env->get_temp_filepath("OrcWriterMultiColumnWithNulls.orc");
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};
@@ -270,8 +266,7 @@ TEST_P(OrcWriterValueParamTest, Timestamps) {
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterTimestamps");
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};
@@ -310,8 +305,7 @@ TEST_F(OrcWriterTest, Strings) {
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterStrings");
 
-  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
-  out_args.table = expected;
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}, expected};
   cudf::write_orc(out_args);
 
   cudf::orc_read_arg in_args{cudf::source_info{filepath}};

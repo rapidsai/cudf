@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <vector>
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <vector>
 
 namespace cudf {
 namespace experimental {
@@ -87,12 +87,12 @@ namespace experimental {
  *
  * @Returns A table containing sorted data from all input tables
  */
-std::unique_ptr<cudf::experimental::table> merge(std::vector<table_view> const& tables_to_merge,
-                                                 std::vector<cudf::size_type> const& key_cols,
-                                                 std::vector<cudf::order> const& column_order,
-                                                 std::vector<cudf::null_order> const& null_precedence = {},
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::experimental::table> merge(
+  std::vector<table_view> const& tables_to_merge,
+  std::vector<cudf::size_type> const& key_cols,
+  std::vector<cudf::order> const& column_order,
+  std::vector<cudf::null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr                  = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
-

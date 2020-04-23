@@ -17,100 +17,82 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
+#include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/column_utils.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/cudf.h>
 
 namespace cudf {
 namespace unary {
 
-template<typename T, typename Tout, typename F>
-__global__
-void gpu_op_kernel(const T *data, cudf::size_type size,
-                   Tout *results, F functor) {
-    int tid = threadIdx.x;
-    int blkid = blockIdx.x;
-    int blksz = blockDim.x;
-    int gridsz = gridDim.x;
+template <typename T, typename Tout, typename F>
+__global__ void gpu_op_kernel(const T* data, cudf::size_type size, Tout* results, F functor) {
+  int tid    = threadIdx.x;
+  int blkid  = blockIdx.x;
+  int blksz  = blockDim.x;
+  int gridsz = gridDim.x;
 
-    int start = tid + blkid * blksz;
-    int step = blksz * gridsz;
-    for (int i=start; i<size; i+=step) {
-        results[i] = functor.apply(data[i]);
-    }
+  int start = tid + blkid * blksz;
+  int step  = blksz * gridsz;
+  for (int i = start; i < size; i += step) { results[i] = functor.apply(data[i]); }
 }
 
-template<typename T, typename Tout, typename F>
+template <typename T, typename Tout, typename F>
 struct Launcher {
-    static
-    gdf_error launch(gdf_column const* input, gdf_column *output) {
+  static gdf_error launch(gdf_column const* input, gdf_column* output) {
+    // Return immediately for empty inputs
+    if ((0 == input->size)) { return GDF_SUCCESS; }
 
-        // Return immediately for empty inputs
-        if((0==input->size))
-        {
-          return GDF_SUCCESS;
-        }
+    /* check for size of the columns */
+    if (input->size != output->size) { return GDF_COLUMN_SIZE_MISMATCH; }
 
-        /* check for size of the columns */
-        if (input->size != output->size) {
-            return GDF_COLUMN_SIZE_MISMATCH;
-        }
+    // find optimal blocksize
+    int mingridsize, blocksize;
+    CUDA_TRY(
+      cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize, gpu_op_kernel<T, Tout, F>));
+    // find needed gridsize
+    int neededgridsize = (input->size + blocksize - 1) / blocksize;
+    int gridsize       = std::min(neededgridsize, mingridsize);
 
-        // find optimal blocksize
-        int mingridsize, blocksize;
-        CUDA_TRY(
-            cudaOccupancyMaxPotentialBlockSize(&mingridsize, &blocksize,
-                                               gpu_op_kernel<T, Tout, F>)
-        );
-        // find needed gridsize
-        int neededgridsize = (input->size + blocksize - 1) / blocksize;
-        int gridsize = std::min(neededgridsize, mingridsize);
+    F functor;
+    gpu_op_kernel<<<gridsize, blocksize>>>(
+      // input
+      (const T*)input->data,
+      input->size,
+      // output
+      (Tout*)output->data,
+      // action
+      functor);
 
-        F functor;
-        gpu_op_kernel<<<gridsize, blocksize>>>(
-            // input
-            (const T*)input->data, input->size,
-            // output
-            (Tout*)output->data,
-            // action
-            functor
-        );
-
-        CHECK_CUDA(0);
-        return GDF_SUCCESS;
-    }
+    CHECK_CUDA(0);
+    return GDF_SUCCESS;
+  }
 };
 
 inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output) {
-    // Check for null data pointer
-    validate(input);
+  // Check for null data pointer
+  validate(input);
 
-    if ( not is_nullable(input) ) {
-        if ( not is_nullable(output) ) {
-            // if input column has no mask, then output column is allowed to have no mask
-            output.null_count = 0;
-        }
-        else { // output.valid != nullptr
-            CUDA_TRY( cudaMemset(output.valid, 0xff,
-                                gdf_num_bitmask_elements( input.size )) );
-            output.null_count = 0;
-        }
+  if (not is_nullable(input)) {
+    if (not is_nullable(output)) {
+      // if input column has no mask, then output column is allowed to have no mask
+      output.null_count = 0;
+    } else {  // output.valid != nullptr
+      CUDA_TRY(cudaMemset(output.valid, 0xff, gdf_num_bitmask_elements(input.size)));
+      output.null_count = 0;
     }
-    else { // input.valid != nullptr
-        CUDF_EXPECTS( is_nullable(output),
-            "Input column has valid mask but output column does not");
+  } else {  // input.valid != nullptr
+    CUDF_EXPECTS(is_nullable(output), "Input column has valid mask but output column does not");
 
-        // Validity mask transfer
-        CUDA_TRY( cudaMemcpy(output.valid, input.valid,
-                             gdf_num_bitmask_elements( input.size ),
-                             cudaMemcpyDeviceToDevice) );
-        output.null_count = input.null_count;
-    }
+    // Validity mask transfer
+    CUDA_TRY(cudaMemcpy(
+      output.valid, input.valid, gdf_num_bitmask_elements(input.size), cudaMemcpyDeviceToDevice));
+    output.null_count = input.null_count;
+  }
 }
 
-} // unary
-} // cudf
+}  // namespace unary
+}  // namespace cudf
 
-#endif // UNARY_OPS_H
+#endif  // UNARY_OPS_H

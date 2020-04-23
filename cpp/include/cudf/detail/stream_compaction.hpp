@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -59,13 +59,12 @@ namespace detail {
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
  */
-std::unique_ptr<experimental::table>
-    drop_nulls(table_view const& input,
-               std::vector<size_type> const& keys,
-               cudf::size_type keep_threshold,
-               rmm::mr::device_memory_resource *mr =
-                   rmm::mr::get_default_resource(),
-               cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
@@ -89,12 +88,11 @@ std::unique_ptr<experimental::table>
  * @return unique_ptr<table> Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-std::unique_ptr<experimental::table>
-    apply_boolean_mask(table_view const& input,
-                       column_view const& boolean_mask,
-                       rmm::mr::device_memory_resource *mr =
-                           rmm::mr::get_default_resource(),
-                       cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> apply_boolean_mask(
+  table_view const& input,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Create a new table without duplicate rows
@@ -117,14 +115,13 @@ std::unique_ptr<experimental::table>
  *
  * @return unique_ptr<table> Table with unique rows as per specified `keep`.
  */
-std::unique_ptr<experimental::table>
-    drop_duplicates(table_view const& input,
-                    std::vector<size_type> const& keys,
-                    duplicate_keep_option const keep,
-                    bool const nulls_are_equal=true,
-                    rmm::mr::device_memory_resource *mr =
-                        rmm::mr::get_default_resource(),
-                    cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> drop_duplicates(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option const keep,
+  bool const nulls_are_equal          = true,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Count the unique elements in the column_view

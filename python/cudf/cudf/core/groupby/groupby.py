@@ -164,6 +164,7 @@ class GroupBy(object):
 
         # copy categorical information from keys to the result index:
         result.index._copy_categories(self.grouping.keys)
+        result._index = cudf.core.index.as_index(result._index)
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):

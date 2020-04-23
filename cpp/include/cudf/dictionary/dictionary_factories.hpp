@@ -18,9 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
-
-namespace cudf
-{
+namespace cudf {
 
 /**
  * @brief Construct a dictionary column by copying the provided `keys`
@@ -56,10 +54,11 @@ namespace cudf
  *               device kernels.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
-                                                column_view const& indices_column,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                cudaStream_t stream = 0);
+std::unique_ptr<column> make_dictionary_column(
+  column_view const& keys_column,
+  column_view const& indices_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys
@@ -81,9 +80,9 @@ std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
  * @param null_count Number of nulls for the output column.
  * @return New dictionary column.
  */
-std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_column,
-                                                std::unique_ptr<column> indices_column,
-                                                rmm::device_buffer&& null_mask,
-                                                size_type null_count );
+std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
+                                               std::unique_ptr<column> indices_column,
+                                               rmm::device_buffer&& null_mask,
+                                               size_type null_count);
 
 }  // namespace cudf

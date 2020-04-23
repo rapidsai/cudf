@@ -73,4 +73,4 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = cudf_val.to_pandas()
-    pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)
+    return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)

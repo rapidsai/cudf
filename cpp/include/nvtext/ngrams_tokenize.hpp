@@ -19,8 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
+namespace nvtext {
 
 /**
  * @brief Returns a single column of strings by tokenizing the input strings
@@ -71,11 +70,11 @@ namespace nvtext
  * @param mr Resource for allocating device memory.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> ngrams_tokenize( cudf::strings_column_view const& strings,
-                                               cudf::size_type ngrams = 2,
-                                               cudf::string_scalar const& delimiter = cudf::string_scalar{""},
-                                               cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::column> ngrams_tokenize(
+  cudf::strings_column_view const& strings,
+  cudf::size_type ngrams               = 2,
+  cudf::string_scalar const& delimiter = cudf::string_scalar{""},
+  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
-
-} // namespace nvtext
+}  // namespace nvtext

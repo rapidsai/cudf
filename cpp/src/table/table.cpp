@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -26,20 +26,17 @@ namespace experimental {
 table::table(table const& other) : _num_rows{other.num_rows()} {
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
-  for (auto const& c : other._columns) {
-    _columns.emplace_back(std::make_unique<column>(*c));
-  }
+  for (auto const& c : other._columns) { _columns.emplace_back(std::make_unique<column>(*c)); }
 }
 
 // Move the contents of a vector `unique_ptr<column>`
-table::table(std::vector<std::unique_ptr<column>>&& columns)
-    : _columns{std::move(columns)} {
-  if(num_columns() > 0) {
+table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::move(columns)} {
+  if (num_columns() > 0) {
     for (auto const& c : _columns) {
       CUDF_EXPECTS(c, "Unexpected null column");
-      CUDF_EXPECTS(c->size() == _columns.front()->size(), "Column size mismatch: " +
-                                                          std::to_string(c->size()) + " != " +
-                                                          std::to_string(_columns.front()->size()));
+      CUDF_EXPECTS(c->size() == _columns.front()->size(),
+                   "Column size mismatch: " + std::to_string(c->size()) +
+                     " != " + std::to_string(_columns.front()->size()));
     }
     _num_rows = _columns.front()->size();
   } else {
@@ -48,22 +45,18 @@ table::table(std::vector<std::unique_ptr<column>>&& columns)
 }
 
 // Copy the contents of a `table_view`
-table::table(table_view view, cudaStream_t stream,
-             rmm::mr::device_memory_resource* mr) : _num_rows{view.num_rows()} {
+table::table(table_view view, cudaStream_t stream, rmm::mr::device_memory_resource* mr)
+  : _num_rows{view.num_rows()} {
   CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
-  for (auto const& c : view) {
-    _columns.emplace_back(std::make_unique<column>(c, stream, mr));
-  }
+  for (auto const& c : view) { _columns.emplace_back(std::make_unique<column>(c, stream, mr)); }
 }
 
 // Create immutable view
 table_view table::view() const {
   std::vector<column_view> views;
   views.reserve(_columns.size());
-  for (auto const& c : _columns) {
-    views.push_back(c->view());
-  }
+  for (auto const& c : _columns) { views.push_back(c->view()); }
   return table_view{views};
 }
 
@@ -71,9 +64,7 @@ table_view table::view() const {
 mutable_table_view table::mutable_view() {
   std::vector<mutable_column_view> views;
   views.reserve(_columns.size());
-  for (auto const& c : _columns) {
-    views.push_back(c->mutable_view());
-  }
+  for (auto const& c : _columns) { views.push_back(c->mutable_view()); }
   return mutable_table_view{views};
 }
 
@@ -85,11 +76,9 @@ std::vector<std::unique_ptr<column>> table::release() {
 
 // Returns a table_view with set of specified columns
 table_view table::select(std::vector<cudf::size_type> const& column_indices) const {
-    std::vector<column_view> columns;
-    for (auto index : column_indices) {
-      columns.push_back(_columns.at(index)->view());
-    }
-    return table_view(columns);
+  std::vector<column_view> columns;
+  for (auto index : column_indices) { columns.push_back(_columns.at(index)->view()); }
+  return table_view(columns);
 }
 
 }  // namespace experimental

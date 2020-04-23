@@ -605,10 +605,18 @@ def boolean_mask_scatter(object input, Table target_table,
                          Column boolean_mask):
 
     if isinstance(input, Table):
-        _boolean_mask_scatter_table(input, target_table, boolean_mask)
+        return _boolean_mask_scatter_table(
+            input,
+            target_table,
+            boolean_mask
+        )
     else:
         scalar_list = [Scalar(i) for i in input]
-        _boolean_mask_scatter_scalar(scalar_list, target_table, boolean_mask)
+        return _boolean_mask_scatter_scalar(
+            scalar_list,
+            target_table,
+            boolean_mask
+        )
 
 
 def shift(Column input, int offset, object fill_value=None):

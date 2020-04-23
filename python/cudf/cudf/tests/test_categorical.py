@@ -134,8 +134,8 @@ def test_categorical_compare_ordered():
     assert sr1.cat.ordered
 
     # test using ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, sr1 < sr2)
-    np.testing.assert_array_equal(pdsr1 > pdsr2, sr1 > sr2)
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_array())
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_array())
 
 
 def test_categorical_binary_add():
@@ -205,7 +205,7 @@ def test_categorical_masking():
 
     assert len(expect_masked) == len(got_masked)
     assert len(expect_masked) == got_masked.valid_count
-    assert list(expect_masked) == list(got_masked)
+    assert_eq(got_masked, expect_masked)
 
 
 def test_df_cat_set_index():

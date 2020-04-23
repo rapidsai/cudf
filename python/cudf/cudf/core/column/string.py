@@ -308,7 +308,7 @@ class StringMethods(object):
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out[0]
+            out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -1804,7 +1804,9 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self, mask=None, size=None, offset=0, null_count=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -1833,7 +1835,13 @@ class StringColumn(column.ColumnBase):
             size = size - offset
 
         super().__init__(
-            None, size, dtype, mask=mask, offset=offset, children=children
+            None,
+            size,
+            dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
@@ -2085,6 +2093,13 @@ class StringColumn(column.ColumnBase):
             warnings.warn("fillna parameter not supported for string arrays")
 
         return self.to_arrow().to_pandas().values
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            Conversion to GPU array in strings is not yet supported.\nTo \
+            explicitly construct a host array, consider using .to_array()"
+        )
 
     def serialize(self):
         header = {"null_count": self.null_count}
