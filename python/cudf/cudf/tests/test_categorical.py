@@ -576,3 +576,19 @@ def test_categorical_creation(data, dtype):
     expected = pd.Series(data, dtype=dtype)
     got = gd.Series(data, dtype=dtype)
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "categories",
+    [
+        [],
+        [1, 2, 3],
+        pd.Series(["a", "c", "b"], dtype="category"),
+        pd.Series([1, 2, 3, 4, -100], dtype="category"),
+    ],
+)
+@pytest.mark.parametrize("ordered", [True, False])
+def test_categorical_dtype(categories, ordered):
+    expected = pd.CategoricalDtype(categories=categories, ordered=ordered)
+    got = gd.CategoricalDtype(categories=categories, ordered=ordered)
+    assert_eq(expected, got)
