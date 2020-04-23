@@ -30,7 +30,7 @@ def _nonempty_index(idx):
         categories = idx._data[key[0]].categories
         codes = [0, 0]
         ordered = idx._data[key[0]].ordered
-        values = column.build_categorical_column(
+        values = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
         return cudf.core.index.CategoricalIndex(values, name=idx.name)
@@ -50,12 +50,8 @@ def _nonempty_index(idx):
     )
 
 
-@meta_nonempty.register(cudf.Series)
-def _nonempty_series(s, idx=None):
-    if idx is None:
-        idx = _nonempty_index(s.index)
-    dtype = s.dtype
-    if is_categorical_dtype(dtype):
+def _get_non_empty_data(s):
+    if is_categorical_dtype(s.dtype):
         categories = (
             s._column.categories if len(s._column.categories) else ["a"]
         )
@@ -64,10 +60,18 @@ def _nonempty_series(s, idx=None):
         data = column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
-    elif is_string_dtype(dtype):
+    elif is_string_dtype(s.dtype):
         data = ["cat", "dog"]
     else:
-        data = np.arange(start=0, stop=2, dtype=dtype)
+        data = np.arange(start=0, stop=2, dtype=s.dtype)
+    return data
+
+
+@meta_nonempty.register(cudf.Series)
+def _nonempty_series(s, idx=None):
+    if idx is None:
+        idx = _nonempty_index(s.index)
+    data = _get_non_empty_data(s)
 
     return cudf.Series(data, name=s.name, index=idx)
 
@@ -75,13 +79,15 @@ def _nonempty_series(s, idx=None):
 @meta_nonempty.register(cudf.DataFrame)
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
-    dt_s_dict = dict()
+    columns_with_dtype = dict()
     res = cudf.DataFrame(index=idx)
-    for col in x.columns:
-        dt = str(x[col]._column.dtype)
-        if dt not in dt_s_dict:
-            dt_s_dict[dt] = _nonempty_series(x[col])
-        res[col] = dt_s_dict[dt]._column
+    for col in x._data.names:
+        dtype = str(x._data[col].dtype)
+        if dtype not in columns_with_dtype:
+            columns_with_dtype[dtype] = cudf.core.column.as_column(
+                _get_non_empty_data(x[col])
+            )
+        res._data[col] = columns_with_dtype[dtype]
     return res
 
 
