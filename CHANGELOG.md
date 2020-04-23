@@ -118,6 +118,7 @@
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #5000 Performance improvements in `isin` and dask_cudf backend
 
 ## Bug Fixes
 
