@@ -20,16 +20,13 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cudf/detail/utilities/cuda.cuh>
+
 namespace cudf {
 namespace experimental {
 namespace detail {
 
 namespace {
-
-template <class F>
-__global__ void single_thread_kernel(F f) {
-  if (threadIdx.x == 0) f();
-}
 
 struct get_element_functor {
   template <typename T>
@@ -46,11 +43,12 @@ struct get_element_functor {
     auto device_s   = get_scalar_device_view(*typed_s);
     auto device_col = column_device_view::create(input, stream);
 
-    single_thread_kernel<<<1, 1, 0, stream>>>(
+    device_single_thread(
       [device_s, d_col = *device_col, index] __device__() mutable {
         device_s.set_value(d_col.element<T>(index));
         device_s.set_valid(d_col.is_valid(index));
-      });
+      },
+      stream);
     return s;
   }
 
@@ -65,13 +63,15 @@ struct get_element_functor {
     rmm::device_scalar<string_view> temp_data;
     rmm::device_scalar<bool> temp_valid;
 
-    single_thread_kernel<<<1, 1, 0, stream>>>([buffer   = temp_data.data(),
-                                               validity = temp_valid.data(),
-                                               d_col    = *device_col,
-                                               index] __device__() mutable {
-      *buffer   = d_col.element<string_view>(index);
-      *validity = d_col.is_valid(index);
-    });
+    device_single_thread(
+      [buffer   = temp_data.data(),
+       validity = temp_valid.data(),
+       d_col    = *device_col,
+       index] __device__() mutable {
+        *buffer   = d_col.element<string_view>(index);
+        *validity = d_col.is_valid(index);
+      },
+      stream);
 
     return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, mr);
   }
@@ -94,10 +94,11 @@ struct get_element_functor {
     auto result_validity = result->validity_data();
     auto device_col      = column_device_view::create(input, stream);
 
-    single_thread_kernel<<<1, 1, 0, stream>>>(
+    device_single_thread(
       [result_validity, d_col = *device_col, index] __device__() mutable {
         *result_validity = d_col.is_valid(index);
-      });
+      },
+      stream);
 
     return result;
   }
