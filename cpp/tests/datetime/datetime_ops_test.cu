@@ -329,7 +329,8 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
                        true);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate) {
+TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
+{
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
@@ -338,46 +339,47 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate) {
   // Dates converted using epochconverter.com
   // Make some nullable fields as well
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{
-      {
-       999L,          // Random nullable field
-       0L,            // This is the UNIX epoch - 1970-01-01
-       1577865600L,   // 2020-01-01 00:00:00 GMT
-       1581667200L,   // 2020-02-14 00:00:00 GMT
-       3L,            // Random nullable field
-       1609401600L,   // 2020-12-31 00:00:00 GMT
-       4133923200L,   // 2100-12-31 00:00:00 GMT
-       111L,          // Random nullable field
-       -2180188800L   // 1900-11-30 00:00:00 GMT
-      },
-      { false, true, true, true, false, true, true, false, true },
+    {
+      999L,         // Random nullable field
+      0L,           // This is the UNIX epoch - 1970-01-01
+      1577865600L,  // 2020-01-01 00:00:00 GMT
+      1581667200L,  // 2020-02-14 00:00:00 GMT
+      3L,           // Random nullable field
+      1609401600L,  // 2020-12-31 00:00:00 GMT
+      4133923200L,  // 2100-12-31 00:00:00 GMT
+      111L,         // Random nullable field
+      -2180188800L  // 1900-11-30 00:00:00 GMT
+    },
+    {false, true, true, true, false, true, true, false, true},
   };
 
   expect_columns_equal(*day_of_year(timestamps_d),
                        fixed_width_column_wrapper<int16_t>{
                          {
-                          999,  // Random nullable field
-                          1,    // Number of year days until UNIX epoch time
-                          1,    // Number of year days until 2020-01-01
-                          45,   // Number of year days until 2020-02-14
-                          3,    // Random nullable field
-                          366,  // Number of year days until 2020-12-31
-                          365,  // Number of year days until 2100-12-31
-                          111,  // Random nullable field
-                          334   // Number of year days until 1900-11-30
+                           999,  // Random nullable field
+                           1,    // Number of year days until UNIX epoch time
+                           1,    // Number of year days until 2020-01-01
+                           45,   // Number of year days until 2020-02-14
+                           3,    // Random nullable field
+                           366,  // Number of year days until 2020-12-31
+                           365,  // Number of year days until 2100-12-31
+                           111,  // Random nullable field
+                           334   // Number of year days until 1900-11-30
                          },
-                         { false, true, true, true, false, true, true, false, true },
+                         {false, true, true, true, false, true, true, false, true},
                        },
                        true);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn) {
+TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
+{
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
 
   // Create an empty column
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{};
-  auto out_col = day_of_year(timestamps_d);
+  auto out_col      = day_of_year(timestamps_d);
   EXPECT_EQ(out_col->size(), 0);
 }
 

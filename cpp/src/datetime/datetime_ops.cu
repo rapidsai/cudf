@@ -116,7 +116,8 @@ static __device__ int16_t const days_until_month[2][12] = {
 // Extract the day number of the year present in the timestamp
 struct extract_day_num_of_year {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const {
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
     using namespace simt::std::chrono;
 
     // Only has the days - time component is chopped off, which is what we want
@@ -251,8 +252,8 @@ std::unique_ptr<column> last_day_of_month(column_view const& column,
     column, 0, mr);
 }
 
-std::unique_ptr<column> day_of_year(column_view const& column,
-                                    rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> day_of_year(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<detail::extract_day_num_of_year, cudf::INT16>(column, 0, mr);
 }
