@@ -37,13 +37,13 @@
 #include <cub/cub.cuh>
 
 namespace {
-
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
 __global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
                                      cudf::size_type size,
                                      cudf::size_type per_thread,
-                                     Filter filter) {
+                                     Filter filter)
+{
   int tid   = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
 
@@ -58,7 +58,8 @@ __global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
 
 // Compute the exclusive prefix sum of each thread's mask value within each block
 template <int block_size>
-__device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type& block_sum) {
+__device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type& block_sum)
+{
   int offset = 0;
 
   using BlockScan = cub::BlockScan<cudf::size_type, block_size>;
@@ -89,7 +90,8 @@ __launch_bounds__(block_size) __global__
                       cudf::size_type const* __restrict__ block_offsets,
                       cudf::size_type size,
                       cudf::size_type per_thread,
-                      Filter filter) {
+                      Filter filter)
+{
   T* __restrict__ output_data                   = output_view.data<T>();
   cudf::bitmask_type* __restrict__ output_valid = output_view.null_mask();
   constexpr cudf::size_type leader_lane{0};
@@ -112,9 +114,10 @@ __launch_bounds__(block_size) __global__
   for (int i = 0; i < per_thread; i++) {
     bool mask_true = (tid < size) && filter(tid);
 
-    block_sum = 0;
+    cudf::size_type tmp_block_sum = 0;
     // get output location using a scan of the mask result
-    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, block_sum);
+    const cudf::size_type local_index = block_scan_mask<block_size>(mask_true, tmp_block_sum);
+    block_sum += tmp_block_sum;
 
     if (has_validity) {
       temp_valids[threadIdx.x] = false;  // init shared memory
@@ -137,7 +140,8 @@ __launch_bounds__(block_size) __global__
     __syncthreads();  // wait for shared data and validity mask to be complete
 
     // Copy output data coalesced from shared to global
-    if (threadIdx.x < block_sum) output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
+    if (threadIdx.x < tmp_block_sum)
+      output_data[block_offset + threadIdx.x] = temp_data[threadIdx.x];
 
     if (has_validity) {
       // Since the valid bools are contiguous in shared memory now, we can use
@@ -148,12 +152,13 @@ __launch_bounds__(block_size) __global__
 
       constexpr int num_warps = block_size / cudf::experimental::detail::warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      const int last_index = block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
-      const int last_warp  = min(num_warps, last_index / cudf::experimental::detail::warp_size);
-      const int wid        = threadIdx.x / cudf::experimental::detail::warp_size;
-      const int lane       = threadIdx.x % cudf::experimental::detail::warp_size;
+      const int last_index =
+        tmp_block_sum + (block_offset % cudf::experimental::detail::warp_size) - 1;
+      const int last_warp = min(num_warps, last_index / cudf::experimental::detail::warp_size);
+      const int wid       = threadIdx.x / cudf::experimental::detail::warp_size;
+      const int lane      = threadIdx.x % cudf::experimental::detail::warp_size;
 
-      if (block_sum > 0 && wid <= last_warp) {
+      if (tmp_block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / cudf::experimental::detail::warp_size) + wid;
 
         // compute the valid mask for this warp
@@ -182,7 +187,7 @@ __launch_bounds__(block_size) __global__
       }
     }
 
-    block_offset += block_sum;
+    block_offset += tmp_block_sum;
     tid += block_size;
   }
   // Compute total null_count for this block and add it to global count
@@ -208,8 +213,9 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
-    //Actually we gather here
+    cudaStream_t stream                 = 0)
+  {
+    // Actually we gather here
     rmm::device_vector<cudf::size_type> indices(output_size, 0);
 
     thrust::copy_if(rmm::exec_policy(stream)->on(stream),
@@ -232,7 +238,8 @@ struct scatter_gather_functor {
     cudf::size_type const* block_offsets,
     Filter filter,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     auto output_column = cudf::experimental::detail::allocate_like(
       input, output_size, cudf::experimental::mask_allocation_policy::RETAIN, mr, stream);
     auto output = output_column->mutable_view();
@@ -277,10 +284,10 @@ namespace experimental {
 namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
- * 
+ *
  * @p filter must be a functor or lambda with the following signature:
  * __device__ bool operator()(cudf::size_type i);
- * It will return true if element i of @p input should be copied, 
+ * It will return true if element i of @p input should be copied,
  * false otherwise.
  *
  * @tparam Filter the filter functor type
@@ -293,7 +300,8 @@ std::unique_ptr<experimental::table> copy_if(
   table_view const& input,
   Filter filter,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   if (0 == input.num_rows() || 0 == input.num_columns()) { return experimental::empty_like(input); }
 
   constexpr int block_size = 256;

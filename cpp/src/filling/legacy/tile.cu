@@ -29,10 +29,9 @@
 #include <thrust/scan.h>
 
 namespace cudf {
-
 namespace detail {
-
-cudf::table tile(const cudf::table &in, gdf_size_type count, cudaStream_t stream = 0) {
+cudf::table tile(const cudf::table &in, gdf_size_type count, cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
   gdf_size_type num_rows = in.num_rows();

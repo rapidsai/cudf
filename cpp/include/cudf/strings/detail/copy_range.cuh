@@ -28,7 +28,6 @@
 #include <thrust/iterator/transform_iterator.h>
 
 namespace {
-
 template <bool source_has_nulls,
           bool target_has_nulls,
           typename SourceValueIterator,
@@ -40,7 +39,8 @@ struct compute_element_size {
   cudf::size_type target_begin;
   cudf::size_type target_end;
 
-  __device__ cudf::size_type operator()(cudf::size_type idx) {
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
     if (idx >= target_begin && idx < target_end) {
       if (source_has_nulls) {
         return *(source_validity_begin + (idx - target_begin))
@@ -66,7 +66,6 @@ struct compute_element_size {
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Internal API to copy a range of string elements out-of-place from
  * source iterators to a target column.
@@ -102,7 +101,8 @@ std::unique_ptr<column> copy_range(
   size_type target_begin,
   size_type target_end,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(
     (target_begin >= 0) && (target_begin < target.size()) && (target_end <= target.size()),
     "Range is out of bounds.");

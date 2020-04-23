@@ -26,7 +26,6 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
-
 /**
  * @brief Enums for the flags in the page header
  **/
@@ -46,8 +45,8 @@ struct nvstrdesc_s {
  * @brief Struct describing a particular page of column chunk data
  **/
 struct PageInfo {
-  uint8_t *
-    page_data;  // Compressed page data before decompression, or uncompressed data after decompression
+  uint8_t *page_data;  // Compressed page data before decompression, or uncompressed data after
+                       // decompression
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   int32_t num_values;              // Number of values in this data page or dictionary
@@ -58,8 +57,8 @@ struct PageInfo {
   uint8_t encoding;                // Encoding for data or dictionary page
   uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
   uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  int32_t
-    valid_count;  // Count of valid (non-null) values in this page (negative values indicate data error)
+  int32_t valid_count;  // Count of valid (non-null) values in this page (negative values indicate
+                        // data error)
 };
 
 /**
@@ -102,7 +101,9 @@ struct ColumnChunkDesc {
       codec(codec_),
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
-      ts_clock_rate(ts_clock_rate_) {}
+      ts_clock_rate(ts_clock_rate_)
+  {
+  }
 
   uint8_t *compressed_data;     // pointer to compressed column chunk data
   size_t compressed_size;       // total compressed data size for this chunk
@@ -137,8 +138,8 @@ struct EncColumnDesc : stats_column_desc {
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
-  uint8_t
-    level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
+  uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
+                       //!< levels
   uint8_t pad;
 };
 
@@ -181,7 +182,8 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  **/
 inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
-                                                          uint32_t num_pages = 1) {
+                                                          uint32_t num_pages = 1)
+{
   return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
 }
 

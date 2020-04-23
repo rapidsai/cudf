@@ -24,7 +24,7 @@
 namespace cudf {
 /**
  * @brief Merge sorted tables.
- * 
+ *
  * Merges two sorted tables (including null values) into one sorted table
  * containing data from both tables.
  *

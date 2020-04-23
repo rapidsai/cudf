@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief This functor is used by elementwise_aggregator to do in-place update
  * operations.
@@ -38,7 +37,8 @@ struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index) {
+                                    cudf::size_type source_index)
+  {
     release_assert(false && "Invalid Source type and Aggregation combination.");
   }
 };
@@ -80,7 +80,8 @@ struct update_target_element<
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index) {
+                                    cudf::size_type source_index)
+  {
     using TargetType = target_type_t<SourceType, op>;
 
     assert(gdf_dtype_of<TargetType>() == target.dtype);
@@ -126,7 +127,8 @@ struct update_target_element<
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const&,
-                                    cudf::size_type) {
+                                    cudf::size_type)
+  {
     using TargetType = target_type_t<SourceType, COUNT>;
     assert(gdf_dtype_of<TargetType>() == target.dtype);
 
@@ -143,7 +145,8 @@ struct elementwise_aggregator {
                                     cudf::size_type target_index,
                                     gdf_column const& source,
                                     cudf::size_type source_index,
-                                    operators op) {
+                                    operators op)
+  {
     switch (op) {
       case MIN: {
         update_target_element<SourceType, MIN, source_has_nulls>{}(
@@ -202,7 +205,8 @@ __device__ inline void aggregate_row(device_table const& target,
                                      cudf::size_type target_index,
                                      device_table const& source,
                                      cudf::size_type source_index,
-                                     operators* ops) {
+                                     operators* ops)
+{
   using namespace bit_mask;
   for (cudf::size_type i = 0; i < target.num_columns(); ++i) {
     bit_mask_t const* const __restrict__ source_mask{

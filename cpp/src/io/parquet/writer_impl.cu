@@ -36,12 +36,10 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
-
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 namespace {
-
 /**
  * @brief Helper for pinned host memory
  **/
@@ -51,7 +49,8 @@ using pinned_buffer = std::unique_ptr<T, decltype(&cudaFreeHost)>;
 /**
  * @brief Function that translates GDF compression to parquet compression
  **/
-parquet::Compression to_parquet_compression(compression_type compression) {
+parquet::Compression to_parquet_compression(compression_type compression)
+{
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return parquet::Compression::SNAPPY;
@@ -73,7 +72,8 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
                                         const size_type *offsets,
                                         const char *strdata,
                                         const uint32_t *nulls,
-                                        size_type column_size) {
+                                        size_type column_size)
+{
   size_type row = blockIdx.x * blockDim.x + threadIdx.x;
   if (row < column_size) {
     uint32_t is_valid = (nulls) ? (nulls[row >> 5] >> (row & 0x1f)) & 1 : 1;
@@ -114,7 +114,8 @@ class parquet_column_view {
       _data_count(col.size()),
       _null_count(col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
-      _nulls(col.nullable() ? col.null_mask() : nullptr) {
+      _nulls(col.nullable() ? col.null_mask() : nullptr)
+  {
     switch (col.type().id()) {
       case cudf::type_id::INT8:
         _physical_type  = Type::INT32;
@@ -221,11 +222,13 @@ class parquet_column_view {
   uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
   uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data().get() : nullptr; }
   void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows) {
+  void alloc_dictionary(size_t max_num_rows)
+  {
     _dict_data.resize(max_num_rows);
     _dict_index.resize(max_num_rows);
   }
-  bool check_dictionary_used() {
+  bool check_dictionary_used()
+  {
     if (!_dictionary_used) {
       _dict_data.resize(0);
       _dict_data.shrink_to_fit();
@@ -268,7 +271,8 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
                                        uint32_t fragment_size,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   CUDA_TRY(cudaMemcpyAsync(col_desc.device_ptr(),
                            col_desc.host_ptr(),
                            col_desc.memory_size(),
@@ -292,7 +296,8 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
                                               uint32_t num_columns,
                                               uint32_t num_fragments,
                                               uint32_t fragment_size,
-                                              cudaStream_t stream) {
+                                              cudaStream_t stream)
+{
   rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
 
   CUDA_TRY(gpu::InitFragmentStatistics(frag_stats_group.data().get(),
@@ -312,7 +317,8 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                                             uint32_t num_rowgroups,
                                             uint32_t num_columns,
                                             uint32_t num_dictionaries,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream)
+{
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
   CUDA_TRY(cudaMemcpyAsync(
@@ -344,7 +350,8 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
   CUDA_TRY(cudaMemcpyAsync(
     chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
@@ -382,7 +389,8 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                                 gpu_inflate_status_s *comp_out,
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   CUDA_TRY(gpu::EncodePages(
     pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream));
   switch (compression_) {
@@ -391,7 +399,8 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
       break;
     default: break;
   }
-  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the chunk-level
+  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
+  // chunk-level
   CUDA_TRY(DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
                              pages,
                              rowgroups_in_batch * num_columns,
@@ -424,13 +433,16 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   : _mr(mr),
     compression_(to_parquet_compression(options.compression)),
     stats_granularity_(options.stats_granularity),
-    out_sink_(std::move(sink)) {}
+    out_sink_(std::move(sink))
+{
+}
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &table,
                                                           const table_metadata *metadata,
                                                           bool return_filemetadata,
                                                           const std::string &metadata_out_file_path,
-                                                          cudaStream_t stream) {
+                                                          cudaStream_t stream)
+{
   pq_chunked_state state;
   state.user_metadata     = metadata;
   state.stream            = stream;
@@ -441,7 +453,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &tabl
   return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
 }
 
-void writer::impl::write_chunked_begin(pq_chunked_state &state) {
+void writer::impl::write_chunked_begin(pq_chunked_state &state)
+{
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
@@ -450,7 +463,8 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state) {
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state) {
+void writer::impl::write_chunked(table_view const &table, pq_chunked_state &state)
+{
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -499,17 +513,19 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       // Column metadata
       state.md.schema[1 + i].type           = col.physical_type();
       state.md.schema[1 + i].converted_type = col.converted_type();
-      // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunked() call)
-      // we cannot know up front if the user is going to end up passing tables with nulls/no nulls in the
-      // multiple write_chunked() case.  so we'll do some special handling.
+      // because the repetition type is global (in the sense of, not per-rowgroup or per
+      // write_chunked() call) we cannot know up front if the user is going to end up passing tables
+      // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
+      // handling.
       //
-      // if the user is explictly saying "I am only calling this once", fall back to the original behavior and assume
-      // the columns in this one table tell us everything we need to know.
+      // if the user is explictly saying "I am only calling this once", fall back to the original
+      // behavior and assume the columns in this one table tell us everything we need to know.
       if (state.single_write_mode) {
         state.md.schema[1 + i].repetition_type =
           (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
       }
-      // otherwise, if the user is explicitly telling us global information about all the tables that will ever get passed in
+      // otherwise, if the user is explicitly telling us global information about all the tables
+      // that will ever get passed in
       else if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
         state.md.schema[1 + i].repetition_type =
           state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
@@ -563,10 +579,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   }
 
   // Init page fragments
-  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing fragments larger than the
-  // desired page size -> TODO: keep track of the max fragment size, and iteratively reduce this value if the largest
-  // fragment exceeds the max page size limit (we ideally want the page size to be below 1MB so as to have enough pages
-  // to get good compression/decompression performance).
+  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing
+  // fragments larger than the desired page size -> TODO: keep track of the max fragment size, and
+  // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
+  // ideally want the page size to be below 1MB so as to have enough pages to get good
+  // compression/decompression performance).
   uint32_t fragment_size = 5000;
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
@@ -865,7 +882,8 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path) {
+  pq_chunked_state &state, bool return_filemetadata, const std::string &metadata_out_file_path)
+{
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
@@ -899,7 +917,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
 writer::writer(std::unique_ptr<data_sink> sink,
                writer_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr)) {}
+  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
+{
+}
 
 // Destructor within this translation unit
 writer::~writer() = default;
@@ -909,7 +929,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
                                                         const table_metadata *metadata,
                                                         bool return_filemetadata,
                                                         const std::string metadata_out_file_path,
-                                                        cudaStream_t stream) {
+                                                        cudaStream_t stream)
+{
   return _impl->write(table, metadata, return_filemetadata, metadata_out_file_path, stream);
 }
 
@@ -917,7 +938,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
 void writer::write_chunked_begin(pq_chunked_state &state) { _impl->write_chunked_begin(state); }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, pq_chunked_state &state) {
+void writer::write_chunked(table_view const &table, pq_chunked_state &state)
+{
   _impl->write_chunked(table, state);
 }
 
@@ -925,7 +947,8 @@ void writer::write_chunked(table_view const &table, pq_chunked_state &state) {
 void writer::write_chunked_end(pq_chunked_state &state) { _impl->write_chunked_end(state); }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list) {
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>> &metadata_list)
+{
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);
   FileMetaData md;

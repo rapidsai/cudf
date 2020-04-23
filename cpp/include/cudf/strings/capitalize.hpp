@@ -41,9 +41,9 @@ std::unique_ptr<column> capitalize(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Modifies first character after spaces to uppercase and lower-cases the rest. 
+ * @brief Modifies first character after spaces to uppercase and lower-cases the rest.
  *
- * Returns a column of strings where, for each string row in the input, 
+ * Returns a column of strings where, for each string row in the input,
  * the first character after spaces is modified to upper-case,
  * while all the remaining characters in a word are modified to lower-case.
  *
@@ -64,5 +64,5 @@ std::unique_ptr<column> title(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  //namespace strings
-}  //namespace cudf
+}  // namespace strings
+}  // namespace cudf

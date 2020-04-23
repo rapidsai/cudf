@@ -32,23 +32,29 @@ struct managed_allocator {
   managed_allocator() = default;
 
   template <class U>
-  constexpr managed_allocator(const managed_allocator<U>&) noexcept {}
+  constexpr managed_allocator(const managed_allocator<U>&) noexcept
+  {
+  }
 
-  T* allocate(std::size_t n, cudaStream_t stream = 0) const {
+  T* allocate(std::size_t n, cudaStream_t stream = 0) const
+  {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
-  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
+  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const
+  {
     mr->deallocate(p, n * sizeof(T), stream);
   }
 };
 
 template <class T, class U>
-bool operator==(const managed_allocator<T>&, const managed_allocator<U>&) {
+bool operator==(const managed_allocator<T>&, const managed_allocator<U>&)
+{
   return true;
 }
 template <class T, class U>
-bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&) {
+bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&)
+{
   return false;
 }
 
@@ -60,23 +66,29 @@ struct default_allocator {
   default_allocator() = default;
 
   template <class U>
-  constexpr default_allocator(const default_allocator<U>&) noexcept {}
+  constexpr default_allocator(const default_allocator<U>&) noexcept
+  {
+  }
 
-  T* allocate(std::size_t n, cudaStream_t stream = 0) const {
+  T* allocate(std::size_t n, cudaStream_t stream = 0) const
+  {
     return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
   }
 
-  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
+  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const
+  {
     mr->deallocate(p, n * sizeof(T), stream);
   }
 };
 
 template <class T, class U>
-bool operator==(const default_allocator<T>&, const default_allocator<U>&) {
+bool operator==(const default_allocator<T>&, const default_allocator<U>&)
+{
   return true;
 }
 template <class T, class U>
-bool operator!=(const default_allocator<T>&, const default_allocator<U>&) {
+bool operator!=(const default_allocator<T>&, const default_allocator<U>&)
+{
   return false;
 }
 

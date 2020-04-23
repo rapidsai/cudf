@@ -197,7 +197,8 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
 
   mutable_table_view() = default;
 
-  mutable_column_view& column(size_type column_index) const {
+  mutable_column_view& column(size_type column_index) const
+  {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
   /**---------------------------------------------------------------------------*
@@ -226,18 +227,20 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view) {
+inline bool has_nulls(table_view view)
+{
   return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
 }
 
 /**---------------------------------------------------------------------------*
-   * @brief Checks if two `table_view`s have columns of same types
-   *
-   * @param lhs left-side table_view operand
-   * @param rhs right-side table_view operand
-   * @return boolean comparison result
-   *---------------------------------------------------------------------------**/
-inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
+ * @brief Checks if two `table_view`s have columns of same types
+ *
+ * @param lhs left-side table_view operand
+ * @param rhs right-side table_view operand
+ * @return boolean comparison result
+ *---------------------------------------------------------------------------**/
+inline bool have_same_types(table_view const& lhs, table_view const& rhs)
+{
   return std::equal(
     lhs.begin(),
     lhs.end(),

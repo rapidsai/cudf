@@ -53,7 +53,6 @@ device_memory_resource* get_default_resource();
 }  // namespace rmm
 
 namespace cudf {
-
 // Forward declaration
 struct table;
 class column;
@@ -138,7 +137,6 @@ enum class mask_state : int32_t {
 };
 
 namespace experimental {
-
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j

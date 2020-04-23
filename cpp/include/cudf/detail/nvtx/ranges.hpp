@@ -19,7 +19,6 @@
 #include "nvtx3.hpp"
 
 namespace cudf {
-
 /**
  * @brief Tag type for libcudf's NVTX domain.
  *

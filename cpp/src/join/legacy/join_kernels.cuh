@@ -32,22 +32,23 @@ enum class JoinType { INNER_JOIN, LEFT_JOIN, FULL_JOIN };
 constexpr int warp_size = 32;
 
 /* --------------------------------------------------------------------------*/
-/** 
-* @brief  Builds a hash table from a device_table that maps the hash values of 
+/**
+* @brief  Builds a hash table from a device_table that maps the hash values of
   each row to its respective row index.
-* 
+*
 * @param[in,out] multi_map The hash table to be built to insert rows into
 * @param[in] build_table The table to build the hash table on
 * @param[in] build_table_num_rows The number of rows in the build table
 * @tparam multimap_type The type of the hash table
-* 
+*
 */
 /* ----------------------------------------------------------------------------*/
 template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
                                  device_table build_table,
                                  const cudf::size_type build_table_num_rows,
-                                 gdf_error *gdf_error_code) {
+                                 gdf_error *gdf_error_code)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < build_table_num_rows) {
@@ -67,9 +68,9 @@ __global__ void build_hash_table(multimap_type multi_map,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
 * @brief  Adds a pair of indices to the shared memory cache
-* 
+*
 * @param[in] first The first index in the pair
 * @param[in] second The second index in the pair
 * @param[in,out] current_idx_shared Pointer to shared index that determines where in the shared
@@ -77,7 +78,7 @@ memory cache the pair will be written
 * @param[in] warp_id The ID of the warp of the calling the thread
 * @param[out] joined_shared_l Pointer to the shared memory cache for left indices
 * @param[out] joined_shared_r Pointer to the shared memory cache for right indices
-* 
+*
 */
 /* ----------------------------------------------------------------------------*/
 template <typename size_type, typename output_index_type>
@@ -86,7 +87,8 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
                                              size_type *current_idx_shared,
                                              const int warp_id,
                                              output_index_type *joined_shared_l,
-                                             output_index_type *joined_shared_r) {
+                                             output_index_type *joined_shared_r)
+{
   size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
   // its guaranteed to fit into the shared cache
@@ -95,10 +97,10 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
 * @brief  Computes the output size of joining the probe table to the build table
   by probing the hash map with the probe table and counting the number of matches.
-* 
+*
 * @param[in] multi_map The hash table built on the build table
 * @param[in] build_table The build table
 * @param[in] probe_table The probe table
@@ -107,7 +109,7 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
   @tparam join_type The type of join to be performed
   @tparam multimap_type The datatype of the hash table
   @tparam output_cache_size The size of the shared memory cache for caching the join output results
-* 
+*
 */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename multimap_type, int block_size, int output_cache_size>
@@ -115,12 +117,13 @@ __global__ void compute_join_output_size(multimap_type multi_map,
                                          device_table build_table,
                                          device_table probe_table,
                                          const cudf::size_type probe_table_num_rows,
-                                         cudf::size_type *output_size) {
-  // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
-  // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
-  // 'output_size'.
-  // Compared to probing one element per thread, this implementation improves performance by reducing atomic adds to
-  // the shared memory counter.
+                                         cudf::size_type *output_size)
+{
+  // This kernel probes multiple elements in the probe_table and store the number of matches found
+  // inside a register. A block reduction is used at the end to calculate the matches per thread
+  // block, and atomically add to the global 'output_size'. Compared to probing one element per
+  // thread, this implementation improves performance by reducing atomic adds to the shared memory
+  // counter.
 
   cudf::size_type thread_counter{0};
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -192,17 +195,18 @@ __global__ void compute_join_output_size(multimap_type multi_map,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
- * @brief  Probes the hash map with the probe table to find all matching rows 
+/**
+ * @brief  Probes the hash map with the probe table to find all matching rows
  between the probe and hash table and generate the output for the desired Join operation.
- * 
+ *
  * @param[in] multi_map The hash table built from the build table
  * @param[in] build_table The build table
  * @param[in] probe_table The probe table
  * @param[in] probe_table_num_rows The length of the columns in the probe table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
+ * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
+ output
  * @param[in] max_size The maximum size of the output
  * @param[in] offset An optional offset
  * @tparam join_type The type of join to be performed
@@ -210,7 +214,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * @tparam output_index_type The datatype used for the indices in the output arrays
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join output results
- * 
+ *
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type,
@@ -228,7 +232,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  cudf::size_type *current_idx,
                                  const cudf::size_type max_size,
                                  bool flip_results,
-                                 const output_index_type offset = 0) {
+                                 const output_index_type offset = 0)
+{
   constexpr int num_warps = block_size / warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];
@@ -332,7 +337,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
 #if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
       __syncwarp(activemask);
 #endif
-      //flush output cache if next iteration does not fit
+      // flush output cache if next iteration does not fit
       if (current_idx_shared[warp_id] + warp_size >= output_cache_size) {
         // count how many active threads participating here which could be less than warp_size
 #if defined(CUDA_VERSION) && CUDA_VERSION < 9000
@@ -363,7 +368,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
       }
     }
 
-    //final flush of output cache
+    // final flush of output cache
     if (current_idx_shared[warp_id] > 0) {
       // count how many active threads participating here which could be less than warp_size
 #if defined(CUDA_VERSION) && CUDA_VERSION < 9000
@@ -410,7 +415,7 @@ __global__ void probe_hash_table_uniq_keys(
         output_offset_shared = 0;
         current_idx_shared = 0;
     }
-    
+
     __syncthreads();
 
     size_type i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -426,15 +431,15 @@ __global__ void probe_hash_table_uniq_keys(
             joined_shared[my_current_idx] = joined_val;
         }
     }
-    
+
     __syncthreads();
-    
+
     if ( current_idx_shared > 0 ) {
         if ( 0 == threadIdx.x ) {
             output_offset_shared = atomicAdd( current_idx, current_idx_shared );
         }
         __syncthreads();
-        
+
         if ( threadIdx.x < current_idx_shared ) {
             joined[output_offset_shared+threadIdx.x] = joined_shared[threadIdx.x];
         }

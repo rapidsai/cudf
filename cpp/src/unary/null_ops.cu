@@ -23,11 +23,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
-
 namespace experimental {
-
-std::unique_ptr<column> is_null(cudf::column_view const& input,
-                                rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   auto input_device_view = column_device_view::create(input);
   auto device_view       = *input_device_view;
@@ -40,7 +38,8 @@ std::unique_ptr<column> is_null(cudf::column_view const& input,
 }
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   auto input_device_view = column_device_view::create(input);
   auto device_view       = *input_device_view;
