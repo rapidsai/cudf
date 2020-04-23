@@ -5,6 +5,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.dataframe.core import make_meta, meta_nonempty
 
 import cudf
 
@@ -601,8 +602,6 @@ def test_hash_object_dispatch(index):
     ],
 )
 def test_make_meta_backends(index):
-
-    from dask.dataframe.core import make_meta, meta_nonempty
 
     dtypes = ["int8", "int32", "int64", "float64"]
     df = cudf.DataFrame(
