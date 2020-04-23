@@ -2006,16 +2006,21 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testNansToNulls() {
-    try (ColumnVector cvFloat = ColumnVector.fromBoxedFloats(1.2f, Float.POSITIVE_INFINITY,
-        Float.NEGATIVE_INFINITY, null, Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f);
-         ColumnVector cvDouble = ColumnVector.fromBoxedDoubles(1.2d, Double.POSITIVE_INFINITY,
-             Double.NEGATIVE_INFINITY, null, Double.NaN, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d);
+    Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
+        Float.NEGATIVE_INFINITY, null, -Float.NaN, Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f};
+    Double[] doubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
+        Double.NEGATIVE_INFINITY, null, Double.NaN, -Double.NaN, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d};
+    Float[] expectedFloats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
+        Float.NEGATIVE_INFINITY, null, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f};
+    Double[] expectedDoubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
+        Double.NEGATIVE_INFINITY, null, null, null, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d};
+
+    try (ColumnVector cvFloat = ColumnVector.fromBoxedFloats(floats);
+         ColumnVector cvDouble = ColumnVector.fromBoxedDoubles(doubles);
          ColumnVector resultFloat = cvFloat.nansToNulls();
          ColumnVector resultDouble = cvDouble.nansToNulls();
-         ColumnVector expectedFloat = ColumnVector.fromBoxedFloats(1.2f, Float.POSITIVE_INFINITY,
-             Float.NEGATIVE_INFINITY, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f);
-         ColumnVector expectedDouble = ColumnVector.fromBoxedDoubles(1.2d, Double.POSITIVE_INFINITY,
-          Double.NEGATIVE_INFINITY, null, null, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d)) {
+         ColumnVector expectedFloat = ColumnVector.fromBoxedFloats(expectedFloats);
+         ColumnVector expectedDouble = ColumnVector.fromBoxedDoubles(expectedDoubles)) {
       assertColumnsAreEqual(expectedFloat, resultFloat);
       assertColumnsAreEqual(expectedDouble, resultDouble);
     }
