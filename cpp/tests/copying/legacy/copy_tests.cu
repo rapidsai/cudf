@@ -32,16 +32,14 @@ TEST_F(CopyErrorTest, NullInput) {
 template <typename T>
 struct CopyTest : GdfTest {};
 
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(CopyTest, test_types);
 
 TYPED_TEST(CopyTest, BasicCopy) {
   constexpr cudf::size_type source_size{1000};
   cudf::test::column_wrapper<TypeParam> source{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
   gdf_column copy{};
   EXPECT_NO_THROW(copy = cudf::copy(source));
   EXPECT_TRUE(source == copy);
@@ -62,8 +60,7 @@ TYPED_TEST(CopyTest, NoNullMask) {
 TYPED_TEST(CopyTest, EmptyInput) {
   constexpr cudf::size_type source_size{0};
   cudf::test::column_wrapper<TypeParam> source{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
   gdf_column copy{};
   EXPECT_NO_THROW(copy = cudf::copy(source));
   EXPECT_TRUE(source == copy);
@@ -73,12 +70,10 @@ TYPED_TEST(CopyTest, EmptyTable) {
   constexpr cudf::size_type source_size{0};
 
   cudf::test::column_wrapper<TypeParam> source0{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
 
   cudf::test::column_wrapper<TypeParam> source1{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
 
   cudf::table table{source0.get(), source1.get()};
 
@@ -90,10 +85,10 @@ TYPED_TEST(CopyTest, EmptyTable) {
 
 TYPED_TEST(CopyTest, TableNoNullMask) {
   constexpr cudf::size_type source_size{1000};
-  cudf::test::column_wrapper<TypeParam> source0{
-      source_size, [](cudf::size_type row) { return row; }};
-  cudf::test::column_wrapper<TypeParam> source1{
-      source_size, [](cudf::size_type row) { return row; }};
+  cudf::test::column_wrapper<TypeParam> source0{source_size,
+                                                [](cudf::size_type row) { return row; }};
+  cudf::test::column_wrapper<TypeParam> source1{source_size,
+                                                [](cudf::size_type row) { return row; }};
 
   cudf::table table{source0.get(), source1.get()};
 
@@ -107,12 +102,10 @@ TYPED_TEST(CopyTest, TableCopy) {
   constexpr cudf::size_type source_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source0{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
 
   cudf::test::column_wrapper<TypeParam> source1{
-      source_size, [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; }};
+    source_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; }};
 
   cudf::table table{source0.get(), source1.get()};
 

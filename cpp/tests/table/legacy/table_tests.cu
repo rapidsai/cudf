@@ -16,8 +16,8 @@
 
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -34,9 +34,16 @@ struct TableTest : public GdfTest {
   int random_size() { return distribution(generator); }
 };
 
-using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
-                                      double, cudf::date32, cudf::date64,
-                                      cudf::timestamp, cudf::category>;
+using TestingTypes = ::testing::Types<int8_t,
+                                      int16_t,
+                                      int32_t,
+                                      int64_t,
+                                      float,
+                                      double,
+                                      cudf::date32,
+                                      cudf::date64,
+                                      cudf::timestamp,
+                                      cudf::category>;
 
 TYPED_TEST_CASE(TableTest, TestingTypes);
 
@@ -74,10 +81,8 @@ TYPED_TEST(TableTest, MultiColumn) {
   EXPECT_EQ(3, table.num_columns());
 
   auto expected = cols.begin();
-  auto result = table.begin();
-  while (result != table.end()) {
-    columns_are_equal(*expected++, *result++);
-  }
+  auto result   = table.begin();
+  while (result != table.end()) { columns_are_equal(*expected++, *result++); }
 
   columns_are_equal(cols[0], table.get_column(0));
   columns_are_equal(cols[1], table.get_column(1));
@@ -86,14 +91,11 @@ TYPED_TEST(TableTest, MultiColumn) {
 
 TYPED_TEST(TableTest, ConstructColumns) {
   const auto size = this->random_size();
-  std::vector<gdf_dtype> dtypes{GDF_INT8, GDF_INT32, GDF_FLOAT32,
-                                cudf::gdf_dtype_of<TypeParam>()};
+  std::vector<gdf_dtype> dtypes{GDF_INT8, GDF_INT32, GDF_FLOAT32, cudf::gdf_dtype_of<TypeParam>()};
 
   std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
-  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
-    dtype_infos[3].time_unit = TIME_UNIT_ns;
-  }
+  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) { dtype_infos[3].time_unit = TIME_UNIT_ns; }
 
   // Construct columns, no bitmask allocation
   cudf::table t{size, dtypes, dtype_infos};
@@ -118,14 +120,11 @@ TYPED_TEST(TableTest, ConstructColumns) {
 
 TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
   const auto size = this->random_size();
-  std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8,
-                                cudf::gdf_dtype_of<TypeParam>()};
+  std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8, cudf::gdf_dtype_of<TypeParam>()};
 
   std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
-  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
-    dtype_infos[3].time_unit = TIME_UNIT_ns;
-  }
+  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) { dtype_infos[3].time_unit = TIME_UNIT_ns; }
 
   // Construct columns, each with a bitmask allocation indicating all values
   // are null
@@ -155,15 +154,11 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
 
 TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
   const auto size = this->random_size();
-  std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8,
-                                cudf::gdf_dtype_of<TypeParam>()};
-
+  std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8, cudf::gdf_dtype_of<TypeParam>()};
 
   std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
-  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
-    dtype_infos[3].time_unit = TIME_UNIT_ns;
-  }
+  if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) { dtype_infos[3].time_unit = TIME_UNIT_ns; }
 
   // Construct columns, each with a bitmask allocation indicating all values
   // are null
@@ -191,90 +186,91 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
   });
 }
 
-TYPED_TEST(TableTest, GetTableWithSelectedColumns)
-{
-    column_wrapper <int8_t> col1 = column_wrapper<int8_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int16_t> col2 = column_wrapper<int16_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int32_t> col3 = column_wrapper<int32_t>({4,5,6,7},[](auto row) { return true; });
-    column_wrapper <int64_t> col4 = column_wrapper<int64_t>({4,5,6,7},[](auto row) { return true; });
+TYPED_TEST(TableTest, GetTableWithSelectedColumns) {
+  column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int16_t> col2 =
+    column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int32_t> col3 =
+    column_wrapper<int32_t>({4, 5, 6, 7}, [](auto row) { return true; });
+  column_wrapper<int64_t> col4 =
+    column_wrapper<int64_t>({4, 5, 6, 7}, [](auto row) { return true; });
 
-    std::vector<gdf_column*> cols;
-    cols.push_back(col1.get());
-    cols.push_back(col2.get());
-    cols.push_back(col3.get());
-    cols.push_back(col4.get());
+  std::vector<gdf_column*> cols;
+  cols.push_back(col1.get());
+  cols.push_back(col2.get());
+  cols.push_back(col3.get());
+  cols.push_back(col4.get());
 
-    cudf::table table(cols);
-    cudf::table selected_table = table.select(std::vector<cudf::size_type>{2,3});
-    columns_are_equal(table.get_column(2), selected_table.get_column(0));
-    columns_are_equal(table.get_column(3), selected_table.get_column(1));
+  cudf::table table(cols);
+  cudf::table selected_table = table.select(std::vector<cudf::size_type>{2, 3});
+  columns_are_equal(table.get_column(2), selected_table.get_column(0));
+  columns_are_equal(table.get_column(3), selected_table.get_column(1));
 }
 
-TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
-{
-    column_wrapper <int8_t> col1 = column_wrapper<int8_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int16_t> col2 = column_wrapper<int16_t>({1,2,3,4},[](auto row) { return true; });
+TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns) {
+  column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int16_t> col2 =
+    column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
 
-    std::vector<gdf_column*> cols;
-    cols.push_back(col1.get());
-    cols.push_back(col2.get());
+  std::vector<gdf_column*> cols;
+  cols.push_back(col1.get());
+  cols.push_back(col2.get());
 
-    cudf::table table(cols);
-    CUDF_EXPECT_THROW_MESSAGE (table.select(std::vector<cudf::size_type>{0,1,2}), "Requested too many columns.");
+  cudf::table table(cols);
+  CUDF_EXPECT_THROW_MESSAGE(table.select(std::vector<cudf::size_type>{0, 1, 2}),
+                            "Requested too many columns.");
 }
 
-TYPED_TEST(TableTest, SelectingNoColumns)
-{
-    column_wrapper <int8_t> col1 = column_wrapper<int8_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int16_t> col2 = column_wrapper<int16_t>({1,2,3,4},[](auto row) { return true; });
+TYPED_TEST(TableTest, SelectingNoColumns) {
+  column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int16_t> col2 =
+    column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
 
-    std::vector<gdf_column*> cols;
-    cols.push_back(col1.get());
-    cols.push_back(col2.get());
+  std::vector<gdf_column*> cols;
+  cols.push_back(col1.get());
+  cols.push_back(col2.get());
 
-    cudf::table table(cols);
-    cudf::table selected_table = table.select(std::vector<cudf::size_type>{});
+  cudf::table table(cols);
+  cudf::table selected_table = table.select(std::vector<cudf::size_type>{});
 
-    EXPECT_EQ(selected_table.num_columns(), 0);
+  EXPECT_EQ(selected_table.num_columns(), 0);
 }
 
-TYPED_TEST(TableTest, ConcatTables)
-{
-    column_wrapper <int8_t> col1 = column_wrapper<int8_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int16_t> col2 = column_wrapper<int16_t>({1,2,3,4},[](auto row) { return true; });
+TYPED_TEST(TableTest, ConcatTables) {
+  column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int16_t> col2 =
+    column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
 
-    std::vector<gdf_column*> cols;
-    cols.push_back(col1.get());
-    cols.push_back(col2.get());
+  std::vector<gdf_column*> cols;
+  cols.push_back(col1.get());
+  cols.push_back(col2.get());
 
-    cudf::table table1{std::vector<gdf_column*>{col1.get()}};
-    cudf::table table2{std::vector<gdf_column*>{col2.get()}};
+  cudf::table table1{std::vector<gdf_column*>{col1.get()}};
+  cudf::table table2{std::vector<gdf_column*>{col2.get()}};
 
-    cudf::table concated_table = cudf::concat (table1, table2);
-    columns_are_equal(concated_table.get_column(0), col1.get());
-    columns_are_equal(concated_table.get_column(1), col2.get());
+  cudf::table concated_table = cudf::concat(table1, table2);
+  columns_are_equal(concated_table.get_column(0), col1.get());
+  columns_are_equal(concated_table.get_column(1), col2.get());
 }
 
-TYPED_TEST(TableTest, ConcatTablesRowsMismatch)
-{
-    column_wrapper <int8_t> col1 = column_wrapper<int8_t>({1,2,3,4},[](auto row) { return true; });
-    column_wrapper <int16_t> col2 = column_wrapper<int16_t>({1,2,3},[](auto row) { return true; });
+TYPED_TEST(TableTest, ConcatTablesRowsMismatch) {
+  column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
+  column_wrapper<int16_t> col2 = column_wrapper<int16_t>({1, 2, 3}, [](auto row) { return true; });
 
-    std::vector<gdf_column*> cols;
-    cols.push_back(col1.get());
-    cols.push_back(col2.get());
+  std::vector<gdf_column*> cols;
+  cols.push_back(col1.get());
+  cols.push_back(col2.get());
 
-    cudf::table table1{std::vector<gdf_column*>{col1.get()}};
-    cudf::table table2{std::vector<gdf_column*>{col2.get()}};
+  cudf::table table1{std::vector<gdf_column*>{col1.get()}};
+  cudf::table table2{std::vector<gdf_column*>{col2.get()}};
 
-    CUDF_EXPECT_THROW_MESSAGE(cudf::concat (table1, table2), "Number of rows mismatch");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::concat(table1, table2), "Number of rows mismatch");
 }
 
-TYPED_TEST(TableTest, ConcatEmptyTables)
-{
-    cudf::table table1 = cudf::table{};
-    cudf::table table2 = cudf::table{};
+TYPED_TEST(TableTest, ConcatEmptyTables) {
+  cudf::table table1 = cudf::table{};
+  cudf::table table2 = cudf::table{};
 
-    cudf::table concated_table = cudf::concat (table1, table2);
-    EXPECT_EQ(concated_table.num_columns(), 0);
+  cudf::table concated_table = cudf::concat(table1, table2);
+  EXPECT_EQ(concated_table.num_columns(), 0);
 }

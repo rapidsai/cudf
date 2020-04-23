@@ -44,8 +44,7 @@ struct type_tester {
 
 TYPED_TEST(TypedDispatcherTest, TypeToId) {
   EXPECT_TRUE(cudf::experimental::type_dispatcher(
-      cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-      type_tester<TypeParam>{}));
+    cudf::data_type{cudf::experimental::type_to_id<TypeParam>()}, type_tester<TypeParam>{}));
 }
 
 namespace {
@@ -58,15 +57,14 @@ struct verify_dispatched_type {
 
 __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result) {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::experimental::type_dispatcher(cudf::data_type{id},
-                                           verify_dispatched_type{}, id);
+    *d_result =
+      cudf::experimental::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
 }
 }  // namespace
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch) {
   thrust::device_vector<bool> result(1, false);
-  dispatch_test_kernel<<<1, 1>>>(cudf::experimental::type_to_id<TypeParam>(),
-                                 result.data().get());
+  dispatch_test_kernel<<<1, 1>>>(cudf::experimental::type_to_id<TypeParam>(), result.data().get());
   CUDA_TRY(cudaDeviceSynchronize());
   EXPECT_EQ(true, result[0]);
 }
@@ -74,13 +72,11 @@ TYPED_TEST(TypedDispatcherTest, DeviceDispatch) {
 struct IdDispatcherTest : public DispatcherTest,
                           public testing::WithParamInterface<cudf::type_id> {};
 
-INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest,
-                        testing::ValuesIn(cudf::test::all_type_ids));
+INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest, testing::ValuesIn(cudf::test::all_type_ids));
 
 TEST_P(IdDispatcherTest, IdToType) {
   auto t = GetParam();
-  EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t},
-                                         verify_dispatched_type{}, t));
+  EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t}, verify_dispatched_type{}, t));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

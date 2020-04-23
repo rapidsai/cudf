@@ -25,7 +25,6 @@
 namespace cudf {
 namespace test {
 
-
 template <typename V>
 struct groupby_std_test : public cudf::test::BaseFixture {};
 
@@ -143,6 +142,5 @@ TYPED_TEST(groupby_std_test, ddof_non_default)
 }
 // clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

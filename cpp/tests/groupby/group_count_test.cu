@@ -25,7 +25,6 @@
 namespace cudf {
 namespace test {
 
-
 template <typename V>
 struct groupby_count_test : public cudf::test::BaseFixture {};
 
@@ -170,6 +169,5 @@ TEST_F(groupby_count_string_test, basic)
 }
 // clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

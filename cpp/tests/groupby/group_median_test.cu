@@ -25,7 +25,6 @@
 namespace cudf {
 namespace test {
 
-
 template <typename V>
 struct groupby_median_test : public cudf::test::BaseFixture {};
 
@@ -122,6 +121,5 @@ TYPED_TEST(groupby_median_test, null_keys_and_values)
 }
 // clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

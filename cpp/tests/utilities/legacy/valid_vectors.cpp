@@ -17,26 +17,25 @@
 
 #include <tests/utilities/legacy/valid_vectors.h>
 
-host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
-{
-  auto deleter = [](cudf::valid_type* valid) { delete[] valid; };
-  auto n_bytes = gdf_valid_allocation_size(length);
+host_valid_pointer create_and_init_valid(size_t length, size_t null_count) {
+  auto deleter    = [](cudf::valid_type* valid) { delete[] valid; };
+  auto n_bytes    = gdf_valid_allocation_size(length);
   auto valid_bits = new cudf::valid_type[n_bytes];
-   for (size_t i = 0; i < length; ++i) {
-    if ((float)std::rand()/(RAND_MAX + 1u) >= (float)null_count/(length-i)) {
+  for (size_t i = 0; i < length; ++i) {
+    if ((float)std::rand() / (RAND_MAX + 1u) >= (float)null_count / (length - i)) {
       cudf::util::turn_bit_on(valid_bits, i);
     } else {
       cudf::util::turn_bit_off(valid_bits, i);
       --null_count;
     }
   }
-  return host_valid_pointer{ valid_bits, deleter };
+  return host_valid_pointer{valid_bits, deleter};
 }
 
-void initialize_valids(std::vector<host_valid_pointer>& valids, size_t size, size_t length, size_t null_count)
-{
+void initialize_valids(std::vector<host_valid_pointer>& valids,
+                       size_t size,
+                       size_t length,
+                       size_t null_count) {
   valids.clear();
-  for (size_t i = 0; i < size; ++i) {
-    valids.push_back(create_and_init_valid(length, null_count));
-  }
+  for (size_t i = 0; i < size; ++i) { valids.push_back(create_and_init_valid(length, null_count)); }
 }

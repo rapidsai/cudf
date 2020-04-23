@@ -20,12 +20,11 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <algorithm>
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace test {
-
 
 template <typename V>
 struct groupby_nth_element_test : public cudf::test::BaseFixture {};
@@ -305,5 +304,5 @@ TYPED_TEST(groupby_nth_element_test, basic_string)
 }
 // clang-format on
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

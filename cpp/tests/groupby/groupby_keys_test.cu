@@ -25,7 +25,6 @@
 namespace cudf {
 namespace test {
 
-
 template <typename V>
 struct groupby_keys_test : public cudf::test::BaseFixture {};
 
@@ -196,5 +195,5 @@ TEST_F(groupby_string_keys_test, basic)
 }
 // clang-format on
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

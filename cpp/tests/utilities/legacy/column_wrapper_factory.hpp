@@ -55,81 +55,68 @@ namespace test {
  * indices into an NVCategory containing the keys ["0", "2", "4", ...]
  */
 template <typename T>
-struct column_wrapper_factory
-{
-  template<typename DataInitializer>
+struct column_wrapper_factory {
+  template <typename DataInitializer>
   column_wrapper<T> make(cudf::size_type size, DataInitializer data_init) {
-    return column_wrapper<T>(size,
-      [&](cudf::size_type row) { return convert(data_init(row)); });
+    return column_wrapper<T>(size, [&](cudf::size_type row) { return convert(data_init(row)); });
   }
 
-  template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<T> make(cudf::size_type size,
-                         DataInitializer data_init, BitInitializer bit_init) {
-    return column_wrapper<T>(size,
-      [&](cudf::size_type row) { return convert(data_init(row)); },
-      bit_init);
+  template <typename DataInitializer, typename BitInitializer>
+  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init, BitInitializer bit_init) {
+    return column_wrapper<T>(
+      size, [&](cudf::size_type row) { return convert(data_init(row)); }, bit_init);
   }
-protected: 
-  T convert(cudf::size_type row) {
-    return static_cast<T>(row);
-  }
+
+ protected:
+  T convert(cudf::size_type row) { return static_cast<T>(row); }
 };
 
 template <>
-struct column_wrapper_factory<cudf::nvstring_category>
-{
-  template<typename DataInitializer>
-  column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
-                                               DataInitializer data_init) {
+struct column_wrapper_factory<cudf::nvstring_category> {
+  template <typename DataInitializer>
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size, DataInitializer data_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
-    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
+    auto c = column_wrapper<cudf::nvstring_category>{size, strings.data()};
     destroy_strings(strings);
     return c;
   }
 
-  template<typename DataInitializer, typename BitInitializer>
+  template <typename DataInitializer, typename BitInitializer>
   column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init,
                                                BitInitializer bit_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
-    auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data(),
-                                                      bit_init};
+    auto c = column_wrapper<cudf::nvstring_category>{size, strings.data(), bit_init};
     destroy_strings(strings);
     return c;
   }
 
-protected:
+ protected:
   const char* convert(cudf::size_type row) {
     static int str_width = std::to_string(std::numeric_limits<cudf::size_type>().max()).size();
-    
+
     std::ostringstream convert;
     convert << std::setfill('0') << std::setw(str_width) << row;
-    char *s = new char[convert.str().size()+1];
+    char* s = new char[convert.str().size() + 1];
     std::strcpy(s, convert.str().c_str());
-    return s; 
+    return s;
   }
 
   template <typename DataInitializer>
-  std::vector<const char*> generate_strings(cudf::size_type size,
-                                            DataInitializer data_init)
-  {
+  std::vector<const char*> generate_strings(cudf::size_type size, DataInitializer data_init) {
     std::vector<const char*> strings(size);
-    std::generate(strings.begin(), strings.end(), [&, row=0]() mutable {
-      return convert(data_init(row++));
-    });
+    std::generate(
+      strings.begin(), strings.end(), [&, row = 0]() mutable { return convert(data_init(row++)); });
     return strings;
   }
 
   void destroy_strings(std::vector<const char*> strings) {
-    std::for_each(strings.begin(), strings.end(), [](const char* x) { 
-      delete [] x; 
-    });
+    std::for_each(strings.begin(), strings.end(), [](const char* x) { delete[] x; });
   }
 };
 
-} // namespace test
+}  // namespace test
 
-} // namespace cudf
+}  // namespace cudf
 
-#endif // COLUMN_WRAPPER_FACTORY
+#endif  // COLUMN_WRAPPER_FACTORY

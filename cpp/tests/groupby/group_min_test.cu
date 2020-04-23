@@ -25,7 +25,6 @@
 namespace cudf {
 namespace test {
 
-
 template <typename V>
 struct groupby_min_test : public cudf::test::BaseFixture {};
 
@@ -170,5 +169,5 @@ TEST_F(groupby_min_string_test, zero_valid_values)
 }
 // clang-format on
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf
