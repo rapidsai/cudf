@@ -159,6 +159,9 @@ struct modify_special_chars
 
     string_view d_str = d_column_.template element<string_view>(idx);
     size_type str_size_bytes = d_str.size_bytes();
+
+    char* d_buffer = get_output_ptr(idx);
+    //assert( d_buffer != nullptr );
     
     if( predicate_(d_str) ) {
       char const quote_char = '\"';
@@ -171,10 +174,6 @@ struct modify_special_chars
       //modify d_str by duplicating all 2bl quotes
       //and surrounding whole string by 2bl quotes:
       //
-      char* d_buffer = get_output_ptr(idx);
-      //assert( d_buffer != nullptr );
-
-
       //pre-condition: `d_str` is _not_ modified by `d_buffer` manipulation
       //because it's a copy of `idx` entry in `d_column_`
       //(since `d_column` is const)
@@ -192,7 +191,14 @@ struct modify_special_chars
       }
        
       d_buffer = copy_and_increment(d_buffer, quote_str, len1quote);  // add the quote suffix;
-      
+    } else {
+      //copy the source string unmodified:
+      //(pass-through)
+      //
+      for( auto itr = d_str.begin(); itr != d_str.end(); ++itr ) {
+        char_utf8 the_chr = *itr;
+        d_buffer += from_char_utf8(the_chr, d_buffer);
+      }
     }
     return 0;
   }
