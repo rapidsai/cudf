@@ -47,26 +47,26 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,       ///< sum reduction
-    PRODUCT,   ///< product reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT_VALID,    ///< count number of valid elements
-    COUNT_ALL,      ///< count number of elements
-    ANY,       ///< any reduction
-    ALL,       ///< all reduction
-    SUM_OF_SQUARES, ///< sum of squares reduction
-    MEAN,      ///< arithmetic mean reduction
-    VARIANCE,  ///< groupwise variance
-    STD,       ///< groupwise standard deviation
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN,    ///< Index of min element
-    NUNIQUE,   ///< count number of unique elements
-    NTH_ELEMENT, ///< get the nth element
-    PTX,       ///< PTX UDF based reduction
-    CUDA       ///< CUDA UDf based reduction
+    SUM,             ///< sum reduction
+    PRODUCT,         ///< product reduction
+    MIN,             ///< min reduction
+    MAX,             ///< max reduction
+    COUNT_VALID,     ///< count number of valid elements
+    COUNT_ALL,       ///< count number of elements
+    ANY,             ///< any reduction
+    ALL,             ///< all reduction
+    SUM_OF_SQUARES,  ///< sum of squares reduction
+    MEAN,            ///< arithmetic mean reduction
+    VARIANCE,        ///< groupwise variance
+    STD,             ///< groupwise standard deviation
+    MEDIAN,          ///< median reduction
+    QUANTILE,        ///< compute specified quantile(s)
+    ARGMAX,          ///< Index of max element
+    ARGMIN,          ///< Index of min element
+    NUNIQUE,         ///< count number of unique elements
+    NTH_ELEMENT,     ///< get the nth element
+    PTX,             ///< PTX UDF based reduction
+    CUDA             ///< CUDA UDf based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
@@ -87,10 +87,7 @@ class aggregation {
   size_t hash_impl() const { return std::hash<decltype(kind)>{}(kind); }
 };
 
-enum class udf_type : bool {
-   CUDA,
-   PTX
-};
+enum class udf_type : bool { CUDA, PTX };
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
@@ -109,7 +106,8 @@ std::unique_ptr<aggregation> make_max_aggregation();
  * 
  * @param _include_nulls Indicates if null values will be counted.
 */
-std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls = include_nulls::NO);
+std::unique_ptr<aggregation> make_count_aggregation(
+  include_nulls _include_nulls = include_nulls::NO);
 
 /// Factory to create a ANY aggregation
 std::unique_ptr<aggregation> make_any_aggregation();
@@ -148,8 +146,8 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param quantiles The desired quantiles
  * @param interpolation The desired interpolation
  */
-std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i = interpolation::LINEAR);
+std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
+                                                       interpolation i = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
@@ -171,8 +169,8 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * `nunique` returns the number of unique elements.
  * @param _include_nulls Indicates if null values will be counted.
 */
-std::unique_ptr<aggregation>
-make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
+std::unique_ptr<aggregation> make_nunique_aggregation(
+  include_nulls _include_nulls = include_nulls::NO);
 
 /**
  * @brief Factory to create a `nth_element` aggregation
@@ -187,8 +185,8 @@ make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
  * @param n index of nth element in each group.
  * @param _include_nulls include nulls during indexing.
  */
-std::unique_ptr<aggregation>
-make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
+std::unique_ptr<aggregation> make_nth_element_aggregation(
+  size_type n, include_nulls _include_nulls = include_nulls::YES);
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA

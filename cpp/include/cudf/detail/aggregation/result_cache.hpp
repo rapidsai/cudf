@@ -27,8 +27,7 @@ namespace detail {
 
 struct aggregation_equality {
   bool operator()(std::unique_ptr<aggregation> const& lhs,
-                  std::unique_ptr<aggregation> const& rhs) const
-  {
+                  std::unique_ptr<aggregation> const& rhs) const {
     if (lhs and rhs) {
       return lhs->is_equal(*rhs);
     } else {
@@ -49,37 +48,30 @@ struct aggregation_hash {
 
 class result_cache {
  public:
-  result_cache() = delete;
-  ~result_cache() = default;
+  result_cache()                    = delete;
+  ~result_cache()                   = default;
   result_cache(result_cache const&) = delete;
   result_cache& operator=(const result_cache& other) = delete;
 
-  result_cache(size_t num_columns)
-  : _cache(num_columns)
-  {}
+  result_cache(size_t num_columns) : _cache(num_columns) {}
 
   bool has_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
-  void add_result(size_t col_idx, std::unique_ptr<aggregation> const& agg,
+  void add_result(size_t col_idx,
+                  std::unique_ptr<aggregation> const& agg,
                   std::unique_ptr<column>&& col);
 
-  column_view
-  get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
+  column_view get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
-  std::unique_ptr<column>
-  release_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
+  std::unique_ptr<column> release_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
 
  private:
-  std::vector<
-    std::unordered_map<
-      std::unique_ptr<aggregation>,
-      std::unique_ptr<column>,
-      aggregation_hash,
-      aggregation_equality
-    >
-  > _cache;
+  std::vector<std::unordered_map<std::unique_ptr<aggregation>,
+                                 std::unique_ptr<column>,
+                                 aggregation_hash,
+                                 aggregation_equality>>
+    _cache;
 };
-
 
 }  // namespace detail
 }  // namespace experimental

@@ -20,11 +20,8 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-bool result_cache::has_result(size_t col_idx, 
-                              std::unique_ptr<aggregation> const& agg) const
-{
-  if (col_idx < 0 or col_idx > _cache.size())
-    return false;
+bool result_cache::has_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const {
+  if (col_idx < 0 or col_idx > _cache.size()) return false;
 
   auto result_it = _cache[col_idx].find(agg);
 
@@ -34,30 +31,26 @@ bool result_cache::has_result(size_t col_idx,
     return false;
 }
 
-void result_cache::add_result(size_t col_idx, 
+void result_cache::add_result(size_t col_idx,
                               std::unique_ptr<aggregation> const& agg,
-                              std::unique_ptr<column>&& col)
-{
+                              std::unique_ptr<column>&& col) {
   _cache[col_idx].emplace(agg->clone(), std::move(col));
 }
 
-column_view result_cache::get_result(
-  size_t col_idx, std::unique_ptr<aggregation> const& agg) const
-{
+column_view result_cache::get_result(size_t col_idx,
+                                     std::unique_ptr<aggregation> const& agg) const {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
   auto result_it = _cache[col_idx].find(agg);
   return result_it->second->view();
 }
 
-std::unique_ptr<column> 
-result_cache::release_result(size_t col_idx,
-                             std::unique_ptr<aggregation> const& agg)
-{
+std::unique_ptr<column> result_cache::release_result(size_t col_idx,
+                                                     std::unique_ptr<aggregation> const& agg) {
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
   // unordered_map.extract() is a c++17 feature so we do this:
-  auto result_it = _cache[col_idx].find(agg);
+  auto result_it                 = _cache[col_idx].find(agg);
   std::unique_ptr<column> result = std::move(result_it->second);
   _cache[col_idx].erase(result_it);
   return std::move(result);
