@@ -345,12 +345,17 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return df
         else:
             df = DataFrame()
-            for i, column in enumerate(columns_df._columns):
+            for column in columns_df._data.names:
                 # need as_column() in case a scalar is returned
-                df[i] = cudf.core.column.as_column(column[arg[0]])
+                df[column] = cudf.core.column.as_column(
+                    columns_df._data[column][arg[0]]
+                )
 
             df.index = as_index(columns_df.index[arg[0]])
-            df.columns = columns_df.columns
+            if isinstance(
+                columns_df.columns, (cudf.MultiIndex, pd.MultiIndex)
+            ):
+                df.columns = columns_df.columns
 
         # Iloc Step 3:
         # Reindex
