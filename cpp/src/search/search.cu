@@ -186,12 +186,12 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
-                                                              scalar const& value,
-                                                              cudaStream_t stream,
-                                                              rmm::mr::device_memory_resource* mr) {
+                                                           scalar const& value,
+                                                           cudaStream_t stream,
+                                                           rmm::mr::device_memory_resource* mr)
+{
   CUDF_FAIL("list_view type not supported yet");
 }
-
 
 }  // namespace
 
@@ -282,7 +282,8 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
   column_view const& haystack,
   column_view const& needles,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   CUDF_FAIL("list_view type not supported");
 }
 

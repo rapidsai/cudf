@@ -32,12 +32,12 @@ struct nunique_functor {
   template <typename T>
   typename std::enable_if_t<cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
   operator()(column_view const& values,
-                                     rmm::device_vector<size_type> const& group_labels,
-                                     size_type const num_groups,
-                                     rmm::device_vector<size_type> const& group_offsets,
-                                     include_nulls _include_nulls,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+             rmm::device_vector<size_type> const& group_labels,
+             size_type const num_groups,
+             rmm::device_vector<size_type> const& group_offsets,
+             include_nulls _include_nulls,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
   {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -92,12 +92,13 @@ struct nunique_functor {
   template <typename T>
   typename std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
   operator()(column_view const& values,
-                                     rmm::device_vector<size_type> const& group_labels,
-                                     size_type const num_groups,
-                                     rmm::device_vector<size_type> const& group_offsets,
-                                     include_nulls _include_nulls,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+             rmm::device_vector<size_type> const& group_labels,
+             size_type const num_groups,
+             rmm::device_vector<size_type> const& group_offsets,
+             include_nulls _include_nulls,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
+  {
     CUDF_FAIL("list_view group_nunique not supported yet");
     return nullptr;
   }

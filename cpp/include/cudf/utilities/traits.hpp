@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/strings/string_view.cuh>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -45,18 +45,16 @@ struct is_relationally_comparable_impl<L,
   : std::true_type {
 };
 
-
 template <typename L, typename R, typename = void>
-struct is_equality_comparable_impl : std::false_type {};
+struct is_equality_comparable_impl : std::false_type {
+};
 
 template <typename L, typename R>
 using equality_comparable = decltype(std::declval<L>() == std::declval<R>());
 
 template <typename L, typename R>
-struct is_equality_comparable_impl<L,
-                                   R,
-                                   void_t<equality_comparable<L, R>>>
-  : std::true_type {};
+struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : std::true_type {
+};
 
 template <typename T>
 using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
@@ -96,7 +94,8 @@ constexpr inline bool is_relationally_comparable()
  * @return false Objects of types `L` and `R` cannot be compared
  */
 template <typename L, typename R>
-constexpr inline bool is_equality_comparable() {
+constexpr inline bool is_equality_comparable()
+{
   return is_equality_comparable_impl<L, R>::value;
 }
 
@@ -259,7 +258,8 @@ constexpr inline bool is_fixed_width(data_type type)
 template <typename T>
 constexpr inline bool is_compound()
 {
-  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or std::is_same<T, cudf::list_view>::value;
+  return std::is_same<T, cudf::string_view>::value or std::is_same<T, cudf::dictionary32>::value or
+         std::is_same<T, cudf::list_view>::value;
 }
 
 struct is_compound_impl {
@@ -324,18 +324,21 @@ struct is_simple_impl {
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 template <typename T>
-constexpr inline bool is_nested() {
+constexpr inline bool is_nested()
+{
   return std::is_same<T, cudf::list_view>::value;
 }
 
 struct is_nested_impl {
   template <typename T>
-  bool operator()() {
+  bool operator()()
+  {
     return is_nested<T>();
   }
 };
 
-constexpr inline bool is_nested(data_type type) {
+constexpr inline bool is_nested(data_type type)
+{
   return cudf::experimental::type_dispatcher(type, is_nested_impl{});
 }
 

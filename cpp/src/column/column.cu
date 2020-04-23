@@ -219,8 +219,9 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()() { 
+            std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
     CUDF_FAIL("list_view not supported yet");
     return nullptr;
   }

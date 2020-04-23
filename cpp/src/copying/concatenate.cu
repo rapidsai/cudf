@@ -314,9 +314,9 @@ struct concatenate_dispatch {
     return cudf::strings::detail::concatenate(views, mr, stream);
   }
 
-  template <typename T,
-      std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()() {
+  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()()
+  {
     CUDF_FAIL("list_view concatenate not yet supported");
   }
 };

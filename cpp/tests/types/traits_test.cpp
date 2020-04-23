@@ -110,7 +110,8 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparable)
   EXPECT_FALSE(comparable);
 }
 
-TYPED_TEST(TypedTraitsTest, NotRelationallyComparableWithList) {  
+TYPED_TEST(TypedTraitsTest, NotRelationallyComparableWithList)
+{
   bool comparable = cudf::is_relationally_comparable<TypeParam, cudf::list_view>();
   EXPECT_FALSE(comparable);
 
@@ -118,15 +119,18 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparableWithList) {
   EXPECT_FALSE(comparable);
 }
 
-TYPED_TEST(TypedTraitsTest, EqualityComparable) {
+TYPED_TEST(TypedTraitsTest, EqualityComparable)
+{
   // All the test types should be comparable with themselves
   bool comparable = cudf::is_equality_comparable<TypeParam, TypeParam>();
   EXPECT_TRUE(comparable);
 }
 
-TYPED_TEST(TypedTraitsTest, NotEqualityComparable) {
+TYPED_TEST(TypedTraitsTest, NotEqualityComparable)
+{
   // No type should be comparable with an empty dummy type
-  struct foo {};
+  struct foo {
+  };
   bool comparable = cudf::is_equality_comparable<foo, TypeParam>();
   EXPECT_FALSE(comparable);
 
@@ -134,7 +138,8 @@ TYPED_TEST(TypedTraitsTest, NotEqualityComparable) {
   EXPECT_FALSE(comparable);
 }
 
-TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList) {    
+TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList)
+{
   bool comparable = cudf::is_equality_comparable<TypeParam, cudf::list_view>();
   EXPECT_FALSE(comparable);
 

@@ -329,8 +329,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
       return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
         std::forward<Ts>(args)...);
     case LIST:
-      return f.template operator()<typename IdTypeMap<LIST>::type>(
-        std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<LIST>::type>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");

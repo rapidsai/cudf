@@ -24,8 +24,8 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cudf/strings/string_view.cuh>
 #include <cudf/lists/list_view.cuh>
+#include <cudf/strings/string_view.cuh>
 
 #include <io/csv/datetime.cuh>
 #include <io/utilities/parsing_utils.cuh>
@@ -246,8 +246,10 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
 }
 template <>
 __inline__ __device__ cudf::list_view decode_value(const char *data,
-                                                     long start, long end,
-                                                     ParseOptions const &opts) {
+                                                   long start,
+                                                   long end,
+                                                   ParseOptions const &opts)
+{
   return cudf::list_view{};
 }
 

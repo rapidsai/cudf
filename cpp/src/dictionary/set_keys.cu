@@ -38,12 +38,13 @@ namespace {
  * The output column is the new indices column for the new dictionary column.
  */
 struct dispatch_compute_indices {
-  template <typename Element>  
-  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
+  template <typename Element>
+  typename std::enable_if_t<cudf::is_relationally_comparable<Element, Element>(),
+                            std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
-                                     column_view const& new_keys,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+             column_view const& new_keys,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto d_dictionary    = *dictionary_view;
@@ -76,12 +77,14 @@ struct dispatch_compute_indices {
     return result;
   }
 
-  template <typename Element>  
-  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(), std::unique_ptr<column>>
+  template <typename Element>
+  typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
+                            std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
-                                     column_view const& new_keys,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+             column_view const& new_keys,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
+  {
     CUDF_FAIL("list_view dictionary set_keys not supported yet");
     return nullptr;
   }

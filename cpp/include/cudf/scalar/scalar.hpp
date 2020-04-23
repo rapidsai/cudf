@@ -342,29 +342,29 @@ class string_scalar : public scalar {
  * @brief An owning class to represent a list in device memory
  */
 class list_scalar : public scalar {
-public:
-   using value_type = cudf::list_view;
+ public:
+  using value_type = cudf::list_view;
 
-   list_scalar() : scalar(data_type(LIST)) {}
-   ~list_scalar() = default;
-   list_scalar(list_scalar&& other) = default;
-   list_scalar(list_scalar const& other) = default;
-   list_scalar& operator=(list_scalar const& other) = delete;
-   list_scalar& operator=(list_scalar&& other) = delete;      
+  list_scalar() : scalar(data_type(LIST)) {}
+  ~list_scalar()                        = default;
+  list_scalar(list_scalar&& other)      = default;
+  list_scalar(list_scalar const& other) = default;
+  list_scalar& operator=(list_scalar const& other) = delete;
+  list_scalar& operator=(list_scalar&& other) = delete;
 
-   /**
+  /**
    * @brief Get the value of the scalar as a string_view
-   * 
+   *
    * @param stream The CUDA stream to do the operation in
    */
-   value_type value(cudaStream_t stream = 0) const { return list_view{}; }
+  value_type value(cudaStream_t stream = 0) const { return list_view{}; }
 
-   /**
+  /**
    * @brief Returns the size of the string in bytes
    */
-   size_type size() const { return 0; }   
+  size_type size() const { return 0; }
 
-protected:
+ protected:
 };
 
 /**
