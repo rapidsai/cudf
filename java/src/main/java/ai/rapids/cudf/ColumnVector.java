@@ -211,6 +211,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Returns a new ColumnVector with NaNs converted to nulls, preserving the existing null values.
    */
   public ColumnVector nansToNulls() {
+    assert type == DType.FLOAT32 || type == DType.FLOAT64;
     return new ColumnVector(nansToNulls(this.getNativeView()));
   }
 
