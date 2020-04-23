@@ -183,7 +183,8 @@
 - PR #4886 Minimize regex-find calls in multi-replace cudf::strings::replace_re function
 - PR #4887 Remove `developer.rst` and any links
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
-- Pr #4899 Fix series inplace handling
+- PR #4899 Fix series inplace handling
+- PR #4940 Fix boolean mask issue with large sized Dataframe
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
