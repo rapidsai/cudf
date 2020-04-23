@@ -286,7 +286,7 @@ __global__ void __launch_bounds__(1024, 1)
     num_dict_entries = s->num_dict_entries;
     frag_dict_size   = s->frag_dict_size;
     if (s->total_dict_entries + num_dict_entries > 65536 ||
-        s->dictionary_size + frag_dict_size > 512 * 1024) {
+        (s->dictionary_size != 0 && s->dictionary_size + frag_dict_size > 512 * 1024)) {
       break;
     }
     __syncthreads();
