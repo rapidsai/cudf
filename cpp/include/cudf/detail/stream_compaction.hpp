@@ -136,7 +136,6 @@ std::unique_ptr<experimental::table> drop_duplicates(
  * @param[in] input The column_view whose unique elements will be counted.
  * @param[in] _include_nulls flag to include or ignore `null` while counting
  * @param[in] nan_as_null flag to consider `NaN==null` if true.
- * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @return number of unique elements
