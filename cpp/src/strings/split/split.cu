@@ -40,44 +40,6 @@ using position_pair     = thrust::pair<size_type, size_type>;
 
 namespace {
 
-//
-// This will create new columns by splitting the array of strings vertically.
-// All the first tokens go in the first column, all the second tokens go in the second column, etc.
-// It is comparable to Pandas split with expand=True but the rows/columns are transposed.
-// Example:
-//   import pandas as pd
-//   pd_series = pd.Series(['', None, 'a_b', '_a_b_', '__aa__bb__', '_a__bbb___c', '_aa_b__ccc__'])
-//   print(pd_series.str.split(pat='_', expand=True))
-//            0     1     2     3     4     5     6
-//      0    ''  None  None  None  None  None  None
-//      1  None  None  None  None  None  None  None
-//      2     a     b  None  None  None  None  None
-//      3    ''     a     b    ''  None  None  None
-//      4    ''    ''    aa    ''    bb    ''    ''
-//      5    ''     a    ''   bbb    ''    ''     c
-//      6    ''    aa     b    ''   ccc    ''    ''
-//
-//   print(pd_series.str.split(pat='_', n=1, expand=True))
-//            0            1
-//      0    ''         None
-//      1  None         None
-//      2     a            b
-//      3    ''         a_b_
-//      4    ''    _aa__bb__
-//      5    ''   a__bbb___c
-//      6    ''  aa_b__ccc__
-//
-//   print(pd_series.str.split(pat='_', n=2, expand=True))
-//            0     1         2
-//      0    ''  None      None
-//      1  None  None      None
-//      2     a     b      None
-//      3    ''     a        b_
-//      4    ''        aa__bb__
-//      5    ''     a  _bbb___c
-//      6    ''    aa  b__ccc__
-//
-
 /**
  * @brief Base class for delimiter-based tokenizers.
  *
@@ -343,11 +305,11 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
                                size_type const* d_indexes,
                                size_type* d_counts) const
   {
-    size_type str_idx = d_indexes[idx];
+    size_type str_idx = d_indexes[idx]; // 1-based string index created by upper_bound()
     if ((idx > 0) && d_indexes[idx - 1] == str_idx)
       return;  // first delimiter found handles all of them for this string
     auto const delim_length    = d_delimiter.size_bytes();
-    string_view const d_str    = get_string(str_idx - 1);
+    string_view const d_str    = get_string(str_idx - 1); // -1 for 0-based index
     const char* const base_ptr = get_base_ptr();
     size_type delim_count      = 0;
     size_type last_pos         = d_positions[idx] - delim_length;
@@ -392,6 +354,43 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
  * according to their position in each string. The first token from each string goes
  * into the first output column, the 2nd token from each string goes into the 2nd
  * output column, etc.
+ * 
+ * Output should be comparable to Pandas `split()` with `expand=True` but the
+ * rows/columns are transposed.
+ * 
+ * ```
+ *   import pandas as pd
+ *   pd_series = pd.Series(['', None, 'a_b', '_a_b_', '__aa__bb__', '_a__bbb___c', '_aa_b__ccc__'])
+ *   print(pd_series.str.split(pat='_', expand=True))
+ *            0     1     2     3     4     5     6
+ *      0    ''  None  None  None  None  None  None
+ *      1  None  None  None  None  None  None  None
+ *      2     a     b  None  None  None  None  None
+ *      3    ''     a     b    ''  None  None  None
+ *      4    ''    ''    aa    ''    bb    ''    ''
+ *      5    ''     a    ''   bbb    ''    ''     c
+ *      6    ''    aa     b    ''   ccc    ''    ''
+ *
+ *   print(pd_series.str.split(pat='_', n=1, expand=True))
+ *            0            1
+ *      0    ''         None
+ *      1  None         None
+ *      2     a            b
+ *      3    ''         a_b_
+ *      4    ''    _aa__bb__
+ *      5    ''   a__bbb___c
+ *      6    ''  aa_b__ccc__
+ *
+ *   print(pd_series.str.split(pat='_', n=2, expand=True))
+ *            0     1         2
+ *      0    ''  None      None
+ *      1  None  None      None
+ *      2     a     b      None
+ *      3    ''     a        b_
+ *      4    ''        aa__bb__
+ *      5    ''     a  _bbb___c
+ *      6    ''    aa  b__ccc__
+ * ```
  *
  * @tparam Tokenizer provides unique functions for split/rsplit.
  * @param strings_column The strings to split
@@ -533,49 +532,6 @@ std::unique_ptr<experimental::table> split_fn(strings_column_view const& strings
   }
   return std::make_unique<experimental::table>(std::move(results));
 }
-
-//
-// This section is the whitespace-delimiter version of the column split function.
-// Like the one above, it can be compared to Pandas split with expand=True but
-// with the rows/columns transposed.
-//
-// The main difference between whitespace tokenizing and delimiter-based tokenizing
-// is that all contiguous whitespace is treated as a single delimiter and leading
-// and trailing whitespace is ignored (mostly).
-//
-//  import pandas as pd
-//  pd_series = pd.Series(['', None, 'a b', ' a b ', '  aa  bb  ', ' a  bbb   c', ' aa b  ccc  '])
-//  print(pd_series.str.split(pat=None, expand=True))
-//            0     1     2
-//      0  None  None  None
-//      1  None  None  None
-//      2     a     b  None
-//      3     a     b  None
-//      4    aa    bb  None
-//      5     a   bbb     c
-//      6    aa     b   ccc
-//
-//  print(pd_series.str.split(pat=None, n=1, expand=True))
-//            0         1
-//      0  None      None
-//      1  None      None
-//      2     a         b
-//      3     a        b
-//      4    aa      bb
-//      5     a   bbb   c
-//      6    aa  b  ccc
-//
-//  print(pd_series.str.split(pat=None, n=2, expand=True))
-//            0     1      2
-//      0  None  None   None
-//      1  None  None   None
-//      2     a     b   None
-//      3     a     b   None
-//      4    aa    bb   None
-//      5     a   bbb      c
-//      6    aa     b  ccc
-//
-//
 
 /**
  * @brief Base class for whitespace tokenizers.
@@ -815,6 +771,41 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
  * into the first output column, the 2nd token from each string goes into the 2nd
  * output column, etc.
  *
+ * This can be compared to Pandas `split()` with no delimiter and with `expand=True` but
+ * with the rows/columns transposed.
+ *
+ *  import pandas as pd
+ *  pd_series = pd.Series(['', None, 'a b', ' a b ', '  aa  bb  ', ' a  bbb   c', ' aa b  ccc  '])
+ *  print(pd_series.str.split(pat=None, expand=True))
+ *            0     1     2
+ *      0  None  None  None
+ *      1  None  None  None
+ *      2     a     b  None
+ *      3     a     b  None
+ *      4    aa    bb  None
+ *      5     a   bbb     c
+ *      6    aa     b   ccc
+ *
+ *  print(pd_series.str.split(pat=None, n=1, expand=True))
+ *            0         1
+ *      0  None      None
+ *      1  None      None
+ *      2     a         b
+ *      3     a        b
+ *      4    aa      bb
+ *      5     a   bbb   c
+ *      6    aa  b  ccc
+ *
+ *  print(pd_series.str.split(pat=None, n=2, expand=True))
+ *            0     1      2
+ *      0  None  None   None
+ *      1  None  None   None
+ *      2     a     b   None
+ *      3     a     b   None
+ *      4    aa    bb   None
+ *      5     a   bbb      c
+ *      6    aa     b  ccc
+ * 
  * @tparam Tokenizer provides unique functions for split/rsplit.
  * @param strings_count The number of strings in the column
  * @param tokenizer Tokenizer for counting and producing tokens
