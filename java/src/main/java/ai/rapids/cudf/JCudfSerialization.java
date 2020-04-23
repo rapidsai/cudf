@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.BufferedOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -778,6 +779,13 @@ public class JCudfSerialization {
   }
 
   /**
+   * Write an empty columns header with a valid row count
+   */
+  private static SerializedTableHeader calcEmptyHeader(int numRows) {
+    return new SerializedTableHeader(numRows, null, null, 0);
+  }
+
+  /**
    * Calculate the new header for a concatenated set of columns.
    * @param columnsForEachBatch first index is the batch, second index is the column.
    * @return the new header.
@@ -1310,6 +1318,19 @@ public class JCudfSerialization {
   }
 
   /**
+   * Write a rowcount only header to the output stream in a case
+   * where a columnar batch with no columns but a non zero row count is received
+   * @param out the stream to write the serialized table out to.
+   * @param numRows the number of rows to write out.
+   */
+  public static void writeRowsToStream(OutputStream out, long numRows) throws IOException {
+    DataWriter writer = writerFrom(out);
+    SerializedTableHeader header = calcEmptyHeader((int) numRows);
+    header.writeTo(writer);
+    writer.flush();
+  }
+
+  /**
    * Take the data from multiple batches stored in the parsed headers and the dataBuffer and write
    * it out to out as if it were a single buffer.
    * @param headers the headers parsed from multiple streams.
@@ -1408,9 +1429,7 @@ public class JCudfSerialization {
     try {
       SerializedTableHeader combined = calcConcatedHeader(providers);
 
-      try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
-           HostPrediction hostPrediction = new HostPrediction(combined.dataLen, "readAndConcat");
-           HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
            DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
@@ -1452,17 +1471,27 @@ public class JCudfSerialization {
     }
   }
 
-  public static Table readTableFrom(SerializedTableHeader header,
-                                    HostMemoryBuffer hostBuffer) {
-    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom");
-         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+  public static TableAndRowCountPair readTableFrom(SerializedTableHeader header,
+                                                   HostMemoryBuffer hostBuffer) {
+    ContiguousTable contigTable = null;
+    DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
+    try {
       if (hostBuffer.length > 0) {
         try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
           devBuffer.copyFromHostBuffer(hostBuffer);
         }
       }
-      return sliceUpColumnVectors(header, devBuffer, hostBuffer);
+      if (header.getNumColumns() > 0) {
+        Table table = sliceUpColumnVectors(header, devBuffer, hostBuffer);
+        contigTable = new ContiguousTable(table, devBuffer);
+      }
+    } finally {
+      if (contigTable == null) {
+        devBuffer.close();
+      }
     }
+
+    return new TableAndRowCountPair(header.numRows, contigTable);
   }
 
   /**
@@ -1473,7 +1502,7 @@ public class JCudfSerialization {
    * @throws IOException on any error.
    * @throws EOFException if the data stream ended unexpectedly in the middle of processing.
    */
-  public static Table readTableFrom(InputStream in) throws IOException {
+  public static TableAndRowCountPair readTableFrom(InputStream in) throws IOException {
     DataInputStream din;
     if (in instanceof DataInputStream) {
       din = (DataInputStream) in;
@@ -1483,15 +1512,62 @@ public class JCudfSerialization {
 
     SerializedTableHeader header = new SerializedTableHeader(din);
     if (!header.initialized) {
-      return null;
+      return new TableAndRowCountPair(0, null);
     }
 
-    try (HostPrediction prediction = new HostPrediction(header.dataLen, "readTableFrom");
-        HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
+    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
       if (header.dataLen > 0) {
         readTableIntoBuffer(din, header, hostBuffer);
       }
       return readTableFrom(header, hostBuffer);
+    }
+  }
+
+  /** Holds the result of deserializing a table. */
+  public static final class TableAndRowCountPair implements Closeable {
+    private final int numRows;
+    private final ContiguousTable contigTable;
+
+    public TableAndRowCountPair(int numRows, ContiguousTable table) {
+      this.numRows = numRows;
+      this.contigTable = table;
+    }
+
+    @Override
+    public void close() {
+      if (contigTable != null) {
+        contigTable.close();
+      }
+    }
+
+    /** Get the number of rows that were deserialized. */
+    public int getNumRows() {
+          return numRows;
+      }
+
+    /**
+     * Get the Table that was deserialized or null if there was no data
+     * (e.g.: rows without columns).
+     * <p>NOTE: Ownership of the table is not transferred by this method.
+     * The table is still owned by this instance and will be closed when this
+     * instance is closed.
+     */
+    public Table getTable() {
+      if (contigTable != null) {
+        return contigTable.getTable();
+      }
+      return null;
+    }
+
+    /**
+     * Get the ContiguousTable that was deserialized or null if there was no
+     * data (e.g.: rows without columns).
+     * <p>NOTE: Ownership of the contiguous table is not transferred by this
+     * method. The contiguous table is still owned by this instance and will
+     * be closed when this instance is closed.
+     */
+    public ContiguousTable getContiguousTable() {
+      return contigTable;
     }
   }
 }

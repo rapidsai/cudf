@@ -134,8 +134,8 @@ def test_categorical_compare_ordered():
     assert sr1.cat.ordered
 
     # test using ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, sr1 < sr2)
-    np.testing.assert_array_equal(pdsr1 > pdsr2, sr1 > sr2)
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_array())
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_array())
 
 
 def test_categorical_binary_add():
@@ -150,7 +150,7 @@ def test_categorical_binary_add():
     with pytest.raises(TypeError) as raises:
         sr + sr
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
+        "Series of dtype `category` cannot perform the operation: add"
     )
 
 
@@ -166,7 +166,7 @@ def test_categorical_unary_ceil():
     with pytest.raises(TypeError) as raises:
         sr.ceil()
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "ceil"
+        "Series of dtype `category` cannot perform the operation: ceil"
     )
 
 
@@ -205,7 +205,7 @@ def test_categorical_masking():
 
     assert len(expect_masked) == len(got_masked)
     assert len(expect_masked) == got_masked.valid_count
-    assert list(expect_masked) == list(got_masked)
+    assert_eq(got_masked, expect_masked)
 
 
 def test_df_cat_set_index():
@@ -243,7 +243,7 @@ def test_cat_series_binop_error():
     with pytest.raises(TypeError) as raises:
         dfa + dfb
     raises.match(
-        "Series of dtype `category` cannot perform the operation: " "add"
+        "Series of dtype `category` cannot perform the operation: add"
     )
     # if lhs is a numerical
     with pytest.raises(TypeError) as raises:
@@ -456,3 +456,13 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
         cd_sr_1 = cd_sr.cat.remove_categories(["a", "d"], inplace=inplace)
 
     raises.match("removals must all be in old categories")
+
+
+def test_categorical_dataframe_slice_copy():
+    pdf = pd.DataFrame({"g": pd.Series(["a", "b", "z"], dtype="category")})
+    gdf = DataFrame.from_pandas(pdf)
+
+    exp = pdf[1:].copy()
+    gdf = gdf[1:].copy()
+
+    assert_eq(exp, gdf)

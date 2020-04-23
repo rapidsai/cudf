@@ -122,7 +122,8 @@ def test_from_dask_dataframe():
 
 
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
-def test_set_index(nelem):
+@pytest.mark.parametrize("divisions", [None, "quantile"])
+def test_set_index(nelem, divisions):
     with dask.config.set(scheduler="single-threaded"):
         np.random.seed(0)
         # Use unique index range as the sort may not be stable-ordering
@@ -135,9 +136,23 @@ def test_set_index(nelem):
         dgdf = ddf.map_partitions(cudf.from_pandas)
 
         expect = ddf.set_index("x")
-        got = dgdf.set_index("x")
+        got = dgdf.set_index("x", divisions=divisions)
 
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_set_index_quantile(nelem, nparts, by):
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.random.choice(cudf.datasets.names, size=nelem)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    got = ddf.set_index(by, divisions="quantile")
+    expect = df.sort_values(by=by).set_index(by)
+    dd.assert_eq(got, expect)
 
 
 def assert_frame_equal_by_index_group(expect, got):
@@ -251,11 +266,10 @@ def test_assign():
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
-    out = dgf.assign(z=newcol)
+    got = dgf.assign(z=newcol)
 
-    got = out
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"], pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -366,6 +380,81 @@ def test_repartition_simple_divisions(start, stop):
     dd.utils.assert_eq(a, b)
 
 
+@pytest.mark.parametrize("npartitions", [2, 17, 20])
+def test_repartition_hash_staged(npartitions):
+    by = ["b"]
+    datarange = 35
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+        }
+    )
+    # WARNING: Specific npartitions-max_branch combination
+    # was specifically chosen to cover changes in #4676
+    npartitions_initial = 17
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=4
+    )
+
+    # Make sure we are getting a dask_cudf dataframe
+    assert type(ddf_new) == type(ddf)
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
+@pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
+@pytest.mark.parametrize("npartitions", [3, 4, 5])
+@pytest.mark.parametrize("max_branch", [3, 32])
+def test_repartition_hash(by, npartitions, max_branch):
+    npartitions_i = 4
+    datarange = 26
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.randint(datarange, size=size),
+            "c": np.random.choice(list("abcdefgh"), size=size),
+            "d": np.random.choice(np.arange(26), size=size),
+        }
+    )
+    gdf.d = gdf.d.astype("datetime64[ms]")
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=max_branch
+    )
+
+    # Check that the length was preserved
+    assert len(ddf_new) == len(ddf)
+
+    # Check that the partitions have unique keys,
+    # and that the key values are preserved
+    expect_unique = gdf[by].drop_duplicates().sort_values(by)
+    got_unique = cudf.concat(
+        [
+            part[by].compute().drop_duplicates()
+            for part in ddf_new[by].partitions
+        ],
+        ignore_index=True,
+    ).sort_values(by)
+    dd.assert_eq(got_unique, expect_unique, check_index=False)
+
+
 @pytest.fixture
 def pdf():
     return pd.DataFrame(
@@ -467,18 +556,21 @@ def test_hash_object_dispatch(index):
     # DataFrame
     result = dd.utils.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # Series
     result = dd.utils.hash_object_dispatch(obj["x"], index=index)
     expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
     result = dd.utils.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -520,3 +612,21 @@ def test_make_meta_backends(index):
 
     # Check "non-empty" metadata types
     dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([]),
+        pd.DataFrame({"abc": [], "xyz": []}),
+        pd.Series([1, 2, 10, 11]),
+        pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
+    ],
+)
+def test_dataframe_series_replace(data):
+    pdf = data.copy()
+    gdf = cudf.from_pandas(pdf)
+
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+
+    dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))

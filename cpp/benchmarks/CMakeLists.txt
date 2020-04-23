@@ -5,6 +5,8 @@ project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
+
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
@@ -13,9 +15,8 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
+    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
-
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -48,12 +49,25 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
+# - column benchmarks -----------------------------------------------------------------------------
+
+set(COLUMN_CONCAT_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/column/concatenate_benchmark.cpp")
+
+ConfigureBench(COLUMN_CONCAT_BENCH "${COLUMN_CONCAT_BENCH_SRC}")
+
+###################################################################################################
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_benchmark.cu")
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
+
+set(LEGACY_GATHER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_benchmark.cu")
+
+ConfigureBench(LEGACY_GATHER_BENCH "${LEGACY_GATHER_BENCH_SRC}")
 
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
@@ -62,6 +76,11 @@ set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+set(LEGACY_SCATTER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_benchmark.cu")
+
+ConfigureBench(LEGACY_SCATTER_BENCH "${LEGACY_SCATTER_BENCH_SRC}")
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -78,6 +97,14 @@ set(SHIFT_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_benchmark.cu")
 
 ConfigureBench(SHIFT_BENCH "${SHIFT_BENCH_SRC}")
+
+###################################################################################################
+# - transpose benchmark ---------------------------------------------------------------------------
+
+set(TRANSPOSE_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/transpose/transpose_benchmark.cu")
+
+ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
 
 ###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
@@ -120,6 +147,11 @@ set(TD_BENCH_SRC
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
 
+set(LEGACY_TD_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/legacy/type_dispatcher_benchmark.cu")
+
+ConfigureBench(LEGACY_TYPE_DISPATCHER_BENCH "${LEGACY_TD_BENCH_SRC}")
+
 ###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------
 
@@ -132,7 +164,8 @@ ConfigureBench(LEGACY_QUANTILES_BENCH "${LEGACY_QUANTILES_BENCH_SRC}")
 # - groupby benchmark -----------------------------------------------------------------------------
 
 set(GROUPBY_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_benchmark.cu"
+  "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_benchmark.cu")
 
 ConfigureBench(GROUPBY_BENCH "${GROUPBY_BENCH_SRC}")
 

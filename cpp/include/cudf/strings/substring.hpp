@@ -15,14 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column.
@@ -43,22 +41,19 @@ namespace strings
  * r2 is now ["lo","ob"]
  * ```
  *
- * @throw cudf::logic_error if start position is not a positive integer or zero.
- * @throw cudf::logic_error if start is greater than stop.
- * @throw cudf::logic_error if step value is not a positive integer.
- *
  * @param strings Strings column for this operation.
  * @param start First character position to begin the substring.
  * @param stop Last character position (exclusive) to end the substring.
- *             Default of -1 indicates to use the end of each string.
  * @param step Distance between input characters retrieved.
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<column> slice_strings( strings_column_view const& strings,
-                                       size_type start, size_type stop=-1, size_type step=1,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+std::unique_ptr<column> slice_strings(
+  strings_column_view const& strings,
+  numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
+  numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
+  numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a new strings column that contains substrings of the
@@ -95,9 +90,11 @@ std::unique_ptr<column> slice_strings( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  */
-std::unique_ptr<column> slice_strings( strings_column_view const& strings,
-                                       column_view const& starts, column_view const& stops,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> slice_strings(
+  strings_column_view const& strings,
+  column_view const& starts,
+  column_view const& stops,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

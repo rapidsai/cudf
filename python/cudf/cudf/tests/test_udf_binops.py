@@ -41,7 +41,7 @@ def test_generic_ptx(dtype):
 
     output_type = numba.numpy_support.as_dtype(result.signature.return_type)
 
-    out_col = libcudf.binops.apply_op_udf(
+    out_col = libcudf.binaryop.binaryop_udf(
         lhs_col, rhs_col, ptx_code, output_type.type
     )
 

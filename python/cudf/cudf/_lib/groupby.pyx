@@ -1,166 +1,199 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
+from collections import defaultdict
 
-import collections
 import numpy as np
-from numbers import Number
 
-from cython.operator cimport dereference as deref
-from libcpp.utility cimport pair
+from libcpp.pair cimport pair
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-from libc.stdlib cimport malloc, free
+from libcpp cimport bool
 
-import cudf
-from cudf.core.buffer import Buffer
-from cudf.utils.cudautils import zeros
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+from cudf._lib.move cimport move
+from cudf._lib.aggregation cimport make_aggregation, Aggregation
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.nvtx import nvtx_range_pop
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
+from cudf._lib.cpp.table.table cimport table, table_view
+cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.groupby as libcudf_groupby
+cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
-cimport cudf._lib.includes.groupby.hash as hash_groupby
-cimport cudf._lib.includes.groupby.sort as sort_groupby
 
-agg_names = {
-    'sum': hash_groupby.SUM,
-    'min': hash_groupby.MIN,
-    'max': hash_groupby.MAX,
-    'count': hash_groupby.COUNT,
-    'mean': hash_groupby.MEAN
+_GROUPBY_AGGS = {
+    "count",
+    "size",
+    "sum",
+    "argmin",
+    "argmax",
+    "min",
+    "max",
+    "mean",
+    "variance",
+    "std",
+    "quantile",
+    "median",
+    "nunique",
+    "nth",
+}
+
+_CATEGORICAL_AGGS = {
+    "count",
+    "size",
+    "nunique",
+}
+
+_STRING_AGGS = {
+    "count",
+    "max",
+    "min",
+    "nunique",
+    "nth",
 }
 
 
-def groupby(
-    keys,
-    values,
-    ops,
-    method='hash',
-    sort_results=True,
-    dropna=True
-):
-    """
-    Apply aggregations *ops* on *values*, grouping by *keys*.
+cdef class GroupBy:
+    cdef unique_ptr[libcudf_groupby.groupby] c_obj
+    cdef dict __dict__
 
-    Parameters
-    ----------
-    keys : list of Columns
-    values : list of Columns
-    ops : str or list of str
-        Aggregation to be performed for each column in *values*
-    dropna : bool
-        Whether or not to drop null keys
-    Returns
-    -------
-    result : tuple of list of Columns
-        keys and values of the result
-    """
-    from cudf.core.column import build_column, build_categorical_column
+    def __cinit__(self, Table keys, bool dropna=True, *args, **kwargs):
+        cdef libcudf_types.include_nulls c_include_nulls
 
-    if len(values) == 0:
-        return (keys, [])
-
-    cdef pair[cudf_table, cudf_table] result
-    cdef cudf_table *c_keys_table = table_from_columns(keys)
-    cdef cudf_table *c_values_table = table_from_columns(values)
-    cdef vector[hash_groupby.operators] c_ops
-
-    num_values_cols = len(values)
-    for i in range(num_values_cols):
-        if isinstance(ops, str):
-            c_ops.push_back(agg_names[ops])
+        if dropna:
+            c_include_nulls = libcudf_types.include_nulls.NO
         else:
-            c_ops.push_back(agg_names[ops[i]])
+            c_include_nulls = libcudf_types.include_nulls.YES
 
-    cdef bool ignore_null_keys = dropna
-    cdef hash_groupby.Options *options = new hash_groupby.Options(dropna)
+        cdef table_view keys_view = keys.view()
 
-    with nogil:
-        result = hash_groupby.groupby(
-            c_keys_table[0],
-            c_values_table[0],
-            c_ops,
-            deref(options)
-        )
-
-    del c_keys_table
-    del c_values_table
-    del options
-
-    result_key_cols = columns_from_table(&result.first)
-    result_value_cols = columns_from_table(&result.second)
-
-    for i, inp_key_col in enumerate(keys):
-        if is_categorical_dtype(inp_key_col.dtype):
-            result_key_cols[i] = build_categorical_column(
-                categories=inp_key_col.cat().categories,
-                codes=result_key_cols[i],
-                mask=result_key_cols[i].mask,
-                ordered=inp_key_col.cat().ordered
+        with nogil:
+            self.c_obj.reset(
+                new libcudf_groupby.groupby(
+                    keys_view,
+                    c_include_nulls
+                )
             )
 
-    return (result_key_cols, result_value_cols)
+    def __init__(self, Table keys, bool dropna=True):
+        self.keys = keys
+        self.dropna = dropna
+
+    def groups(self, Table values):
+
+        cdef table_view values_view = values.view()
+
+        with nogil:
+            c_groups = move(self.c_obj.get()[0].get_groups(values_view))
+
+        c_grouped_keys = move(c_groups.keys)
+        c_grouped_values = move(c_groups.values)
+        c_group_offsets = c_groups.offsets
+
+        grouped_keys = Table.from_unique_ptr(
+            move(c_grouped_keys),
+            column_names=range(c_grouped_keys.get()[0].num_columns())
+        )
+        grouped_values = Table.from_unique_ptr(
+            move(c_grouped_values),
+            index_names=values._index_names,
+            column_names=values._column_names
+        )
+        return grouped_keys, grouped_values, c_group_offsets
+
+    def aggregate(self, Table values, aggregations):
+        """
+        Parameters
+        ----------
+        values : Table
+        aggregations
+            A dict mapping column names in `Table` to a list of aggregations
+            to perform on that column
+
+            Each aggregation may be specified as:
+            - a string (e.g., "max")
+            - a lambda/function
+
+        Returns
+        -------
+        Table of aggregated values
+        """
+        from cudf.core.column_accessor import ColumnAccessor
+        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
+        cdef Column col
+
+        aggregations = _drop_unsupported_aggs(values, aggregations)
+
+        for i, (col_name, aggs) in enumerate(aggregations.items()):
+            col = values._data[col_name]
+            c_agg_requests.push_back(
+                move(libcudf_groupby.aggregation_request())
+            )
+            c_agg_requests[i].values = col.view()
+            for agg in aggs:
+                c_agg_requests[i].aggregations.push_back(
+                    move(make_aggregation(agg))
+                )
+
+        cdef pair[
+            unique_ptr[table],
+            vector[libcudf_groupby.aggregation_result]
+        ] c_result
+
+        with nogil:
+            c_result = move(
+                self.c_obj.get()[0].aggregate(
+                    c_agg_requests
+                )
+            )
+
+        grouped_keys = Table.from_unique_ptr(
+            move(c_result.first),
+            column_names=self.keys._column_names
+        )
+
+        result_data = ColumnAccessor(multiindex=True)
+        for i, col_name in enumerate(aggregations):
+            for j, agg_name in enumerate(aggregations[col_name]):
+                if callable(agg_name):
+                    agg_name = agg_name.__name__
+                result_data[(col_name, agg_name)] = (
+                    Column.from_unique_ptr(move(c_result.second[i].results[j]))
+                )
+
+        result = Table(data=result_data, index=grouped_keys)
+        return result
 
 
-def groupby_without_aggregations(cols, key_cols):
+def _drop_unsupported_aggs(Table values, aggs):
     """
-    Sorts the Columns ``cols`` based on the subset ``key_cols``.
-    Parameters
-    ----------
-    cols : list
-        List of Columns to be sorted
-    key_cols : list
-        Subset of *cols* to sort by
-    Returns
-    -------
-    sorted_columns : list
-    offsets : Column
-        Integer offsets to the start of each set of unique keys
+    Drop any aggregations that are not supported.
     """
-    from cudf.core.column import build_column, build_categorical_column
+    from pandas.core.groupby.groupby import DataError
 
-    cdef cudf_table* c_in_table = table_from_columns(cols)
-    cdef vector[size_type] c_key_col_indices
-    cdef pair[cudf_table, gdf_column] c_result
+    if all(len(v) == 0 for v in aggs.values()):
+        return aggs
 
-    for i in range(len(key_cols)):
-        if key_cols[i] in cols:
-            c_key_col_indices.push_back(cols.index(key_cols[i]))
-
-    cdef size_t c_num_key_cols = c_key_col_indices.size()
-
-    cdef gdf_context* c_ctx = create_context_view(
-        0,
-        'sort',
-        0,
-        0,
-        0,
-        'null_as_largest',
-        True
+    from cudf.utils.dtypes import (
+        is_categorical_dtype,
+        is_string_dtype
     )
+    result = aggs.copy()
 
-    with nogil:
-        c_result = sort_groupby.gdf_group_by_without_aggregations(
-            c_in_table[0],
-            c_num_key_cols,
-            c_key_col_indices.data(),
-            c_ctx
-        )
+    for col_name in aggs:
+        if (
+            is_string_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _STRING_AGGS:
+                    del result[col_name][i]
+        elif (
+                is_categorical_dtype(values._data[col_name].dtype)
+        ):
+            for i, agg_name in enumerate(aggs[col_name]):
+                if Aggregation(agg_name).kind not in _CATEGORICAL_AGGS:
+                    del result[col_name][i]
 
-    offsets = gdf_column_to_column(&c_result.second)
-    sorted_cols = columns_from_table(&c_result.first)
+    if all(len(v) == 0 for v in result.values()):
+        raise DataError("No numeric types to aggregate")
 
-    for i, inp_col in enumerate(cols):
-        if is_categorical_dtype(inp_col.dtype):
-            sorted_cols[i] = build_categorical_column(
-                categories=inp_col.cat().categories,
-                codes=sorted_cols[i],
-                mask=sorted_cols[i].mask,
-                ordered=inp_col.cat().ordered
-            )
-
-    del c_in_table
-
-    return sorted_cols, offsets
+    return result

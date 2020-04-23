@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace detail {
-
 /** --------------------------------------------------------------------------*
  * @brief Partitions rows from the input table into multiple output tables.
  *
@@ -38,12 +37,12 @@ namespace detail {
  *
  * @returns An output table and a vector of row offsets to each partition
  * -------------------------------------------------------------------------**/
-std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>>
-hash_partition(table_view const& input,
-               std::vector<size_type> const& columns_to_hash,
-               int num_partitions,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-               cudaStream_t stream = 0);
+std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  std::vector<size_type> const& columns_to_hash,
+  int num_partitions,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /** --------------------------------------------------------------------------*
  * @brief Computes the hash value of each row in the input set of columns.
@@ -59,7 +58,7 @@ hash_partition(table_view const& input,
 std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash = {},
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream = 0);
+                             cudaStream_t stream                 = 0);
 
 }  // namespace detail
 }  // namespace cudf

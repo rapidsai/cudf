@@ -12,6 +12,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests.utils import assert_eq
 
 
@@ -314,7 +315,7 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
         gdf = gdf.drop("col_category")
 
     for row in range(num_rows):
-        assert gdf["col_int32"][row] == row + skip_rows
+        assert gdf["col_int32"].iloc[row] == row + skip_rows
 
 
 def test_parquet_reader_spark_timestamps(datadir):
@@ -469,6 +470,34 @@ def test_multifile_warning(datadir):
         assert_eq(expect, got)
 
 
+# Validates the metadata return path of the parquet writer
+def test_parquet_writer_return_metadata(tmpdir, simple_gdf):
+    gdf_fname = tmpdir.join("data1.parquet")
+
+    # Write out the gdf using the GPU accelerated writer
+    df_metadata = simple_gdf.to_parquet(
+        gdf_fname.strpath, index=None, metadata_file_path="test/data1.parquet"
+    )
+    # Verify that we got a valid parquet signature in the initial metadata blob
+    assert df_metadata.tobytes()[0:4] == b"PAR1"
+
+    df_metadata_list1 = [df_metadata]
+    df_metadata_list2 = [df_metadata, df_metadata]
+    merged_metadata1 = merge_parquet_filemetadata(df_metadata_list1)
+    merged_metadata2 = merge_parquet_filemetadata(df_metadata_list2)
+
+    # Verify that we got a valid parquet signature in the final metadata blob
+    assert merged_metadata1.tobytes()[0:4] == b"PAR1"
+    assert merged_metadata2.tobytes()[0:4] == b"PAR1"
+
+    # Make sure aggregation is combining metadata correctly
+    fmd1 = pa.parquet.ParquetFile(BytesIO(merged_metadata1.tobytes())).metadata
+    fmd2 = pa.parquet.ParquetFile(BytesIO(merged_metadata2.tobytes())).metadata
+    assert fmd2.num_columns == fmd1.num_columns
+    assert fmd2.num_rows == 2 * fmd1.num_rows
+    assert fmd2.num_row_groups == 2 * fmd1.num_row_groups
+
+
 # Validates the integrity of the GPU accelerated parquet writer.
 def test_parquet_writer_gpu_none_index(tmpdir, simple_pdf, simple_gdf):
     gdf_fname = tmpdir.join("gdf.parquet")
@@ -550,3 +579,74 @@ def test_parquet_writer_gpu_multi_index(tmpdir, simple_pdf, simple_gdf):
     got = pd.read_parquet(gdf_fname)
 
     assert_eq(expect, got, check_categorical=False)
+
+
+def test_parquet_writer_gpu_chunked(tmpdir, simple_pdf, simple_gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    writer = ParquetWriter(gdf_fname)
+    writer.write_table(simple_gdf)
+    writer.write_table(simple_gdf)
+    writer.close()
+
+    assert_eq(pd.read_parquet(gdf_fname), pd.concat([simple_pdf, simple_pdf]))
+
+
+@pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
+def test_parquet_write_partitioned(tmpdir_factory, cols):
+    # Checks that write_to_dataset is wrapping to_parquet
+    # as expected
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    size = 100
+    pdf = pd.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=cols)
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(gdf_dir, index=False, partition_cols=cols)
+
+    # Use pandas since dataset may be partitioned
+    expect = pd.read_parquet(pdf_dir)
+    got = pd.read_parquet(gdf_dir)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("cols", [None, ["b"]])
+def test_parquet_write_to_dataset(tmpdir_factory, cols):
+    dir1 = tmpdir_factory.mktemp("dir1")
+    dir2 = tmpdir_factory.mktemp("dir2")
+    if cols is None:
+        dir1 = dir1.join("file.pq")
+        dir2 = dir2.join("file.pq")
+    dir1 = str(dir1)
+    dir2 = str(dir2)
+
+    size = 100
+    gdf = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size),
+            "b": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    gdf.to_parquet(dir1, partition_cols=cols)
+    cudf.io.write_to_dataset(gdf, dir2, partition_cols=cols)
+
+    # cudf read_parquet cannot handle partitioned dataset
+    expect = pd.read_parquet(dir1)
+    got = pd.read_parquet(dir2)
+    assert_eq(expect, got)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": cudf.Series([1, 2, 3]),
+            "b": cudf.Series([1, 2, 3]),
+            "c": cudf.Series(["a", "b", "c"], dtype="category"),
+        }
+    )
+    with pytest.raises(ValueError):
+        gdf.to_parquet(dir1, partition_cols=cols)

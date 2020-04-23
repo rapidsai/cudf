@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -22,15 +22,19 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
-
 const char* operation =
-R"***(
-#pragma once
+  R"***(
+    #pragma once
+    #include <cmath>
     #include "traits.h"
     using namespace simt::std;
 
     struct Add {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
         }
@@ -39,7 +43,11 @@ R"***(
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow difference of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
         }
@@ -48,7 +56,7 @@ R"***(
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            return Sub::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -335,12 +343,67 @@ R"***(
             GENERIC_BINARY_OP(&output, x, y);
             return output;
         }
+    };    
+    
+    struct ShiftLeft {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x << y);
+        }
     };
 
+    struct RShiftLeft {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (y << x);
+        }
+    };
+
+    struct ShiftRight {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (x >> y);
+        }
+    };    
+
+    struct RShiftRight {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (y >> x);
+        }
+    };
+
+    struct ShiftRightUnsigned {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<make_unsigned_t<TypeLhs>>(x) >> y);            
+        }
+    };    
+
+    struct RShiftRightUnsigned {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (static_cast<make_unsigned_t<TypeLhs>>(y) >> x);            
+        }
+    };    
+
+    struct LogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
+        }
+    };
+
+    struct RLogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
+        }
+    };
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf

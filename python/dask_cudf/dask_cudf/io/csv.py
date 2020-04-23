@@ -9,7 +9,7 @@ from dask.dataframe.io.csv import make_reader
 from dask.utils import parse_bytes
 
 import cudf
-from cudf._lib.GDFError import GDFError
+from cudf._lib.legacy.GDFError import GDFError
 
 
 def read_csv(path, chunksize="256 MiB", **kwargs):

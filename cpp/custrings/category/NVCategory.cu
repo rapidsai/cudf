@@ -74,9 +74,9 @@ public:
     {
         if( memoryBuffer )
         {
-            if( bIpcHandle )
-                cudaIpcCloseMemHandle(memoryBuffer);
-            else
+            if( bIpcHandle ) {
+                CUDA_TRY(cudaIpcCloseMemHandle(memoryBuffer));
+            } else
                 RMM_FREE(memoryBuffer,0);
         }
         delete pList;

@@ -19,11 +19,11 @@
 #include <memory>
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
+#include <cudf/legacy/io_types.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
-
 /*
  * @brief Interface to parse Avro data to cuDF columns.
  *

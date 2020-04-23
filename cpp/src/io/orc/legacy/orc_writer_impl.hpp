@@ -23,16 +23,15 @@
 #include <string>
 #include <vector>
 
-#include <io/utilities/wrapper_utils.hpp>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace io {
 namespace orc {
-
 // Forward internal classes
 class ProtobufWriter;
 class orc_column;
@@ -77,9 +76,11 @@ class writer::Impl {
    * @param[in,out] dict_index Dictionary index memory
    * @param[in,out] dict List of dictionary chunks
    **/
-  void init_dictionaries(orc_column* orc_columns, size_t num_rows,
+  void init_dictionaries(orc_column* orc_columns,
+                         size_t num_rows,
                          const std::vector<int>& str_col_ids,
-                         uint32_t* dict_data, uint32_t* dict_index,
+                         uint32_t* dict_data,
+                         uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>& dict);
 
   /**
@@ -93,11 +94,13 @@ class writer::Impl {
    * @param[in,out] dict_index List of dictionary indices
    * @param[in,out] stripe_dict List of stripe dictionaries
    **/
-  void build_dictionaries(
-      orc_column* columns, size_t num_rows, const std::vector<int>& str_col_ids,
-      const std::vector<uint32_t>& stripe_list,
-      const hostdevice_vector<gpu::DictionaryChunk>& dict, uint32_t* dict_index,
-      hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
+  void build_dictionaries(orc_column* columns,
+                          size_t num_rows,
+                          const std::vector<int>& str_col_ids,
+                          const std::vector<uint32_t>& stripe_list,
+                          const hostdevice_vector<gpu::DictionaryChunk>& dict,
+                          uint32_t* dict_index,
+                          hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**
    * @brief Returns stream information for each column
@@ -110,7 +113,8 @@ class writer::Impl {
    *
    * @return List of streams
    **/
-  std::vector<Stream> gather_streams(orc_column* columns, size_t num_columns,
+  std::vector<Stream> gather_streams(orc_column* columns,
+                                     size_t num_columns,
                                      size_t num_rows,
                                      const std::vector<uint32_t>& stripe_list,
                                      std::vector<int32_t>& strm_ids);
@@ -129,8 +133,10 @@ class writer::Impl {
    *
    * @return rmm::device_buffer Device buffer containing encoded data
    **/
-  rmm::device_buffer encode_columns(orc_column* columns, size_t num_columns,
-                                    size_t num_rows, size_t num_rowgroups,
+  rmm::device_buffer encode_columns(orc_column* columns,
+                                    size_t num_columns,
+                                    size_t num_rows,
+                                    size_t num_rowgroups,
                                     const std::vector<int>& str_col_ids,
                                     const std::vector<uint32_t>& stripe_list,
                                     const std::vector<Stream>& streams,
@@ -151,11 +157,13 @@ class writer::Impl {
    *
    * @return List of stripes
    **/
-  std::vector<StripeInformation> gather_stripes(
-      size_t num_columns, size_t num_rows, size_t num_index_streams,
-      size_t num_data_streams, const std::vector<uint32_t>& stripe_list,
-      hostdevice_vector<gpu::EncChunk>& chunks,
-      hostdevice_vector<gpu::StripeStream>& strm_desc);
+  std::vector<StripeInformation> gather_stripes(size_t num_columns,
+                                                size_t num_rows,
+                                                size_t num_index_streams,
+                                                size_t num_data_streams,
+                                                const std::vector<uint32_t>& stripe_list,
+                                                hostdevice_vector<gpu::EncChunk>& chunks,
+                                                hostdevice_vector<gpu::StripeStream>& strm_desc);
 
   /**
    * @brief Write the specified column's row index stream
@@ -173,14 +181,19 @@ class writer::Impl {
    * @param[in] streams List of all streams
    * @param[in] pbw_ Protobuf writer
    **/
-  void write_index_stream(
-      int32_t stripe_id, int32_t stream_id, orc_column* columns,
-      size_t num_columns, size_t num_data_streams, size_t group,
-      size_t groups_in_stripe, const hostdevice_vector<gpu::EncChunk>& chunks,
-      const hostdevice_vector<gpu::StripeStream>& strm_desc,
-      const hostdevice_vector<gpu_inflate_status_s>& comp_out,
-      StripeInformation& stripe, std::vector<Stream>& streams,
-      ProtobufWriter& pbw_);
+  void write_index_stream(int32_t stripe_id,
+                          int32_t stream_id,
+                          orc_column* columns,
+                          size_t num_columns,
+                          size_t num_data_streams,
+                          size_t group,
+                          size_t groups_in_stripe,
+                          const hostdevice_vector<gpu::EncChunk>& chunks,
+                          const hostdevice_vector<gpu::StripeStream>& strm_desc,
+                          const hostdevice_vector<gpu_inflate_status_s>& comp_out,
+                          StripeInformation& stripe,
+                          std::vector<Stream>& streams,
+                          ProtobufWriter& pbw_);
 
   /**
    * @brief Write the specified column's data streams
@@ -194,7 +207,8 @@ class writer::Impl {
    **/
   void write_data_stream(const gpu::StripeStream& strm_desc,
                          const gpu::EncChunk& chunk,
-                         const uint8_t* compressed_data, uint8_t* stream_out,
+                         const uint8_t* compressed_data,
+                         uint8_t* stream_out,
                          StripeInformation& stripe,
                          std::vector<Stream>& streams);
 
@@ -204,7 +218,8 @@ class writer::Impl {
    * @param[in] num_rows Number of rows
    **/
   template <typename T = size_t>
-  constexpr inline auto div_by_rowgroups(T num_rows) const {
+  constexpr inline auto div_by_rowgroups(T num_rows) const
+  {
     return util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
   }
 
@@ -214,14 +229,15 @@ class writer::Impl {
    * @param[in] modulus Number to use for division
    **/
   template <typename T = size_t>
-  constexpr inline auto div_rowgroups_by(T modulus) const {
+  constexpr inline auto div_rowgroups_by(T modulus) const
+  {
     return util::div_rounding_up_unsafe<T, T>(row_index_stride_, modulus);
   }
 
  private:
-  size_t max_stripe_size_ = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_ = DEFAULT_ROW_INDEX_STRIDE;
-  size_t compression_blocksize_ = DEFAULT_COMPRESSION_BLOCKSIZE;
+  size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
+  size_t row_index_stride_          = DEFAULT_ROW_INDEX_STRIDE;
+  size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
   bool enable_dictionary_ = true;

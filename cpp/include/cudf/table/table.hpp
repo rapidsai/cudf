@@ -23,11 +23,10 @@
 
 namespace cudf {
 namespace experimental {
-
 class table {
  public:
-  table() = default;
-  ~table() = default;
+  table()        = default;
+  ~table()       = default;
   table(table&&) = default;
   table& operator=(table const&) = delete;
   table& operator=(table&&) = delete;
@@ -55,7 +54,8 @@ class table {
    * @param mr Optional, the memory resource that will be used for allocating
    * the device memory for the new columns
    *---------------------------------------------------------------------------**/
-  table(table_view view, cudaStream_t stream = 0,
+  table(table_view view,
+        cudaStream_t stream                 = 0,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
@@ -138,37 +138,6 @@ class table {
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
-
-
-/**---------------------------------------------------------------------------*
- * @brief Columns of `tables_to_concat` are concatenated vertically to return a
- * single table_view
- *
- * example:
- * ```
- * column_view c0; //Contains {0,1,2,3}
- * column_view c1; //Contains {4,5,6,7}
- * table_view t0{{c0, c0}};
- * table_view t1{{c1, c1}};
- * ...
- * auto t = concatenate({t0.view(), t1.view()});
- * column_view tc0 = (t->view()).column(0); //Contains {0,1,2,3,4,5,6,7}
- * column_view tc1 = (t->view()).column(1); //Contains {0,1,2,3,4,5,6,7}
- * ```
- *
- * @throws cudf::logic_error
- * If number of columns mismatch
- *
- * @param tables_to_concat The table views to be concatenated into a single
- * table
- * @param mr Optional The resource to use for all allocations
- * @param stream Optional The stream on which to execute all allocations and copies
- * @return Unique pointer to a single table having all the rows from the
- * elements of `tables_to_concat` respectively in the same order.
- *---------------------------------------------------------------------------**/
-std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-            cudaStream_t stream = 0);
 
 }  // namespace experimental
 }  // namespace cudf

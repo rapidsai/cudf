@@ -19,10 +19,13 @@
 #include "compound.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::mean(
-    column_view const& col, cudf::data_type const output_dtype,
-    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  column_view const& col,
+  cudf::data_type const output_dtype,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::compound::element_type_dispatcher< cudf::experimental::reduction::op::mean>;
-  return cudf::experimental::type_dispatcher( col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
+  using reducer = cudf::experimental::reduction::compound::element_type_dispatcher<
+    cudf::experimental::reduction::op::mean>;
+  return cudf::experimental::type_dispatcher(
+    col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
 }
-

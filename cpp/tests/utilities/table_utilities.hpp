@@ -16,28 +16,27 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace test {
-
-/**---------------------------------------------------------------------------*
+/**
  * @brief Verifies the property equality of two tables.
  *
  * @param lhs The first table
  * @param rhs The second table
- *---------------------------------------------------------------------------**/
+ */
 void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
-  
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Verifies the equality of two tables.
  *
  * Treats null elements as equivalent.
  *
  * @param lhs The first table
  * @param rhs The second table
- *---------------------------------------------------------------------------**/
+ */
 void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
 
 /*

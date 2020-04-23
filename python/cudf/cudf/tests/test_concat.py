@@ -47,7 +47,7 @@ def make_frames(index=None, nulls="none"):
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 @pytest.mark.parametrize("index", [False, "z", "y"])
 @pytest.mark.parametrize("axis", [0, "index"])
-def test_concat(index, nulls, axis):
+def test_concat_dataframe(index, nulls, axis):
     if index == "y" and nulls in ("some", "all"):
         pytest.skip("nulls in columns, dont index")
     df, df2, gdf, gdf2 = make_frames(index, nulls=nulls)
@@ -237,3 +237,17 @@ def test_concat_string_index_name(myindex):
     df3 = gd.concat([df1, df2])
 
     assert df3.index.name == myindex
+
+
+def test_concat_duplicate_columns():
+    cdf = gd.DataFrame(
+        {
+            "id4": 4 * list(range(6)),
+            "id5": 4 * list(reversed(range(6))),
+            "v3": 6 * list(range(4)),
+        }
+    )
+    cdf_std = cdf.groupby(["id4", "id5"])[["v3"]].std()
+    cdf_med = cdf.groupby(["id4", "id5"])[["v3"]].quantile(q=0.5)
+    with pytest.raises(NotImplementedError):
+        gd.concat([cdf_med, cdf_std], axis=1)

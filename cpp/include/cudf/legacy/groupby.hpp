@@ -18,8 +18,8 @@
 #define GROUPBY_HPP
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
 #include <cudf/legacy/quantiles.hpp>
+#include <cudf/types.hpp>
 
 #include <tuple>
 #include <vector>
@@ -34,11 +34,9 @@ template <typename T>
 class rmm_allocator;
 
 namespace cudf {
-
 class table;
 
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
@@ -79,17 +77,15 @@ struct Options {
  * @brief Supported aggregation operations
  *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD};
+enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
 namespace hash {
-
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
  *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {
-  Options(bool _ignore_null_keys = true)
-      : groupby::Options(_ignore_null_keys) {}
-}; 
+  Options(bool _ignore_null_keys = true) : groupby::Options(_ignore_null_keys) {}
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
@@ -119,32 +115,31 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }  // namespace hash
 
 namespace sort {
-
-struct operation_args {};
+struct operation_args {
+};
 
 struct std_args : operation_args {
   int ddof;
-  
-  std_args(int _ddof)
-  : operation_args{}, ddof{_ddof}
-  {}
+
+  std_args(int _ddof) : operation_args{}, ddof{_ddof} {}
 };
 
 struct quantile_args : operation_args {
   std::vector<double> quantiles;
   cudf::interpolation interpolation;
-  
-  quantile_args(const std::vector<double> &_quantiles,  cudf::interpolation _interpolation)
-  : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
-  {}
+
+  quantile_args(const std::vector<double>& _quantiles, cudf::interpolation _interpolation)
+    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {
+  }
 };
 
 struct operation {
-  operators                         op_name;
-  std::unique_ptr<operation_args>   args;
+  operators op_name;
+  std::unique_ptr<operation_args> args;
 };
 
-enum class null_order : bool { AFTER, BEFORE }; 
+enum class null_order : bool { AFTER, BEFORE };
 
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the sort-based groupby
@@ -152,15 +147,17 @@ enum class null_order : bool { AFTER, BEFORE };
  * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
  *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {
-  null_order null_sort_behavior; ///< Indicates how nulls are treated
-  bool input_sorted; ///< Indicates if the input data is sorted. 
+  null_order null_sort_behavior;  ///< Indicates how nulls are treated
+  bool input_sorted;              ///< Indicates if the input data is sorted.
 
-  Options(bool _ignore_null_keys = true,
+  Options(bool _ignore_null_keys         = true,
           null_order _null_sort_behavior = null_order::AFTER,
-          bool _input_sorted = false)
-      : groupby::Options(_ignore_null_keys),
-        input_sorted(_input_sorted),
-        null_sort_behavior(_null_sort_behavior) {}
+          bool _input_sorted             = false)
+    : groupby::Options(_ignore_null_keys),
+      input_sorted(_input_sorted),
+      null_sort_behavior(_null_sort_behavior)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
@@ -184,9 +181,9 @@ struct Options : groupby::Options {
  * second member contains the reduced output values
  *---------------------------------------------------------------------------**/
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
-                                            cudf::table const& values,
-                                            std::vector<operation> const& ops,
-                                            Options options = Options{});
+                                                         cudf::table const& values,
+                                                         std::vector<operation> const& ops,
+                                                         Options options = Options{});
 }  // namespace sort
 }  // namespace groupby
 }  // namespace cudf
@@ -200,10 +197,10 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
  * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
  * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
- * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
-gdf_column
-gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
+gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 
 /**
  * @brief Sorts a set of columns based on specified "key" columns. Returns a
@@ -224,13 +221,13 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key
  * columns.
- *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
-std::pair<cudf::table,
-          gdf_column>
-gdf_group_by_without_aggregations(cudf::table const& input_table,
-                                  cudf::size_type num_key_cols,
-                                  cudf::size_type const* key_col_indices,
-                                  gdf_context* context);
+std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
+  cudf::table const& input_table,
+  cudf::size_type num_key_cols,
+  cudf::size_type const* key_col_indices,
+  gdf_context* context);
 
 #endif

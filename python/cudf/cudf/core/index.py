@@ -10,11 +10,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import nvstrings
-import rmm
-
 import cudf
-from cudf.core.buffer import Buffer
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -24,7 +21,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.core.frame import Frame
-from cudf.utils import cudautils, ioutils, utils
+from cudf.utils import ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 from cudf.utils.utils import cached_property
@@ -82,6 +79,25 @@ class Index(Frame):
 
     def __contains__(self, item):
         return item in self._values
+
+    def get_level_values(self, level):
+        if level == self.name:
+            return self
+        elif pd.api.types.is_integer(level):
+            if level != 0:
+                raise IndexError(
+                    f"Cannot get level: {level} " f"for index with 1 level"
+                )
+            return self
+        else:
+            raise KeyError(f"Requested level with name {level} " "not found")
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            col = self._data[self.name]
+            col._mimic_inplace(other._data[other.name], inplace=True)
+        else:
+            return other
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -180,23 +196,6 @@ class Index(Frame):
     def sum(self):
         return self._values.sum()
 
-    def find_segments(self):
-        """Return the beginning index for segments
-
-        Returns
-        -------
-        result : NumericalColumn
-        """
-        segments, _ = self._find_segments()
-        return segments
-
-    def _find_segments(self):
-        seg, markers = cudautils.find_segments(self.gpu_values)
-        return (
-            column.build_column(data=Buffer(seg), dtype=seg.dtype),
-            markers,
-        )
-
     @classmethod
     def _concat(cls, objs):
         data = ColumnBase._concat([o._values for o in objs])
@@ -220,7 +219,7 @@ class Index(Frame):
             return as_index(op())
 
     def unique(self):
-        return as_index(self._values.unique())
+        return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -290,6 +289,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True
@@ -355,7 +355,7 @@ class Index(Frame):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
         return as_index(self._values.astype(dtype), name=self.name)
@@ -383,27 +383,6 @@ class Index(Frame):
 
         return Series(self._values)
 
-    def isnull(self):
-        """Identify missing values in an Index.
-        """
-        return as_index(self._values.isnull(), name=self.name)
-
-    def isna(self):
-        """Identify missing values in an Index. Alias for isnull.
-        """
-        return self.isnull()
-
-    def notna(self):
-        """Identify non-missing values in an Index.
-        """
-        return as_index(self._values.notna(), name=self.name)
-
-    def notnull(self):
-        """Identify non-missing values in an Index. Alias for notna.
-        """
-        return self.notna()
-
-    @property
     @property
     def is_unique(self):
         raise (NotImplementedError)
@@ -458,15 +437,52 @@ class Index(Frame):
             return NotImplemented
 
     def isin(self, values):
-        return self.to_series().isin(values)
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        """
+
+        result = self.to_series().isin(values).values
+
+        return result
+
+    def where(self, cond, other=None):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, or array-like
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+        Returns
+        -------
+        Same type as caller
+        """
+        return super().where(cond=cond, other=other)
 
     @property
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
-
-    def repeat(self, repeats, axis=None):
-        assert axis in (None, 0)
-        return as_index(self._values.repeat(repeats))
 
     def memory_usage(self, deep=False):
         return self._values._memory_usage(deep=deep)
@@ -482,15 +498,29 @@ class Index(Frame):
 
     @classmethod
     def _from_table(cls, table):
-        if table._num_columns == 0:
-            raise ValueError("Cannot construct Index from any empty Table")
-        if table._num_columns == 1:
-            return as_index(
-                next(iter(table._data.columns)),
-                name=next(iter(table._data.keys())),
-            )
+        if not isinstance(table, RangeIndex):
+            if table._num_columns == 0:
+                raise ValueError("Cannot construct Index from any empty Table")
+            if table._num_columns == 1:
+                values = next(iter(table._data.values()))
+
+                if isinstance(values, NumericalColumn):
+                    out = GenericIndex.__new__(GenericIndex)
+                elif isinstance(values, DatetimeColumn):
+                    out = DatetimeIndex.__new__(DatetimeIndex)
+                elif isinstance(values, StringColumn):
+                    out = StringIndex.__new__(StringIndex)
+                elif isinstance(values, CategoricalColumn):
+                    out = CategoricalIndex.__new__(CategoricalIndex)
+                out._data = table._data
+                out._index = None
+                return out
+            else:
+                return cudf.MultiIndex._from_table(
+                    table, names=table._data.names
+                )
         else:
-            return cudf.MultiIndex._from_table(table)
+            return as_index(table)
 
 
 class RangeIndex(Index):
@@ -533,10 +563,18 @@ class RangeIndex(Index):
     def name(self, value):
         self._name = value
 
+    @property
+    def _num_columns(self):
+        return 1
+
+    @property
+    def _num_rows(self):
+        return len(self)
+
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
+            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
             return column.as_column(vals)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
@@ -598,10 +636,6 @@ class RangeIndex(Index):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
-        elif isinstance(index, (list, np.ndarray)):
-            index = np.asarray(index)
-            index = rmm.to_device(index)
-
         else:
             if is_scalar(index):
                 index = min_signed_type(index)(index)
@@ -738,7 +772,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cudautils.arange(start, stop, step, dtype=np.int64)
+    vals = cupy.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -806,18 +840,44 @@ class GenericIndex(Index):
         return len(self._values)
 
     def __repr__(self):
-        vals = [self._values[i] for i in range(min(len(self), 10))]
-        return (
-            "{}({}, dtype={}".format(
-                self.__class__.__name__, vals, self._values.dtype
+        from pandas._config import get_option
+
+        max_seq_items = get_option("max_seq_items") or len(self)
+        mr = 0
+        if 2 * max_seq_items < len(self):
+            mr = max_seq_items + 1
+
+        if len(self) > mr and mr != 0:
+            top = self[0:mr]
+            bottom = self[-1 * mr :]
+            from cudf import concat
+
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        if preprocess._values.nullable:
+            output = (
+                self.__class__(preprocess._values.astype("O").fillna("null"))
+                .to_pandas()
+                .__repr__()
             )
-            + (
-                ", name='{}'".format(self.name)
-                if self.name is not None
-                else ""
-            )
-            + ")"
-        )
+        else:
+            output = preprocess.to_pandas().__repr__()
+
+        lines = output.split("\n")
+        if len(lines) > 1:
+            tmp_meta = lines[-1]
+            prior_to_dtype = lines[-1].split("dtype")[0]
+            lines = lines[:-1]
+            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
+            if self.name is not None:
+                lines[-1] = lines[-1] + ", name='%s'" % self.name
+            if "length" in tmp_meta:
+                lines[-1] = lines[-1] + ", length=%d)" % len(self)
+            else:
+                lines[-1] = lines[-1] + ")"
+
+        return "\n".join(lines)
 
     def __getitem__(self, index):
         res = self._values[index]
@@ -890,13 +950,11 @@ class DatetimeIndex(GenericIndex):
         # and then just dispatch upstream
         kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
-            values = DatetimeColumn.from_numpy(values)
+            values = column.as_column(values)
         elif isinstance(values, pd.DatetimeIndex):
-            values = DatetimeColumn.from_numpy(values.values)
+            values = column.as_column(values.values)
         elif isinstance(values, (list, tuple)):
-            values = DatetimeColumn.from_numpy(
-                np.array(values, dtype="<M8[ms]")
-            )
+            values = column.as_column(np.array(values, dtype="<M8[ms]"))
         super(DatetimeIndex, self).__init__(values, **kwargs)
 
     @property
@@ -937,7 +995,10 @@ class DatetimeIndex(GenericIndex):
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
         out_column = column.build_column(
-            data=out_column.data, dtype=out_column.dtype, mask=out_column.mask
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
         )
         return as_index(out_column, name=self.name)
 
@@ -1003,7 +1064,11 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             values = values._values.copy()
         else:
-            values = column.as_column(nvstrings.to_device(values))
+            values = column.as_column(values, dtype="str")
+            if not pd.api.types.is_string_dtype(values.dtype):
+                raise ValueError(
+                    "Couldn't create StringIndex from passed in object"
+                )
         super(StringIndex, self).__init__(values, **kwargs)
 
     def to_pandas(self):

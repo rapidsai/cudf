@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
 from io import BytesIO, StringIO
@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
+import cudf._lib.json as libjson
 from cudf.utils import ioutils
 
 
@@ -32,8 +32,10 @@ def read_json(
         path_or_buf, compression, (BytesIO, StringIO), **kwargs
     )
     if engine == "cudf":
-        df = libcudf.json.read_json(
-            path_or_buf, dtype, lines, compression, byte_range
+        return cudf.DataFrame._from_table(
+            libjson.read_json(
+                path_or_buf, dtype, lines, compression, byte_range
+            )
         )
     else:
         warnings.warn(
@@ -71,4 +73,4 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = cudf_val.to_pandas()
-    pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)
+    return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)

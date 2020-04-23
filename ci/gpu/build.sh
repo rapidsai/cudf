@@ -59,7 +59,7 @@ logger "Activate conda env..."
 source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
-              "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
+              "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.6.0" "dlpack" \
               "feather-format" "cupy>=6.6.0,<8.0.0a0,!=7.1.0" "arrow-cpp=0.15.0" "pyarrow=0.15.0" \
               "fastavro>=0.22.0" "pandas>=0.25,<0.26" "hypothesis" "s3fs" "gcsfs" \
               "boto3" "moto" "httpretty" "streamz" "ipython=7.3*" "jupyterlab"
@@ -83,7 +83,11 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
+if [[ ${BUILD_MODE} == "pull-request" ]]; then
+    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests
+else
+    $WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -l
+fi
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and

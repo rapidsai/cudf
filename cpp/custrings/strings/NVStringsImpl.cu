@@ -73,8 +73,8 @@ unsigned char* get_unicode_flags()
     if( !d_unicode_flags )
     {
         // leave this out of RMM since it is never freed
-        cudaMalloc(&d_unicode_flags,65536);
-        cudaMemcpy(d_unicode_flags,unicode_flags,65536,cudaMemcpyHostToDevice);
+        CUDA_TRY(cudaMalloc(&d_unicode_flags,65536));
+        CUDA_TRY(cudaMemcpy(d_unicode_flags,unicode_flags,65536,cudaMemcpyHostToDevice));
     }
     return d_unicode_flags;
 }
@@ -85,8 +85,8 @@ unsigned short* get_charcases()
     if( !d_charcases )
     {
         // leave this out of RMM since it is never freed
-        cudaMalloc(&d_charcases,65536*sizeof(unsigned short));
-        cudaMemcpy(d_charcases,charcases,65536*sizeof(unsigned short),cudaMemcpyHostToDevice);
+        CUDA_TRY(cudaMalloc(&d_charcases,65536*sizeof(unsigned short)));
+        CUDA_TRY(cudaMemcpy(d_charcases,charcases,65536*sizeof(unsigned short),cudaMemcpyHostToDevice));
     }
     return d_charcases;
 }
@@ -168,7 +168,7 @@ int NVStrings_init_from_strings(NVStringsImpl* pImpl, const char** strs, unsigne
     rmmError_t rerr = RMM_ALLOC(&d_flatstrs,nbytes,0);
     if( rerr == RMM_SUCCESS )
         err = cudaMemcpyAsync(d_flatstrs, h_flatstrs, nbytes, cudaMemcpyHostToDevice);
-    free(h_flatstrs); // no longer needed
+    free(h_flatstrs); // no longer needed FIXME: bug? free before synchonize
     if( err != cudaSuccess )
     {
         fprintf(stderr,"nvs-sts: alloc/copy %'lu bytes\n",nbytes);
@@ -364,7 +364,7 @@ int NVStrings_init_from_offsets( NVStringsImpl* pImpl, const char* strs, int cou
     rmmError_t rerr = RMM_ALLOC(&d_flatstrs,nbytes,0);
     if( rerr == RMM_SUCCESS )
         err = cudaMemcpyAsync(d_flatstrs, h_flatstrs, nbytes, cudaMemcpyHostToDevice);
-    free(h_flatstrs); // no longer needed
+    free(h_flatstrs); // no longer needed // FIXME: bug? free before cudaMemcpyAsync sync.
     if( err != cudaSuccess )
     {
         fprintf(stderr,"nvs-ofs: alloc/copy %'lu bytes\n",nbytes);

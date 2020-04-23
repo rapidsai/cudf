@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,10 @@ package ai.rapids.cudf;
 import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.function.Function;
+import java.util.stream.Collector;
+
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
 public class BinaryOpTest extends CudfTestBase {
@@ -35,6 +39,7 @@ public class BinaryOpTest extends CudfTestBase {
   private static final Double[] DOUBLES_2 = new Double[]{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 100.0};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, true, false, false, null};
   private static final Boolean[] BOOLEANS_2 = new Boolean[]{true, false, true, false, true};
+  private static final int[] SHIFT_BY = new int[]{1, 2, 3, 4, 5, 10, 20};
 
   interface CpuOpVV {
     void computeNullSafe(Builder ret, HostColumnVector lhs, HostColumnVector rhs, int index);
@@ -990,6 +995,117 @@ public class BinaryOpTest extends CudfTestBase {
                (b, l, r, i) -> b.append(l || r.getBoolean(i)))) {
         assertColumnsAreEqual(expected, answer, "false OR boolean");
       }
+    }
+  }
+
+  @Test
+  public void testShiftLeft() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftLeft(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) << r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted left");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftLeft(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)l.getInt(i) << r)))) {
+        assertColumnsAreEqual(expected, answer, "int32 << scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftLeft(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l << r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short << int32");
+      }
+    }
+  }
+
+  @Test
+  public void testShiftRight() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftRight(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) >> r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted right");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftRight(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)(l.getInt(i) >> r))))) {
+        assertColumnsAreEqual(expected, answer, "int32 >> scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftRight(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l >> r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short >> int32 = int16");
+      }
+    }
+  }
+
+  @Test
+  public void testShiftRightUnsigned() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_2);
+         ColumnVector shiftBy = ColumnVector.fromInts(SHIFT_BY)) {
+      try (ColumnVector answer = icv.shiftRightUnsigned(shiftBy);
+           ColumnVector expected = forEach(DType.INT32, icv, shiftBy,
+               (b, l, r, i) -> b.append(l.getInt(i) >>> r.getInt(i)))) {
+        assertColumnsAreEqual(expected, answer, "int32 shifted right unsigned");
+      }
+
+      try (Scalar s = Scalar.fromInt(4);
+           ColumnVector answer = icv.shiftRightUnsigned(s, DType.INT64);
+           ColumnVector expected = forEachS(DType.INT64, icv, 4,
+               (b, l, r, i) -> b.append(((long)(l.getInt(i) >>> r))))) {
+        assertColumnsAreEqual(expected, answer, "int32 >>> scalar = int64");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
+           ColumnVector answer = s.shiftRightUnsigned(shiftBy, DType.INT16);
+           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
+               (b, l, r, i) -> {
+                 int shifted = l >>> r.getInt(i);
+                 b.append((short) shifted);
+               })) {
+        assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
+      }
+    }
+  }
+
+  @Test
+  public void testLogBase10() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(10);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+            .map(Math::log10)
+            .toArray(Double[]::new))) {
+      assertColumnsAreEqual(expected, answer, "log10");
+    }
+  }
+
+  @Test
+  public void testLogBase2() {
+    try (ColumnVector dcv1 = ColumnVector.fromBoxedDoubles(DOUBLES_2);
+         Scalar base = Scalar.fromInt(2);
+         ColumnVector answer = dcv1.log(base);
+         ColumnVector expected = ColumnVector.fromBoxedDoubles(Arrays.stream(DOUBLES_2)
+             .map(n -> Math.log(n) / Math.log(2))
+             .toArray(Double[]::new))) {
+      assertColumnsAreEqual(expected, answer, "log2");
     }
   }
 }

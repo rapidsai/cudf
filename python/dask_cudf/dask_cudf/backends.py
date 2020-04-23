@@ -20,10 +20,10 @@ def _nonempty_index(idx):
     elif isinstance(idx, cudf.core.index.DatetimeIndex):
         start = "1970-01-01"
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
-        values = cudf.core.column.DatetimeColumn.from_numpy(data)
+        values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
     elif isinstance(idx, cudf.core.index.StringIndex):
-        return cudf.core.index.StringIndex(["cat", "dog"])
+        return cudf.core.index.StringIndex(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1
@@ -56,7 +56,9 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        categories = s._column.categories
+        categories = (
+            s._column.categories if len(s._column.categories) else ["a"]
+        )
         codes = [0, 0]
         ordered = s._column.ordered
         data = column.build_categorical_column(
@@ -98,33 +100,29 @@ def make_meta_cudf_index(x, index=None):
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def concat_cudf(
-    dfs, axis=0, join="outer", uniform=False, filter_warning=True, sort=None
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    sort=None,
+    ignore_index=False,
 ):
     assert join == "outer"
-    return cudf.concat(dfs, axis=axis)
+    return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
 try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
-    from cudf.core.column import column, CategoricalColumn, StringColumn
+    from cudf.core.column import column
 
-    def _handle_string(s):
-        if isinstance(s._column, StringColumn):
-            out_col = column.column_empty(len(s), dtype="int32", masked=False)
-            ptr = out_col.data_ptr
-            s._column.data_array_view.hash(devptr=ptr)
-            s = out_col
-        return s
-
-    def safe_hash(df):
-        frame = df.copy(deep=False)
+    def safe_hash(frame):
+        index = frame.index
         if isinstance(frame, cudf.DataFrame):
-            for col in frame.columns:
-                frame[col] = _handle_string(frame[col])
-            return frame.hash_columns()
+            return cudf.Series(frame.hash_columns(), index=index)
         else:
-            return _handle_string(frame)
+            return cudf.Series(frame.hash_values(), index=index)
 
     @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
     def hash_object_cudf(frame, index=True):
@@ -139,15 +137,20 @@ try:
             return safe_hash(ind.to_frame(index=False))
 
         col = column.as_column(ind)
-        if isinstance(col, StringColumn):
-            col = col.as_numerical_column("int32")
-        elif isinstance(col, CategoricalColumn):
-            col = col.as_numerical
-        return cudf.Series(col).hash_values()
+        return safe_hash(cudf.Series(col))
 
-    @group_split_dispatch.register(cudf.DataFrame)
-    def group_split_cudf(df, c, k):
-        return dict(zip(range(k), df.scatter_by_map(c, map_size=k)))
+    @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
+    def group_split_cudf(df, c, k, ignore_index=False):
+        return dict(
+            zip(
+                range(k),
+                df.scatter_by_map(
+                    c.astype(np.int32, copy=False),
+                    map_size=k,
+                    keep_index=not ignore_index,
+                ),
+            )
+        )
 
 
 except ImportError:

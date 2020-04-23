@@ -56,6 +56,14 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def is_numerical_dtype(obj):
+    return not is_categorical_dtype(obj) and (
+        np.issubdtype(obj, np.bool_)
+        or np.issubdtype(obj, np.floating)
+        or np.issubdtype(obj, np.signedinteger)
+    )
+
+
 def is_string_dtype(obj):
     return pd.api.types.is_string_dtype(obj) and not is_categorical_dtype(obj)
 
@@ -72,39 +80,49 @@ def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.
     """
-    from cudf.core import Series, Index
-    from cudf.core.column import ColumnBase, CategoricalColumn
-    from cudf.core.index import CategoricalIndex
-
     if obj is None:
         return False
-    if isinstance(obj, cudf.core.dtypes.CategoricalDtype):
+    if isinstance(obj, cudf.CategoricalDtype):
         return True
-    if obj is cudf.core.dtypes.CategoricalDtype:
+    if obj is cudf.CategoricalDtype:
+        return True
+    if isinstance(obj, np.dtype):
+        return False
+    if isinstance(obj, CategoricalDtype):
+        return True
+    if obj is CategoricalDtype:
         return True
     if obj is CategoricalDtypeType:
         return True
     if isinstance(obj, str) and obj == "category":
         return True
-    if hasattr(obj, "type"):
-        if obj.type is CategoricalDtypeType:
-            return True
     if isinstance(
         obj,
         (
             CategoricalDtype,
-            CategoricalIndex,
-            CategoricalColumn,
+            cudf.core.index.CategoricalIndex,
+            cudf.core.column.CategoricalColumn,
             pd.Categorical,
             pd.CategoricalIndex,
         ),
     ):
         return True
+    if isinstance(obj, np.ndarray):
+        return False
     if isinstance(
-        obj, (Index, Series, ColumnBase, pd.Index, pd.Series, np.ndarray)
+        obj,
+        (
+            cudf.Index,
+            cudf.Series,
+            cudf.core.column.ColumnBase,
+            pd.Index,
+            pd.Series,
+        ),
     ):
         return is_categorical_dtype(obj.dtype)
-
+    if hasattr(obj, "type"):
+        if obj.type is CategoricalDtypeType:
+            return True
     return pandas_dtype(obj).type is CategoricalDtypeType
 
 
@@ -142,6 +160,8 @@ def to_cudf_compatible_scalar(val, dtype=None):
     """
     if val is None:
         return val
+
+    dtype = "str" if is_string_dtype(dtype) else dtype
 
     if not is_scalar(val):
         raise ValueError(
@@ -225,3 +245,37 @@ def min_numeric_column_type(x):
         return np.promote_types(max_bound_dtype, min_bound_dtype)
 
     return x.dtype
+
+
+def check_cast_unsupported_dtype(dtype):
+    from cudf._lib.types import np_to_cudf_types
+    import warnings
+
+    if is_categorical_dtype(dtype):
+        return dtype
+    dtype = np.dtype(dtype)
+    if dtype in np_to_cudf_types:
+        return dtype
+
+    # A mapping of un-supported types to next capable supported dtype.
+    cast_types_map = {
+        np.dtype("uint8"): np.dtype("int16"),
+        np.dtype("uint16"): np.dtype("int32"),
+        np.dtype("uint32"): np.dtype("int64"),
+        np.dtype("uint64"): np.dtype("int64"),
+        np.dtype("float16"): np.dtype("float32"),
+    }
+
+    if dtype in cast_types_map:
+
+        if dtype == np.dtype("uint64"):
+            warnings.warn(
+                "Downcasting from uint64 to int64, potential data \
+                    overflow can occur."
+            )
+
+        return cast_types_map[dtype]
+
+    raise NotImplementedError(
+        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+    )

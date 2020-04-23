@@ -19,12 +19,14 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
+/**
+ * @file encode.hpp
+ * @brief Dictionary encode and decode APIs.
+ */
 
-namespace cudf
-{
-namespace dictionary
-{
-
+namespace cudf {
+//! Dictionary column APIs.
+namespace dictionary {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -51,9 +53,9 @@ namespace dictionary
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
-    column_view const& column,
-    data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& column,
+  data_type indices_type              = data_type{INT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -69,8 +71,9 @@ std::unique_ptr<column> encode(
  * @param mr Resource for allocating memory for the output.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> decode(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace dictionary
-} // namespace cudf
+}  // namespace dictionary
+}  // namespace cudf

@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -x --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-x]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l]
    clean            - remove all existing build artifacts and configuration (start
                       over)
    libnvstrings     - build the nvstrings C++ code only
@@ -32,8 +32,10 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n
    -v               - verbose build mode
    -g               - build for debug
    -n               - no install step
-   --disable_nvtx   - disable inserting NVTX profiling ranges
+   -l               - build legacy tests
    --allgpuarch     - build for all supported GPU architectures
+   --disable_nvtx   - disable inserting NVTX profiling ranges
+   --show_depr_warn - show cmake deprecation warnings
    -h               - print this text
 
    default action (no args) is to build and install 'libnvstrings' then
@@ -49,10 +51,12 @@ BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUD
 VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
-BENCHMARKS=OFF
+BUILD_BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
-BUILD_TESTS="OFF"
+BUILD_TESTS=OFF
+BUILD_LEGACY_TESTS=OFF
+BUILD_DISABLE_DEPRECATION_WARNING=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -95,17 +99,23 @@ if hasArg -n; then
     LIBCUDF_BUILD_DIR=${LIB_BUILD_DIR}
     LIBNVSTRINGS_BUILD_DIR=${LIB_BUILD_DIR}
 fi
+if hasArg -l; then
+    BUILD_LEGACY_TESTS=ON
+fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS="ON"
+    BUILD_BENCHMARKS=ON
 fi
 if hasArg tests; then
     BUILD_TESTS=ON
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
+fi
+if hasArg --show_depr_warn; then
+    BUILD_DISABLE_DEPRECATION_WARNING=OFF
 fi
 
 # If clean given, run it prior to any other steps
@@ -141,7 +151,9 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
           -DUSE_NVTX=${BUILD_NVTX} \
-          -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
+          -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
+          -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 
@@ -183,6 +195,10 @@ if buildAll || hasArg libcudf; then
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
         make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_benchmarks_cudf VERBOSE=${VERBOSE}
     fi
 fi
 

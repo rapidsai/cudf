@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,24 +31,43 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
 
   private static final class DeviceBufferCleaner extends MemoryBufferCleaner {
     private long address;
+    private long lengthInBytes;
+    private Cuda.Stream stream;
 
-    DeviceBufferCleaner(long address) {
+    DeviceBufferCleaner(long address, long lengthInBytes, Cuda.Stream stream) {
       this.address = address;
+      this.lengthInBytes = lengthInBytes;
+      this.stream = stream;
     }
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
+      long origAddress = address;
       if (address != 0) {
-        Rmm.free(address, 0);
-        address = 0;
+        long s = stream == null ? 0 : stream.getStream();
+        try {
+          Rmm.free(address, lengthInBytes, s);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          address = 0;
+          lengthInBytes = 0;
+          stream = null;
+        }
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
-        log.error("WE LEAKED A DEVICE BUFFER!!!!");
+        log.error("A DEVICE BUFFER WAS LEAKED (ID: " + id + " " + Long.toHexString(origAddress) + ")");
         logRefCountDebug("Leaked device buffer");
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return address == 0;
     }
   }
 
@@ -73,6 +92,11 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
       }
       return neededCleanup;
     }
+
+    @Override
+    public boolean isClean() {
+      return rmmBufferAddress == 0;
+    }
   }
 
   // Static factory method to make this a little simpler from JNI
@@ -84,8 +108,8 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     super(address, lengthInBytes, new RmmDeviceBufferCleaner(rmmBufferAddress));
   }
 
-  DeviceMemoryBuffer(long address, long lengthInBytes) {
-    super(address, lengthInBytes, new DeviceBufferCleaner(address));
+  DeviceMemoryBuffer(long address, long lengthInBytes, Cuda.Stream stream) {
+    super(address, lengthInBytes, new DeviceBufferCleaner(address, lengthInBytes, stream));
   }
 
   private DeviceMemoryBuffer(long address, long lengthInBytes, DeviceMemoryBuffer parent) {
@@ -98,7 +122,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @return the buffer
    */
   public static DeviceMemoryBuffer allocate(long bytes) {
-    return new DeviceMemoryBuffer(Rmm.alloc(bytes, 0), bytes);
+    return Rmm.alloc(bytes);
   }
 
   /**
@@ -109,6 +133,7 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @param len how many bytes to slice
    * @return a device buffer that will need to be closed independently from this buffer.
    */
+  @Override
   public synchronized final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
     refCount++;
