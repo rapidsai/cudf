@@ -102,7 +102,7 @@ TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 
 /**
  * @brief The number of test trials for each operator
- * 
+ *
  */
 static constexpr int NUM_TRIALS{10000};
 

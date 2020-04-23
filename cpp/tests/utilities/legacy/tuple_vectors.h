@@ -52,14 +52,14 @@ void initialize_vector(std::vector<T>& v,
   for (size_t i = 0; i < column_length; ++i) { v[i] = the_initializer(i); }
 }
 
-//compile time recursion to initialize a tuple of vectors
+// compile time recursion to initialize a tuple of vectors
 template <typename initializer_t, std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type initialize_tuple(
   std::tuple<std::vector<Tp>...>& t,
   std::vector<size_t> column_lengths,
   initializer_t the_initializer) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 template <typename initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
@@ -69,7 +69,7 @@ template <typename initializer_t, std::size_t I = 0, typename... Tp>
   // Initialize the current vector
   initialize_vector(std::get<I>(t), column_lengths[I], the_initializer);
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   initialize_tuple<initializer_t, I + 1, Tp...>(t, column_lengths, the_initializer);
 }
 
@@ -82,15 +82,15 @@ void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> col
   initialize_tuple(t, column_lengths, the_initializer);
 }
 
-//compile time recursion to initialize a tuple of vectors
+// compile time recursion to initialize a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type initialize_tuple(
   std::tuple<std::vector<Tp>...>& t,
   size_t column_length,
   size_t column_range,
   bool sorted = false) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
@@ -101,7 +101,7 @@ template <std::size_t I = 0, typename... Tp>
   // Initialize the current vector
   initialize_vector(std::get<I>(t), column_length, column_range, sorted);
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   initialize_tuple<I + 1, Tp...>(t, column_length, column_range, sorted);
 }
 
@@ -114,11 +114,11 @@ void print_vector(std::vector<T>& v) {
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuple(
   std::tuple<std::vector<Tp>...>& t) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 
-//compile time recursion to print a tuple of vectors
+// compile time recursion to print a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
   I<sizeof...(Tp), void>::type print_tuple(std::tuple<std::vector<Tp>...>& t) {
@@ -126,7 +126,7 @@ template <std::size_t I = 0, typename... Tp>
   print_vector(std::get<I>(t));
   std::cout << std::endl;
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   print_tuple<I + 1, Tp...>(t);
 }
 

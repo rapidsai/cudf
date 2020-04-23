@@ -75,7 +75,7 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth) {
       }
       break;
     default:
-      //printf("unsupported skip for type %d\n", t);
+      // printf("unsupported skip for type %d\n", t);
       break;
   }
   return true;

@@ -77,7 +77,7 @@ inline bool is_simple(operators op) { return array_contains(simple_aggregations,
 /**---------------------------------------------------------------------------*
  * @brief  To verify that the input operator is part of  ordered_aggregations list.
  * Ordered aggregation is used to identify other ones like MEDIAN and  QUANTILE,
- * which cannot be represented as a combination of single-pass aggregations. 
+ * which cannot be represented as a combination of single-pass aggregations.
  *---------------------------------------------------------------------------**/
 inline bool is_ordered(operators op) { return array_contains(ordered_aggregations, op); }
 

@@ -9,7 +9,7 @@
 #include <cudf/legacy/reduction.hpp>
 #include <utilities/legacy/device_atomics.cuh>
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 template <class T>
 __global__ void gpu_copy_and_replace_nulls(

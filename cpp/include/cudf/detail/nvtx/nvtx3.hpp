@@ -219,7 +219,7 @@
  *
  * `nvtx3::mark` allows annotating an instantaneous event in an application's
  * timeline. For example, indicating when a mutex is locked or unlocked.
- * 
+ *
  * \code{.cpp}
  * std::mutex global_lock;
  * void lock_mutex(){

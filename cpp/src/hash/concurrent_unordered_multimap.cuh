@@ -37,8 +37,10 @@
  * Does support concurrent insert, but not concurrent insert and probping.
  *
  * @note The user is responsible for the following stream semantics:
- * - Either the same stream should be used to create the map as is used by the kernels that access it, or
- * - the stream used to create the map should be synchronized before it is accessed from a different stream or from host code.
+ * - Either the same stream should be used to create the map as is used by the kernels that access
+ * it, or
+ * - the stream used to create the map should be synchronized before it is accessed from a different
+ * stream or from host code.
  *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
@@ -125,7 +127,7 @@ class concurrent_unordered_multimap {
    *
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
-   * 
+   *
    * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
   void destroy(cudaStream_t stream = 0) {
@@ -541,7 +543,7 @@ class concurrent_unordered_multimap {
    * @param[in] hash_function An optional hashing function
    * @param[in] equal An optional functor for comparing if two keys are equal
    * @param[in] a An optional functor for allocating the hash table memory
-   * @param[in] stream CUDA stream to use for device opertions. 
+   * @param[in] stream CUDA stream to use for device opertions.
    */
   explicit concurrent_unordered_multimap(size_type n,
                                          const bool init             = true,

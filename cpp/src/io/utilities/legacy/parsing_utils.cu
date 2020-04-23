@@ -2,7 +2,7 @@
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -77,17 +77,17 @@ __device__ __forceinline__ void setElement(void* array,
                                            const V& v) {}
 
 /**---------------------------------------------------------------------------*
- * @brief CUDA kernel that finds all occurrences of a character in the given 
+ * @brief CUDA kernel that finds all occurrences of a character in the given
  * character array. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output array.
- * 
+ *
  * @param[in] data Pointer to the input character array
  * @param[in] size Number of bytes in the input array
  * @param[in] offset Offset to add to the output positions
  * @param[in] key Character to find in the array
  * @param[in,out] count Pointer to the number of found occurrences
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 template <class T>
@@ -119,16 +119,16 @@ __global__ void countAndSetPositions(char* data,
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
- * 
- * Does not load the entire file into the GPU memory at any time, so it can 
+ *
+ * Does not load the entire file into the GPU memory at any time, so it can
  * be used to parse large files. Output array needs to be preallocated.
- * 
+ *
  * @param[in] h_data Pointer to the input character array
  * @param[in] h_size Number of bytes in the input array
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return cudf::size_type total number of occurrences
  *---------------------------------------------------------------------------**/
 template <class T>
@@ -173,7 +173,7 @@ cudf::size_type findAllFromSet(const char* h_data,
  * @brief Searches the input character array for each of characters in a set
  * and sums up the number of occurrences.
  *
- * Does not load the entire buffer into the GPU memory at any time, so it can 
+ * Does not load the entire buffer into the GPU memory at any time, so it can
  * be used with buffers of any size.
  *
  * @param[in] h_data Pointer to the data in host memory
@@ -265,14 +265,14 @@ class BlockSumPyramid {
  * and the first bracket in the next block (if any). For example, "[[]]" = 0,
  * because all open brackets are closed. "[[]" = 1, because the one unmatched
  * open bracket would raise the level of all subsequent elements.
- * 
+ *
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] bracket_count Number of brackets
  * @param[in] open_chars Array of characters to treat as open brackets
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
  * @param[in, out] sum_array Array of partial sums
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 __global__ void sumBracketsKernel(pos_key_pair* brackets,
@@ -311,7 +311,7 @@ __global__ void sumBracketsKernel(pos_key_pair* brackets,
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
  * @param[in, out] sum_array Array of partial sums
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 void sumBrackets(pos_key_pair* brackets,
@@ -333,10 +333,10 @@ void sumBrackets(pos_key_pair* brackets,
 
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that computes partial sums of the input elements
- * 
+ *
  * @param[in] elements Array of input elements to sum
  * @param[in, out] aggregate Array of partial sums
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 __global__ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate) {
@@ -356,10 +356,10 @@ __global__ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggrega
 
 /**---------------------------------------------------------------------------*
  * @brief Wrapper around aggregateSumKernel
- * 
+ *
  * @param[in] elements Array of input elements to sum
  * @param[in, out] aggregate Array of partial sums
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate) {
@@ -379,17 +379,17 @@ void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
  *
  * The algorithm uses the pyramid of partial sums to compute the levels
  * in parallel, in log(n) time per block of elements.
- * 
+ *
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] count Number of brackets
- * @param[in] sum_pyramid Pyramid of aggregated partial sums, where 
+ * @param[in] sum_pyramid Pyramid of aggregated partial sums, where
  * higher levels aggregate more elements per block
  * @param[in] pyramid_height Number of levels in the sum_pyramid
  * @param[in] open_chars Array of characters to treat as open brackets
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
  * @param[out] levels Array of output levels, one per bracket
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 __global__ void assignLevelsKernel(const pos_key_pair* brackets,
@@ -446,17 +446,17 @@ __global__ void assignLevelsKernel(const pos_key_pair* brackets,
 
 /**---------------------------------------------------------------------------*
  * @brief Wrapper around assignLevelsKernel
- * 
+ *
  * @param[in] brackets Array of brackets, in (offset, char) format
  * @param[in] count Number of brackets
- * @param[in] sum_pyramid Pyramid of aggregated partial sums, where 
+ * @param[in] sum_pyramid Pyramid of aggregated partial sums, where
  * higher levels aggregate more elements per block
  * @param[in] pyramid_height Number of levels in the sum_pyramid
  * @param[in] open_chars Array of characters to treat as open brackets
  * @param[in] close_chars Array of characters to treat as close brackets
  * @param[in] bracket_char_cnt Number of bracket character pairs
  * @param[out] levels Array of outout levels
- * 
+ *
  * @return void
  *---------------------------------------------------------------------------**/
 void assignLevels(pos_key_pair* brackets,
@@ -486,17 +486,17 @@ void assignLevels(pos_key_pair* brackets,
 
 /**---------------------------------------------------------------------------*
  * @brief Computes nested levels for each of the brackets in the input array
- * 
+ *
  * The input array of brackets is sorted before levels are computed.
  * The algorithms assumes well-formed input, i.e. brackets are correctly nested
  * and there are no brackets that should be ignored (e.g. qouted brackets)
  * Brackets at the top level are assigned level 1.
- * 
+ *
  * @param[in] brackets Device memory array of brackets, in (offset, key) format
  * @param[in] count Number of brackets
  * @param[in] open_chars string of characters to treat as open brackets
  * @param[in] close_chars string of characters to treat as close brackets
- * 
+ *
  * @return rmm::device_vector<int16_t> Device vector containing bracket levels
  *---------------------------------------------------------------------------**/
 rmm::device_vector<int16_t> getBracketLevels(pos_key_pair* brackets,

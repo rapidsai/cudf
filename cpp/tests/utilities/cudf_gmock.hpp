@@ -16,7 +16,7 @@
 
 #pragma once
 
-//TODO after legacy are removed
+// TODO after legacy are removed
 //#include "cudf_gtest.hpp"
 //#include <gmock/gmock.h>
 

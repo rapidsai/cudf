@@ -391,7 +391,8 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
       break;
     default: break;
   }
-  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the chunk-level
+  // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
+  // chunk-level
   CUDA_TRY(DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
                              pages,
                              rowgroups_in_batch * num_columns,
@@ -499,17 +500,19 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       // Column metadata
       state.md.schema[1 + i].type           = col.physical_type();
       state.md.schema[1 + i].converted_type = col.converted_type();
-      // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunked() call)
-      // we cannot know up front if the user is going to end up passing tables with nulls/no nulls in the
-      // multiple write_chunked() case.  so we'll do some special handling.
+      // because the repetition type is global (in the sense of, not per-rowgroup or per
+      // write_chunked() call) we cannot know up front if the user is going to end up passing tables
+      // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
+      // handling.
       //
-      // if the user is explictly saying "I am only calling this once", fall back to the original behavior and assume
-      // the columns in this one table tell us everything we need to know.
+      // if the user is explictly saying "I am only calling this once", fall back to the original
+      // behavior and assume the columns in this one table tell us everything we need to know.
       if (state.single_write_mode) {
         state.md.schema[1 + i].repetition_type =
           (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
       }
-      // otherwise, if the user is explicitly telling us global information about all the tables that will ever get passed in
+      // otherwise, if the user is explicitly telling us global information about all the tables
+      // that will ever get passed in
       else if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
         state.md.schema[1 + i].repetition_type =
           state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
@@ -563,10 +566,11 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
   }
 
   // Init page fragments
-  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing fragments larger than the
-  // desired page size -> TODO: keep track of the max fragment size, and iteratively reduce this value if the largest
-  // fragment exceeds the max page size limit (we ideally want the page size to be below 1MB so as to have enough pages
-  // to get good compression/decompression performance).
+  // 5000 is good enough for up to ~200-character strings. Longer strings will start producing
+  // fragments larger than the desired page size -> TODO: keep track of the max fragment size, and
+  // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
+  // ideally want the page size to be below 1MB so as to have enough pages to get good
+  // compression/decompression performance).
   uint32_t fragment_size = 5000;
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);

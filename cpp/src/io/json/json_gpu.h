@@ -26,16 +26,16 @@ namespace json {
 namespace gpu {
 
 /**
- * @brief Convert a buffer of input data (text) into raw cuDF column data. 
+ * @brief Convert a buffer of input data (text) into raw cuDF column data.
  *
  * @param[in] input_data The entire data to read
  * @param[in] dtypes The data type of each column
  * @param[out] output_columns The output column data
- * @param[in] num_records The number of lines/rows 
+ * @param[in] num_records The number of lines/rows
  * @param[in] num_columns The number of columns
  * @param[in] rec_starts The start of each data record
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
- * @param[out] num_valid_fields The numbers of valid fields in columns 
+ * @param[out] num_valid_fields The numbers of valid fields in columns
  * @param[in] opts A set of parsing options
  * @param[in] stream Cuda stream to run kernels on
  *
@@ -53,7 +53,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
                              cudaStream_t stream = 0);
 
 /**
- * @brief Process a buffer of data and determine information about the column types within.  
+ * @brief Process a buffer of data and determine information about the column types within.
  *
  * @param[out] column_infos The count for each column data type
  * @param[in] data Input data buffer
@@ -61,7 +61,7 @@ void convert_json_to_columns(rmm::device_buffer const &input_data,
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data 
+ * @param[in] num_records The number of lines/rows of input data
  * @param[in] stream Cuda stream to run kernels on
  *
  * @returns void

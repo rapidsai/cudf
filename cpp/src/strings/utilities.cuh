@@ -28,7 +28,8 @@ namespace strings {
 namespace detail {
 
 /**
- * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
  *
  * @param buffer Device buffer to copy to.
  * @param input Data to copy from.
@@ -41,7 +42,8 @@ __device__ inline char* copy_and_increment(char* buffer, const char* input, size
 }
 
 /**
- * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
  *
  * @param buffer Device buffer to copy to.
  * @param d_string String to copy.
@@ -60,7 +62,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string) {
  *         memory containing the offsets and chars columns during write.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string.
- *        After that, the d_offsets and d_chars are set and this is called again to fill in the chars memory.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ * chars memory.
  * @param strings_count Number of strings.
  * @param null_count Number of nulls in the strings column.
  * @param mr Memory resource to use.

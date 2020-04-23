@@ -185,7 +185,7 @@ struct scalar_scatterer {
    * @brief Type-dispatched function to scatter from one scalar to a table based
    * on a `scatter_map`.
    *
-   * @tparam ColumnType Dispatched type for the column being scattered 
+   * @tparam ColumnType Dispatched type for the column being scattered
    * @param source The scalar to scatter to
    * @param scatter_map Array of indices that maps the source element to destination
    * elements

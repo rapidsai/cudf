@@ -277,7 +277,8 @@ void __device__ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, u
     vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
-      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for 64-bit sum overflow
+      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+      // 64-bit sum overflow
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   }
@@ -528,7 +529,8 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
     vsum = WarpReduceSum32(s->warp_sum[t & 0x1f].i_val);
     if (!(t & 0x1f)) {
       s->ck.sum.i_val = vsum;
-      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for 64-bit sum overflow
+      // TODO: For now, don't set the sum flag with 64-bit values so we don't have to check for
+      // 64-bit sum overflow
       s->ck.has_sum = (dtype <= dtype_int32 && has_minmax);
     }
   } else if (t < 32 * 4) {

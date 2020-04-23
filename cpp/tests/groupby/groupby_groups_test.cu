@@ -83,5 +83,5 @@ TYPED_TEST(groupby_group_keys_and_values_test, some_nulls) {
   test_groups(keys, expect_grouped_keys, expect_group_offsets, values, expect_grouped_values);
 }
 
-}  //namespace test
-}  //namespace cudf
+}  // namespace test
+}  // namespace cudf

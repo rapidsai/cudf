@@ -179,7 +179,8 @@ inline __device__ void skipbits(inflate_state_s *s, uint32_t n) {
   s->bitpos = bitpos;
 }
 
-// TODO: If we require 4-byte alignment of input bitstream & length (padded), reading bits would become quite a bit faster
+// TODO: If we require 4-byte alignment of input bitstream & length (padded), reading bits would
+// become quite a bit faster
 __device__ uint32_t getbits(inflate_state_s *s, uint32_t n) {
   uint32_t v = showbits(s, n);
   skipbits(s, n);
@@ -189,7 +190,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n) {
 /**
  * @brief Decode a code from the stream s using huffman table {symbols,counts}.
  * Return the symbol or a negative value if there is an error.
- * If all of the lengths are zero, i.e. an empty code, or if the code is 
+ * If all of the lengths are zero, i.e. an empty code, or if the code is
  * incomplete and an invalid code is received, then -10 is returned after
  * reading MAXBITS bits.
  *
@@ -611,7 +612,8 @@ __device__ void decode_symbols(inflate_state_s *s) {
           }
         }
       }
-      // skipbits(s, len) inlined with added error check for reading past the end of the input buffer
+      // skipbits(s, len) inlined with added error check for reading past the end of the input
+      // buffer
       bitpos += len;
       if (bitpos >= 32) {
         bitbuf.x = bitbuf.y;

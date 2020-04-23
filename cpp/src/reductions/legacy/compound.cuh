@@ -30,7 +30,8 @@ namespace compound {
  * @param[in] col    input column
  * @param[out] scalar  output scalar data
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
- *                   The divisor used in calculations is N - ddof, where N represents the number of elements.
+ *                   The divisor used in calculations is N - ddof, where N represents the number of
+ * elements.
  * @param[in] stream cuda stream
  *
  * @tparam ElementType  the input column cudf dtype

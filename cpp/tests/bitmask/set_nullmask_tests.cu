@@ -38,7 +38,7 @@ std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& 
 }
 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
-  void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  //Device Ptr
+  void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
                             thrust::host_vector<bool> const& expect) {
     auto itb_dev = thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
@@ -53,9 +53,9 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
                            cudf::size_type end,
                            bool valid) {
     thrust::host_vector<bool> expected(end - begin, valid);
-    //TEST
+    // TEST
     rmm::device_buffer mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
-    //valid ? cudf::mask_state::ALL_NULL : cudf::mask_state::ALL_VALID);
+    // valid ? cudf::mask_state::ALL_NULL : cudf::mask_state::ALL_VALID);
     cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, valid);
     expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask.data()), begin, expected);
   }
@@ -66,7 +66,7 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
       auto i = n++;
       return (!valid) ^ (i < middle);
     });
-    //TEST
+    // TEST
     rmm::device_buffer mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
     cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), 0, middle, valid);
     cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), middle, size, !valid);
@@ -96,10 +96,10 @@ TEST_F(SetBitmaskTest, error_range) {
   cudf::size_type size = 121;
   using size_pair      = std::pair<cudf::size_type, cudf::size_type>;
   std::vector<size_pair> begin_end_fail{
-    {-1, size},  //begin>=0
-    {-2, -1},    //begin>=0
-    {8, 8},      //begin<end
-    {9, 8},      //begin<end
+    {-1, size},  // begin>=0
+    {-2, -1},    // begin>=0
+    {8, 8},      // begin<end
+    {9, 8},      // begin<end
   };
   for (auto begin_end : begin_end_fail) {
     auto begin = begin_end.first, end = begin_end.second;
@@ -107,10 +107,10 @@ TEST_F(SetBitmaskTest, error_range) {
     EXPECT_ANY_THROW(this->test_set_null_range(size, begin, end, false));
   }
   std::vector<size_pair> begin_end_pass{
-    {0, size},         //begin>=0
-    {0, 1},            //begin>=0
-    {8, 9},            //begin<end
-    {size - 1, size},  //begin<end
+    {0, size},         // begin>=0
+    {0, 1},            // begin>=0
+    {8, 9},            // begin<end
+    {size - 1, size},  // begin<end
   };
   for (auto begin_end : begin_end_pass) {
     auto begin = begin_end.first, end = begin_end.second;

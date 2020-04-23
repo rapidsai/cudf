@@ -29,14 +29,14 @@ namespace test {
 /**
  * @brief Convenience factory for column_wrapper that can generate columns of
  * any cudf datatype from simple integer generators.
- * 
- * Often we need to write gtests for a variety of cudf data types. 
- * string_category columns, for example, often require a separate path 
+ *
+ * Often we need to write gtests for a variety of cudf data types.
+ * string_category columns, for example, often require a separate path
  * from numeric data types when generating input and reference columns and
  * running tests.
  * column_wrapper_factory allows you to pass data and bit initializers just like
  * you do for the underlying column_wrapper, but it has a specialization for
- * nvstring_category columns that will convert generated numeric values into 
+ * nvstring_category columns that will convert generated numeric values into
  * strings and initialize the column wrapper with a vector of those strings.
  * This, combined with column_wrapper's type-aware comparison function allow
  * using the same tests for numeric and string data with no special handling.
@@ -51,7 +51,7 @@ namespace test {
  *                                      [](int row) { return true; });
  *
  * If T is an int, src.data contains [0, 2, 4, ...]
- * If T is cudf::nvstring_category, src.data contains [0, 1, 2, ...] which are 
+ * If T is cudf::nvstring_category, src.data contains [0, 1, 2, ...] which are
  * indices into an NVCategory containing the keys ["0", "2", "4", ...]
  */
 template <typename T>

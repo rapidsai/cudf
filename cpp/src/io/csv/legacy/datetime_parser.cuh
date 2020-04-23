@@ -21,8 +21,8 @@
  * -
  *
  * 												(start at 0)
-	ID		Format					Size		First Sep Idx		Second Sep		'T' Sep		Time Sep 1			Time Sep 2
- 	01		06/2018					6 - 7			1, 2			-				-					-					-
+  ID		Format					Size		First Sep Idx		Second Sep		'T' Sep		Time Sep 1			Time Sep 2
+  01		06/2018					6 - 7			1, 2			-				-					-					-
     02		06-2018					6 - 7			1, 2			-				-					-					-
     03		2018/06					6 - 7			4				-				-					-					-
     04		2018-06					6 - 7			4				-				-					-					-
@@ -38,14 +38,18 @@
     14		01-06-2018T10:16		12 - 16			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13			-
     15		2018/06/01T10:16		12 - 16			4				6, 7			8, 9, 10		10, 11, 12, 13			-
     16		2018-06-01T10:16		12 - 16			4				6, 7			8, 9, 10		10, 11, 12, 13			-
-    17		06/01/2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    18		06-01-2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    19		01/06/2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    20		01-06-2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    21		2018/06/01T10:16:12		14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    22		2018-06-01T10:16:12		14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    23		2018/06/01T10:16:12AM	14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
-    24		2018-06-01T10:16:12PM	14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12, 13, 14, 15
+    17		06/01/2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13
+ 11, 12, 13, 14, 15 18		06-01-2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10,
+ 11, 12, 13		11, 12, 13, 14, 15
+    19		01/06/2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10, 11, 12, 13
+ 11, 12, 13, 14, 15 20		01-06-2018T10:16:12		14 - 19			1, 2			3, 4, 5			8, 9, 10		10,
+ 11, 12, 13		11, 12, 13, 14, 15
+    21		2018/06/01T10:16:12		14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12,
+ 13, 14, 15 22		2018-06-01T10:16:12		14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13
+ 11, 12, 13, 14, 15 23		2018/06/01T10:16:12AM	14 - 19			4				6, 7			8, 9, 10		10, 11,
+ 12, 13		11, 12, 13, 14, 15
+    24		2018-06-01T10:16:12PM	14 - 19			4				6, 7			8, 9, 10		10, 11, 12, 13		11, 12,
+ 13, 14, 15
 
 
 
@@ -153,8 +157,8 @@ __inline__ __device__ int32_t parseDateFormat(const char *data,
 
 /**
  * @brief Parses a datetime character stream and computes the number of
- * milliseconds since epoch. 
- * 
+ * milliseconds since epoch.
+ *
  * This function takes a string and produces a date32 representation
  * Acceptable formats are a combination of MM/YYYY and MM/DD/YYYY
  *
@@ -162,7 +166,7 @@ __inline__ __device__ int32_t parseDateFormat(const char *data,
  * @param[in] start The start index of the character stream
  * @param[in] end The end index of the character stream
  * @param[in] dayfirst Flag to indicate day/month or month/day order
- * 
+ *
  * @return Milliseconds since epoch
  */
 __inline__ __device__ int64_t parseDateTimeFormat(const char *data,
@@ -287,7 +291,7 @@ __inline__ __device__ bool extractDate(
 /**
  * @brief Parse a character stream to extract the hour, minute, second and
  * millisecond time field values.
- * 
+ *
  * Incoming format is expected to be HH:MM:SS.MS, with the latter second and
  * millisecond fields optional. Each time field can be a single, double,
  * or triple (in the case of milliseconds) digits. 12-hr and 24-hr time format

@@ -121,26 +121,26 @@ class NVStrings;
  * specializing for a set of types that share some property. For example, a
  * functor that prints `integral` or `floating point` for integral or floating
  * point types:
- * 
+ *
  * ```
  * struct integral_or_floating_point {
  *   template <typename ColumnType,
  *             std::enable_if_t<not std::is_integral<ColumnType>::value and
  *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "neither integral nor floating point\n"; }
- * 
+ *
  *   template <typename ColumnType,
  *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "integral\n"; }
- * 
+ *
  *   template < typename ColumnType,
  *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "floating point\n"; }
  * };
  * ```
- * 
- * For more info on SFINAE and `std::enable_if`, see 
- * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/ 
+ *
+ * For more info on SFINAE and `std::enable_if`, see
+ * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/
  *
  * The return type for all template instantiations of the functor's "operator()"
  * lambda must be the same, else there will be a compiler error as you would be

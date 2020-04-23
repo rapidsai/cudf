@@ -45,11 +45,11 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
 
 /**---------------------------------------------------------------------------*
- * @brief Macro for checking (pre-)conditions that throws an exception when  
+ * @brief Macro for checking (pre-)conditions that throws an exception when
  * a condition is violated.
- * 
+ *
  * Example usage:
- * 
+ *
  * @code
  * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
  * @endcode
@@ -74,7 +74,7 @@ struct cuda_error : public std::runtime_error {
  * ```
  * CUDF_FAIL("Non-arithmetic operation is not supported");
  * ```
- * 
+ *
  * @param[in] reason String literal description of the reason
  *---------------------------------------------------------------------------**/
 #define CUDF_FAIL(reason) \

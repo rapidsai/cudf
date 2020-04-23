@@ -82,8 +82,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
-  auto s =
-    new ScalarType(std::move(dev_result), true, stream, mr);  //only for string_view, data is copied
+  auto s           = new ScalarType(
+    std::move(dev_result), true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
 
@@ -125,7 +125,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   using ScalarType = cudf::experimental::scalar_type_t<OutputType>;
-  auto s = new ScalarType(dev_result, true, stream, mr);  //only for string_view, data is copied
+  auto s           = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
   return std::unique_ptr<scalar>(s);
 }
 
@@ -147,7 +147,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  *
  * @param[in] d_in      the begin iterator
  * @param[in] num_items the number of items
- * @param[in] op        the reduction operator 
+ * @param[in] op        the reduction operator
  * @param[in] valid_count   the intermediate operator argument 1
  * @param[in] ddof      the intermediate operator argument 2
  * @param[in] stream    cuda stream

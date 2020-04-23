@@ -57,7 +57,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <cub/cub.cuh>
-namespace {  //anonymous
+namespace {  // anonymous
 
 static constexpr int BLOCK_SIZE = 256;
 
@@ -101,8 +101,8 @@ __device__ int get_new_string_value(cudf::size_type idx,
 }
 
 /*
- * Kernel which does the first pass of strings replace. It computes the output null_mask, null_count,
- * and the offsets.
+ * Kernel which does the first pass of strings replace. It computes the output null_mask,
+ * null_count, and the offsets.
  *
  * @param input The input column to replace strings in.
  * @param values_to_replace The string values to replace.
@@ -165,8 +165,8 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
 }
 
 /*
- * Kernel which does the second pass of strings replace. It copies the string data needed from input and
- * replacement into the new strings column chars column.
+ * Kernel which does the second pass of strings replace. It copies the string data needed from input
+ * and replacement into the new strings column chars column.
  * @param input The input column
  * @param replacement The replacement values
  * @param offsets The offsets column of the new strings column
@@ -211,9 +211,10 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
  *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
  *
  * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
- * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false` otherwise
- * The input_has_nulls and replacement_has_nulls template parameters allows us to specialize
- * this kernel for the different scenario for performance without writing different kernel.
+ * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false`
+ * otherwise The input_has_nulls and replacement_has_nulls template parameters allows us to
+ * specialize this kernel for the different scenario for performance without writing different
+ * kernel.
  *
  * @param[in] input_data Device array with the data to be modified
  * @param[in] input_valid Valid mask associated with input_data
@@ -447,7 +448,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   return output;
 }
 
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
@@ -503,7 +504,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
 }  // namespace experimental
 }  // namespace cudf
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 template <int phase, bool replacement_has_nulls>
 __global__ void replace_nulls_strings(cudf::column_device_view input,
@@ -784,7 +785,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::strings::replace_nulls(input_s, repl, mr);
 }
 
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
@@ -820,7 +821,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, mr, stream);
 }
 
-}  //namespace detail
+}  // namespace detail
 
 namespace experimental {
 
@@ -838,7 +839,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
 }  // namespace experimental
-}  //namespace cudf
+}  // namespace cudf
 
 namespace {  // anonymous
 

@@ -25,7 +25,7 @@ namespace cudf {
 
 /**
  * @brief Tie-breaker method to use for ranking the column.
- * 
+ *
  */
 enum class rank_method {
   FIRST,    ///< stable sort order ranking (no ties)
@@ -61,7 +61,7 @@ std::unique_ptr<column> sorted_order(
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
  * The order of equivalent elements is guaranteed to be preserved.
- * 
+ *
  * @copydetails cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(

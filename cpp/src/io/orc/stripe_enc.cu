@@ -105,7 +105,8 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
 /**
  * @brief Raw data output
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
+ *streams[cid]+strm_pos[cid])
  * @param[in] inmask input buffer position mask for circular buffers
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
@@ -132,7 +133,8 @@ static __device__ void StoreBytes(
 /**
  * @brief ByteRLE encoder
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
+ *streams[cid]+strm_pos[cid])
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
@@ -283,7 +285,8 @@ static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax) {
   vmin = INT64_MIN;
   vmax = INT64_MAX;
 }
-//static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0); vmax = UINT64_MAX; }
+// static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0);
+// vmax = UINT64_MAX; }
 static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax) {
   vmin = INT32_MIN;
   vmax = INT32_MAX;
@@ -327,7 +330,8 @@ static inline __device__ void StoreBitsBigEndian(
 /**
  * @brief Integer RLEv2 encoder
  *
- * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at
+ *streams[cid]+strm_pos[cid])
  * @param[in] s encoder state
  * @param[in] inbuf base input buffer
  * @param[in] inpos position in input buffer
@@ -435,7 +439,8 @@ static __device__ uint32_t IntegerRLE(
           }
           // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
           if (vrange_mode2 == 0 && mode1_w > 1) {
-            // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >= 3)
+            // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >=
+            // 3)
             uint32_t bytecnt = 2;
             dst[0]           = 0xC0 + ((literal_run - 1) >> 8);
             dst[1]           = (literal_run - 1) & 0xff;
@@ -905,13 +910,13 @@ extern "C" __global__ void __launch_bounds__(512)
 }
 
 /**
-* @brief Encode column dictionaries
-*
-* @param[in] stripes Stripe dictionaries device array [stripe][string_column]
-* @param[in] chunks EncChunk device array [rowgroup][column]
-* @param[in] num_columns Number of columns
-*
-**/
+ * @brief Encode column dictionaries
+ *
+ * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_columns Number of columns
+ *
+ **/
 // blockDim {512,1,1}
 extern "C" __global__ void __launch_bounds__(512)
   gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns) {
@@ -1092,7 +1097,8 @@ extern "C" __global__ void __launch_bounds__(256)
 }
 
 /**
- * @brief Compacts compressed blocks in a single contiguous stream, and update 3-byte block length fields
+ * @brief Compacts compressed blocks in a single contiguous stream, and update 3-byte block length
+ *fields
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in] chunks EncChunk device array [rowgroup][column]
@@ -1192,17 +1198,17 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks,
 }
 
 /**
-* @brief Launches kernel for encoding column dictionaries
-*
-* @param[in] stripes Stripe dictionaries device array [stripe][string_column]
-* @param[in] chunks EncChunk device array [rowgroup][column]
-* @param[in] num_string_columns Number of string columns
-* @param[in] num_columns Number of columns
-* @param[in] num_stripes Number of stripes
-* @param[in] stream CUDA stream to use, default 0
-*
-* @return cudaSuccess if successful, a CUDA error code otherwise
-**/
+ * @brief Launches kernel for encoding column dictionaries
+ *
+ * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_string_columns Number of string columns
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
 cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
                                      EncChunk *chunks,
                                      uint32_t num_string_columns,

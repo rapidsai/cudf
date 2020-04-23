@@ -28,8 +28,8 @@ namespace detail {
  *
  * Computes:
  * `out[i] = F(in[i])`
- * 
- * The output null mask is the same is the input null mask so if input[i] is 
+ *
+ * The output null mask is the same is the input null mask so if input[i] is
  * null then output[i] is also null
  *
  * @param input         An immutable view of the input column to transform

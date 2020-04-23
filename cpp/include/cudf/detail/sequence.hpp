@@ -26,7 +26,8 @@ namespace detail {
 
 /**
  * @copydoc cudf::experimental::sequence(size_type size, scalar const& init, scalar const& step,
- *                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+ *                                       rmm::mr::device_memory_resource* mr =
+ *rmm::mr::get_default_resource())
  *
  * @param stream CUDA stream to run this function
  **/
@@ -39,7 +40,8 @@ std::unique_ptr<column> sequence(
 
 /**
  * @copydoc cudf::experimental::sequence(size_type size, scalar const& init,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+                                         rmm::mr::device_memory_resource* mr =
+ rmm::mr::get_default_resource())
  *
  * @param stream CUDA stream to run this function
  **/

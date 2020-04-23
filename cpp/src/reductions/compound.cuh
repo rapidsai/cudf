@@ -41,7 +41,8 @@ namespace compound {
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
- * @tparam Op           the compound operator derived from `cudf::experimental::reduction::op::compound_op`
+ * @tparam Op           the compound operator derived from
+ * `cudf::experimental::reduction::op::compound_op`
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,

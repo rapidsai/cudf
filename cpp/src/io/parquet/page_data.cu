@@ -65,20 +65,20 @@ struct page_state_s {
 };
 
 /**---------------------------------------------------------------------------*
-* @brief Computes a 32-bit hash when given a byte stream and range.
-*
-* MurmurHash3_32 implementation from
-* https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-*
-* MurmurHash3 was written by Austin Appleby, and is placed in the public
-* domain. The author hereby disclaims copyright to this source code.
-*
-* @param[in] key The input data to hash
-* @param[in] len The length of the input data
-* @param[in] seed An initialization value
-*
-* @return The hash value
-*---------------------------------------------------------------------------**/
+ * @brief Computes a 32-bit hash when given a byte stream and range.
+ *
+ * MurmurHash3_32 implementation from
+ * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+ *
+ * MurmurHash3 was written by Austin Appleby, and is placed in the public
+ * domain. The author hereby disclaims copyright to this source code.
+ *
+ * @param[in] key The input data to hash
+ * @param[in] len The length of the input data
+ * @param[in] seed An initialization value
+ *
+ * @return The hash value
+ *---------------------------------------------------------------------------**/
 __device__ uint32_t device_str2hash32(const char *key, size_t len, uint32_t seed = 33) {
   const uint8_t *p  = reinterpret_cast<const uint8_t *>(key);
   uint32_t h1       = seed, k1;
@@ -303,7 +303,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t) {
           if (out_valid_mask == ~0)  // Safe to output all 32 bits are within the current page
           {
             *valid_map = out_valid;
-          } else  // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
+          } else  // Special case for the first valid row, which may not start on a 32-bit boundary
+                  // (only setting some of the bits)
           {
             atomicAnd(valid_map, ~out_valid_mask);
             atomicOr(valid_map, out_valid);
@@ -347,7 +348,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t) {
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
- * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to 31)
+ * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
+ *31)
  * @param[in] t Warp1 thread ID (0..31)
  *
  * @return The new output position
@@ -784,8 +786,8 @@ inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
   }
   dtype_len_in = s->dtype_len_in;
   dict_pos *= dtype_len_in;
-  // FIXME: Not very efficient (currently reading 1 byte at a time) -> need a variable-length unaligned
-  // load utility function (both little-endian and big-endian versions)
+  // FIXME: Not very efficient (currently reading 1 byte at a time) -> need a variable-length
+  // unaligned load utility function (both little-endian and big-endian versions)
   if (dtype == INT32) {
     int32_t lo32 = 0;
     for (unsigned int i = 0; i < dtype_len_in; i++) {
@@ -1134,7 +1136,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS) gpuDecodePageData(
   }
   __syncthreads();
   if (!t) {
-    // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
+    // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of
+    // valid values
     pages[page_idx].num_rows    = s->num_rows - s->first_row;
     pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
   }

@@ -60,7 +60,7 @@ TEST_F(DropNullsErrorTest, EmptyInput) {
 }
 
 /*
- * Runs drop_nulls checking for errors, and compares the result column 
+ * Runs drop_nulls checking for errors, and compares the result column
  * to the specified expected result column.
  */
 template <typename T>
@@ -154,7 +154,7 @@ struct DropNullsTableTest : GdfTest {};
 static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factory;
 
 /*
- * Runs drop_nulls checking for errors, and compares the result column 
+ * Runs drop_nulls checking for errors, and compares the result column
  * to the specified expected result column.
  */
 void DropNullsTable(cudf::table const &source,

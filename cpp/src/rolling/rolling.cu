@@ -616,16 +616,16 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 }
 
 /**
-* @copydoc cudf::experimental::rolling_window(
-*                                  column_view const& input,
-*                                  PrecedingWindowIterator preceding_window_begin,
-*                                  FollowingWindowIterator following_window_begin,
-*                                  size_type min_periods,
-*                                  std::unique_ptr<aggregation> const& agg,
-*                                  rmm::mr::device_memory_resource* mr)
-*
-* @param stream The stream to use for CUDA operations
-*/
+ * @copydoc cudf::experimental::rolling_window(
+ *                                  column_view const& input,
+ *                                  PrecedingWindowIterator preceding_window_begin,
+ *                                  FollowingWindowIterator following_window_begin,
+ *                                  size_type min_periods,
+ *                                  std::unique_ptr<aggregation> const& agg,
+ *                                  rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream The stream to use for CUDA operations
+ */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        PrecedingWindowIterator preceding_window_begin,
@@ -745,7 +745,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   // Thus, for an input of 1000 rows,
   //   0. [] indicates a single group, spanning the entire column.
   //   1  [10] is invalid.
-  //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no groups.)
+  //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no
+  //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
   assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&
@@ -810,8 +811,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   column_view const& timestamp_column,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type
-    preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes days for now.
+  size_type preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes days
+                                       // for now.
   size_type following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,

@@ -16,7 +16,7 @@
 
 #pragma once
 
-//Quantile (percentile) functionality
+// Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
 #include <cudf/detail/utilities/release_assert.cuh>
@@ -83,13 +83,13 @@ namespace detail {
 /**
  * @brief Helper struct that calculates the values needed to get quantile values
  * by interpolation.
- * 
- * For a quantile that lies between indices i and j, this struct calculates 
+ *
+ * For a quantile that lies between indices i and j, this struct calculates
  * i (lower_bound),
  * j (upper_bound),
  * index nearest to quantile between i and j (nearest),
  * and the fractional distance that the quantile lies ahead i (fraction)
- * 
+ *
  */
 struct quantile_index {
   cudf::size_type lower_bound;
@@ -125,12 +125,12 @@ CUDA_HOST_DEVICE_CALLABLE T get_array_value(T const* devarr, cudf::size_type loc
 
 /**
  * @brief Gets the value at the given quantile
- * 
+ *
  * @param devarr array of values to get quantile from
  * @param size size of @p devarr
  * @param quantile Number in [0,1] indicating quantile to get
  * @param interpolation method to calculate value when quantile lies at inexact index
- * @return value at quantile 
+ * @return value at quantile
  */
 template <typename T, typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE RetT select_quantile(T const* devarr,

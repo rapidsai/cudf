@@ -138,9 +138,9 @@ using test_types = ::testing::Types<int8_t,
 TYPED_TEST_CASE(ApplyBooleanMaskTest, test_types);
 
 /*
- * Runs apply_boolean_mask checking for errors, and compares the result column 
+ * Runs apply_boolean_mask checking for errors, and compares the result column
  * to the specified expected result column.
- * 
+ *
  * Note this wraps creating a single-column table to make it simpler to test all
  * data types
  */

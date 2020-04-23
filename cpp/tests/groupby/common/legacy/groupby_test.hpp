@@ -93,7 +93,7 @@ inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& r
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Verifies the equality of two vectors of columns 
+ * @brief Verifies the equality of two vectors of columns
  *
  * @param lhs The first array
  * @param rhs The second array

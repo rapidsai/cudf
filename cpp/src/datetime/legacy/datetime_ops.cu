@@ -27,8 +27,9 @@
 #include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 
-/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
- The piece of code borrowed and modified is:
+/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07
+http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018 The piece of code
+borrowed and modified is:
 
  **************************************************************************************
 // Returns year/month/day triple in civil calendar

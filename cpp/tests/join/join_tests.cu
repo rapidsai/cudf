@@ -367,7 +367,7 @@ TEST_F(JoinTest, InnerJoinWithNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-//Empty Left Table
+// Empty Left Table
 TEST_F(JoinTest, EmptyLeftTableInnerJoin) {
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
@@ -428,7 +428,7 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin) {
   cudf::test::expect_tables_equal(t1, *result);
 }
 
-//Empty Right Table
+// Empty Right Table
 TEST_F(JoinTest, EmptyRightTableInnerJoin) {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
@@ -489,7 +489,7 @@ TEST_F(JoinTest, EmptyRightTableFullJoin) {
   cudf::test::expect_tables_equal(t0, *result);
 }
 
-//Both tables empty
+// Both tables empty
 TEST_F(JoinTest, BothEmptyInnerJoin) {
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
@@ -550,7 +550,7 @@ TEST_F(JoinTest, BothEmptyFullJoin) {
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
-//EqualValues X Inner,Left,Full
+// EqualValues X Inner,Left,Full
 
 TEST_F(JoinTest, EqualValuesInnerJoin) {
   column_wrapper<int32_t> col0_0{{0, 0}};

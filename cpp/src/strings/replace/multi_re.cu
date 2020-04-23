@@ -42,7 +42,8 @@ using found_range = thrust::pair<size_type, size_type>;
  * The logic includes computing the size of each string and also writing the output.
  *
  * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
+ * So the size of the stack is in proportion to the number of instructions in the given regex
+ * pattern.
  *
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
@@ -163,7 +164,8 @@ std::unique_ptr<column> replace_re(
 
   // create child columns
   std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
-  // Each invocation is predicated on the stack size which is dependent on the number of regex instructions
+  // Each invocation is predicated on the stack size which is dependent on the number of regex
+  // instructions
   if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
     children = make_strings_children(
       replace_multi_regex_fn<RX_STACK_SMALL>{

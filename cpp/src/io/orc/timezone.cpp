@@ -35,8 +35,8 @@ namespace io {
 
 #pragma pack(push, 1)
 /**
-  * @brief 32-bit TZif header
-  **/
+ * @brief 32-bit TZif header
+ **/
 struct tzif_hdr_s {
   uint32_t magic;          // "TZif"
   uint8_t version;         // 0:version1, '2':version2, '3':version3
@@ -46,8 +46,8 @@ struct tzif_hdr_s {
   uint32_t leapcnt;        // number of leap second records contained in the body
   uint32_t timecnt;        // number of transition times contained in the body
   uint32_t typecnt;  // number of local time type Records contained in the body - MUST NOT be zero
-  uint32_t
-    charcnt;  // total number of octets used by the set of time zone designations contained in the body
+  uint32_t charcnt;  // total number of octets used by the set of time zone designations contained
+                     // in the body
 };
 
 struct localtime_type_record_s {
@@ -304,7 +304,8 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts) {
 /**
  * @brief Creates a transition table to convert ORC timestanps to UTC
  *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
+ * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
+ *transitions repeat forever with 400 year cycle)
  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
  *
  * @return true if successful, false if failed to find/parse the timezone information
@@ -406,7 +407,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
       fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
     }
     fin.close();
-    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules (2 transitions/year)
+    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
+    // (2 transitions/year)
     table.resize((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
     earliest_std_idx = 0;
     for (size_t t = 0; t < tzh.timecnt; t++) {
@@ -471,7 +473,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
     // Add gmt offset
     table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
   } else {
-    //printf("Failed to open \"%s\"\n", tz_filename.c_str());
+    // printf("Failed to open \"%s\"\n", tz_filename.c_str());
     return false;
   }
   return true;

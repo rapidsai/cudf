@@ -231,12 +231,12 @@ inline bool has_nulls(table_view view) {
 }
 
 /**---------------------------------------------------------------------------*
-   * @brief Checks if two `table_view`s have columns of same types
-   *
-   * @param lhs left-side table_view operand
-   * @param rhs right-side table_view operand
-   * @return boolean comparison result
-   *---------------------------------------------------------------------------**/
+ * @brief Checks if two `table_view`s have columns of same types
+ *
+ * @param lhs left-side table_view operand
+ * @param rhs right-side table_view operand
+ * @return boolean comparison result
+ *---------------------------------------------------------------------------**/
 inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
   return std::equal(
     lhs.begin(),

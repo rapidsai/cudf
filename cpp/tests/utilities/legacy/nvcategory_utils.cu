@@ -55,11 +55,11 @@ gdf_column *create_nv_category_column(cudf::size_type num_rows, bool repeat_stri
 
   for (cudf::size_type row_index = 0; row_index < num_rows; row_index++) {
     string_host_data[row_index] =
-      new char[(num_rows + 25) / 26];  //allows string to grow depending on numbe of rows
+      new char[(num_rows + 25) / 26];  // allows string to grow depending on numbe of rows
     std::string temp_string = "";
     int num_chars           = repeat_strings ? 1 : (row_index / 26) + 1;
     char repeat_char =
-      (26 - (row_index % 26)) + 65;  //chars are Z,Y ...C,B,A,ZZ,YY,.....BBB,AAA.....
+      (26 - (row_index % 26)) + 65;  // chars are Z,Y ...C,B,A,ZZ,YY,.....BBB,AAA.....
     for (int char_index = 0; char_index < num_chars; char_index++) {
       temp_string.push_back(repeat_char);
     }

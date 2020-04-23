@@ -32,7 +32,8 @@ namespace detail {
 namespace {
 
 /**
- * @brief Type-dispatch functor for remapping the old indices to new values based on the new key-set.
+ * @brief Type-dispatch functor for remapping the old indices to new values based on the new
+ * key-set.
  *
  * The dispatch is based on the key type.
  * The output column is the new indices column for the new dictionary column.

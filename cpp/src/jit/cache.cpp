@@ -56,7 +56,7 @@ boost::filesystem::path get_user_home_cache_dir() {
  * doesn't exist.
  *
  * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
- * are used and if $HOME is not defined, returns an empty path and file 
+ * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
  **/
 boost::filesystem::path getCacheDir() {

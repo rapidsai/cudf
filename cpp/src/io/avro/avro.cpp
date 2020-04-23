@@ -52,7 +52,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row) 
         schema_parser sp;
         if (!sp.parse(md->schema, value)) { return false; }
       } else {
-        //printf("\"%s\" = \"%s\"\n", key.c_str(), value.c_str());
+        // printf("\"%s\" = \"%s\"\n", key.c_str(), value.c_str());
         md->user_data.emplace(key, value);
       }
     }
@@ -189,7 +189,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
     switch (c) {
       case '"':
         str = get_str();
-        //printf("str: \"%s\" (cur_attr=%d, state=%d)\n", str.c_str(), cur_attr, state);
+        // printf("str: \"%s\" (cur_attr=%d, state=%d)\n", str.c_str(), cur_attr, state);
         if (state == state_attrname && cur_attr == attrtype_none &&
             typenames.find(str) != typenames.end()) {
           cur_attr = attrtype_type;
@@ -309,7 +309,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
       default: return false;
     }
   }
-  //printf("schema (%d entries) = %s\n", (int)schema.size(), m_base);
+  // printf("schema (%d entries) = %s\n", (int)schema.size(), m_base);
   return true;
 }
 

@@ -90,7 +90,8 @@ std::unique_ptr<column> add_keys(
                                                           mr,
                                                           stream)
                          ->release();
-  // the result may contain nulls if the input contains nulls and the corresponding index is therefore invalid
+  // the result may contain nulls if the input contains nulls and the corresponding index is
+  // therefore invalid
   auto contents       = table_indices.front()->release();
   auto indices_column = std::make_unique<column>(data_type{INT32},
                                                  dictionary_column.size(),

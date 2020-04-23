@@ -52,7 +52,7 @@ struct zip_eocd_s  // end of central directory
   uint32_t cdir_size;      // size of the central directory
   uint32_t
     cdir_offset;  // offset of start of central directory with respect to the starting disk number
-                  //uint16_t comment_len;   // comment length (excluded from struct)
+                  // uint16_t comment_len;   // comment length (excluded from struct)
 };
 
 struct zip64_eocdl  // end of central dir locator
@@ -275,16 +275,16 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @Brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
  * The result is allocated and stored in a vector.
  * If the function call fails, the output vector is empty.
- * 
+ *
  * @param src[in] Pointer to the compressed data in system memory
  * @param src_size[in] The size of the compressed data, in bytes
  * @param strm_type[in] Type of compression of the input data
  * @param dst[out] Vector containing the uncompressed output
- * 
+ *
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
@@ -366,9 +366,8 @@ gdf_error io_uncompress_single_h2d(const void *src,
   }
   if (!comp_data || comp_len <= 0) return GDF_UNSUPPORTED_DTYPE;
   if (uncomp_len <= 0) {
-    uncomp_len =
-      comp_len * 4 +
-      4096;  // In case uncompressed size isn't known in advance, assume ~4:1 compression for initial size
+    uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
+                                       // ~4:1 compression for initial size
   }
 
   if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP) {
@@ -412,14 +411,14 @@ gdf_error io_uncompress_single_h2d(const void *src,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Uncompresses the input data and stores the allocated result into 
+ * @brief Uncompresses the input data and stores the allocated result into
  * a vector.
- * 
+ *
  * @param[in] h_data Pointer to the csv data in host memory
  * @param[in] num_bytes Size of the input data, in bytes
  * @param[in] compression String describing the compression type
  * @param[out] h_uncomp_data Vector containing the output uncompressed data
- * 
+ *
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
 gdf_error getUncompressedHostData(const char *h_data,
@@ -441,8 +440,8 @@ gdf_error getUncompressedHostData(const char *h_data,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief ZLIB host decompressor class
-*/
+ * @Brief ZLIB host decompressor class
+ */
 /* ----------------------------------------------------------------------------*/
 
 class HostDecompressor_ZLIB : public HostDecompressor {
@@ -471,8 +470,8 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief SNAPPY host decompressor class
-*/
+ * @Brief SNAPPY host decompressor class
+ */
 /* ----------------------------------------------------------------------------*/
 
 class HostDecompressor_SNAPPY : public HostDecompressor {
@@ -567,12 +566,12 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief CPU decompression class
-*
-* @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
-*
-* @returns corresponding HostDecompressor class, nullptr if failure
-*/
+ * @Brief CPU decompression class
+ *
+ * @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+ *
+ * @returns corresponding HostDecompressor class, nullptr if failure
+ */
 /* ----------------------------------------------------------------------------*/
 
 HostDecompressor *HostDecompressor::Create(int stream_type) {

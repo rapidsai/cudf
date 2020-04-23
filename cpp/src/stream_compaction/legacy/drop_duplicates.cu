@@ -114,7 +114,7 @@ auto get_unique_ordered_indices(const cudf::table& keys,
                              comp,
                              keep);
   }
-  //not resizing vector to avoid copy
+  // not resizing vector to avoid copy
 
   return std::make_pair(std::move(unique_indices),
                         thrust::distance(unique_indices.begin(), result_end));
@@ -162,7 +162,7 @@ cudf::size_type unique_count(const cudf::table& keys,
   }
 }
 
-}  //namespace detail
+}  // namespace detail
 
 cudf::table drop_duplicates(const cudf::table& input,
                             const cudf::table& keys,
@@ -214,8 +214,8 @@ cudf::size_type unique_count(gdf_column const& input,
                              bool const nan_as_null) {
   if (0 == input.size || input.null_count == input.size) { return 0; }
   gdf_column col{input};
-  //TODO: remove after NaN support to equality operator is added
-  //if (nan_as_null)
+  // TODO: remove after NaN support to equality operator is added
+  // if (nan_as_null)
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
     auto temp      = nans_to_nulls(col);
     col.valid      = reinterpret_cast<cudf::valid_type*>(temp.first);
@@ -227,7 +227,7 @@ cudf::size_type unique_count(gdf_column const& input,
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64))
     bit_mask::destroy_bit_mask(reinterpret_cast<bit_mask::bit_mask_t*>(col.valid));
 
-  //TODO: remove after NaN support to equality operator is added
+  // TODO: remove after NaN support to equality operator is added
   // if nan is counted as null when null is already present.
   if (not nan_as_null and has_nans and cudf::has_nulls(input)) ++count;
 

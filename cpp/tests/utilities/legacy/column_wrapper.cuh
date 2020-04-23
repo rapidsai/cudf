@@ -517,7 +517,7 @@ struct column_wrapper {
 
   /**---------------------------------------------------------------------------*
    * @brief Prints the values of the underlying gdf_column to a string
-   * 
+   *
    *---------------------------------------------------------------------------**/
   std::string to_str() const {
     std::ostringstream buffer;

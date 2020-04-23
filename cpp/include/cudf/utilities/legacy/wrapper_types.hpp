@@ -27,29 +27,29 @@
 #include <type_traits>
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @file wrapper_types.hpp
  * @brief  Wrapper structs for for the non-fundamental gdf_dtype types.
  *
- * These structs simply wrap a single member variable of a fundamental type 
- * called "value". 
- * 
+ * These structs simply wrap a single member variable of a fundamental type
+ * called "value".
+ *
  * These wrapper structures are used in conjunction with the type_dispatcher to
- * emulate "strong typedefs", i.e., provide opaque types that allow template 
+ * emulate "strong typedefs", i.e., provide opaque types that allow template
  * specialization. A normal C++ typedef is simply an alias and does not allow
  * for specializing a template or overloading a function.
- * 
+ *
  * The purpose of these "strong typedefs" is to provide a one-to-one mapping between
  * gdf_dtype enum values and concrete C++ types and allow distinguishing columns with
  * different gdf_dtype types, but have the same underlying type. For example,
  * the underlying type of both GDF_DATE32 and GDF_INT32 is int32_t. However, if
  * one wished to specialize a functor invoked with the type_dispatcher to handle
  * GDF_DATE32 different from GDF_INT32, that would not be possible with aliases.
- * 
+ *
  * The standard arithmetic operators are defined for these wrapper structs such
  * that they can be used as if they were fundamental arithmetic types.
- * 
- * In general, interacting with the wrapper structs should be done via the defined 
+ *
+ * In general, interacting with the wrapper structs should be done via the defined
  * operators. However, if one needs to directly access the underlying value, the
  * "unwrap" function may be used. Calling `unwrap` on an instance of a wrapper struct
  * will return a reference to the underlying value. Calling `unwrap` on an instance
@@ -60,15 +60,15 @@
 namespace cudf {
 namespace detail {
 /**
-     * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values 
-     * that do not correspond to fundamental types.
-     * 
-     * Implements operators that allow the wrapper to be used as if it were a fundamental
-     * type.
-     * 
-     * @tparam T  The type of the wrapped value, i.e., the "underlying type" of the wrapper
-     * @tparam type_id  The wrapped gdf_dtype
-     */
+ * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values
+ * that do not correspond to fundamental types.
+ *
+ * Implements operators that allow the wrapper to be used as if it were a fundamental
+ * type.
+ *
+ * @tparam T  The type of the wrapped value, i.e., the "underlying type" of the wrapper
+ * @tparam type_id  The wrapped gdf_dtype
+ */
 template <typename T, gdf_dtype type_id>
 struct wrapper {
   static constexpr gdf_dtype corresponding_column_type{type_id};  ///< The wrapped gdf_dtype
@@ -206,13 +206,13 @@ CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator/(wrapper<T, type_id> cons
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
-     * @brief  Returns a reference to the underlying "value" member of a wrapper struct
-     * 
-     * @param[in] wrapped A non-const reference to the wrapper struct to unwrap
-     * 
-     * @returns A reference to the underlying wrapped value  
-     */
+/**
+ * @brief  Returns a reference to the underlying "value" member of a wrapper struct
+ *
+ * @param[in] wrapped A non-const reference to the wrapper struct to unwrap
+ *
+ * @returns A reference to the underlying wrapped value
+ */
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type &unwrap(
   wrapper<T, type_id> &wrapped) {
@@ -220,13 +220,13 @@ CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type &unwrap(
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
-     * @brief  Returns a reference to the underlying "value" member of a wrapper struct
-     * 
-     * @param[in] wrapped A const reference to the wrapper struct to unwrap
-     * 
-     * @returns A const reference to the underlying wrapped value  
-     */
+/**
+ * @brief  Returns a reference to the underlying "value" member of a wrapper struct
+ *
+ * @param[in] wrapped A const reference to the wrapper struct to unwrap
+ *
+ * @returns A const reference to the underlying wrapped value
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type const &unwrap(
@@ -235,17 +235,17 @@ CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type const &unwrap
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
-     * @brief Passthrough function for fundamental types
-     *
-     * This specialization of "unwrap" is provided such that it can be used in generic
-     * code that is agnostic to whether or not the type being operated on is a wrapper
-     * struct or a fundamental type
-     * 
-     * @param[in] value Reference to a fundamental type to passthrough
-     * 
-     * @returns Reference to the value passed in
-     */
+/**
+ * @brief Passthrough function for fundamental types
+ *
+ * This specialization of "unwrap" is provided such that it can be used in generic
+ * code that is agnostic to whether or not the type being operated on is a wrapper
+ * struct or a fundamental type
+ *
+ * @param[in] value Reference to a fundamental type to passthrough
+ *
+ * @returns Reference to the value passed in
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
@@ -255,17 +255,17 @@ CUDA_HOST_DEVICE_CALLABLE
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
-     * @brief Passthrough function for fundamental types
-     *
-     * This specialization of "unwrap" is provided such that it can be used in generic
-     * code that is agnostic to whether or not the type being operated on is a wrapper
-     * struct or a fundamental type
-     * 
-     * @param[in] value const reference to a fundamental type to passthrough
-     * 
-     * @returns const reference to the value passed in
-     */
+/**
+ * @brief Passthrough function for fundamental types
+ *
+ * This specialization of "unwrap" is provided such that it can be used in generic
+ * code that is agnostic to whether or not the type being operated on is a wrapper
+ * struct or a fundamental type
+ *
+ * @param[in] value const reference to a fundamental type to passthrough
+ *
+ * @returns const reference to the value passed in
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
@@ -276,14 +276,14 @@ CUDA_HOST_DEVICE_CALLABLE
 
 /**---------------------------------------------------------------------------*
  * @brief Trait to use to get underlying type of wrapped object
- * 
+ *
  * This struct can be used with either a fundamental type or a wrapper type and
  * it uses unwrap to get the underlying type.
- * 
- * Example use case: 
+ *
+ * Example use case:
  *  Making a functor to use with a `type_dispatcher` that works on the
  *  underlying type of all `gdf_dtype`
- *  
+ *
  * ```c++
  * struct example_functor{
  *  template <typename T>
@@ -293,7 +293,7 @@ CUDA_HOST_DEVICE_CALLABLE
  *  }
  * };
  * ```
- * 
+ *
  * @tparam T Either wrapped object type or fundamental type
  *---------------------------------------------------------------------------**/
 template <typename T>
@@ -303,13 +303,13 @@ struct unwrapped_type {
 
 /**---------------------------------------------------------------------------*
  * @brief Helper type for `unwrapped_type`
- * 
+ *
  * Example:
  * ```c++
- * using T1 = cudf::detail::unwrapped_type_t<date32>; // T1 = int 
- * using T2 = cudf::detail::unwrapped_type_t<float>;  // T2 = float 
+ * using T1 = cudf::detail::unwrapped_type_t<date32>; // T1 = int
+ * using T2 = cudf::detail::unwrapped_type_t<float>;  // T2 = float
  * ```
- * 
+ *
  * @tparam T Either wrapped object type or fundamental type
  *---------------------------------------------------------------------------**/
 template <typename T>
@@ -442,7 +442,7 @@ struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the lowest finite value representable by the numeric type T
-   * 
+   *
    * Returns a finite value x such that there is no other finite value y where y < x
    *---------------------------------------------------------------------------**/
   static constexpr wrapper_t lowest() noexcept {
@@ -451,7 +451,7 @@ struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the minimum finite value representable by the numeric type T
-   * 
+   *
    * For floating-point types with denormalization, min returns the minimum
    * positive normalized value.
    *---------------------------------------------------------------------------**/
@@ -459,10 +459,10 @@ struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
 };
 
 /** --------------------------------------------------------------------------*
-  * @brief Specialization of std::numeric_limits for cudf::bool8
-  *
-  * Required since the underlying type, int8_t, has different limits than bool
-  * --------------------------------------------------------------------------**/
+ * @brief Specialization of std::numeric_limits for cudf::bool8
+ *
+ * Required since the underlying type, int8_t, has different limits than bool
+ * --------------------------------------------------------------------------**/
 template <>
 struct numeric_limits<cudf::bool8> {
   static constexpr cudf::bool8 max() noexcept {

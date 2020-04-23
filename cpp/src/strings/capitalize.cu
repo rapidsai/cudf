@@ -32,9 +32,9 @@ namespace strings {
 namespace detail {
 namespace {  // anonym.
 
-//base class for probing string
-//manipulation memory load requirements;
-//and for executing string modification:
+// base class for probing string
+// manipulation memory load requirements;
+// and for executing string modification:
 //
 struct probe_execute_base {
   using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
@@ -72,10 +72,10 @@ struct probe_execute_base {
   char* d_chars_;
 };
 
-//class that factors out the common inside-loop behavior
-//of operator() between capitalize's `probe` and `execute`;
+// class that factors out the common inside-loop behavior
+// of operator() between capitalize's `probe` and `execute`;
 //(public inheritance to allow getters pass-through
-//in derived classes);
+// in derived classes);
 //
 struct probe_execute_capitalize : public probe_execute_base {
   explicit probe_execute_capitalize(column_device_view const d_column)
@@ -99,14 +99,14 @@ struct probe_execute_capitalize : public probe_execute_base {
   }
 };
 
-//functor for probing string capitalization
-//requirements:
+// functor for probing string capitalization
+// requirements:
 //(private inheritance to prevent polymorphic use,
 // a requirement that came up in code review)
 //
 struct probe_capitalize : private probe_execute_capitalize {
   explicit probe_capitalize(column_device_view const d_column)
-    :  //probe_execute_base(d_column)
+    :  // probe_execute_base(d_column)
       probe_execute_capitalize(d_column) {}
 
   __device__ int32_t operator()(size_type idx) const {
@@ -122,13 +122,13 @@ struct probe_capitalize : private probe_execute_capitalize {
   }
 };
 
-//functor for executing string capitalization:
+// functor for executing string capitalization:
 //(private inheritance to prevent polymorphic use,
 // a requirement that came up in code review)
 //
 struct execute_capitalize : private probe_execute_capitalize {
   execute_capitalize(column_device_view const d_column, int32_t const* d_offsets, char* d_chars)
-    :  //probe_execute_base(d_column, d_offsets, d_chars)
+    :  // probe_execute_base(d_column, d_offsets, d_chars)
       probe_execute_capitalize(d_column, d_offsets, d_chars) {}
 
   __device__ int32_t operator()(size_type idx) {
@@ -144,10 +144,10 @@ struct execute_capitalize : private probe_execute_capitalize {
   }
 };
 
-//class that factors out the common inside-loop behavior
-//of operator() between title's `probe` and `execute`;
+// class that factors out the common inside-loop behavior
+// of operator() between title's `probe` and `execute`;
 //(public inheritance to allow getters pass-through
-//in derived classes);
+// in derived classes);
 //
 struct probe_execute_title : public probe_execute_base {
   explicit probe_execute_title(column_device_view const d_column) : probe_execute_base(d_column) {}
@@ -175,8 +175,8 @@ struct probe_execute_title : public probe_execute_base {
   }
 };
 
-//functor for probing string title-ization
-//requirements:
+// functor for probing string title-ization
+// requirements:
 //(private inheritance to prevent polymorphic use,
 // a requirement that came up in code review)
 //
@@ -200,7 +200,7 @@ struct probe_title : private probe_execute_title {
   }
 };
 
-//functor for executing string title-ization:
+// functor for executing string title-ization:
 //(private inheritance to prevent polymorphic use,
 // a requirement that came up in code review)
 //
@@ -252,9 +252,10 @@ std::unique_ptr<column> modify_strings(
     thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
   auto offsets_column = detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
-  auto offsets_view  = offsets_column->view();
-  auto d_new_offsets = offsets_view.template data<
-    int32_t>();  //not sure why this requires `.template` and the next one (`d_chars = ...`) doesn't
+  auto offsets_view = offsets_column->view();
+  auto d_new_offsets =
+    offsets_view.template data<int32_t>();  // not sure why this requires `.template` and the next
+                                            // one (`d_chars = ...`) doesn't
 
   // build the chars column -- convert characters based on case_flag parameter
   size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
@@ -280,7 +281,7 @@ std::unique_ptr<column> modify_strings(
                              mr);
 }
 
-}  //namespace detail
+}  // namespace detail
 
 std::unique_ptr<column> capitalize(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr) {
@@ -294,5 +295,5 @@ std::unique_ptr<column> title(strings_column_view const& strings,
   return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr);
 }
 
-}  //namespace strings
-}  //namespace cudf
+}  // namespace strings
+}  // namespace cudf

@@ -32,8 +32,8 @@ namespace cudf {
 
 /**
  * @brief An owning class to represent a singular value
- * 
- * A scalar is a singular value of any of the supported datatypes in cudf. 
+ *
+ * A scalar is a singular value of any of the supported datatypes in cudf.
  * Classes derived from this class are used to represent a scalar. Objects of
  * derived classes should be upcasted to this class while passing to an
  * external libcudf API.
@@ -53,7 +53,7 @@ class scalar {
 
   /**
    * @brief Updates the validity of the value
-   * 
+   *
    * @param is_valid true: set the value to valid. false: set it to null
    * @param stream The CUDA stream to do the operation in
    */
@@ -63,7 +63,7 @@ class scalar {
    * @brief Indicates whether the scalar contains a valid value
    *
    * @note Using the value when `is_valid() == false` is undefined behaviour
-   * 
+   *
    * @param stream The CUDA stream to do the operation in
    * @return true Value is valid
    * @return false Value is invalid/null
@@ -88,10 +88,10 @@ class scalar {
 
   /**
    * @brief Construct a new scalar object
-   * 
+   *
    * @note Do not use this constructor directly. Instead, use a factory method
    * like make_numeric_scalar or make_string_scalar
-   * 
+   *
    * @param type Data type of the scalar
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -121,7 +121,7 @@ class fixed_width_scalar : public scalar {
 
   /**
    * @brief Set the value of the scalar
-   * 
+   *
    * @param value New value of scalar
    * @param stream The CUDA stream to do the operation in
    */
@@ -137,7 +137,7 @@ class fixed_width_scalar : public scalar {
 
   /**
    * @brief Get the value of the scalar
-   * 
+   *
    * @param stream The CUDA stream to do the operation in
    */
   T value(cudaStream_t stream = 0) const { return _data.value(stream); }
@@ -159,7 +159,7 @@ class fixed_width_scalar : public scalar {
 
   /**
    * @brief Construct a new fixed width scalar object
-   * 
+   *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -190,7 +190,7 @@ class fixed_width_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a numerical value in device memory
- * 
+ *
  * @tparam T the data type of the numerical value
  */
 template <typename T>
@@ -207,7 +207,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 
   /**
    * @brief Construct a new numeric scalar object
-   * 
+   *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -249,7 +249,7 @@ class string_scalar : public scalar {
 
   /**
    * @brief Construct a new string scalar object
-   * 
+   *
    * @param value The value of the string
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -264,7 +264,7 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object from string_view
    * Note that this function copies the data pointed by string_view.
-   * 
+   *
    * @param source string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -279,7 +279,7 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object from string_view in device memory
    * Note that this function copies the data pointed by string_view.
-   * 
+   *
    * @param data device_scalar string_view pointing string value to copy
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in
@@ -298,14 +298,14 @@ class string_scalar : public scalar {
 
   /**
    * @brief Get the value of the scalar in a host std::string
-   * 
+   *
    * @param stream The CUDA stream to do the operation in
    */
   std::string to_string(cudaStream_t stream = 0) const;
 
   /**
    * @brief Get the value of the scalar as a string_view
-   * 
+   *
    * @param stream The CUDA stream to do the operation in
    */
   value_type value(cudaStream_t stream = 0) const { return value_type{data(), size()}; }
@@ -326,7 +326,7 @@ class string_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a timestamp value in device memory
- * 
+ *
  * @tparam T the data type of the timestamp value
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types
  */
@@ -344,7 +344,7 @@ class timestamp_scalar : public detail::fixed_width_scalar<T> {
 
   /**
    * @brief Construct a new timestamp scalar object
-   * 
+   *
    * @param value The initial value of the scalar
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream The CUDA stream to do the allocation in

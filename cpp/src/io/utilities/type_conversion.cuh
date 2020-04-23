@@ -24,9 +24,9 @@ namespace io {
 
 /**
  * @brief Convert a string to a cuDF data_type
- * 
+ *
  * @param[in] dtype The string to be converted
- * 
+ *
  * @return data_type The converted data type
  */
 data_type convert_string_to_dtype(const std::string &dtype);

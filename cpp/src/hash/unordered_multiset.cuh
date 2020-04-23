@@ -55,7 +55,7 @@ class unordered_multiset_device_view {
 };
 
 /*
- * Fixed size set on a device.  
+ * Fixed size set on a device.
  *
  */
 template <typename Element,

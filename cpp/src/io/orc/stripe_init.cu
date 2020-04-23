@@ -62,8 +62,9 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         max_uncompressed_size = 0;
         break;
       }
-      // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual uncompressed size and avoid waste due to block size alignment
-      // For now, rely on the max compression ratio to limit waste for the most extreme cases (small single-block streams)
+      // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
+      // uncompressed size and avoid waste due to block size alignment For now, rely on the max
+      // compression ratio to limit waste for the most extreme cases (small single-block streams)
       uncompressed_size =
         (is_uncompressed)
           ? block_len
@@ -168,8 +169,9 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         uncompressed_size_actual =
           SHFL0((t == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
       }
-      // In practice, this should never happen with a well-behaved writer, as we would expect the uncompressed size to always be equal to
-      // the compression block size except for the last block
+      // In practice, this should never happen with a well-behaved writer, as we would expect the
+      // uncompressed size to always be equal to the compression block size except for the last
+      // block
       if (uncompressed_actual < uncompressed_estimated) {
         // warp-level memmove
         for (int i = t; i < (int)uncompressed_size_actual; i += 32) {
@@ -265,8 +267,8 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
       case GET_LENGTH:
         if (length == 0) {
           length = (uint32_t)(cur + v - start);
-          state =
-            NOT_FOUND;  // Scan for positions (same field id & low-level type as RowIndexEntry entry)
+          state = NOT_FOUND;  // Scan for positions (same field id & low-level type as RowIndexEntry
+                              // entry)
         } else {
           pos_end = min((uint32_t)(cur + v - start), length);
           state   = STORE_INDEX0;

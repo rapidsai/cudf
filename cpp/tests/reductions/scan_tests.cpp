@@ -334,7 +334,7 @@ TYPED_TEST(ScanTest, skip_nulls) {
   const column_view input_view = col_in;
   std::unique_ptr<cudf::column> col_out;
 
-  //test output calculation
+  // test output calculation
   std::vector<TypeParam> out_v(input_view.size());
   std::vector<bool> out_b(input_view.size());
 
@@ -347,7 +347,7 @@ TYPED_TEST(ScanTest, skip_nulls) {
 
   std::partial_sum(b.cbegin(), b.cend(), out_b.begin(), std::logical_and<bool>{});
 
-  //skipna=true (default)
+  // skipna=true (default)
   CUDF_EXPECT_NO_THROW(col_out =
                          cudf::experimental::scan(input_view,
                                                   cudf::experimental::make_sum_aggregation(),
@@ -362,7 +362,7 @@ TYPED_TEST(ScanTest, skip_nulls) {
     print_view(col_out->view(), "result = ");
   }
 
-  //skipna=false
+  // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
                          cudf::experimental::scan(input_view,
                                                   cudf::experimental::make_sum_aggregation(),
@@ -402,7 +402,7 @@ TEST_F(ScanStringTest, skip_nulls) {
   cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
   cudf::test::strings_column_wrapper expected2(exact.begin(), exact.end(), out_b.begin());
   std::unique_ptr<cudf::column> col_out;
-  //skipna=false
+  // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
                          cudf::experimental::scan(col_nulls,
                                                   cudf::experimental::make_max_aggregation(),
@@ -415,7 +415,7 @@ TEST_F(ScanStringTest, skip_nulls) {
   cudf::test::expect_column_properties_equal(expected2, col_out->view());
   cudf::test::expect_columns_equal(expected2, col_out->view());
 
-  //Exclusive scan string not supported.
+  // Exclusive scan string not supported.
   CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::scan(col_nulls,
                                                       cudf::experimental::make_min_aggregation(),
                                                       scan_type::EXCLUSIVE,
@@ -436,11 +436,11 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls) {
   cudf::test::fixed_width_column_wrapper<TypeParam> const col_in(v.begin(), v.end(), b.begin());
   std::unique_ptr<cudf::column> col_out;
 
-  //test output calculation
+  // test output calculation
   std::vector<TypeParam> out_v(v.size());
   std::vector<bool> out_b(v.size());
 
-  //skipna=true (default)
+  // skipna=true (default)
   CUDF_EXPECT_NO_THROW(
     col_out = cudf::experimental::scan(
       col_in, cudf::experimental::make_sum_aggregation(), scan_type::INCLUSIVE, include_nulls::NO));
@@ -453,7 +453,7 @@ TYPED_TEST(ScanTest, EmptyColumnskip_nulls) {
     print_view(col_out->view(), "result = ");
   }
 
-  //skipna=false
+  // skipna=false
   CUDF_EXPECT_NO_THROW(col_out =
                          cudf::experimental::scan(col_in,
                                                   cudf::experimental::make_sum_aggregation(),

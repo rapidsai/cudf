@@ -150,7 +150,7 @@ special_case_mapping* d_special_case_mappings           = nullptr;
 }  // namespace
 
 /**
- * @copydoc cudf::strings::detail::get_character_flags_table 
+ * @copydoc cudf::strings::detail::get_character_flags_table
  */
 const character_flags_table_type* get_character_flags_table() {
   std::lock_guard<std::mutex> guard(g_flags_table_mutex);
@@ -163,7 +163,7 @@ const character_flags_table_type* get_character_flags_table() {
 }
 
 /**
- * @copydoc cudf::strings::detail::get_character_cases_table 
+ * @copydoc cudf::strings::detail::get_character_cases_table
  */
 const character_cases_table_type* get_character_cases_table() {
   std::lock_guard<std::mutex> guard(g_cases_table_mutex);
@@ -176,7 +176,7 @@ const character_cases_table_type* get_character_cases_table() {
 }
 
 /**
- * @copydoc cudf::strings::detail::get_special_case_mapping_table 
+ * @copydoc cudf::strings::detail::get_special_case_mapping_table
  */
 const special_case_mapping* get_special_case_mapping_table() {
   std::lock_guard<std::mutex> guard(g_special_case_mappings_mutex);

@@ -64,7 +64,7 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
   constexpr cudf::size_type table_n_rows{1000};
   constexpr cudf::size_type scatter_size{table_n_rows};
 
-  //data
+  // data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols,
     {table_n_rows,
@@ -77,9 +77,9 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
   std::vector<gdf_column *> v_cols(table_n_cols);
   for (size_t i = 0; i < v_colwrap.size(); i++) v_cols[i] = v_colwrap[i].get();
 
-  //input datatypes
+  // input datatypes
   cudf::table input_table{v_cols};
-  //test
+  // test
   if (std::is_same<cudf::size_type, TypeParam>())
     EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map));
   else
@@ -93,7 +93,7 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
   constexpr cudf::size_type table_n_rows{1000};
   constexpr cudf::size_type scatter_size{table_n_rows};
 
-  //data
+  // data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols,
     {table_n_rows,
@@ -103,23 +103,23 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
   std::vector<gdf_column *> v_cols(table_n_cols);
   for (size_t i = 0; i < v_colwrap.size(); i++) v_cols[i] = v_colwrap[i].get();
 
-  //input datatypes
+  // input datatypes
   cudf::table input_table{v_cols};
 
-  //1. No-Null
+  // 1. No-Null
   cudf::test::column_wrapper<cudf::size_type> scatter_map1(
     scatter_size,
     [](cudf::size_type row) { return row % 2; },
     [](cudf::size_type row) { return true; });
   EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map1));
-  //2. All-Null
+  // 2. All-Null
   cudf::test::column_wrapper<cudf::size_type> scatter_map2(
     scatter_size,
     [](cudf::size_type row) { return row % 2; },
     [](cudf::size_type row) { return false; });
   CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map2),
                             "Scatter map cannot contain null elements.");
-  //3. Some-Null
+  // 3. Some-Null
   cudf::test::column_wrapper<cudf::size_type> scatter_map3(
     scatter_size,
     [](cudf::size_type row) { return row % 2; },
@@ -133,7 +133,7 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
 
-  //data
+  // data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols,
     {table_n_rows,
@@ -143,19 +143,19 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
   std::vector<gdf_column *> v_cols(table_n_cols);
   for (size_t i = 0; i < v_colwrap.size(); i++) v_cols[i] = v_colwrap[i].get();
 
-  //input datatypes
+  // input datatypes
   cudf::table input_table{v_cols};
 
-  //1. Equal
+  // 1. Equal
   cudf::test::column_wrapper<cudf::size_type> scatter_map1(
     table_n_rows, [](cudf::size_type row) { return row; }, false);
   EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map1));
-  //2. Lesser
+  // 2. Lesser
   cudf::test::column_wrapper<cudf::size_type> scatter_map2(
     table_n_rows / 2, [](cudf::size_type row) { return row; }, false);
   CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map2),
                             "scatter_map length is not equal to number of rows in input table.");
-  //3. Greater
+  // 3. Greater
   cudf::test::column_wrapper<cudf::size_type> scatter_map3(
     table_n_rows * 2, [](cudf::size_type row) { return row; }, false);
   CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map3),
@@ -164,26 +164,26 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 
 // Test expected output if some of inputs sizes are zero.
 /*
-* c   = number of input table columns
-* r   = number of input table rows
-* sm  = number of rows in scatter_map column
-* o/p = number of output tables
-*
-* c r sm  RESULT
-* 0 * *   seg fault (zero columns is not allowed)
-* 1 0 0   pass  (o/p=0)
-* 1 0 1   throw (r!=sm)
-* 1 1 0   throw (r!=sm)
-* 1 1 1   pass  (o/p=1)
-*
-*/
+ * c   = number of input table columns
+ * r   = number of input table rows
+ * sm  = number of rows in scatter_map column
+ * o/p = number of output tables
+ *
+ * c r sm  RESULT
+ * 0 * *   seg fault (zero columns is not allowed)
+ * 1 0 0   pass  (o/p=0)
+ * 1 0 1   throw (r!=sm)
+ * 1 1 0   throw (r!=sm)
+ * 1 1 1   pass  (o/p=1)
+ *
+ */
 TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
   cudf::size_type table_n_cols = 1;
   for (cudf::size_type table_n_rows : {0, 1}) {
     for (cudf::size_type scatter_size : {0, 1}) {
-      //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
+      // std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
 
-      //data
+      // data
       std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
         table_n_cols,
         {table_n_rows,
@@ -192,7 +192,7 @@ TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
       std::vector<gdf_column *> v_cols(table_n_cols);
       for (size_t i = 0; i < v_colwrap.size(); i++) v_cols[i] = v_colwrap[i].get();
 
-      //input datatypes
+      // input datatypes
       cudf::table input_table{v_cols};
       cudf::test::column_wrapper<cudf::size_type> scatter_map(
         scatter_size, [](cudf::size_type row) { return row; }, false);
@@ -301,7 +301,7 @@ TYPED_TEST(ScatterToTablesTest, FunctionalTest) {
     // Perform scatter in cpu
     std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) =
       scatter_columns(input_cols_data, input_cols_bitmask, std::get<0>(scatter_map.to_host()));
-    //Compare GPU and CPU results
+    // Compare GPU and CPU results
     EXPECT_EQ(output_cols_data.size(), output_tables.size())
       << "Expected=" << scatter_case.first << std::endl;
     for (size_t i = 0; i < output_cols_data.size(); i++) {

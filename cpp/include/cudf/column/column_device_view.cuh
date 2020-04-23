@@ -39,7 +39,7 @@ namespace detail {
  * not-obvious computation of null count, which could lead to undesirable performance issues.
  * This information is also generally not needed in device code, and on the host-side
  * is easily accessible from the associated column_view.
- *   
+ *
  */
 class alignas(16) column_device_view_base {
  public:
@@ -217,7 +217,7 @@ class alignas(16) column_device_view_base {
     : _type{type}, _size{size}, _data{data}, _null_mask{null_mask}, _offset{offset} {}
 };
 
-//Forward declaration
+// Forward declaration
 template <typename T>
 struct value_accessor;
 template <typename T, bool has_nulls>
@@ -276,12 +276,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
   /**
    * @brief Return an iterator to the first element of the column.
-   * 
-   * This iterator only supports columns where `has_nulls() == false`. Using it 
+   *
+   * This iterator only supports columns where `has_nulls() == false`. Using it
    * with columns where `has_nulls() == true` will result in undefined behavior
    * when accessing null elements.
-   * 
-   * For columns with null elements, use `make_null_replacement_iterator`.   
+   *
+   * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T>
   const_iterator<T> begin() const {
@@ -289,13 +289,13 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
-   * @brief Return an iterator to the element following the last element of the column. 
+   * @brief Return an iterator to the element following the last element of the column.
    *
-   * This iterator only supports columns where `has_nulls() == false`. Using it 
+   * This iterator only supports columns where `has_nulls() == false`. Using it
    * with columns where `has_nulls() == true` will result in undefined behavior
    * when accessing null elements.
-   * 
-   * For columns with null elements, use `make_null_replacement_iterator`.   
+   *
+   * For columns with null elements, use `make_null_replacement_iterator`.
    */
   template <typename T>
   const_iterator<T> end() const {
@@ -321,7 +321,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * Else, if the element at `i` is null, then the value of `p.first` is
    * undefined and `p.second == false`.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and 
+   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
    * `nullable() == false`
    * @throws `cudf::logic_error` if column datatype and Element type mismatch.
    */
@@ -335,7 +335,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @brief Return a pair iterator to the element following the last element of
    * the column.
    *
-   * @throws `cudf::logic_error` if tparam `has_nulls == true` and 
+   * @throws `cudf::logic_error` if tparam `has_nulls == true` and
    * `nullable() == false`
    * @throws `cudf::logic_error` if column datatype and Element type mismatch.
    */
@@ -566,7 +566,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * not reccomended to use this function in performance critical regions. When
    * possible, it is more efficient to compute and update an entire word at
    * once using `set_mask_word`.
-   * 
+   *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -583,7 +583,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * not reccomended to use this function in performance critical regions. When
    * possible, it is more efficient to compute and update an entire word at
    * once using `set_mask_word`.
-   * 
+   *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
@@ -665,9 +665,9 @@ __device__ inline string_view const column_device_view::element<string_view>(
 /**
  * @brief Returns `dictionary32` element at the specified index for a
  * dictionary column.
- * 
+ *
  * `dictionary32` is a strongly typed wrapper around an `int32_t` value that holds the
- * offset into the dictionary keys for the specified element. 
+ * offset into the dictionary keys for the specified element.
  *
  * For example, given a dictionary column `d` with:
  * ```c++

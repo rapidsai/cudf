@@ -269,7 +269,7 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
     count += v.size();
   }
 
-  //If concatenated column is nullable, proceed to calculate it
+  // If concatenated column is nullable, proceed to calculate it
   if (has_nulls) {
     cudf::detail::concatenate_masks(views, (col->mutable_view()).null_mask(), stream);
   }

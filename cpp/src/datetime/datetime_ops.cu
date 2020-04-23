@@ -91,9 +91,9 @@ struct extract_last_day_of_month {
     using namespace simt::std::chrono;
     // IDEAL: does not work with CUDA10.0 due to nvcc compiler bug
     // cannot invoke ym_last_day.day()
-    //const year_month_day orig_ymd(floor<days>(ts));
-    //const year_month_day_last ym_last_day(orig_ymd.year(), month_day_last(orig_ymd.month()));
-    //return timestamp_D(sys_days(ym_last_day));
+    // const year_month_day orig_ymd(floor<days>(ts));
+    // const year_month_day_last ym_last_day(orig_ymd.year(), month_day_last(orig_ymd.month()));
+    // return timestamp_D(sys_days(ym_last_day));
 
     // Only has the days - time component is chopped off, which is what we want
     auto const days_since_epoch = floor<days>(ts);

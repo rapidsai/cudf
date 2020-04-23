@@ -58,7 +58,8 @@ namespace detail {
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,
@@ -149,7 +150,7 @@ cudf::size_type unique_count(column_view const& input,
                              cudaStream_t stream = 0);
 
 /**---------------------------------------------------------------------------*
- * @brief A structure to be used for checking `NAN` at an index in a 
+ * @brief A structure to be used for checking `NAN` at an index in a
  * `column_device_view`
  *
  * @tparam T The type of `column_device_view`
@@ -208,7 +209,7 @@ struct has_nans {
    * @brief Checks if `input` has `NAN`
    *
    * @note This will be applicable only for non-floating point type columns. And
-   * non-floating point columns can never have `NAN`, so it will always return 
+   * non-floating point columns can never have `NAN`, so it will always return
    * false
    *
    * @param[in] input The `column_view` which will be checked for `NAN`

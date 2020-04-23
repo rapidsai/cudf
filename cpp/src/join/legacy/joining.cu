@@ -47,7 +47,7 @@ namespace cudf {
  * @param[in] buffer_length Amount of memory to be allocated
  * @param[in] value The value to be filled into the buffer
  * @tparam data_type The data type to be used for the buffer
- * 
+ *
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -67,7 +67,7 @@ gdf_error allocValueBuffer(data_type** buffer,
  * @param[in,out] buffer Address of the buffer to be allocated
  * @param[in] buffer_length Amount of memory to be allocated
  * @tparam data_type The data type to be used for the buffer
- * 
+ *
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -79,13 +79,13 @@ gdf_error allocSequenceBuffer(data_type** buffer, const cudf::size_type buffer_l
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Trivially computes full join of two tables if one of the tables
  * are empty
  *
  * @throws cudf::logic_error
  * "Dataset is empty" if both left_table and right_table are empty
- * 
+ *
  * @param[in] left_size The size of the left table
  * @param[in] right_size The size of the right table
  * @param[in] rightcol The right set of columns to join
@@ -142,7 +142,7 @@ void trivial_full_join(const cudf::size_type left_size,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Computes the join operation between two sets of columns
  *
  * @throws cudf::logic_error
@@ -150,7 +150,7 @@ void trivial_full_join(const cudf::size_type left_size,
  * If number of rows in table is too big
  * If it has in-valid join context
  * If method is sort based and number of columns to join are more than `1`
- * 
+ *
  * @param[in] left  Table of left columns to join
  * @param[in] right Table of right  columns to join
  * @param[out] left_result The join computed indices of the `left` table
@@ -271,7 +271,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Gathers rows indicated by `left_indices` and `right_indices` from
  * tables `left` and `right`, respectively, into a single `table`.
  *
@@ -282,7 +282,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
  *
  * @throws cudf::logic_error
  * If call to nvcategory_gather_table fails
- * 
+ *
  * @param[in] left   The left table
  * @param[in] right  the right table
  * @param[in] columns_in_common is a vector of pairs of column indices
@@ -295,7 +295,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
  * is out of bounds, the contribution in the output `table` will be NULL.
  * @param[in] right_indicess  Row indices from `right` to gather. If any row
  * index is out of bounds, the contribution in the output `table` will be NULL.
- * 
+ *
  * @returns `table` containing the concatenation of rows from `left` and
  * `right` specified by `left_indices` and `right_indices`, respectively.
  * For any columns indicated by `columns_in_common`, only the corresponding
@@ -312,7 +312,7 @@ cudf::table construct_join_output_df(
   gdf_column* left_indices,
   gdf_column* right_indices) {
   nvtx::range_push("CUDF_JOIN_OUTPUT", nvtx::JOIN_COLOR);
-  //create left and right input table with columns not joined on
+  // create left and right input table with columns not joined on
   std::vector<cudf::size_type> left_columns_in_common(columns_in_common.size());
   std::vector<cudf::size_type> right_columns_in_common(columns_in_common.size());
 
@@ -406,7 +406,7 @@ cudf::table construct_join_output_df(
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Performs join on the columns provided in `left` and `right` as per
  * the joining indices given in `left_on` and `right_on` and creates a single
  * table.
@@ -419,7 +419,7 @@ cudf::table construct_join_output_df(
  * @param[in] left_on The column's indices from `left` to join on.
  * Column `i` from `left_on` will be compared against column `i` of `right_on`.
  * @param[in] right_on The column's indices from `right` to join on.
- * Column `i` from `right_on` will be compared with column `i` of `left_on`. 
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
@@ -482,9 +482,9 @@ cudf::table join_call_compute_df(
     return tmp_table;
   }
 
-  // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
-  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
-  // If the inputs are empty, immediately return
+  // Even though the resulting table might be empty, but the column should match the expected dtypes
+  // and other necessary information So, there is a possibility that there will be lesser number of
+  // right columns, so the tmp_table. If the inputs are empty, immediately return
   if ((0 == left.num_rows()) && (0 == right.num_rows())) { return tmp_table; }
 
   // If left join and the left table is empty, return immediately
@@ -495,7 +495,7 @@ cudf::table join_call_compute_df(
     return cudf::empty_like(tmp_table);
   }
 
-  //if the inputs are nvcategory we need to make the dictionaries comparable
+  // if the inputs are nvcategory we need to make the dictionaries comparable
   bool at_least_one_category_column = std::any_of(cbegin(left_on), cend(left_on), [&](auto index) {
     return (left.get_column(index)->dtype == GDF_STRING_CATEGORY);
   });
@@ -604,7 +604,7 @@ cudf::table join_call_compute_df(
     right_index_out  = right_index_temp.get();
   }
 
-  //get column pointers to join on
+  // get column pointers to join on
   join_call<join_type>(updated_left_table.select(left_on),
                        updated_right_table.select(right_on),
                        left_index_out,
@@ -616,7 +616,7 @@ cudf::table join_call_compute_df(
   left_index_temp.reset(nullptr);
   right_index_temp.reset(nullptr);
 
-  //freeing up the temp column used to synch categories between columns
+  // freeing up the temp column used to synch categories between columns
   for (unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size();
        column_to_free++) {
     gdf_column_free(temp_columns_to_free[column_to_free]);

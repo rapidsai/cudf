@@ -44,7 +44,7 @@ namespace detail {
 
 /**
  * @brief Functor to dispatch aggregation with
- * 
+ *
  * This functor is to be used with `aggregation_dispatcher` to compute the
  * appropriate aggregation. If the values on which to run the aggregation are
  * unchanged, then this functor should be re-used. This is because it stores
@@ -66,7 +66,7 @@ struct store_result_functor {
  private:
   /**
    * @brief Get the grouped values
-   * 
+   *
    * Computes the grouped values from @p values on first invocation and returns
    * the stored result on subsequent invocation
    */
@@ -86,8 +86,8 @@ struct store_result_functor {
 
   /**
    * @brief Get the grouped and sorted values
-   * 
-   * Computes the grouped and sorted (within each group) values from @p values 
+   *
+   * Computes the grouped and sorted (within each group) values from @p values
    * on first invocation and returns the stored result on subsequent invocation
    */
   column_view get_sorted_values() {

@@ -23,13 +23,14 @@ namespace cudf {
 namespace io {
 
 /**
-  * @brief Creates a transition table to convert ORC timestanps to UTC
-  *
-  * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
-  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
-  *
-  * @return true if successful, false if failed to find/parse the timezone information
-  **/
+ * @brief Creates a transition table to convert ORC timestanps to UTC
+ *
+ * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
+ *transitions repeat forever with 400 year cycle)
+ * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
+ *
+ * @return true if successful, false if failed to find/parse the timezone information
+ **/
 bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
 
 }  // namespace io

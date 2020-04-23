@@ -20,7 +20,8 @@
 #include "reduction_functions.cuh"
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
-//                 The divisor used in calculations is N - ddof, where N represents the number of elements.
+//                 The divisor used in calculations is N - ddof, where N represents the number of
+//                 elements.
 
 gdf_scalar cudf::reduction::variance(gdf_column const& col,
                                      gdf_dtype const output_dtype,

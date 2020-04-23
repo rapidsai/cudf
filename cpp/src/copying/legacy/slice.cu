@@ -61,12 +61,12 @@ __global__ void slice_data_kernel(ColumnType* output_data,
 }
 
 /** @brief This function copies a slice of a bitmask.
- * 
- * If the slice is from element 10 to element 40, element 10 corresponds to bit 3 of the second byte, 
- * that bit needs to become bit 0. So we are reading two adjacent blocks and bitshifting them together,
- * to then write one block. We also take care that if the last bits of a bit_mask_t block don't 
- * correspond to this slice, then we to apply a mask to clear those bits.
-*/
+ *
+ * If the slice is from element 10 to element 40, element 10 corresponds to bit 3 of the second
+ * byte, that bit needs to become bit 0. So we are reading two adjacent blocks and bitshifting them
+ * together, to then write one block. We also take care that if the last bits of a bit_mask_t block
+ * don't correspond to this slice, then we to apply a mask to clear those bits.
+ */
 __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
                                      cudf::size_type* output_null_count,
                                      bit_mask_t const* input_bitmask,
@@ -117,8 +117,8 @@ __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
 
     // Perform null bitmask null count
     std::uint32_t null_count_value =
-      __popc(output_bitmask
-               [row_index]);  // Count the number of bits that are set to 1 in a 32 bit integer.
+      __popc(output_bitmask[row_index]);  // Count the number of bits that are set to 1 in a 32 bit
+                                          // integer.
     atomicAdd(output_null_count, null_count_value);
 
     row_index += row_step;
@@ -250,7 +250,7 @@ std::vector<gdf_column*> slice(gdf_column const& input_column,
 
   // Initialize output_columns
   output_columns.resize(num_indices / 2);
-  //TODO: optimize to launch all slices in parallel
+  // TODO: optimize to launch all slices in parallel
   for (cudf::size_type i = 0; i < num_indices / 2; i++) {
     output_columns[i] = new gdf_column{};
     gdf_column_view_augmented(output_columns[i],

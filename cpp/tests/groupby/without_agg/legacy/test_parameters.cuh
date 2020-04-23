@@ -29,11 +29,11 @@
 
 // Selects the kind of join operation that is performed
 enum struct agg_op {
-  MIN,  //0
-  MAX,  //1
-  SUM,  //2
-  CNT,  //3
-  AVG   //4
+  MIN,  // 0
+  MAX,  // 1
+  SUM,  // 2
+  CNT,  // 3
+  AVG   // 4
 };
 
 template <agg_op op>
@@ -109,9 +109,9 @@ struct TestParameters {};
 // number/types of columns for use with Google Test type-parameterized
 // tests. Here agg_operation refers to the type of aggregation eg. min,
 // max etc. and group_method refers to the underlying group algorithm
-//that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
-//tuple of datatypes that specify the column types to be tested.
-//AggOutput specifies the output type of the aggregated column.
+// that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
+// tuple of datatypes that specify the column types to be tested.
+// AggOutput specifies the output type of the aggregated column.
 template <agg_op agg_operation, gdf_method group_method, typename... K, typename AggOutput>
 struct TestParameters<agg_operation, group_method, VTuple<K...>, AggOutput> {
   // The method to use for the groupby

@@ -21,20 +21,20 @@
 #if defined(JITIFY_USE_CACHE)
 /**---------------------------------------------------------------------------*
  * @brief This test runs two processes that try to access the same kernel
- * 
+ *
  * This is a stress test.
- * 
- * A single test process is forked before invocation of CUDA and then both the 
+ *
+ * A single test process is forked before invocation of CUDA and then both the
  * parent and child processes try to get and run a kernel. The child process
  * clears the cache before each iteration of the test so that the cache has to
- * be re-written by it. The parent process runs on a changing time offset so 
+ * be re-written by it. The parent process runs on a changing time offset so
  * that it sometimes gets the kernel from cache and sometimes it doesn't.
- * 
+ *
  * The aim of this test is to check that the file cache doesn't get corrupted
- * when multiple processes are reading/writing to it at the same time. Since 
+ * when multiple processes are reading/writing to it at the same time. Since
  * the public API of JitCache doesn't return the serialized string of the
  * cached kernel, the way to test its validity is to run it on test data.
- * 
+ *
  *---------------------------------------------------------------------------**/
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
   int num_tests = 20;

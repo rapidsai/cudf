@@ -26,9 +26,9 @@ namespace groupby {
 namespace sort {
 
 /**---------------------------------------------------------------------------*
- @brief  Compute the aggregation(s) of corresponding rows in the `values` input 
+ @brief  Compute the aggregation(s) of corresponding rows in the `values` input
  * table using the key sorted order and the group labels.
- * 
+ *
  * The aggregations(s) is computed  by  performing elementwise aggregation
  * operations between a target (the corresponding output value row for group_id)
  * and source   (the corresponding input value row using the current keys sorted
@@ -40,8 +40,8 @@ namespace sort {
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam values_have_nulls Indicates if rows in `input_values` contain null
  * values
- * @param input_values The table whose rows will be aggregated in the 
- * output values table 
+ * @param input_values The table whose rows will be aggregated in the
+ * output values table
  * @param output_values Table that stores the results of aggregating rows of
  * `input_values`.
  * @param key_sorted_order The sorted order of the `keys` in sort-based groupby

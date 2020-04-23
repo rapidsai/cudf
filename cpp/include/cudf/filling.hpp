@@ -25,7 +25,7 @@ namespace experimental {
 
 /**---------------------------------------------------------------------------*
  * @brief Fills a range of elements in-place in a column with a scalar value.
- * 
+ *
  * Fills N elements of @p destination starting at @p begin with @p value, where
  * N = (@p end - @p begin).
  *
@@ -57,7 +57,7 @@ void fill_in_place(mutable_column_view& destination,
 /**---------------------------------------------------------------------------*
  * @brief Fills a range of elements in a column out-of-place with a scalar
  * value.
- * 
+ *
  * Creates a new column as-if an in-place fill was performed into @p input;
  * i.e. it is as if a copy of @p input was created first and then the elements
  * indicated by the indices [@p begin, @p end) were overwritten by @p value.
@@ -84,9 +84,9 @@ std::unique_ptr<column> fill(column_view const& input,
 
 /**---------------------------------------------------------------------------*
  * @brief Repeat rows of a Table.
- * 
- * Creates a new table by repeating the rows of @p input_table. The number of 
- * repetitions of each element is defined by the value at the corresponding 
+ *
+ * Creates a new table by repeating the rows of @p input_table. The number of
+ * repetitions of each element is defined by the value at the corresponding
  * index of @p count
  * Example:
  * ```
@@ -120,7 +120,7 @@ std::unique_ptr<table> repeat(
 
 /**---------------------------------------------------------------------------*
  * @brief Repeat rows of a Table.
- * 
+ *
  * Creates a new table by repeating @p count times the rows of @p input_table.
  * Example:
  * ```
@@ -132,7 +132,7 @@ std::unique_ptr<table> repeat(
  * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
  * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
  * size_type.
- * 
+ *
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
  * @param mr Memory resource to allocate the result output table
@@ -145,21 +145,21 @@ std::unique_ptr<table> repeat(
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step.
- * 
- * Creates a new column and fills with @p size values starting at @p init and 
+ *
+ * Creates a new column and fills with @p size values starting at @p init and
  * incrementing by @p step, generating the sequence
  * [ init, init+step, init+2*step, ... init + (size - 1)*step]
  *
  * ```
  * size = 3
  * init = 0
- * step = 2 
+ * step = 2
  * return = [0, 2, 4]
- * ```  
+ * ```
  * @throws `cudf::logic_error` if @p init and @p @step are not the same type.
  * @throws `cudf::logic_error` if scalar types are not numeric.
- * @throws `cudf::logic_error` if @p size is < 0. 
- * 
+ * @throws `cudf::logic_error` if @p size is < 0.
+ *
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param step Increment value
@@ -174,21 +174,21 @@ std::unique_ptr<column> sequence(
 
 /**
  * @brief Fills a column with a sequence of value specified by an initial value and a step of 1.
- * 
- * Creates a new column and fills with @p size values starting at @p init and 
+ *
+ * Creates a new column and fills with @p size values starting at @p init and
  * incrementing by 1, generating the sequence
  * [ init, init+1, init+2, ... init + (size - 1)]
  *
  * ```
  * size = 3
- * init = 0 
+ * init = 0
  * return = [0, 1, 2]
- * ```   
+ * ```
  * @throws `cudf::logic_error` if @p init is not numeric.
- * @throws `cudf::logic_error` if @p size is < 0. 
- * 
+ * @throws `cudf::logic_error` if @p size is < 0.
+ *
  * @param size Size of the output column
- * @param init First value in the sequence 
+ * @param init First value in the sequence
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result table containing the sequence
  **/

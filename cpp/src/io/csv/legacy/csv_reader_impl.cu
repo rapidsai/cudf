@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -52,14 +52,14 @@ namespace io {
 namespace csv {
 
 /**---------------------------------------------------------------------------*
- * @brief Estimates the maximum expected length or a row, based on the number 
+ * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
- * 
- * If the number of columns is not available, it will return a value large 
+ *
+ * If the number of columns is not available, it will return a value large
  * enough for most use cases
- * 
+ *
  * @param[in] num_columns Number of columns in the CSV file (optional)
- * 
+ *
  * @return Estimated maximum size of a row, in bytes
  *---------------------------------------------------------------------------**/
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
@@ -76,7 +76,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
 }
 
 /**
- * @brief Translates a dtype string and returns its dtype enumeration and any 
+ * @brief Translates a dtype string and returns its dtype enumeration and any
  * extended dtype flags that are supported by cuIO. Often, this is a column
  * with the same underlying dtype the basic types, but with different parsing
  * interpretations.
@@ -104,8 +104,8 @@ std::tuple<gdf_dtype, gdf_dtype_extra_info, column_parse::flags> get_dtype_info(
 }
 
 /**
-* @brief Removes the first and Last quote in the string
-*/
+ * @brief Removes the first and Last quote in the string
+ */
 string removeQuotes(string str, char quotechar) {
   // Exclude first and last quotation char
   const size_t first_quote = str.find(quotechar);
@@ -117,12 +117,12 @@ string removeQuotes(string str, char quotechar) {
 }
 
 /**
- * @brief Parse the first row to set the column names in the raw_csv parameter 
+ * @brief Parse the first row to set the column names in the raw_csv parameter
  *
  * The first row can be either the header row, or the first data row
  *
  * @return void
-*/
+ */
 void reader::Impl::setColumnNamesFromCsv() {
   // If there is only a single character then it would be the terminator
   if (header.size() <= 1) { return; }
@@ -156,9 +156,9 @@ void reader::Impl::setColumnNamesFromCsv() {
         const string new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, opts.quotechar));
 
-        // Stop parsing when we hit the line terminator; relevant when there is a blank line following the header.
-        // In this case, first_row includes multiple line terminators at the end, as the new recStart belongs
-        // to a line that comes after the blank line(s)
+        // Stop parsing when we hit the line terminator; relevant when there is a blank line
+        // following the header. In this case, first_row includes multiple line terminators at the
+        // end, as the new recStart belongs to a line that comes after the blank line(s)
         if (!quotation && first_row[pos] == opts.terminator) { break; }
       } else {
         // This is the first data row, add the automatically generated name

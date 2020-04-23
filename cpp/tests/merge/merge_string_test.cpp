@@ -113,8 +113,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns) {
   cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
 
-//rename test <TestName> as DISABLED_<TestName> to disable:
-//Example: TYPED_TEST(MergeStringTest, DISABLED_Merge2StringKeyColumns)
+// rename test <TestName> as DISABLED_<TestName> to disable:
+// Example: TYPED_TEST(MergeStringTest, DISABLED_Merge2StringKeyColumns)
 //
 TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"});

@@ -55,8 +55,8 @@ struct nunique_functor {
          group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
           bool is_input_countable = (_include_nulls == include_nulls::YES || v.is_valid_nocheck(i));
           bool is_unique          = is_input_countable &&
-                           (group_offsets[group_labels[i]] == i ||  //first element or
-                            (not equal.operator()<T>(i, i - 1)));   //new unique value in sorted
+                           (group_offsets[group_labels[i]] == i ||  // first element or
+                            (not equal.operator()<T>(i, i - 1)));   // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
 
@@ -74,8 +74,8 @@ struct nunique_functor {
          equal,
          group_offsets = group_offsets.data().get(),
          group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
-          bool is_unique = group_offsets[group_labels[i]] == i ||  //first element or
-                           (not equal.operator()<T>(i, i - 1));    //new unique value in sorted
+          bool is_unique = group_offsets[group_labels[i]] == i ||  // first element or
+                           (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),

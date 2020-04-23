@@ -234,10 +234,10 @@ struct ftos_converter {
   }
 
   /**
-     * @brief Dissect a float value into integer, decimal, and exponent components.
-     *
-     * @return The number of decimal places.
-     */
+   * @brief Dissect a float value into integer, decimal, and exponent components.
+   *
+   * @return The number of decimal places.
+   */
   __device__ int dissect_value(double value,
                                unsigned int& integer,
                                unsigned int& decimal,
@@ -293,15 +293,15 @@ struct ftos_converter {
   }
 
   /**
-     * @brief Main kernel method for converting float value to char output array.
-     *
-     * Output need not be more than (significant_digits + 7) bytes:
-     * 7 = 1 sign, 1 decimal point, 1 exponent ('e'), 1 exponent-sign, 3 digits for exponent
-     *
-     * @param value Float value to convert.
-     * @param output Memory to write output characters.
-     * @return Number of bytes written.
-     */
+   * @brief Main kernel method for converting float value to char output array.
+   *
+   * Output need not be more than (significant_digits + 7) bytes:
+   * 7 = 1 sign, 1 decimal point, 1 exponent ('e'), 1 exponent-sign, 3 digits for exponent
+   *
+   * @param value Float value to convert.
+   * @param output Memory to write output characters.
+   * @return Number of bytes written.
+   */
   __device__ int float_to_string(double value, char* output) {
     // check for valid value
     if (std::isnan(value)) {
@@ -363,11 +363,11 @@ struct ftos_converter {
   }
 
   /**
-     * @brief Compute how man bytes are needed to hold the output string.
-     *
-     * @param value Float value to convert.
-     * @return Number of bytes required.
-     */
+   * @brief Compute how man bytes are needed to hold the output string.
+   *
+   * @param value Float value to convert.
+   * @return Number of bytes required.
+   */
   __device__ int compute_ftos_size(double value) {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;

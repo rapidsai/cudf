@@ -36,7 +36,8 @@ namespace {
  * of regex calls to find() to be inlined greatly reducing compile time.
  *
  * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
+ * So the size of the stack is in proportion to the number of instructions in the given regex
+ * pattern.
  *
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.

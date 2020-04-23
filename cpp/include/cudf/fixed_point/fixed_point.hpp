@@ -62,18 +62,18 @@ constexpr inline auto is_supported_construction_value_type() {
 // Helper functions for `fixed_point` type
 namespace detail {
 /**
-    * @brief A function for integer exponentiation by squaring
-    *
-    * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
-    * Note: this is the iterative equivalent of the recursive definition (faster) <br>
-    * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
-    * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
-    *
-    * @tparam Rep Representation type for return type
-    * @tparam Base The base to be exponentiated
-    * @param exponent The exponent to be used for exponentiation
-    * @return Result of `Base` to the power of `exponent` of type `Rep`
-    */
+ * @brief A function for integer exponentiation by squaring
+ *
+ * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
+ * Note: this is the iterative equivalent of the recursive definition (faster) <br>
+ * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
+ * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
+ *
+ * @tparam Rep Representation type for return type
+ * @tparam Base The base to be exponentiated
+ * @param exponent The exponent to be used for exponentiation
+ * @return Result of `Base` to the power of `exponent` of type `Rep`
+ */
 template <typename Rep,
           Radix Base,
           typename T,
@@ -95,58 +95,58 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent) {
 }
 
 /** @brief Helper function to negate strongly typed scale_type
-    *
-    * @param scale The scale to be negated
-    * @return The negated scale
-    */
+ *
+ * @param scale The scale to be negated
+ * @return The negated scale
+ */
 CUDA_HOST_DEVICE_CALLABLE
 auto negate(scale_type const& scale) { return scale_type{-scale}; }
 
 /** @brief Function that performs a `right shift` scale "times" on the `val`
-    *
-    * Note: perform this operation when constructing with positive scale
-    *
-    * @tparam Rep Representation type needed for integer exponentiation
-    * @tparam Rad The radix which will act as the base in the exponentiation
-    * @tparam T Type for value `val` being shifted and the return type
-    * @param val The value being shifted
-    * @param scale The amount to shift the value by
-    * @return Shifted value of type T
-    */
+ *
+ * Note: perform this operation when constructing with positive scale
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param val The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const& scale) {
   return val / ipow<Rep, Rad>(scale._t);
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
-    *
-    * Note: perform this operation when constructing with negative scale
-    *
-    * @tparam Rep Representation type needed for integer exponentiation
-    * @tparam Rad The radix which will act as the base in the exponentiation
-    * @tparam T Type for value `val` being shifted and the return type
-    * @param val The value being shifted
-    * @param scale The amount to shift the value by
-    * @return Shifted value of type T
-    */
+ *
+ * Note: perform this operation when constructing with negative scale
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param val The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const& scale) {
   return val * ipow<Rep, Rad>(-scale._t);
 }
 
 /** @brief Function that performs a `right` or `left shift`
-     * scale "times" on the `val`
-    *
-    * Note: Function will call the correct right or left shift based
-    * on the sign of `val`
-    *
-    * @tparam Rep Representation type needed for integer exponentiation
-    * @tparam Rad The radix which will act as the base in the exponentiation
-    * @tparam T Type for value `val` being shifted and the return type
-    * @param val The value being shifted
-    * @param scale The amount to shift the value by
-    * @return Shifted value of type T
-    */
+ * scale "times" on the `val`
+ *
+ * Note: Function will call the correct right or left shift based
+ * on the sign of `val`
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param val The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scale) {
   if (scale == 0)
@@ -158,18 +158,18 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
 }
 
 /** @brief Function that performs precise shift to avoid "lossiness"
-     * inherent in floating point values
-    *
-    * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
-    * will construct n to have a value of 1 without the precise shift
-    *
-    * @tparam Rep Representation type needed for integer exponentiation
-    * @tparam Rad The radix which will act as the base in the exponentiation
-    * @tparam T Type for value `val` being shifted and the return type
-    * @param value The value being shifted
-    * @param scale The amount to shift the value by
-    * @return Shifted value of type T
-    */
+ * inherent in floating point values
+ *
+ * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
+ * will construct n to have a value of 1 without the precise shift
+ *
+ * @tparam Rep Representation type needed for integer exponentiation
+ * @tparam Rad The radix which will act as the base in the exponentiation
+ * @tparam T Type for value `val` being shifted and the return type
+ * @param value The value being shifted
+ * @param scale The amount to shift the value by
+ * @return Shifted value of type T
+ */
 template <typename Rep,
           Radix Rad,
           typename T,
@@ -220,12 +220,12 @@ class fixed_point {
 
  public:
   /**
-    * @brief Constructor that will perform shifting to store value appropriately
-    *
-    * @tparam T The type that you are constructing from (integral or floating)
-    * @param value The value that will be constructed from
-    * @param scale The exponent that is applied to Rad to perform shifting
-    */
+   * @brief Constructor that will perform shifting to store value appropriately
+   *
+   * @tparam T The type that you are constructing from (integral or floating)
+   * @param value The value that will be constructed from
+   * @param scale The exponent that is applied to Rad to perform shifting
+   */
   template <typename T,
             typename std::enable_if_t<is_supported_construction_value_type<T>() &&
                                       is_supported_representation_type<Rep>()>* = nullptr>
@@ -234,27 +234,27 @@ class fixed_point {
       _scale{scale} {}
 
   /**
-    * @brief Constructor that will not perform shifting (assumes value already
-    * shifted)
-    *
-    * @param s scaled_integer that contains scale and already shifted value
-    */
+   * @brief Constructor that will not perform shifting (assumes value already
+   * shifted)
+   *
+   * @param s scaled_integer that contains scale and already shifted value
+   */
   CUDA_HOST_DEVICE_CALLABLE
   explicit fixed_point(scaled_integer<Rep> s) : _value{s.value}, _scale{s.scale} {}
 
   /**
-    * @brief Default constructor that constructs `fixed_point` number with a
-    * value and scale of zero
-    */
+   * @brief Default constructor that constructs `fixed_point` number with a
+   * value and scale of zero
+   */
   CUDA_HOST_DEVICE_CALLABLE
   fixed_point() : _value{0}, _scale{scale_type{0}} {}
 
   /**
-    * @brief Explicit conversion operator
-    *
-    * @tparam U The type that is being explicitly converted to (integral or floating)
-    * @return The `fixed_point` number in base 10 (aka human readable format)
-    */
+   * @brief Explicit conversion operator
+   *
+   * @tparam U The type that is being explicitly converted to (integral or floating)
+   * @return The `fixed_point` number in base 10 (aka human readable format)
+   */
   template <typename U,
             typename std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const {
@@ -262,12 +262,12 @@ class fixed_point {
   }
 
   /**
-    * @brief operator +=
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The sum
-    */
+   * @brief operator +=
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The sum
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator+=(
     fixed_point<Rep1, Rad1> const& rhs) {
@@ -276,12 +276,12 @@ class fixed_point {
   }
 
   /**
-    * @brief operator *=
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The product
-    */
+   * @brief operator *=
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The product
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator*=(
     fixed_point<Rep1, Rad1> const& rhs) {
@@ -290,12 +290,12 @@ class fixed_point {
   }
 
   /**
-    * @brief operator -=
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The difference
-    */
+   * @brief operator -=
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The difference
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator-=(
     fixed_point<Rep1, Rad1> const& rhs) {
@@ -304,12 +304,12 @@ class fixed_point {
   }
 
   /**
-    * @brief operator /=
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The quotient
-    */
+   * @brief operator /=
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The quotient
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1>& operator/=(
     fixed_point<Rep1, Rad1> const& rhs) {
@@ -318,10 +318,10 @@ class fixed_point {
   }
 
   /**
-    * @brief operator ++ (post-increment)
-    *
-    * @return The incremented result
-    */
+   * @brief operator ++ (post-increment)
+   *
+   * @return The incremented result
+   */
   CUDA_HOST_DEVICE_CALLABLE
   fixed_point<Rep, Rad>& operator++() {
     *this = *this + fixed_point<Rep, Rad>{1, scale_type{_scale}};
@@ -329,82 +329,82 @@ class fixed_point {
   }
 
   /**
-    * @brief operator + (for adding two `fixed_point` numbers)
-    *
-    * If `_scale`s are equal, `_value`s are added <br>
-    * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-    * greater `_scale`, and then `_value`s are added
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The resulting `fixed_point` sum
-    */
+   * @brief operator + (for adding two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are added <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are added
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The resulting `fixed_point` sum
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator+(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-    * @brief operator - (for subtracting two `fixed_point` numbers)
-    *
-    * If `_scale`s are equal, `_value`s are substracted <br>
-    * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-    * greater `_scale`, and then `_value`s are substracted
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The resulting `fixed_point` difference
-    */
+   * @brief operator - (for subtracting two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are substracted <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are substracted
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The resulting `fixed_point` difference
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator-(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-    * @brief operator * (for multiplying two `fixed_point` numbers)
-    *
-    * `_scale`s are added and `_value`s are multiplied
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The resulting `fixed_point` product
-    */
+   * @brief operator * (for multiplying two `fixed_point` numbers)
+   *
+   * `_scale`s are added and `_value`s are multiplied
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The resulting `fixed_point` product
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator*(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-    * @brief operator / (for dividing two `fixed_point` numbers)
-    *
-    * `_scale`s are substracted and `_value`s are divided
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return The resulting `fixed_point` quotient
-    */
+   * @brief operator / (for dividing two `fixed_point` numbers)
+   *
+   * `_scale`s are substracted and `_value`s are divided
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return The resulting `fixed_point` quotient
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend fixed_point<Rep1, Rad1> operator/(
     fixed_point<Rep1, Rad1> const& lhs, fixed_point<Rep1, Rad1> const& rhs);
 
   /**
-    * @brief operator == (for comparing two `fixed_point` numbers)
-    *
-    * If `_scale`s are equal, `_value`s are compared <br>
-    * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
-    * greater `_scale`, and then `_value`s are compared
-    *
-    * @tparam Rep1 Representation type of number being added to `this`
-    * @tparam Rad1 Radix (base) type of number being added to `this`
-    * @return true if `lhs` and `rhs` are equal, false if not
-    */
+   * @brief operator == (for comparing two `fixed_point` numbers)
+   *
+   * If `_scale`s are equal, `_value`s are compared <br>
+   * If `_scale`s are not equal, number with smaller `_scale` is shifted to the
+   * greater `_scale`, and then `_value`s are compared
+   *
+   * @tparam Rep1 Representation type of number being added to `this`
+   * @tparam Rad1 Radix (base) type of number being added to `this`
+   * @return true if `lhs` and `rhs` are equal, false if not
+   */
   template <typename Rep1, Radix Rad1>
   CUDA_HOST_DEVICE_CALLABLE friend bool operator==(fixed_point<Rep1, Rad1> const& lhs,
                                                    fixed_point<Rep1, Rad1> const& rhs);
 };
 
 /** @brief Function that converts Rep to `std::string`
-*
-* @tparam Rep Representation type
-* @return String-ified Rep
-*/
+ *
+ * @tparam Rep Representation type
+ * @return String-ified Rep
+ */
 template <typename Rep>
 std::string print_rep() {
   if (std::is_same<Rep, int32_t>::value)
@@ -416,13 +416,13 @@ std::string print_rep() {
 }
 
 /** @brief Function for identifying integer overflow when adding
-*
-* @tparam Rep Type of integer to check for overflow on
-* @tparam T Types of lhs and rhs (ensures they are the same type)
-* @param lhs Left hand side of addition
-* @param rhs Right hand side of addition
-* @return true if addition causes overflow, false otherwise
-*/
+ *
+ * @tparam Rep Type of integer to check for overflow on
+ * @tparam T Types of lhs and rhs (ensures they are the same type)
+ * @param lhs Left hand side of addition
+ * @param rhs Right hand side of addition
+ * @return true if addition causes overflow, false otherwise
+ */
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs) {
   return rhs > 0 ? lhs > std::numeric_limits<Rep>::max() - rhs
@@ -430,13 +430,13 @@ CUDA_HOST_DEVICE_CALLABLE auto addition_overflow(T lhs, T rhs) {
 }
 
 /** @brief Function for identifying integer overflow when subtracting
-*
-* @tparam Rep Type of integer to check for overflow on
-* @tparam T Types of lhs and rhs (ensures they are the same type)
-* @param lhs Left hand side of subtraction
-* @param rhs Right hand side of subtraction
-* @return true if subtraction causes overflow, false otherwise
-*/
+ *
+ * @tparam Rep Type of integer to check for overflow on
+ * @tparam T Types of lhs and rhs (ensures they are the same type)
+ * @param lhs Left hand side of subtraction
+ * @param rhs Right hand side of subtraction
+ * @return true if subtraction causes overflow, false otherwise
+ */
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs) {
   return rhs > 0 ? lhs < std::numeric_limits<Rep>::min() + rhs
@@ -444,26 +444,26 @@ CUDA_HOST_DEVICE_CALLABLE auto subtraction_overflow(T lhs, T rhs) {
 }
 
 /** @brief Function for identifying integer overflow when dividing
-*
-* @tparam Rep Type of integer to check for overflow on
-* @tparam T Types of lhs and rhs (ensures they are the same type)
-* @param lhs Left hand side of division
-* @param rhs Right hand side of division
-* @return true if division causes overflow, false otherwise
-*/
+ *
+ * @tparam Rep Type of integer to check for overflow on
+ * @tparam T Types of lhs and rhs (ensures they are the same type)
+ * @param lhs Left hand side of division
+ * @param rhs Right hand side of division
+ * @return true if division causes overflow, false otherwise
+ */
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto division_overflow(T lhs, T rhs) {
   return lhs == std::numeric_limits<Rep>::min() && rhs == -1;
 }
 
 /** @brief Function for identifying integer overflow when multiplying
-*
-* @tparam Rep Type of integer to check for overflow on
-* @tparam T Types of lhs and rhs (ensures they are the same type)
-* @param lhs Left hand side of multiplication
-* @param rhs Right hand side of multiplication
-* @return true if multiplication causes overflow, false otherwise
-*/
+ *
+ * @tparam Rep Type of integer to check for overflow on
+ * @tparam T Types of lhs and rhs (ensures they are the same type)
+ * @param lhs Left hand side of multiplication
+ * @param rhs Right hand side of multiplication
+ * @return true if multiplication causes overflow, false otherwise
+ */
 template <typename Rep, typename T>
 CUDA_HOST_DEVICE_CALLABLE auto multiplication_overflow(T lhs, T rhs) {
   auto const min = std::numeric_limits<Rep>::min();
@@ -564,13 +564,13 @@ CUDA_HOST_DEVICE_CALLABLE bool operator==(fixed_point<Rep1, Rad1> const& lhs,
 }
 
 /**
-* @brief ostream operator for outputting `fixed_point` number
-*
-* @tparam Rep Representation type of number being output
-* @tparam Rad Radix (base) type of number being output
-* @param os target ostream
-* @return fp `fixed_point` number being output
-*/
+ * @brief ostream operator for outputting `fixed_point` number
+ *
+ * @tparam Rep Representation type of number being output
+ * @tparam Rad Radix (base) type of number being output
+ * @param os target ostream
+ * @return fp `fixed_point` number being output
+ */
 template <typename Rep, Radix Radix>
 std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp) {
   return os << static_cast<double>(fp);

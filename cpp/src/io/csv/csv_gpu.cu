@@ -418,7 +418,7 @@ struct decode_op {
   }
 
   /**
-   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>

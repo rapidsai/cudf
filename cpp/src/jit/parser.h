@@ -26,15 +26,15 @@ namespace cudf {
 namespace jit {
 
 /**
- * @brief Parse and transform a piece of PTX code that contains the implementation 
+ * @brief Parse and transform a piece of PTX code that contains the implementation
  * of a `__device__` function into a CUDA `__device__` `__inline__` function.
- * 
+ *
  * @param `src` The input PTX code.
  * @param `function_name` The User defined function that the output CUDA function
  * will have.
  * @param `output_arg_type` The output type of the PTX function, e.g. "int", "int64_t"
  * @return The output CUDA `__device__` `__inline__` function
-*/
+ */
 class ptx_parser {
  private:
   std::string ptx;
@@ -55,36 +55,36 @@ class ptx_parser {
    * parameters are determined from, in descending order of priority:
    *  1. The first parameter is always of type "`output_arg_type`*"
    *  2. All other parameters marked in pointer_arg_list are of type "const void*"
-   *  3. For parameters that are used in the function body their types are 
+   *  3. For parameters that are used in the function body their types are
    *      inferred from their corresponding parameter loading instructions
    *  4. Unused parameters are always of type "int"
    *
    * @param src The header part of the PTX code
    * @return The parsed CUDA header
-   
+
    As an example:
 
     .visible .func  (.param .b32 func_retval0) _ZN8__main__7add$241Eff(
-	    .param .b64 _ZN8__main__7add$241Eff_param_0,
-	    .param .b32 _ZN8__main__7add$241Eff_param_1,
-	    .param .b32 _ZN8__main__7add$241Eff_param_2
+      .param .b64 _ZN8__main__7add$241Eff_param_0,
+      .param .b32 _ZN8__main__7add$241Eff_param_1,
+      .param .b32 _ZN8__main__7add$241Eff_param_2
     )
 
    will be transformed to
 
     __device__ __inline__ void GENERIC_BINARY_OP(
-        float* _ZN8__main__7add_241Eff_param_0, 
-        float _ZN8__main__7add_241Eff_param_1, 
+        float* _ZN8__main__7add_241Eff_param_0,
+        float _ZN8__main__7add_241Eff_param_1,
         float _ZN8__main__7add_241Eff_param_2
     )
-   
+
    */
   std::string parse_function_header(const std::string& src);
 
   /**
-   * @brief parse and transform input parameter list of the PTX code into the 
+   * @brief parse and transform input parameter list of the PTX code into the
    * corresponding CUDA form
-   * 
+   *
    * @param src The input parameter list part of the PTX code
    * @return The parsed CUDA input parameter list
    */
@@ -93,7 +93,7 @@ class ptx_parser {
   /**
    * @brief parse and transform an input parameter line of the PTX code into the
    * corresponding CUDA form
-   * 
+   *
    * @param src The input parameter line of the PTX code
    * @return The parsed CUDA input parameter
    */
@@ -101,7 +101,7 @@ class ptx_parser {
 
   /**
    * @brief parse function body of the the PTX code into statements by `;`s.
-   * 
+   *
    * @param src The function body of the PTX code
    * @return The parsed statements
    */
@@ -109,7 +109,7 @@ class ptx_parser {
 
   /**
    * @brief Remove leading white chractors and call `parse_instruction`.
-   * 
+   *
    * @param src The statement to be parsed.
    * @return The resulting CUDA statement.
    */
@@ -118,10 +118,10 @@ class ptx_parser {
   /**
    * @brief Convert the input PTX instruction into a inline PTX
    * statement without changing (exceptions exist).
-   * 
-   * Non-alphanemric that are not underscore in register identifiers 
+   *
+   * Non-alphanemric that are not underscore in register identifiers
    * are all replaced with underscore. An example:
-   * 
+   *
    *  fma.rn.f32 	%f4, %f3, %f1, %f2
    *
    *    ---> asm volatile ("  fma.rn.f32 _f4, _f3, _f1, _f2;");
@@ -129,7 +129,7 @@ class ptx_parser {
    * If a regiter from the input parameters list is used in an instruction
    * its type is inferred from the intruction and saved in the `input_arg_list`
    * to be used in when parsing the function header.
-   * 
+   *
    * See the document at https://github.com/hummingtree/cudf/wiki/PTX-parser
    * for the detailed description about the exceptions.
    *
@@ -143,7 +143,7 @@ class ptx_parser {
    * C++ type (e.g. "float")
    *
    * See the implementation for details
-   * 
+   *
    * @param src The input code
    * @return The resulting code
    */
@@ -154,18 +154,18 @@ class ptx_parser {
    * constraint in inline PTX syntax (e.g. "f")
    *
    * See the implementation for details
-   * 
+   *
    * @param src The input code
    * @return The resulting code
    */
   static std::string register_type_to_contraint(const std::string& src);
 
   /**
-   * @brief Replace any non-alphanumeric charactors that are not underscore with 
+   * @brief Replace any non-alphanumeric charactors that are not underscore with
    * underscore. The leading `[` and trailing `]` are exempted, e.g.
-   * 
+   *
    *  "[t$5]" --> "[t_5]"
-   * 
+   *
    * @param src The input code
    * @return The resulting code
    */
@@ -173,12 +173,12 @@ class ptx_parser {
 
   /**
    * @brief Replace leading `%` in register identifiers with `_`.
-   * 
+   *
    * According to PTX document `%` can only appear at the start of a register
    * identifier. At the same time `%` is not allowed in inline PTX. This function
    * first looks for the register identifier and if it starts with `%` replaces it
    * with `_`.
-   * 
+   *
    * @param src The input code
    * @return The resulting code
    */
@@ -189,7 +189,7 @@ class ptx_parser {
 
   /**
    * @brief C'tor of the `ptx_parser` class
-   * 
+   *
    * @param ptx_ The input PTX code that contains the function whose
    * CUDA is to be generated.
    * @param function_name_ The function name of the output CUDA function
@@ -208,17 +208,17 @@ class ptx_parser {
 };
 
 /**
-  * @brief Parse and Transform a piece of PTX code that contains the implementation 
-  * of a device function into a CUDA device function.
-  * 
-  * @param src The input PTX code.
-  * @param function_name The User defined function that the output CUDA function
-  * will have.
-  * @param output_arg_type output_arg_type The C++ type of the output parameter of the
-  * function
-  * @param pointer_arg_list A list of the parameters that are pointers.
-  * @return The output CUDA device function
-  */
+ * @brief Parse and Transform a piece of PTX code that contains the implementation
+ * of a device function into a CUDA device function.
+ *
+ * @param src The input PTX code.
+ * @param function_name The User defined function that the output CUDA function
+ * will have.
+ * @param output_arg_type output_arg_type The C++ type of the output parameter of the
+ * function
+ * @param pointer_arg_list A list of the parameters that are pointers.
+ * @return The output CUDA device function
+ */
 inline std::string parse_single_function_ptx(const std::string& src,
                                              const std::string& function_name,
                                              const std::string& output_arg_type,
@@ -229,15 +229,15 @@ inline std::string parse_single_function_ptx(const std::string& src,
 }
 
 /**
-  * @brief In a piece of CUDA code that contains the implementation 
-  * of a device function, locate the function and replace its function name
-  * with the specified one.
-  * 
-  * @param src The input CUDA code.
-  * @param function_name The User defined function that the output CUDA function
-  * will have.
-  * @return The output CUDA device function
-  */
+ * @brief In a piece of CUDA code that contains the implementation
+ * of a device function, locate the function and replace its function name
+ * with the specified one.
+ *
+ * @param src The input CUDA code.
+ * @param function_name The User defined function that the output CUDA function
+ * will have.
+ * @return The output CUDA device function
+ */
 std::string parse_single_function_cuda(const std::string& src, const std::string& function_name);
 
 }  // namespace jit

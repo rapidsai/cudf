@@ -63,25 +63,25 @@ struct GroupByWoAggTest : public GdfTest {
   // vector determiens the data type of the column
   using multi_column_t = typename test_parameters::multi_column_t;
 
-  //output_t is the output type of the aggregation column
+  // output_t is the output type of the aggregation column
   using output_t = cudf::size_type;
 
-  //map_t is used for reference solution
+  // map_t is used for reference solution
   using map_t = typename test_parameters::ref_map_type;
 
-  //tuple_t is tuple of datatypes associated with each column to be grouped
+  // tuple_t is tuple of datatypes associated with each column to be grouped
   using tuple_t = typename test_parameters::tuple_t;
 
-  //contains input generated for gdf calculation and reference solution
+  // contains input generated for gdf calculation and reference solution
   multi_column_t input_key;
 
-  //contains the input aggregation column
+  // contains the input aggregation column
   std::vector<output_t> input_value;
 
-  //contains grouped by column output of the gdf groupby call
+  // contains grouped by column output of the gdf groupby call
   multi_column_t cpu_data_cols_out;
 
-  //contains the aggregated output column
+  // contains the aggregated output column
   std::vector<cudf::size_type> cpu_out_indices;
 
   // Containers for unique_ptrs to gdf_columns that will be used in the gdf_group_by functions
@@ -244,22 +244,22 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
   // vector determiens the data type of the column
   using multi_column_t = typename test_parameters::multi_column_t;
 
-  //output_t is the output type of the aggregation column
+  // output_t is the output type of the aggregation column
   using output_t = typename test_parameters::output_type;
 
-  //map_t is used for reference solution
+  // map_t is used for reference solution
   using map_t = typename test_parameters::ref_map_type;
 
-  //tuple_t is tuple of datatypes associated with each column to be grouped
+  // tuple_t is tuple of datatypes associated with each column to be grouped
   using tuple_t = typename test_parameters::tuple_t;
 
-  //contains input valid generated for gdf calculation and reference solution
+  // contains input valid generated for gdf calculation and reference solution
   std::vector<host_valid_pointer> input_key_valids;
 
-  //contains the input valid aggregation column
+  // contains the input valid aggregation column
   host_valid_pointer input_value_valid;
 
-  //contains grouped by column valid output of the gdf groupby call
+  // contains grouped by column valid output of the gdf groupby call
   std::vector<host_valid_pointer> cpu_data_cols_out_valid;
 
   size_t shuffle_seed;

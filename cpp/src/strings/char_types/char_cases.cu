@@ -141,7 +141,7 @@ uint16_t find_collision_proof_prime() {
 }  // anonymous namespace
 
 /**
- * @copydoc cudf::strings::detail::generate_special_mapping_hash_table 
+ * @copydoc cudf::strings::detail::generate_special_mapping_hash_table
  */
 void generate_special_mapping_hash_table() {
   uint16_t hash_prime = find_collision_proof_prime();

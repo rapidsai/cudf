@@ -31,7 +31,7 @@ namespace cudf {
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
- * If element `i` in `indices_column` is null, then element `i` in the returned dictionary column 
+ * If element `i` in `indices_column` is null, then element `i` in the returned dictionary column
  * will also be null.
  *
  * ```

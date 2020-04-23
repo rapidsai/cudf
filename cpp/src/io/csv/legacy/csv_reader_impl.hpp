@@ -72,24 +72,24 @@ class reader::Impl {
 
  public:
   /**
-  * @brief Constructor from a dataset source with reader options.
-  **/
+   * @brief Constructor from a dataset source with reader options.
+   **/
   explicit Impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 reader_options const &args);
 
   /**
-  * @brief Read an entire set or a subset of data from the source and returns
-  * an array of gdf_columns.
-  *
-  * @param[in] range_offset Number of bytes offset from the start
-  * @param[in] range_size Bytes to read; use `0` for all remaining data
-  * @param[in] skip_rows Number of rows to skip from the start
-  * @param[in] skip_end_rows Number of rows to skip from the end
-  * @param[in] num_rows Number of rows to read; use -1 for all remaining data
-  *
-  * @return Object that contains the array of gdf_columns
-  **/
+   * @brief Read an entire set or a subset of data from the source and returns
+   * an array of gdf_columns.
+   *
+   * @param[in] range_offset Number of bytes offset from the start
+   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] skip_end_rows Number of rows to skip from the end
+   * @param[in] num_rows Number of rows to read; use -1 for all remaining data
+   *
+   * @return Object that contains the array of gdf_columns
+   **/
   table read(size_t range_offset,
              size_t range_size,
              cudf::size_type skip_rows,

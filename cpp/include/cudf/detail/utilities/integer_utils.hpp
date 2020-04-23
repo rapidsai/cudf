@@ -30,10 +30,10 @@ namespace cudf {
 namespace util {
 
 /**
-* Finds the smallest integer not less than `number_to_round` and modulo `S` is
-* zero. This function assumes that `number_to_round` is non-negative and
-* `modulus` is positive.
-*/
+ * Finds the smallest integer not less than `number_to_round` and modulo `S` is
+ * zero. This function assumes that `number_to_round` is non-negative and
+ * `modulus` is positive.
+ */
 template <typename S>
 inline S round_up_safe(S number_to_round, S modulus) {
   auto remainder = number_to_round % modulus;
@@ -46,10 +46,10 @@ inline S round_up_safe(S number_to_round, S modulus) {
 }
 
 /**
-* Finds the largest integer not greater than `number_to_round` and modulo `S` is
-* zero. This function assumes that `number_to_round` is non-negative and
-* `modulus` is positive.
-*/
+ * Finds the largest integer not greater than `number_to_round` and modulo `S` is
+ * zero. This function assumes that `number_to_round` is non-negative and
+ * `modulus` is positive.
+ */
 template <typename S>
 inline S round_down_safe(S number_to_round, S modulus) {
   auto remainder    = number_to_round % modulus;
@@ -58,17 +58,17 @@ inline S round_down_safe(S number_to_round, S modulus) {
 }
 
 /**
-* Divides the left-hand-side by the right-hand-side, rounding up
-* to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
-*
-* @param dividend the number to divide
-* @param divisor the number by which to divide
-* @return The least integer multiple of {@link divisor} which is greater than or equal to
-* the non-integral division dividend/divisor.
-*
-* @note sensitive to overflow, i.e. if dividend > std::numeric_limits<S>::max() - divisor,
-* the result will be incorrect
-*/
+ * Divides the left-hand-side by the right-hand-side, rounding up
+ * to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
+ *
+ * @param dividend the number to divide
+ * @param divisor the number by which to divide
+ * @return The least integer multiple of {@link divisor} which is greater than or equal to
+ * the non-integral division dividend/divisor.
+ *
+ * @note sensitive to overflow, i.e. if dividend > std::numeric_limits<S>::max() - divisor,
+ * the result will be incorrect
+ */
 template <typename S, typename T>
 constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept {
   return (dividend + divisor - 1) / divisor;
@@ -97,17 +97,17 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
 }  // namespace detail
 
 /**
-* Divides the left-hand-side by the right-hand-side, rounding up
-* to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
-*
-* @param dividend the number to divide
-* @param divisor the number of by which to divide
-* @return The least integer multiple of {@link divisor} which is greater than or equal to
-* the non-integral division dividend/divisor.
-*
-* @note will not overflow, and may _or may not_ be slower than the intuitive
-* approach of using (dividend + divisor - 1) / divisor
-*/
+ * Divides the left-hand-side by the right-hand-side, rounding up
+ * to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
+ *
+ * @param dividend the number to divide
+ * @param divisor the number of by which to divide
+ * @return The least integer multiple of {@link divisor} which is greater than or equal to
+ * the non-integral division dividend/divisor.
+ *
+ * @note will not overflow, and may _or may not_ be slower than the intuitive
+ * approach of using (dividend + divisor - 1) / divisor
+ */
 template <typename I>
 constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept {
   using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;

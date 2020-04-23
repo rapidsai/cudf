@@ -41,7 +41,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @throws `cudf::logic_error` if input column data type is not convertible to
  * output data type.
  * If the input column has arithmetic type, output_dtype can be any arithmetic
- * type. For `mean`, `var` and `std` ops, a floating point output type must be 
+ * type. For `mean`, `var` and `std` ops, a floating point output type must be
  * specified. If the input column has non-arithmetic type
  *   eg.(timestamp, string...), the same type must be specified.
  *

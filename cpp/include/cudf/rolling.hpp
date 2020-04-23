@@ -35,8 +35,8 @@ namespace experimental {
  *   `[i-preceding_window+1, i+following_window]` to do the window computation.
  * - instead of storing NA/NaN for output rows that do not meet the minimum number of observations
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
- * 
- * The returned column for count aggregation always has `INT32` type. All other operators return a 
+ *
+ * The returned column for count aggregation always has `INT32` type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
@@ -60,29 +60,29 @@ std::unique_ptr<column> rolling_window(
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.
  *
- * Like `rolling_window()`, this function aggregates values in a window around each 
+ * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in that elements of the
- * `input` column are grouped into distinct groups (e.g. the result of a groupby). The window aggregation cannot cross
- * the group boundaries.
- * For a row `i` of `input`, the group is determined from the corresponding (i.e. i-th) values of 
- * the columns under `group_keys`. 
- * 
+ * `input` column are grouped into distinct groups (e.g. the result of a groupby). The window
+ *aggregation cannot cross the group boundaries. For a row `i` of `input`, the group is determined
+ *from the corresponding (i.e. i-th) values of the columns under `group_keys`.
+ *
  * Note: This method requires that the rows are presorted by the `group_key` values.
- * 
+ *
  * Example: Consider a user-sales dataset, where the rows look as follows:
  *  { "user_id", sales_amt, day }
  *
- * The `grouped_rolling_window()` method enables windowing queries such as grouping a dataset by `user_id`, 
- * and summing up the `sales_amt` column over a window of 3 rows (2 preceding (including current row), 1 row following). 
- * 
- * In this example, 
+ * The `grouped_rolling_window()` method enables windowing queries such as grouping a dataset by
+ *`user_id`, and summing up the `sales_amt` column over a window of 3 rows (2 preceding (including
+ *current row), 1 row following).
+ *
+ * In this example,
  *    1. `group_keys == [ user_id ]`
- *    2. `input == sales_amt` 
- * The data are grouped by `user_id`, and ordered by `day`-string. The aggregation 
+ *    2. `input == sales_amt`
+ * The data are grouped by `user_id`, and ordered by `day`-string. The aggregation
  * (SUM) is then calculated for a window of 3 values around (and including) each row.
- * 
+ *
  * For the following input:
- * 
+ *
  *  [ // user,  sales_amt
  *    { "user1",   10      },
  *    { "user2",   20      },
@@ -94,24 +94,24 @@ std::unique_ptr<column> rolling_window(
  *    { "user1",   60      },
  *    { "user2",   40      }
  *  ]
- * 
- * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+ *
+ * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector
  * (with 2 groups, one for each distinct `user_id`):
- * 
+ *
  *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
  *      <-------user1-------->|<------user2------->
- * 
+ *
  * The SUM aggregation is applied with 1 preceding and 1 following
  * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
  * yielding the following column:
- * 
+ *
  *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
- * 
+ *
  * Note: The SUMs calculated at the group boundaries (i.e. indices 0, 4, 5, and 8)
  * consider only 2 values each, in spite of the window-size being 3.
  * Each aggregation operation cannot cross group boundaries.
- * 
- * The returned column for `op == COUNT` always has `INT32` type. All other operators return a 
+ *
+ * The returned column for `op == COUNT` always has `INT32` type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
@@ -135,34 +135,37 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a column.
+ * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
+ *column.
  *
- * Like `rolling_window()`, this function aggregates values in a window around each 
+ * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
- *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a groupby), determined by 
- *      the corresponding values of the columns under `group_keys`. The window-aggregation cannot cross the group boundaries.
- *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number of days
- *      preceding/following the current row). The timestamps for the input data are specified by the `timestamp_column`
- *      argument.
- * 
+ *   1. The elements of the `input` column are grouped into distinct groups (e.g. the result of a
+ *groupby), determined by the corresponding values of the columns under `group_keys`. The
+ *window-aggregation cannot cross the group boundaries.
+ *   2. Within a group, the aggregation window is calculated based on a time interval (e.g. number
+ *of days preceding/following the current row). The timestamps for the input data are specified by
+ *the `timestamp_column` argument.
+ *
  * Note: This method requires that the rows are presorted by the group keys and timestamp values.
- * 
+ *
  * Example: Consider a user-sales dataset, where the rows look as follows:
  *  { "user_id", sales_amt, date }
  *
- * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by increasing `date`, 
- * and summing up the `sales_amt` column over a window of 3 days (1 preceding day, the current day, and 1 following day). 
- * 
- * In this example, 
+ * This method enables windowing queries such as grouping a dataset by `user_id`, sorting by
+ *increasing `date`, and summing up the `sales_amt` column over a window of 3 days (1 preceding day,
+ *the current day, and 1 following day).
+ *
+ * In this example,
  *    1. `group_keys == [ user_id ]`
  *    2. `timestamp_column == date`
- *    3. `input == sales_amt` 
- * The data are grouped by `user_id`, and ordered by `date`. The aggregation 
+ *    3. `input == sales_amt`
+ * The data are grouped by `user_id`, and ordered by `date`. The aggregation
  * (SUM) is then calculated for a window of 3 days around (and including) each row.
- * 
+ *
  * For the following input:
- * 
- *  [ // user,  sales_amt,  YYYYMMDD (date)  
+ *
+ *  [ // user,  sales_amt,  YYYYMMDD (date)
  *    { "user1",   10,      20200101    },
  *    { "user2",   20,      20200101    },
  *    { "user1",   20,      20200102    },
@@ -173,28 +176,29 @@ std::unique_ptr<column> grouped_rolling_window(
  *    { "user1",   60,      20200107    },
  *    { "user2",   40,      20200104    }
  *  ]
- * 
- * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
- * (with 2 groups, one for each distinct `user_id`):
- * 
+ *
+ * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt`
+ *vector (with 2 groups, one for each distinct `user_id`):
+ *
  * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
  * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
  *                    <-------user1-------->|<---------user2--------->
- * 
- * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
- * The aggregation window is thus 3 *days* wide, yielding the following output column:
- * 
+ *
+ * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1
+ *period. The aggregation window is thus 3 *days* wide, yielding the following output column:
+ *
  *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
- * 
- * Note: The number of rows participating in each window might vary, based on the index within the group, datestamp,
- * and `min_periods`. Apropos:
- *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no preceding values.
- *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2 following values,
- *     based on its datestamp.
- * 
+ *
+ * Note: The number of rows participating in each window might vary, based on the index within the
+ *group, datestamp, and `min_periods`. Apropos:
+ *  1. results[0] considers 2 values, because it is at the beginning of its group, and has no
+ *preceding values.
+ *  2. results[5] considers 3 values, despite being at the beginning of its group. It must include 2
+ *following values, based on its datestamp.
+ *
  * Each aggregation operation cannot cross group boundaries.
- * 
- * The returned column for `op == COUNT` always has `INT32` type. All other operators return a 
+ *
+ * The returned column for `op == COUNT` always has `INT32` type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
@@ -233,18 +237,19 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *   this function updates the valid bitmask of the column to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size can be specified for each element using
  *   an additional array.
- * 
- * The returned column for count aggregation always has INT32 type. All other operators return a 
+ *
+ * The returned column for count aggregation always has INT32 type. All other operators return a
  * column of the same type as the input. Therefore it is suggested to convert integer column types
  * (especially low-precision integers) to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
- * 
+ *
  * @throws cudf::logic_error if window column type is not INT32
  *
  * @param[in] input_col The input column
  * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
- *                             `preceding_window[i]` specifies preceding window size for element `i`.
- * @param[in] following_window A non-nullable column of INT32 window sizes in the backward direction.
- *                             `following_window[i]` specifies following window size for element `i`.
+ *                             `preceding_window[i]` specifies preceding window size for element
+ *`i`.
+ * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
+ *direction. `following_window[i]` specifies following window size for element `i`.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)

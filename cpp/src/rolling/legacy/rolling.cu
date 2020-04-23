@@ -107,7 +107,8 @@ __launch_bounds__(block_size) __global__
   while (i < nrows) {
     ColumnType val = agg_op::template identity<ColumnType>();
     volatile cudf::size_type count =
-      0;  // declare this as volatile to avoid some compiler optimizations that lead to incorrect results for CUDA 10.0 and below (fixed in CUDA 10.1)
+      0;  // declare this as volatile to avoid some compiler optimizations that lead to incorrect
+          // results for CUDA 10.0 and below (fixed in CUDA 10.1)
 
     // dynamic window handling
     if (window_col != nullptr) window = window_col[i];

@@ -46,7 +46,7 @@ std::unique_ptr<column> interleave_columns(
 
 /*
  * @brief Repeats the rows from `input` table `count` times to form a new table.
- * 
+ *
  * `output.num_columns() == input.num_columns()`
  * `output.num_rows() == input.num_rows() * count`
  *

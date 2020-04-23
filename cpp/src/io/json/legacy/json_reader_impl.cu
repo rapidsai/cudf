@@ -150,7 +150,8 @@ void reader::Impl::decompressInput() {
 void reader::Impl::setRecordStarts() {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
-  // and then filtering out the records that is a quotechar or a linetermination within a quotechar pair.
+  // and then filtering out the records that is a quotechar or a linetermination within a quotechar
+  // pair.
   if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   const auto prefilter_count = countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) +
@@ -644,8 +645,9 @@ __global__ void detectJsonDataTypes(const char *data,
     else if (other_count > 3 || decimal_count > 1) {
       atomicAdd(&column_infos[col].string_count, 1);
     } else {
-      // A date field can have either one or two '-' or '\'; A legal combination will only have one of them
-      // To simplify the process of auto column detection, we are not covering all the date-time formation permutations
+      // A date field can have either one or two '-' or '\'; A legal combination will only have one
+      // of them To simplify the process of auto column detection, we are not covering all the
+      // date-time formation permutations
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {

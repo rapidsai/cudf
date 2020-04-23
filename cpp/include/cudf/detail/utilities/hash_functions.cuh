@@ -21,7 +21,8 @@
 
 using hash_value_type = uint32_t;
 
-//MurmurHash3_32 implementation from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+// MurmurHash3_32 implementation from
+// https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
 //-----------------------------------------------------------------------------
 // MurmurHash3 was written by Austin Appleby, and is placed in the public
 // domain. The author hereby disclaims copyright to this source code.
@@ -50,17 +51,17 @@ struct MurmurHash3_32 {
   }
 
   /* --------------------------------------------------------------------------*/
-  /** 
-     * @brief  Combines two hash values into a new single hash value. Called 
-     * repeatedly to create a hash value from several variables.
-     * Taken from the Boost hash_combine function 
-     * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-     * 
-     * @param lhs The first hash value to combine
-     * @param rhs The second hash value to combine
-     * 
-     * @returns A hash value that intelligently combines the lhs and rhs hash values
-     */
+  /**
+   * @brief  Combines two hash values into a new single hash value. Called
+   * repeatedly to create a hash value from several variables.
+   * Taken from the Boost hash_combine function
+   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+   *
+   * @param lhs The first hash value to combine
+   * @param rhs The second hash value to combine
+   *
+   * @returns A hash value that intelligently combines the lhs and rhs hash values
+   */
   /* ----------------------------------------------------------------------------*/
   CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) {
     result_type combined{lhs};
@@ -98,7 +99,7 @@ struct MurmurHash3_32 {
     // body
     const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
     for (int i = -nblocks; i; i++) {
-      uint32_t k1 = blocks[i];  //getblock32(blocks,i);
+      uint32_t k1 = blocks[i];  // getblock32(blocks,i);
       k1 *= c1;
       k1 = rotl32(k1, 15);
       k1 *= c2;
@@ -210,7 +211,7 @@ MurmurHash3_32<double>::operator()(double const& key) const {
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  This hash function simply returns the value that is asked to be hash
  reinterpreted as the result_type of the functor.
  */
@@ -220,17 +221,17 @@ struct IdentityHash {
   using result_type = hash_value_type;
 
   /* --------------------------------------------------------------------------*/
-  /** 
-     * @brief  Combines two hash values into a new single hash value. Called 
-     * repeatedly to create a hash value from several variables.
-     * Taken from the Boost hash_combine function 
-     * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-     * 
-     * @param lhs The first hash value to combine
-     * @param rhs The second hash value to combine
-     * 
-     * @returns A hash value that intelligently combines the lhs and rhs hash values
-     */
+  /**
+   * @brief  Combines two hash values into a new single hash value. Called
+   * repeatedly to create a hash value from several variables.
+   * Taken from the Boost hash_combine function
+   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+   *
+   * @param lhs The first hash value to combine
+   * @param rhs The second hash value to combine
+   *
+   * @returns A hash value that intelligently combines the lhs and rhs hash values
+   */
   /* ----------------------------------------------------------------------------*/
   CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const {
     result_type combined{lhs};
@@ -246,8 +247,8 @@ struct IdentityHash {
 };
 
 /**
-* @brief Specialization of IdentityHash for wrapper structs that hashes the underlying value.
-*/
+ * @brief Specialization of IdentityHash for wrapper structs that hashes the underlying value.
+ */
 template <typename T, gdf_dtype type_id>
 struct IdentityHash<cudf::detail::wrapper<T, type_id>> {
   using result_type = hash_value_type;

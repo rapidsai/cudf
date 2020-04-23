@@ -47,13 +47,13 @@ struct characters_tokenizer {
       end_position(d_str.length()) {}
 
   /**
-     * @brief Return true if the given character is a delimiter.
-     *
-     * For empty delimiter, whitespace code-point is checked.
-     *
-     * @param chr The character to test.
-     * @return true if the character is a delimiter
-     */
+   * @brief Return true if the given character is a delimiter.
+   *
+   * For empty delimiter, whitespace code-point is checked.
+   *
+   * @param chr The character to test.
+   * @return true if the character is a delimiter
+   */
   __device__ bool is_delimiter(cudf::char_utf8 chr) {
     return d_delimiter.empty() ? (chr <= ' ') :  // whitespace check
              thrust::any_of(thrust::seq,
@@ -63,17 +63,17 @@ struct characters_tokenizer {
   }
 
   /**
-     * @brief Identifies the bounds of the next token in the given
-     * string at the specified iterator position.
-     *
-     * For empty delimiter, whitespace code-point is checked.
-     * Starting at the given iterator (itr) position, a token
-     * start position is identified when a delimiter is
-     * not found. Once found, the end position is identified
-     * when a delimiter or the end of the string is found.
-     *
-     * @return true if a token has been found
-     */
+   * @brief Identifies the bounds of the next token in the given
+   * string at the specified iterator position.
+   *
+   * For empty delimiter, whitespace code-point is checked.
+   * Starting at the given iterator (itr) position, a token
+   * start position is identified when a delimiter is
+   * not found. Once found, the end position is identified
+   * when a delimiter or the end of the string is found.
+   *
+   * @return true if a token has been found
+   */
   __device__ bool next_token() {
     if (itr != d_str.begin()) {  // skip these 2 lines the first time through
       start_position = end_position + 1;
@@ -101,9 +101,9 @@ struct characters_tokenizer {
   }
 
   /**
-     * @brief Returns the byte offsets for the current token
-     * within this string.
-     */
+   * @brief Returns the byte offsets for the current token
+   * within this string.
+   */
   __device__ position_pair token_byte_positions() {
     return position_pair{d_str.byte_offset(start_position), d_str.byte_offset(end_position)};
   }
@@ -131,14 +131,14 @@ struct strings_tokenizer {
   string_index_pair* d_tokens{};             // token positions in device memory
 
   /**
-     * @brief Identifies the token positions within each string.
-     *
-     * This counts the tokens in each string and also places the token positions
-     * into the d_tokens member.
-     *
-     * @param idx Index of the string to tokenize in the d_strings column.
-     * @return The number of tokens for this string.
-     */
+   * @brief Identifies the token positions within each string.
+   *
+   * This counts the tokens in each string and also places the token positions
+   * into the d_tokens member.
+   *
+   * @param idx Index of the string to tokenize in the d_strings column.
+   * @return The number of tokens for this string.
+   */
   __device__ cudf::size_type operator()(cudf::size_type idx) {
     if (d_strings.is_null(idx)) return 0;
     auto d_str = d_strings.element<cudf::string_view>(idx);
@@ -175,14 +175,14 @@ struct multi_delimiter_strings_tokenizer {
   string_index_pair* d_tokens{};             // token positions found for each string
 
   /**
-     * @brief Identifies the token positions within each string.
-     *
-     * This counts the tokens in each string and also places the token positions
-     * into the d_tokens member.
-     *
-     * @param idx Index of the string to tokenize in the d_strings column.
-     * @return The number of tokens for this string.
-     */
+   * @brief Identifies the token positions within each string.
+   *
+   * This counts the tokens in each string and also places the token positions
+   * into the d_tokens member.
+   *
+   * @param idx Index of the string to tokenize in the d_strings column.
+   * @return The number of tokens for this string.
+   */
   __device__ cudf::size_type operator()(cudf::size_type idx) {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view d_str   = d_strings.element<cudf::string_view>(idx);

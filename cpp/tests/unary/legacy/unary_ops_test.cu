@@ -27,7 +27,8 @@
 struct col_cast_test : public GdfTest {};
 
 TEST_F(col_cast_test, usage_example) {
-  // gdf_column input examples for int32, int64, float32, float64, date32, date64 and timestamp (in milliseconds)
+  // gdf_column input examples for int32, int64, float32, float64, date32, date64 and timestamp (in
+  // milliseconds)
 
   std::vector<int32_t> inputInt32Data = {-1528, 1, 19382};
 
@@ -273,7 +274,8 @@ struct DisType<double, TFROM> {
   typedef double value_type;
 };
 
-// Generates random values between 0 and the maximum possible value of the data type with the minimum max() value
+// Generates random values between 0 and the maximum possible value of the data type with the
+// minimum max() value
 template <typename TOUT, typename TFROM>
 void fill_with_random_values(std::vector<TFROM> &input, size_t size) {
   std::random_device rd;
@@ -458,7 +460,7 @@ struct generateValidRandom {
 struct gdf_unaryops_output_valid_TEST : public GdfTest {};
 
 TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
-  //The output datatype is set by the casting function
+  // The output datatype is set by the casting function
   {
     const int colSize = 1024;
     std::vector<float> inputData(colSize);
@@ -469,7 +471,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
     EXPECT_NO_THROW(cudf::cast(inputCol, GDF_FLOAT64));
   }
 
-  //The input and output valid bitmaps are equal
+  // The input and output valid bitmaps are equal
   {
     const int colSize = 1024;
     std::vector<float> inputData(colSize);
@@ -485,7 +487,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
     EXPECT_TRUE(inputCol == outputCol);
   }
 
-  //Testing with a colSize not divisible by 8
+  // Testing with a colSize not divisible by 8
   {
     const int colSize = 1000;
     std::vector<float> inputData(colSize);
@@ -504,7 +506,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 struct gdf_date_casting_TEST : public GdfTest {};
 
 TEST_F(gdf_date_casting_TEST, date32_to_date64) {
-  //date32 to date64
+  // date32 to date64
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -621,7 +623,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 }
 
 TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
-  //date32 to date64 over valid bitmask
+  // date32 to date64 over valid bitmask
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -645,7 +647,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
       cudf::date64{0}                // no operation
     };
 
-    auto altValidFunctor = [](cudf::size_type row) { return (row % 2 == 0); };  //01010101
+    auto altValidFunctor = [](cudf::size_type row) { return (row % 2 == 0); };  // 01010101
     auto inputCol        = cudf::test::column_wrapper<cudf::date32>(inputData, altValidFunctor);
     auto expectOut       = cudf::test::column_wrapper<cudf::date64>(outputData, altValidFunctor);
 
@@ -658,7 +660,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 }
 
 TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
-  //date32 to timestamp s
+  // date32 to timestamp s
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -697,7 +699,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp s to date32
+  // timestamp s to date32
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528934400},   // '2018-06-14 00:00:00'
@@ -734,7 +736,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date32 to timestamp ms
+  // date32 to timestamp ms
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -773,7 +775,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp ms to date32
+  // timestamp ms to date32
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590000},   // '2018-06-14 00:19:50.000'
@@ -810,7 +812,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date32 to timestamp ns
+  // date32 to timestamp ns
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -849,7 +851,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp ns to date32
+  // timestamp ns to date32
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590000000000},   // '2018-06-14 00:19:50.000000000'
@@ -886,7 +888,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date32 to timestamp us
+  // date32 to timestamp us
   {
     std::vector<cudf::date32> inputData = {
       cudf::date32{17696},   // '2018-06-14'
@@ -925,7 +927,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp us to date32
+  // timestamp us to date32
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590000000},   // '2018-06-14 00:19:50.000000'
@@ -1072,7 +1074,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date64 to timestamp s
+  // date64 to timestamp s
   {
     std::vector<cudf::date64> inputData = {
       cudf::date64{1528935590000},   // '2018-06-14 00:19:50.000'
@@ -1111,7 +1113,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp s to date64
+  // timestamp s to date64
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590},   // '2018-06-14 00:19:50'
@@ -1148,7 +1150,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date64 to timestamp us
+  // date64 to timestamp us
   {
     std::vector<cudf::date64> inputData = {
       cudf::date64{1528935590000},   // '2018-06-14 00:19:50.000'
@@ -1187,7 +1189,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp us to date64
+  // timestamp us to date64
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590000000},   // '2018-06-14 00:19:50.000000'
@@ -1224,7 +1226,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //date64 to timestamp ns
+  // date64 to timestamp ns
   {
     std::vector<cudf::date64> inputData = {
       cudf::date64{1528935590000},   // '2018-06-14 00:19:50.000'
@@ -1263,7 +1265,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp ns to date64
+  // timestamp ns to date64
   {
     std::vector<cudf::timestamp> inputData = {
       cudf::timestamp{1528935590000000000},   // '2018-06-14 00:19:50.000000000'
@@ -1304,7 +1306,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 struct gdf_timestamp_casting_TEST : public GdfTest {};
 
 TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
-  //timestamp to timestamp from s to ms
+  // timestamp to timestamp from s to ms
   {
     // timestamps with seconds
     std::vector<cudf::timestamp> inputData = {
@@ -1390,7 +1392,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ms to s
+  // timestamp to timestamp from ms to s
   {
     // timestamps with milliseconds
     std::vector<cudf::timestamp> inputData = {
@@ -1476,7 +1478,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from s to us
+  // timestamp to timestamp from s to us
   {
     // timestamps with seconds
     std::vector<cudf::timestamp> inputData = {
@@ -1562,7 +1564,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from us to s
+  // timestamp to timestamp from us to s
   {
     // timestamps with microseconds
     std::vector<cudf::timestamp> inputData = {
@@ -1648,7 +1650,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from s to ns
+  // timestamp to timestamp from s to ns
   {
     // timestamps with seconds
     std::vector<cudf::timestamp> inputData = {
@@ -1734,7 +1736,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ns to s
+  // timestamp to timestamp from ns to s
   {
     // timestamps with nanoseconds
     std::vector<cudf::timestamp> inputData = {
@@ -1820,7 +1822,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from us to ns
+  // timestamp to timestamp from us to ns
   {
     // timestamps with microseconds
     std::vector<cudf::timestamp> inputData = {
@@ -1906,7 +1908,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ns to us
+  // timestamp to timestamp from ns to us
   {
     // timestamps with nanoseconds
     std::vector<cudf::timestamp> inputData = {
@@ -1992,7 +1994,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ms to ns
+  // timestamp to timestamp from ms to ns
   {
     // timestamps with milliseconds
     std::vector<cudf::timestamp> inputData = {
@@ -2078,7 +2080,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ns to ms
+  // timestamp to timestamp from ns to ms
   {
     // timestamps with nanoseconds
     std::vector<cudf::timestamp> inputData = {
@@ -2164,7 +2166,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from us to ms
+  // timestamp to timestamp from us to ms
   {
     // timestamps with microseconds
     std::vector<cudf::timestamp> inputData = {
@@ -2250,7 +2252,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
     EXPECT_TRUE(outputCol == expectOut);
   }
 
-  //timestamp to timestamp from ms to us
+  // timestamp to timestamp from ms to us
   {
     // timestamps with milliseconds
     std::vector<cudf::timestamp> inputData = {

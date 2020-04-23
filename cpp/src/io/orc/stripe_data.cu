@@ -22,7 +22,7 @@
 
 #define BYTESTREAM_BFRSZ (1 << LOG2_BYTESTREAM_BFRSZ)
 #define BYTESTREAM_BFRMASK32 ((BYTESTREAM_BFRSZ - 1) >> 2)
-//TODO: Should be more efficient with 512 threads per block and circular queue for values
+// TODO: Should be more efficient with 512 threads per block and circular queue for values
 #define LOG2_NWARPS 5  // Log2 of number of warps per threadblock
 #define LOG2_NTHREADS (LOG2_NWARPS + 5)
 #define NWARPS (1 << LOG2_NWARPS)
@@ -142,8 +142,9 @@ struct orcdec_state_s {
 };
 
 /**
- * @brief Initializes byte stream, modifying length and start position to keep the read pointer 8-byte aligned
- *        Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7] is valid
+ * @brief Initializes byte stream, modifying length and start position to keep the read pointer
+ *8-byte aligned Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7]
+ *is valid
  *
  * @param[in] bs Byte stream input
  * @param[in] base Pointer to raw byte stream data
@@ -1030,7 +1031,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
       if (scale >= 0) {
         scale   = min(scale, 27);
         vals[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-      } else  //if (scale < 0)
+      } else  // if (scale < 0)
       {
         bool is_negative = (v.hi < 0);
         uint64_t hi = v.hi, lo = v.lo;
@@ -1160,8 +1161,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         }
         __syncthreads();
       }
-      // We may have some valid values that are not decoded below first_row -> count these in skip_count,
-      // so that subsequent kernel can infer the correct row position
+      // We may have some valid values that are not decoded below first_row -> count these in
+      // skip_count, so that subsequent kernel can infer the correct row position
       if (row_in < first_row && t < 32) {
         uint32_t skippedrows = min(static_cast<uint32_t>(first_row - row_in), nrows);
         uint32_t skip_count  = 0;
@@ -1300,7 +1301,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
       }
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
-      // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the last row
+      // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
+      // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
       last_row = max(last_row, SHFL_XOR(last_row, 1));
       last_row = max(last_row, SHFL_XOR(last_row, 2));
@@ -1646,9 +1648,9 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       }
       __syncthreads();
       if (numvals == 0 && vals_skipped != 0 && num_rowgroups > 0) {
-        // Special case if the secondary streams produced fewer values than the primary stream's RLE run,
-        // as a result of initial RLE run offset: keep vals_skipped as non-zero to ensure proper
-        // buffered_count/max_vals update below.
+        // Special case if the secondary streams produced fewer values than the primary stream's RLE
+        // run, as a result of initial RLE run offset: keep vals_skipped as non-zero to ensure
+        // proper buffered_count/max_vals update below.
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
@@ -1669,10 +1671,12 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         s->top.data.max_vals = numvals;
       }
       __syncthreads();
-      // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
+      // Use the valid bits to compute non-null row positions until we get a full batch of values to
+      // decode
       DecodeRowPositions(s, first_row, t);
       if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped) {
-        // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
+        // This is a bug (could happen with bitstream errors with a bad run that would produce more
+        // values than the number of remaining rows)
         return;
       }
       // Store decoded values to output
@@ -1727,7 +1731,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
                   count = global_dictionary[s->chunk.dictionary_start + dict_idx].len;
                 } else {
                   count = 0;
-                  //ptr = (uint8_t *)0xdeadbeef;
+                  // ptr = (uint8_t *)0xdeadbeef;
                 }
               } else {
                 uint32_t dict_idx =
@@ -1736,7 +1740,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
                 ptr   = s->chunk.streams[CI_DATA] + dict_idx;
                 if (dict_idx + count > s->chunk.strm_len[CI_DATA]) {
                   count = 0;
-                  //ptr = (uint8_t *)0xdeadbeef;
+                  // ptr = (uint8_t *)0xdeadbeef;
                 }
               }
               strdesc->ptr   = reinterpret_cast<const char *>(ptr);

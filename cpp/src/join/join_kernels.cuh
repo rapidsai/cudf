@@ -57,15 +57,15 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Builds a hash table from a row hasher that maps the hash
-* values of each row to its respective row index.
-*
-* @param[in,out] multi_map The hash table to be built to insert rows into
-* @param[in] hash_build Row hasher for the build table
-* @param[in] build_table_num_rows The number of rows in the build table
-* @tparam multimap_type The type of the hash table
-*
-*/
+ * @brief  Builds a hash table from a row hasher that maps the hash
+ * values of each row to its respective row index.
+ *
+ * @param[in,out] multi_map The hash table to be built to insert rows into
+ * @param[in] hash_build Row hasher for the build table
+ * @param[in] build_table_num_rows The number of rows in the build table
+ * @tparam multimap_type The type of the hash table
+ *
+ */
 /* ----------------------------------------------------------------------------*/
 template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
@@ -113,11 +113,11 @@ __global__ void compute_join_output_size(multimap_type multi_map,
                                          row_equality check_row_equality,
                                          const cudf::size_type probe_table_num_rows,
                                          size_type* output_size) {
-  // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
-  // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
-  // 'output_size'.
-  // Compared to probing one element per thread, this implementation improves performance by reducing atomic adds to
-  // the shared memory counter.
+  // This kernel probes multiple elements in the probe_table and store the number of matches found
+  // inside a register. A block reduction is used at the end to calculate the matches per thread
+  // block, and atomically add to the global 'output_size'. Compared to probing one element per
+  // thread, this implementation improves performance by reducing atomic adds to the shared memory
+  // counter.
 
   cudf::size_type thread_counter{0};
   const cudf::size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -226,7 +226,8 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * @param[in] probe_table_num_rows The length of the columns in the probe table
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global output
+ * @param[in,out] current_idx A global counter used by threads to coordinate writes to the global
+ output
  * @param[in] max_size The maximum size of the output
  * @param[in] offset An optional offset
  * @tparam JoinKind The type of join to be performed
@@ -306,7 +307,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
         // First check that the hash values of the two rows match
         else if (found->first == probe_row_hash_value) {
           // If the hash values are equal, check that the rows are equal
-          //TODO : REMOVE : if(row_equal{probe_table, build_table}(probe_row_index, found->second))
+          // TODO : REMOVE : if(row_equal{probe_table, build_table}(probe_row_index, found->second))
           if (check_row_equality(probe_row_index, found->second)) {
             // If the rows are equal, then we have found a true match
             found_match = true;
@@ -346,7 +347,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
       }
 
       __syncwarp(activemask);
-      //flush output cache if next iteration does not fit
+      // flush output cache if next iteration does not fit
       if (current_idx_shared[warp_id] + experimental::detail::warp_size >= output_cache_size) {
         flush_output_cache<num_warps, output_cache_size>(activemask,
                                                          max_size,
@@ -364,7 +365,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
       }
     }
 
-    //final flush of output cache
+    // final flush of output cache
     if (current_idx_shared[warp_id] > 0) {
       flush_output_cache<num_warps, output_cache_size>(activemask,
                                                        max_size,
@@ -380,8 +381,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
   }
 }
 
-}  //namespace detail
+}  // namespace detail
 
-}  //namespace experimental
+}  // namespace experimental
 
-}  //namespace cudf
+}  // namespace cudf

@@ -44,13 +44,13 @@ struct hex_to_integer_fn {
   column_device_view const strings_column;
 
   /**
-     * @brief Converts a single hex string into an integer.
-     *
-     * Non-hexadecimal characters are ignored.
-     * This means it can handle "0x01A23" and "1a23".
-     *
-     * Overflow of the int64 type is not detected.
-     */
+   * @brief Converts a single hex string into an integer.
+   *
+   * Non-hexadecimal characters are ignored.
+   * This means it can handle "0x01A23" and "1a23".
+   *
+   * Overflow of the int64 type is not detected.
+   */
   __device__ int64_t string_to_integer(string_view const& d_str) {
     int64_t result = 0, base = 1;
     const char* str = d_str.data();

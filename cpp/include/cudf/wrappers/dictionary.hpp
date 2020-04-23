@@ -29,9 +29,9 @@ namespace cudf {
  * @brief A strongly typed wrapper for indices in a DICTIONARY type column.
  *
  * IndexType will be integer types like int32_t.
- * 
+ *
  * For example, `dictionary32` is a strongly typed wrapper around an `int32_t`
- * value that holds the offset into the dictionary keys for a specific element. 
+ * value that holds the offset into the dictionary keys for a specific element.
  *
  * This wrapper provides common conversion and comparison operations for
  * the IndexType.

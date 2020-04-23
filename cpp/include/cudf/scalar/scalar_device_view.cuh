@@ -46,7 +46,7 @@ class scalar_device_view_base {
 
   /**
    * @brief Updates the validity of the value
-   * 
+   *
    * @param is_valid true: set the value to valid. false: set it to null
    */
   __device__ void set_valid(bool is_valid) noexcept { *_is_valid = is_valid; }
@@ -95,10 +95,10 @@ class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
 
   /**
    * @brief Construct a new fixed width scalar device view object
-   * 
+   *
    * This constructor should not be used directly. get_scalar_device_view
    * should be used to get the view of an existing scalar
-   * 
+   *
    * @param type The data type of the value
    * @param data The pointer to the data in device memory
    * @param is_valid The pointer to the bool in device memory that indicates the

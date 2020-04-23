@@ -212,7 +212,7 @@ struct create_column_from_view {
 // Copy from a view
 column::column(column_view view, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
-    // an lvalue reference, which would otherwise dispatch to the copy constructor
+     // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(
       *experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))} {}
 

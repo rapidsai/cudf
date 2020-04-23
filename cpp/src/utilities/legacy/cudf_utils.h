@@ -27,14 +27,14 @@ inline void set_null_count(gdf_column& column) {
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Flatten AOS info from gdf_columns into SOA.
- * 
+ *
  * @param[in] cols Host-side array of gdf_columns
  * @param[in] ncols # columns
  * @param[out] d_cols Pointer to device array of columns
  * @param[out] d_types Device array of column types
- * 
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -48,24 +48,24 @@ inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int
 
   void** h_cols = v_cols.data();
   int* h_types  = v_types.data();
-  CUDA_TRY(
-    cudaMemcpy(d_cols, h_cols, ncols * sizeof(void*), cudaMemcpyHostToDevice));  //TODO: add streams
-  CUDA_TRY(
-    cudaMemcpy(d_types, h_types, ncols * sizeof(int), cudaMemcpyHostToDevice));  //TODO: add streams
+  CUDA_TRY(cudaMemcpy(
+    d_cols, h_cols, ncols * sizeof(void*), cudaMemcpyHostToDevice));  // TODO: add streams
+  CUDA_TRY(cudaMemcpy(
+    d_types, h_types, ncols * sizeof(int), cudaMemcpyHostToDevice));  // TODO: add streams
 
   return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Flatten AOS info from gdf_columns into SOA.
- * 
+ *
  * @param[in] cols Host-side array of pointers to gdf_columns
  * @param[in] ncols # columns
  * @param[out] d_cols Pointer to device array of columns
  * @param[out] d_valids Pointer to device array of cudf::valid_type for each column
  * @param[out] d_types Device array of column types
- * 
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -86,16 +86,16 @@ inline gdf_error soa_col_info(gdf_column const* const* cols,
   void** h_cols               = v_cols.data();
   cudf::valid_type** h_valids = v_valids.data();
   int* h_types                = v_types.data();
-  CUDA_TRY(
-    cudaMemcpy(d_cols, h_cols, ncols * sizeof(void*), cudaMemcpyHostToDevice));  //TODO: add streams
+  CUDA_TRY(cudaMemcpy(
+    d_cols, h_cols, ncols * sizeof(void*), cudaMemcpyHostToDevice));  // TODO: add streams
   if (d_valids) {
     CUDA_TRY(cudaMemcpy(d_valids,
                         h_valids,
                         ncols * sizeof(cudf::valid_type*),
-                        cudaMemcpyHostToDevice));  //TODO: add streams
+                        cudaMemcpyHostToDevice));  // TODO: add streams
   }
-  CUDA_TRY(
-    cudaMemcpy(d_types, h_types, ncols * sizeof(int), cudaMemcpyHostToDevice));  //TODO: add streams
+  CUDA_TRY(cudaMemcpy(
+    d_types, h_types, ncols * sizeof(int), cudaMemcpyHostToDevice));  // TODO: add streams
 
   return GDF_SUCCESS;
 }

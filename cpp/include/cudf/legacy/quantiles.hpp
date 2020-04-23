@@ -21,9 +21,9 @@
 namespace cudf {
 
 /**
- * @brief Interpolation method to use, when the desired quantile lies between 
+ * @brief Interpolation method to use, when the desired quantile lies between
  * two data points i and j
- * 
+ *
  */
 enum interpolation {
   LINEAR = 0,  ///< Linear interpolation between i and j
@@ -36,7 +36,7 @@ enum interpolation {
 /**
  * @brief  Computes exact quantile
  *
- * Computes quantile using double precision. 
+ * Computes quantile using double precision.
  * This function works only with arithmetic columns.
  *
  * @param[in] col_in input column
@@ -53,7 +53,7 @@ gdf_error quantile_exact(
 /**
  * @brief  Computes approximate quantile
  *
- * Computes quantile with the same type as @p col_in. 
+ * Computes quantile with the same type as @p col_in.
  * This function works only with arithmetic columns.
  *
  * @param[in] col_in input column
@@ -67,17 +67,17 @@ gdf_error quantile_approx(gdf_column* col_in, double q, gdf_scalar* result, gdf_
 
 /**
  * @brief Find values at given quantiles within groups
- * 
+ *
  * Computes groupby @p keys and finds values at each quantile specified in
  * @p quantiles in each group of each column in @p values. When the quantile
- * does not correspond to an exact index, but lies between index i and j, the 
- * result is an interpolation of values at index i and j, using the method 
+ * does not correspond to an exact index, but lies between index i and j, the
+ * result is an interpolation of values at index i and j, using the method
  * specified in @p interpolation. Nulls are always ignored in @p values.
- * 
- * Returns the resulting quantile(s) for all groups in a single column. 
+ *
+ * Returns the resulting quantile(s) for all groups in a single column.
  * When more than one quantile is requested, each group's results are stored
- * contiguously in the same order specified in `quantiles`. 
- * 
+ * contiguously in the same order specified in `quantiles`.
+ *
  * Illustration:
  * ```
  * Let
@@ -85,7 +85,7 @@ gdf_error quantile_approx(gdf_column* col_in, double q, gdf_scalar* result, gdf_
  * values = {[v1,v2,v3,v4,v5],}
  * quantiles = {q1, q2}
  * out_keys, out_values = group_quantiles(keys, values, quantiles)
- * 
+ *
  * out_keys = {[ a,      b,     c     ],}
  * out_vals = {[x1, x2, y1, y2, z1, z2],}
  * where
@@ -96,12 +96,12 @@ gdf_error quantile_approx(gdf_column* col_in, double q, gdf_scalar* result, gdf_
  * z1 = value at quantile q1 in group [v2,v4]
  * z2 = value at quantile q2 in group [v2,v4]
  * ```
- * 
+ *
  * @param keys Keys to group by
  * @param values Values to find the quantiles in
  * @param quantiles List of quantiles q where q is in [0,1]
  * @param interpolation Method to use for interpolating quantiles that lie between points
- * @param include_nulls Whether to consider rows in `keys` that contain `NULL` values. 
+ * @param include_nulls Whether to consider rows in `keys` that contain `NULL` values.
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group values at quantiles
  */

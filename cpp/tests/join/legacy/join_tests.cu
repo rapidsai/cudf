@@ -103,15 +103,15 @@ struct JoinTest : public GdfTest {
   ~JoinTest() {}
 
   /* --------------------------------------------------------------------------*
-  * @brief Creates a unique_ptr that wraps a gdf_column structure 
-  *           intialized with a host vector
-  *
-  * @param host_vector vector containing data to be transfered to device side column
-  * @param host_valid  vector containing valid masks associated with the supplied vector
-  * @param n_count     null_count to be set for the generated column
-  *
-  * @returns A unique_ptr wrapping the new gdf_column
-  * --------------------------------------------------------------------------*/
+   * @brief Creates a unique_ptr that wraps a gdf_column structure
+   *           intialized with a host vector
+   *
+   * @param host_vector vector containing data to be transfered to device side column
+   * @param host_valid  vector containing valid masks associated with the supplied vector
+   * @param n_count     null_count to be set for the generated column
+   *
+   * @returns A unique_ptr wrapping the new gdf_column
+   * --------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const& host_vector,
                                     cudf::valid_type* host_valid,
@@ -190,8 +190,8 @@ struct JoinTest : public GdfTest {
     std::tuple<std::vector<Tp>...>& t,
     std::vector<host_valid_pointer>& valids,
     const cudf::size_type n_count) {
-    //bottom of compile-time recursion
-    //purposely empty...
+    // bottom of compile-time recursion
+    // purposely empty...
   }
   template <std::size_t I = 0, typename... Tp>
     inline typename std::enable_if < I<sizeof...(Tp), void>::type convert_tuple_to_gdf_columns(
@@ -207,7 +207,7 @@ struct JoinTest : public GdfTest {
       gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr, n_count));
     }
 
-    //recurse to next vector in tuple
+    // recurse to next vector in tuple
     convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids, n_count);
   }
 
@@ -221,14 +221,14 @@ struct JoinTest : public GdfTest {
   }
 
   /* --------------------------------------------------------------------------*
-   * @brief  Initializes two sets of columns, left and right, with random 
+   * @brief  Initializes two sets of columns, left and right, with random
    *            values for the join operation.
    *
    * @param left_column_length The length of the left set of columns
-   * @param left_column_range The upper bound of random values for the left 
+   * @param left_column_range The upper bound of random values for the left
    *                          columns. Values are [0, left_column_range)
    * @param right_column_length The length of the right set of columns
-   * @param right_column_range The upper bound of random values for the right 
+   * @param right_column_range The upper bound of random values for the right
    *                           columns. Values are [0, right_column_range)
    * @param print Optionally print the left and right set of columns for debug
    * -------------------------------------------------------------------------*/
@@ -304,10 +304,11 @@ struct JoinTest : public GdfTest {
    * @brief  Computes a reference solution for joining the left and right sets of columns
    *
    * @param print Option to print the solution for debug
-   * @param sort Option to sort the solution. This is necessary for comparison against the gdf solution
+   * @param sort Option to sort the solution. This is necessary for comparison against the gdf
+   * solution
    *
-   * @returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
-   * where left_columns[left_index] == right_columns[right_index]
+   * @returns A vector of 'result_type' where result_type is a structure with a left_index,
+   * right_index where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true) {
@@ -346,8 +347,9 @@ struct JoinTest : public GdfTest {
         for (auto i = range.first; i != range.second; ++i) {
           const auto right_index = i->second;
 
-          // If all of the columns in right_columns[right_index] == all of the columns in left_columns[left_index]
-          // Then this index pair is added to the result as a matching pair of row indices
+          // If all of the columns in right_columns[right_index] == all of the columns in
+          // left_columns[left_index] Then this index pair is added to the result as a matching pair
+          // of row indices
           if (true ==
               rows_equal_using_valids(
                 left_columns, right_columns, left_valids, right_valids, left_index, right_index)) {
@@ -400,11 +402,13 @@ struct JoinTest : public GdfTest {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @brief  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * @brief  Computes the result of joining the left and right sets of columns with the libgdf
+   * functions
    *
    * @param gdf_result A vector of result_type that holds the result of the libgdf join function
    * @param print Option to print the result computed by the libgdf function
-   * @param sort Option to sort the result. This is required to compare the result against the reference solution
+   * @param sort Option to sort the result. This is required to compare the result against the
+   * reference solution
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_gdf_result(bool print                = false,
@@ -525,7 +529,7 @@ struct JoinTest : public GdfTest {
 // number/types of columns for use with Google Test type-parameterized
 // tests .Here join_operation refers to the type of join eg. INNER,
 // LEFT, FULL and join_method refers to the underlying join algorithm
-//that performs it eg. GDF_HASH or GDF_SORT.
+// that performs it eg. GDF_HASH or GDF_SORT.
 template <join_op join_operation,
           gdf_method join_method,
           typename tuple_of_vectors,

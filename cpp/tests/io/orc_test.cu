@@ -259,7 +259,7 @@ TEST_F(OrcWriterTest, MultiColumn) {
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
 
   cudf_io::table_metadata expected_metadata;
-  //expected_metadata.column_names.emplace_back("bools");
+  // expected_metadata.column_names.emplace_back("bools");
   expected_metadata.column_names.emplace_back("int8s");
   expected_metadata.column_names.emplace_back("int16s");
   expected_metadata.column_names.emplace_back("int32s");
@@ -317,7 +317,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
 
   cudf_io::table_metadata expected_metadata;
-  //expected_metadata.column_names.emplace_back("bools");
+  // expected_metadata.column_names.emplace_back("bools");
   expected_metadata.column_names.emplace_back("int8s");
   expected_metadata.column_names.emplace_back("int16s");
   expected_metadata.column_names.emplace_back("int32s");

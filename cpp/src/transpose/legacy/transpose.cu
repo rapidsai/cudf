@@ -18,7 +18,7 @@ constexpr int MAX_GRID_SIZE = (1 << 16) - 1;
 /**
  * @brief Transposes the values from ncols x nrows input columns to
  *  nrows x ncols output columns
- * 
+ *
  * @tparam ColumnType  Datatype of values pointed to by the pointers
  * @param in_cols[in]  Pointers to input columns' data
  * @param out_cols[out]  Pointers to pre-allocated output columns' data
@@ -43,7 +43,7 @@ __global__ void gpu_transpose(ColumnType **in_cols,
 
 /**
  * @brief Transposes the validity mask
- * 
+ *
  * @param[in] in_cols_valid  pointers to the validity mask of the input columns
  * @param[out] out_cols_valid  pointers to the pre-allocated validity mask of
  *  the output columns

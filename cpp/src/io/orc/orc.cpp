@@ -28,7 +28,7 @@ void ProtobufReader::skip_struct_field(int t) {
     case PB_TYPE_FIXEDLEN: skip_bytes(get_u32()); break;
     case PB_TYPE_FIXED32: skip_bytes(4); break;
     default:
-      //printf("invalid type (%d)\n", t);
+      // printf("invalid type (%d)\n", t);
       break;
   }
 }
@@ -391,9 +391,9 @@ PBW_BEGIN_STRUCT(SchemaType)
 PBW_FLD_UINT(1, kind)
 PBW_FLD_PACKED_UINT(2, subtypes)
 PBW_FLD_REPEATED_STRING(3, fieldNames)
-//PBW_FLD_UINT(4, maximumLength)
-//PBW_FLD_UINT(5, precision)
-//PBW_FLD_UINT(6, scale)
+// PBW_FLD_UINT(4, maximumLength)
+// PBW_FLD_UINT(5, precision)
+// PBW_FLD_UINT(6, scale)
 PBW_END_STRUCT()
 
 PBW_BEGIN_STRUCT(UserMetadataItem)

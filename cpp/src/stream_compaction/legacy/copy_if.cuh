@@ -300,7 +300,7 @@ namespace detail {
 
 /*
  * @brief Filters a column using a Filter function object
- * 
+ *
  * @p filter must be a functor or lambda with the following signature:
  * __device__ bool operator()(cudf::size_type i);
  * It return true if element i of @p input should be copied, false otherwise.
@@ -312,15 +312,15 @@ namespace detail {
  */
 template <typename Filter>
 table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
-  /*  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask 
-  * that scatters input[i] if boolean_mask[i] is non-null and "true". This is 
-  * simply an exclusive scan of the mask. Second, use the `scatter_map` to
-  * scatter elements from the `input` column into the `output` column.
-  * 
-  * Slightly more complicated for performance reasons: we first compute the 
-  * per-block count of passed elements, then scan that, and perform the
-  * intra-block scan inside the kernel that scatters the output
-  */
+  /*  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask
+   * that scatters input[i] if boolean_mask[i] is non-null and "true". This is
+   * simply an exclusive scan of the mask. Second, use the `scatter_map` to
+   * scatter elements from the `input` column into the `output` column.
+   *
+   * Slightly more complicated for performance reasons: we first compute the
+   * per-block count of passed elements, then scan that, and perform the
+   * intra-block scan inside the kernel that scatters the output
+   */
   // no error for empty input, just return empty output
   if (0 == input.num_rows() || 0 == input.num_columns()) return empty_like(input);
 

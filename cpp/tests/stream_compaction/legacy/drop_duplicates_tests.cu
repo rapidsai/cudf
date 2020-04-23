@@ -97,7 +97,7 @@ TYPED_TEST(DropDuplicatesTest, Duplicate) {
 template <class T>
 struct DropDuplicatesDoubleTest : GdfTest {};
 
-//using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
+// using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
 //                                      double, cudf::date32, cudf::date64,
 //                                      cudf::timestamp, cudf::category>;
 //                                   cudf::nvstring_category, cudf::bool8>;
@@ -180,7 +180,7 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<typename T::Type0> sourc
 
   EXPECT_NO_THROW(out_table = cudf::drop_duplicates(input_table, keycol_table, keep));
 
-  //reorder and compare columns
+  // reorder and compare columns
   compare_columns_indexed<T>(out_table, expected_col1, expected_col2);
 }
 

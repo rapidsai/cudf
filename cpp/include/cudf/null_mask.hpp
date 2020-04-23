@@ -82,12 +82,12 @@ rmm::device_buffer create_null_mask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
- * @brief Sets a pre-allocated bitmask buffer to a given state in the range 
+ * @brief Sets a pre-allocated bitmask buffer to a given state in the range
  *  `[begin_bit, end_bit)`
  *
- * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true` 
+ * Sets `[begin_bit, end_bit)` bits of bitmask to valid if `valid==true`
  * or null otherwise.
- * 
+ *
  * @param bitmask Pointer to bitmask (e.g. returned by `column_view.null_mask()`)
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
@@ -218,12 +218,12 @@ rmm::device_buffer copy_bitmask(
 
 /**
  * @brief Returns a bitwise AND of the bitmasks of columns of a table
- * 
- * If any of the columns isn't nullable, it is considered all valid. 
+ *
+ * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
- * 
+ *
  * @param view The table of columns
- * @param stream CUDA stream on which to execute kernels 
+ * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource for allocating output bitmask
  * @return rmm::device_buffer Output bitmask
  */

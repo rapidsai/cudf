@@ -52,11 +52,11 @@ using index_vector = rmm::device_vector<cudf::size_type>;
 namespace {
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the ordered aggregation requests which were skipped 
+ * @brief Computes the ordered aggregation requests which were skipped
  * in a previous process (`compound_to_simple`). These ordered aggregations
  * were skipped because they can't be compound to simple aggregation.
- * 
- * Then combine these results with  the set of output aggregation columns 
+ *
+ * Then combine these results with  the set of output aggregation columns
  * corresponding to not ordered aggregation requests.
  *
  * @param groupby[in] The object for computing sort-based groupby
@@ -149,7 +149,7 @@ std::vector<gdf_column*> compute_ordered_aggregations(
  * @param simple_values_columns The list of simple values columns
  * @param simple_operators The list of simple aggregation operations
  * @param stream[in] CUDA stream on which to execute
- * @return output value table with the aggregation(s) computed 
+ * @return output value table with the aggregation(s) computed
  *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls>
 cudf::table compute_simple_aggregations(const cudf::table& input_keys,
@@ -160,7 +160,7 @@ cudf::table compute_simple_aggregations(const cudf::table& input_keys,
                                         cudaStream_t& stream) {
   const gdf_column& key_sorted_order = groupby.key_sort_order();
 
-  //group_labels
+  // group_labels
   const index_vector& group_labels = groupby.group_labels();
   const cudf::size_type num_groups = groupby.num_groups();
 
@@ -190,7 +190,8 @@ cudf::table compute_simple_aggregations(const cudf::table& input_keys,
 
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
-  //Aggregate all rows for simple requests using the key sorted order (indices) and the group labels
+  // Aggregate all rows for simple requests using the key sorted order (indices) and the group
+  // labels
   cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls>
     <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
       *d_input_values,
@@ -315,7 +316,7 @@ auto groupby_null_specialization(table const& keys, table const& values) {
 namespace detail {
 
 /**---------------------------------------------------------------------------*
- * @brief Verifies the requested aggregation is valid for the arguments of the 
+ * @brief Verifies the requested aggregation is valid for the arguments of the
  * operator.
  *
  * @throw cudf::logic_error if an invalid combination of argument and operator

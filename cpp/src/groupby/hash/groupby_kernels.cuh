@@ -28,7 +28,7 @@ namespace detail {
 namespace hash {
 
 /**
- * @brief Compute single-pass aggregations and store results into a sparse 
+ * @brief Compute single-pass aggregations and store results into a sparse
  * `output_values` table, and populate `map` with indices of unique keys
  *
  * The hash map is built by inserting every row `i` from the `keys` and
@@ -75,14 +75,14 @@ struct compute_single_pass_aggs {
 
   /**
    * @brief Construct a new compute_single_pass_aggs functor object
-   * 
+   *
    * @param map Hash map object to insert key,value pairs into.
    * @param num_keys The number of rows in input keys table
-   * @param input_values The table whose rows will be aggregated in the values 
+   * @param input_values The table whose rows will be aggregated in the values
    * of the hash map
    * @param output_values Table that stores the results of aggregating rows of
    * `input_values`.
-   * @param aggs The set of aggregation operations to perform accross the 
+   * @param aggs The set of aggregation operations to perform accross the
    * columns of the `input_values` rows
    * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
    * value in row `i` of input keys. Only used if `skip_rows_with_nulls` is `true`

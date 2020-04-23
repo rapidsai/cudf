@@ -31,7 +31,7 @@ namespace strings {
 namespace detail {
 namespace {  // anonym.
 
-//execute string wrap:
+// execute string wrap:
 //
 struct execute_wrap {
   execute_wrap(column_device_view const d_column,
@@ -56,7 +56,7 @@ struct execute_wrap {
 
       auto pos = itr.position();
 
-      //execute conditions:
+      // execute conditions:
       //
       if (the_chr <= ' ') {  // convert all whitespace to space
         d_buffer[bidx]        = ' ';
@@ -126,7 +126,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              mr);
 }
 
-}  //namespace detail
+}  // namespace detail
 
 std::unique_ptr<column> wrap(strings_column_view const& strings,
                              size_type width,
@@ -135,5 +135,5 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   return detail::wrap<detail::execute_wrap>(strings, width, mr);
 }
 
-}  //namespace strings
-}  //namespace cudf
+}  // namespace strings
+}  // namespace cudf

@@ -171,7 +171,7 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
 /**
  * @brief Maps a C++ type to the scalar type required to hold its value
- * 
+ *
  * @tparam T The concrete C++ type to map
  */
 template <typename T>

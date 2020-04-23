@@ -31,10 +31,9 @@ namespace {
 enum class side : bool { LEFT, RIGHT };
 
 using bit_mask::bit_mask_t;
-using index_type = thrust::tuple<
-  side,
-  cudf::
-    size_type>;  // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
+using index_type = thrust::tuple<side,
+                                 cudf::size_type>;  // `thrust::get<0>` indicates left/right side,
+                                                    // `thrust::get<1>` indicates the row index
 
 /**
  * @brief Merges the bits of two validity bitmasks.

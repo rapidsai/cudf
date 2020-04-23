@@ -86,15 +86,15 @@ struct OrderByTest : public GdfTest {
   ~OrderByTest() {}
 
   /* --------------------------------------------------------------------------*
-  * @brief Creates a unique_ptr that wraps a gdf_column structure 
-  *           initialized with a host vector
-  *
-  * @param host_vector vector containing data to be transfered to device side column
-  * @param host_valid  vector containing valid masks associated with the supplied vector
-  * @param n_count     null_count to be set for the generated column
-  *
-  * @returns A unique_ptr wrapping the new gdf_column
-  * --------------------------------------------------------------------------*/
+   * @brief Creates a unique_ptr that wraps a gdf_column structure
+   *           initialized with a host vector
+   *
+   * @param host_vector vector containing data to be transfered to device side column
+   * @param host_valid  vector containing valid masks associated with the supplied vector
+   * @param n_count     null_count to be set for the generated column
+   *
+   * @returns A unique_ptr wrapping the new gdf_column
+   * --------------------------------------------------------------------------*/
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const& host_vector,
                                     cudf::valid_type* host_valid,
@@ -173,8 +173,8 @@ struct OrderByTest : public GdfTest {
     std::tuple<std::vector<Tp>...>& t,
     std::vector<host_valid_pointer>& valids,
     const cudf::size_type n_count) {
-    //bottom of compile-time recursion
-    //purposely empty...
+    // bottom of compile-time recursion
+    // purposely empty...
   }
   template <std::size_t I = 0, typename... Tp>
     inline typename std::enable_if < I<sizeof...(Tp), void>::type convert_tuple_to_gdf_columns(
@@ -190,7 +190,7 @@ struct OrderByTest : public GdfTest {
       gdf_columns.push_back(create_gdf_column(std::get<I>(t), nullptr, n_count));
     }
 
-    //recurse to next vector in tuple
+    // recurse to next vector in tuple
     convert_tuple_to_gdf_columns<I + 1, Tp...>(gdf_columns, t, valids, n_count);
   }
 
@@ -255,8 +255,8 @@ struct OrderByTest : public GdfTest {
     std::vector<host_valid_pointer>& valids,
     std::vector<int8_t>& asc_desc,
     std::vector<size_t>& indices) {
-    //bottom of compile-time recursion
-    //purposely empty...
+    // bottom of compile-time recursion
+    // purposely empty...
   }
   template <std::size_t I = 0, typename... Tp>
     inline typename std::enable_if <
@@ -299,7 +299,7 @@ struct OrderByTest : public GdfTest {
       std::stable_sort(indices.begin(), indices.end() - invalid_count, cmp);
     }
 
-    //recurse to next vector in tuple
+    // recurse to next vector in tuple
     sort_multi_column<I + 1, Tp...>(t, valids, asc_desc, indices);
   }
 
@@ -336,7 +336,7 @@ struct OrderByTest : public GdfTest {
   /**
    * @brief  Computes the result of sorting the set of columns with the libgdf functions
    *
-   * @param use_default_sort_order Whether or not to sort using the default ascending order 
+   * @param use_default_sort_order Whether or not to sort using the default ascending order
    * @param print Option to print the result computed by the libgdf function
    */
   /* ----------------------------------------------------------------------------*/
@@ -434,10 +434,10 @@ typedef ::testing::Types<
   TestParameters<VTuple<float, int32_t, float>, true>
 
   // TODO: enable and fix sorting tests for GDF_BOOL8
-  //TestParameters< VTuple<cudf::bool8>, true >,
-  //TestParameters< VTuple<int32_t, cudf::bool8>, false >,
-  //TestParameters< VTuple<double, cudf::bool8>, true >,
-  //TestParameters< VTuple<float, int32_t, cudf::bool8>, true >
+  // TestParameters< VTuple<cudf::bool8>, true >,
+  // TestParameters< VTuple<int32_t, cudf::bool8>, false >,
+  // TestParameters< VTuple<double, cudf::bool8>, true >,
+  // TestParameters< VTuple<float, int32_t, cudf::bool8>, true >
   >
   Implementations;
 

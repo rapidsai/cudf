@@ -22,7 +22,7 @@ namespace io {
 
 /**
  * @copydoc cudf::experimental::io:convert_string_to_dtype
- * 
+ *
  **/
 data_type convert_string_to_dtype(const std::string &dtype) {
   if (dtype == "str") return data_type(cudf::type_id::STRING);

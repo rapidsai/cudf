@@ -36,7 +36,7 @@
 
 using bit_mask::bit_mask_t;
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 static constexpr int warp_size  = 32;
 static constexpr int BLOCK_SIZE = 256;
@@ -79,30 +79,31 @@ __device__ auto get_new_value(cudf::size_type idx,
 
 /* --------------------------------------------------------------------------*/
 /**
-   * @brief Kernel that replaces elements from `output_data` given the following
-   *        rule: replace all `values_to_replace[i]` in [values_to_replace_begin`,
-   *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
-   *
-   * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
-   * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false` otherwise
-   * The input_has_nulls and replacement_has_nulls template parameters allows us to specialize
-   * this kernel for the different scenario for performance without writing different kernel.
-   *
-   * @param[in] input_data Device array with the data to be modified
-   * @param[in] input_valid Valid mask associated with input_data
-   * @param[out] output_data Device array to store the data from input_data
-   * @param[out] output_valid Valid mask associated with output_data
-   * @param[out] output_valid_count #valid in output column
-   * @param[in] nrows # rows in `output_data`
-   * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
-   * of old values to be replaced
-   * @param[in] values_to_replace_end  Device pointer to the end of the sequence
-   * of old values to be replaced
-   * @param[in] d_replacement_values Device array with the new values
-   * @param[in] replacement_valid Valid mask associated with d_replacement_values
-   *
-   * @returns
-   */
+ * @brief Kernel that replaces elements from `output_data` given the following
+ *        rule: replace all `values_to_replace[i]` in [values_to_replace_begin`,
+ *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
+ *
+ * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
+ * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false`
+ * otherwise The input_has_nulls and replacement_has_nulls template parameters allows us to
+ * specialize this kernel for the different scenario for performance without writing different
+ * kernel.
+ *
+ * @param[in] input_data Device array with the data to be modified
+ * @param[in] input_valid Valid mask associated with input_data
+ * @param[out] output_data Device array to store the data from input_data
+ * @param[out] output_valid Valid mask associated with output_data
+ * @param[out] output_valid_count #valid in output column
+ * @param[in] nrows # rows in `output_data`
+ * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
+ * of old values to be replaced
+ * @param[in] values_to_replace_end  Device pointer to the end of the sequence
+ * of old values to be replaced
+ * @param[in] d_replacement_values Device array with the new values
+ * @param[in] replacement_valid Valid mask associated with d_replacement_values
+ *
+ * @returns
+ */
 /* ----------------------------------------------------------------------------*/
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
 __global__ void replace_kernel(const T* __restrict__ input_data,
@@ -185,9 +186,9 @@ __global__ void replace_kernel(const T* __restrict__ input_data,
 
 /* --------------------------------------------------------------------------*/
 /**
-   * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
-   *        `replace_kernel` with the appropriate data types.
-   */
+ * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
+ *        `replace_kernel` with the appropriate data types.
+ */
 /* ----------------------------------------------------------------------------*/
 struct replace_kernel_forwarder {
   template <typename col_type>
@@ -250,7 +251,7 @@ struct replace_kernel_forwarder {
     }
   }
 };
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
@@ -323,7 +324,7 @@ gdf_column find_and_replace_all(const gdf_column& input_col,
 
 }  // namespace cudf
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 using bit_mask::bit_mask_t;
 
@@ -422,7 +423,7 @@ struct replace_nulls_scalar_kernel_forwarder {
   }
 };
 
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {

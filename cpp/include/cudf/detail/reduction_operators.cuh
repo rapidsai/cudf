@@ -100,7 +100,7 @@ struct simple_op {
    *
    * @tparam T data type of identity value
    *
-   * @return identity value 
+   * @return identity value
    */
   template <typename T>
   constexpr T get_identity() {

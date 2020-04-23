@@ -31,7 +31,8 @@ namespace detail {
 
 namespace {
 
-// This functor only exists here because using a lambda directly in the tabulate() call generates the cryptic
+// This functor only exists here because using a lambda directly in the tabulate() call generates
+// the cryptic
 // __T289 link error.  This seems to be related to lambda usage within functions using SFINAE.
 template <typename T>
 struct tabulator {
@@ -51,7 +52,7 @@ struct const_tabulator {
 };
 
 /**
- * @brief Functor called by the `type_dispatcher` to generate the sequence specified 
+ * @brief Functor called by the `type_dispatcher` to generate the sequence specified
  * by init and step.
  */
 struct sequence_functor {

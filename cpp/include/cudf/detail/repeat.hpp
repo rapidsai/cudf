@@ -26,9 +26,9 @@ namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
- * 
- * Creates a new table by repeating the rows of @p input_table. The number of 
- * repetitions of each element is defined by the value at the corresponding 
+ *
+ * Creates a new table by repeating the rows of @p input_table. The number of
+ * repetitions of each element is defined by the value at the corresponding
  * index of @p count
  * Example:
  * ```
@@ -63,7 +63,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
- * 
+ *
  * Creates a new table by repeating @p count times the rows of @p input_table.
  * Example:
  * ```
@@ -75,7 +75,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
  * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
  * size_type.
- * 
+ *
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
  * @param mr Memory resource to allocate the result output table

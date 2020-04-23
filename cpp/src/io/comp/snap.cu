@@ -22,7 +22,8 @@ namespace io {
 
 #define HASH_BITS 12
 
-// TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal encoding
+// TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
+// encoding
 #define MAX_LITERAL_LENGTH 256
 
 #define MAX_COPY_LENGTH 64       // Syntax limit

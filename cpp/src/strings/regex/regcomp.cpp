@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <strings/regex/regcomp.h>
 #include <cudf/utilities/error.hpp>
@@ -517,7 +517,7 @@ class regex_compiler {
 
   inline Node popand(int op) {
     if (andstack.size() < 1) {
-      //missing operand for op
+      // missing operand for op
       int inst_id = m_prog.add_inst(NOP);
       pushand(inst_id, inst_id);
     }
@@ -551,13 +551,13 @@ class regex_compiler {
           // unknown operator in evaluntil
           break;
         case LBRA: /* must have been RBRA */
-          op1                                    = popand('(');
-          id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  //subidstack[subidstack.size()-1];
+          op1      = popand('(');
+          id_inst2 = m_prog.add_inst(RBRA);
+          m_prog.inst_at(id_inst2).u1.subid = ator.subid;  // subidstack[subidstack.size()-1];
           m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
           id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;  //subidstack[subidstack.size() - 1];
-          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
+          m_prog.inst_at(id_inst1).u1.subid = ator.subid;  // subidstack[subidstack.size() - 1];
+          m_prog.inst_at(id_inst1).u2.next_id = op1.id_first;
           pushand(id_inst1, id_inst2);
           return;
         case OR:
@@ -633,7 +633,7 @@ class regex_compiler {
 
   void Operator(int t) {
     if (t == RBRA && --nbra < 0)
-      //unmatched right paren
+      // unmatched right paren
       return;
     if (t == LBRA) {
       nbra++;
@@ -803,7 +803,7 @@ class regex_compiler {
 reprog reprog::create_from(const char32_t* pattern) {
   reprog rtn;
   regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
-  //rtn->print();
+  // rtn->print();
   return rtn;
 }
 

@@ -21,11 +21,11 @@ namespace experimental {
 namespace detail {
 
 /**
-   * @brief Dispatcher for running Scan operation on input column
-   * Dispatches scan operartion on `Op` and creates output column
-   *
-   * @tparam Op device binary operator
-   */
+ * @brief Dispatcher for running Scan operation on input column
+ * Dispatches scan operartion on `Op` and creates output column
+ *
+ * @tparam Op device binary operator
+ */
 template <typename Op>
 struct ScanDispatcher {
  private:
@@ -40,7 +40,7 @@ struct ScanDispatcher {
     return std::is_arithmetic<T>::value || is_string_supported<T>();
   }
 
-  //for arithmetic types
+  // for arithmetic types
   template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
   auto exclusive_scan(const column_view& input_view,
                       include_nulls include_nulls_flag,
@@ -77,7 +77,7 @@ struct ScanDispatcher {
     return output_column;
   }
 
-  //for string type
+  // for string type
   template <typename T, std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
   std::unique_ptr<column> exclusive_scan(const column_view& input_view,
                                          include_nulls include_nulls_flag,
@@ -104,7 +104,7 @@ struct ScanDispatcher {
     return mask;
   }
 
-  //for arithmetic types
+  // for arithmetic types
   template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
   auto inclusive_scan(const column_view& input_view,
                       include_nulls include_nulls_flag,
@@ -139,7 +139,7 @@ struct ScanDispatcher {
     return output_column;
   }
 
-  //for string type
+  // for string type
   template <typename T, std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
   std::unique_ptr<column> inclusive_scan(const column_view& input_view,
                                          include_nulls include_nulls_flag,
@@ -181,7 +181,7 @@ struct ScanDispatcher {
    * @param inclusive inclusive or exclusive scan
    * @param mr The resource to use for all allocations
    * @param stream The stream on which to execute all allocations and copies
-   * @return 
+   * @return
    *
    * @tparam T type of input column
    */

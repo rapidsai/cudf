@@ -74,8 +74,8 @@ auto make_type_param_vector(std::initializer_list<T> const& init_list) {
 
 /**
  * @brief Type list for all integral types.
- * 
-*/
+ *
+ */
 using IntegralTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
 
 /**
@@ -130,7 +130,7 @@ using StringTypes = cudf::test::Types<string_view>;
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all fixed-width element types for use in GTest
  * typed tests.
- * 
+ *
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
@@ -141,7 +141,7 @@ using FixedWidthTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of sortable types for use in GTest typed tests.
- * 
+ *
  * Example:
  * ```
  * // Invokes all typed fixture tests for all sortable types in libcudf

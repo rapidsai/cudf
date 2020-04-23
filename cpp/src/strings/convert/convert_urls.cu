@@ -31,11 +31,11 @@ namespace {
 //
 // This is the functor for the url_encode() method below.
 // Specific requirements are documented in custrings issue #321.
-// In summary it converts mostly non-ascii characters and control characters into UTF-8 hex characters
-// prefixed with '%'. For example, the space character must be converted to characters '%20' where the
-// '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are converted to
-// multiple hex charactes. For example, the é character is converted to characters '%C3%A9' where 'C3A9'
-// is the UTF-8 bytes xc3a9 for this character.
+// In summary it converts mostly non-ascii characters and control characters into UTF-8 hex
+// characters prefixed with '%'. For example, the space character must be converted to characters
+// '%20' where the '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters
+// are converted to multiple hex charactes. For example, the é character is converted to characters
+// '%C3%A9' where 'C3A9' is the UTF-8 bytes xc3a9 for this character.
 //
 struct url_encoder_fn {
   column_device_view const d_strings;

@@ -35,12 +35,12 @@ struct GdfTest : public ::testing::Test {
 };
 
 /**
-* @brief Environment for google tests that creates/deletes temporary directory 
-* for each test program and provides path of filenames
-* 
-* TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
-*   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-*/
+ * @brief Environment for google tests that creates/deletes temporary directory
+ * for each test program and provides path of filenames
+ *
+ * TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+ *   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+ */
 struct TempDirTestEnvironment : public ::testing::Environment {
   std::string tmpdir;
 
@@ -51,7 +51,7 @@ struct TempDirTestEnvironment : public ::testing::Environment {
   }
 
   void TearDown() {
-    //TODO: should use std::filesystem instead, once C++17 support added
+    // TODO: should use std::filesystem instead, once C++17 support added
     nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
@@ -60,17 +60,17 @@ struct TempDirTestEnvironment : public ::testing::Environment {
   }
 
   /**
-     * @brief Get directory path to use for temporary files
-     *
-     * @return std::string The temporary directory path
-     */
+   * @brief Get directory path to use for temporary files
+   *
+   * @return std::string The temporary directory path
+   */
   std::string get_temp_dir() { return tmpdir; }
 
   /**
-     * @brief Get a temporary filepath to use for the specified filename
-     *
-     * @return std::string The temporary filepath
-     */
+   * @brief Get a temporary filepath to use for the specified filename
+   *
+   * @return std::string The temporary filepath
+   */
   std::string get_temp_filepath(std::string filename) { return tmpdir + filename; }
 };
 #endif  // CUDF_TEST_FIXTURES_H

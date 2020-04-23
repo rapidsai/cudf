@@ -51,12 +51,12 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
-      group_sizes.begin<size_type>(),  //stencil
+      group_sizes.begin<size_type>(),  // stencil
       nth_index.begin(),
       [n] __device__(auto group_size, auto group_offset) {
         return group_offset + ((n < 0) ? group_size + n : n);
       },
-      [n] __device__(auto group_size) {  //nth within group
+      [n] __device__(auto group_size) {  // nth within group
         return (n < 0) ? group_size >= (-n) : group_size > n;
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))

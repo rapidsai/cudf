@@ -224,7 +224,7 @@ std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::col
   CUDF_FAIL("dictionary type not supported");
 }
 
-}  //namespace
+}  // namespace
 
 template <typename T, typename ScalarIterator>
 std::unique_ptr<column> clamp(column_view const& input,

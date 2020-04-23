@@ -140,7 +140,7 @@ void print_gdf_column(gdf_column const* column,
  * @param length Length of the mask in bits
  * @param ostream Output stream, defaults to the standard output stream
  *
- * @note the mask may have more space allocated for it than is necessary 
+ * @note the mask may have more space allocated for it than is necessary
  * for the specified length; in particular, it will have "slack" bits
  * in the last byte, if length % 8 != 0. Such slack bits are ignored and
  * not printed. Usually, length is the number of elements of a gdf_column.
@@ -236,8 +236,8 @@ inline typename std::enable_if<I == sizeof...(Tp), void>::type convert_tuple_to_
   std::vector<gdf_col_pointer>& gdf_columns,
   std::tuple<std::vector<Tp>...>& t,
   valid_initializer_t bit_initializer) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 
 template <typename valid_initializer_t, std::size_t I = 0, typename... Tp>
@@ -251,7 +251,7 @@ template <typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   // the vector of gdf_columns
   gdf_columns.push_back(init_gdf_column(std::get<I>(t), column, bit_initializer));
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   convert_tuple_to_gdf_columns<valid_initializer_t, I + 1, Tp...>(gdf_columns, t, bit_initializer);
 }
 
@@ -298,8 +298,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector<std::vector<T>> 
 /**
  * ---------------------------------------------------------------------------*
  * @brief Compare two gdf_columns on all fields, including pairwise comparison
- * of data and valid arrays. 
- * 
+ * of data and valid arrays.
+ *
  * Uses type_dispatcher to dispatch the data comparison
  *
  * @param left The left column

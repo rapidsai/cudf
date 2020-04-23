@@ -25,9 +25,9 @@
 
 /**---------------------------------------------------------------------------*
  * @brief Checks whether the given character is a whitespace character.
- * 
+ *
  * @param[in] ch The character to check
- * 
+ *
  * @return True if the input is whitespace, False otherwise
  *---------------------------------------------------------------------------**/
 __inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' '; }
@@ -35,12 +35,12 @@ __inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' 
 /**---------------------------------------------------------------------------*
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
- * 
+ *
  * @param[in] data The character stream to scan
  * @param[in,out] start The start index to adjust
  * @param[in,out] end The end index to adjust
  * @param[in] quotechar The character used to denote quotes
- * 
+ *
  * @return Adjusted or unchanged start_idx and end_idx
  *---------------------------------------------------------------------------**/
 __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
@@ -55,7 +55,7 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
 
 /**---------------------------------------------------------------------------*
  * @brief Computes a 32-bit hash when given a byte stream and range.
- * 
+ *
  * MurmurHash3_32 implementation from
  * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
  *
@@ -65,16 +65,16 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
  * algorithms are optimized for their respective platforms. You can still
  * compile and run any of them on any platform, but your performance with the
  * non-native version will be less than optimal.
- * 
+ *
  * This is a modified version of what is used for hash-join. The change is at
  * accept a char * key and range (start and end) so that the large raw CSV data
  * pointer could be used
- * 
+ *
  * @param[in] key The input data to hash
  * @param[in] start The start index of the input data
  * @param[in] end The end index of the input data
  * @param[in] seed An initialization value
- * 
+ *
  * @return The hash value
  *---------------------------------------------------------------------------**/
 __inline__ __device__ int32_t convertStrToHash(const char* key,
@@ -306,8 +306,8 @@ __inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(const c
   return cudf::timestamp{parse_numeric<int64_t>(data, start, end, opts)};
 }
 
-//The purpose of this is merely to allow compilation
-//It should NOT be used
+// The purpose of this is merely to allow compilation
+// It should NOT be used
 template <>
 __inline__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
   const char* data, long start, long end, const ParseOptions& opts) {

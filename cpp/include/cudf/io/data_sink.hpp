@@ -47,22 +47,22 @@ class data_sink {
 
   /**
    * @brief Create a void sink (one that does no actual io)
-   * 
+   *
    * A useful code path for benchmarking, to eliminate physical
    * hardware randomness from profiling.
-   *   
+   *
    **/
   static std::unique_ptr<data_sink> create();
 
   /**
    * @brief Create a wrapped custom user data sink
-   * 
+   *
    * @param[in] User-provided data sink (typically custom class)
    *
    * The data sink returned here is not the one passed by the user. It is an internal
    * class that wraps the user pointer.  The principle is to allow the user to declare
    * a custom sink instance and use it across multiple write() calls.
-   *   
+   *
    **/
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
 
@@ -83,21 +83,21 @@ class data_sink {
 
   /**
    * @brief Whether or not this sink supports writing from gpu memory addresses.
-   * 
+   *
    * Internal to some of the file format writers, we have code that does things like
-   * 
+   *
    * tmp_buffer = alloc_temp_buffer();
    * cudaMemcpy(tmp_buffer, device_buffer, size);
    * sink->write(tmp_buffer, size);
-   * 
+   *
    * In the case where the sink type is itself a memory buffered write, this ends up
-   * being effectively a second memcpy.  So a useful optimization for a "smart" 
-   * custom data_sink is to do it's own internal management of the movement 
+   * being effectively a second memcpy.  So a useful optimization for a "smart"
+   * custom data_sink is to do it's own internal management of the movement
    * of data between cpu and gpu; turning the internals of the writer into simply
-   * 
+   *
    * sink->device_write(device_buffer, size)
-   * 
-   * If this function returns true, the data_sink will receive calls to device_write() 
+   *
+   * If this function returns true, the data_sink will receive calls to device_write()
    * instead of write() when possible.  However, it is still possible to receive
    * write() calls as well.
    *
@@ -119,7 +119,7 @@ class data_sink {
 
   /**
    * @brief Flush the data written into the sink
-   * 
+   *
    * @return void
    */
   virtual void flush() = 0;

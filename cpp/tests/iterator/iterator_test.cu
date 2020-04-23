@@ -7,9 +7,10 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 #include <cudf/detail/iterator.cuh>                             // include iterator header
@@ -460,7 +461,7 @@ TYPED_TEST(IteratorTest, error_handling) {
   CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, false>()));
   CUDF_EXPECT_NO_THROW((d_col_null->pair_begin<T, true>()));
 
-  //scalar iterator
+  // scalar iterator
   using ScalarType = cudf::experimental::scalar_type_t<T>;
   std::unique_ptr<cudf::scalar> s(new ScalarType{T{1}, false});
   CUDF_EXPECT_THROW_MESSAGE((cudf::experimental::detail::make_scalar_iterator<T>(*s)),

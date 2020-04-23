@@ -23,7 +23,7 @@ namespace cudf {
 
 /**
  * @brief Fills a range of elements in a column with a scalar value.
- * 
+ *
  * Fills N elements of @p column starting at @p begin with @p value, where
  * N = (@p end - @p begin)
  *
@@ -33,16 +33,16 @@ namespace cudf {
  * @param[in] value The scalar value to fill
  * @param[in] begin The starting index of the fill range
  * @param[in] end The index one past the end of the fill range
- * 
+ *
  * @return void
  */
 void fill(gdf_column *column, gdf_scalar const &value, cudf::size_type begin, cudf::size_type end);
 
 /**
  * @brief Repeat rows of a Table
- * 
- * Creates a new table by repeating the rows of @p in. The number of 
- * repetitions of each element is defined by the value at the corresponding 
+ *
+ * Creates a new table by repeating the rows of @p in. The number of
+ * repetitions of each element is defined by the value at the corresponding
  * index of @p count
  * Example:
  * ```
@@ -50,7 +50,7 @@ void fill(gdf_column *column, gdf_scalar const &value, cudf::size_type begin, cu
  * count = [1,2,3]
  * return = [4,5,5,6,6,6]
  * ```
- * 
+ *
  * @param in Input column
  * @param count Non-nullable column of type `GDF_INT32`
  * @return cudf::table The result table containing the repetitions
@@ -59,7 +59,7 @@ cudf::table repeat(const cudf::table &in, const gdf_column &count);
 
 /**
  * @brief Repeat rows of a Table
- * 
+ *
  * Creates a new table by repeating @p count times the rows of @p in.
  * Example:
  * ```
@@ -67,7 +67,7 @@ cudf::table repeat(const cudf::table &in, const gdf_column &count);
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * 
+ *
  * @param in Input column
  * @param count Non-null scalar of type `GDF_INT32`
  * @return cudf::table The result table containing the repetitions
@@ -76,7 +76,7 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar &count);
 
 /**
  * @brief Construct a new table by tiling the input table
- * 
+ *
  * Creates a new table that contains the rows of @p in repeated @p count times.
  * The difference from `repeat()` is illustrated in the example below.
  * Example:
@@ -85,7 +85,7 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar &count);
  * count = 2
  * return = [4,5,6,4,5,6]
  * ```
- *  
+ *
  * @param in Input table
  * @param count Number of times to tile the rows
  * @return cudf::table The result table containing the tiled columns

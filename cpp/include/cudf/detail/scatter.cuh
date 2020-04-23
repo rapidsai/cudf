@@ -180,7 +180,8 @@ struct column_scatterer {
  *
  * @param[in] source The input columns containing values to be scattered into the
  * target columns
- * @param[in] scatter_map_begin Beginning of iterator range of integer indices that has been provided.
+ * @param[in] scatter_map_begin Beginning of iterator range of integer indices that has been
+ *provided.
  * @param[in] scatter_map_end End of iterator range of integer indices that has been provided.
  * source columns to rows in the target columns
  * @param[in] target The set of columns into which values from the source_table
@@ -252,6 +253,6 @@ std::unique_ptr<table> scatter(
 
   return std::make_unique<table>(std::move(result));
 }
-}  //namespace detail
-}  //namespace experimental
+}  // namespace detail
+}  // namespace experimental
 }  // namespace cudf

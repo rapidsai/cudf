@@ -26,8 +26,8 @@ typedef struct CUstream_st* cudaStream_t;
 namespace cudf {
 
 /** ---------------------------------------------------------------------------*
-* @brief Indicates when to allocate a mask, based on an existing mask.
-* ---------------------------------------------------------------------------**/
+ * @brief Indicates when to allocate a mask, based on an existing mask.
+ * ---------------------------------------------------------------------------**/
 enum mask_allocation_policy {
   NEVER,   ///< Do not allocate a null mask, regardless of input
   RETAIN,  ///< Allocate a null mask if the input contains one
@@ -36,7 +36,7 @@ enum mask_allocation_policy {
 
 /*
  * Initializes and returns gdf_column of the same type as the input.
- * 
+ *
  * @param input The input column to emulate
  * @return gdf_column An unallocated column of same type as input
  */
@@ -70,7 +70,7 @@ gdf_column allocate_like(gdf_column const& input,
 
 /**
  * @brief Creates a new column that is a copy of input
- * 
+ *
  * @param input The input column to copy
  * @param stream Optional stream in which to perform copies
  * @return gdf_column A copy of input
@@ -149,11 +149,11 @@ table copy(table const& t, cudaStream_t stream = 0);
 
 /**
  * @brief Copies a range of elements from one column to another.
- * 
+ *
  * Copies N elements of @p in_column starting at @p in_begin to the N
  * elements of @p out_column starting at @p out_begin, where
  * N = (@p out_end - @p out_begin)
- * 
+ *
  * The datatypes of in_column and out_column must be the same.
  *
  * If the input and output columns are the same and ranges overlap, the
@@ -164,7 +164,7 @@ table copy(table const& t, cudaStream_t stream = 0);
  * @param[in] out_begin The starting index of the output range
  * @param[in] out_end The index one past the end of the output range
  * @param[in] in_begin The starting index of the input range
- * 
+ *
  * @return void
  */
 void copy_range(gdf_column* out_column,
@@ -402,7 +402,7 @@ table gather(table const* source_table, gdf_column const& gather_map, bool check
  * conditions:
  * a, b belongs to Range[0, input column size]
  * a <= b, where the position of a is less or equal to the position of b.
-  *
+ *
  * Exceptional cases for the indices array are:
  * When the values in the pair are equal, the function returns an empty column.
  * When the values in the pair are 'strictly decreasing', the outcome is
@@ -458,7 +458,7 @@ std::vector<gdf_column*> slice(gdf_column const& input,
  * When the indices array is empty, an empty vector of columns is returned.
  *
  * The input columns may have different sizes. The number of
- * columns must be equal to the number of indices in the array plus one. 
+ * columns must be equal to the number of indices in the array plus one.
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
@@ -494,22 +494,22 @@ std::vector<gdf_column*> split(gdf_column const& input,
  * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
  *
  * Example:
- * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28},
  *               { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
  * scatter_map:  { 3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
- * output:     {[{22}, {2}], 
- *              [{16, 24, 26, 28}, {4, 4, 6, 2}], 
- *              [{}, {}], 
- *              [{10, 14}, {1, 3}], 
+ * output:     {[{22}, {2}],
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}],
+ *              [{}, {}],
+ *              [{10, 14}, {1, 3}],
  *              [{12, 18, 20}, {2, null, 0}]}
  *
  * @param[in] input Table whose rows will be partitioned into a set of
- * tables according to `scatter_map` 
+ * tables according to `scatter_map`
  * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map
- * each row in `input` table into one of the output tables. 
+ * each row in `input` table into one of the output tables.
  *
  * @return A std::vector of `table`s containing the scattered rows of `input`.
- * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`. 
+ * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`.
  *
  */
 std::vector<cudf::table> scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);

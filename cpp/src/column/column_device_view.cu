@@ -41,22 +41,22 @@ namespace {
 /**
  * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
  * to build device_views from views.
- * 
+ *
  * It is used to build the array of child columns in device memory. Since child columns can
  * also have child columns, this uses recursion to build up the flat device buffer to contain
  * all the children and set the member pointers appropriately.
- * 
+ *
  * This is accomplished by laying out all the children and grand-children into a flat host
- * buffer first but also keep a running device pointer to but used when setting the 
+ * buffer first but also keep a running device pointer to but used when setting the
  * d_children array result.
- * 
+ *
  * This function is provided both the host pointer in which to insert its children (and
  * by recursion its grand-children) and the device pointer to be used when calculating
  * ultimate device pointer for the d_children member.
- * 
+ *
  * @tparam ColumnView is either column_view or mutable_column_view
  * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
- * 
+ *
  * @param source The column view to make into a device view
  * @param h_ptr The host memory where to place any child data
  * @param d_ptr The device pointer for calculating the d_children member of any child data

@@ -273,12 +273,12 @@ struct elementwise_aggregator {
  * ```c++
  * target_row[i] = aggs[i](target_row[i], source_row[i])
  * ```
- * 
- * This function only supports aggregations that can be done in a "single pass", 
+ *
+ * This function only supports aggregations that can be done in a "single pass",
  * i.e., given an initial value `R`, the aggregation `op` can be computed on a series
- * of elements `e[i] for i in [0,n)` by computing `R = op(e[i],R)` for any order 
+ * of elements `e[i] for i in [0,n)` by computing `R = op(e[i],R)` for any order
  * of the values of `i`.
- * 
+ *
  * The initial value and validity of `R` depends on the aggregation:
  * SUM: 0 and NULL
  * MIN: Max value of type and NULL
@@ -287,10 +287,10 @@ struct elementwise_aggregator {
  * COUNT_ALL:   0 and VALID
  * ARGMAX: `ARGMAX_SENTINEL` and NULL
  * ARGMIN: `ARGMIN_SENTINEL` and NULL
- * 
+ *
  * It is required that the elements of `target` be initialized with the corresponding
  * initial values and validity specified above.
- * 
+ *
  * Handling of null elements in both `source` and `target` depends on the aggregation:
  * SUM, MIN, MAX, ARGMIN, ARGMAX:
  *  - `source`: Skipped
@@ -328,11 +328,11 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
 /**
  * @brief Dispatched functor to initialize a column with the identity of an
  * aggregation operation.
- * 
- * Given a type `T` and `aggregation kind k`, determines and sets the value of 
- * each element of the passed column to the appropriate initial value for the 
+ *
+ * Given a type `T` and `aggregation kind k`, determines and sets the value of
+ * each element of the passed column to the appropriate initial value for the
  * aggregation.
- * 
+ *
  * The initial values set as per aggregation are:
  * SUM: 0
  * COUNT_VALID: 0 and VALID
@@ -341,7 +341,7 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
  * MAX: Min value of type `T`
  * ARGMAX: `ARGMAX_SENTINEL`
  * ARGMIN: `ARGMIN_SENTINEL`
- * 
+ *
  * Only works on columns of fixed-width types.
  */
 struct identity_initializer {
@@ -401,9 +401,9 @@ struct identity_initializer {
  *
  * @throw cudf::logic_error if column type and corresponging agg are incompatible
  * @throw cudf::logic_error if column type is not fixed-width
- * 
+ *
  * @param table The table of columns to initialize.
- * @param aggs A vector of aggregation operations corresponding to the table 
+ * @param aggs A vector of aggregation operations corresponding to the table
  * columns. The aggregations determine the identity value for each column.
  */
 void initialize_with_identity(mutable_table_view& table,

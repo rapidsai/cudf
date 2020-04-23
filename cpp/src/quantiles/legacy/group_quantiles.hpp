@@ -28,7 +28,7 @@ namespace detail {
 
 /**
  * @brief Internal API to calculate groupwise quantiles
- * 
+ *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param group_sizes Number of valid elements per group
@@ -47,7 +47,7 @@ void group_quantiles(gdf_column const& values,
 
 /**
  * @brief Internal API to calculate groupwise medians
- * 
+ *
  * @param values Grouped and sorted (within group) values to get medians from
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param group_sizes Number of valid elements per group

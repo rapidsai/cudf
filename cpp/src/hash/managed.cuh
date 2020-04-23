@@ -41,4 +41,4 @@ inline bool isPtrManaged(cudaPointerAttributes attr) {
 #endif
 }
 
-#endif  //MANAGED_CUH
+#endif  // MANAGED_CUH

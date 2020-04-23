@@ -113,9 +113,9 @@ __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
   }
 }
 
-//Set pre-allocated null mask of given bit range [begin_bit, end_bit)
-//to valid, if valid==true,
-//or null, otherwise;
+// Set pre-allocated null mask of given bit range [begin_bit, end_bit)
+// to valid, if valid==true,
+// or null, otherwise;
 void set_null_mask(
   bitmask_type *bitmask, size_type begin_bit, size_type end_bit, bool valid, cudaStream_t stream) {
   CUDF_FUNC_RANGE();
@@ -193,7 +193,7 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 
 /**
  * @brief Convenience function to get offset word from a bitmask
- * 
+ *
  * @see copy_offset_bitmask
  * @see offset_bitmask_and
  */
@@ -304,10 +304,10 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
 
 /**
  * @brief Computes the bitwise AND of an array of bitmasks
- * 
+ *
  * @param destination The bitmask to write result into
  * @param source Array of source mask pointers. All masks must be of same size
- * @param begin_bit Array of offsets into corresponding @p source masks. 
+ * @param begin_bit Array of offsets into corresponding @p source masks.
  *                  Must be same size as source array
  * @param num_sources Number of masks in @p source array
  * @param source_size Number of bits in each mask in @p source

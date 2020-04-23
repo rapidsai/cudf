@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -453,7 +453,8 @@ int32_t bz2_decompress_block(unbz_state_s *s) {
 
   s->save_nblock = nblock;
 
-  // Verify the end-of-block signature: should be followed by another block or an end-of-stream signature
+  // Verify the end-of-block signature: should be followed by another block or an end-of-stream
+  // signature
   {
     const uint8_t *save_cur = s->cur;
     uint64_t save_bitbuf    = s->bitbuf;

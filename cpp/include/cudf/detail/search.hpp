@@ -28,20 +28,20 @@ namespace experimental {
 namespace detail {
 
 /**
- * @brief Find smallest indices in a sorted table where values should be 
+ * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the first index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  1 }
- * 
+ *
  *  Multi Column:
  *      idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -51,7 +51,7 @@ namespace detail {
  *             { .7 },
  *             { 61 }}
  *   result =  {  3 }
- * 
+ *
  * @param t               Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
@@ -70,20 +70,20 @@ std::unique_ptr<column> lower_bound(
   cudaStream_t steam                  = 0);
 
 /**
- * @brief Find largest indices in a sorted table where values should be 
+ * @brief Find largest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the last index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single Column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  3 }
- * 
+ *
  *  Multi Column:
  *    idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -92,7 +92,7 @@ std::unique_ptr<column> lower_bound(
  *   values = {{ 20 },
  *             { .7 },
  *             { 61 }}
- *   result =  {  5  *   * 
+ *   result =  {  5  *   *
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order

@@ -35,7 +35,7 @@ namespace detail {
  *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
- * 
+ *
  * The caller must update the null mask in the output column.
  *
  * @tparam SourceIterator must produce string_view objects

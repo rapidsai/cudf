@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #pragma once
 #include <string>
 #include <vector>
@@ -23,7 +23,7 @@ namespace detail {
 
 /**
  * @brief Actions and Tokens (regex instruction types)
- * 
+ *
  * ```
  *	02xx are operators, value == precedence
  *	03xx are tokens, i.e. operands for operators
@@ -87,9 +87,9 @@ class reprog {
   reprog& operator=(reprog&&) = default;
 
   /**
-     * @brief Parses the given regex pattern and compiles
-     * into a list of chained instructions.
-     */
+   * @brief Parses the given regex pattern and compiles
+   * into a list of chained instructions.
+   */
   static reprog create_from(const char32_t* pattern);
 
   int32_t add_inst(int32_t type);

@@ -35,10 +35,10 @@ struct nvstrdesc_s {
  * @brief Struct to describe the avro schema
  **/
 struct schemadesc_s {
-  uint32_t kind;  // avro type kind
-  uint32_t
-    count;  // for records/unions: number of following child columns, for nulls: global null_count, for enums: dictionary ofs
-  void *dataptr;  // Ptr to column data, or null if column not selected
+  uint32_t kind;   // avro type kind
+  uint32_t count;  // for records/unions: number of following child columns, for nulls: global
+                   // null_count, for enums: dictionary ofs
+  void *dataptr;   // Ptr to column data, or null if column not selected
 };
 
 /**

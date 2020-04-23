@@ -74,7 +74,7 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
     input, valid_table_filter{*keys_device_view, keep_threshold}, mr, stream);
 }
 
-}  //namespace detail
+}  // namespace detail
 
 /*
  * Filters a table to remove null elements.
@@ -96,5 +96,5 @@ std::unique_ptr<experimental::table> drop_nulls(table_view const& input,
   return cudf::experimental::detail::drop_nulls(input, keys, keys.size(), mr);
 }
 
-}  //namespace experimental
-}  //namespace cudf
+}  // namespace experimental
+}  // namespace cudf

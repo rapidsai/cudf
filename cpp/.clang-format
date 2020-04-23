@@ -128,7 +128,7 @@ RawStringFormats:
     CanonicalDelimiter: ''
     BasedOnStyle: google
 # Enabling comment reflow causes doxygen comments to be messed up in their formats!
-ReflowComments: false
+ReflowComments: true
 SortIncludes: true
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: false

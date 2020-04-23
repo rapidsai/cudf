@@ -98,8 +98,10 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
  * Supports concurrent insert, but not concurrent insert and find.
  *
  * @note The user is responsible for the following stream semantics:
- * - Either the same stream should be used to create the map as is used by the kernels that access it, or
- * - the stream used to create the map should be synchronized before it is accessed from a different stream or from host code.
+ * - Either the same stream should be used to create the map as is used by the kernels that access
+ * it, or
+ * - the stream used to create the map should be synchronized before it is accessed from a different
+ * stream or from host code.
  *
  * TODO:
  *  - add constructor that takes pointer to hash_table to avoid allocations
@@ -485,7 +487,7 @@ class concurrent_unordered_map {
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
-   * @param stream CUDA stream to use for device operations. 
+   * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
   concurrent_unordered_map(size_type capacity,
                            const mapped_type unused_element,

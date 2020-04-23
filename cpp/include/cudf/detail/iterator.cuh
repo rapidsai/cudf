@@ -17,18 +17,18 @@
 /** --------------------------------------------------------------------------*
  * @brief provides column input iterator with nulls replaced with a specified value
  * @file iterator.cuh
- * 
+ *
  * The column input iterator is designed to be used as an input
  * iterator for thrust and cub.
  *
  * Usage:
  * auto iter = make_null_replacement_iterator(column, null_value);
- * 
- * The column input iterator returns only a scalar value of data at [id] or 
+ *
+ * The column input iterator returns only a scalar value of data at [id] or
  * the null_replacement value passed while creating the iterator.
- * For non-null column, use 
+ * For non-null column, use
  * auto iter = column.begin<Element>();
- * 
+ *
  * -------------------------------------------------------------------------**/
 
 #pragma once
@@ -131,15 +131,13 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @brief Constructs a pair iterator over a column's values and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
- * 
- * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`, `p.first` contains 
- * the value of the element at `i` and `p.second == true`.
  *
- * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second == false`. 
- * `pair(column[i], validity)`.
- * `validity` is `true` if `has_nulls=false`.
- * `validity` is validity of the element at `i` if `has_nulls=true` and the
- * column is nullable.
+ * If an element at position `i` is valid (or `has_nulls == false`), then for `p = *(iter + i)`,
+ * `p.first` contains the value of the element at `i` and `p.second == true`.
+ *
+ * Else, if the element at `i` is null, then the value of `p.first` is undefined and `p.second ==
+ * false`. `pair(column[i], validity)`. `validity` is `true` if `has_nulls=false`. `validity` is
+ * validity of the element at `i` if `has_nulls=true` and the column is nullable.
  *
  * @throws `cudf::logic_error` if the column is nullable.
  * @throws `cudf::logic_error` if column datatype and Element type mismatch.
@@ -176,7 +174,7 @@ auto inline make_validity_iterator(column_device_view const& column) {
  * @brief Constructs a constant iterator over a scalar's value.
  *
  * Dereferencing the returned iterator returns a `Element`.
- * 
+ *
  * For `p = *(iter + i)`, `p` is the value stored in the scalar.
  *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
@@ -199,16 +197,16 @@ auto inline make_scalar_iterator(scalar const& scalar_value) {
  * @brief Constructs a constant pair iterator over a scalar's value and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
- *  
- * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains 
+ *
+ * If scalar is valid, then for `p = *(iter + i)`, `p.first` contains
  * the value of the scalar and `p.second == true`.
  *
- * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`. 
- * 
+ * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
+ *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam bool unused. This template parameter exists to enforce same 
+ * @tparam bool unused. This template parameter exists to enforce same
  * template interface as @ref make_pair_iterator(column_device_view const&).
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
@@ -222,6 +220,6 @@ auto inline make_pair_iterator(scalar const& scalar_value) {
     static_cast<ScalarType const*>(&scalar_value)->value(), scalar_value.is_valid()));
 }
 
-}  //namespace detail
-}  //namespace experimental
-}  //namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

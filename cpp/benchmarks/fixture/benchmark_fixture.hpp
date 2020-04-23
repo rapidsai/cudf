@@ -22,33 +22,33 @@ namespace cudf {
 
 /**
  * @brief Google Benchmark fixture for libcudf benchmarks
- * 
+ *
  * libcudf benchmarks should use a fixture derived from this fixture class to
  * ensure that the RAPIDS Memory Manager pool mode is used in benchmarks, which
  * eliminates memory allocation / deallocation performance overhead from the
  * benchmark.
- * 
+ *
  * The SetUp and TearDown methods of this fixture initialize RMM into pool mode
- * and finalize it, respectively. These methods are called automatically by 
+ * and finalize it, respectively. These methods are called automatically by
  * Google Benchmark
- * 
- * Example: 
- * 
+ *
+ * Example:
+ *
  * template <class T>
  * class my_benchmark : public cudf::benchmark {
  * public:
  *   using TypeParam = T;
  * };
- * 
+ *
  * Then:
- * 
+ *
  * BENCHMARK_TEMPLATE_DEFINE_F(my_benchmark, my_test_name, int)
- *   (::benchmark::State& state) {      
+ *   (::benchmark::State& state) {
  *     for (auto _ : state) {
  *       // benchmark stuff
  *     }
  * }
- * 
+ *
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
 class benchmark : public ::benchmark::Fixture {

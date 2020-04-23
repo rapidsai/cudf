@@ -233,8 +233,10 @@ extern "C" __global__ void __launch_bounds__(128)
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case DATA_PAGE:
-              // TODO: Unless the file only uses V2 page headers or has no complex nesting (num_rows == num_values), we can't infer num_rows at this time
-              // -> we'll need another pass after decompression to parse the definition and repetition levels to infer the correct value of num_rows
+              // TODO: Unless the file only uses V2 page headers or has no complex nesting (num_rows
+              // == num_values), we can't infer num_rows at this time
+              // -> we'll need another pass after decompression to parse the definition and
+              // repetition levels to infer the correct value of num_rows
               bs->page.num_rows = bs->page.num_values;  // Assumes num_rows == num_values
                                                         // Fall-through to V2
             case DATA_PAGE_V2:

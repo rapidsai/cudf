@@ -20,7 +20,7 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/type_lists.hpp>
-//TODO remove after PR 3490 merge
+// TODO remove after PR 3490 merge
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <cudf/cudf.h>
@@ -231,7 +231,7 @@ TYPED_TEST(ReductionTest, SumOfSquare) {
                        cudf::experimental::make_sum_of_squares_aggregation());
 }
 
-//TODO TYPED_TEST case for AllTypes
+// TODO TYPED_TEST case for AllTypes
 struct ReductionAnyAllTest : public ReductionTest<bool> {
   ReductionAnyAllTest() {}
   ~ReductionAnyAllTest() {}
@@ -589,8 +589,8 @@ TEST_F(ReductionErrorTest, empty_column) {
   };
 
   // test input column is nullptr, reduction throws an error if input is nullptr
-  //TODO(karthikeyann) invalid column_view
-  //EXPECT_ANY_THROW(statement(nullptr));
+  // TODO(karthikeyann) invalid column_view
+  // EXPECT_ANY_THROW(statement(nullptr));
 
   // test if the size of input column is zero
   // expect result.is_valid() is false
@@ -702,7 +702,7 @@ std::vector<std::string> string_list[] = {
   {"one", "", "three", "four", "five", "six", "seven", "eight", "nine"},
   {"", "", "", "four", "five", "six", "seven", "eight", "nine"},
   {"", "", "", "", "", "", "", "", ""},
-  //DeviceMin identity sentinel test cases
+  // DeviceMin identity sentinel test cases
   {"\xF7\xBF\xBF\xBF", "", "", "", "", "", "", "", ""},
   {"one", "two", "three", "four", "\xF7\xBF\xBF\xBF", "six", "seven", "eight", "nine"},
   {"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
@@ -733,12 +733,12 @@ TEST_P(StringReductionTest, MinMax) {
   std::string expected_min_null_result = *(std::min_element(r_strings.begin(), r_strings.end()));
   std::string expected_max_null_result = *(std::max_element(r_strings.begin(), r_strings.end()));
 
-  //MIN
+  // MIN
   this->reduction_test(
     col, expected_min_result, succeed, cudf::experimental::make_min_aggregation());
   this->reduction_test(
     col_nulls, expected_min_null_result, succeed, cudf::experimental::make_min_aggregation());
-  //MAX
+  // MAX
   this->reduction_test(
     col, expected_max_result, succeed, cudf::experimental::make_max_aggregation());
   this->reduction_test(
@@ -756,11 +756,11 @@ TEST_F(StringReductionTest, AllNull) {
     host_strings.begin(), host_strings.end(), host_bools.begin());
   cudf::data_type output_dtype = cudf::column_view(col_nulls).type();
 
-  //MIN
+  // MIN
   std::unique_ptr<cudf::scalar> minresult =
     cudf::experimental::reduce(col_nulls, cudf::experimental::make_min_aggregation(), output_dtype);
   EXPECT_FALSE(minresult->is_valid());
-  //MAX
+  // MAX
   std::unique_ptr<cudf::scalar> maxresult =
     cudf::experimental::reduce(col_nulls, cudf::experimental::make_max_aggregation(), output_dtype);
   EXPECT_FALSE(maxresult->is_valid());

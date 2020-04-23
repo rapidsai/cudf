@@ -24,20 +24,20 @@ namespace binops {
 namespace jit {
 
 /**
-   * @brief Orientation of lhs and rhs in operator
-   */
+ * @brief Orientation of lhs and rhs in operator
+ */
 enum class OperatorType {
   Direct,  ///< Orientation of operands is op(lhs, rhs)
   Reverse  ///< Orientation of operands is op(rhs, lhs)
 };
 
 /**
-   * @brief Get the Operator Name
-   * 
-   * @param op The binary operator as enum of type cudf::binary_operator
-   * @param type @see OperatorType
-   * @return std::string The name of the operator as string
-   */
+ * @brief Get the Operator Name
+ *
+ * @param op The binary operator as enum of type cudf::binary_operator
+ * @param type @see OperatorType
+ * @return std::string The name of the operator as string
+ */
 std::string inline get_operator_name(binary_operator op, OperatorType type) {
   std::string operator_name;
   switch (op) {

@@ -43,15 +43,15 @@ class grid_config_1d {
   const int num_blocks;
 
   /**
-     * @param overall_num_elements The number of elements the kernel needs to handle/process,
-     * in its main, one-dimensional/linear input (e.g. one or more cuDF columns)
-     * @param num_threads_per_block The grid block size, determined according to the kernel's
-     * specific features (amount of shared memory necessary, SM functional units use pattern
-     * etc.); this can't be determined generically/automatically (as opposed to the number of
-     * blocks)
-     * @param elements_per_thread Typically, a single kernel thread processes more than a single
-     * element; this affects the number of threads the grid must contain
-     */
+   * @param overall_num_elements The number of elements the kernel needs to handle/process,
+   * in its main, one-dimensional/linear input (e.g. one or more cuDF columns)
+   * @param num_threads_per_block The grid block size, determined according to the kernel's
+   * specific features (amount of shared memory necessary, SM functional units use pattern
+   * etc.); this can't be determined generically/automatically (as opposed to the number of
+   * blocks)
+   * @param elements_per_thread Typically, a single kernel thread processes more than a single
+   * element; this affects the number of threads the grid must contain
+   */
   grid_config_1d(cudf::size_type overall_num_elements,
                  int num_threads_per_block_,
                  cudf::size_type elements_per_thread = 1)

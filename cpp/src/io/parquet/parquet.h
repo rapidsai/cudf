@@ -48,7 +48,7 @@ struct file_ender_s {
 
 /**
  * @brief Struct for describing an element/field in the Parquet format schema
- * 
+ *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
  * as a schema tree.
  **/
@@ -132,7 +132,7 @@ struct KeyValue {
 
 /**
  * @brief Thrift-derived struct describing file-level metadata
- * 
+ *
  * The additional information stored in the key_value_metadata can be used
  * during reading to reconstruct the output data to the exact original dataset
  * prior to conversion to Parquet.

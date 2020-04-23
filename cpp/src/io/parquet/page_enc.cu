@@ -240,8 +240,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
         sh      = (hash & 1) ? 16 : 0;
         pos_old = s->map.u16[hash];
       }
-      // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic behavior for the
-      // first row in the hash map that will be used for early duplicate detection
+      // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
+      // behavior for the first row in the hash map that will be used for early duplicate detection
       __syncthreads();
       if (i + t < nnz) {
         pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
@@ -261,8 +261,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
       if (collision && val == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
     }
     __syncthreads();
-    // Now that the values are ordered by hash, compare every entry with the first entry in the hash map,
-    // the position of the first entry can be inferred from the hash map counts
+    // Now that the values are ordered by hash, compare every entry with the first entry in the hash
+    // map, the position of the first entry can be inferred from the hash map counts
     uint32_t dupe_data_size = 0;
     for (uint32_t i = 0; i < nnz; i += 512) {
       const void *col_data = s->col.column_data_base;
@@ -574,7 +574,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
 }
 
 /**
- * @brief Mask table representing how many consecutive repeats are needed to code a repeat run [nbits-1]
+ * @brief Mask table representing how many consecutive repeats are needed to code a repeat run
+ *[nbits-1]
  **/
 static __device__ __constant__ uint32_t kRleRunMask[16] = {
   0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3, 0x1, 0x1, 0x1, 0x1};
@@ -1272,8 +1273,9 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     }
     CPW_BEGIN_STRUCT(hdr_start)
     int page_type = page_g.page_type;
-    // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and RLE_DICTIONARY in data page,
-    // but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data pages (actual encoding is identical).
+    // NOTE: For dictionary encoding, parquet v2 recommends using PLAIN in dictionary page and
+    // RLE_DICTIONARY in data page, but parquet v1 uses PLAIN_DICTIONARY in both dictionary and data
+    // pages (actual encoding is identical).
 #if ENABLE_BOOL_RLE
     int encoding =
       (col_g.physical_type != BOOLEAN)

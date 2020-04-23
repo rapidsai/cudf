@@ -126,7 +126,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
   __syncthreads();
-  // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when there are no nulls)
+  // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when
+  // there are no nulls)
   LoadNonNullIndices(s, t);
   // Sum the lengths of all the strings
   if (t == 0) {
@@ -208,8 +209,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
-    // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic behavior for the
-    // first row in the hash map that will be used for early duplicate detection
+    // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
+    // behavior for the first row in the hash map that will be used for early duplicate detection
     // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
     if (i + t < nnz) {
@@ -240,8 +241,8 @@ extern "C" __global__ void __launch_bounds__(512, 2)
     if (collision && ck_row == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
   }
   __syncthreads();
-  // Now that the strings are ordered by hash, compare every string with the first entry in the hash map,
-  // the position of the first string can be inferred from the hash map counts
+  // Now that the strings are ordered by hash, compare every string with the first entry in the hash
+  // map, the position of the first string can be inferred from the hash map counts
   dict_char_count = 0;
   for (uint32_t i = 0; i < nnz; i += 512) {
     uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;

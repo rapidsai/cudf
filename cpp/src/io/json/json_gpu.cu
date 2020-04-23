@@ -95,12 +95,12 @@ __device__ long seek_field_name_end(const char *data,
 /**
  * @brief Decodes a numeric value base on templated cudf type T with specified
  * base.
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed numeric value
  **/
 template <typename T, int base>
@@ -111,12 +111,12 @@ decode_value(const char *data, long start, long end, ParseOptions const &opts) {
 
 /**
  * @brief Decodes a numeric value base on templated cudf type T
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed numeric value
  **/
 template <typename T>
@@ -127,12 +127,12 @@ decode_value(const char *data, long start, long end, ParseOptions const &opts) {
 
 /**
  * @brief Decodes a timestamp_D
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_D
  **/
 template <>
@@ -145,12 +145,12 @@ __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
 
 /**
  * @brief Decodes a timestamp_s
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_s
  **/
 template <>
@@ -164,12 +164,12 @@ __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
 
 /**
  * @brief Decodes a timestamp_ms
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_ms
  **/
 template <>
@@ -183,12 +183,12 @@ __inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
 
 /**
  * @brief Decodes a timestamp_us
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_us
  **/
 template <>
@@ -202,12 +202,12 @@ __inline__ __device__ cudf::timestamp_us decode_value(const char *data,
 
 /**
  * @brief Decodes a timestamp_ns
- * 
+ *
  * @param data The character string for parse
  * @param start The index within data to start parsing from
  * @param end The end index within data to end parsing
  * @param opts The global parsing behavior options
- * 
+ *
  * @return The parsed timestamp_ns
  **/
 template <>
@@ -271,7 +271,7 @@ struct ConvertFunctor {
   }
 
   /**
-   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
@@ -308,9 +308,9 @@ struct ConvertFunctor {
 
 /**
  * @brief Checks whether the given character is a whitespace character.
- * 
+ *
  * @param[in] ch The character to check
- * 
+ *
  * @return True if the input is whitespace, False otherwise
  **/
 __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
@@ -318,12 +318,12 @@ __inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == '
 /**
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
- * 
+ *
  * @param[in] data The character stream to scan
  * @param[in,out] start The start index to adjust
  * @param[in,out] end The end index to adjust
  * @param[in] quotechar The character used to denote quotes
- * 
+ *
  * @return Adjusted or unchanged start_idx and end_idx
  **/
 __inline__ __device__ void trim_field_start_end(const char *data,
@@ -462,18 +462,18 @@ __global__ void convert_json_to_columns_kernel(const char *data,
 }
 
 /**
- * @brief CUDA kernel that processes a buffer of data and determines information about the 
+ * @brief CUDA kernel that processes a buffer of data and determines information about the
  * column types within.
  *
  * Data is processed in one row/record at a time, so the number of total
  * threads (tid) is equal to the number of rows.
- * 
+ *
  * @param[in] data Input data buffer
  * @param[in] data_size Size of the data buffer, in bytes
  * @param[in] opts A set of parsing options
  * @param[in] num_columns The number of columns of input data
  * @param[in] rec_starts The start the input data of interest
- * @param[in] num_records The number of lines/rows of input data 
+ * @param[in] num_records The number of lines/rows of input data
  * @param[out] column_infos The count for each column data type
  *
  * @returns void
@@ -568,8 +568,9 @@ __global__ void detect_json_data_types(const char *data,
     else if (other_count > 3 || decimal_count > 1) {
       atomicAdd(&column_infos[col].string_count, 1);
     } else {
-      // A date field can have either one or two '-' or '\'; A legal combination will only have one of them
-      // To simplify the process of auto column detection, we are not covering all the date-time formation permutations
+      // A date field can have either one or two '-' or '\'; A legal combination will only have one
+      // of them To simplify the process of auto column detection, we are not covering all the
+      // date-time formation permutations
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {

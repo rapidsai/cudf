@@ -79,8 +79,8 @@ inline bool is_trivial_join(table_view const& left,
   return false;
 }
 
-}  //namespace detail
+}  // namespace detail
 
-}  //namespace experimental
+}  // namespace experimental
 
-}  //namespace cudf
+}  // namespace cudf

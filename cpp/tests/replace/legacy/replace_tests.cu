@@ -84,18 +84,18 @@ struct ReplaceTest : public GdfTest {
 };
 
 /* --------------------------------------------------------------------------*
-   * @brief Main method for testing.
-   * Initializes the input columns with the given values. Then compute the actual
-   * resultant column by invoking `cudf::find_and_replace_all()` and then
-   * compute the expected column.
-   *
-   * @param input_column The original values
-   * @param values_to_replace_column The values that will be replaced
-   * @param replacement_values_column The new values
-   * @param input_column_valid The mask for replace column
-   * @param replacement_values_valid The mask for new values
-   * @param print Optionally print the set of columns for debug
-   * -------------------------------------------------------------------------*/
+ * @brief Main method for testing.
+ * Initializes the input columns with the given values. Then compute the actual
+ * resultant column by invoking `cudf::find_and_replace_all()` and then
+ * compute the expected column.
+ *
+ * @param input_column The original values
+ * @param values_to_replace_column The values that will be replaced
+ * @param replacement_values_column The new values
+ * @param input_column_valid The mask for replace column
+ * @param replacement_values_valid The mask for new values
+ * @param print Optionally print the set of columns for debug
+ * -------------------------------------------------------------------------*/
 template <typename T>
 void test_replace(
   std::vector<T> const &input_column,

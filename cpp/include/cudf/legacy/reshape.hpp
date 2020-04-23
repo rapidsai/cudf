@@ -22,7 +22,7 @@ namespace cudf {
 
 /**
  * @brief Stack rows of a Table into a single column
- * 
+ *
  * Converts the column major table @p in into a row major contiguous buffer,
  * which is returned as a `gdf_column`.
  * Example:
@@ -30,9 +30,9 @@ namespace cudf {
  * in = [[4,5,6], [1,2,3]]
  * return = [4,1,5,2,6,3]
  * ```
- * 
+ *
  * @note: The dtype of all columns in @p input should be the same
- * 
+ *
  * @param input Input table
  * @return gdf_column The result stacked buffer as column
  */

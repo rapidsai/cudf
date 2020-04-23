@@ -78,47 +78,47 @@ __device__ inline bool rows_equal(device_table const &lhs,
 
 /**
  * @brief Functor to compute if two rows are equal.
- * 
+ *
  * @tparam nullable Flag indicating the possibility of null values
  */
 template <bool nullable = true>
 struct row_equality_comparator {
   /**
- * @brief  Constructor for row_equality_comparator
- *
- * @param lhs             The left table
- * @param nulls_are_equal Flag indicating whether two null values are considered
- * equal
- *
- * Use this constructor when you will be comparing two rows from the same table
- */
+   * @brief  Constructor for row_equality_comparator
+   *
+   * @param lhs             The left table
+   * @param nulls_are_equal Flag indicating whether two null values are considered
+   * equal
+   *
+   * Use this constructor when you will be comparing two rows from the same table
+   */
   row_equality_comparator(device_table const &lhs, bool nulls_are_equal = false)
     : _lhs{lhs}, _rhs{lhs}, _nulls_are_equal{nulls_are_equal} {}
 
   /**
- * @brief  Constructor for row_equality_comparator
- *
- * @param lhs             The left table
- * @param rhs             The right table
- * @param nulls_are_equal Flag indicating whether two null values are considered
- * equal
- *
- * Use this constructor when you will be comparing rows from two different tables
- */
+   * @brief  Constructor for row_equality_comparator
+   *
+   * @param lhs             The left table
+   * @param rhs             The right table
+   * @param nulls_are_equal Flag indicating whether two null values are considered
+   * equal
+   *
+   * Use this constructor when you will be comparing rows from two different tables
+   */
   row_equality_comparator(device_table const &lhs,
                           device_table const &rhs,
                           bool nulls_are_equal = false)
     : _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal} {}
 
   /**
- * @brief  Functor to compute if two rows are equal.
- *
- * @param lhs_index   Row index to the left table
- * @param rhs_index   Row index to the right table
- * 
- * @returns true      If the two rows are element-wise equal
- * @returns false     If any element differs between the two rows
- */
+   * @brief  Functor to compute if two rows are equal.
+   *
+   * @param lhs_index   Row index to the left table
+   * @param rhs_index   Row index to the right table
+   *
+   * @returns true      If the two rows are element-wise equal
+   * @returns false     If any element differs between the two rows
+   */
   __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const {
     return rows_equal<nullable>(_lhs, lhs_index, _rhs, rhs_index, _nulls_are_equal);
   }
@@ -178,14 +178,15 @@ struct typed_row_inequality_comparator {
 template <bool nullable = true>
 struct row_inequality_comparator {
   /**
- * @brief  Constructor for inequality comparator
- *
- * @param lhs                 The left table
- * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
- * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending order and 1 is descending)
- *
- * Use this constructor when you will be comparing two rows from the same table
- */
+   * @brief  Constructor for inequality comparator
+   *
+   * @param lhs                 The left table
+   * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
+   * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending
+   * order and 1 is descending)
+   *
+   * Use this constructor when you will be comparing two rows from the same table
+   */
   row_inequality_comparator(device_table const &lhs,
                             bool nulls_are_smallest            = true,
                             int8_t const *const asc_desc_flags = nullptr)
@@ -195,15 +196,16 @@ struct row_inequality_comparator {
       _asc_desc_flags(asc_desc_flags) {}
 
   /**
- * @brief  Constructor for inequality comparator
- *
- * @param lhs                 The left table
- * @param rhs                 The right table
- * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
- * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending order and 1 is descending)
- *
- * Use this constructor when you will be comparing two rows from the same table
- */
+   * @brief  Constructor for inequality comparator
+   *
+   * @param lhs                 The left table
+   * @param rhs                 The right table
+   * @param nulls_are_smallest  Flag indicating is nulls are to be treated as the smallest value
+   * @param asc_desc_flags      Device array of sort order types for each column (0 is ascending
+   * order and 1 is descending)
+   *
+   * Use this constructor when you will be comparing two rows from the same table
+   */
   row_inequality_comparator(device_table const &lhs,
                             device_table const &rhs,
                             bool nulls_are_smallest            = true,
@@ -214,16 +216,16 @@ struct row_inequality_comparator {
       _asc_desc_flags(asc_desc_flags) {}
 
   /**
- * @brief  Inquality operator comparator
- *
- * @param lhs_index   Row index to the left table
- * @param rhs_index   Row index to the right table
- * 
- * @returns true      If the elements from the two rows fulfill the inequality as defined by 
- *                        asc_desc_flags and nulls_are_smallest
- * @returns false     If the elements from the two rows do not fulfill the inequality as defined by 
- *                        asc_desc_flags and nulls_are_smallest
- */
+   * @brief  Inquality operator comparator
+   *
+   * @param lhs_index   Row index to the left table
+   * @param rhs_index   Row index to the right table
+   *
+   * @returns true      If the elements from the two rows fulfill the inequality as defined by
+   *                        asc_desc_flags and nulls_are_smallest
+   * @returns false     If the elements from the two rows do not fulfill the inequality as defined
+   * by asc_desc_flags and nulls_are_smallest
+   */
   __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const {
     State state = State::Undecided;
     for (cudf::size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {

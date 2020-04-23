@@ -103,7 +103,7 @@ struct copy_if_else_functor_impl<string_view, Left, Right, Filter> {
 
 /**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations
- *        of column_view and scalar 
+ *        of column_view and scalar
  */
 struct copy_if_else_functor {
   template <typename T, typename Left, typename Right, typename Filter>

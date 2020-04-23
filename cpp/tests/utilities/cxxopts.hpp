@@ -48,11 +48,11 @@ static constexpr struct {
 } version = {CXXOPTS__VERSION_MAJOR, CXXOPTS__VERSION_MINOR, CXXOPTS__VERSION_PATCH};
 }  // namespace cxxopts
 
-//when we ask cxxopts to use Unicode, help strings are processed using ICU,
-//which results in the correct lengths being computed for strings when they
-//are formatted for the help output
-//it is necessary to make sure that <unicode/unistr.h> can be found by the
-//compiler, and that icu-uc is linked in to the binary.
+// when we ask cxxopts to use Unicode, help strings are processed using ICU,
+// which results in the correct lengths being computed for strings when they
+// are formatted for the help output
+// it is necessary to make sure that <unicode/unistr.h> can be found by the
+// compiler, and that icu-uc is linked in to the binary.
 
 #ifdef CXXOPTS_USE_UNICODE
 #include <unicode/unistr.h>
@@ -124,7 +124,7 @@ inline cxxopts::UnicodeStringIterator end(const icu::UnicodeString& s) {
 }
 }  // namespace std
 
-//ifdef CXXOPTS_USE_UNICODE
+// ifdef CXXOPTS_USE_UNICODE
 #else
 
 namespace cxxopts {
@@ -154,7 +154,7 @@ std::string toUTF8String(T&& t) {
 inline bool empty(const std::string& s) { return s.empty(); }
 }  // namespace cxxopts
 
-//ifdef CXXOPTS_USE_UNICODE
+// ifdef CXXOPTS_USE_UNICODE
 #endif
 
 namespace cxxopts {
@@ -832,7 +832,7 @@ class Options {
                   std::shared_ptr<const Value> value,
                   std::string arg_help);
 
-  //parse positional arguments into the given option
+  // parse positional arguments into the given option
   void parse_positional(std::string option);
 
   void parse_positional(std::vector<std::string> options);
@@ -871,7 +871,7 @@ class Options {
   std::vector<std::string>::iterator m_next_positional;
   std::unordered_set<std::string> m_positional_set;
 
-  //mapping from groups to help options
+  // mapping from groups to help options
   std::map<std::string, HelpGroupDetails> m_help;
 };
 
@@ -972,7 +972,7 @@ String format_description(const HelpOptionDetails& o, size_t start, size_t width
     ++current;
   }
 
-  //append whatever is left
+  // append whatever is left
   stringAppend(result, startLine, current);
 
   return result;
@@ -1146,23 +1146,23 @@ inline void ParseResult::parse(int& argc, char**& argv) {
     std::regex_match(argv[current], result, option_matcher);
 
     if (result.empty()) {
-      //not a flag
+      // not a flag
 
       // but if it starts with a `-`, then it's an error
       if (argv[current][0] == '-' && argv[current][1] != '\0') {
         if (!m_allow_unrecognised) { throw_or_mimic<option_syntax_exception>(argv[current]); }
       }
 
-      //if true is returned here then it was consumed, otherwise it is
-      //ignored
+      // if true is returned here then it was consumed, otherwise it is
+      // ignored
       if (consume_positional(argv[current])) {
       } else {
         argv[nextKeep] = argv[current];
         ++nextKeep;
       }
-      //if we return from here then it was parsed successfully, so continue
+      // if we return from here then it was parsed successfully, so continue
     } else {
-      //short or long option?
+      // short or long option?
       if (result[4].length() != 0) {
         const std::string& s = result[4];
 
@@ -1174,7 +1174,7 @@ inline void ParseResult::parse(int& argc, char**& argv) {
             if (m_allow_unrecognised) {
               continue;
             } else {
-              //error
+              // error
               throw_or_mimic<option_not_exists_exception>(name);
             }
           }
@@ -1182,12 +1182,12 @@ inline void ParseResult::parse(int& argc, char**& argv) {
           auto value = iter->second;
 
           if (i + 1 == s.size()) {
-            //it must be the last argument
+            // it must be the last argument
             checked_parse_arg(argc, argv, current, value, name);
           } else if (value->value().has_implicit()) {
             parse_option(value, name, value->value().get_implicit_value());
           } else {
-            //error
+            // error
             throw_or_mimic<option_requires_argument_exception>(name);
           }
         }
@@ -1204,20 +1204,20 @@ inline void ParseResult::parse(int& argc, char**& argv) {
             ++current;
             continue;
           } else {
-            //error
+            // error
             throw_or_mimic<option_not_exists_exception>(name);
           }
         }
 
         auto opt = iter->second;
 
-        //equals provided for long option?
+        // equals provided for long option?
         if (result[2].length() != 0) {
-          //parse the option given
+          // parse the option given
 
           parse_option(opt, name, result[3]);
         } else {
-          //parse the next argument
+          // parse the next argument
           checked_parse_arg(argc, argv, current, opt, name);
         }
       }
@@ -1241,7 +1241,7 @@ inline void ParseResult::parse(int& argc, char**& argv) {
       ++current;
     }
 
-    //adjust argv for any that couldn't be swallowed
+    // adjust argv for any that couldn't be swallowed
     while (current != argc) {
       argv[nextKeep] = argv[current];
       ++nextKeep;
@@ -1269,7 +1269,7 @@ inline void Options::add_option(const std::string& group,
 
   if (l.size() > 0) { add_one_option(l, option); }
 
-  //add the help details
+  // add the help details
   auto& options = m_help[group];
 
   options.options.emplace_back(HelpOptionDetails{s,
@@ -1315,7 +1315,7 @@ inline String Options::help_one_group(const std::string& g) const {
 
   longest = (std::min)(longest, static_cast<size_t>(OPTION_LONGEST));
 
-  //widest allowed description
+  // widest allowed description
   auto allowed = size_t{76} - longest - OPTION_DESC_GAP;
 
   auto fiter = format.begin();
@@ -1397,4 +1397,4 @@ inline const HelpGroupDetails& Options::group_help(const std::string& group) con
 
 }  // namespace cxxopts
 
-#endif  //CXXOPTS_HPP_INCLUDED
+#endif  // CXXOPTS_HPP_INCLUDED

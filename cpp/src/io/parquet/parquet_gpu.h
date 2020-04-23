@@ -46,8 +46,8 @@ struct nvstrdesc_s {
  * @brief Struct describing a particular page of column chunk data
  **/
 struct PageInfo {
-  uint8_t *
-    page_data;  // Compressed page data before decompression, or uncompressed data after decompression
+  uint8_t *page_data;  // Compressed page data before decompression, or uncompressed data after
+                       // decompression
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   int32_t num_values;              // Number of values in this data page or dictionary
@@ -58,8 +58,8 @@ struct PageInfo {
   uint8_t encoding;                // Encoding for data or dictionary page
   uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
   uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  int32_t
-    valid_count;  // Count of valid (non-null) values in this page (negative values indicate data error)
+  int32_t valid_count;  // Count of valid (non-null) values in this page (negative values indicate
+                        // data error)
 };
 
 /**
@@ -137,8 +137,8 @@ struct EncColumnDesc : stats_column_desc {
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
-  uint8_t
-    level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble) levels
+  uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
+                       //!< levels
   uint8_t pad;
 };
 

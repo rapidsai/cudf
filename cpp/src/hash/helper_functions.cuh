@@ -23,7 +23,7 @@ constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 
 /**---------------------------------------------------------------------------*
  * @brief  Compute requisite size of hash table.
- * 
+ *
  * Computes the number of entries required in a hash table to satisfy
  * inserting a specified number of keys to achieve the specified hash table
  * occupancy.

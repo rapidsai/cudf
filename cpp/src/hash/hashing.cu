@@ -41,7 +41,7 @@ constexpr size_type THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL = 1024;
 constexpr size_type FALLBACK_BLOCK_SIZE      = 256;
 constexpr size_type FALLBACK_ROWS_PER_THREAD = 1;
 
-/** 
+/**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses the modulo operation.
  */
@@ -61,11 +61,11 @@ bool is_power_two(T number) {
   return (0 == (number & (number - 1)));
 }
 
-/** 
+/**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses a bitwise mask. Only works when num_partitions is a power of 2.
  *
- * For n % d, if d is a power of two, then it can be computed more efficiently via 
+ * For n % d, if d is a power of two, then it can be computed more efficiently via
  * a single bitwise AND as:
  * n & (d - 1)
  */
@@ -85,12 +85,12 @@ class bitwise_partitioner {
 };
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Computes which partition each row of a device_table will belong to based
-   on hashing each row, and applying a partition function to the hash value. 
+   on hashing each row, and applying a partition function to the hash value.
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
- * 
+ *
  * @param[in] the_table The table whose rows will be partitioned
  * @param[in] num_rows The number of rows in the table
  * @param[in] num_partitions The number of partitions to divide the rows into
@@ -99,7 +99,7 @@ class bitwise_partitioner {
  * @param[out] row_partition_offset Array that holds the offset of each row in its partition of
  * the thread block
  * @param[out] block_partition_sizes Array that holds the size of each partition for each block,
- * i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
+ * i.e., { {block0 partition0 size, block1 partition0 size, ...},
          {block0 partition1 size, block1 partition1 size, ...},
          ...
          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
@@ -163,19 +163,21 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Given an array of partition numbers, computes the final output location
-   for each element in the output such that all rows with the same partition are 
+   for each element in the output such that all rows with the same partition are
    contiguous in memory.
- * 
+ *
  * @param row_partition_numbers The array that records the partition number for each row
  * @param num_rows The number of rows
  * @param num_partitions THe number of partitions
- * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
- * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
+ * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread
+ block,
+ * i.e., { {block0 partition0 offset, block1 partition0 offset, ...},
          {block0 partition1 offset, block1 partition1 offset, ...},
          ...
-         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset, ...} }
+         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset,
+ ...} }
  */
 /* ----------------------------------------------------------------------------*/
 __global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
@@ -217,9 +219,9 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Move one column from the input table to the hashed table.
- * 
+ *
  * @param[in] input_buf Data buffer of the column in the input table
  * @param[out] output_buf Preallocated data buffer of the column in the output table
  * @param[in] num_rows The number of rows in each column
@@ -453,7 +455,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
   //          {block0 partition1 size, block1 partition1 size, ...},
   //          ...
-  //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
+  //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size,
+  //          ...} }
   auto block_partition_sizes = rmm::device_vector<size_type>(grid_size * num_partitions);
 
   auto scanned_block_partition_sizes = rmm::device_vector<size_type>(grid_size * num_partitions);

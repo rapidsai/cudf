@@ -123,7 +123,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  * Example Arguments:
  * begin1:        zero-based counting iterator,
  * begin2:        zero-based counting iterator,
- * p:             [](size_type col, size_type row){ return col == row; } 
+ * p:             [](size_type col, size_type row){ return col == row; }
  * masks:         [[b00...], [b00...], [b00...]]
  * mask_count:    3
  * mask_num_bits: 2

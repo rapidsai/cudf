@@ -50,30 +50,30 @@ class strings_column_view : private column_view {
   using column_view::size;
 
   /**
-     * @brief Returns the parent column.
-     */
+   * @brief Returns the parent column.
+   */
   column_view parent() const;
 
   /**
-     * @brief Returns the internal column of offsets
-     *
-     * @throw cudf::logic error if this is an empty column
-     */
+   * @brief Returns the internal column of offsets
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
   column_view offsets() const;
 
   /**
-     * @brief Returns the internal column of chars
-     *
-     * @throw cudf::logic error if this is an empty column
-     */
+   * @brief Returns the internal column of chars
+   *
+   * @throw cudf::logic error if this is an empty column
+   */
   column_view chars() const;
 
   /**
-     * @brief Returns the number of bytes in the chars child column.
-     *
-     * This accounts for the offset of the strings' column_view and
-     * for empty columns.
-     */
+   * @brief Returns the number of bytes in the chars child column.
+   *
+   * This accounts for the offset of the strings' column_view and
+   * for empty columns.
+   */
   size_type chars_size() const noexcept;
 };
 

@@ -176,9 +176,9 @@ struct substring_from_fn {
   char* d_chars{};
 
   /**
-     * @brief Function logic for substring_from API.
-     * This does both calculate and the execute based on template parameter.
-     */
+   * @brief Function logic for substring_from API.
+   * This does both calculate and the execute based on template parameter.
+   */
   __device__ size_type operator()(size_type idx) {
     if (d_column.is_null(idx)) return 0;  // null string
     string_view d_str = d_column.template element<string_view>(idx);
@@ -203,9 +203,9 @@ struct substring_from_fn {
  */
 struct dispatch_substring_from_fn {
   /**
-     * @brief Returns strings column with substrings based on the ranges in the
-     * individual starts and stops column position values.
-     */
+   * @brief Returns strings column with substrings based on the ranges in the
+   * individual starts and stops column position values.
+   */
   template <typename PositionType,
             std::enable_if_t<std::is_integral<PositionType>::value>* = nullptr>
   std::unique_ptr<column> operator()(strings_column_view const& strings,

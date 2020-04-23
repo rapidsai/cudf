@@ -110,7 +110,7 @@ struct NVCategoryTest : public GdfTest {
   }
 };
 
-//todo refactor tests
+// todo refactor tests
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING) {
   bool print          = false;
   const int rows_size = 64;
@@ -128,13 +128,13 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING) {
 
   int8_t *asc_desc;
   EXPECT_EQ(RMM_ALLOC(&asc_desc, 1, 0), RMM_SUCCESS);
-  int8_t minus_one = -1;  //desc
+  int8_t minus_one = -1;  // desc
   CUDA_TRY(cudaMemset(asc_desc, minus_one, 1));
 
   gdf_context context;
   context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
 
-  //doesnt output nvcategory type columns so works as is
+  // doesnt output nvcategory type columns so works as is
   gdf_error err = gdf_order_by(input_columns, asc_desc, 1, output_column, &context);
   EXPECT_EQ(GDF_SUCCESS, err);
 
@@ -153,11 +153,11 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING) {
 
 // Selects the kind of join operation that is performed
 enum struct agg_op {
-  MIN,  //0
-  MAX,  //1
-  SUM,  //2
-  CNT,  //3
-  AVG   //4
+  MIN,  // 0
+  MAX,  // 1
+  SUM,  // 2
+  CNT,  // 3
+  AVG   // 4
 };
 
 template <agg_op op>
@@ -248,7 +248,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON) {
 
   unsigned int *indices;
   EXPECT_EQ(RMM_ALLOC(&indices, sizeof(unsigned int) * new_category->size(), 0), RMM_SUCCESS);
-  //now reset data
+  // now reset data
   new_category->get_values((int *)indices, true);
 
   CUDA_TRY(cudaMemcpy(left_column->data,
@@ -387,10 +387,11 @@ struct NVCategoryJoinTest : public GdfTest {
    * @Synopsis  Computes a reference solution for joining the left and right sets of columns
    *
    * @Param print Option to print the solution for debug
-   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf solution
+   * @Param sort Option to sort the solution. This is necessary for comparison against the gdf
+   * solution
    *
-   * @Returns A vector of 'result_type' where result_type is a structure with a left_index, right_index
-   * where left_columns[left_index] == right_columns[right_index]
+   * @Returns A vector of 'result_type' where result_type is a structure with a left_index,
+   * right_index where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_reference_solution(join_op op,
@@ -474,13 +475,15 @@ struct NVCategoryJoinTest : public GdfTest {
 
   /* --------------------------------------------------------------------------*/
   /**
-   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf functions
+   * @Synopsis  Computes the result of joining the left and right sets of columns with the libgdf
+   * functions
    *
    * @Param op The join operator
    * @Param left_join_idx The vector of column indexes to join from left dataframe
    * @Param right_join_idx The vector of column indexes to join from right dataframe
    * @Param print Option to print the result computed by the libgdf function
-   * @Param sort Option to sort the result. This is required to compare the result against the reference solution
+   * @Param sort Option to sort the result. This is required to compare the result against the
+   * reference solution
    */
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_gdf_result(join_op op,

@@ -25,10 +25,10 @@ namespace strings {
  * @brief Decodes each string using URL encoding.
  *
  * Converts mostly non-ascii characters and control characters into UTF-8 hex code-points
- * prefixed with '%'. For example, the space character must be converted to characters '%20' where the
- * '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are converted to
- * multiple hex charactes. For example, the é character is converted to characters '%C3%A9' where 'C3A9'
- * is the UTF-8 bytes 0xC3A9 for this character.
+ * prefixed with '%'. For example, the space character must be converted to characters '%20' where
+ * the '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are
+ * converted to multiple hex charactes. For example, the é character is converted to characters
+ * '%C3%A9' where 'C3A9' is the UTF-8 bytes 0xC3A9 for this character.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *

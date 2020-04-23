@@ -260,8 +260,8 @@ TYPED_TEST(MergeTest_, MergeWithEmptyColumn) {
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   columnFactoryT leftColWrap1(sequence, sequence + inputRows);
-  columnFactoryT
-    rightColWrap1{};  //wrapper of empty column <- this might require a (sequence, sequence) generator
+  columnFactoryT rightColWrap1{};  // wrapper of empty column <- this might require a (sequence,
+                                   // sequence) generator
 
   std::vector<cudf::size_type> key_cols{0};
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
@@ -483,18 +483,18 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns) {
   std::vector<cudf::order> column_order{cudf::order::ASCENDING};
 
   /*Note: default behavior semantics for null_precedence has changed
-     *      wrt legacy code:
-     *
-     * in legacy code missing (default) nulls argument 
-     * meant nulls are greatest; i.e., null_order::AFTER (not null_order::BEFORE)
-     *
-     * While new semantics is (see row_operators.cuh: row_lexicographic_comparator::operator() ):
-     * null_order null_precedence = _null_precedence == nullptr ?
-     *                  null_order::BEFORE: _null_precedence[i];
-     *
-     * hence missing (default) value meant nulls are smallest
-     * null_order::BEFORE (not  null_order::AFTER) (!)
-    */
+   *      wrt legacy code:
+   *
+   * in legacy code missing (default) nulls argument
+   * meant nulls are greatest; i.e., null_order::AFTER (not null_order::BEFORE)
+   *
+   * While new semantics is (see row_operators.cuh: row_lexicographic_comparator::operator() ):
+   * null_order null_precedence = _null_precedence == nullptr ?
+   *                  null_order::BEFORE: _null_precedence[i];
+   *
+   * hence missing (default) value meant nulls are smallest
+   * null_order::BEFORE (not  null_order::AFTER) (!)
+   */
   std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
 
   cudf::table_view left_view{{leftColWrap1}};

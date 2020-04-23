@@ -57,8 +57,8 @@ class RollingTest : public GdfTest {
                     const std::vector<cudf::size_type> &min_periods,
                     const std::vector<cudf::size_type> &forward_window,
                     gdf_agg_op agg) {
-    // it's not possible to check sizes in the rolling window API since we pass raw pointers for window/periods
-    // so we check here that the tests are setup correctly
+    // it's not possible to check sizes in the rolling window API since we pass raw pointers for
+    // window/periods so we check here that the tests are setup correctly
     CUDF_EXPECTS(window.size() == 0 || window.size() == (size_t)input.size(),
                  "Window array size != input column size");
     CUDF_EXPECTS(min_periods.size() == 0 || min_periods.size() == (size_t)input.size(),
@@ -260,8 +260,8 @@ class RollingTest : public GdfTest {
                                       [&](cudf::size_type i) { return ref_data_valid[i]; });
 
     // print the columns for debugging
-    //out.print();
-    //ref.print();
+    // out.print();
+    // ref.print();
 
     ASSERT_TRUE(out == ref);
     ASSERT_TRUE(out_gdf_col->null_count == ref_data_null_count);

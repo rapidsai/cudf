@@ -62,7 +62,7 @@ struct DownCasting {
   __device__ TypeTo apply(TypeFrom data) {
     auto udata = cudf::detail::unwrap(data);
     return static_cast<TypeTo>((udata - (units_factor - 1) * (udata < 0)) /
-                               units_factor);  //ceiling only when data is negative
+                               units_factor);  // ceiling only when data is negative
   }
 };
 

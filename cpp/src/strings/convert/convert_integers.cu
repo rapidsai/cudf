@@ -44,13 +44,13 @@ struct string_to_integer_fn {
   const column_device_view strings_column;  // strings to convert
 
   /**
-     * @brief Converts a single string into an integer.
-     *
-     * The '+' and '-' are allowed but only at the beginning of the string.
-     * The string is expected to contain base-10 [0-9] characters only.
-     * Any other character will end the parse.
-     * Overflow of the int64 type is not detected.
-     */
+   * @brief Converts a single string into an integer.
+   *
+   * The '+' and '-' are allowed but only at the beginning of the string.
+   * The string is expected to contain base-10 [0-9] characters only.
+   * Any other character will end the parse.
+   * Overflow of the int64 type is not detected.
+   */
   __device__ int64_t string_to_integer(string_view const& d_str) {
     int64_t value   = 0;
     size_type bytes = d_str.size_bytes();

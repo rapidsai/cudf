@@ -66,11 +66,11 @@ inline typename std::enable_if<I == sizeof...(Tp), void>::type
 print_tuples_valids_and_order_by_types(std::tuple<std::vector<Tp>...>& t,
                                        std::vector<host_valid_pointer>& valid,
                                        std::vector<int8_t>& order_by_types) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 
-//compile time recursion to print a tuple of vectors
+// compile time recursion to print a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
   I<sizeof...(Tp), void>::type print_tuples_valids_and_order_by_types(
@@ -81,7 +81,7 @@ template <std::size_t I = 0, typename... Tp>
   print_vector_valids_and_sort_order(
     std::get<I>(t), valid[I].get(), (order_by_type)order_by_types[I]);
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   print_tuples_valids_and_order_by_types<I + 1, Tp...>(t, valid, order_by_types);
 }
 #endif  // ORDER_BY_TYPE_VECTORS_H

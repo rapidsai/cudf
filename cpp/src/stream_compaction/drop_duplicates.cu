@@ -85,8 +85,9 @@ OutputIterator unique_copy(Exec&& exec,
  * @brief Create a column_view of index values which represent the row values
  * without duplicates as per @p `keep`
  *
- * Given a `keys` table_view, each row index is copied to output `unique_indices`, if the corresponding
- * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
+ * Given a `keys` table_view, each row index is copied to output `unique_indices`, if the
+ * corresponding row of `keys` table_view is unique, where the definition of unique depends on the
+ * value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: only unique rows are kept
@@ -99,7 +100,8 @@ OutputIterator unique_copy(Exec&& exec,
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
- * @return column_view column_view of unique row index as per specified `keep`, this is actually slice of `unique_indices`.
+ * @return column_view column_view of unique row index as per specified `keep`, this is actually
+ * slice of `unique_indices`.
  */
 column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        cudf::mutable_column_view& unique_indices,

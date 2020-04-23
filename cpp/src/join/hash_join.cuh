@@ -209,7 +209,7 @@ get_base_hash_join_indices(table_view const& left,
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_base_hash_join_indices<JoinKind>(right, left, true, stream);
   }
-  //Trivial left join case - exit early
+  // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
     return get_trivial_left_join_indices(left, stream);
   }
@@ -294,8 +294,8 @@ get_base_hash_join_indices(table_view const& left,
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
-}  //namespace detail
+}  // namespace detail
 
-}  //namespace experimental
+}  // namespace experimental
 
-}  //namespace cudf
+}  // namespace cudf

@@ -23,7 +23,7 @@ namespace cudf {
 namespace reduction {
 namespace simple {
 
-/** --------------------------------------------------------------------------*    
+/** --------------------------------------------------------------------------*
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
  *

@@ -165,12 +165,12 @@ class TempDirTestEnvironment : public ::testing::Environment {
 /**
  * @brief Creates a memory resource for the unit test environment
  * given the name of the allocation mode.
- * 
+ *
  * The returned resource instance must be kept alive for the duration of
  * the tests. Attaching the resource to a TestEnvironment causes
  * issues since the environment objects are not destroyed until
  * after the runtime is shutdown.
- * 
+ *
  * @throw cudf::logic_error if the `allocation_mode` is unsupported.
  *
  * @param allocation_mode String identifies which resource type.
@@ -193,7 +193,7 @@ inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
  *
  * Currently only supports 'rmm_mode' string paramater, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
- * 
+ *
  * @return Parsing results in the form of unordered map
  */
 inline auto parse_cudf_test_opts(int argc, char **argv) {
@@ -208,14 +208,14 @@ inline auto parse_cudf_test_opts(int argc, char **argv) {
 
 /**
  * @brief Macro that defines main function for gtest programs that use rmm
- * 
+ *
  * Should be included in every test program that uses rmm allocators since
  * it maintains the lifespan of the rmm default memory resource.
  * This `main` function is a wrapper around the google test generated `main`,
  * maintaining the original functionality. In addition, this custom `main`
  * function parses the command line to customize test behavior, like the
  * allocation mode used for creating the default memory resource.
- * 
+ *
  */
 #define CUDF_TEST_PROGRAM_MAIN()                                        \
   int main(int argc, char **argv) {                                     \

@@ -14,8 +14,8 @@ template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
 enum struct GroupByOutType {
-  PANDAS,  //0
-  SQL      //1
+  PANDAS,  // 0
+  SQL      // 1
 };
 
 template <GroupByOutType, typename>
@@ -45,9 +45,9 @@ void tuple_each(Tuple &t, Func &&f) {
 // number/types of columns for use with Google Test type-parameterized
 // tests. Here agg_operation refers to the type of aggregation eg. min,
 // max etc. and group_method refers to the underlying group algorithm
-//that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
-//tuple of datatypes that specify the column types to be tested.
-//AggOutput specifies the output type of the aggregated column.
+// that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
+// tuple of datatypes that specify the column types to be tested.
+// AggOutput specifies the output type of the aggregated column.
 template <GroupByOutType group_output_method, typename... K>
 struct TestParameters<group_output_method, VTuple<K...>> {
   // // The method to use for the groupby

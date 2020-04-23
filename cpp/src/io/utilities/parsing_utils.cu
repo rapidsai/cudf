@@ -62,17 +62,17 @@ __device__ __forceinline__ void setElement(void* array,
                                            const V& v) {}
 
 /**
- * @brief CUDA kernel that finds all occurrences of a character in the given 
+ * @brief CUDA kernel that finds all occurrences of a character in the given
  * character array. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output array.
- * 
+ *
  * @param[in] data Pointer to the input character array
  * @param[in] size Number of bytes in the input array
  * @param[in] offset Offset to add to the output positions
  * @param[in] key Character to find in the array
  * @param[in,out] count Pointer to the number of found occurrences
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return void
  **/
 template <class T>

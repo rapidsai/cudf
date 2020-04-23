@@ -515,12 +515,12 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11) {
 }
 
 TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
-  //test the case when nrows `mod` npartitions = 0
+  // test the case when nrows `mod` npartitions = 0
   //
-  //input:
-  //strings: ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u"],
-  //bools:   [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
-  //nulls:   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0])
+  // input:
+  // strings: ["a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u"],
+  // bools:   [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+  // nulls:   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0])
   //
   strings_column_wrapper rrColWrap1(
     {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
@@ -543,12 +543,12 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
 
   cudf::size_type num_partitions = 3;
 
-  //expected:
-  //indxs:   [0,3,6,9,12,15,18,1,4,7,10,13,16,19,2,5,8,11,14,17,20],
-  //strings: ["a","d","g","j","m","p","s","b","e","h","k","n","q","t","c","f","i","l","o","r","u"],
-  //bools:   [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
-  //nulls:   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
-  //offsets: [0,7,14]
+  // expected:
+  // indxs:   [0,3,6,9,12,15,18,1,4,7,10,13,16,19,2,5,8,11,14,17,20],
+  // strings: ["a","d","g","j","m","p","s","b","e","h","k","n","q","t","c","f","i","l","o","r","u"],
+  // bools:   [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+  // nulls:   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  // offsets: [0,7,14]
   //
   cudf::size_type start_partition = 0;
   {
@@ -591,12 +591,12 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
 
-  //expected:
-  //indxs:   [2,5,8,11,14,17,20,0,3,6,9,12,15,18,1,4,7,10,13,16,19],
-  //strings: ["c","f","i","l","o","r","u","a","d","g","j","m","p","s","b","e","h","k","n","q","t"],
-  //bools:   [1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-  //nulls:   [1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  //offsets: [0,7,14]
+  // expected:
+  // indxs:   [2,5,8,11,14,17,20,0,3,6,9,12,15,18,1,4,7,10,13,16,19],
+  // strings: ["c","f","i","l","o","r","u","a","d","g","j","m","p","s","b","e","h","k","n","q","t"],
+  // bools:   [1,0,1,0,1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+  // nulls:   [1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  // offsets: [0,7,14]
   //
   start_partition = 1;
   {

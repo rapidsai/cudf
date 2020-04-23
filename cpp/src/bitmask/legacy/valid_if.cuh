@@ -114,15 +114,15 @@ __global__ void valid_if_kernel(const bit_container* source_mask,
 }  // namespace detail
 
 /**
-  * @brief Generate a bitmask where every bit is marked with valid 
-  * if and only if predicate(bit) and source_mask(bit) are both true.
-  * 
-  * @param source_mask The source mask
-  * @param p The predicate that has an operator() member function
-  * @param num_bits Number of bits
-  * @param stream An optional cudaStream_t object
-  * @return The generated bitmask as well as its null_count
-  */
+ * @brief Generate a bitmask where every bit is marked with valid
+ * if and only if predicate(bit) and source_mask(bit) are both true.
+ *
+ * @param source_mask The source mask
+ * @param p The predicate that has an operator() member function
+ * @param num_bits Number of bits
+ * @param stream An optional cudaStream_t object
+ * @return The generated bitmask as well as its null_count
+ */
 template <typename bit_container, typename predicate, typename size_type>
 std::pair<bit_container*, size_type> valid_if(const bit_container* source_mask,
                                               const predicate& p,

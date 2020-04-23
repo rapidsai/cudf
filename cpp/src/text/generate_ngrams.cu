@@ -46,14 +46,14 @@ struct ngram_generator_fn {
   char* d_chars{};
 
   /**
-     * @brief Build ngram for each string.
-     *
-     * This is called for each thread and processed for each string.
-     * Each string will produce the number of ngrams specified.
-     *
-     * @param idx Index of the kernel thread.
-     * @return Number of bytes required for the string for this thread.
-     */
+   * @brief Build ngram for each string.
+   *
+   * This is called for each thread and processed for each string.
+   * Each string will produce the number of ngrams specified.
+   *
+   * @param idx Index of the kernel thread.
+   * @return Number of bytes required for the string for this thread.
+   */
   __device__ cudf::size_type operator()(cudf::size_type idx) {
     char* out_ptr         = d_chars ? d_chars + d_offsets[idx] : nullptr;
     cudf::size_type bytes = 0;

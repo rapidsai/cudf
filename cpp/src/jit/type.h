@@ -31,17 +31,17 @@ const void* get_data_ptr(scalar const& s);
 
 /**
  * @brief Maps a `cudf::data_type` to the name of its corresponding C++ type
- * 
+ *
  * When passed a `cudf::data_type`, returns the `std::string` name of the C++
  * type used to represent the data.
- * 
+ *
  * Example:
  * @code
  *   auto d = data_type(type_id::INT32);
  *   auto s = jit::getTypeName(d);
  *   // s == std::string("int32_t")
  * @endcode
- * 
+ *
  * @param type The data type
  * @return std::string Name of the data type in string
  */

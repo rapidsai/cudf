@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019-2020, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef __IO_ORC_GPU_H__
 #define __IO_ORC_GPU_H__
@@ -44,11 +44,11 @@ struct CompressedStreamInfo {
   gpu_inflate_status_s *decstatus;  // [in] results of decompression
   gpu_inflate_input_s
     *copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
-  uint32_t
-    num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed blocks(out)
-  uint32_t
-    num_uncompressed_blocks;  // [in,out] number of entries in copyctl(in), number of uncompressed blocks(out)
-  uint64_t max_uncompressed_size;  // [out] maximum uncompressed data size
+  uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
+                                   // blocks(out)
+  uint32_t num_uncompressed_blocks;  // [in,out] number of entries in copyctl(in), number of
+                                     // uncompressed blocks(out)
+  uint64_t max_uncompressed_size;    // [out] maximum uncompressed data size
 };
 
 enum StreamIndexType {
@@ -70,7 +70,7 @@ struct nvstrdesc_s {
 
 /**
  * @brief Struct to describe a single entry in the global dictionary
-**/
+ **/
 struct DictionaryEntry {
   uint32_t pos;  // Position in data stream
   uint32_t len;  // Length in data stream
@@ -99,9 +99,9 @@ struct ColumnDesc {
   uint32_t rowgroup_id;                    // row group position
   uint8_t encoding_kind;                   // column encoding kind (orc::ColumnEncodingKind)
   uint8_t type_kind;                       // column data type (orc::TypeKind)
-  uint8_t dtype_len;  // data type length (for types that can be mapped to different sizes)
-  uint8_t
-    decimal_scale;  // number of fractional decimal digits for decimal type (bit 7 set if converting to float64)
+  uint8_t dtype_len;      // data type length (for types that can be mapped to different sizes)
+  uint8_t decimal_scale;  // number of fractional decimal digits for decimal type (bit 7 set if
+                          // converting to float64)
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
@@ -183,7 +183,8 @@ struct StripeDictionary {
  * @param[in] strm_info List of compressed streams
  * @param[in] num_streams Number of compressed streams
  * @param[in] compression_block_size maximum size of compressed blocks (up to 16M)
- * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from compressed size)
+ * @param[in] log2maxcr log2 of maximum compression ratio (used to infer max uncompressed size from
+ *compressed size)
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise

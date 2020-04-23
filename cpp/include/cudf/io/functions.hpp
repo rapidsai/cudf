@@ -399,8 +399,8 @@ struct orc_chunked_state;
  * @param[in] args Settings for controlling writing behavior
  * @param[in] mr Optional resource to use for device memory allocation
  *
- * @returns pointer to an anonymous state structure storing information about the chunked write. this
- *          pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
+ * @returns pointer to an anonymous state structure storing information about the chunked write.
+ * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
  *          calls.
  */
 std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
@@ -409,12 +409,12 @@ std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
  *
- * All tables passed into multiple calls of this function must contain the same # of columns and have columns
- * of the same type.
+ * All tables passed into multiple calls of this function must contain the same # of columns and
+ * have columns of the same type.
  *
  * @param[in] table The table data to be written.
- * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
- *            from write_orc_chunked_begin()
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_orc_chunked_begin()
  */
 void write_orc_chunked(table_view const& table,
                        std::shared_ptr<detail::orc::orc_chunked_state> state);
@@ -422,8 +422,8 @@ void write_orc_chunked(table_view const& table,
 /**
  * @brief Finish writing a chunked/stream orc file.
  *
- * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
- *            from write_orc_chunked_begin()
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_orc_chunked_begin()
  */
 void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
 
@@ -581,9 +581,9 @@ struct pq_chunked_state;
 
 /**
  * @brief Begin the process of writing a parquet file in a chunked/stream form.
- * 
+ *
  * The intent of the write_parquet_chunked_ path is to allow writing of an
- * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes. 
+ * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
  *
  * The following code snippet demonstrates how to write a single parquet file containing
  * one logical table by writing a series of individual cudf::tables.
@@ -591,7 +591,8 @@ struct pq_chunked_state;
  *  #include <cudf.h>
  *  ...
  *  std::string filepath = "dataset.parquet";
- *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath), table->view()};
+ *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
+ * table->view()};
  *  ...
  *  auto state = cudf::write_parquet_chunked_begin(args);
  *    cudf::write_parquet_chunked(table0, state);
@@ -602,32 +603,32 @@ struct pq_chunked_state;
  *
  * @param[in] args Settings for controlling writing behavior
  * @param[in] mr Optional resource to use for device memory allocation
- * 
- * @returns pointer to an anonymous state structure storing information about the chunked write. this 
- *          pointer must be passed to all subsequent write_parquet_chunked() and write_parquet_chunked_end()
- *          calls.
+ *
+ * @returns pointer to an anonymous state structure storing information about the chunked write.
+ * this pointer must be passed to all subsequent write_parquet_chunked() and
+ * write_parquet_chunked_end() calls.
  */
 std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
   write_parquet_chunked_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.
- * 
- * All tables passed into multiple calls of this function must contain the same # of columns and have columns
- * of the same type. 
+ *
+ * All tables passed into multiple calls of this function must contain the same # of columns and
+ * have columns of the same type.
  *
  * @param[in] table The table data to be written.
- * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
- *            from write_parquet_chunked_begin()
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_parquet_chunked_begin()
  */
 void write_parquet_chunked(table_view const& table,
                            std::shared_ptr<detail::parquet::pq_chunked_state> state);
 
 /**
- * @brief Finish writing a chunked/stream parquet file.   
- * 
- * @param[in] state Opaque state information about the writer process. Must be the same pointer returned
- *            from write_parquet_chunked_begin()
+ * @brief Finish writing a chunked/stream parquet file.
+ *
+ * @param[in] state Opaque state information about the writer process. Must be the same pointer
+ * returned from write_parquet_chunked_begin()
  */
 void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
 

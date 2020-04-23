@@ -173,7 +173,7 @@ void reader::impl::decompress_input() {
  * @brief Finds all record starts in the file and stores them in rec_starts_
  *
  * Does not upload the entire file to the GPU
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
@@ -181,7 +181,8 @@ void reader::impl::decompress_input() {
 void reader::impl::set_record_starts(cudaStream_t stream) {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
-  // and then filtering out the records that is a quotechar or a linetermination within a quotechar pair.
+  // and then filtering out the records that is a quotechar or a linetermination within a quotechar
+  // pair.
   if (allow_newlines_in_strings_) { chars_to_count.push_back('\"'); }
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
@@ -289,7 +290,7 @@ void reader::impl::upload_data_to_device() {
  * @brief Parse the first row to set the column name
  *
  * Sets the column_names_ data member
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
@@ -342,7 +343,7 @@ void reader::impl::set_column_names(cudaStream_t stream) {
  * @brief Set the data type array data member
  *
  * If user does not pass the data types, deduces types from the file content
- * 
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return void
@@ -389,7 +390,8 @@ void reader::impl::set_data_types(cudaStream_t stream) {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = metadata.column_names.size();
 
-    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{ TIME_UNIT_NONE });
+    // dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{
+    // TIME_UNIT_NONE });
 
     rmm::device_vector<cudf::experimental::io::json::ColumnInfo> d_column_infos(
       num_columns, cudf::experimental::io::json::ColumnInfo{});
@@ -426,7 +428,7 @@ void reader::impl::set_data_types(cudaStream_t stream) {
 
 /**
  * @brief Parse the input data and store results a table
- *       
+ *
  * @param[in] stream Cuda stream to execute gpu operations on
  *
  * @return table_with_metadata struct

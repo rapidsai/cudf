@@ -74,7 +74,8 @@ typename std::enable_if_t<!std::is_floating_point<T>::value, bool> almost_equal(
 }
 
 /**
- * @note Currently ignoring the extra type info, i.e. assuming it's the same for both columns, or can be ignored
+ * @note Currently ignoring the extra type info, i.e. assuming it's the same for both columns, or
+ * can be ignored
  */
 template <typename E>
 void expect_column_values_are_equal(cudf::size_type common_size,
@@ -112,7 +113,8 @@ void expect_column_values_are_equal(cudf::size_type common_size,
   }
 }
 
-// Note: This has quite a bit of code repretition, plus it repeats all of `cudf::util::have_same_type` essentially.
+// Note: This has quite a bit of code repretition, plus it repeats all of
+// `cudf::util::have_same_type` essentially.
 inline bool expect_columns_have_same_type(const gdf_column& validated_column_1,
                                           const gdf_column& validated_column_2,
                                           bool ignore_extra_type_info = false) noexcept {

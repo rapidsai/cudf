@@ -106,19 +106,19 @@ struct Rank : public BaseFixture {
 
 TYPED_TEST_CASE(Rank, NumericTypes);
 
-//fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
+// fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
 //                                        3,   2,   1,   4,   6,   5
 TYPED_TEST(Rank, first_asce_keep) {
-  //ASCENDING
+  // ASCENDING
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
-  fixed_width_column_wrapper<size_type> col2_rank{{2, 1, -1, 3, 5, 4}, {1, 1, 0, 1, 1, 1}};  //KEEP
+  fixed_width_column_wrapper<size_type> col2_rank{{2, 1, -1, 3, 5, 4}, {1, 1, 0, 1, 1, 1}};  // KEEP
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 3, 6, 4}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::FIRST, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
 TYPED_TEST(Rank, first_asce_top) {
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
-  fixed_width_column_wrapper<size_type> col2_rank{{3, 2, 1, 4, 6, 5}};  //BEFORE = TOP
+  fixed_width_column_wrapper<size_type> col2_rank{{3, 2, 1, 4, 6, 5}};  // BEFORE = TOP
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 3, 6, 4}};
   this->run_all_tests(rank_method::FIRST, asce_top, col1_rank, col2_rank, col3_rank);
 }
@@ -126,29 +126,29 @@ TYPED_TEST(Rank, first_asce_top) {
 TYPED_TEST(Rank, first_asce_bottom) {
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
   ;
-  fixed_width_column_wrapper<size_type> col2_rank{{2, 1, 6, 3, 5, 4}};  //AFTER  = BOTTOM
+  fixed_width_column_wrapper<size_type> col2_rank{{2, 1, 6, 3, 5, 4}};  // AFTER  = BOTTOM
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 3, 6, 4}};
   this->run_all_tests(rank_method::FIRST, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
 TYPED_TEST(Rank, first_desc_keep) {
-  //DESCENDING
+  // DESCENDING
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
-  fixed_width_column_wrapper<size_type> col2_rank{{2, 5, -1, 3, 1, 4}, {1, 1, 0, 1, 1, 1}};  //KEEP
+  fixed_width_column_wrapper<size_type> col2_rank{{2, 5, -1, 3, 1, 4}, {1, 1, 0, 1, 1, 1}};  // KEEP
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 4, 1, 5}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::FIRST, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
 TYPED_TEST(Rank, first_desc_top) {
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
-  fixed_width_column_wrapper<size_type> col2_rank{{3, 6, 1, 4, 2, 5}};  //AFTER  = TOP
+  fixed_width_column_wrapper<size_type> col2_rank{{3, 6, 1, 4, 2, 5}};  // AFTER  = TOP
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 4, 1, 5}};
   this->run_all_tests(rank_method::FIRST, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
 TYPED_TEST(Rank, first_desc_bottom) {
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
-  fixed_width_column_wrapper<size_type> col2_rank{{2, 5, 6, 3, 1, 4}};  //BEFORE = BOTTOM
+  fixed_width_column_wrapper<size_type> col2_rank{{2, 5, 6, 3, 1, 4}};  // BEFORE = BOTTOM
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 4, 1, 5}};
   this->run_all_tests(rank_method::FIRST, desc_bottom, col1_rank, col2_rank, col3_rank);
 }

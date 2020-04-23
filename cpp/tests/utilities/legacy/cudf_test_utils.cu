@@ -41,8 +41,8 @@ const T& promote_for_streaming(const T& x) {
   return x;
 }
 
-//int promote_for_streaming(const char& x)          { return x; }
-//int promote_for_streaming(const unsigned char& x) { return x; }
+// int promote_for_streaming(const char& x)          { return x; }
+// int promote_for_streaming(const unsigned char& x) { return x; }
 int promote_for_streaming(const signed char& x) { return x; }
 
 }  // namespace detail

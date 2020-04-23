@@ -71,7 +71,8 @@ inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len) {
  * @brief Fetch a page fragment and its dictionary entries in row-ascending order
  *
  * @param[in,out] s dictionary state
- * @param[in,out] dict_data fragment dictionary data for the current column (zeroed out after fetching)
+ * @param[in,out] dict_data fragment dictionary data for the current column (zeroed out after
+ *fetching)
  * @param[in] frag_start_row row position of current fragment
  * @param[in] t thread id
  **/
@@ -128,8 +129,9 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t) {
     }
     __syncthreads();
     if (is_valid && !is_unique) {
-      // NOTE: Should have at most 3 iterations (once for early duplicate elimination, once for final dictionary duplicate elimination and once for re-ordering)
-      // (If something went wrong building the dictionary, it will likely hang or crash right here)
+      // NOTE: Should have at most 3 iterations (once for early duplicate elimination, once for
+      // final dictionary duplicate elimination and once for re-ordering) (If something went wrong
+      // building the dictionary, it will likely hang or crash right here)
       do { dict_idx = dict_index[dict_idx & 0x7fffffff]; } while (dict_idx > 0x7fffffff);
       dict_index[row] = dict_idx;
     }

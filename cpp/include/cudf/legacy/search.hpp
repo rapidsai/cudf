@@ -23,20 +23,20 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief Find smallest indices in a sorted table where values should be 
+ * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the first index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  1 }
- * 
+ *
  *  Multi Column:
  *      idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -46,15 +46,16 @@ namespace cudf {
  *             { .7 },
  *             { 61 }}
  *   result =  {  3 }
- * 
+ *
  * @param t             Table to search
  * @param values        Find insert locations for these values
- * @param desc_flags    Vector of column sort order. False indicates the 
+ * @param desc_flags    Vector of column sort order. False indicates the
  *  corresponding column is sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
- * 
- * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
+ *
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as
+ *values.
  *---------------------------------------------------------------------------**/
 gdf_column lower_bound(table const& t,
                        table const& values,
@@ -62,20 +63,20 @@ gdf_column lower_bound(table const& t,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
- * @brief Find largest indices in a sorted table where values should be 
+ * @brief Find largest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the last index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single Column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  3 }
- * 
+ *
  *  Multi Column:
  *    idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -84,15 +85,16 @@ gdf_column lower_bound(table const& t,
  *   values = {{ 20 },
  *             { .7 },
  *             { 61 }}
- *   result =  {  5  *   * 
+ *   result =  {  5  *   *
  * @param column        Table to search
  * @param values        Find insert locations for these values
- * @param desc_flags    Vector of column sort order. False indicates the 
+ * @param desc_flags    Vector of column sort order. False indicates the
  *  corresponding column is sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
- * 
- * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
+ *
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as
+ *values.
  *---------------------------------------------------------------------------**/
 gdf_column upper_bound(table const& t,
                        table const& values,

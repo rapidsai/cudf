@@ -209,7 +209,7 @@ struct scatter_gather_functor {
     Filter filter,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
     cudaStream_t stream                 = 0) {
-    //Actually we gather here
+    // Actually we gather here
     rmm::device_vector<cudf::size_type> indices(output_size, 0);
 
     thrust::copy_if(rmm::exec_policy(stream)->on(stream),
@@ -277,10 +277,10 @@ namespace experimental {
 namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
- * 
+ *
  * @p filter must be a functor or lambda with the following signature:
  * __device__ bool operator()(cudf::size_type i);
- * It will return true if element i of @p input should be copied, 
+ * It will return true if element i of @p input should be copied,
  * false otherwise.
  *
  * @tparam Filter the filter functor type

@@ -200,12 +200,12 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts, 
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
- *  
+ *
  * @param[in] d_data Input character array in device memory
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return cudf::size_type total number of occurrences
  **/
 template <class T>
@@ -218,16 +218,16 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
- * 
- * Does not load the entire file into the GPU memory at any time, so it can 
+ *
+ * Does not load the entire file into the GPU memory at any time, so it can
  * be used to parse large files. Output array needs to be preallocated.
- * 
+ *
  * @param[in] h_data Pointer to the input character array
  * @param[in] h_size Number of bytes in the input array
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return cudf::size_type total number of occurrences
  **/
 template <class T>
@@ -252,7 +252,7 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  * @brief Searches the input character array for each of characters in a set
  * and sums up the number of occurrences.
  *
- * Does not load the entire buffer into the GPU memory at any time, so it can 
+ * Does not load the entire buffer into the GPU memory at any time, so it can
  * be used with buffers of any size.
  *
  * @param[in] h_data Pointer to the data in host memory

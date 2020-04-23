@@ -34,7 +34,7 @@ namespace detail {
  * Caller must set the validity mask in the output column.
  *
  * @tparam row_order_iterator This must be an iterator for type thrust::tuple<side,size_type>.
- * 
+ *
  * @param lhs First column.
  * @param rhs Second column.
  * @param row_order Indexes for each column.

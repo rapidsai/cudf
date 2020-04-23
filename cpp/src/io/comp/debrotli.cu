@@ -272,7 +272,8 @@ static __device__ uint8_t *local_alloc(debrotli_state_s *s, uint32_t bytes) {
   }
 }
 
-/// Shrink the size of the local heap, returns ptr to end (used for stack-like intermediate allocations at the end of the heap)
+/// Shrink the size of the local heap, returns ptr to end (used for stack-like intermediate
+/// allocations at the end of the heap)
 static __device__ uint8_t *local_heap_shrink(debrotli_state_s *s, uint32_t bytes) {
   int heap_used  = s->heap_used;
   int heap_limit = s->heap_limit;
@@ -606,7 +607,8 @@ static __device__ uint32_t BuildHuffmanTable(uint16_t *root_lut,
   table_size = 1 << table_bits;
   total_size = table_size;
 
-  // Fill in the root table. Reduce the table size to if possible, and create the repetitions by memcpy.
+  // Fill in the root table. Reduce the table size to if possible, and create the repetitions by
+  // memcpy.
   if (table_bits > max_length) {
     table_bits = max_length;
     table_size = 1 << table_bits;
@@ -920,10 +922,9 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
         symbol++;
       } else {
         // Process repeated symbol code length.
-        // A) Check if it is the extension of previous repeat sequence; if the decoded value is not 16, then it is a new symbol-skip
-        // B) Update repeat variable
-        // C) Check if operation is feasible (fits alphabet)
-        // D) For each symbol do the same operations as in single symbol
+        // A) Check if it is the extension of previous repeat sequence; if the decoded value is not
+        // 16, then it is a new symbol-skip B) Update repeat variable C) Check if operation is
+        // feasible (fits alphabet) D) For each symbol do the same operations as in single symbol
         uint32_t extra_bits, repeat_delta, new_len, old_repeat;
 
         if (code_len == 16) {
@@ -1645,7 +1646,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
             }
             distance_tree = s->distance_hgroup->htrees[dist_context_map_slice[distance_context]];
             distance_code = getvlc(s, distance_tree);
-            // Convert the distance code to the actual distance by possibly looking up past distances from the s->ringbuffer.
+            // Convert the distance code to the actual distance by possibly looking up past
+            // distances from the s->ringbuffer.
             distance_context = 0;
             if ((distance_code & ~0xF) == 0) {
               // Take distance from ring buffer
@@ -1656,9 +1658,11 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
                 distance_context = 1;
               } else {
                 int dist = distance_code << 1;
-                // kDistanceShortCodeIndexOffset has 2-bit values from LSB: 3, 2, 1, 0, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2
+                // kDistanceShortCodeIndexOffset has 2-bit values from LSB: 3, 2, 1, 0, 3, 3, 3, 3,
+                // 3, 3, 2, 2, 2, 2, 2, 2
                 const uint32_t kDistanceShortCodeIndexOffset = 0xAAAFFF1B;
-                // kDistanceShortCodeValueOffset has 2-bit values from LSB: -0, 0,-0, 0,-1, 1,-2, 2,-3, 3,-1, 1,-2, 2,-3, 3
+                // kDistanceShortCodeValueOffset has 2-bit values from LSB: -0, 0,-0, 0,-1, 1,-2,
+                // 2,-3, 3,-1, 1,-2, 2,-3, 3
                 const uint32_t kDistanceShortCodeValueOffset = 0xFA5FA500;
                 int v         = (dist_rb_idx + (int)(kDistanceShortCodeIndexOffset >> dist)) & 0x3;
                 distance_code = s->dist_rb[v];
@@ -1668,7 +1672,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
                 } else {
                   distance_code -= v;
                   if (distance_code <= 0) {
-                    // A huge distance will cause a failure later on. This is a little faster than failing here.
+                    // A huge distance will cause a failure later on. This is a little faster than
+                    // failing here.
                     distance_code = 0x7FFFFFFF;
                   }
                 }
@@ -1704,7 +1709,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
           if (max_distance > (out + pos - s->outbase)) {
             max_distance = (int32_t)(out + pos - s->outbase);
           }
-          // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is larger than the max LZ77 distance
+          // Apply copy of LZ77 back-reference, or static dictionary reference if the distance is
+          // larger than the max LZ77 distance
           if (distance_code > max_distance) {
             // The maximum allowed distance is BROTLI_MAX_ALLOWED_DISTANCE = 0x7FFFFFFC.
             // With this choice, no signed overflow can occur after decoding
@@ -1712,7 +1718,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
             if (distance_code > BROTLI_MAX_ALLOWED_DISTANCE ||
                 copy_length < BROTLI_MIN_DICTIONARY_WORD_LENGTH ||
                 copy_length > BROTLI_MAX_DICTIONARY_WORD_LENGTH) {
-              //printf("distance_code = %d/%d, copy_length = %d\n", distance_code, (int)(out - s->outbase), copy_length);
+              // printf("distance_code = %d/%d, copy_length = %d\n", distance_code, (int)(out -
+              // s->outbase), copy_length);
               s->error    = -1;
               pos         = meta_block_len;
               copy_length = 0;
@@ -1739,7 +1746,9 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
                   copy_length = 0;
                 }
               } else {
-                //printf("transform_idx=%d/%d, distance_code = %d/%d, copy_length = %d\n", transform_idx, kNumTransforms, distance_code, (int)(out - s->outbase), copy_length);
+                // printf("transform_idx=%d/%d, distance_code = %d/%d, copy_length = %d\n",
+                // transform_idx, kNumTransforms, distance_code, (int)(out - s->outbase),
+                // copy_length);
                 s->error    = -1;
                 pos         = meta_block_len;
                 copy_length = 0;
@@ -1810,7 +1819,8 @@ static __device__ void ProcessCommands(debrotli_state_s *s,
  * @param inputs[in] Source/Destination buffer information per block
  * @param outputs[out] Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
- * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between blocks)
+ * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
+ *blocks)
  * @param count Number of blocks to decompress
  **/
 extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
@@ -1915,7 +1925,7 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs) {
   uint32_t max_fb_size, min_fb_size, fb_size;
   CUDA_TRY(cudaGetDevice(&dev));
   if (cudaSuccess == cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev)) {
-    //printf("%d SMs on device %d\n", sm_count, dev);
+    // printf("%d SMs on device %d\n", sm_count, dev);
     max_num_inputs =
       min(max_num_inputs, sm_count * 3);  // no more than 3 blocks/sm at most due to 32KB smem use
     if (max_num_inputs <= 0) {
@@ -1923,11 +1933,13 @@ size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs) {
     }
   }
   max_num_inputs = min(max(max_num_inputs, 1), 512);
-  // Max fb size per block occurs if all huffman tables for all 3 group types fail local_alloc() with num_htrees=256 (See HuffmanTreeGroupAlloc)
+  // Max fb size per block occurs if all huffman tables for all 3 group types fail local_alloc()
+  // with num_htrees=256 (See HuffmanTreeGroupAlloc)
   max_fb_size = 256 * (630 + 1080 + 920) * 2;  // 1.3MB
   // Min avg fb size needed per block (typical)
   min_fb_size = 10 * 1024;  // TODO: Gather some statistics for typical meta-block size
-  // Allocate at least two worst-case metablocks or 1 metablock plus typical size for every other block
+  // Allocate at least two worst-case metablocks or 1 metablock plus typical size for every other
+  // block
   fb_size = max(max_fb_size * min(max_num_inputs, 2), max_fb_size + max_num_inputs * min_fb_size);
   // Add some room for alignment
   return fb_size + 16 + sizeof(brotli_dictionary_s);
@@ -1955,7 +1967,8 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs,
   fb_heap_size = (uint32_t)((scratch_size - sizeof(brotli_dictionary_s)) & ~0xf);
 
   CUDA_TRY(cudaMemsetAsync(scratch_u8, 0, 2 * sizeof(uint32_t), stream));
-  // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't page-locked
+  // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
+  // page-locked
   CUDA_TRY(cudaMemcpyAsync(scratch_u8 + fb_heap_size,
                            get_brotli_dictionary(),
                            sizeof(brotli_dictionary_s),

@@ -121,11 +121,11 @@ constexpr inline T lcm(T u, T v) noexcept {
  *
  *  @param[out] mask                  address of the bit mask pointer
  *  @param[in]  num_elements          number of elements in the bit mask
- *  @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All other
- *                                    values indicate un-initialized.  Default is uninitialized
- *  @param[in]  padding_boundary      optional, specifies the quantum, in bytes, of the amount of memory
- *                                    allocated (i.e. the actually-required allocation size is "padded" to
- *                                    a multiple of this value).
+ *  @param[in]  fill_value            optional, should the memory be initialized to all 0 or 1s. All
+ * other values indicate un-initialized.  Default is uninitialized
+ *  @param[in]  padding_boundary      optional, specifies the quantum, in bytes, of the amount of
+ * memory allocated (i.e. the actually-required allocation size is "padded" to a multiple of this
+ * value).
  *
  *  @return GDF_SUCCESS on success, the RMM or CUDA error on error
  */
@@ -163,7 +163,7 @@ inline gdf_error create_bit_mask(bit_mask_t **mask,
  *
  *  Note that for performance reasons (this is often called in inner loops
  *  in CUDA device code) this function does not verify that @p valid is non-null.
- *  That should be checked in a wider scope, since it usually doesn't vary for 
+ *  That should be checked in a wider scope, since it usually doesn't vary for
  *  different threads of the same kernel.
  *
  *  @param[in]  valid         The bit mask to update

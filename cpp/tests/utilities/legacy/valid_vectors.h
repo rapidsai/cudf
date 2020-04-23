@@ -60,11 +60,11 @@ void print_vector_and_valid(std::vector<T>& v, const cudf::valid_type* valid) {
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuples_and_valids(
   std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid) {
-  //bottom of compile-time recursion
-  //purposely empty...
+  // bottom of compile-time recursion
+  // purposely empty...
 }
 
-//compile time recursion to print a tuple of vectors
+// compile time recursion to print a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
   I<sizeof...(Tp), void>::type print_tuples_and_valids(std::tuple<std::vector<Tp>...>& t,
@@ -72,7 +72,7 @@ template <std::size_t I = 0, typename... Tp>
   // print the current vector:
   print_vector_and_valid(std::get<I>(t), valid[I].get());
 
-  //recurse to next vector in tuple
+  // recurse to next vector in tuple
   print_tuples_and_valids<I + 1, Tp...>(t, valid);
 }
 

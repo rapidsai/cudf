@@ -97,12 +97,12 @@ BENCHMARK_REGISTER_F(Reshape, StrStack)
 
 /**
  * @brief Benchmarks for approach towards combining NVCategories
- * 
+ *
  * The below benchmarks are to compare the performance of two approaches towards
  * combining NVCategories. One is a cumulative call to `NVCategory.merge_and_remap`
  * for each pair of columns. The other is to call `NVCategory::create_from_categories`
  * on all the categories together.
- * 
+ *
  * To run the benchmarks, uncomment the following #define
  */
 

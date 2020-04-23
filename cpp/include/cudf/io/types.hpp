@@ -99,13 +99,13 @@ enum statistics_freq {
  * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
  *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
  *
- *     col1     col2 
- *      / \ 
- *     /   \ 
- *   s3    f4 
- *   / \ 
- *  /   \ 
- * f5    f6 
+ *     col1     col2
+ *      / \
+ *     /   \
+ *   s3    f4
+ *   / \
+ *  /   \
+ * f5    f6
  */
 struct table_metadata {
   std::vector<std::string> column_names;         //!< Names of columns contained in the table
@@ -113,17 +113,19 @@ struct table_metadata {
 };
 
 /**
- * @brief Derived class of table_metadata which includes nullability information per column of input.
- * 
- * This information is used as an optimization for chunked writes. If the caller leaves column_nullable
- * uninitialized, the writer code will assume the worst case : that all columns are nullable.
- * 
- * If the column_nullable field is not empty, it is expected that it has a length equal to the number
- * of columns in the table being written.  
- * 
- * In the case where column nullability is known, pass `true` if the corresponding column could contain 
- * nulls in one or more subtables to be written, otherwise `false`.
- * 
+ * @brief Derived class of table_metadata which includes nullability information per column of
+ * input.
+ *
+ * This information is used as an optimization for chunked writes. If the caller leaves
+ * column_nullable uninitialized, the writer code will assume the worst case : that all columns are
+ * nullable.
+ *
+ * If the column_nullable field is not empty, it is expected that it has a length equal to the
+ * number of columns in the table being written.
+ *
+ * In the case where column nullability is known, pass `true` if the corresponding column could
+ * contain nulls in one or more subtables to be written, otherwise `false`.
+ *
  */
 struct table_metadata_with_nullability : public table_metadata {
   std::vector<bool> column_nullable;  //!< Per-column nullability information.
