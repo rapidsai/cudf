@@ -31,12 +31,10 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 using string_index_pair = thrust::pair<const char*, size_type>;
 using findall_result    = thrust::pair<size_type, string_index_pair>;
 
 namespace {
-
 /**
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
@@ -52,10 +50,13 @@ struct findall_fn {
              reprog_device& prog,
              size_type column_index    = -1,
              size_type const* d_counts = nullptr)
-    : d_strings(d_strings), prog(prog), column_index(column_index), d_counts(d_counts) {}
+    : d_strings(d_strings), prog(prog), column_index(column_index), d_counts(d_counts)
+  {
+  }
 
   // this will count columns as well as locate a specific string for a column
-  __device__ findall_result findall(size_type idx) {
+  __device__ findall_result findall(size_type idx)
+  {
     string_index_pair result{nullptr, 0};
     if (d_strings.is_null(idx) || (d_counts && (column_index >= d_counts[idx])))
       return findall_result{0, result};
@@ -83,7 +84,8 @@ struct findall_fn {
     return findall_result{column_count, result};
   }
 
-  __device__ string_index_pair operator()(size_type idx) {
+  __device__ string_index_pair operator()(size_type idx)
+  {
     // this one only cares about the string
     return findall(idx).second;
   }
@@ -92,9 +94,12 @@ struct findall_fn {
 template <size_t stack_size>
 struct findall_count_fn : public findall_fn<stack_size> {
   findall_count_fn(column_device_view const& strings, reprog_device& prog)
-    : findall_fn<stack_size>{strings, prog} {}
+    : findall_fn<stack_size>{strings, prog}
+  {
+  }
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     // this one only cares about the column count
     return findall_fn<stack_size>::findall(idx).first;
   }
@@ -107,7 +112,8 @@ std::unique_ptr<experimental::table> findall_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -190,7 +196,8 @@ std::unique_ptr<experimental::table> findall_re(
 
 std::unique_ptr<experimental::table> findall_re(strings_column_view const& strings,
                                                 std::string const& pattern,
-                                                rmm::mr::device_memory_resource* mr) {
+                                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::findall_re(strings, pattern, mr);
 }

@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Types of binary operations that can be performed on data.
  */

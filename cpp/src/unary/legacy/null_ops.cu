@@ -25,10 +25,9 @@
 using bit_mask::bit_mask_t;
 
 namespace cudf {
-
 namespace detail {
-
-gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStream_t stream = 0) {
+gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStream_t stream = 0)
+{
   auto output = cudf::allocate_column(GDF_BOOL8, input.size, false, gdf_dtype_extra_info{}, stream);
 
   if (not cudf::is_nullable(input)) {

@@ -20,12 +20,10 @@
 #include <cudf/types.h>
 
 namespace cudf {
-
 // Forward declaration
 struct table;
 
 namespace detail {
-
 /**---------------------------------------------------------------------------*
  * @brief Gathers the rows (including null values) of a set of source columns
  * into a set of destination columns.
@@ -65,8 +63,8 @@ namespace detail {
  * i.e., setting both to `true` is undefined.
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
- * `nvstring_category` objects of these will be synchronizeded before gather is 
- * performed. 
+ * `nvstring_category` objects of these will be synchronizeded before gather is
+ * performed.
  * @param allow_negative_indices Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @return gdf_error

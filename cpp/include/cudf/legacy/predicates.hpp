@@ -17,17 +17,17 @@
 #pragma once
 
 namespace cudf {
-
-/** 
+/**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical order.
- * 
+ *
  * @param[in] input              table whose rows need to be compared for ordering
  * @param[in] descending         vector that specifies the expected ordering of each input column
  *                               (0 is ascending order and 1 is descending)
- *                               If this an empty vector, then it will be assumed that each column is in ascending order.
+ *                               If this an empty vector, then it will be assumed that each column
+ * is in ascending order.
  * @param[in] nulls_are_smallest true indicates nulls are to be considered
  *                               smaller than non-nulls ; false indicates opposite
- * 
+ *
  * @returns true - if sorted , false - if not.
  */
 bool is_sorted(cudf::table const& table,

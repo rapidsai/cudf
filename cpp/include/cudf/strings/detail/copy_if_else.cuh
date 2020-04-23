@@ -25,7 +25,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Returns a new strings column using the specified Filter to select
  * strings from the lhs iterator or the rhs iterator.
@@ -43,7 +42,8 @@ namespace detail {
  * @param lhs_begin Start of first set of data. Used when filter_fn returns true.
  * @param lhs_end End of first set of data.
  * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
- * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a specific row.
+ * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
+ * specific row.
  * @param mr Resource for allocating device memory.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column.
@@ -55,7 +55,8 @@ std::unique_ptr<cudf::column> copy_if_else(
   StringPairIterRight rhs_begin,
   Filter filter_fn,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 

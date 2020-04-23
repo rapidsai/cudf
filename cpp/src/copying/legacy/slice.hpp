@@ -23,9 +23,7 @@
 #include <vector>
 
 namespace cudf {
-
 namespace detail {
-
 /**
  * @brief Slices a column (including null values) into a set of columns
  * according to a set of indices.
@@ -50,7 +48,7 @@ namespace detail {
  * size), the outcome is undefined.
  *
  * The output columns will be allocated by the function.
- * 
+ *
  * It uses an vector of 'cudaStream_t' in order to process in a parallel manner
  * the different output columns. In case of the size of the streams is less than
  * the size of the output columns, it reassigns again the streams with the remaining

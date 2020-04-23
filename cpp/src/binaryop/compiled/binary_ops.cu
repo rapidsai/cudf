@@ -38,7 +38,8 @@ struct apply_binop {
   binary_operator op;
   apply_binop(binary_operator op) : op(op) {}
   CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& lhs,
-                                      ElementPair<Rhs> const& rhs) const {
+                                      ElementPair<Rhs> const& rhs) const
+  {
     Lhs x = lhs.second ? lhs.first : Lhs{};
     Rhs y = rhs.second ? rhs.first : Rhs{};
     switch (op) {
@@ -52,25 +53,32 @@ struct apply_binop {
       default: return Out{};
     }
   }
-  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x == y);
   }
-  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x != y);
   }
-  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x < y);
   }
-  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x > y);
   }
-  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x <= y);
   }
-  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x >= y);
   }
-  CUDA_DEVICE_CALLABLE Out null_equal(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const {
+  CUDA_DEVICE_CALLABLE Out null_equal(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const
+  {
     if (!x.second && !y.second) return Out{true};
     if (x.second && y.second) return this->equal(x.first, y.first);
     return Out{false};
@@ -80,7 +88,8 @@ struct apply_binop {
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
   apply_binop_scalar_lhs_rhs(binary_operator op) : apply_binop<Lhs, Rhs, Out>(op) {}
-  CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const {
+  CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const
+  {
     return apply_binop<Lhs, Rhs, Out>::operator()(x, y);
   }
 };
@@ -88,7 +97,8 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Lhs, Rhs, Out> {
   apply_binop_scalar_rhs_lhs(binary_operator op) : apply_binop<Lhs, Rhs, Out>(op) {}
-  CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const {
+  CUDA_DEVICE_CALLABLE Out operator()(ElementPair<Lhs> const& x, ElementPair<Rhs> const& y) const
+  {
     return apply_binop<Lhs, Rhs, Out>::operator()(y, x);
   }
 };
@@ -101,7 +111,8 @@ struct binary_op {
                                      data_type out_type,
                                      bool const reversed,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     std::unique_ptr<column> out;
     if (null_using_binop(op)) {
       out = make_numeric_column(
@@ -162,7 +173,8 @@ struct binary_op {
                                      binary_operator op,
                                      data_type out_type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     std::unique_ptr<column> out;
     if (null_using_binop(op)) {
       out = make_numeric_column(
@@ -230,7 +242,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
@@ -244,7 +257,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
@@ -258,7 +272,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");

@@ -45,7 +45,8 @@ struct Functor {
 
 template <class Float, FunctorType ft>
 struct Functor<Float, ft, typename std::enable_if_t<std::is_floating_point<Float>::value>> {
-  static __device__ Float f(Float x) {
+  static __device__ Float f(Float x)
+  {
     if (ft == BANDWIDTH_BOUND) {
       return x + static_cast<Float>(1) - static_cast<Float>(1);
     } else {
@@ -62,7 +63,8 @@ constexpr int block_size = 256;
 
 // This is for NO_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols) {
+__global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols)
+{
   using F               = Functor<T, functor_type>;
   cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while (index < n_rows) {
@@ -73,7 +75,8 @@ __global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_
 
 // This is for HOST_DISPATCHING
 template <FunctorType functor_type, class T>
-__global__ void host_dispatching_kernel(mutable_column_device_view source_column) {
+__global__ void host_dispatching_kernel(mutable_column_device_view source_column)
+{
   using F               = Functor<T, functor_type>;
   T* A                  = source_column.data<T>();
   cudf::size_type index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -88,7 +91,8 @@ struct ColumnHandle {
   template <typename ColumnType>
   void operator()(mutable_column_device_view source_column,
                   int work_per_thread,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     cudf::experimental::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
@@ -105,7 +109,8 @@ struct ColumnHandle {
 template <FunctorType functor_type>
 struct RowHandle {
   template <typename T>
-  __device__ void operator()(mutable_column_device_view source, cudf::size_type index) {
+  __device__ void operator()(mutable_column_device_view source, cudf::size_type index)
+  {
     using F                 = Functor<T, functor_type>;
     source.data<T>()[index] = F::f(source.data<T>()[index]);
   }
@@ -113,7 +118,8 @@ struct RowHandle {
 
 // This is for DEVICE_DISPATCHING
 template <FunctorType functor_type>
-__global__ void device_dispatching_kernel(mutable_table_device_view source) {
+__global__ void device_dispatching_kernel(mutable_table_device_view source)
+{
   const cudf::size_type n_rows = source.num_rows();
   cudf::size_type index        = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -127,7 +133,8 @@ __global__ void device_dispatching_kernel(mutable_table_device_view source) {
 }
 
 template <FunctorType functor_type, DispatchingType dispatching_type, class T>
-void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread) {
+void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
+{
   const cudf::size_type n_rows = input.num_rows();
   const cudf::size_type n_cols = input.num_columns();
 
@@ -154,7 +161,8 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread) {
 }
 
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
-void type_dispatcher_benchmark(benchmark::State& state) {
+void type_dispatcher_benchmark(benchmark::State& state)
+{
   const cudf::size_type source_size = static_cast<cudf::size_type>(state.range(1));
 
   const cudf::size_type n_cols = static_cast<cudf::size_type>(state.range(0));
@@ -199,10 +207,12 @@ void type_dispatcher_benchmark(benchmark::State& state) {
                           sizeof(TypeParam));
 }
 
-class TypeDispatcher : public cudf::benchmark {};
+class TypeDispatcher : public cudf::benchmark {
+};
 
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)    \
-  BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State & state) {         \
+  BENCHMARK_DEFINE_F(TypeDispatcher, name)(::benchmark::State & state)           \
+  {                                                                              \
     type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state); \
   }                                                                              \
   BENCHMARK_REGISTER_F(TypeDispatcher, name)                                     \

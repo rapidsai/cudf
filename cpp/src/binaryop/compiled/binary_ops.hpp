@@ -39,7 +39,6 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 inline bool null_using_binop(binary_operator op) { return op == binary_operator::NULL_EQUALS; }
 
 namespace compiled {
-
 /**
  * @brief Performs a binary operation between a string scalar and a string
  * column.

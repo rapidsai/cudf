@@ -26,28 +26,31 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
- * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
  *
  * @param buffer Device buffer to copy to.
  * @param input Data to copy from.
  * @param bytes Number of bytes to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
-__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes) {
+__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
+{
   memcpy(buffer, input, bytes);
   return buffer + bytes;
 }
 
 /**
- * @brief Copies input string data into a buffer and increments the pointer by the number of bytes copied.
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
  *
  * @param buffer Device buffer to copy to.
  * @param d_string String to copy.
  * @return Pointer to the end of the output buffer after the copy.
  */
-__device__ inline char* copy_string(char* buffer, const string_view& d_string) {
+__device__ inline char* copy_string(char* buffer, const string_view& d_string)
+{
   return copy_and_increment(buffer, d_string.data(), d_string.size_bytes());
 }
 
@@ -60,7 +63,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string) {
  *         memory containing the offsets and chars columns during write.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string.
- *        After that, the d_offsets and d_chars are set and this is called again to fill in the chars memory.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ * chars memory.
  * @param strings_count Number of strings.
  * @param null_count Number of nulls in the strings column.
  * @param mr Memory resource to use.
@@ -72,7 +76,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                            size_type strings_count,
                            size_type null_count,
                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                           cudaStream_t stream                 = 0) {
+                           cudaStream_t stream                 = 0)
+{
   auto transformer =
     thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), size_and_exec_fn);
   auto offsets_column =
@@ -97,7 +102,8 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
  * @param utf8_char Single UTF-8 character to convert.
  * @return Code-point for the UTF-8 character.
  */
-__device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char) {
+__device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char)
+{
   uint32_t unchr = 0;
   if (utf8_char < 0x00000080)  // single-byte pass thru
     unchr = utf8_char;
@@ -126,7 +132,8 @@ __device__ inline uint32_t utf8_to_codepoint(cudf::char_utf8 utf8_char) {
  * @param unchr Character code-point to convert.
  * @return Single UTF-8 character.
  */
-__host__ __device__ inline cudf::char_utf8 codepoint_to_utf8(uint32_t unchr) {
+__host__ __device__ inline cudf::char_utf8 codepoint_to_utf8(uint32_t unchr)
+{
   cudf::char_utf8 utf8 = 0;
   if (unchr < 0x00000080)  // single byte utf8
     utf8 = unchr;

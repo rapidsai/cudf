@@ -20,7 +20,6 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-
 #define NWARPS 16
 #define MAX_SHARED_SCHEMA_LEN 1000
 
@@ -28,8 +27,8 @@ namespace gpu {
  * Avro varint encoding - see
  * https://avro.apache.org/docs/1.2.0/spec.html#binary_encoding
  */
-static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur,
-                                                           const uint8_t *end) {
+static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, const uint8_t *end)
+{
   uint64_t u = 0;
   if (cur < end) {
     u = *cur++;
@@ -70,7 +69,8 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
                                                  const uint8_t *cur,
                                                  const uint8_t *end,
                                                  const nvstrdesc_s *global_dictionary,
-                                                 uint32_t num_dictionary_entries) {
+                                                 uint32_t num_dictionary_entries)
+{
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
   for (uint32_t i = 0; i < schema_len;) {
@@ -235,7 +235,8 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                           uint32_t num_dictionary_entries,
                           uint32_t min_row_size,
                           size_t max_rows,
-                          size_t first_row) {
+                          size_t first_row)
+{
   __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
   __shared__ __align__(8) block_desc_s blk_g[NWARPS];
 
@@ -330,7 +331,8 @@ cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
                                           size_t max_rows,
                                           size_t first_row,
                                           uint32_t min_row_size,
-                                          cudaStream_t stream) {
+                                          cudaStream_t stream)
+{
   dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
   dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
                 1);  // 1 warp per datablock, NWARPS datablocks per threadblock

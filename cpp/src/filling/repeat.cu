@@ -41,13 +41,12 @@
 #include <memory>
 
 namespace {
-
 struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(
-    cudaStream_t stream = 0) {
+  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream = 0)
+  {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
 #if 1
     // TODO: temporary till cudf::scalar's value() function is marked as const
@@ -63,8 +62,8 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(
-    cudaStream_t stream) {
+  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream)
+  {
     CUDF_FAIL("count value should be a integral type.");
   }
 };
@@ -74,7 +73,8 @@ struct compute_offsets {
 
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value, rmm::device_vector<cudf::size_type>> operator()(
-    bool check_count, cudaStream_t stream = 0) {
+    bool check_count, cudaStream_t stream = 0)
+  {
     // static_cast is necessary due to bool
     if (check_count && static_cast<int64_t>(std::numeric_limits<T>::max()) >
                          std::numeric_limits<cudf::size_type>::max()) {
@@ -99,7 +99,8 @@ struct compute_offsets {
 
   template <typename T>
   std::enable_if_t<not std::is_integral<T>::value, rmm::device_vector<cudf::size_type>> operator()(
-    bool check_count, cudaStream_t stream) {
+    bool check_count, cudaStream_t stream)
+  {
     CUDF_FAIL("count value should be a integral type.");
   }
 };
@@ -108,14 +109,13 @@ struct compute_offsets {
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   CUDF_EXPECTS(input_table.num_rows() == count.size(), "in and count must have equal size");
   CUDF_EXPECTS(count.has_nulls() == false, "count cannot contain nulls");
 
@@ -139,7 +139,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
                               rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   CUDF_EXPECTS(count.is_valid(), "count cannot be null");
   auto stride = cudf::experimental::type_dispatcher(count.type(), count_accessor{&count}, stream);
   CUDF_EXPECTS(stride >= 0, "count value should be non-negative");
@@ -164,14 +165,16 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, check_count, mr, 0);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::repeat(input_table, count, mr, 0);
 }

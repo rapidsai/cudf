@@ -39,10 +39,8 @@ namespace experimental {
 namespace io {
 //! Inner interfaces and implementations
 namespace detail {
-
 //! ORC format
 namespace orc {
-
 /**
  * @brief Options for the ORC writer.
  */
@@ -61,7 +59,9 @@ struct writer_options {
    * @param format Compression format to use
    */
   explicit writer_options(compression_type format, bool stats_en)
-    : compression(format), enable_statistics(stats_en) {}
+    : compression(format), enable_statistics(stats_en)
+  {
+  }
 };
 
 /**
@@ -127,7 +127,6 @@ class writer {
 
 //! Parquet format
 namespace parquet {
-
 /**
  * @brief Options for the parquet writer.
  */
@@ -146,7 +145,9 @@ struct writer_options {
    * @param format Compression format to use
    */
   explicit writer_options(compression_type format, statistics_freq stats_lvl)
-    : compression(format), stats_granularity(stats_lvl) {}
+    : compression(format), stats_granularity(stats_lvl)
+  {
+  }
 };
 
 /**
@@ -192,7 +193,8 @@ class writer {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked_begin(struct pq_chunked_state& state);
 
@@ -200,14 +202,16 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked(table_view const& table, struct pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.   
+   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked_end(struct pq_chunked_state& state);
 
