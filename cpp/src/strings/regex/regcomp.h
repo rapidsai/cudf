@@ -17,10 +17,12 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Actions and Tokens (regex instruction types)
  *
@@ -77,7 +79,8 @@ struct reinst {
  * @brief Regex program handles parsing a pattern in to individual set
  * of chained instructions.
  */
-class reprog {
+class reprog
+{
  public:
   reprog()              = default;
   reprog(const reprog&) = default;

@@ -24,9 +24,11 @@
 
 #include <vector>
 
-struct DictionarySliceTest : public cudf::test::BaseFixture {};
+struct DictionarySliceTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionarySliceTest, SliceColumn) {
+TEST_F(DictionarySliceTest, SliceColumn)
+{
   cudf::test::strings_column_wrapper strings{
     {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
   auto dictionary = cudf::dictionary::encode(strings);
@@ -58,7 +60,8 @@ TEST_F(DictionarySliceTest, SliceColumn) {
   }
 }
 
-TEST_F(DictionarySliceTest, SplitColumn) {
+TEST_F(DictionarySliceTest, SplitColumn)
+{
   cudf::test::fixed_width_column_wrapper<float> input{{4.25, 7.125, 0.5, 0., -11.75, 7.125, 0.5},
                                                       {1, 1, 1, 0, 1, 1, 1}};
   auto dictionary = cudf::dictionary::encode(input);

@@ -29,11 +29,12 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
-namespace cudf {
-
-namespace detail {
-
-cudf::table repeat(const cudf::table& in, const gdf_column& count, cudaStream_t stream = 0) {
+namespace cudf
+{
+namespace detail
+{
+cudf::table repeat(const cudf::table& in, const gdf_column& count, cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
                "Count column should be of index type");
   CUDF_EXPECTS(in.num_rows() == count.size, "in and count must have equal size");
@@ -64,7 +65,8 @@ cudf::table repeat(const cudf::table& in, const gdf_column& count, cudaStream_t 
   return output;
 }
 
-cudf::table repeat(const cudf::table& in, const gdf_scalar& count, cudaStream_t stream = 0) {
+cudf::table repeat(const cudf::table& in, const gdf_scalar& count, cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
                "Count value should be of index type");
   CUDF_EXPECTS(count.is_valid, "count cannot be null");
@@ -94,11 +96,13 @@ cudf::table repeat(const cudf::table& in, const gdf_scalar& count, cudaStream_t 
 
 }  // namespace detail
 
-cudf::table repeat(const cudf::table& in, const gdf_column& count) {
+cudf::table repeat(const cudf::table& in, const gdf_column& count)
+{
   return detail::repeat(in, count);
 }
 
-cudf::table repeat(const cudf::table& in, const gdf_scalar& count) {
+cudf::table repeat(const cudf::table& in, const gdf_scalar& count)
+{
   return detail::repeat(in, count);
 }
 

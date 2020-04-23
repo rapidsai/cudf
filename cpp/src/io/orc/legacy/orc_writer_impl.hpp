@@ -29,10 +29,12 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace io {
-namespace orc {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
 // Forward internal classes
 class ProtobufWriter;
 class orc_column;
@@ -40,7 +42,8 @@ class orc_column;
 /**
  * @brief Implementation for ORC writer
  **/
-class writer::Impl {
+class writer::Impl
+{
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
@@ -219,7 +222,8 @@ class writer::Impl {
    * @param[in] num_rows Number of rows
    **/
   template <typename T = size_t>
-  constexpr inline auto div_by_rowgroups(T num_rows) const {
+  constexpr inline auto div_by_rowgroups(T num_rows) const
+  {
     return util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
   }
 
@@ -229,7 +233,8 @@ class writer::Impl {
    * @param[in] modulus Number to use for division
    **/
   template <typename T = size_t>
-  constexpr inline auto div_rowgroups_by(T modulus) const {
+  constexpr inline auto div_rowgroups_by(T modulus) const
+  {
     return util::div_rounding_up_unsafe<T, T>(row_index_stride_, modulus);
   }
 

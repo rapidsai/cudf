@@ -32,17 +32,20 @@
 #include <utility>
 
 //! cuDF interfaces
-namespace cudf {
+namespace cudf
+{
 //! In-development features
-namespace experimental {
+namespace experimental
+{
 //! IO interfaces
-namespace io {
+namespace io
+{
 //! Inner interfaces and implementations
-namespace detail {
-
+namespace detail
+{
 //! ORC format
-namespace orc {
-
+namespace orc
+{
 /**
  * @brief Options for the ORC writer.
  */
@@ -61,13 +64,16 @@ struct writer_options {
    * @param format Compression format to use
    */
   explicit writer_options(compression_type format, bool stats_en)
-    : compression(format), enable_statistics(stats_en) {}
+    : compression(format), enable_statistics(stats_en)
+  {
+  }
 };
 
 /**
  * @brief Class to write ORC dataset data into columns.
  */
-class writer {
+class writer
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -126,8 +132,8 @@ class writer {
 }  // namespace orc
 
 //! Parquet format
-namespace parquet {
-
+namespace parquet
+{
 /**
  * @brief Options for the parquet writer.
  */
@@ -146,13 +152,16 @@ struct writer_options {
    * @param format Compression format to use
    */
   explicit writer_options(compression_type format, statistics_freq stats_lvl)
-    : compression(format), stats_granularity(stats_lvl) {}
+    : compression(format), stats_granularity(stats_lvl)
+  {
+  }
 };
 
 /**
  * @brief Class to write parquet dataset data into columns.
  */
-class writer {
+class writer
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;

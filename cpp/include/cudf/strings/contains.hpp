@@ -18,9 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.

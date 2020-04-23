@@ -29,13 +29,15 @@
 #include <tests/utilities/type_lists.hpp>
 #include <vector>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 void run_sort_test(table_view input,
                    column_view expected_sorted_indices,
                    std::vector<order> column_order         = {},
-                   std::vector<null_order> null_precedence = {}) {
+                   std::vector<null_order> null_precedence = {})
+{
   // Sorted table
   auto got_sorted_table      = experimental::sort(input, column_order, null_precedence);
   auto expected_sorted_table = experimental::gather(input, expected_sorted_indices);
@@ -51,11 +53,13 @@ void run_sort_test(table_view input,
 }
 
 template <typename T>
-struct Sort : public BaseFixture {};
+struct Sort : public BaseFixture {
+};
 
 TYPED_TEST_CASE(Sort, NumericTypes);
 
-TYPED_TEST(Sort, WithNullMax) {
+TYPED_TEST(Sort, WithNullMax)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8, 5}, {1, 1, 0, 1, 1, 1}};
@@ -94,7 +98,8 @@ TYPED_TEST(Sort, WithNullMax) {
   }
 }
 
-TYPED_TEST(Sort, WithNullMin) {
+TYPED_TEST(Sort, WithNullMin)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {1, 1, 0, 1, 1}};
@@ -131,7 +136,8 @@ TYPED_TEST(Sort, WithNullMin) {
   }
 }
 
-TYPED_TEST(Sort, WithMixedNullOrder) {
+TYPED_TEST(Sort, WithMixedNullOrder)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}, {0, 0, 1, 1, 0}};
@@ -165,7 +171,8 @@ TYPED_TEST(Sort, WithMixedNullOrder) {
   run_sort_test(input, expected, column_order, null_precedence);
 }
 
-TYPED_TEST(Sort, WithAllValid) {
+TYPED_TEST(Sort, WithAllValid)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
@@ -192,7 +199,8 @@ TYPED_TEST(Sort, WithAllValid) {
   }
 }
 
-TYPED_TEST(Sort, Stable) {
+TYPED_TEST(Sort, Stable)
+{
   using T = TypeParam;
   using R = int32_t;
 
@@ -208,7 +216,8 @@ TYPED_TEST(Sort, Stable) {
   expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(Sort, MisMatchInColumnOrderSize) {
+TYPED_TEST(Sort, MisMatchInColumnOrderSize)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
@@ -224,7 +233,8 @@ TYPED_TEST(Sort, MisMatchInColumnOrderSize) {
   EXPECT_THROW(experimental::sort_by_key(input, input, column_order), logic_error);
 }
 
-TYPED_TEST(Sort, MisMatchInNullPrecedenceSize) {
+TYPED_TEST(Sort, MisMatchInNullPrecedenceSize)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};
@@ -242,7 +252,8 @@ TYPED_TEST(Sort, MisMatchInNullPrecedenceSize) {
   EXPECT_THROW(experimental::sort_by_key(input, input, column_order, null_precedence), logic_error);
 }
 
-TYPED_TEST(Sort, ZeroSizedColumns) {
+TYPED_TEST(Sort, ZeroSizedColumns)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> col1{};
@@ -259,9 +270,11 @@ TYPED_TEST(Sort, ZeroSizedColumns) {
   run_sort_test(input, expected, column_order);
 }
 
-struct SortByKey : public BaseFixture {};
+struct SortByKey : public BaseFixture {
+};
 
-TEST_F(SortByKey, ValueKeysSizeMismatch) {
+TEST_F(SortByKey, ValueKeysSizeMismatch)
+{
   using T = int64_t;
 
   fixed_width_column_wrapper<T> col1{{5, 4, 3, 5, 8}};

@@ -23,13 +23,15 @@
  * @file type_info.hpp
  * @brief Type info traits used in hash-based groupby.
  *---------------------------------------------------------------------------**/
-namespace cudf {
+namespace cudf
+{
 // forward decls
 struct DeviceMin;
 struct DeviceMax;
 struct DeviceSum;
 
-namespace groupby {
+namespace groupby
+{
 /**---------------------------------------------------------------------------*
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
@@ -128,7 +130,8 @@ using target_type_t = typename target_type<SourceType, op>::type;
  *---------------------------------------------------------------------------**/
 struct target_type_mapper {
   template <typename SourceType>
-  gdf_dtype operator()(operators op) const noexcept {
+  gdf_dtype operator()(operators op) const noexcept
+  {
     switch (op) {
       case MIN: return gdf_dtype_of<target_type_t<SourceType, operators::MIN>>();
       case MAX: return gdf_dtype_of<target_type_t<SourceType, operators::MAX>>();

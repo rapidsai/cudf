@@ -19,9 +19,10 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 /**
  * @brief Creates a transition table to convert ORC timestanps to UTC
  *

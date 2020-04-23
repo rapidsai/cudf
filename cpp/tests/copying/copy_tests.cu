@@ -31,13 +31,15 @@
 #include <iterator/legacy/iterator.cuh>
 
 template <typename T>
-struct CopyTest : public cudf::test::BaseFixture {};
+struct CopyTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypes);
 
 #define wrapper cudf::test::fixed_width_column_wrapper
 
-TYPED_TEST(CopyTest, CopyIfElseTestShort) {
+TYPED_TEST(CopyTest, CopyIfElseTestShort)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 0, 0};
@@ -50,7 +52,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestShort) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseTestManyNulls) {
+TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{{1, 0, 0, 0, 0, 0, 1}, {1, 1, 1, 1, 1, 1, 0}};
@@ -69,7 +72,8 @@ struct copy_if_else_tiny_grid_functor {
                                            cudf::column_view const& rhs,
                                            Filter filter,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+  {
     // output
     std::unique_ptr<cudf::column> out = cudf::experimental::allocate_like(
       lhs, lhs.size(), cudf::experimental::mask_allocation_policy::RETAIN, mr);
@@ -94,14 +98,16 @@ struct copy_if_else_tiny_grid_functor {
                                            cudf::column_view const& rhs,
                                            Filter filter,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+  {
     CUDF_FAIL("Unexpected test execution");
   }
 };
 
 std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                                cudf::column_view const& rhs,
-                                               cudf::column_view const& boolean_mask) {
+                                               cudf::column_view const& boolean_mask)
+{
   auto bool_mask_device_p                   = cudf::column_device_view::create(boolean_mask);
   cudf::column_device_view bool_mask_device = *bool_mask_device_p;
   auto filter                               = [bool_mask_device] __device__(cudf::size_type i) {
@@ -116,7 +122,8 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                              (cudaStream_t)0);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid) {
+TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)
+{
   using T = TypeParam;
 
   // make sure we span at least 2 warps
@@ -147,7 +154,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseTestLong) {
+TYPED_TEST(CopyTest, CopyIfElseTestLong)
+{
   using T = TypeParam;
 
   // make sure we span at least 2 warps
@@ -186,7 +194,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs) {
+TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{};
@@ -199,7 +208,8 @@ TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity) {
+TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
@@ -212,7 +222,8 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2) {
+TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
@@ -225,7 +236,8 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity2) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3) {
+TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
@@ -238,7 +250,8 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity3) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4) {
+TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4)
+{
   using T = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 0, 1, 1};
@@ -251,7 +264,8 @@ TYPED_TEST(CopyTest, CopyIfElseMixedInputValidity4) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTest, CopyIfElseBadInputLength) {
+TYPED_TEST(CopyTest, CopyIfElseBadInputLength)
+{
   using T = TypeParam;
 
   // mask length mismatch
@@ -276,10 +290,12 @@ TYPED_TEST(CopyTest, CopyIfElseBadInputLength) {
 }
 
 template <typename T>
-struct CopyTestNumeric : public cudf::test::BaseFixture {};
+struct CopyTestNumeric : public cudf::test::BaseFixture {
+};
 TYPED_TEST_CASE(CopyTestNumeric, cudf::test::NumericTypes);
 
-TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn) {
+TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -300,7 +316,8 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar) {
+TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -322,7 +339,8 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar) {
+TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -341,10 +359,12 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar) {
 }
 
 template <typename T>
-struct CopyTestTimestamp : public cudf::test::BaseFixture {};
+struct CopyTestTimestamp : public cudf::test::BaseFixture {
+};
 TYPED_TEST_CASE(CopyTestTimestamp, cudf::test::TimestampTypes);
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn) {
+TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -365,7 +385,8 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarColumn) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar) {
+TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -386,7 +407,8 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestColumnScalar) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar) {
+TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar)
+{
   using T = TypeParam;
 
   int num_els = 4;
@@ -404,9 +426,11 @@ TYPED_TEST(CopyTestTimestamp, CopyIfElseTestScalarScalar) {
   cudf::test::expect_columns_equal(out->view(), expected_w);
 }
 
-struct CopyTestUntyped : public cudf::test::BaseFixture {};
+struct CopyTestUntyped : public cudf::test::BaseFixture {
+};
 
-TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch) {
+TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch)
+{
   cudf::test::fixed_width_column_wrapper<bool> mask_w{1, 1, 1, 1};
 
   wrapper<float> lhs_w{5, 5, 5, 5};
@@ -415,9 +439,11 @@ TEST_F(CopyTestUntyped, CopyIfElseTypeMismatch) {
   EXPECT_THROW(cudf::experimental::copy_if_else(lhs_w, rhs_w, mask_w), cudf::logic_error);
 }
 
-struct StringsCopyIfElseTest : public cudf::test::BaseFixture {};
+struct StringsCopyIfElseTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsCopyIfElseTest, CopyIfElse) {
+TEST_F(StringsCopyIfElseTest, CopyIfElse)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
@@ -443,7 +469,8 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn) {
+TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
@@ -470,7 +497,8 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar) {
+TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
@@ -496,7 +524,8 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar) {
+TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 

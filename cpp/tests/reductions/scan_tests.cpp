@@ -36,7 +36,8 @@ using cudf::column_view;
 using cudf::include_nulls;
 using cudf::experimental::scan_type;
 
-void print_view(column_view const& view, const char* msg = nullptr) {
+void print_view(column_view const& view, const char* msg = nullptr)
+{
   std::cout << msg << " {";
   cudf::test::print(view);
   std::cout << "}\n";
@@ -48,7 +49,8 @@ struct ScanTest : public cudf::test::BaseFixture {
   void scan_test(cudf::test::fixed_width_column_wrapper<T> const col_in,
                  cudf::test::fixed_width_column_wrapper<T> const expected_col_out,
                  std::unique_ptr<aggregation> const& agg,
-                 scan_type inclusive) {
+                 scan_type inclusive)
+  {
     bool do_print = false;
 
     auto int_values   = cudf::test::to_host<T>(col_in);
@@ -70,9 +72,8 @@ struct ScanTest : public cudf::test::BaseFixture {
   }
 
   template <typename Ti>
-  void val_check(thrust::host_vector<Ti> const& v,
-                 bool do_print   = false,
-                 const char* msg = nullptr) {
+  void val_check(thrust::host_vector<Ti> const& v, bool do_print = false, const char* msg = nullptr)
+  {
     if (do_print) {
       std::cout << msg << " {";
       std::for_each(v.begin(), v.end(), [](Ti i) { std::cout << ", " << i; });
@@ -83,7 +84,8 @@ struct ScanTest : public cudf::test::BaseFixture {
 
   // make sure all elements in the range of sint8([-128, 127])
   template <typename Ti>
-  void range_check(thrust::host_vector<Ti> const& v) {
+  void range_check(thrust::host_vector<Ti> const& v)
+  {
     std::for_each(v.begin(), v.end(), [](Ti i) {
       ASSERT_GE(static_cast<int>(i), -128);
       ASSERT_LT(static_cast<int>(i), 128);
@@ -98,7 +100,8 @@ TYPED_TEST_CASE(ScanTest, Types);
 // ------------------------------------------------------------------------
 
 template <typename I, typename I2, typename O, typename ZipOp, typename BinOp>
-void zip_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp binop) {
+void zip_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp binop)
+{
   // this could be implemented with a call to std::transform and then a
   // subsequent call to std::partial_sum but that you be less memory efficient
   if (first == last) return;
@@ -121,7 +124,8 @@ struct value_or {
   T operator()(T const& value, bool mask) { return mask ? value : _or; }
 };
 
-TYPED_TEST(ScanTest, Min) {
+TYPED_TEST(ScanTest, Min)
+{
   auto const v =
     cudf::test::make_type_param_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
   auto const b = std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 0, 1};
@@ -149,7 +153,8 @@ TYPED_TEST(ScanTest, Min) {
     scan_type::INCLUSIVE);
 }
 
-TYPED_TEST(ScanTest, Max) {
+TYPED_TEST(ScanTest, Max)
+{
   auto const v =
     cudf::test::make_type_param_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
   auto const b = std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 1, 0, 1};
@@ -177,7 +182,8 @@ TYPED_TEST(ScanTest, Max) {
     scan_type::INCLUSIVE);
 }
 
-TYPED_TEST(ScanTest, Product) {
+TYPED_TEST(ScanTest, Product)
+{
   auto const v = cudf::test::make_type_param_vector<TypeParam>({5, -1, 1, 3, -2, 4});
   auto const b = std::vector<bool>{1, 1, 1, 0, 1, 1};
   std::vector<TypeParam> exact(v.size());
@@ -203,7 +209,8 @@ TYPED_TEST(ScanTest, Product) {
     scan_type::INCLUSIVE);
 }
 
-TYPED_TEST(ScanTest, Sum) {
+TYPED_TEST(ScanTest, Sum)
+{
   auto const v =
     cudf::test::make_type_param_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
   auto const b = std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1};
@@ -234,7 +241,8 @@ struct ScanStringTest : public cudf::test::BaseFixture {
   void scan_test(cudf::test::strings_column_wrapper const& col_in,
                  cudf::test::strings_column_wrapper const& expected_col_out,
                  std::unique_ptr<aggregation> const& agg,
-                 scan_type inclusive) {
+                 scan_type inclusive)
+  {
     bool do_print = false;
     if (do_print) {
       std::cout << "input = {";
@@ -262,7 +270,8 @@ struct ScanStringTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(ScanStringTest, Min) {
+TEST_F(ScanStringTest, Min)
+{
   std::vector<std::string> v = {
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
   std::vector<bool> b = {1, 0, 1, 1, 0, 0, 1, 0, 1};
@@ -294,7 +303,8 @@ TEST_F(ScanStringTest, Min) {
     col_nulls, expected2, cudf::experimental::make_min_aggregation(), scan_type::INCLUSIVE);
 }
 
-TEST_F(ScanStringTest, Max) {
+TEST_F(ScanStringTest, Max)
+{
   std::vector<std::string> v = {
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
   std::vector<bool> b = {1, 0, 1, 1, 0, 0, 1, 1, 1};
@@ -326,7 +336,8 @@ TEST_F(ScanStringTest, Max) {
     col_nulls, expected2, cudf::experimental::make_max_aggregation(), scan_type::INCLUSIVE);
 }
 
-TYPED_TEST(ScanTest, skip_nulls) {
+TYPED_TEST(ScanTest, skip_nulls)
+{
   bool do_print = false;
   auto const v  = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5, 6, 7, 8, 1, 1});
   auto const b  = std::vector<bool>{1, 1, 1, 1, 1, 0, 1, 0, 1, 1};
@@ -378,7 +389,8 @@ TYPED_TEST(ScanTest, skip_nulls) {
   cudf::test::expect_columns_equal(expected_col_out2, col_out->view());
 }
 
-TEST_F(ScanStringTest, skip_nulls) {
+TEST_F(ScanStringTest, skip_nulls)
+{
   bool do_print = false;
   // data and valid arrays
   std::vector<std::string> v(
@@ -429,7 +441,8 @@ TEST_F(ScanStringTest, skip_nulls) {
                             "String types supports only inclusive min/max for `cudf::scan`");
 }
 
-TYPED_TEST(ScanTest, EmptyColumnskip_nulls) {
+TYPED_TEST(ScanTest, EmptyColumnskip_nulls)
+{
   bool do_print = false;
   std::vector<TypeParam> v{};
   std::vector<bool> b{};

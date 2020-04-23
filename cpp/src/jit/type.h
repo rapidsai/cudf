@@ -16,9 +16,10 @@
 
 #pragma once
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 /**
  * @brief Get the raw pointer to data in a (mutable_)column_view
  */

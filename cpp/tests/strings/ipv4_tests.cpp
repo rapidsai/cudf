@@ -24,9 +24,11 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {};
+struct StringsConvertTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConvertTest, IPv4ToIntegers) {
+TEST_F(StringsConvertTest, IPv4ToIntegers)
+{
   std::vector<const char*> h_strings{nullptr, "", "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"};
   cudf::test::strings_column_wrapper strings(
     h_strings.cbegin(),
@@ -46,7 +48,8 @@ TEST_F(StringsConvertTest, IPv4ToIntegers) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, IntegersToIPv4) {
+TEST_F(StringsConvertTest, IntegersToIPv4)
+{
   std::vector<const char*> h_strings{
     "192.168.0.1", "10.0.0.1", nullptr, "0.0.0.0", "41.186.0.1", "41.197.0.1"};
   cudf::test::strings_column_wrapper strings(
@@ -66,7 +69,8 @@ TEST_F(StringsConvertTest, IntegersToIPv4) {
   cudf::test::expect_columns_equal(*results, strings);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4) {
+TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::INT64}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::integers_to_ipv4(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
@@ -74,7 +78,8 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4) {
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(StringsConvertTest, IPv4Error) {
+TEST_F(StringsConvertTest, IPv4Error)
+{
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
   EXPECT_THROW(cudf::strings::integers_to_ipv4(column->view()), cudf::logic_error);
 }

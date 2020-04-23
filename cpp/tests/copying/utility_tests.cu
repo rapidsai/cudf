@@ -26,13 +26,15 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-struct EmptyLikeTest : public cudf::test::BaseFixture {};
+struct EmptyLikeTest : public cudf::test::BaseFixture {
+};
 
 using numeric_types = cudf::test::NumericTypes;
 
 TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
 
-TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
+TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
+{
   cudf::size_type size   = 10;
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   auto input =
@@ -43,9 +45,11 @@ TYPED_TEST(EmptyLikeTest, ColumnNumericTests) {
   cudf::test::expect_columns_equal(*expected, *got);
 }
 
-struct EmptyLikeStringTest : public EmptyLikeTest<std::string> {};
+struct EmptyLikeStringTest : public EmptyLikeTest<std::string> {
+};
 
-void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs) {
+void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
+{
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), 0);
   EXPECT_EQ(lhs.null_count(), 0);
@@ -54,7 +58,8 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs) {
   // An empty column is not required to have children
 }
 
-TEST_F(EmptyLikeStringTest, ColumnStringTest) {
+TEST_F(EmptyLikeStringTest, ColumnStringTest)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "thé result does not include the value in the sum in",
                                      "",
@@ -70,7 +75,8 @@ TEST_F(EmptyLikeStringTest, ColumnStringTest) {
 }
 
 std::unique_ptr<cudf::experimental::table> create_table(cudf::size_type size,
-                                                        cudf::mask_state state) {
+                                                        cudf::mask_state state)
+{
   auto num_column_1 = make_numeric_column(cudf::data_type{cudf::INT64}, size, state);
   auto num_column_2 = make_numeric_column(cudf::data_type{cudf::INT32}, size, state);
   auto num_column_3 = make_numeric_column(cudf::data_type{cudf::FLOAT64}, size, state);
@@ -84,15 +90,18 @@ std::unique_ptr<cudf::experimental::table> create_table(cudf::size_type size,
   return std::make_unique<cudf::experimental::table>(std::move(columns));
 }
 
-void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs) {
+void expect_tables_prop_equal(cudf::table_view lhs, cudf::table_view rhs)
+{
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   for (cudf::size_type index = 0; index < lhs.num_columns(); index++)
     cudf::test::expect_column_properties_equal(lhs.column(index), rhs.column(index));
 }
 
-struct EmptyLikeTableTest : public cudf::test::BaseFixture {};
+struct EmptyLikeTableTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(EmptyLikeTableTest, TableTest) {
+TEST_F(EmptyLikeTableTest, TableTest)
+{
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
   cudf::size_type size   = 10;
   auto input             = create_table(size, state);
@@ -103,12 +112,14 @@ TEST_F(EmptyLikeTableTest, TableTest) {
 }
 
 template <typename T>
-struct AllocateLikeTest : public cudf::test::BaseFixture {};
+struct AllocateLikeTest : public cudf::test::BaseFixture {
+};
 ;
 
 TYPED_TEST_CASE(AllocateLikeTest, numeric_types);
 
-TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize) {
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
+{
   // For same size as input
   cudf::size_type size   = 10;
   cudf::mask_state state = cudf::mask_state::ALL_VALID;
@@ -121,7 +132,8 @@ TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize) {
   cudf::test::expect_column_properties_equal(*expected, *got);
 }
 
-TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize) {
+TYPED_TEST(AllocateLikeTest, ColumnNumericTestSpecifiedSize)
+{
   // For same size as input
   cudf::size_type size           = 10;
   cudf::size_type specified_size = 5;

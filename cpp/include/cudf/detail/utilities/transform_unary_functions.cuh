@@ -31,7 +31,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
-namespace cudf {
+namespace cudf
+{
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
@@ -56,14 +57,16 @@ struct meanvar {
   using this_t = cudf::meanvar<ElementType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  this_t operator+(this_t const &rhs) const {
+  this_t operator+(this_t const &rhs) const
+  {
     return this_t((this->value + rhs.value),
                   (this->value_squared + rhs.value_squared),
                   (this->count + rhs.count));
   };
 
   CUDA_HOST_DEVICE_CALLABLE
-  bool operator==(this_t const &rhs) const {
+  bool operator==(this_t const &rhs) const
+  {
     return ((this->value == rhs.value) && (this->value_squared == rhs.value_squared) &&
             (this->count == rhs.count));
   };
@@ -102,7 +105,8 @@ struct transformer_meanvar {
   using ResultType = meanvar<ElementType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::pair<ElementType, bool> const &pair) {
+  ResultType operator()(thrust::pair<ElementType, bool> const &pair)
+  {
     ElementType v = pair.first;
     return meanvar<ElementType>(v, v * v, (pair.second) ? 1 : 0);
   };

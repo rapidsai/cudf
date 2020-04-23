@@ -18,10 +18,12 @@
 #include <string.h>
 #include <unordered_map>
 
-namespace cudf {
-namespace io {
-namespace avro {
-
+namespace cudf
+{
+namespace io
+{
+namespace avro
+{
 /**
  * @Brief AVRO file metadata parser
  *
@@ -31,7 +33,8 @@ namespace avro {
  *
  * @returns true if successful, false if error
  */
-bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row) {
+bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
+{
   uint32_t sig4, max_block_size;
   size_t total_object_count;
 
@@ -159,7 +162,8 @@ enum {
  *
  * @returns true if successful, false if error
  */
-bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &json_str) {
+bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &json_str)
+{
   char depthbuf[MAX_SCHEMA_DEPTH];
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
@@ -318,7 +322,8 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
  *
  * @returns return parsed string, consuming the terminating quote
  */
-std::string schema_parser::get_str() {
+std::string schema_parser::get_str()
+{
   std::string s;
   const char *start = m_cur;
   const char *cur   = start;

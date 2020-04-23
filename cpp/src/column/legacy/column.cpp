@@ -43,7 +43,8 @@ gdf_error gdf_mask_concat(cudf::valid_type *output_mask,
 // including the validity bitmasks.
 gdf_error gdf_column_concat(gdf_column *output_column,
                             gdf_column *columns_to_concat[],
-                            int num_columns) {
+                            int num_columns)
+{
   GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
   GDF_REQUIRE(output_column != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(columns_to_concat != nullptr, GDF_DATASET_EMPTY);
@@ -124,7 +125,8 @@ cudf::size_type gdf_column_sizeof() { return sizeof(gdf_column); }
 
 // Constructor for the gdf_context struct
 gdf_error gdf_column_view(
-  gdf_column *column, void *data, cudf::valid_type *valid, cudf::size_type size, gdf_dtype dtype) {
+  gdf_column *column, void *data, cudf::valid_type *valid, cudf::size_type size, gdf_dtype dtype)
+{
   column->data                 = data;
   column->valid                = valid;
   column->size                 = size;
@@ -145,7 +147,8 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_dtype dtype,
                                     cudf::size_type null_count,
                                     gdf_dtype_extra_info extra_info,
-                                    const char *name) {
+                                    const char *name)
+{
   gdf_column_view(column, data, valid, size, dtype);
   column->null_count = null_count;
   column->dtype_info = extra_info;
@@ -160,7 +163,8 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
 }
 
 // Free the CUDA device memory of a gdf_column
-gdf_error gdf_column_free(gdf_column *column) {
+gdf_error gdf_column_free(gdf_column *column)
+{
   if (column->dtype == GDF_STRING) {
     if (column->data) { NVStrings::destroy(static_cast<NVStrings *>(column->data)); }
     RMM_TRY(RMM_FREE(column->valid, 0));
@@ -177,11 +181,12 @@ gdf_error gdf_column_free(gdf_column *column) {
   return GDF_SUCCESS;
 }
 
-namespace cudf {
-
-namespace detail {
-
-void allocate_column_fields(gdf_column &column, bool allocate_mask, cudaStream_t stream) {
+namespace cudf
+{
+namespace detail
+{
+void allocate_column_fields(gdf_column &column, bool allocate_mask, cudaStream_t stream)
+{
   if (column.size > 0) {
     const auto byte_width = (column.dtype == GDF_STRING) ? sizeof(std::pair<const char *, size_t>)
                                                          : cudf::size_of(column.dtype);
@@ -202,7 +207,8 @@ gdf_column allocate_column(gdf_dtype dtype,
                            cudf::size_type size,
                            bool allocate_mask,
                            gdf_dtype_extra_info info,
-                           cudaStream_t stream) {
+                           cudaStream_t stream)
+{
   gdf_column output{};
   output.size       = size;
   output.dtype      = dtype;
@@ -215,10 +221,12 @@ gdf_column allocate_column(gdf_dtype dtype,
 
 }  // namespace cudf
 
-namespace {
+namespace
+{
 struct get_type_size {
   template <typename T>
-  auto operator()() {
+  auto operator()()
+  {
     return sizeof(T);
   }
 };

@@ -21,8 +21,8 @@
 
 #include <vector>
 
-namespace cudf {
-
+namespace cudf
+{
 /**---------------------------------------------------------------------------*
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.

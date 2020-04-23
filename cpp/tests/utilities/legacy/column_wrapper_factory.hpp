@@ -22,10 +22,10 @@
 
 #include "column_wrapper.cuh"
 
-namespace cudf {
-
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**
  * @brief Convenience factory for column_wrapper that can generate columns of
  * any cudf datatype from simple integer generators.
@@ -57,12 +57,14 @@ namespace test {
 template <typename T>
 struct column_wrapper_factory {
   template <typename DataInitializer>
-  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init) {
+  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init)
+  {
     return column_wrapper<T>(size, [&](cudf::size_type row) { return convert(data_init(row)); });
   }
 
   template <typename DataInitializer, typename BitInitializer>
-  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init, BitInitializer bit_init) {
+  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init, BitInitializer bit_init)
+  {
     return column_wrapper<T>(
       size, [&](cudf::size_type row) { return convert(data_init(row)); }, bit_init);
   }
@@ -74,7 +76,8 @@ struct column_wrapper_factory {
 template <>
 struct column_wrapper_factory<cudf::nvstring_category> {
   template <typename DataInitializer>
-  column_wrapper<cudf::nvstring_category> make(cudf::size_type size, DataInitializer data_init) {
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size, DataInitializer data_init)
+  {
     std::vector<const char*> strings = generate_strings(size, data_init);
     auto c = column_wrapper<cudf::nvstring_category>{size, strings.data()};
     destroy_strings(strings);
@@ -84,7 +87,8 @@ struct column_wrapper_factory<cudf::nvstring_category> {
   template <typename DataInitializer, typename BitInitializer>
   column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init,
-                                               BitInitializer bit_init) {
+                                               BitInitializer bit_init)
+  {
     std::vector<const char*> strings = generate_strings(size, data_init);
     auto c = column_wrapper<cudf::nvstring_category>{size, strings.data(), bit_init};
     destroy_strings(strings);
@@ -92,7 +96,8 @@ struct column_wrapper_factory<cudf::nvstring_category> {
   }
 
  protected:
-  const char* convert(cudf::size_type row) {
+  const char* convert(cudf::size_type row)
+  {
     static int str_width = std::to_string(std::numeric_limits<cudf::size_type>().max()).size();
 
     std::ostringstream convert;
@@ -103,14 +108,16 @@ struct column_wrapper_factory<cudf::nvstring_category> {
   }
 
   template <typename DataInitializer>
-  std::vector<const char*> generate_strings(cudf::size_type size, DataInitializer data_init) {
+  std::vector<const char*> generate_strings(cudf::size_type size, DataInitializer data_init)
+  {
     std::vector<const char*> strings(size);
     std::generate(
       strings.begin(), strings.end(), [&, row = 0]() mutable { return convert(data_init(row++)); });
     return strings;
   }
 
-  void destroy_strings(std::vector<const char*> strings) {
+  void destroy_strings(std::vector<const char*> strings)
+  {
     std::for_each(strings.begin(), strings.end(), [](const char* x) { delete[] x; });
   }
 };

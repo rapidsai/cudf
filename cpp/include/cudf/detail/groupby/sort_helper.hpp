@@ -23,12 +23,16 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-namespace sort {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
+namespace sort
+{
 /**
  * @brief Helper class for computing sort-based groupby
  *
@@ -65,7 +69,8 @@ struct sort_groupby_helper {
     : _keys(keys),
       _num_keys(-1),
       _include_null_keys(include_null_keys),
-      _keys_pre_sorted(keys_pre_sorted) {
+      _keys_pre_sorted(keys_pre_sorted)
+  {
     if (keys_pre_sorted == sorted::YES and include_null_keys == include_nulls::NO and
         has_nulls(keys)) {
       _keys_pre_sorted = sorted::NO;

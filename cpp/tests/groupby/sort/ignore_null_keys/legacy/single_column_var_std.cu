@@ -68,7 +68,8 @@ using std_args = cudf::groupby::sort::std_args;
 
 TYPED_TEST_CASE(SingleColumnVarStd, TestingTypes);
 
-TYPED_TEST(SingleColumnVarStd, TestVarStdPreSorted) {
+TYPED_TEST(SingleColumnVarStd, TestVarStdPreSorted)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;
@@ -102,7 +103,8 @@ TYPED_TEST(SingleColumnVarStd, TestVarStdPreSorted) {
       out_vals.size(), [&](auto i) { return sqrt(out_vals[i]); }, [](auto) { return true; }));
 }
 
-TYPED_TEST(SingleColumnVarStd, TestVarStd) {
+TYPED_TEST(SingleColumnVarStd, TestVarStd)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;
@@ -133,7 +135,8 @@ TYPED_TEST(SingleColumnVarStd, TestVarStd) {
       out_vals.size(), [&](auto i) { return sqrt(out_vals[i]); }, [](auto) { return true; }));
 }
 
-TYPED_TEST(SingleColumnVarStd, TestVarStdDifferentSizeGroups) {
+TYPED_TEST(SingleColumnVarStd, TestVarStdDifferentSizeGroups)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;
@@ -164,7 +167,8 @@ TYPED_TEST(SingleColumnVarStd, TestVarStdDifferentSizeGroups) {
       out_vals.size(), [&](auto i) { return sqrt(out_vals[i]); }, [](auto) { return true; }));
 }
 
-TYPED_TEST(SingleColumnVarStd, TestVarStdNullable) {
+TYPED_TEST(SingleColumnVarStd, TestVarStdNullable)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;
@@ -208,7 +212,8 @@ TYPED_TEST(SingleColumnVarStd, TestVarStdNullable) {
       [&](auto index) { return out_valids[index]; }));
 }
 
-TYPED_TEST(SingleColumnVarStd, TestVarStdNullableZeroGroupSize) {
+TYPED_TEST(SingleColumnVarStd, TestVarStdNullableZeroGroupSize)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;
@@ -252,7 +257,8 @@ TYPED_TEST(SingleColumnVarStd, TestVarStdNullableZeroGroupSize) {
       [&](auto index) { return out_valids[index]; }));
 }
 
-TYPED_TEST(SingleColumnVarStd, TestVarStdNullableZeroDDoFDivisor) {
+TYPED_TEST(SingleColumnVarStd, TestVarStdNullableZeroDDoFDivisor)
+{
   using K = typename SingleColumnVarStd<TypeParam>::KeyType;
   using V = typename SingleColumnVarStd<TypeParam>::ValueType;
   using R = cudf::test::expected_result_t<V, var_op>;

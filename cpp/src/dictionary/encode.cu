@@ -25,10 +25,12 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
-
+namespace cudf
+{
+namespace dictionary
+{
+namespace detail
+{
 /**
  * @brief Create a new dictionary column from a column_view.
  *
@@ -36,7 +38,8 @@ namespace detail {
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
                                rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   CUDF_EXPECTS(indices_type.id() == INT32, "only INT32 type for indices");
 
   // side effects of this function were are now dependent on:
@@ -88,7 +91,8 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
-                               rmm::mr::device_memory_resource* mr) {
+                               rmm::mr::device_memory_resource* mr)
+{
   return detail::encode(input_column, indices_type, mr);
 }
 

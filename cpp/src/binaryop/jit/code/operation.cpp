@@ -17,12 +17,16 @@
  * limitations under the License.
  */
 
-namespace cudf {
-namespace experimental {
-namespace binops {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace binops
+{
+namespace jit
+{
+namespace code
+{
 const char* operation =
   R"***(
     #pragma once

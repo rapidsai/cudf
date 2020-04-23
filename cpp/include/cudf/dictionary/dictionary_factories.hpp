@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.

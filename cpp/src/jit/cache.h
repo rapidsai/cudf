@@ -25,9 +25,10 @@
 #include <string>
 #include <unordered_map>
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 template <typename Tv>
 using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
 
@@ -45,13 +46,15 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  **/
 boost::filesystem::path getCacheDir();
 
-class cudfJitCache {
+class cudfJitCache
+{
  public:
   /**---------------------------------------------------------------------------*
    * @brief Get a process wide singleton cache object
    *
    *---------------------------------------------------------------------------**/
-  static cudfJitCache& Instance() {
+  static cudfJitCache& Instance()
+  {
     // Meyers' singleton is thread safe in C++11
     // Link: https://stackoverflow.com/a/1661564
     static cudfJitCache cache;
@@ -122,7 +125,8 @@ class cudfJitCache {
    * @brief Class to allow process wise exclusive access to cache files
    *
    *---------------------------------------------------------------------------**/
-  class cacheFile {
+  class cacheFile
+  {
    private:
     std::string _file_name;
     bool successful_read  = false;
@@ -163,7 +167,8 @@ class cudfJitCache {
 
  private:
   template <typename T, typename FallbackFunc>
-  named_prog<T> getCached(std::string const& name, umap_str_shptr<T>& map, FallbackFunc func) {
+  named_prog<T> getCached(std::string const& name, umap_str_shptr<T>& map, FallbackFunc func)
+  {
     // Find memory cached T object
     auto it = map.find(name);
     if (it != map.end()) {

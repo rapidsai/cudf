@@ -20,11 +20,14 @@
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
+namespace gpu
+{
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
@@ -36,7 +39,9 @@ struct CompressedStreamInfo {
       copyctl(nullptr),
       num_compressed_blocks(0),
       num_uncompressed_blocks(0),
-      max_uncompressed_size(0) {}
+      max_uncompressed_size(0)
+  {
+  }
   const uint8_t *compressed_data;  // [in] base ptr to compressed stream data
   uint8_t *uncompressed_data;  // [in] base ptr to uncompressed stream data or NULL if not known yet
   size_t compressed_data_size;      // [in] compressed data size for this stream

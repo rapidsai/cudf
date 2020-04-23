@@ -21,9 +21,10 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-
-namespace experimental {
+namespace cudf
+{
+namespace experimental
+{
 // joins
 
 /**

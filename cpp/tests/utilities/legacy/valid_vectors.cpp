@@ -17,7 +17,8 @@
 
 #include <tests/utilities/legacy/valid_vectors.h>
 
-host_valid_pointer create_and_init_valid(size_t length, size_t null_count) {
+host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
+{
   auto deleter    = [](cudf::valid_type* valid) { delete[] valid; };
   auto n_bytes    = gdf_valid_allocation_size(length);
   auto valid_bits = new cudf::valid_type[n_bytes];
@@ -35,7 +36,8 @@ host_valid_pointer create_and_init_valid(size_t length, size_t null_count) {
 void initialize_valids(std::vector<host_valid_pointer>& valids,
                        size_t size,
                        size_t length,
-                       size_t null_count) {
+                       size_t null_count)
+{
   valids.clear();
   for (size_t i = 0; i < size; ++i) { valids.push_back(create_and_init_valid(length, null_count)); }
 }

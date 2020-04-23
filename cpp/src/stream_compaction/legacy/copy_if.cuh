@@ -38,8 +38,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace {
-
+namespace
+{
 static constexpr int warp_size = 32;
 
 // Compute the count of elements that pass the mask within each block
@@ -47,7 +47,8 @@ template <typename Filter, int block_size>
 __global__ void compute_block_counts(cudf::size_type *__restrict__ block_counts,
                                      cudf::size_type size,
                                      cudf::size_type per_thread,
-                                     Filter filter) {
+                                     Filter filter)
+{
   int tid   = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
 
@@ -62,7 +63,8 @@ __global__ void compute_block_counts(cudf::size_type *__restrict__ block_counts,
 
 // Compute the exclusive prefix sum of each thread's mask value within each block
 template <int block_size>
-__device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type &block_sum) {
+__device__ cudf::size_type block_scan_mask(bool mask_true, cudf::size_type &block_sum)
+{
   int offset = 0;
 
   using BlockScan = cub::BlockScan<cudf::size_type, block_size>;
@@ -95,7 +97,8 @@ __launch_bounds__(block_size, 2048 / block_size) __global__
                       cudf::size_type *__restrict__ block_offsets,
                       cudf::size_type size,
                       cudf::size_type per_thread,
-                      Filter filter) {
+                      Filter filter)
+{
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
 
   int tid                      = threadIdx.x + per_thread * block_size * blockIdx.x;
@@ -207,7 +210,8 @@ __launch_bounds__(block_size, 2048 / block_size) __global__
 }
 
 template <typename Kernel>
-int elements_per_thread(Kernel kernel, cudf::size_type total_size, cudf::size_type block_size) {
+int elements_per_thread(Kernel kernel, cudf::size_type total_size, cudf::size_type block_size)
+{
   // calculate theoretical occupancy
   int max_blocks = 0;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
@@ -228,7 +232,8 @@ struct scatter_functor {
                   gdf_column const &input_column,
                   cudf::size_type *block_offsets,
                   Filter filter,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     bool has_valid = cudf::is_nullable(input_column);
 
     auto scatter = (has_valid) ? scatter_kernel<T, Filter, block_size, true>
@@ -273,7 +278,8 @@ struct scatter_functor {
 cudf::size_type get_output_size(cudf::size_type *block_counts,
                                 cudf::size_type *block_offsets,
                                 cudf::size_type num_blocks,
-                                cudaStream_t stream = 0) {
+                                cudaStream_t stream = 0)
+{
   cudf::size_type last_block_count = 0;
   CUDA_TRY(cudaMemcpyAsync(&last_block_count,
                            &block_counts[num_blocks - 1],
@@ -294,10 +300,10 @@ cudf::size_type get_output_size(cudf::size_type *block_counts,
 
 }  // namespace
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /*
  * @brief Filters a column using a Filter function object
  *
@@ -311,7 +317,8 @@ namespace detail {
  * @return The filter-copied result column
  */
 template <typename Filter>
-table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
+table copy_if(table const &input, Filter filter, cudaStream_t stream = 0)
+{
   /*  * High Level Algorithm: First, compute a `scatter_map` from the boolean_mask
    * that scatters input[i] if boolean_mask[i] is non-null and "true". This is
    * simply an exclusive scan of the mask. Second, use the `scatter_map` to

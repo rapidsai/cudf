@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct TextTokenizeTest : public cudf::test::BaseFixture {};
+struct TextTokenizeTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TextTokenizeTest, Tokenize) {
+TEST_F(TextTokenizeTest, Tokenize)
+{
   std::vector<const char*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      " the cat chased the mouse ",
@@ -57,7 +59,8 @@ TEST_F(TextTokenizeTest, Tokenize) {
   cudf::test::expect_columns_equal(*results, expected_counts);
 }
 
-TEST_F(TextTokenizeTest, TokenizeMulti) {
+TEST_F(TextTokenizeTest, TokenizeMulti)
+{
   std::vector<const char*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      "the cat chased the mouse ",
@@ -84,7 +87,8 @@ TEST_F(TextTokenizeTest, TokenizeMulti) {
   cudf::test::expect_columns_equal(*results, expected_counts);
 }
 
-TEST_F(TextTokenizeTest, TokenizeErrorTest) {
+TEST_F(TextTokenizeTest, TokenizeErrorTest)
+{
   cudf::test::strings_column_wrapper strings{"this column intentionally left blank"};
   cudf::strings_column_view strings_view(strings);
 
@@ -102,7 +106,8 @@ TEST_F(TextTokenizeTest, TokenizeErrorTest) {
   }
 }
 
-TEST_F(TextTokenizeTest, TokenizeEmptyTest) {
+TEST_F(TextTokenizeTest, TokenizeEmptyTest)
+{
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::tokenize(strings_view);

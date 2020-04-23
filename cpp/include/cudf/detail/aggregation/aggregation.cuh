@@ -23,10 +23,12 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/table/table_device_view.cuh>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**
  * @brief Maps an `aggregation::Kind` value to it's corresponding binary
  * operator.
@@ -91,7 +93,8 @@ struct update_target_element {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     release_assert(false and "Invalid source type and aggregation combination.");
   }
 };
@@ -105,7 +108,8 @@ struct update_target_element<Source,
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MIN>;
@@ -125,7 +129,8 @@ struct update_target_element<Source,
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::MAX>;
@@ -145,7 +150,8 @@ struct update_target_element<Source,
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::SUM>;
@@ -166,7 +172,8 @@ struct update_target_element<
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
@@ -186,7 +193,8 @@ struct update_target_element<
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
     atomicAdd(&target.element<Target>(target_index), Target{1});
 
@@ -204,7 +212,8 @@ struct update_target_element<
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMAX>;
@@ -229,7 +238,8 @@ struct update_target_element<
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::ARGMIN>;
@@ -258,7 +268,8 @@ struct elementwise_aggregator {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
-                             size_type source_index) const noexcept {
+                             size_type source_index) const noexcept
+  {
     update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
       target, target_index, source, source_index);
   }
@@ -313,7 +324,8 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
                                      size_type target_index,
                                      table_device_view source,
                                      size_type source_index,
-                                     aggregation::Kind const* aggs) {
+                                     aggregation::Kind const* aggs)
+{
   for (auto i = 0; i < target.num_columns(); ++i) {
     dispatch_type_and_aggregation(source.column(i).type(),
                                   aggs[i],
@@ -347,7 +359,8 @@ __device__ inline void aggregate_row(mutable_table_device_view target,
 struct identity_initializer {
  private:
   template <typename T, aggregation::Kind k>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     return cudf::is_fixed_width<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
@@ -356,18 +369,21 @@ struct identity_initializer {
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
-  identity_from_operator() {
+  identity_from_operator()
+  {
     return corresponding_operator_t<k>::template identity<T>();
   }
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<std::is_same<corresponding_operator_t<k>, void>::value, T>
-  identity_from_operator() {
+  identity_from_operator()
+  {
     CUDF_FAIL("Unable to get identity/sentinel from device operator");
   }
 
   template <typename T, aggregation::Kind k>
-  T get_identity() {
+  T get_identity()
+  {
     if (k == aggregation::ARGMAX)
       return ARGMAX_SENTINEL;
     else if (k == aggregation::ARGMIN)
@@ -380,14 +396,16 @@ struct identity_initializer {
  public:
   template <typename T, aggregation::Kind k>
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                          cudaStream_t stream = 0) {
+                                                          cudaStream_t stream = 0)
+  {
     thrust::fill(
       rmm::exec_policy(stream)->on(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
   }
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<not is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                              cudaStream_t stream = 0) {
+                                                              cudaStream_t stream = 0)
+  {
     CUDF_FAIL("Unsupported aggregation for initializing values");
   }
 };

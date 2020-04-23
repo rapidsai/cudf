@@ -16,7 +16,8 @@
  * @returns
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_nvtx_range_push(char const* const name, gdf_color color) {
+gdf_error gdf_nvtx_range_push(char const* const name, gdf_color color)
+{
   if ((color < 0) || (color > GDF_NUM_COLORS)) return GDF_UNDEFINED_NVTX_COLOR;
 
   if (nullptr == name) return GDF_NULL_NVTX_NAME;
@@ -41,7 +42,8 @@ gdf_error gdf_nvtx_range_push(char const* const name, gdf_color color) {
  * @returns
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_nvtx_range_push_hex(char const* const name, unsigned int color) {
+gdf_error gdf_nvtx_range_push_hex(char const* const name, unsigned int color)
+{
   if (nullptr == name) return GDF_NULL_NVTX_NAME;
 
   PUSH_RANGE(name, color);
@@ -60,7 +62,8 @@ gdf_error gdf_nvtx_range_push_hex(char const* const name, unsigned int color) {
  * @returns
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_nvtx_range_pop() {
+gdf_error gdf_nvtx_range_pop()
+{
   POP_RANGE();
   return GDF_SUCCESS;
 }

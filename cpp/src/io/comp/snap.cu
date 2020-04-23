@@ -17,9 +17,10 @@
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 #define HASH_BITS 12
 
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
@@ -47,14 +48,16 @@ struct snap_state_s {
 /**
  * @brief 12-bit hash from four consecutive bytes
  **/
-static inline __device__ uint32_t snap_hash(uint32_t v) {
+static inline __device__ uint32_t snap_hash(uint32_t v)
+{
   return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - HASH_BITS);
 }
 
 /**
  * @brief Fetches four consecutive bytes
  **/
-static inline __device__ uint32_t fetch4(const uint8_t *src) {
+static inline __device__ uint32_t fetch4(const uint8_t *src)
+{
   uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
   const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align);
   uint32_t v            = src32[0];
@@ -73,7 +76,8 @@ static inline __device__ uint32_t fetch4(const uint8_t *src) {
  * @return Updated pointer to compressed byte stream
  **/
 static __device__ uint8_t *StoreLiterals(
-  uint8_t *dst, uint8_t *end, const uint8_t *src, uint32_t len_minus1, uint32_t t) {
+  uint8_t *dst, uint8_t *end, const uint8_t *src, uint32_t len_minus1, uint32_t t)
+{
   if (len_minus1 < 60) {
     if (!t && dst < end) dst[0] = (len_minus1 << 2);
     dst += 1;
@@ -127,7 +131,8 @@ static __device__ uint8_t *StoreLiterals(
 static __device__ uint8_t *StoreCopy(uint8_t *dst,
                                      uint8_t *end,
                                      uint32_t copy_len,
-                                     uint32_t distance) {
+                                     uint32_t distance)
+{
   if (copy_len < 12 && distance < 2048) {
     // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
     if (dst + 2 <= end) {
@@ -150,7 +155,8 @@ static __device__ uint8_t *StoreCopy(uint8_t *dst,
  * @brief Returns mask of any thread in the warp that has a hash value
  * equal to that of the calling thread
  **/
-static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t) {
+static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
+{
 #if (__CUDA_ARCH__ >= 700)
   return __match_any_sync(~0, v);
 #else
@@ -178,7 +184,8 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t) {
 static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
                                              const uint8_t *src,
                                              uint32_t pos0,
-                                             uint32_t t) {
+                                             uint32_t t)
+{
   uint32_t len    = s->src_len;
   uint32_t pos    = pos0;
   uint32_t maxpos = pos0 + MAX_LITERAL_LENGTH - 31;
@@ -229,7 +236,8 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
 static __device__ uint32_t Match60(const uint8_t *src1,
                                    const uint8_t *src2,
                                    uint32_t len,
-                                   uint32_t t) {
+                                   uint32_t t)
+{
   uint32_t mismatch = BALLOT(t >= len || src1[t] != src2[t]);
   if (mismatch == 0) {
     mismatch = BALLOT(32 + t >= len || src1[32 + t] != src2[32 + t]);
@@ -250,7 +258,8 @@ static __device__ uint32_t Match60(const uint8_t *src1,
  * @param[in] count Number of blocks to compress
  **/
 extern "C" __global__ void __launch_bounds__(128)
-  snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count) {
+  snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
+{
   __shared__ __align__(16) snap_state_s state_g;
 
   snap_state_s *const s = &state_g;
@@ -335,7 +344,8 @@ extern "C" __global__ void __launch_bounds__(128)
 cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs,
                               gpu_inflate_status_s *outputs,
                               int count,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);
   if (count > 0) { snap_kernel<<<dim_grid, dim_block, 0, stream>>>(inputs, outputs, count); }

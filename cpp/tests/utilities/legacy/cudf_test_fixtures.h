@@ -44,18 +44,21 @@ struct GdfTest : public ::testing::Test {
 struct TempDirTestEnvironment : public ::testing::Environment {
   std::string tmpdir;
 
-  void SetUp() {
+  void SetUp()
+  {
     char tmp_format[] = "/tmp/gtest.XXXXXX";
     tmpdir            = mkdtemp(tmp_format);
     tmpdir += "/";
   }
 
-  void TearDown() {
+  void TearDown()
+  {
     // TODO: should use std::filesystem instead, once C++17 support added
     nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb) {
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  {
     return remove(pathname);
   }
 

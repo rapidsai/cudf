@@ -54,7 +54,8 @@ template <typename Key,
           typename Equality     = equal_to<Key>,
           typename Allocator    = managed_allocator<thrust::pair<Key, Element>>,
           bool count_collisions = false>
-class concurrent_unordered_multimap {
+class concurrent_unordered_multimap
+{
  public:
   using hasher         = Hasher;
   using key_equal      = Equality;
@@ -104,7 +105,8 @@ class concurrent_unordered_multimap {
                      const Hasher& hash_function     = hasher(),
                      const Equality& equal           = key_equal(),
                      const allocator_type& allocator = allocator_type(),
-                     cudaStream_t stream             = 0) {
+                     cudaStream_t stream             = 0)
+  {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_multimap<Key,
                                                Element,
@@ -130,7 +132,8 @@ class concurrent_unordered_multimap {
    *
    * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
-  void destroy(cudaStream_t stream = 0) {
+  void destroy(cudaStream_t stream = 0)
+  {
     m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity, stream);
     delete this;
   }
@@ -147,7 +150,8 @@ class concurrent_unordered_multimap {
    *
    * @returns iterator to the first element in the map.
    **/
-  __host__ __device__ iterator begin() {
+  __host__ __device__ iterator begin()
+  {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
   }
 
@@ -163,7 +167,8 @@ class concurrent_unordered_multimap {
    *
    * @returns constant iterator to the first element in the map.
    **/
-  __host__ __device__ const_iterator begin() const {
+  __host__ __device__ const_iterator begin() const
+  {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
   }
 
@@ -179,7 +184,8 @@ class concurrent_unordered_multimap {
    *
    * @returns iterator to the one past the last element in the map.
    **/
-  __host__ __device__ iterator end() {
+  __host__ __device__ iterator end()
+  {
     return iterator(
       m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values + m_hashtbl_size);
   }
@@ -196,12 +202,14 @@ class concurrent_unordered_multimap {
    *
    * @returns constant iterator to the one past the last element in the map.
    **/
-  __host__ __device__ const_iterator end() const {
+  __host__ __device__ const_iterator end() const
+  {
     return const_iterator(
       m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values + m_hashtbl_size);
   }
 
-  __forceinline__ static constexpr __host__ __device__ key_type get_unused_key() {
+  __forceinline__ static constexpr __host__ __device__ key_type get_unused_key()
+  {
     return unused_key;
   }
 
@@ -216,7 +224,8 @@ class concurrent_unordered_multimap {
    */
   /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type>
-  __forceinline__ __host__ __device__ hash_value_type get_hash(const key_type& the_key) const {
+  __forceinline__ __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
+  {
     return m_hf(the_key);
   }
 
@@ -242,7 +251,8 @@ class concurrent_unordered_multimap {
     const key_type& the_key,
     const int num_parts                    = 1,
     bool precomputed_hash                  = false,
-    hash_value_type precomputed_hash_value = 0) const {
+    hash_value_type precomputed_hash_value = 0) const
+  {
     hash_value_type hash_value{0};
 
     // If a precomputed hash value has been passed in, then use it to determine
@@ -291,7 +301,8 @@ class concurrent_unordered_multimap {
   __forceinline__ __device__ iterator insert(const value_type& x,
                                              bool precomputed_hash                  = false,
                                              hash_value_type precomputed_hash_value = 0,
-                                             comparison_type keys_are_equal         = key_equal()) {
+                                             comparison_type keys_are_equal         = key_equal())
+  {
     const size_type hashtbl_size = m_hashtbl_size;
     value_type* hashtbl_values   = m_hashtbl_values;
 
@@ -385,7 +396,8 @@ class concurrent_unordered_multimap {
                                                   const int num_parts                    = 1,
                                                   bool precomputed_hash                  = false,
                                                   hash_value_type precomputed_hash_value = 0,
-                                                  comparison_type keys_are_equal = key_equal()) {
+                                                  comparison_type keys_are_equal = key_equal())
+  {
     hash_value_type hash_value{0};
 
     // If a precomputed hash value has been passed in, then use it to determine
@@ -433,7 +445,8 @@ class concurrent_unordered_multimap {
   find(const key_type& the_key,
        bool precomputed_hash                  = false,
        hash_value_type precomputed_hash_value = 0,
-       comparison_type keys_are_equal         = key_equal()) const {
+       comparison_type keys_are_equal         = key_equal()) const
+  {
     hash_value_type hash_value{0};
 
     // If a precomputed hash value has been passed in, then use it to determine
@@ -469,7 +482,8 @@ class concurrent_unordered_multimap {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, begin_ptr);
   }
 
-  gdf_error assign_async(const concurrent_unordered_multimap& other, cudaStream_t stream = 0) {
+  gdf_error assign_async(const concurrent_unordered_multimap& other, cudaStream_t stream = 0)
+  {
     m_collisions = other.m_collisions;
     if (other.m_hashtbl_size <= m_hashtbl_capacity) {
       m_hashtbl_size = other.m_hashtbl_size;
@@ -489,7 +503,8 @@ class concurrent_unordered_multimap {
     return GDF_SUCCESS;
   }
 
-  void clear_async(cudaStream_t stream = 0) {
+  void clear_async(cudaStream_t stream = 0)
+  {
     constexpr int block_size = 128;
     init_hashtbl<<<((m_hashtbl_size - 1) / block_size) + 1, block_size, 0, stream>>>(
       m_hashtbl_values, m_hashtbl_size, unused_key, unused_element);
@@ -498,14 +513,16 @@ class concurrent_unordered_multimap {
 
   unsigned long long get_num_collisions() const { return m_collisions; }
 
-  void print() {
+  void print()
+  {
     for (size_type i = 0; i < m_hashtbl_size; ++i) {
       std::cout << i << ": " << m_hashtbl_values[i].first << "," << m_hashtbl_values[i].second
                 << std::endl;
     }
   }
 
-  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0) {
+  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0)
+  {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
@@ -556,7 +573,8 @@ class concurrent_unordered_multimap {
       m_allocator(a),
       m_hashtbl_size(n),
       m_hashtbl_capacity(n),
-      m_collisions(0) {
+      m_collisions(0)
+  {
     m_hashtbl_values         = m_allocator.allocate(m_hashtbl_capacity, stream);
     constexpr int block_size = 128;
     {

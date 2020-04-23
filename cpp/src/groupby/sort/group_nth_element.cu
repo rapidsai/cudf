@@ -22,11 +22,14 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 std::unique_ptr<column> group_nth_element(column_view const &values,
                                           column_view const &group_sizes,
                                           rmm::device_vector<size_type> const &group_labels,
@@ -35,7 +38,8 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                           size_type n,
                                           include_nulls _include_nulls,
                                           rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream) {
+                                          cudaStream_t stream)
+{
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
 

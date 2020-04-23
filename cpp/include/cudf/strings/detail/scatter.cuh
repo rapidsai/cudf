@@ -21,10 +21,12 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Scatters strings into a copy of the target column
  * according to a scatter map.
@@ -56,7 +58,8 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map,
   strings_column_view const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = target.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 

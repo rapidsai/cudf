@@ -26,9 +26,11 @@
 
 #include <vector>
 
-struct TextGenerateNgramsTest : public cudf::test::BaseFixture {};
+struct TextGenerateNgramsTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TextGenerateNgramsTest, Ngrams) {
+TEST_F(TextGenerateNgramsTest, Ngrams)
+{
   cudf::test::strings_column_wrapper strings{"the", "fox", "jumped", "over", "the", "dog"};
   cudf::strings_column_view strings_view(strings);
 
@@ -47,7 +49,8 @@ TEST_F(TextGenerateNgramsTest, Ngrams) {
   }
 }
 
-TEST_F(TextGenerateNgramsTest, NgramsWithNulls) {
+TEST_F(TextGenerateNgramsTest, NgramsWithNulls)
+{
   std::vector<const char*> h_strings{"the", "fox", "", "jumped", "over", nullptr, "the", "dog"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -62,13 +65,15 @@ TEST_F(TextGenerateNgramsTest, NgramsWithNulls) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(TextGenerateNgramsTest, Empty) {
+TEST_F(TextGenerateNgramsTest, Empty)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = nvtext::generate_ngrams(cudf::strings_column_view(zero_size_strings_column));
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(TextGenerateNgramsTest, Errors) {
+TEST_F(TextGenerateNgramsTest, Errors)
+{
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};
   // invalid parameter value
   EXPECT_THROW(nvtext::generate_ngrams(cudf::strings_column_view(strings), 1), cudf::logic_error);

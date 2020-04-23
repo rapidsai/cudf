@@ -26,17 +26,19 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 template <typename SortMapIterator>
 std::unique_ptr<table> quantiles(table_view const& input,
                                  SortMapIterator sortmap,
                                  std::vector<double> const& q,
                                  interpolation interp,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   auto quantile_idx_lookup = [sortmap, interp, size = input.num_rows()] __device__(double q) {
     auto selector = [sortmap] __device__(auto idx) { return sortmap[idx]; };
     return detail::select_quantile<size_type>(selector, size, q, interp);
@@ -57,7 +59,8 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  cudf::sorted is_input_sorted,
                                  std::vector<order> const& column_order,
                                  std::vector<null_order> const& null_precedence,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   if (q.size() == 0) { return empty_like(input); }
 

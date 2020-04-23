@@ -19,9 +19,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**
  * @brief Verifies the property equality of two tables.
  *

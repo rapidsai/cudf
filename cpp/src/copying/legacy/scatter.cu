@@ -36,14 +36,16 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 template <typename index_type, typename scatter_map_type>
 __global__ void invert_map(index_type gather_map[],
                            const cudf::size_type destination_rows,
                            scatter_map_type const scatter_map,
-                           const cudf::size_type source_rows) {
+                           const cudf::size_type source_rows)
+{
   index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid < source_rows) {
     index_type destination_row = *(scatter_map + tid);
@@ -57,7 +59,8 @@ struct dispatch_map_type {
                   gdf_column const& scatter_map,
                   table* destination_table,
                   bool check_bounds,
-                  bool allow_negative_indices) {
+                  bool allow_negative_indices)
+  {
     map_type const* typed_scatter_map = static_cast<map_type const*>(scatter_map.data);
 
     if (check_bounds) {
@@ -121,7 +124,8 @@ struct dispatch_map_type {
                   gdf_column const& scatter_map,
                   table* destination_table,
                   bool check_bounds,
-                  bool allow_negative_indices) {
+                  bool allow_negative_indices)
+  {
     CUDF_FAIL("Scatter map must be an integral type.");
   }
 };
@@ -130,7 +134,8 @@ void scatter(table const* source_table,
              gdf_column const& scatter_map,
              table* destination_table,
              bool check_bounds,
-             bool allow_negative_indices) {
+             bool allow_negative_indices)
+{
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -149,7 +154,8 @@ void scatter(table const* source_table,
              cudf::size_type const scatter_map[],
              table* destination_table,
              bool check_bounds,
-             bool allow_negative_indices) {
+             bool allow_negative_indices)
+{
   gdf_column scatter_map_column{};
   gdf_column_view(&scatter_map_column,
                   const_cast<cudf::size_type*>(scatter_map),
@@ -164,7 +170,8 @@ template <bool mark_true>
 __global__ void marking_bitmask_kernel(bit_mask_t* destination_mask,
                                        cudf::size_type num_destination_rows,
                                        const cudf::size_type scatter_map[],
-                                       cudf::size_type num_scatter_rows) {
+                                       cudf::size_type num_scatter_rows)
+{
   cudf::size_type row = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (row < num_scatter_rows) {
@@ -197,7 +204,8 @@ struct scalar_scatterer {
                   cudf::size_type const scatter_map[],
                   const cudf::size_type num_scatter_rows,
                   gdf_column* destination_column,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     const ColumnType source_data{*reinterpret_cast<ColumnType const*>(&source.data)};
     ColumnType* destination_data{reinterpret_cast<ColumnType*>(destination_column->data)};
 
@@ -215,7 +223,8 @@ struct scalar_scatterer {
 void scalar_scatter(const std::vector<gdf_scalar>& source,
                     cudf::size_type const scatter_map[],
                     cudf::size_type num_scatter_rows,
-                    table* destination_table) {
+                    table* destination_table)
+{
   CUDF_EXPECTS(source.size() == (size_t)destination_table->num_columns(),
                "scalar vector and destination table size mismatch.");
 
@@ -255,7 +264,8 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
   }
 }
 
-inline bool validate_scatter_map(gdf_column const& scatter_map, cudf::table const& input) {
+inline bool validate_scatter_map(gdf_column const& scatter_map, cudf::table const& input)
+{
   CUDF_EXPECTS(scatter_map.dtype == GDF_INT32, "scatter_map is not GDF_INT32 column.");
   CUDF_EXPECTS(not cudf::has_nulls(scatter_map), "Scatter map cannot contain null elements.");
   CUDF_EXPECTS(scatter_map.size == input.num_rows(),
@@ -266,7 +276,8 @@ inline bool validate_scatter_map(gdf_column const& scatter_map, cudf::table cons
 
 std::vector<cudf::table> ordered_scatter_to_tables(cudf::table const& input,
                                                    cudf::size_type const* scatter_array,
-                                                   cudf::size_type num_groups) {
+                                                   cudf::size_type num_groups)
+{
   std::vector<cudf::table> output_tables;
   output_tables.reserve(num_groups);
   for (cudf::size_type groupid = 0; groupid < num_groups; groupid++) {
@@ -283,7 +294,8 @@ std::vector<cudf::table> ordered_scatter_to_tables(cudf::table const& input,
 table scatter(table const& source,
               gdf_column const& scatter_map,
               table const& target,
-              bool check_bounds) {
+              bool check_bounds)
+{
   const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
@@ -307,7 +319,8 @@ table scatter(table const& source,
 table scatter(table const& source,
               cudf::size_type const scatter_map[],
               table const& target,
-              bool check_bounds) {
+              bool check_bounds)
+{
   const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
@@ -331,7 +344,8 @@ table scatter(table const& source,
 table scatter(std::vector<gdf_scalar> const& source,
               cudf::size_type const scatter_map[],
               cudf::size_type num_scatter_rows,
-              table const& target) {
+              table const& target)
+{
   const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
@@ -351,8 +365,8 @@ table scatter(std::vector<gdf_scalar> const& source,
   return output;
 }
 
-std::vector<cudf::table> scatter_to_tables(cudf::table const& input,
-                                           gdf_column const& scatter_map) {
+std::vector<cudf::table> scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map)
+{
   if (not detail::validate_scatter_map(scatter_map, input)) return std::vector<cudf::table>();
 
   cudf::size_type* scatter_array = static_cast<cudf::size_type*>(scatter_map.data);

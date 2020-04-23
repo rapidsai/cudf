@@ -22,11 +22,14 @@
 
 #include <cudf/legacy/binaryop.hpp>
 
-namespace cudf {
-namespace binops {
-namespace jit {
-
-class Operator {
+namespace cudf
+{
+namespace binops
+{
+namespace jit
+{
+class Operator
+{
  public:
   enum class Type { Direct, Reverse };
 

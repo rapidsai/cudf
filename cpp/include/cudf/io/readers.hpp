@@ -32,24 +32,29 @@
 #include <vector>
 
 // Forward declarations
-namespace arrow {
-namespace io {
+namespace arrow
+{
+namespace io
+{
 class RandomAccessFile;
 }
 }  // namespace arrow
 
 //! cuDF interfaces
-namespace cudf {
+namespace cudf
+{
 //! In-development features
-namespace experimental {
+namespace experimental
+{
 //! IO interfaces
-namespace io {
+namespace io
+{
 //! Inner interfaces and implementations
-namespace detail {
-
+namespace detail
+{
 //! Avro format
-namespace avro {
-
+namespace avro
+{
 /**
  * @brief Options for the Avro reader.
  */
@@ -70,7 +75,8 @@ struct reader_options {
 /**
  * @brief Class to read Avro dataset data into columns.
  */
-class reader {
+class reader
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -141,7 +147,8 @@ class reader {
 }  // namespace avro
 
 //! JSON format
-namespace json {
+namespace json
+{
 /**
  * @brief Options for the JSON reader.
  */
@@ -167,13 +174,16 @@ struct reader_options {
                  compression_type compression,
                  std::vector<std::string> dtype,
                  bool dayfirst)
-    : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst) {}
+    : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst)
+  {
+  }
 };
 
 /**
  * @brief Class to read JSON dataset data into columns.
  */
-class reader {
+class reader
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -244,8 +254,8 @@ class reader {
 }  // namespace json
 
 //! CSV format
-namespace csv {
-
+namespace csv
+{
 /**
  * @brief Options for the CSV reader.
  */
@@ -336,7 +346,8 @@ struct reader_options {
 /**
  * @brief Class to read CSV dataset data into columns.
  */
-class reader {
+class reader
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -425,8 +436,8 @@ class reader {
 }  // namespace csv
 
 //! ORC format
-namespace orc {
-
+namespace orc
+{
 /**
  * @brief Options for the ORC reader.
  */
@@ -460,13 +471,16 @@ struct reader_options {
       use_np_dtypes(np_compat),
       timestamp_type(timestamp_type),
       decimals_as_float(decimals_as_float_),
-      forced_decimals_scale(forced_decimals_scale_) {}
+      forced_decimals_scale(forced_decimals_scale_)
+  {
+  }
 };
 
 /**
  * @brief Class to read ORC dataset data into columns.
  */
-class reader {
+class reader
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;
@@ -564,8 +578,8 @@ class reader {
 }  // namespace orc
 
 //! Parquet format
-namespace parquet {
-
+namespace parquet
+{
 /**
  * @brief Options for the Parquet reader.
  */
@@ -593,13 +607,16 @@ struct reader_options {
     : columns(std::move(columns)),
       strings_to_categorical(strings_to_categorical),
       use_pandas_metadata(use_pandas_metadata),
-      timestamp_type(timestamp_type) {}
+      timestamp_type(timestamp_type)
+  {
+  }
 };
 
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
-class reader {
+class reader
+{
  private:
   class impl;
   std::unique_ptr<impl> _impl;

@@ -24,7 +24,8 @@
 #include <tests/utilities/type_lists.hpp>
 
 struct MaskToNullTest : public cudf::test::BaseFixture {
-  void run_test(std::vector<bool> input, std::vector<bool> val) {
+  void run_test(std::vector<bool> input, std::vector<bool> val)
+  {
     cudf::test::fixed_width_column_wrapper<bool> input_column(
       input.begin(), input.end(), val.begin());
     std::transform(
@@ -48,7 +49,8 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
     cudf::test::expect_columns_equal(expected, got_column.view());
   }
 
-  void run_test(thrust::host_vector<bool> input) {
+  void run_test(thrust::host_vector<bool> input)
+  {
     cudf::test::fixed_width_column_wrapper<bool> input_column(input.begin(), input.end());
 
     auto sample = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -63,25 +65,29 @@ struct MaskToNullTest : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(MaskToNullTest, WithNoNull) {
+TEST_F(MaskToNullTest, WithNoNull)
+{
   std::vector<bool> input({1, 0, 1, 0, 1, 0, 1, 0});
 
   run_test(input);
 }
 
-TEST_F(MaskToNullTest, WithNull) {
+TEST_F(MaskToNullTest, WithNull)
+{
   std::vector<bool> input({1, 0, 1, 0, 1, 0, 1, 0});
   std::vector<bool> val({1, 1, 1, 1, 1, 1, 0, 1});
 
   run_test(input, val);
 }
 
-TEST_F(MaskToNullTest, ZeroSize) {
+TEST_F(MaskToNullTest, ZeroSize)
+{
   std::vector<bool> input({});
   run_test(input);
 }
 
-TEST_F(MaskToNullTest, NonBoolTypeColumn) {
+TEST_F(MaskToNullTest, NonBoolTypeColumn)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> input_column({1, 2, 3, 4, 5});
 
   EXPECT_THROW(cudf::experimental::bools_to_mask(input_column), cudf::logic_error);

@@ -25,9 +25,11 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-struct DropNullsTest : public cudf::test::BaseFixture {};
+struct DropNullsTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DropNullsTest, WholeRowIsNull) {
+TEST_F(DropNullsTest, WholeRowIsNull)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -45,7 +47,8 @@ TEST_F(DropNullsTest, WholeRowIsNull) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(DropNullsTest, NoNull) {
+TEST_F(DropNullsTest, NoNull)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 1, 1, 1, 1}};
@@ -58,7 +61,8 @@ TEST_F(DropNullsTest, NoNull) {
   cudf::test::expect_tables_equal(input, got->view());
 }
 
-TEST_F(DropNullsTest, MixedSetOfRows) {
+TEST_F(DropNullsTest, MixedSetOfRows)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -76,7 +80,8 @@ TEST_F(DropNullsTest, MixedSetOfRows) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold) {
+TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 1}};
@@ -95,7 +100,8 @@ TEST_F(DropNullsTest, MixedSetOfRowsWithThreshold) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(DropNullsTest, EmptyTable) {
+TEST_F(DropNullsTest, EmptyTable)
+{
   cudf::table_view input{std::vector<cudf::column_view>()};
   cudf::table_view expected{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{};
@@ -105,7 +111,8 @@ TEST_F(DropNullsTest, EmptyTable) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(DropNullsTest, EmptyColumns) {
+TEST_F(DropNullsTest, EmptyColumns)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{};
   cudf::test::fixed_width_column_wrapper<double> col3{};
@@ -121,7 +128,8 @@ TEST_F(DropNullsTest, EmptyColumns) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(DropNullsTest, EmptyKeys) {
+TEST_F(DropNullsTest, EmptyKeys)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::table_view input{{col1}};
@@ -131,7 +139,8 @@ TEST_F(DropNullsTest, EmptyKeys) {
   cudf::test::expect_tables_equal(input, got->view());
 }
 
-TEST_F(DropNullsTest, StringColWithNull) {
+TEST_F(DropNullsTest, StringColWithNull)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{11, 12, 11, 13, 12, 15},
                                                        {1, 1, 0, 1, 0, 1}};
   cudf::test::strings_column_wrapper col2{{"Hi", "Hello", "Hi", "No", "Hello", "Naive"},
@@ -148,11 +157,13 @@ TEST_F(DropNullsTest, StringColWithNull) {
 }
 
 template <typename T>
-struct DropNullsTestAll : public cudf::test::BaseFixture {};
+struct DropNullsTestAll : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(DropNullsTestAll, cudf::test::NumericTypes);
 
-TYPED_TEST(DropNullsTestAll, AllNull) {
+TYPED_TEST(DropNullsTestAll, AllNull)
+{
   using T = TypeParam;
   cudf::test::fixed_width_column_wrapper<T> key_col{{true, false, true, false, true, false},
                                                     {0, 0, 0, 0, 0, 0}};

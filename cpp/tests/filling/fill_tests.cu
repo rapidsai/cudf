@@ -34,7 +34,8 @@ auto odd_valid   = [](cudf::size_type row) { return row % 2 != 0; };
 auto all_invalid = [](cudf::size_type row) { return false; };
 
 template <typename T>
-class FillTypedTestFixture : public cudf::test::BaseFixture {
+class FillTypedTestFixture : public cudf::test::BaseFixture
+{
  public:
   static constexpr cudf::size_type column_size{1000};
 
@@ -43,7 +44,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
             cudf::size_type end,
             T value,
             bool value_is_valid                     = true,
-            BitInitializerType destination_validity = all_valid) {
+            BitInitializerType destination_validity = all_valid)
+  {
     static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
@@ -92,7 +94,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(FillTypedTestFixture, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(FillTypedTestFixture, SetSingle) {
+TYPED_TEST(FillTypedTestFixture, SetSingle)
+{
   using T = TypeParam;
 
   cudf::size_type index{9};
@@ -105,7 +108,8 @@ TYPED_TEST(FillTypedTestFixture, SetSingle) {
   this->test(index, index + 1, value, false);
 }
 
-TYPED_TEST(FillTypedTestFixture, SetAll) {
+TYPED_TEST(FillTypedTestFixture, SetAll)
+{
   using T = TypeParam;
 
   cudf::size_type size{FillTypedTestFixture<T>::column_size};
@@ -119,7 +123,8 @@ TYPED_TEST(FillTypedTestFixture, SetAll) {
   this->test(0, size, value, false);
 }
 
-TYPED_TEST(FillTypedTestFixture, SetRange) {
+TYPED_TEST(FillTypedTestFixture, SetRange)
+{
   using T = TypeParam;
 
   cudf::size_type begin{99};
@@ -133,7 +138,8 @@ TYPED_TEST(FillTypedTestFixture, SetRange) {
   this->test(begin, end, value, false);
 }
 
-TYPED_TEST(FillTypedTestFixture, SetRangeNullCount) {
+TYPED_TEST(FillTypedTestFixture, SetRangeNullCount)
+{
   using T = TypeParam;
 
   cudf::size_type size{FillTypedTestFixture<T>::column_size};
@@ -158,7 +164,8 @@ TYPED_TEST(FillTypedTestFixture, SetRangeNullCount) {
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillStringTestFixture : public cudf::test::BaseFixture {
+class FillStringTestFixture : public cudf::test::BaseFixture
+{
  public:
   static constexpr cudf::size_type column_size{100};
 
@@ -167,7 +174,8 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
             cudf::size_type end,
             std::string value,
             bool value_is_valid                     = true,
-            BitInitializerType destination_validity = all_valid) {
+            BitInitializerType destination_validity = all_valid)
+  {
     cudf::size_type size{FillStringTestFixture::column_size};
 
     auto destination_elements = cudf::test::make_counting_transform_iterator(
@@ -200,7 +208,8 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TEST_F(FillStringTestFixture, SetSingle) {
+TEST_F(FillStringTestFixture, SetSingle)
+{
   cudf::size_type size{FillStringTestFixture::column_size};
 
   cudf::size_type index{9};
@@ -213,7 +222,8 @@ TEST_F(FillStringTestFixture, SetSingle) {
   this->test(index, index + 1, value, false);
 }
 
-TEST_F(FillStringTestFixture, SetAll) {
+TEST_F(FillStringTestFixture, SetAll)
+{
   cudf::size_type size{FillStringTestFixture::column_size};
 
   auto value = "#" + std::to_string(size * 2);
@@ -225,7 +235,8 @@ TEST_F(FillStringTestFixture, SetAll) {
   this->test(0, size, value, false);
 }
 
-TEST_F(FillStringTestFixture, SetRange) {
+TEST_F(FillStringTestFixture, SetRange)
+{
   cudf::size_type size{FillStringTestFixture::column_size};
 
   cudf::size_type begin{9};
@@ -239,7 +250,8 @@ TEST_F(FillStringTestFixture, SetRange) {
   this->test(begin, end, value, false);
 }
 
-TEST_F(FillStringTestFixture, SetRangeNullCount) {
+TEST_F(FillStringTestFixture, SetRangeNullCount)
+{
   cudf::size_type size{FillStringTestFixture::column_size};
 
   cudf::size_type begin{10};
@@ -262,9 +274,12 @@ TEST_F(FillStringTestFixture, SetRangeNullCount) {
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture {};
+class FillErrorTestFixture : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(FillErrorTestFixture, InvalidInplaceCall) {
+TEST_F(FillErrorTestFixture, InvalidInplaceCall)
+{
   auto p_val_int   = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T_int      = cudf::experimental::id_to_type<cudf::INT32>;
   using ScalarType = cudf::experimental::scalar_type_t<T_int>;
@@ -288,7 +303,8 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall) {
                cudf::logic_error);
 }
 
-TEST_F(FillErrorTestFixture, InvalidRange) {
+TEST_F(FillErrorTestFixture, InvalidRange)
+{
   auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   using T          = cudf::experimental::id_to_type<cudf::INT32>;
   using ScalarType = cudf::experimental::scalar_type_t<T>;
@@ -340,7 +356,8 @@ TEST_F(FillErrorTestFixture, InvalidRange) {
                     cudf::experimental::fill(destination, 0, destination_view.size(), *p_val));
 }
 
-TEST_F(FillErrorTestFixture, DTypeMismatch) {
+TEST_F(FillErrorTestFixture, DTypeMismatch)
+{
   cudf::size_type size{100};
 
   auto p_val       = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));

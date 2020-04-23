@@ -22,11 +22,12 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "slice.hpp"
 
-namespace cudf {
-
+namespace cudf
+{
 rmm::device_vector<cudf::size_type> splits_to_slice_indices(cudf::size_type const* splits,
                                                             cudf::size_type const num_splits,
-                                                            cudf::size_type const split_end) {
+                                                            cudf::size_type const split_end)
+{
   rmm::device_vector<cudf::size_type> slice_indices((num_splits + 1) * 2);
   slice_indices[0]                        = 0;
   slice_indices[slice_indices.size() - 1] = split_end;
@@ -38,7 +39,8 @@ rmm::device_vector<cudf::size_type> splits_to_slice_indices(cudf::size_type cons
 
 std::vector<gdf_column*> split(gdf_column const& input_column,
                                cudf::size_type const* splits,
-                               cudf::size_type num_splits) {
+                               cudf::size_type num_splits)
+{
   if (num_splits == 0 || splits == nullptr) {
     return std::vector<gdf_column*>();
   } else {

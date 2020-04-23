@@ -16,16 +16,20 @@
 
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 std::unique_ptr<column> group_max(column_view const& values,
                                   size_type num_groups,
                                   rmm::device_vector<size_type> const& group_labels,
                                   rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   return type_dispatcher(values.type(),
                          reduce_functor<aggregation::MAX>{},
                          values,

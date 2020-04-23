@@ -48,7 +48,8 @@ gdf_error gdf_order_by(gdf_column const* const* cols,
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,
-                       gdf_context* context) {
+                       gdf_context* context)
+{
   GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
   /* NOTE: providing support for indexes to be multiple different types explodes compilation time,

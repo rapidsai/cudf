@@ -33,16 +33,19 @@
 #include <io/legacy/cuio_common.hpp>
 #include <io/utilities/legacy/parsing_utils.cuh>
 
-namespace cudf {
-namespace io {
-namespace json {
-
+namespace cudf
+{
+namespace io
+{
+namespace json
+{
 using string_pair = std::pair<const char *, size_t>;
 
 reader::Impl::Impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    reader_options const &options)
-  : source_(std::move(source)), filepath_(filepath), args_(options) {
+  : source_(std::move(source)), filepath_(filepath), args_(options)
+{
   CUDF_EXPECTS(args_.lines, "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_         = createSerializedTrie({"true"});
@@ -66,7 +69,8 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
  *
  * @return Estimated maximum size of a row, in bytes
  *---------------------------------------------------------------------------**/
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
+constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
+{
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
@@ -79,7 +83,8 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-table reader::Impl::read(size_t range_offset, size_t range_size) {
+table reader::Impl::read(size_t range_offset, size_t range_size)
+{
   ingestRawInput(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
@@ -109,7 +114,8 @@ table reader::Impl::read(size_t range_offset, size_t range_size) {
   return table(out_cols.data(), out_cols.size());
 }
 
-void reader::Impl::ingestRawInput(size_t range_offset, size_t range_size) {
+void reader::Impl::ingestRawInput(size_t range_offset, size_t range_size)
+{
   size_t map_range_size = 0;
   if (range_size != 0) { map_range_size = range_size + calculateMaxRowSize(args_.dtype.size()); }
 
@@ -129,7 +135,8 @@ void reader::Impl::ingestRawInput(size_t range_offset, size_t range_size) {
   byte_range_size_   = range_size;
 }
 
-void reader::Impl::decompressInput() {
+void reader::Impl::decompressInput()
+{
   const auto compression_type = infer_compression_type(
     args_.compression, filepath_, {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
@@ -147,7 +154,8 @@ void reader::Impl::decompressInput() {
   }
 }
 
-void reader::Impl::setRecordStarts() {
+void reader::Impl::setRecordStarts()
+{
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
   // and then filtering out the records that is a quotechar or a linetermination within a quotechar
@@ -201,7 +209,8 @@ void reader::Impl::setRecordStarts() {
   rec_starts_.resize(filtered_count);
 }
 
-void reader::Impl::uploadDataToDevice() {
+void reader::Impl::uploadDataToDevice()
+{
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
 
@@ -247,7 +256,8 @@ void reader::Impl::uploadDataToDevice() {
  * @return std::vector<std::string> names of JSON object values
  *---------------------------------------------------------------------------**/
 std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_obj,
-                                                const ParseOptions &opts) {
+                                                const ParseOptions &opts)
+{
   enum class ParseState { preColName, colName, postColName };
   std::vector<std::string> names;
   bool quotation = false;
@@ -280,7 +290,8 @@ std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_ob
   return names;
 }
 
-void reader::Impl::setColumnNames() {
+void reader::Impl::setColumnNames()
+{
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
   if (rec_starts_.size() > 1) {
@@ -321,7 +332,8 @@ void reader::Impl::setColumnNames() {
   }
 }
 
-void reader::Impl::convertDataToColumns() {
+void reader::Impl::convertDataToColumns()
+{
   const auto num_columns = dtypes_.size();
 
   for (size_t col = 0; col < num_columns; ++col) {
@@ -373,7 +385,8 @@ struct ConvertFunctor {
    *---------------------------------------------------------------------------**/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(
-    const char *data, void *gdf_columns, long row, long start, long end, const ParseOptions &opts) {
+    const char *data, void *gdf_columns, long row, long start, long end, const ParseOptions &opts)
+  {
     T &value{static_cast<T *>(gdf_columns)[row]};
 
     // Check for user-specified true/false values first, where the output is
@@ -394,7 +407,8 @@ struct ConvertFunctor {
    *---------------------------------------------------------------------------**/
   template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(
-    const char *data, void *gdf_columns, long row, long start, long end, const ParseOptions &opts) {
+    const char *data, void *gdf_columns, long row, long start, long end, const ParseOptions &opts)
+  {
     T &value{static_cast<T *>(gdf_columns)[row]};
     value = convertStrToValue<T>(data, start, end, opts);
   }
@@ -414,7 +428,8 @@ struct ConvertFunctor {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-__device__ void limitRangeToBrackets(const char *data, long &start, long &stop) {
+__device__ void limitRangeToBrackets(const char *data, long &start, long &stop)
+{
   while (start < stop && data[start] != '[' && data[start] != '{') { start++; }
   start++;
 
@@ -435,7 +450,8 @@ __device__ void limitRangeToBrackets(const char *data, long &start, long &stop) 
  *
  * @return long Position of the first character after the field name.
  *---------------------------------------------------------------------------**/
-__device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long start, long stop) {
+__device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long start, long stop)
+{
   bool quotation = false;
   for (auto pos = start; pos < stop; ++pos) {
     // Ignore escaped quotes
@@ -475,7 +491,8 @@ __global__ void convertJsonToGdf(const char *data,
                                  void *const *gdf_columns,
                                  int num_columns,
                                  cudf::valid_type *const *valid_fields,
-                                 cudf::size_type *num_valid_fields) {
+                                 cudf::size_type *num_valid_fields)
+{
   const long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
@@ -527,7 +544,8 @@ __global__ void convertJsonToGdf(const char *data,
 void reader::Impl::convertJsonToColumns(gdf_dtype *const dtypes,
                                         void *const *gdf_columns,
                                         cudf::valid_type *const *valid_fields,
-                                        cudf::size_type *num_valid_fields) {
+                                        cudf::size_type *num_valid_fields)
+{
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));
@@ -570,7 +588,8 @@ __global__ void detectJsonDataTypes(const char *data,
                                     int num_columns,
                                     const uint64_t *rec_starts,
                                     cudf::size_type num_records,
-                                    ColumnInfo *column_infos) {
+                                    ColumnInfo *column_infos)
+{
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records) return;
 
@@ -664,7 +683,8 @@ __global__ void detectJsonDataTypes(const char *data,
   }
 }
 
-void reader::Impl::detectDataTypes(ColumnInfo *column_infos) {
+void reader::Impl::detectDataTypes(ColumnInfo *column_infos)
+{
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detectJsonDataTypes));
@@ -683,7 +703,8 @@ void reader::Impl::detectDataTypes(ColumnInfo *column_infos) {
   CUDA_TRY(cudaGetLastError());
 }
 
-void reader::Impl::setDataTypes() {
+void reader::Impl::setDataTypes()
+{
   if (!args_.dtype.empty()) {
     CUDF_EXPECTS(args_.dtype.size() == column_names_.size(),
                  "Need to specify the type of each column.\n");
@@ -748,16 +769,21 @@ void reader::Impl::setDataTypes() {
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-  : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {
+  : impl_(std::make_unique<Impl>(nullptr, filepath, options))
+{
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
 }
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "", options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "", options))
+{
+}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(file), "", options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(file), "", options))
+{
+}
 
 table reader::read() { return impl_->read(0, 0); }
 

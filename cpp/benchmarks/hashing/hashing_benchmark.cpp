@@ -25,10 +25,13 @@
 
 using cudf::test::fixed_width_column_wrapper;
 
-class Hashing : public cudf::benchmark {};
+class Hashing : public cudf::benchmark
+{
+};
 
 template <class T>
-void BM_hash_partition(benchmark::State& state) {
+void BM_hash_partition(benchmark::State& state)
+{
   auto const num_rows       = state.range(0);
   auto const num_cols       = state.range(1);
   auto const num_partitions = state.range(2);
@@ -59,7 +62,8 @@ void BM_hash_partition(benchmark::State& state) {
 BENCHMARK_DEFINE_F(Hashing, hash_partition)
 (::benchmark::State& state) { BM_hash_partition<double>(state); }
 
-static void CustomRanges(benchmark::internal::Benchmark* b) {
+static void CustomRanges(benchmark::internal::Benchmark* b)
+{
   for (int columns = 1; columns <= 256; columns *= 16) {
     for (int partitions = 64; partitions <= 1024; partitions *= 2) {
       for (int rows = 1 << 17; rows <= 1 << 21; rows *= 2) { b->Args({rows, columns, partitions}); }

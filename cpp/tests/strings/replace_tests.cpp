@@ -26,9 +26,11 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct StringsReplaceTest : public cudf::test::BaseFixture {};
+struct StringsReplaceTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsReplaceTest, Replace) {
+TEST_F(StringsReplaceTest, Replace)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
@@ -79,7 +81,8 @@ TEST_F(StringsReplaceTest, Replace) {
   }
 }
 
-TEST_F(StringsReplaceTest, ReplaceSlice) {
+TEST_F(StringsReplaceTest, ReplaceSlice)
+{
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -120,7 +123,8 @@ TEST_F(StringsReplaceTest, ReplaceSlice) {
   }
 }
 
-TEST_F(StringsReplaceTest, ReplaceSliceError) {
+TEST_F(StringsReplaceTest, ReplaceSliceError)
+{
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "are not", "important", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -131,7 +135,8 @@ TEST_F(StringsReplaceTest, ReplaceSliceError) {
                cudf::logic_error);
 }
 
-TEST_F(StringsReplaceTest, ReplaceMulti) {
+TEST_F(StringsReplaceTest, ReplaceMulti)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
@@ -192,7 +197,8 @@ TEST_F(StringsReplaceTest, ReplaceMulti) {
   }
 }
 
-TEST_F(StringsReplaceTest, ReplaceNulls) {
+TEST_F(StringsReplaceTest, ReplaceNulls)
+{
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
 
   cudf::test::strings_column_wrapper strings(
@@ -215,7 +221,8 @@ TEST_F(StringsReplaceTest, ReplaceNulls) {
   }
 }
 
-TEST_F(StringsReplaceTest, EmptyStringsColumn) {
+TEST_F(StringsReplaceTest, EmptyStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::replace(

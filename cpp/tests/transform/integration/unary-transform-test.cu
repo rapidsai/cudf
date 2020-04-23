@@ -26,14 +26,18 @@
 
 #include <cctype>
 
-namespace cudf {
-namespace test {
-namespace transformation {
-
-struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {};
+namespace cudf
+{
+namespace test
+{
+namespace transformation
+{
+struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
+};
 
 template <class dtype, class Op, class Data>
-void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx) {
+void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
+{
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   auto data_iter = cudf::test::make_counting_transform_iterator(0, data_init);
 
@@ -45,7 +49,8 @@ void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, boo
   ASSERT_UNARY<dtype, dtype>(out->view(), in, op);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32) {
+TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32)
+{
   // c = a*a*a*a
   const char* cuda =
     R"***(
@@ -105,7 +110,8 @@ __device__ inline void    fdsf   (
   test_udf<dtype>(ptx, op, data_init, 500, true);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32) {
+TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
+{
   // c = a * a - a
   const char cuda[] =
     "__device__ inline void f(int* output,int input){*output = input*input - input;}";
@@ -139,7 +145,8 @@ TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32) {
   test_udf<dtype>(ptx, op, data_init, 500, true);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8) {
+TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
+{
   // Capitalize all the lower case letters
   // Assuming ASCII, the PTX code is compiled from the following CUDA code
 

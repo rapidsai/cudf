@@ -35,12 +35,16 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace avro {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace avro
+{
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
@@ -50,7 +54,8 @@ class metadata;
 /**
  * @brief Implementation for Avro reader
  */
-class reader::impl {
+class reader::impl
+{
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

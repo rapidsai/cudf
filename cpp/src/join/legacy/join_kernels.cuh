@@ -47,7 +47,8 @@ template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
                                  device_table build_table,
                                  const cudf::size_type build_table_num_rows,
-                                 gdf_error *gdf_error_code) {
+                                 gdf_error *gdf_error_code)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < build_table_num_rows) {
@@ -86,7 +87,8 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
                                              size_type *current_idx_shared,
                                              const int warp_id,
                                              output_index_type *joined_shared_l,
-                                             output_index_type *joined_shared_r) {
+                                             output_index_type *joined_shared_r)
+{
   size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
   // its guaranteed to fit into the shared cache
@@ -115,7 +117,8 @@ __global__ void compute_join_output_size(multimap_type multi_map,
                                          device_table build_table,
                                          device_table probe_table,
                                          const cudf::size_type probe_table_num_rows,
-                                         cudf::size_type *output_size) {
+                                         cudf::size_type *output_size)
+{
   // This kernel probes multiple elements in the probe_table and store the number of matches found
   // inside a register. A block reduction is used at the end to calculate the matches per thread
   // block, and atomically add to the global 'output_size'. Compared to probing one element per
@@ -229,7 +232,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  cudf::size_type *current_idx,
                                  const cudf::size_type max_size,
                                  bool flip_results,
-                                 const output_index_type offset = 0) {
+                                 const output_index_type offset = 0)
+{
   constexpr int num_warps = block_size / warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ output_index_type join_shared_l[num_warps][output_cache_size];

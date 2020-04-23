@@ -20,9 +20,10 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Row-wise concatenates the given list of strings columns and
  * returns a single strings column result.

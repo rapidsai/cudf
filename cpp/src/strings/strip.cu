@@ -27,11 +27,14 @@
 #include <thrust/logical.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -61,7 +64,8 @@ struct strip_fn {
   int32_t const* d_offsets{};
   char* d_chars{};
 
-  __device__ bool is_strip_character(char_utf8 chr) {
+  __device__ bool is_strip_character(char_utf8 chr)
+  {
     return d_to_strip.empty() ? (chr <= ' ') :  // whitespace check
              thrust::any_of(
                thrust::seq, d_to_strip.begin(), d_to_strip.end(), [chr] __device__(char_utf8 c) {
@@ -69,7 +73,8 @@ struct strip_fn {
                });
   }
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str     = d_strings.element<string_view>(idx);
     size_type length      = d_str.length();
@@ -102,7 +107,8 @@ std::unique_ptr<column> strip(strings_column_view const& strings,
                               strip_type stype                    = strip_type::BOTH,
                               string_scalar const& to_strip       = string_scalar(""),
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
 
@@ -151,7 +157,8 @@ std::unique_ptr<column> strip(strings_column_view const& strings,
 std::unique_ptr<column> strip(strings_column_view const& strings,
                               strip_type stype,
                               string_scalar const& to_strip,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::strip(strings, stype, to_strip, mr);
 }

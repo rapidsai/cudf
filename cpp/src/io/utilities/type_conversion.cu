@@ -16,15 +16,18 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
 /**
  * @copydoc cudf::experimental::io:convert_string_to_dtype
  *
  **/
-data_type convert_string_to_dtype(const std::string &dtype) {
+data_type convert_string_to_dtype(const std::string &dtype)
+{
   if (dtype == "str") return data_type(cudf::type_id::STRING);
   if (dtype == "timestamp[s]") return data_type(cudf::type_id::TIMESTAMP_SECONDS);
   // backwards compat: "timestamp" defaults to milliseconds

@@ -26,9 +26,11 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct StringsFindMultipleTest : public cudf::test::BaseFixture {};
+struct StringsFindMultipleTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsFindMultipleTest, FindMultiple) {
+TEST_F(StringsFindMultipleTest, FindMultiple)
+{
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "lease", "test strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -50,7 +52,8 @@ TEST_F(StringsFindMultipleTest, FindMultiple) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn) {
+TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   std::vector<const char*> h_targets{""};
@@ -61,7 +64,8 @@ TEST_F(StringsFindMultipleTest, ZeroSizeStringsColumn) {
   EXPECT_EQ(results->size(), 0);
 }
 
-TEST_F(StringsFindMultipleTest, ErrorTest) {
+TEST_F(StringsFindMultipleTest, ErrorTest)
+{
   cudf::test::strings_column_wrapper strings({"this string intentionally left blank"}, {0});
   auto strings_view = cudf::strings_column_view(strings);
 

@@ -25,8 +25,8 @@
 
 #include <cmath>
 
-namespace {
-
+namespace
+{
 struct var_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void> operator()(
@@ -36,7 +36,8 @@ struct var_functor {
     gdf_column* result,
     cudf::size_type ddof,
     bool is_std,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
     auto values_data  = static_cast<const T*>(values.data);
     auto result_data  = static_cast<double*>(result->data);
     auto values_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(values.valid);
@@ -111,22 +112,25 @@ struct var_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, void> operator()(Args&&... args) {
+  std::enable_if_t<!std::is_arithmetic<T>::value, void> operator()(Args&&... args)
+  {
     CUDF_FAIL("Only numeric types are supported in variance");
   }
 };
 
 }  // namespace
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 void group_var(gdf_column const& values,
                rmm::device_vector<size_type> const& group_labels,
                rmm::device_vector<size_type> const& group_sizes,
                gdf_column* result,
                size_type ddof,
-               cudaStream_t stream) {
+               cudaStream_t stream)
+{
   type_dispatcher(
     values.dtype, var_functor{}, values, group_labels, group_sizes, result, ddof, false, stream);
 }
@@ -136,7 +140,8 @@ void group_std(gdf_column const& values,
                rmm::device_vector<size_type> const& group_sizes,
                gdf_column* result,
                size_type ddof,
-               cudaStream_t stream) {
+               cudaStream_t stream)
+{
   type_dispatcher(
     values.dtype, var_functor{}, values, group_labels, group_sizes, result, ddof, true, stream);
 }
@@ -144,7 +149,8 @@ void group_std(gdf_column const& values,
 std::pair<cudf::table, cudf::table> group_var_std(cudf::table const& keys,
                                                   cudf::table const& values,
                                                   cudf::size_type ddof,
-                                                  bool is_std) {
+                                                  bool is_std)
+{
   groupby::sort::detail::helper gb_obj(keys);
   auto group_labels = gb_obj.group_labels();
 
@@ -176,13 +182,15 @@ std::pair<cudf::table, cudf::table> group_var_std(cudf::table const& keys,
 
 std::pair<cudf::table, cudf::table> group_std(cudf::table const& keys,
                                               cudf::table const& values,
-                                              cudf::size_type ddof) {
+                                              cudf::size_type ddof)
+{
   return detail::group_var_std(keys, values, ddof, true);
 }
 
 std::pair<cudf::table, cudf::table> group_var(cudf::table const& keys,
                                               cudf::table const& values,
-                                              cudf::size_type ddof) {
+                                              cudf::size_type ddof)
+{
   return detail::group_var_std(keys, values, ddof, false);
 }
 

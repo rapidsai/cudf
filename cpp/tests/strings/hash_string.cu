@@ -27,18 +27,21 @@
 #include <thrust/transform.h>
 #include <vector>
 
-struct StringsHashTest : public cudf::test::BaseFixture {};
+struct StringsHashTest : public cudf::test::BaseFixture {
+};
 
 struct hash_string_fn {
   cudf::column_device_view d_strings;
-  uint32_t __device__ operator()(uint32_t idx) {
+  uint32_t __device__ operator()(uint32_t idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     auto item = d_strings.element<cudf::string_view>(idx);
     return MurmurHash3_32<cudf::string_view>{}(item);
   }
 };
 
-TEST_F(StringsHashTest, HashTest) {
+TEST_F(StringsHashTest, HashTest)
+{
   std::vector<const char*> h_strings{"abcdefghijklmnopqrstuvwxyz",
                                      "abcdefghijklmnopqrstuvwxyz",
                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ",

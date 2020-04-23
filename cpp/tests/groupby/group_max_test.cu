@@ -22,11 +22,13 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 template <typename V>
-struct groupby_max_test : public cudf::test::BaseFixture {};
+struct groupby_max_test : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(groupby_max_test, cudf::test::FixedWidthTypes);
 

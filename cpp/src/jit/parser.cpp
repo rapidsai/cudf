@@ -22,14 +22,16 @@
 
 #include "parser.h"
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 constexpr char percent_escape[] = "_";
 
 inline bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
 
-std::string ptx_parser::escape_percent(const std::string& src) {
+std::string ptx_parser::escape_percent(const std::string& src)
+{
   // Since we are transforming into inline ptx we are not allowed to have
   // register names starting with %.
   const size_t length = src.size();
@@ -47,7 +49,8 @@ std::string ptx_parser::escape_percent(const std::string& src) {
   }
 }
 
-std::string ptx_parser::remove_nonalphanumeric(const std::string& src) {
+std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
+{
   const size_t length = src.size();
   size_t start        = 0;
   size_t stop         = 0;
@@ -61,7 +64,8 @@ std::string ptx_parser::remove_nonalphanumeric(const std::string& src) {
   return output.substr(start, stop - start);
 }
 
-std::string ptx_parser::register_type_to_contraint(const std::string& src) {
+std::string ptx_parser::register_type_to_contraint(const std::string& src)
+{
   if (src == ".b8" || src == ".u8" || src == ".s8")
     return "h";
   else if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
@@ -78,7 +82,8 @@ std::string ptx_parser::register_type_to_contraint(const std::string& src) {
     return "x_reg";
 }
 
-std::string ptx_parser::register_type_to_cpp_type(const std::string& register_type) {
+std::string ptx_parser::register_type_to_cpp_type(const std::string& register_type)
+{
   if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
     return "char";
   else if (register_type == ".u16")
@@ -105,7 +110,8 @@ std::string ptx_parser::register_type_to_cpp_type(const std::string& register_ty
     return "x_cpptype";
 }
 
-std::string ptx_parser::parse_instruction(const std::string& src) {
+std::string ptx_parser::parse_instruction(const std::string& src)
+{
   // I am assumming for an instruction statement the starting phrase is an
   // instruction.
   const size_t length = src.size();
@@ -211,7 +217,8 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
   return "asm volatile (\"" + output + "\"" + suffix + ");" + original_code;
 }
 
-std::string ptx_parser::parse_statement(const std::string& src) {
+std::string ptx_parser::parse_statement(const std::string& src)
+{
   // First find the first non-white charactor.
   const size_t length = src.size();
   size_t start        = 0;
@@ -226,7 +233,8 @@ std::string ptx_parser::parse_statement(const std::string& src) {
   }
 }
 
-std::vector<std::string> ptx_parser::parse_function_body(const std::string& src) {
+std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
+{
   const size_t length = src.size();
   size_t start        = 0;
   size_t stop         = 0;
@@ -243,7 +251,8 @@ std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
   return statements;
 }
 
-std::string ptx_parser::parse_param(const std::string& src) {
+std::string ptx_parser::parse_param(const std::string& src)
+{
   const size_t length = src.size();
   size_t start        = 0;
   size_t stop         = 0;
@@ -262,7 +271,8 @@ std::string ptx_parser::parse_param(const std::string& src) {
   return name;
 }
 
-std::string ptx_parser::parse_param_list(const std::string& src) {
+std::string ptx_parser::parse_param_list(const std::string& src)
+{
   const size_t length = src.size();
   size_t start        = 0;
   size_t stop         = 0;
@@ -301,7 +311,8 @@ std::string ptx_parser::parse_param_list(const std::string& src) {
   return "\n  " + output + "\n";
 }
 
-std::string ptx_parser::parse_function_header(const std::string& src) {
+std::string ptx_parser::parse_function_header(const std::string& src)
+{
   const size_t length = src.size();
   size_t start        = 0;
   size_t stop         = 0;
@@ -335,7 +346,8 @@ std::string ptx_parser::parse_function_header(const std::string& src) {
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
-std::string remove_comments(const std::string& src) {
+std::string remove_comments(const std::string& src)
+{
   // Remove the comments in the input ptx code.
   size_t start       = 0;
   size_t stop        = 0;
@@ -371,7 +383,8 @@ std::string remove_comments(const std::string& src) {
 }
 
 // The interface
-std::string ptx_parser::parse() {
+std::string ptx_parser::parse()
+{
   std::string no_comments = remove_comments(ptx);
 
   input_arg_list.clear();
@@ -431,10 +444,13 @@ ptx_parser::ptx_parser(const std::string& ptx_,
   : ptx(ptx_),
     function_name(function_name_),
     output_arg_type(output_arg_type_),
-    pointer_arg_list(pointer_arg_list_) {}
+    pointer_arg_list(pointer_arg_list_)
+{
+}
 
 // The interface
-std::string parse_single_function_cuda(const std::string& src, const std::string& function_name) {
+std::string parse_single_function_cuda(const std::string& src, const std::string& function_name)
+{
   std::string no_comments = remove_comments(src);
 
   // For CUDA device function we just need to find the function

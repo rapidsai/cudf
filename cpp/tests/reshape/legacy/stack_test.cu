@@ -27,13 +27,15 @@ template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename T>
-struct StackTest : GdfTest {};
+struct StackTest : GdfTest {
+};
 
 using test_types = ::testing::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(StackTest, test_types);
 
-TYPED_TEST(StackTest, StackOrdered) {
+TYPED_TEST(StackTest, StackOrdered)
+{
   using T       = TypeParam;
   using wrapper = cudf::test::column_wrapper<T>;
 

@@ -27,9 +27,10 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
  * end).
@@ -40,10 +41,12 @@ struct bounds_checker {
   cudf::size_type begin;
   cudf::size_type end;
 
-  __device__ bounds_checker(cudf::size_type begin_, cudf::size_type end_)
-    : begin{begin_}, end{end_} {}
+  __device__ bounds_checker(cudf::size_type begin_, cudf::size_type end_) : begin{begin_}, end{end_}
+  {
+  }
 
-  __device__ __forceinline__ bool operator()(map_type const index) {
+  __device__ __forceinline__ bool operator()(map_type const index)
+  {
     return ((index >= begin) && (index < end));
   }
 };
@@ -55,7 +58,8 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
                                       bit_mask_t **destination_valid,
                                       cudf::size_type num_destination_rows,
                                       cudf::size_type *d_count,
-                                      cudf::size_type num_columns) {
+                                      cudf::size_type num_columns)
+{
   for (cudf::size_type i = 0; i < num_columns; i++) {
     const bit_mask_t *__restrict__ source_valid_col = source_valid[i];
     bit_mask_t *__restrict__ destination_valid_col  = destination_valid[i];
@@ -134,7 +138,8 @@ struct column_gatherer {
                   gdf_column *destination_column,
                   bool ignore_out_of_bounds,
                   bool sync_nvstring_category,
-                  cudaStream_t stream) {
+                  cudaStream_t stream)
+  {
     column_type const *source_data{static_cast<column_type const *>(source_column->data)};
     column_type *destination_data{static_cast<column_type *>(destination_column->data)};
 
@@ -220,7 +225,8 @@ enum index_conversion { NEGATIVE_TO_POSITIVE = 0, NONE };
  * Positive indices are unchanged by this transformation.
  *---------------------------------------------------------------------------**/
 template <typename map_type, index_conversion ic = index_conversion::NONE>
-struct index_converter : public thrust::unary_function<map_type, map_type> {};
+struct index_converter : public thrust::unary_function<map_type, map_type> {
+};
 
 template <typename map_type>
 struct index_converter<map_type, index_conversion::NEGATIVE_TO_POSITIVE> {
@@ -245,7 +251,8 @@ void gather(table const *source_table,
             bool check_bounds,
             bool ignore_out_of_bounds,
             bool sync_nvstring_category,
-            bool allow_negative_indices) {
+            bool allow_negative_indices)
+{
   auto source_n_cols = source_table->num_columns();
   auto source_n_rows = source_table->num_rows();
 

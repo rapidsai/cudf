@@ -27,9 +27,10 @@
 #include <thrust/logical.h>
 #include <bitset>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_scalar used for unit testing.
  *
@@ -62,7 +63,8 @@ struct scalar_wrapper {
    * @param value The value to use for the scalar
    * @param is_valid is the scalar valid
    *---------------------------------------------------------------------------**/
-  scalar_wrapper(ScalarType value, bool is_valid = true) {
+  scalar_wrapper(ScalarType value, bool is_valid = true)
+  {
     auto dataptr        = reinterpret_cast<ScalarType*>(&(the_scalar.data));
     *dataptr            = value;
     the_scalar.is_valid = is_valid;
@@ -101,7 +103,8 @@ struct scalar_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Prints the value of the underlying gdf_scalar.
    *---------------------------------------------------------------------------**/
-  void print() const {
+  void print() const
+  {
     ScalarType value = *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
     if (the_scalar.is_valid)
       std::cout << value << std::endl;
@@ -116,7 +119,8 @@ struct scalar_wrapper {
    * @return true The two scalars are equal
    * @return false The two scalars are not equal
    *---------------------------------------------------------------------------**/
-  bool operator==(scalar_wrapper<ScalarType> const& rhs) const {
+  bool operator==(scalar_wrapper<ScalarType> const& rhs) const
+  {
     return (the_scalar.dtype == rhs.the_scalar.dtype and this->is_valid() == rhs.is_valid() and
             this->value() == rhs.value());
   }

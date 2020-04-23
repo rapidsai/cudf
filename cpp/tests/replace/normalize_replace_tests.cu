@@ -23,12 +23,14 @@
 #include <cudf/cudf.h>
 
 // This is the main test fixture
-struct ReplaceTest : public cudf::test::BaseFixture {};
+struct ReplaceTest : public cudf::test::BaseFixture {
+};
 
 template <typename T>
 void normalize_nans_and_zeros_test_internal(
   cudf::test::fixed_width_column_wrapper<T> const& test_data_in,
-  cudf::column_view const& test_data_comp) {
+  cudf::column_view const& test_data_comp)
+{
   // mutable overload
   {
     cudf::column test_data(test_data_in);
@@ -55,7 +57,8 @@ void normalize_nans_and_zeros_test_internal(
 }
 
 // Test for normalize_nans_and_nulls
-TEST_F(ReplaceTest, NormalizeNansAndZerosFloat) {
+TEST_F(ReplaceTest, NormalizeNansAndZerosFloat)
+{
   // bad data
   cudf::test::fixed_width_column_wrapper<float> f_test_data{
     32.5f, -0.0f, 111.0f, -NAN, NAN, 1.0f, 0.0f, 54.3f};
@@ -67,7 +70,8 @@ TEST_F(ReplaceTest, NormalizeNansAndZerosFloat) {
 }
 
 // Test for normalize_nans_and_nulls
-TEST_F(ReplaceTest, NormalizeNansAndZerosDouble) {
+TEST_F(ReplaceTest, NormalizeNansAndZerosDouble)
+{
   // bad data
   cudf::test::fixed_width_column_wrapper<double> d_test_data{
     32.5, -0.0, 111.0, double(-NAN), double(NAN), 1.0, 0.0, 54.3};

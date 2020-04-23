@@ -21,10 +21,12 @@
 #include "groupby/common/legacy/type_info.hpp"
 #include "utilities/legacy/device_atomics.cuh"
 
-namespace cudf {
-namespace groupby {
-namespace sort {
-
+namespace cudf
+{
+namespace groupby
+{
+namespace sort
+{
 /**---------------------------------------------------------------------------*
  @brief  Compute the aggregation(s) of corresponding rows in the `values` input
  * table using the key sorted order and the group labels.
@@ -61,7 +63,8 @@ __global__ void aggregate_all_rows(device_table input_values,
                                    cudf::size_type const* group_labels,
                                    bool skip_null_keys,
                                    operators* ops,
-                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_values.num_rows()) {

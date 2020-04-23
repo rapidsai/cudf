@@ -25,9 +25,10 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 std::string random_string(size_t len = 15,
                           std::string const &allowed_chars =
                             "abcdefghijklmnaoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");

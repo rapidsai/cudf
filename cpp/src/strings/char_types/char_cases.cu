@@ -22,12 +22,14 @@
 #include <cudf/utilities/error.hpp>
 
 //
-namespace cudf {
-namespace strings {
-namespace detail {
-
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 struct special_case_mapping_in {
   uint16_t num_upper_chars;
   uint16_t upper[3];
@@ -121,7 +123,8 @@ constexpr uint16_t primes[] = {
 };
 
 // find a prime number that generates no collisions for all possible input data
-uint16_t find_collision_proof_prime() {
+uint16_t find_collision_proof_prime()
+{
   size_t codepoints_in_size = std::end(codepoints_in) - std::begin(codepoints_in);
 
   for (auto pitr = std::begin(primes); pitr < std::end(primes); ++pitr) {
@@ -143,7 +146,8 @@ uint16_t find_collision_proof_prime() {
 /**
  * @copydoc cudf::strings::detail::generate_special_mapping_hash_table
  */
-void generate_special_mapping_hash_table() {
+void generate_special_mapping_hash_table()
+{
   uint16_t hash_prime = find_collision_proof_prime();
   if (hash_prime == 0) { CUDF_FAIL("Could not find a usable prime number for hash table"); }
 

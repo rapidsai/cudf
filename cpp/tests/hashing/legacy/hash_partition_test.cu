@@ -43,9 +43,12 @@
 template <template <typename> class hash_function>
 struct row_partition_mapper {
   __device__ row_partition_mapper(device_table table_to_hash, const cudf::size_type _num_partitions)
-    : the_table{table_to_hash}, num_partitions{_num_partitions} {}
+    : the_table{table_to_hash}, num_partitions{_num_partitions}
+  {
+  }
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(cudf::size_type row_index) const
+  {
     return hash_row<true, hash_function>(the_table, row_index) % num_partitions;
   }
 
@@ -80,7 +83,8 @@ struct HashPartitionTest : public GdfTest {
   std::vector<gdf_column*> raw_gdf_input_columns;
   std::vector<gdf_column*> raw_gdf_output_columns;
 
-  HashPartitionTest() {
+  HashPartitionTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -89,7 +93,8 @@ struct HashPartitionTest : public GdfTest {
 
   ~HashPartitionTest() {}
 
-  void create_input(size_t num_rows, size_t max_value, bool print = false) {
+  void create_input(size_t num_rows, size_t max_value, bool print = false)
+  {
     initialize_tuple(input_columns, num_rows, max_value);
     initialize_tuple(output_columns, num_rows, max_value);
 
@@ -107,7 +112,8 @@ struct HashPartitionTest : public GdfTest {
     }
   }
 
-  std::vector<int> compute_gdf_result(const int num_partitions, bool print = false) {
+  std::vector<int> compute_gdf_result(const int num_partitions, bool print = false)
+  {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
     gdf_error result_error{GDF_SUCCESS};
@@ -137,9 +143,8 @@ struct HashPartitionTest : public GdfTest {
     return partition_offsets;
   }
 
-  void verify_gdf_result(int num_partitions,
-                         std::vector<int> partition_offsets,
-                         bool print = false) {
+  void verify_gdf_result(int num_partitions, std::vector<int> partition_offsets, bool print = false)
+  {
     std::vector<gdf_column*> gdf_cols_to_hash;
 
     for (int i = 0; i < num_cols_to_hash; ++i) {
@@ -256,7 +261,8 @@ typedef ::testing::Types<
 
 TYPED_TEST_CASE(HashPartitionTest, Implementations);
 
-TYPED_TEST(HashPartitionTest, ExampleTest) {
+TYPED_TEST(HashPartitionTest, ExampleTest)
+{
   const int num_partitions = 5;
 
   this->create_input(100, 100);
@@ -266,7 +272,8 @@ TYPED_TEST(HashPartitionTest, ExampleTest) {
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
-TYPED_TEST(HashPartitionTest, OnePartition) {
+TYPED_TEST(HashPartitionTest, OnePartition)
+{
   const int num_partitions = 1;
 
   this->create_input(100000, 1000);
@@ -276,7 +283,8 @@ TYPED_TEST(HashPartitionTest, OnePartition) {
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
-TYPED_TEST(HashPartitionTest, TenPartitions) {
+TYPED_TEST(HashPartitionTest, TenPartitions)
+{
   const int num_partitions = 10;
 
   this->create_input(1000000, 1000);
@@ -286,7 +294,8 @@ TYPED_TEST(HashPartitionTest, TenPartitions) {
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
-TYPED_TEST(HashPartitionTest, EightPartitions) {
+TYPED_TEST(HashPartitionTest, EightPartitions)
+{
   const int num_partitions = 8;
 
   this->create_input(1000000, 1000);
@@ -296,7 +305,8 @@ TYPED_TEST(HashPartitionTest, EightPartitions) {
   this->verify_gdf_result(num_partitions, partition_offsets);
 }
 
-TYPED_TEST(HashPartitionTest, 257Partitions) {
+TYPED_TEST(HashPartitionTest, 257Partitions)
+{
   const int num_partitions = 257;
 
   this->create_input(1000000, 1000);

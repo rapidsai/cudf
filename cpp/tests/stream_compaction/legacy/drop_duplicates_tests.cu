@@ -27,7 +27,8 @@
 #include <limits>
 
 template <typename T>
-struct DropDuplicatesTest : GdfTest {};
+struct DropDuplicatesTest : GdfTest {
+};
 
 using test_types2 = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
@@ -35,7 +36,8 @@ TYPED_TEST_CASE(DropDuplicatesTest, test_types2);
 
 template <typename T>
 void TypedDropDuplicatesTest(cudf::test::column_wrapper<T> source,
-                             cudf::test::column_wrapper<T> expected) {
+                             cudf::test::column_wrapper<T> expected)
+{
   gdf_column* inrow[]{source.get()};
   cudf::table input_table(inrow, 1);
   enum cudf::duplicate_keep_option keep = cudf::duplicate_keep_option::KEEP_LAST;
@@ -60,12 +62,14 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<T> source,
 
 constexpr cudf::size_type column_size{1000000};
 
-TYPED_TEST(DropDuplicatesTest, Empty) {
+TYPED_TEST(DropDuplicatesTest, Empty)
+{
   TypedDropDuplicatesTest<TypeParam>(cudf::test::column_wrapper<TypeParam>{},   //{0, false},
                                      cudf::test::column_wrapper<TypeParam>{});  //{0, false});
 }
 
-TYPED_TEST(DropDuplicatesTest, Distinct) {
+TYPED_TEST(DropDuplicatesTest, Distinct)
+{
   constexpr cudf::size_type column_size = std::numeric_limits<TypeParam>::max() > 1000000
                                             ? 1000000
                                             : std::numeric_limits<TypeParam>::max();
@@ -77,7 +81,8 @@ TYPED_TEST(DropDuplicatesTest, Distinct) {
                                           [](cudf::size_type row) { return true; }});
 }
 
-TYPED_TEST(DropDuplicatesTest, SingleValue) {
+TYPED_TEST(DropDuplicatesTest, SingleValue)
+{
   TypedDropDuplicatesTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{
       column_size, [](cudf::size_type row) { return 2; }, false},
@@ -86,7 +91,8 @@ TYPED_TEST(DropDuplicatesTest, SingleValue) {
   //[](cudf::size_type row) { return true; }});
 }
 
-TYPED_TEST(DropDuplicatesTest, Duplicate) {
+TYPED_TEST(DropDuplicatesTest, Duplicate)
+{
   TypedDropDuplicatesTest<TypeParam>(
     cudf::test::column_wrapper<TypeParam>{
       column_size, [](cudf::size_type row) { return row % 100; }, false},
@@ -95,7 +101,8 @@ TYPED_TEST(DropDuplicatesTest, Duplicate) {
 }
 
 template <class T>
-struct DropDuplicatesDoubleTest : GdfTest {};
+struct DropDuplicatesDoubleTest : GdfTest {
+};
 
 // using TestingTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float,
 //                                      double, cudf::date32, cudf::date64,
@@ -122,7 +129,8 @@ TYPED_TEST_CASE(DropDuplicatesDoubleTest, Implementations);
 template <class T>
 bool compare_columns_indexed(cudf::table out_table,
                              cudf::test::column_wrapper<typename T::Type0> expected_col1,
-                             cudf::test::column_wrapper<typename T::Type1> expected_col2) {
+                             cudf::test::column_wrapper<typename T::Type1> expected_col2)
+{
   int rows                   = expected_col1.size();
   gdf_column index_col       = *(out_table.get_column(0));
   cudf::size_type* index_ptr = ((cudf::size_type*)index_col.data);
@@ -168,7 +176,8 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<typename T::Type0> sourc
                              cudf::test::column_wrapper<typename T::Type1> source_col2,
                              cudf::test::column_wrapper<typename T::Type0> expected_col1,
                              cudf::test::column_wrapper<typename T::Type1> expected_col2,
-                             enum cudf::duplicate_keep_option keep) {
+                             enum cudf::duplicate_keep_option keep)
+{
   cudf::test::column_wrapper<cudf::size_type> index{source_col1.size(),
                                                     [](cudf::size_type row) { return row; },
                                                     [](cudf::size_type row) { return true; }};
@@ -186,7 +195,8 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<typename T::Type0> sourc
 
 auto lamda_valid = [](cudf::size_type row) { return true; };
 
-TYPED_TEST(DropDuplicatesDoubleTest, Empty) {
+TYPED_TEST(DropDuplicatesDoubleTest, Empty)
+{
   TypedDropDuplicatesTest<TypeParam>(
     cudf::test::column_wrapper<typename TypeParam::Type0>{},  //{0, false},
     cudf::test::column_wrapper<typename TypeParam::Type1>{},  //{0, false},
@@ -195,7 +205,8 @@ TYPED_TEST(DropDuplicatesDoubleTest, Empty) {
     cudf::duplicate_keep_option::KEEP_LAST);
 }
 
-TYPED_TEST(DropDuplicatesDoubleTest, Distinct) {
+TYPED_TEST(DropDuplicatesDoubleTest, Distinct)
+{
   auto lamda_type0 = [](cudf::size_type row) { return typename TypeParam::Type0(row); };
   auto lamda_type1 = [](cudf::size_type row) { return typename TypeParam::Type1(row); };
   cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0};
@@ -222,7 +233,8 @@ TYPED_TEST(DropDuplicatesDoubleTest, Distinct) {
     cudf::duplicate_keep_option::KEEP_NONE);
 }
 
-TYPED_TEST(DropDuplicatesDoubleTest, Duplicate) {
+TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
+{
   auto lamda_type0 = [](cudf::size_type row) { return typename TypeParam::Type0(row % 100); };
   auto lamda_type1 = [](cudf::size_type row) { return typename TypeParam::Type1(row % 7); };
   cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0};

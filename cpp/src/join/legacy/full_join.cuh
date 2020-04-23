@@ -26,9 +26,12 @@ template <typename size_type>
 struct ValidRange {
   size_type start, stop;
   __host__ __device__ ValidRange(const size_type begin, const size_type end)
-    : start(begin), stop(end) {}
+    : start(begin), stop(end)
+  {
+  }
 
-  __host__ __device__ __forceinline__ bool operator()(const size_type index) {
+  __host__ __device__ __forceinline__ bool operator()(const size_type index)
+  {
     return ((index >= start) && (index < stop));
   }
 };
@@ -63,7 +66,8 @@ template <typename index_type, typename size_type>
 rmm::device_vector<index_type> create_missing_indices(index_type const *const index_ptr,
                                                       const size_type max_index_value,
                                                       const size_type index_size,
-                                                      cudaStream_t stream) {
+                                                      cudaStream_t stream)
+{
   // Assume all the indices in invalid_index_map are invalid
   rmm::device_vector<index_type> invalid_index_map(max_index_value, 1);
   // Vector allocated for unmatched result
@@ -115,7 +119,8 @@ gdf_error expand_buffer(data_type **buffer,
                         size_type *const buffer_capacity,
                         const size_type buffer_size,
                         const size_type expand_size,
-                        cudaStream_t stream) {
+                        cudaStream_t stream)
+{
   size_type requested_size = buffer_size + expand_size;
   // No need to proceed if the buffer can contain requested additional elements
   if (*buffer_capacity >= requested_size) { return GDF_SUCCESS; }
@@ -154,7 +159,8 @@ gdf_error append_full_join_indices(index_type **l_index_ptr,
                                    size_type &index_capacity,
                                    size_type &index_size,
                                    const size_type max_index_value,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   gdf_error err;
   // Get array of indices that do not appear in r_index_ptr
   rmm::device_vector<index_type> unmatched_indices =

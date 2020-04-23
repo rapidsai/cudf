@@ -25,9 +25,10 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace groupby {
-
+namespace cudf
+{
+namespace groupby
+{
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
 
@@ -59,7 +60,8 @@ static constexpr std::array<operators, 4> ordered_aggregations = {MEDIAN, QUANTI
 
 // Just an utility function to find the existence of on element in a constexpr array
 template <class T, size_t N>
-constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
+constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
+{
   for (auto i = 0u; i < N; ++i) {
     if (haystack[i] == needle) return true;
   }

@@ -20,13 +20,17 @@
 #include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
+struct BinopVerifyInputTest : public BinaryOperationTest {
+};
 
-struct BinopVerifyInputTest : public BinaryOperationTest {};
-
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
+{
   using TypeLhs = int64_t;
   using TypeRhs = int64_t;
 
@@ -39,7 +43,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
     cudf::logic_error);
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
+{
   using TypeOut = int64_t;
   using TypeLhs = int64_t;
   using TypeRhs = int64_t;

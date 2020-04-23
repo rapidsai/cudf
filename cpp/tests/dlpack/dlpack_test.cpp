@@ -31,7 +31,8 @@ struct dlpack_deleter {
 using unique_managed_tensor = std::unique_ptr<DLManagedTensor, dlpack_deleter>;
 
 template <typename T>
-DLDataType get_dtype() {
+DLDataType get_dtype()
+{
   uint8_t const bits{sizeof(T) * 8};
   uint16_t const lanes{1};
   if (std::is_floating_point<T>::value) {
@@ -46,7 +47,8 @@ DLDataType get_dtype() {
 }
 
 template <typename T>
-void validate_dtype(DLDataType const& dtype) {
+void validate_dtype(DLDataType const& dtype)
+{
   switch (dtype.code) {
     case kDLInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_signed<T>::value); break;
     case kDLUInt: EXPECT_TRUE(std::is_integral<T>::value && std::is_unsigned<T>::value); break;
@@ -57,45 +59,54 @@ void validate_dtype(DLDataType const& dtype) {
   EXPECT_EQ(sizeof(T) * 8, dtype.bits);
 }
 
-class DLPackUntypedTests : public BaseFixture {};
+class DLPackUntypedTests : public BaseFixture
+{
+};
 
-TEST_F(DLPackUntypedTests, EmptyTableToDlpack) {
+TEST_F(DLPackUntypedTests, EmptyTableToDlpack)
+{
   cudf::table_view empty(std::vector<cudf::column_view>{});
   EXPECT_EQ(nullptr, cudf::to_dlpack(empty));
 }
 
-TEST_F(DLPackUntypedTests, EmptyColsToDlpack) {
+TEST_F(DLPackUntypedTests, EmptyColsToDlpack)
+{
   fixed_width_column_wrapper<int32_t> col1({});
   fixed_width_column_wrapper<int32_t> col2({});
   cudf::table_view input({col1, col2});
   EXPECT_EQ(nullptr, cudf::to_dlpack(input));
 }
 
-TEST_F(DLPackUntypedTests, NullTensorFromDlpack) {
+TEST_F(DLPackUntypedTests, NullTensorFromDlpack)
+{
   EXPECT_THROW(cudf::from_dlpack(nullptr), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, MultipleTypesToDlpack) {
+TEST_F(DLPackUntypedTests, MultipleTypesToDlpack)
+{
   fixed_width_column_wrapper<int16_t> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4});
   cudf::table_view input({col1, col2});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, InvalidNullsToDlpack) {
+TEST_F(DLPackUntypedTests, InvalidNullsToDlpack)
+{
   fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<int32_t> col2({1, 2, 3, 4}, {1, 0, 1, 1});
   cudf::table_view input({col1, col2});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, StringTypeToDlpack) {
+TEST_F(DLPackUntypedTests, StringTypeToDlpack)
+{
   strings_column_wrapper col({"foo", "bar", "baz"});
   cudf::table_view input({col});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, UnsupportedDeviceTypeFromDlpack) {
+TEST_F(DLPackUntypedTests, UnsupportedDeviceTypeFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -105,7 +116,8 @@ TEST_F(DLPackUntypedTests, UnsupportedDeviceTypeFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, InvalidDeviceIdFromDlpack) {
+TEST_F(DLPackUntypedTests, InvalidDeviceIdFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -115,7 +127,8 @@ TEST_F(DLPackUntypedTests, InvalidDeviceIdFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, UnsupportedDimsFromDlpack) {
+TEST_F(DLPackUntypedTests, UnsupportedDimsFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -125,7 +138,8 @@ TEST_F(DLPackUntypedTests, UnsupportedDimsFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, TooManyRowsFromDlpack) {
+TEST_F(DLPackUntypedTests, TooManyRowsFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -136,7 +150,8 @@ TEST_F(DLPackUntypedTests, TooManyRowsFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, TooManyColsFromDlpack) {
+TEST_F(DLPackUntypedTests, TooManyColsFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col1({1, 2, 3, 4});
   fixed_width_column_wrapper<int32_t> col2({5, 6, 7, 8});
   cudf::table_view input({col1, col2});
@@ -148,7 +163,8 @@ TEST_F(DLPackUntypedTests, TooManyColsFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, InvalidTypeFromDlpack) {
+TEST_F(DLPackUntypedTests, InvalidTypeFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -158,7 +174,8 @@ TEST_F(DLPackUntypedTests, InvalidTypeFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, UnsupportedIntBitsizeFromDlpack) {
+TEST_F(DLPackUntypedTests, UnsupportedIntBitsizeFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -168,7 +185,8 @@ TEST_F(DLPackUntypedTests, UnsupportedIntBitsizeFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, UnsupportedFloatBitsizeFromDlpack) {
+TEST_F(DLPackUntypedTests, UnsupportedFloatBitsizeFromDlpack)
+{
   fixed_width_column_wrapper<float> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -178,7 +196,8 @@ TEST_F(DLPackUntypedTests, UnsupportedFloatBitsizeFromDlpack) {
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
-TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack) {
+TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack)
+{
   fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4});
   cudf::table_view input({col});
   unique_managed_tensor tensor(cudf::to_dlpack(input));
@@ -189,22 +208,28 @@ TEST_F(DLPackUntypedTests, UnsupportedLanesFromDlpack) {
 }
 
 template <typename T>
-class DLPackTimestampTests : public BaseFixture {};
+class DLPackTimestampTests : public BaseFixture
+{
+};
 
 TYPED_TEST_CASE(DLPackTimestampTests, TimestampTypes);
 
-TYPED_TEST(DLPackTimestampTests, TimestampTypesToDlpack) {
+TYPED_TEST(DLPackTimestampTests, TimestampTypesToDlpack)
+{
   fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4});
   cudf::table_view input({col});
   EXPECT_THROW(cudf::to_dlpack(input), cudf::logic_error);
 }
 
 template <typename T>
-class DLPackNumericTests : public BaseFixture {};
+class DLPackNumericTests : public BaseFixture
+{
+};
 
 TYPED_TEST_CASE(DLPackNumericTests, NumericTypes);
 
-TYPED_TEST(DLPackNumericTests, ToDlpack1D) {
+TYPED_TEST(DLPackNumericTests, ToDlpack1D)
+{
   // Test nullable column with no nulls
   fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4}, {1, 1, 1, 1});
   auto const col_view = static_cast<cudf::column_view>(col);
@@ -230,7 +255,8 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D) {
   expect_columns_equal(col_view, result_view);
 }
 
-TYPED_TEST(DLPackNumericTests, ToDlpack2D) {
+TYPED_TEST(DLPackNumericTests, ToDlpack2D)
+{
   using T             = TypeParam;
   auto const col1_tmp = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
   auto const col2_tmp = cudf::test::make_type_param_vector<T>({4, 5, 6, 7});
@@ -269,7 +295,8 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D) {
   }
 }
 
-TYPED_TEST(DLPackNumericTests, FromDlpack1D) {
+TYPED_TEST(DLPackNumericTests, FromDlpack1D)
+{
   // Use to_dlpack to generate an input tensor
   fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4});
   cudf::table_view input({col});
@@ -280,7 +307,8 @@ TYPED_TEST(DLPackNumericTests, FromDlpack1D) {
   expect_tables_equal(input, result->view());
 }
 
-TYPED_TEST(DLPackNumericTests, FromDlpack2D) {
+TYPED_TEST(DLPackNumericTests, FromDlpack2D)
+{
   // Use to_dlpack to generate an input tensor
   using T         = TypeParam;
   auto const col1 = cudf::test::make_type_param_vector<T>({1, 2, 3, 4});
@@ -302,7 +330,8 @@ TYPED_TEST(DLPackNumericTests, FromDlpack2D) {
   expect_tables_equal(input, result->view());
 }
 
-TYPED_TEST(DLPackNumericTests, FromDlpackCpu) {
+TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
+{
   // Host buffer with stride > rows and byte_offset > 0
   using T         = TypeParam;
   auto const data = cudf::test::make_type_param_vector<T>({0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0});
@@ -329,7 +358,8 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu) {
   expect_tables_equal(expected, result->view());
 }
 
-TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D) {
+TYPED_TEST(DLPackNumericTests, FromDlpackEmpty1D)
+{
   // Use to_dlpack to generate an input tensor
   cudf::table_view input(std::vector<cudf::column_view>{});
   unique_managed_tensor tensor(cudf::to_dlpack(input));

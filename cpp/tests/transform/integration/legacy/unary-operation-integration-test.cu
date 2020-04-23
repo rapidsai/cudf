@@ -27,15 +27,19 @@
 #include <tests/utilities/legacy/valid_vectors.h>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 
-namespace cudf {
-namespace test {
-namespace transformation {
-
-struct UnaryOperationIntegrationTest : public GdfTest {};
+namespace cudf
+{
+namespace test
+{
+namespace transformation
+{
+struct UnaryOperationIntegrationTest : public GdfTest {
+};
 
 template <class dtype, class Op, class Data>
 void test_cuda_and_ptx_udf(
-  const char cuda[], const char ptx[], Op op, Data data_init, cudf::size_type size) {
+  const char cuda[], const char ptx[], Op op, Data data_init, cudf::size_type size)
+{
   auto in =
     cudf::test::column_wrapper<dtype>(size, data_init, [](cudf::size_type row) { return true; });
   {
@@ -62,7 +66,8 @@ void test_cuda_and_ptx_udf(
   }
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32) {
+TEST_F(UnaryOperationIntegrationTest, Transform_FP32_FP32)
+{
   // c = a*a*a*a
   const char* cuda =
     R"***(
@@ -121,7 +126,8 @@ __device__ inline void    fdsf   (
   test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32) {
+TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32)
+{
   // c = a * a - a
   const char cuda[] =
     R"***(
@@ -161,7 +167,8 @@ __device__ inline void f(
   test_cuda_and_ptx_udf<dtype>(cuda, ptx, op, data_init, 500);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8) {
+TEST_F(UnaryOperationIntegrationTest, Transform_INT8_INT8)
+{
   // Capitalize all the lower case letters
   // Assuming ASCII, the PTX code is compiled from the following CUDA code
 

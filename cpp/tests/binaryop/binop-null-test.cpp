@@ -21,13 +21,16 @@
 #include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
-
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
 struct BinaryOperationNullTest : public BinaryOperationTest {
   template <typename T>
-  auto make_random_wrapped_column(size_type size, mask_state state) {
+  auto make_random_wrapped_column(size_type size, mask_state state)
+  {
     auto data_iter = make_data_iter();
     switch (state) {
       case mask_state::ALL_NULL: {
@@ -50,7 +53,8 @@ struct BinaryOperationNullTest : public BinaryOperationTest {
   }
 };
 
-TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid) {
+TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -69,7 +73,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_Valid) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Scalar_Valid_Vector_NonNullable) {
+TEST_F(BinaryOperationNullTest, Scalar_Valid_Vector_NonNullable)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -87,7 +92,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Valid_Vector_NonNullable) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable) {
+TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -106,7 +112,8 @@ TEST_F(BinaryOperationNullTest, Scalar_Null_Vector_NonNullable) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Vector_Null_Scalar_Valid) {
+TEST_F(BinaryOperationNullTest, Vector_Null_Scalar_Valid)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -124,7 +131,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Scalar_Valid) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Vector_Null_Vector_Valid) {
+TEST_F(BinaryOperationNullTest, Vector_Null_Vector_Valid)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -142,7 +150,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_Valid) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Vector_Null_Vector_NonNullable) {
+TEST_F(BinaryOperationNullTest, Vector_Null_Vector_NonNullable)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -160,7 +169,8 @@ TEST_F(BinaryOperationNullTest, Vector_Null_Vector_NonNullable) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Vector_Valid_Vector_NonNullable) {
+TEST_F(BinaryOperationNullTest, Vector_Valid_Vector_NonNullable)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;
@@ -178,7 +188,8 @@ TEST_F(BinaryOperationNullTest, Vector_Valid_Vector_NonNullable) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationNullTest, Vector_NonNullable_Vector_NonNullable) {
+TEST_F(BinaryOperationNullTest, Vector_NonNullable_Vector_NonNullable)
+{
   using TypeOut = int32_t;
   using TypeLhs = int32_t;
   using TypeRhs = int32_t;

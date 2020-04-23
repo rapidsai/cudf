@@ -35,7 +35,8 @@ struct DigitizeTest : public GdfTest {
   gdf_col_pointer col_in;
   gdf_col_pointer bins;
 
-  DigitizeTest() {
+  DigitizeTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -47,7 +48,8 @@ struct DigitizeTest : public GdfTest {
   void initialize_data(size_t column_length,
                        size_t column_range,
                        size_t bins_length,
-                       size_t bins_range) {
+                       size_t bins_range)
+  {
     initialize_vector(col_in_data, column_length, column_range, false);
     col_in = create_gdf_column(col_in_data);
 
@@ -55,7 +57,8 @@ struct DigitizeTest : public GdfTest {
     bins = create_gdf_column(bins_data);
   }
 
-  gdf_error digitize(bool right) {
+  gdf_error digitize(bool right)
+  {
     rmm::device_vector<cudf::size_type> out_indices_dev(col_in->size);
     gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
     out_data.resize(out_indices_dev.size());
@@ -70,19 +73,22 @@ struct DigitizeTest : public GdfTest {
 typedef ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double> ValidGdfTypes;
 TYPED_TEST_CASE(DigitizeTest, ValidGdfTypes);
 
-TYPED_TEST(DigitizeTest, UpperBound) {
+TYPED_TEST(DigitizeTest, UpperBound)
+{
   this->initialize_data(1000, 56, 4, 100);
   gdf_error result = this->digitize(true);
   EXPECT_EQ(result, GDF_SUCCESS);
 }
 
-TYPED_TEST(DigitizeTest, LowerBound) {
+TYPED_TEST(DigitizeTest, LowerBound)
+{
   this->initialize_data(10000, 60, 10, 100);
   gdf_error result = this->digitize(false);
   EXPECT_EQ(result, GDF_SUCCESS);
 }
 
-void digitize_detail(bool right, const std::vector<int32_t>& expected) {
+void digitize_detail(bool right, const std::vector<int32_t>& expected)
+{
   std::vector<double> bins_data{0, 2, 5, 7, 8};
   gdf_col_pointer bins = create_gdf_column(bins_data);
 
@@ -103,12 +109,14 @@ void digitize_detail(bool right, const std::vector<int32_t>& expected) {
   for (unsigned int i = 0; i < num_rows; ++i) { EXPECT_EQ(expected[i], out_indices[i]); }
 }
 
-TYPED_TEST(DigitizeTest, UpperBoundDetail) {
+TYPED_TEST(DigitizeTest, UpperBoundDetail)
+{
   std::vector<int32_t> expected{0, 0, 1, 1, 2, 4, 5};
   digitize_detail(true, expected);
 }
 
-TYPED_TEST(DigitizeTest, LowerBoundDetail) {
+TYPED_TEST(DigitizeTest, LowerBoundDetail)
+{
   std::vector<int32_t> expected{0, 1, 1, 2, 2, 5, 5};
   digitize_detail(false, expected);
 }

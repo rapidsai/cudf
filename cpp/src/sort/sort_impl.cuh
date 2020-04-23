@@ -25,17 +25,20 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sequence.h>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 // Create permuted row indices that would materialize sorted order
 template <bool stable = false>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(data_type(experimental::type_to_id<size_type>()), 0);
   }

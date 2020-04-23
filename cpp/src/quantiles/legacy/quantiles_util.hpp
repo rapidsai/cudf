@@ -23,11 +23,13 @@
 #include <cudf/legacy/quantiles.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace interpolate {
-
+namespace cudf
+{
+namespace interpolate
+{
 template <typename T_out, typename T_in>
-CUDA_HOST_DEVICE_CALLABLE void linear(T_out& result, T_in lhs, T_in rhs, double frac) {
+CUDA_HOST_DEVICE_CALLABLE void linear(T_out& result, T_in lhs, T_in rhs, double frac)
+{
   // TODO: safe operation to avoid overflow/underflow
   // double can fully represent int8-32 value range.
   // Since the fractoin part of double is 52 bits,
@@ -44,7 +46,8 @@ CUDA_HOST_DEVICE_CALLABLE void linear(T_out& result, T_in lhs, T_in rhs, double 
 }
 
 template <typename T_out, typename T_in>
-CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, T_in lhs, T_in rhs) {
+CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, T_in lhs, T_in rhs)
+{
   // TODO: try std::midpoint (C++20) if available
   double dlhs = static_cast<double>(lhs);
   double drhs = static_cast<double>(rhs);
@@ -56,7 +59,8 @@ CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, T_in lhs, T_in rhs) {
 // @overloads
 
 template <typename T_out>
-CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, int64_t lhs, int64_t rhs) {
+CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, int64_t lhs, int64_t rhs)
+{
   // caring to avoid integer overflow and underflow between int64_t and T_out( double )
   int64_t half = lhs / 2 + rhs / 2;
   int64_t rest = (lhs % 2 + rhs % 2);
@@ -65,7 +69,8 @@ CUDA_HOST_DEVICE_CALLABLE void midpoint(T_out& result, int64_t lhs, int64_t rhs)
 }
 
 template <>
-CUDA_HOST_DEVICE_CALLABLE void midpoint(int64_t& result, int64_t lhs, int64_t rhs) {
+CUDA_HOST_DEVICE_CALLABLE void midpoint(int64_t& result, int64_t lhs, int64_t rhs)
+{
   // caring to avoid integer overflow
   int64_t half = lhs / 2 + rhs / 2;
   int64_t rest = (lhs % 2 + rhs % 2);
@@ -78,8 +83,8 @@ CUDA_HOST_DEVICE_CALLABLE void midpoint(int64_t& result, int64_t lhs, int64_t rh
 
 }  // end of namespace interpolate
 
-namespace detail {
-
+namespace detail
+{
 /**
  * @brief Helper struct that calculates the values needed to get quantile values
  * by interpolation.
@@ -98,7 +103,8 @@ struct quantile_index {
   double fraction;
 
   CUDA_HOST_DEVICE_CALLABLE
-  quantile_index(cudf::size_type length, double quant) {
+  quantile_index(cudf::size_type length, double quant)
+  {
     // clamp quant value.
     // Todo: use std::clamp if c++17 is supported.
     quant = std::min(std::max(quant, 0.0), 1.0);
@@ -113,7 +119,8 @@ struct quantile_index {
 };
 
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE T get_array_value(T const* devarr, cudf::size_type location) {
+CUDA_HOST_DEVICE_CALLABLE T get_array_value(T const* devarr, cudf::size_type location)
+{
   T result;
 #if defined(__CUDA_ARCH__)
   result = devarr[location];
@@ -133,10 +140,9 @@ CUDA_HOST_DEVICE_CALLABLE T get_array_value(T const* devarr, cudf::size_type loc
  * @return value at quantile
  */
 template <typename T, typename RetT = double>
-CUDA_HOST_DEVICE_CALLABLE RetT select_quantile(T const* devarr,
-                                               cudf::size_type size,
-                                               double quantile,
-                                               interpolation interpolation) {
+CUDA_HOST_DEVICE_CALLABLE RetT
+select_quantile(T const* devarr, cudf::size_type size, double quantile, interpolation interpolation)
+{
   T temp[2];
   RetT result;
 

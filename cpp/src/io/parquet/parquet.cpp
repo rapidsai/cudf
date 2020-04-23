@@ -16,10 +16,12 @@
 
 #include "parquet.h"
 
-namespace cudf {
-namespace io {
-namespace parquet {
-
+namespace cudf
+{
+namespace io
+{
+namespace parquet
+{
 const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
                                                           1,
                                                           2,
@@ -45,7 +47,8 @@ const uint8_t CompactProtocolReader::g_list2struct[16] = {0,
  *
  * @return True if the struct type is recognized, false otherwise
  **/
-bool CompactProtocolReader::skip_struct_field(int t, int depth) {
+bool CompactProtocolReader::skip_struct_field(int t, int depth)
+{
   switch (t) {
     case ST_FLD_TRUE:
     case ST_FLD_FALSE: break;
@@ -81,16 +84,17 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth) {
   return true;
 }
 
-#define PARQUET_BEGIN_STRUCT(st)                                  \
-  bool CompactProtocolReader::read(st *s) { /*printf(#st "\n");*/ \
-    int fld = 0;                                                  \
-    for (;;) {                                                    \
-      int c, t, f;                                                \
-      c = getb();                                                 \
-      if (!c) break;                                              \
-      f   = c >> 4;                                               \
-      t   = c & 0xf;                                              \
-      fld = (f) ? fld + f : get_i16();                            \
+#define PARQUET_BEGIN_STRUCT(st)          \
+  bool CompactProtocolReader::read(st *s) \
+  { /*printf(#st "\n");*/                 \
+    int fld = 0;                          \
+    for (;;) {                            \
+      int c, t, f;                        \
+      c = getb();                         \
+      if (!c) break;                      \
+      f   = c >> 4;                       \
+      t   = c & 0xf;                      \
+      fld = (f) ? fld + f : get_i16();    \
       switch (fld) {
 #define PARQUET_FLD_INT16(id, m)       \
   case id:                             \
@@ -284,7 +288,8 @@ PARQUET_END_STRUCT()
  *
  * @return True if schema constructed completely, false otherwise
  **/
-bool CompactProtocolReader::InitSchema(FileMetaData *md) {
+bool CompactProtocolReader::InitSchema(FileMetaData *md)
+{
   int final_pos = WalkSchema(md->schema);
   if (final_pos != md->schema.size()) { return false; }
 
@@ -330,11 +335,9 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md) {
  *
  * @return The node index that was populated
  **/
-int CompactProtocolReader::WalkSchema(std::vector<SchemaElement> &schema,
-                                      int idx,
-                                      int parent_idx,
-                                      int max_def_level,
-                                      int max_rep_level) {
+int CompactProtocolReader::WalkSchema(
+  std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
+{
   if (idx >= 0 && (size_t)idx < schema.size()) {
     SchemaElement *e = &schema[idx];
     if (e->repetition_type == OPTIONAL) {
@@ -368,9 +371,10 @@ int CompactProtocolReader::WalkSchema(std::vector<SchemaElement> &schema,
  **/
 /* ----------------------------------------------------------------------------*/
 
-#define CPW_BEGIN_STRUCT(st)                         \
-  size_t CompactProtocolWriter::write(const st *s) { \
-    size_t struct_start_pos = m_buf->size();         \
+#define CPW_BEGIN_STRUCT(st)                       \
+  size_t CompactProtocolWriter::write(const st *s) \
+  {                                                \
+    size_t struct_start_pos = m_buf->size();       \
     int cur_fld             = 0;
 
 #define CPW_FLD_INT(f, m, t) \

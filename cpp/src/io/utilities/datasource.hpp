@@ -25,13 +25,15 @@
 #include <memory>
 #include <string>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 /**
  * @brief Class for reading from a file or memory source
  **/
-class datasource {
+class datasource
+{
  public:
   /**
    * @brief Create a source from a file path

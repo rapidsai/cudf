@@ -2,9 +2,10 @@
 
 #include <cstdint>
 
-namespace cudf {
-namespace nvtx {
-
+namespace cudf
+{
+namespace nvtx
+{
 enum class color : uint32_t {
   GREEN      = 0xff00ff00,
   BLUE       = 0xff0000ff,

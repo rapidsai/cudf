@@ -47,7 +47,8 @@
 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
-gdf_column *create_column_ints(int32_t *host_data, cudf::size_type num_rows) {
+gdf_column *create_column_ints(int32_t *host_data, cudf::size_type num_rows)
+{
   gdf_column *column = new gdf_column{};
   int32_t *data;
   EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t), 0), RMM_SUCCESS);
@@ -61,7 +62,8 @@ gdf_column *create_column_ints(int32_t *host_data, cudf::size_type num_rows) {
   return column;
 }
 
-gdf_column *create_column_constant(cudf::size_type num_rows, int value) {
+gdf_column *create_column_constant(cudf::size_type num_rows, int value)
+{
   gdf_column *column = new gdf_column{};
   int *data;
   bit_mask::bit_mask_t *valid;
@@ -73,7 +75,8 @@ gdf_column *create_column_constant(cudf::size_type num_rows, int value) {
   return column;
 }
 
-int32_t *generate_int_data(cudf::size_type num_rows, size_t max_value, bool print = false) {
+int32_t *generate_int_data(cudf::size_type num_rows, size_t max_value, bool print = false)
+{
   int32_t *host_data = new int32_t[num_rows];
 
   for (cudf::size_type row_index = 0; row_index < num_rows; row_index++) {
@@ -87,7 +90,8 @@ int32_t *generate_int_data(cudf::size_type num_rows, size_t max_value, bool prin
 }
 
 struct NVCategoryTest : public GdfTest {
-  gdf_column *create_boolean_column(cudf::size_type num_rows) {
+  gdf_column *create_boolean_column(cudf::size_type num_rows)
+  {
     gdf_column *column = new gdf_column{};
     int *data;
     bit_mask::bit_mask_t *valid;
@@ -98,7 +102,8 @@ struct NVCategoryTest : public GdfTest {
     return column;
   }
 
-  gdf_column *create_indices_column(cudf::size_type num_rows) {
+  gdf_column *create_indices_column(cudf::size_type num_rows)
+  {
     gdf_column *column = new gdf_column{};
     int *data;
     bit_mask::bit_mask_t *valid;
@@ -111,7 +116,8 @@ struct NVCategoryTest : public GdfTest {
 };
 
 // todo refactor tests
-TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING) {
+TEST_F(NVCategoryTest, TEST_NVCATEGORY_SORTING)
+{
   bool print          = false;
   const int rows_size = 64;
   const int length    = 2;
@@ -163,11 +169,13 @@ enum struct agg_op {
 template <agg_op op>
 struct AggOp {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return static_cast<T>(0);
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return static_cast<T>(0);
   }
 };
@@ -175,11 +183,13 @@ struct AggOp {
 template <>
 struct AggOp<agg_op::MIN> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return (a < b) ? a : b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -187,11 +197,13 @@ struct AggOp<agg_op::MIN> {
 template <>
 struct AggOp<agg_op::MAX> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return (a > b) ? a : b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -199,11 +211,13 @@ struct AggOp<agg_op::MAX> {
 template <>
 struct AggOp<agg_op::SUM> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return a + b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -212,18 +226,21 @@ template <>
 struct AggOp<agg_op::CNT> {
   size_t count{0};
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     count = a + 1;
     return count;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     count = 1;
     return count;
   }
 };
 
-TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON) {
+TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
+{
   bool print          = false;
   const int rows_size = 64;
   const size_t length = 1;
@@ -287,7 +304,8 @@ struct NVCategoryConcatTest : public GdfTest {
   gdf_column *concat_out;
   const int length = 2;
 
-  std::vector<std::string> compute_gdf_result(bool print = false) {
+  std::vector<std::string> compute_gdf_result(bool print = false)
+  {
     size_t keys_size = 0;
     for (size_t i = 0; i < concat_columns.size(); i++) keys_size += concat_columns[i]->size;
 
@@ -320,7 +338,8 @@ struct NVCategoryConcatTest : public GdfTest {
   }
 };
 
-TEST_F(NVCategoryConcatTest, concat_test) {
+TEST_F(NVCategoryConcatTest, concat_test)
+{
   bool print          = false;
   const int rows_size = 64;
 
@@ -361,9 +380,11 @@ using result_type = typename std::pair<int, int>;
 
 // Define stream operator for a std::pair for conveinience of printing results.
 // Needs to be in the std namespace to work with std::copy
-namespace std {
+namespace std
+{
 template <typename first_t, typename second_t>
-std::ostream &operator<<(std::ostream &os, std::pair<first_t, second_t> const &p) {
+std::ostream &operator<<(std::ostream &os, std::pair<first_t, second_t> const &p)
+{
   os << p.first << "\t" << p.second;
   std::cout << "\n";
   return os;
@@ -396,7 +417,8 @@ struct NVCategoryJoinTest : public GdfTest {
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_reference_solution(join_op op,
                                                       bool print = false,
-                                                      bool sort  = true) {
+                                                      bool sort  = true)
+  {
     using key_type   = std::string;
     using value_type = size_t;
 
@@ -491,7 +513,8 @@ struct NVCategoryJoinTest : public GdfTest {
                                               std::vector<int> right_join_idx,
                                               bool print                = false,
                                               bool sort                 = true,
-                                              gdf_error expected_result = GDF_SUCCESS) {
+                                              gdf_error expected_result = GDF_SUCCESS)
+  {
     EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
     EXPECT_EQ(left_join_idx.size(), right_join_idx.size()) << "Mismatch join indexes size";
 
@@ -636,7 +659,8 @@ struct NVCategoryJoinTest : public GdfTest {
                     std::vector<result_type> &reference_result,
                     size_t length,
                     bool print = false,
-                    bool sort  = true) {
+                    bool sort  = true)
+  {
     gdf_column *result_column = gdf_raw_result_columns[0];
 
     if (print) {
@@ -691,7 +715,8 @@ struct NVCategoryJoinTest : public GdfTest {
   }
 };
 
-TEST_F(NVCategoryJoinTest, join_test) {
+TEST_F(NVCategoryJoinTest, join_test)
+{
   bool print       = false;
   size_t rows_size = 64;
   join_op op       = join_op::INNER;
@@ -736,7 +761,8 @@ TEST_F(NVCategoryJoinTest, join_test) {
   this->check_output(op, reference_result, length, print);
 }
 
-TEST_F(NVCategoryJoinTest, join_test_nulls) {
+TEST_F(NVCategoryJoinTest, join_test_nulls)
+{
   bool print       = false;
   size_t rows_size = 16;
   join_op op       = join_op::INNER;
@@ -780,7 +806,8 @@ TEST_F(NVCategoryJoinTest, join_test_nulls) {
   }
 }
 
-TEST_F(NVCategoryJoinTest, join_test_bug) {
+TEST_F(NVCategoryJoinTest, join_test_bug)
+{
   bool print = false;
   join_op op = join_op::LEFT;
 

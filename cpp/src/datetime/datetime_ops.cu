@@ -24,14 +24,17 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
-namespace datetime {
-namespace detail {
-
+namespace cudf
+{
+namespace datetime
+{
+namespace detail
+{
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const {
+  CUDA_DEVICE_CALLABLE int16_t operator()(Timestamp const ts) const
+  {
     using namespace simt::std::chrono;
 
     auto days_since_epoch = floor<days>(ts);
@@ -65,7 +68,8 @@ struct extract_component_operator {
 // date only (without the time component)
 struct extract_last_day_of_month {
   CUDA_DEVICE_CALLABLE auto days_in_month(simt::std::chrono::month mon, bool is_leap_year) const
-    -> uint8_t {
+    -> uint8_t
+  {
     using namespace simt::std::chrono;
     // The expression in switch has to be integral/enumerated type.
     // The constexpr in case has to match the switch type
@@ -87,7 +91,8 @@ struct extract_last_day_of_month {
   }
 
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const {
+  CUDA_DEVICE_CALLABLE timestamp_D operator()(Timestamp const ts) const
+  {
     using namespace simt::std::chrono;
     // IDEAL: does not work with CUDA10.0 due to nvcc compiler bug
     // cannot invoke ym_last_day.day()
@@ -114,13 +119,15 @@ struct launch_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const {
+    cudaStream_t stream) const
+  {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const {
+    cudaStream_t stream) const
+  {
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
@@ -133,7 +140,8 @@ struct launch_functor {
 template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
                                           cudaStream_t stream,
-                                          rmm::mr::device_memory_resource* mr) {
+                                          rmm::mr::device_memory_resource* mr)
+{
   auto size            = column.size();
   auto output_col_type = data_type{OutputColCudfT};
   auto null_mask       = copy_bitmask(column, stream, mr);
@@ -156,8 +164,8 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
 
 }  // namespace detail
 
-std::unique_ptr<column> extract_year(column_view const& column,
-                                     rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::YEAR>,
@@ -165,7 +173,8 @@ std::unique_ptr<column> extract_year(column_view const& column,
 }
 
 std::unique_ptr<column> extract_month(column_view const& column,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
 
   return detail::apply_datetime_op<
@@ -173,8 +182,8 @@ std::unique_ptr<column> extract_month(column_view const& column,
     cudf::INT16>(column, 0, mr);
 }
 
-std::unique_ptr<column> extract_day(column_view const& column,
-                                    rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> extract_day(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::DAY>,
@@ -182,15 +191,16 @@ std::unique_ptr<column> extract_day(column_view const& column,
 }
 
 std::unique_ptr<column> extract_weekday(column_view const& column,
-                                        rmm::mr::device_memory_resource* mr) {
+                                        rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::WEEKDAY>,
     cudf::INT16>(column, 0, mr);
 }
 
-std::unique_ptr<column> extract_hour(column_view const& column,
-                                     rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> extract_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::HOUR>,
@@ -198,7 +208,8 @@ std::unique_ptr<column> extract_hour(column_view const& column,
 }
 
 std::unique_ptr<column> extract_minute(column_view const& column,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::MINUTE>,
@@ -206,7 +217,8 @@ std::unique_ptr<column> extract_minute(column_view const& column,
 }
 
 std::unique_ptr<column> extract_second(column_view const& column,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<
     detail::extract_component_operator<detail::datetime_component::SECOND>,
@@ -214,7 +226,8 @@ std::unique_ptr<column> extract_second(column_view const& column,
 }
 
 std::unique_ptr<column> last_day_of_month(column_view const& column,
-                                          rmm::mr::device_memory_resource* mr) {
+                                          rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_datetime_op<detail::extract_last_day_of_month, cudf::TIMESTAMP_DAYS>(
     column, 0, mr);

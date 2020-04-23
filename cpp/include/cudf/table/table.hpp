@@ -21,10 +21,12 @@
 #include <memory>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-
-class table {
+namespace cudf
+{
+namespace experimental
+{
+class table
+{
  public:
   table()        = default;
   ~table()       = default;

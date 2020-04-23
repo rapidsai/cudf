@@ -24,9 +24,12 @@ using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
-class HashTest : public cudf::test::BaseFixture {};
+class HashTest : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(HashTest, MultiValue) {
+TEST_F(HashTest, MultiValue)
+{
   strings_column_wrapper const strings_col({"",
                                             "The quick brown fox",
                                             "jumps over the lazy dog.",
@@ -57,7 +60,8 @@ TEST_F(HashTest, MultiValue) {
   expect_columns_equal(output1->view(), output2->view());
 }
 
-TEST_F(HashTest, MultiValueNulls) {
+TEST_F(HashTest, MultiValueNulls)
+{
   // Nulls with different values should be equal
   strings_column_wrapper const strings_col1({"",
                                              "The quick brown fox",
@@ -110,11 +114,14 @@ TEST_F(HashTest, MultiValueNulls) {
 }
 
 template <typename T>
-class HashTestTyped : public cudf::test::BaseFixture {};
+class HashTestTyped : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(HashTestTyped, Equality) {
+TYPED_TEST(HashTestTyped, Equality)
+{
   fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
 
@@ -126,7 +133,8 @@ TYPED_TEST(HashTestTyped, Equality) {
   expect_columns_equal(output1->view(), output2->view());
 }
 
-TYPED_TEST(HashTestTyped, EqualityNulls) {
+TYPED_TEST(HashTestTyped, EqualityNulls)
+{
   using T = TypeParam;
 
   // Nulls with different values should be equal
@@ -144,11 +152,14 @@ TYPED_TEST(HashTestTyped, EqualityNulls) {
 }
 
 template <typename T>
-class HashTestFloatTyped : public cudf::test::BaseFixture {};
+class HashTestFloatTyped : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
-TYPED_TEST(HashTestFloatTyped, TestExtremes) {
+TYPED_TEST(HashTestFloatTyped, TestExtremes)
+{
   using T = TypeParam;
   T min   = std::numeric_limits<T>::min();
   T max   = std::numeric_limits<T>::max();

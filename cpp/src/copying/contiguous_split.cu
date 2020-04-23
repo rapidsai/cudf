@@ -26,14 +26,14 @@
 
 #include <numeric>
 
-namespace cudf {
-
-namespace experimental {
-
-namespace detail {
-
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Copies contents of `in` to `out`.  Copies validity if present
  * but does not compute null count.
@@ -43,7 +43,8 @@ namespace {
  */
 template <size_type block_size, typename T, bool has_validity>
 __launch_bounds__(block_size) __global__
-  void copy_in_place_kernel(column_device_view const in, mutable_column_device_view out) {
+  void copy_in_place_kernel(column_device_view const in, mutable_column_device_view out)
+{
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
   const int warp_id              = tid / cudf::experimental::detail::warp_size;
   const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;
@@ -119,7 +120,8 @@ __launch_bounds__(block_size) __global__
                                     size_type offset_shift,
                                     size_type num_chars,
                                     char const* __restrict__ chars_in,
-                                    char* __restrict__ chars_out) {
+                                    char* __restrict__ chars_out)
+{
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
   const int warp_id              = tid / cudf::experimental::detail::warp_size;
   const size_type warps_per_grid = gridDim.x * block_size / cudf::experimental::detail::warp_size;
@@ -192,7 +194,8 @@ struct column_split_info {
  */
 struct column_buffer_size_functor {
   template <typename T>
-  size_t operator()(column_view const& c, column_split_info& split_info) {
+  size_t operator()(column_view const& c, column_split_info& split_info)
+  {
     split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);
     split_info.validity_buf_size =
       (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
@@ -201,7 +204,8 @@ struct column_buffer_size_functor {
 };
 template <>
 size_t column_buffer_size_functor::operator()<string_view>(column_view const& c,
-                                                           column_split_info& split_info) {
+                                                           column_split_info& split_info)
+{
   // this has already been precomputed in an earlier step. return the sum.
   return split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size;
 }
@@ -217,7 +221,8 @@ struct column_copy_functor {
   void operator()(column_view const& in,
                   column_split_info const& split_info,
                   char*& dst,
-                  std::vector<column_view>& out_cols) {
+                  std::vector<column_view>& out_cols)
+  {
     // outgoing pointers
     char* data             = dst;
     bitmask_type* validity = split_info.validity_buf_size == 0
@@ -256,7 +261,8 @@ template <>
 void column_copy_functor::operator()<string_view>(column_view const& in,
                                                   column_split_info const& split_info,
                                                   char*& dst,
-                                                  std::vector<column_view>& out_cols) {
+                                                  std::vector<column_view>& out_cols)
+{
   // outgoing pointers
   char* chars_buf            = dst;
   bitmask_type* validity_buf = split_info.validity_buf_size == 0
@@ -351,7 +357,8 @@ struct column_preprocess_info {
 thrust::host_vector<column_split_info> preprocess_string_column_info(
   cudf::table_view const& t,
   rmm::device_vector<column_split_info>& device_split_info,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   // build a list of all the offset columns and their indices for all input string columns and put
   // them on the gpu
   thrust::host_vector<column_preprocess_info> offset_columns;
@@ -411,7 +418,8 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(
 contiguous_split_result alloc_and_copy(cudf::table_view const& t,
                                        rmm::device_vector<column_split_info>& device_split_info,
                                        rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   // preprocess column split information for string columns.
   thrust::host_vector<column_split_info> split_info =
     preprocess_string_column_info(t, device_split_info, stream);
@@ -451,7 +459,8 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
                                                       rmm::mr::device_memory_resource* mr,
-                                                      cudaStream_t stream) {
+                                                      cudaStream_t stream)
+{
   auto subtables = cudf::experimental::split(input, splits);
 
   // optimization : for large numbers of splits this allocation can dominate total time
@@ -478,7 +487,8 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr) {
+                                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return cudf::experimental::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
 }

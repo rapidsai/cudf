@@ -24,50 +24,56 @@
 #include <cmath>
 #include <type_traits>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 // trig functions
 
 struct DeviceSin {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::sin(data);
   }
 };
 
 struct DeviceCos {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::cos(data);
   }
 };
 
 struct DeviceTan {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::tan(data);
   }
 };
 
 struct DeviceArcSin {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::asin(data);
   }
 };
 
 struct DeviceArcCos {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::acos(data);
   }
 };
 
 struct DeviceArcTan {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::atan(data);
   }
 };
@@ -76,21 +82,24 @@ struct DeviceArcTan {
 
 struct DeviceExp {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::exp(data);
   }
 };
 
 struct DeviceLog {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::log(data);
   }
 };
 
 struct DeviceSqrt {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::sqrt(data);
   }
 };
@@ -99,21 +108,24 @@ struct DeviceSqrt {
 
 struct DeviceCeil {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::ceil(data);
   }
 };
 
 struct DeviceFloor {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::floor(data);
   }
 };
 
 struct DeviceAbs {
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return std::abs(data);
   }
 };
@@ -123,7 +135,8 @@ struct DeviceAbs {
 struct DeviceInvert {
   // TODO: maybe sfinae overload this for cudf::bool8
   template <typename T>
-  __device__ T apply(T data) {
+  __device__ T apply(T data)
+  {
     return ~data;
   }
 };
@@ -132,13 +145,15 @@ struct DeviceInvert {
 
 struct DeviceNot {
   template <typename T>
-  __device__ cudf::bool8 apply(T data) {
+  __device__ cudf::bool8 apply(T data)
+  {
     return static_cast<cudf::bool8>(!data);
   }
 };
 
 template <typename T, typename F>
-static void launch(gdf_column const* input, gdf_column* output) {
+static void launch(gdf_column const* input, gdf_column* output)
+{
   cudf::unary::Launcher<T, T, F>::launch(input, output);
 }
 
@@ -146,13 +161,15 @@ template <typename F>
 struct MathOpDispatcher {
   template <typename T>
   typename std::enable_if_t<std::is_arithmetic<T>::value, void> operator()(gdf_column const* input,
-                                                                           gdf_column* output) {
+                                                                           gdf_column* output)
+  {
     launch<T, F>(input, output);
   }
 
   template <typename T>
   typename std::enable_if_t<!std::is_arithmetic<T>::value, void> operator()(gdf_column const* input,
-                                                                            gdf_column* output) {
+                                                                            gdf_column* output)
+  {
     CUDF_FAIL("Unsupported datatype for operation");
   }
 };
@@ -161,13 +178,15 @@ template <typename F>
 struct BitwiseOpDispatcher {
   template <typename T>
   typename std::enable_if_t<std::is_integral<T>::value, void> operator()(gdf_column const* input,
-                                                                         gdf_column* output) {
+                                                                         gdf_column* output)
+  {
     launch<T, F>(input, output);
   }
 
   template <typename T>
   typename std::enable_if_t<!std::is_integral<T>::value, void> operator()(gdf_column const* input,
-                                                                          gdf_column* output) {
+                                                                          gdf_column* output)
+  {
     CUDF_FAIL("Unsupported datatype for operation");
   }
 };
@@ -176,7 +195,8 @@ template <typename F>
 struct LogicalOpDispatcher {
  private:
   template <typename T>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     return std::is_arithmetic<T>::value || std::is_same<T, cudf::bool8>::value;
 
     // TODO: try using member detector
@@ -186,20 +206,23 @@ struct LogicalOpDispatcher {
  public:
   template <typename T>
   typename std::enable_if_t<is_supported<T>(), void> operator()(gdf_column const* input,
-                                                                gdf_column* output) {
+                                                                gdf_column* output)
+  {
     cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
   }
 
   template <typename T>
   typename std::enable_if_t<!is_supported<T>(), void> operator()(gdf_column const* input,
-                                                                 gdf_column* output) {
+                                                                 gdf_column* output)
+  {
     CUDF_FAIL("Unsupported datatype for operation");
   }
 };
 
 }  // namespace detail
 
-gdf_column unary_operation(gdf_column const& input, unary_op op) {
+gdf_column unary_operation(gdf_column const& input, unary_op op)
+{
   gdf_column output{};
 
   if (op == unary_op::NOT) {

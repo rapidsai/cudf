@@ -28,17 +28,20 @@
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
-namespace cudf {
-namespace io {
-namespace avro {
-
+namespace cudf
+{
+namespace io
+{
+namespace avro
+{
 // Forward declare Avro metadata parser
 class avro_metadata;
 
 /**
  * @brief Implementation for Avro reader
  **/
-class reader::Impl {
+class reader::Impl
+{
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

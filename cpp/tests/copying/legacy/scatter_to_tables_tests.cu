@@ -25,13 +25,15 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 template <typename T>
-struct ScatterToTablesTest : GdfTest {};
+struct ScatterToTablesTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(ScatterToTablesTest, test_types);
 
 //  All Pass test cases
-TYPED_TEST(ScatterToTablesTest, PassTest) {
+TYPED_TEST(ScatterToTablesTest, PassTest)
+{
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
   constexpr cudf::size_type scatter_size{table_n_rows};
@@ -59,7 +61,8 @@ TYPED_TEST(ScatterToTablesTest, PassTest) {
 }
 
 // Test Failure if scatter_map is not `GDF_INT32` column
-TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
+TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest)
+{
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
   constexpr cudf::size_type scatter_size{table_n_rows};
@@ -88,7 +91,8 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
 }
 
 // Test Failure if scatter_map column has null entries
-TYPED_TEST(ScatterToTablesTest, NullMapTest) {
+TYPED_TEST(ScatterToTablesTest, NullMapTest)
+{
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
   constexpr cudf::size_type scatter_size{table_n_rows};
@@ -129,7 +133,8 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
 }
 
 // Test Failure if scatter_map and input_table number of rows mismatch are not equal
-TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
+TYPED_TEST(ScatterToTablesTest, SizeMismatchTest)
+{
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
 
@@ -177,7 +182,8 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
  * 1 1 1   pass  (o/p=1)
  *
  */
-TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
+TYPED_TEST(ScatterToTablesTest, ZeroSizeTest)
+{
   cudf::size_type table_n_cols = 1;
   for (cudf::size_type table_n_rows : {0, 1}) {
     for (cudf::size_type scatter_size : {0, 1}) {
@@ -213,7 +219,8 @@ TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
 template <typename T>
 auto scatter_columns(std::vector<std::vector<T>> input_cols_data,
                      std::vector<std::vector<cudf::valid_type>> input_cols_bitmask,
-                     std::vector<cudf::size_type> scatter_map) {
+                     std::vector<cudf::size_type> scatter_map)
+{
   auto max = *std::max_element(scatter_map.begin(), scatter_map.end());
   std::vector<std::vector<std::vector<T>>> output_cols_data(max + 1);
   std::vector<std::vector<std::vector<cudf::valid_type>>> output_cols_bitmask(max + 1);
@@ -256,7 +263,8 @@ auto scatter_columns(std::vector<std::vector<T>> input_cols_data,
   return std::make_tuple(output_cols_data, output_cols_bitmask, output_cols_null_count);
 }
 
-TYPED_TEST(ScatterToTablesTest, FunctionalTest) {
+TYPED_TEST(ScatterToTablesTest, FunctionalTest)
+{
   using TypeParam = cudf::size_type;
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};

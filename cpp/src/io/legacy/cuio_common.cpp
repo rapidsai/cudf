@@ -18,9 +18,10 @@
 
 #include <algorithm>
 
-namespace cudf {
-
-std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype) {
+namespace cudf
+{
+std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype)
+{
   if (dtype == "str") return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
   if (dtype == "timestamp[s]")
     return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_s});
@@ -57,7 +58,8 @@ std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::strin
 std::string infer_compression_type(
   const std::string &compression_arg,
   const std::string &filename,
-  const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map) {
+  const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map)
+{
   auto str_tolower = [](const auto &begin, const auto &end) {
     std::string out;
     std::transform(begin, end, std::back_inserter(out), ::tolower);

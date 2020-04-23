@@ -21,13 +21,17 @@
 #include <cudf/binaryop.hpp>
 #include <tests/binaryop/binop-fixture.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
+struct BinaryOperationGenericPTXTest : public BinaryOperationTest {
+};
 
-struct BinaryOperationGenericPTXTest : public BinaryOperationTest {};
-
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)
+{
   // c = a*a*a + b
   const char* ptx =
     R"***(
@@ -85,7 +89,8 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32)
+{
   // c = a*a*a + b
   const char* ptx =
     R"***(
@@ -144,7 +149,8 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64)
+{
   // c = a*a*a + b*b
   const char* ptx =
     R"***(

@@ -28,8 +28,8 @@ constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
 
-namespace {
-
+namespace
+{
 /**
  * @brief Kernel to count the number of set bits in a column's validity buffer
  *
@@ -50,7 +50,8 @@ template <typename size_type>
 __global__ void count_valid_bits(valid32_t const* const masks32,
                                  int const num_masks32,
                                  int const num_rows,
-                                 size_type* const global_count) {
+                                 size_type* const global_count)
+{
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
 
@@ -95,7 +96,8 @@ __global__ void count_valid_bits(valid32_t const* const masks32,
 
 gdf_error gdf_count_nonzero_mask(cudf::valid_type const* masks,
                                  cudf::size_type num_rows,
-                                 cudf::size_type* count) {
+                                 cudf::size_type* count)
+{
   // TODO: add a default parameter cudaStream_t stream = 0 when we move API to
   // C++
 
@@ -161,7 +163,8 @@ gdf_error gdf_count_nonzero_mask(cudf::valid_type const* masks,
 gdf_error gdf_mask_concat(cudf::valid_type* output_mask,
                           cudf::size_type output_column_length,
                           gdf_column* columns_to_concat[],
-                          cudf::size_type num_columns) {
+                          cudf::size_type num_columns)
+{
   std::vector<cudf::valid_type*> h_masks(num_columns);
   std::vector<cudf::size_type> h_column_lengths(num_columns);
   std::transform(columns_to_concat, columns_to_concat + num_columns, h_masks.begin(), [](auto col) {
@@ -227,7 +230,8 @@ gdf_error gdf_mask_concat(cudf::valid_type* output_mask,
 gdf_error all_bitmask_on(cudf::valid_type* valid_out,
                          cudf::size_type& out_null_count,
                          cudf::size_type num_values,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   cudf::valid_type max_char = 255;
@@ -243,7 +247,8 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    const cudf::valid_type* valid_left,
                                    const cudf::valid_type* valid_right,
                                    cudaStream_t stream,
-                                   cudf::size_type num_values) {
+                                   cudf::size_type num_values)
+{
   cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -259,17 +264,21 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
   return error;
 }
 
-namespace cudf {
-namespace {
-
+namespace cudf
+{
+namespace
+{
 /**
  * @brief  Computes a bitmask from the bitwise AND of a set of bitmasks.
  */
 struct bitwise_and {
   bitwise_and(bit_mask::bit_mask_t** _masks, cudf::size_type _num_masks)
-    : masks{_masks}, num_masks(_num_masks) {}
+    : masks{_masks}, num_masks(_num_masks)
+  {
+  }
 
-  __device__ inline bit_mask::bit_mask_t operator()(cudf::size_type mask_element_index) {
+  __device__ inline bit_mask::bit_mask_t operator()(cudf::size_type mask_element_index)
+  {
     using namespace bit_mask;
     bit_mask_t result_mask{~bit_mask_t{0}};  // all 1s
     for (cudf::size_type i = 0; i < num_masks; ++i) { result_mask &= masks[i][mask_element_index]; }
@@ -281,8 +290,8 @@ struct bitwise_and {
 };
 }  // namespace
 
-rmm::device_vector<bit_mask::bit_mask_t> row_bitmask(cudf::table const& table,
-                                                     cudaStream_t stream) {
+rmm::device_vector<bit_mask::bit_mask_t> row_bitmask(cudf::table const& table, cudaStream_t stream)
+{
   using namespace bit_mask;
   rmm::device_vector<bit_mask_t> row_bitmask(num_elements(table.num_rows()), ~bit_mask_t{0});
 

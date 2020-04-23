@@ -26,8 +26,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
-namespace {
-
+namespace
+{
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -41,11 +41,14 @@ enum TwoPass {
 
 }  // namespace
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Function logic for the substring API.
  *
@@ -58,7 +61,8 @@ struct substring_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ cudf::size_type operator()(size_type idx) {
+  __device__ cudf::size_type operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return 0;  // null string
     string_view d_str = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
@@ -110,7 +114,8 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_default_resource(),
-  cudaStream_t stream                    = 0) {
+  cudaStream_t stream                    = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -159,14 +164,16 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& start,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, start, stop, step, mr);
 }
 
-namespace detail {
-namespace {
-
+namespace detail
+{
+namespace
+{
 template <typename PositionType, TwoPass Pass = SizeOnly>
 struct substring_from_fn {
   const column_device_view d_column;
@@ -179,7 +186,8 @@ struct substring_from_fn {
    * @brief Function logic for substring_from API.
    * This does both calculate and the execute based on template parameter.
    */
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return 0;  // null string
     string_view d_str = d_column.template element<string_view>(idx);
     size_type length  = d_str.length();
@@ -212,7 +220,8 @@ struct dispatch_substring_from_fn {
                                      column_view const& starts_column,
                                      column_view const& stops_column,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     const PositionType* starts = starts_column.data<PositionType>();
     const PositionType* stops  = stops_column.data<PositionType>();
 
@@ -262,7 +271,8 @@ struct dispatch_substring_from_fn {
                                      column_view const&,
                                      column_view const&,
                                      rmm::mr::device_memory_resource*,
-                                     cudaStream_t) const {
+                                     cudaStream_t) const
+  {
     CUDF_FAIL("Positions values must be an integral type.");
   }
 };
@@ -273,7 +283,8 @@ std::unique_ptr<column> dispatch_substring_from_fn::operator()<bool>(
   column_view const&,
   column_view const&,
   rmm::mr::device_memory_resource*,
-  cudaStream_t) const {
+  cudaStream_t) const
+{
   CUDF_FAIL("Positions values must not be bool type.");
 }
 
@@ -285,7 +296,8 @@ std::unique_ptr<column> slice_strings(
   column_view const& starts_column,
   column_view const& stops_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(starts_column.size() == strings_count,
@@ -314,7 +326,8 @@ std::unique_ptr<column> slice_strings(
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::slice_strings(strings, starts_column, stops_column, mr);
 }

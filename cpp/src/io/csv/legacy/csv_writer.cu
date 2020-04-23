@@ -36,12 +36,14 @@ struct column_to_strings_fn {
   const char* false_string;
 
   template <typename T>
-  NVStrings* operator()() {
+  NVStrings* operator()()
+  {
     throw std::runtime_error("column type not supported");
   }
 
   // convert cudf time units to nvstrings timestamp units
-  NVStrings::timestamp_units cudf2nvs(gdf_time_unit time_unit) {
+  NVStrings::timestamp_units cudf2nvs(gdf_time_unit time_unit)
+  {
     if (time_unit == TIME_UNIT_s) return NVStrings::seconds;
     if (time_unit == TIME_UNIT_us) return NVStrings::us;
     if (time_unit == TIME_UNIT_ns) return NVStrings::ns;
@@ -51,7 +53,8 @@ struct column_to_strings_fn {
 
 // specialization code for each type
 template <>
-NVStrings* column_to_strings_fn::operator()<int8_t>() {
+NVStrings* column_to_strings_fn::operator()<int8_t>()
+{
   auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
   rmm::device_vector<int32_t> int_buffer(rows);
   thrust::transform(rmm::exec_policy()->on(0),
@@ -63,7 +66,8 @@ NVStrings* column_to_strings_fn::operator()<int8_t>() {
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<int16_t>() {
+NVStrings* column_to_strings_fn::operator()<int16_t>()
+{
   auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
   rmm::device_vector<int32_t> int_buffer(rows);
   thrust::transform(rmm::exec_policy()->on(0),
@@ -75,27 +79,32 @@ NVStrings* column_to_strings_fn::operator()<int16_t>() {
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<int32_t>() {
+NVStrings* column_to_strings_fn::operator()<int32_t>()
+{
   return NVStrings::itos((static_cast<const int32_t*>(column->data)) + row_offset, rows, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<int64_t>() {
+NVStrings* column_to_strings_fn::operator()<int64_t>()
+{
   return NVStrings::ltos((static_cast<const int64_t*>(column->data)) + row_offset, rows, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<float>() {
+NVStrings* column_to_strings_fn::operator()<float>()
+{
   return NVStrings::ftos((static_cast<const float*>(column->data)) + row_offset, rows, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<double>() {
+NVStrings* column_to_strings_fn::operator()<double>()
+{
   return NVStrings::dtos((static_cast<const double*>(column->data)) + row_offset, rows, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<cudf::bool8>() {
+NVStrings* column_to_strings_fn::operator()<cudf::bool8>()
+{
   if (sizeof(bool) == sizeof(cudf::bool8))
     return NVStrings::create_from_bools((static_cast<const bool*>(column->data)) + row_offset,
                                         rows,
@@ -116,7 +125,8 @@ NVStrings* column_to_strings_fn::operator()<cudf::bool8>() {
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<cudf::date32>() {
+NVStrings* column_to_strings_fn::operator()<cudf::date32>()
+{
   NVStrings::timestamp_units units = NVStrings::days;
   if (column->dtype_info.time_unit != TIME_UNIT_NONE)
     units = cudf2nvs(column->dtype_info.time_unit);
@@ -132,20 +142,23 @@ NVStrings* column_to_strings_fn::operator()<cudf::date32>() {
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<cudf::date64>() {
+NVStrings* column_to_strings_fn::operator()<cudf::date64>()
+{
   return NVStrings::long2timestamp(
     static_cast<const uint64_t*>(column->data) + row_offset, rows, NVStrings::ms, nullptr, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<cudf::timestamp>() {
+NVStrings* column_to_strings_fn::operator()<cudf::timestamp>()
+{
   NVStrings::timestamp_units units = cudf2nvs(column->dtype_info.time_unit);
   return NVStrings::long2timestamp(
     static_cast<const uint64_t*>(column->data) + row_offset, rows, units, nullptr, valid);
 }
 
 template <>
-NVStrings* column_to_strings_fn::operator()<cudf::nvstring_category>() {
+NVStrings* column_to_strings_fn::operator()<cudf::nvstring_category>()
+{
   NVCategory* category = reinterpret_cast<NVCategory*>(column->dtype_info.category);
   CUDF_EXPECTS(category != nullptr, "write_csv: invalid category column");
   return category->gather_strings((static_cast<const int32_t*>(column->data)) + row_offset, rows);
@@ -170,7 +183,8 @@ NVStrings* column_to_strings_csv(const gdf_column* column,
                                  const char* delimiter,
                                  const char* null_representation,
                                  const char* true_string,
-                                 const char* false_string) {
+                                 const char* false_string)
+{
   NVStrings* rtn = nullptr;
   // point the null bitmask to the next set of bits associated with this chunk of rows
   cudf::valid_type* valid = column->valid;
@@ -235,7 +249,8 @@ NVStrings* column_to_strings_csv(const gdf_column* column,
 // the file without going through host memory.
 //
 //---------------------------------------------------------------------------
-gdf_error write_csv(csv_write_arg* args) {
+gdf_error write_csv(csv_write_arg* args)
+{
   // when args becomes a struct/class these can be modified
   auto columns               = args->columns;
   int count                  = args->num_cols;

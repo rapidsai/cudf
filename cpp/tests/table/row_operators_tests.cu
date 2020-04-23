@@ -26,16 +26,19 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct RowOperatorTestForNAN : public cudf::test::BaseFixture {};
+struct RowOperatorTestForNAN : public cudf::test::BaseFixture {
+};
 
-TEST_F(RowOperatorTestForNAN, NANEquality) {
+TEST_F(RowOperatorTestForNAN, NANEquality)
+{
   cudf::test::fixed_width_column_wrapper<double> col1{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<double> col2{{1., double(NAN), 3., 4.}, {1, 1, 0, 1}};
 
   cudf::test::expect_columns_equal(col1, col2);
 }
 
-TEST_F(RowOperatorTestForNAN, NANSorting) {
+TEST_F(RowOperatorTestForNAN, NANSorting)
+{
   // NULL Before
   cudf::test::fixed_width_column_wrapper<double> input{
     {0.,

@@ -57,8 +57,10 @@
  *
  */
 /* ----------------------------------------------------------------------------*/
-namespace cudf {
-namespace detail {
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief Base wrapper structure to emulate "strong typedefs" for gdf_dtype values
  * that do not correspond to fundamental types.
@@ -76,20 +78,26 @@ struct wrapper {
   value_type value;      ///< The wrapped value
 
   template <gdf_dtype dtype = type_id, std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(value_type v) : value{v} {}
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(value_type v) : value{v}
+  {
+  }
 
   template <typename from_type,
             gdf_dtype dtype                          = type_id,
             std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(from_type v) : value{static_cast<bool>(v)} {}
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(from_type v) : value{static_cast<bool>(v)}
+  {
+  }
 
   template <gdf_dtype dtype = type_id, std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const
+  {
     return this->value;
   }
 
   template <gdf_dtype dtype = type_id, std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const
+  {
     return static_cast<value_type>(static_cast<bool>(this->value));
   }
 
@@ -99,7 +107,8 @@ struct wrapper {
             gdf_dtype dtype                      = type_id,
             typename std::enable_if<(dtype == GDF_BOOL8) && std::is_arithmetic<T_out>::value,
                                     int>::type * = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit operator T_out() const {
+  CUDA_HOST_DEVICE_CALLABLE explicit operator T_out() const
+  {
     // Casting a cudf::bool8 to arithmetic type should always be the same as
     // casting a bool to arithmetic type, and not the same as casting the
     // underlying type to arithmetic type. Therefore we cast the value to bool
@@ -113,95 +122,110 @@ struct wrapper {
 };
 
 template <typename T, gdf_dtype type_id>
-std::ostream &operator<<(std::ostream &os, wrapper<T, type_id> const &w) {
+std::ostream &operator<<(std::ostream &os, wrapper<T, type_id> const &w)
+{
   return os << w.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator==(wrapper<T, type_id> const &lhs,
-                                          wrapper<T, type_id> const &rhs) {
+                                          wrapper<T, type_id> const &rhs)
+{
   return lhs.value == rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator!=(wrapper<T, type_id> const &lhs,
-                                          wrapper<T, type_id> const &rhs) {
+                                          wrapper<T, type_id> const &rhs)
+{
   return lhs.value != rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator<=(wrapper<T, type_id> const &lhs,
-                                          wrapper<T, type_id> const &rhs) {
+                                          wrapper<T, type_id> const &rhs)
+{
   return lhs.value <= rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator>=(wrapper<T, type_id> const &lhs,
-                                          wrapper<T, type_id> const &rhs) {
+                                          wrapper<T, type_id> const &rhs)
+{
   return lhs.value >= rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator<(wrapper<T, type_id> const &lhs,
-                                         wrapper<T, type_id> const &rhs) {
+                                         wrapper<T, type_id> const &rhs)
+{
   return lhs.value < rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE bool operator>(wrapper<T, type_id> const &lhs,
-                                         wrapper<T, type_id> const &rhs) {
+                                         wrapper<T, type_id> const &rhs)
+{
   return lhs.value > rhs.value;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> &operator+=(wrapper<T, type_id> &lhs,
-                                                          wrapper<T, type_id> const &rhs) {
+                                                          wrapper<T, type_id> const &rhs)
+{
   lhs.value += rhs.value;
   return lhs;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> &operator-=(wrapper<T, type_id> &lhs,
-                                                          wrapper<T, type_id> const &rhs) {
+                                                          wrapper<T, type_id> const &rhs)
+{
   lhs.value -= rhs.value;
   return lhs;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> &operator*=(wrapper<T, type_id> &lhs,
-                                                          wrapper<T, type_id> const &rhs) {
+                                                          wrapper<T, type_id> const &rhs)
+{
   lhs.value *= rhs.value;
   return lhs;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> &operator/=(wrapper<T, type_id> &lhs,
-                                                          wrapper<T, type_id> const &rhs) {
+                                                          wrapper<T, type_id> const &rhs)
+{
   lhs.value /= rhs.value;
   return lhs;
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator+(wrapper<T, type_id> const &lhs,
-                                                        wrapper<T, type_id> const &rhs) {
+                                                        wrapper<T, type_id> const &rhs)
+{
   return wrapper<T, type_id>{static_cast<T>(lhs.value + rhs.value)};
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator-(wrapper<T, type_id> const &lhs,
-                                                        wrapper<T, type_id> const &rhs) {
+                                                        wrapper<T, type_id> const &rhs)
+{
   return wrapper<T, type_id>{static_cast<T>(lhs.value - rhs.value)};
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator*(wrapper<T, type_id> const &lhs,
-                                                        wrapper<T, type_id> const &rhs) {
+                                                        wrapper<T, type_id> const &rhs)
+{
   return wrapper<T, type_id>{static_cast<T>(lhs.value * rhs.value)};
 }
 
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator/(wrapper<T, type_id> const &lhs,
-                                                        wrapper<T, type_id> const &rhs) {
+                                                        wrapper<T, type_id> const &rhs)
+{
   return wrapper<T, type_id>{static_cast<T>(lhs.value / rhs.value)};
 }
 
@@ -215,7 +239,8 @@ CUDA_HOST_DEVICE_CALLABLE wrapper<T, type_id> operator/(wrapper<T, type_id> cons
  */
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type &unwrap(
-  wrapper<T, type_id> &wrapped) {
+  wrapper<T, type_id> &wrapped)
+{
   return wrapped.value;
 }
 
@@ -230,7 +255,8 @@ CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type &unwrap(
 /* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type const &unwrap(
-  wrapper<T, type_id> const &wrapped) {
+  wrapper<T, type_id> const &wrapped)
+{
   return wrapped.value;
 }
 
@@ -250,7 +276,8 @@ CUDA_HOST_DEVICE_CALLABLE typename wrapper<T, type_id>::value_type const &unwrap
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
   typename std::enable_if_t<std::is_fundamental<typename std::decay<T>::type>::value, T>
-    &unwrap(T &value) {
+    &unwrap(T &value)
+{
   return value;
 }
 
@@ -270,7 +297,8 @@ CUDA_HOST_DEVICE_CALLABLE
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
   typename std::enable_if_t<std::is_fundamental<typename std::decay<T>::type>::value, T> const &
-  unwrap(T const &value) {
+  unwrap(T const &value)
+{
   return value;
 }
 
@@ -337,88 +365,104 @@ static constexpr bool8 false_v{bool8::value_type{0}};
 #endif
 
 // Wrapper operator overloads for cudf::bool8
-namespace detail {
-
-inline std::ostream &operator<<(std::ostream &os, cudf::bool8 const &w) {
+namespace detail
+{
+inline std::ostream &operator<<(std::ostream &os, cudf::bool8 const &w)
+{
   return os << static_cast<bool>(w);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator==(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator==(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) == static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator!=(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator!=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) != static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator<=(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator<=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) <= static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator>=(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator>=(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) >= static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator<(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator<(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) < static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-bool operator>(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+bool operator>(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<bool>(lhs) > static_cast<bool>(rhs);
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 operator+(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 operator+(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<cudf::bool8>(static_cast<bool>(lhs) + static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 operator-(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 operator-(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<cudf::bool8>(static_cast<bool>(lhs) - static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 operator*(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 operator*(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<cudf::bool8>(static_cast<bool>(lhs) * static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 operator/(cudf::bool8 const &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 operator/(cudf::bool8 const &lhs, cudf::bool8 const &rhs)
+{
   return static_cast<cudf::bool8>(static_cast<bool>(lhs) / static_cast<bool>(rhs));
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 &operator+=(cudf::bool8 &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 &operator+=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
   lhs = lhs + rhs;
   return lhs;
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 &operator-=(cudf::bool8 &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 &operator-=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
   lhs = lhs - rhs;
   return lhs;
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 &operator*=(cudf::bool8 &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 &operator*=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
   lhs = lhs * rhs;
   return lhs;
 }
 
 CUDA_HOST_DEVICE_CALLABLE
-cudf::bool8 &operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs) {
+cudf::bool8 &operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
+{
   lhs = lhs / rhs;
   return lhs;
 }
 
 template <typename T, gdf_dtype type_id>
-CUDA_HOST_DEVICE_CALLABLE cudf::bool8 operator!(wrapper<T, type_id> const &me) {
+CUDA_HOST_DEVICE_CALLABLE cudf::bool8 operator!(wrapper<T, type_id> const &me)
+{
   return static_cast<cudf::bool8>(!static_cast<bool>(me.value));
 }
 
@@ -426,8 +470,8 @@ CUDA_HOST_DEVICE_CALLABLE cudf::bool8 operator!(wrapper<T, type_id> const &me) {
 
 }  // namespace cudf
 
-namespace std {
-
+namespace std
+{
 /**---------------------------------------------------------------------------*
  * @brief Specialization of std::numeric_limits for wrapper types
  *---------------------------------------------------------------------------**/
@@ -445,7 +489,8 @@ struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
    *
    * Returns a finite value x such that there is no other finite value y where y < x
    *---------------------------------------------------------------------------**/
-  static constexpr wrapper_t lowest() noexcept {
+  static constexpr wrapper_t lowest() noexcept
+  {
     return wrapper_t{std::numeric_limits<T>::lowest()};
   }
 
@@ -465,7 +510,8 @@ struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
  * --------------------------------------------------------------------------**/
 template <>
 struct numeric_limits<cudf::bool8> {
-  static constexpr cudf::bool8 max() noexcept {
+  static constexpr cudf::bool8 max() noexcept
+  {
     // tried using `return cudf::true_v` but it causes a compiler segfault!
     return cudf::bool8{true};
   }
@@ -477,15 +523,16 @@ struct numeric_limits<cudf::bool8> {
 
 }  // namespace std
 
-namespace cub {
-
+namespace cub
+{
 template <>
 struct NumericTraits<cudf::date32>
   : BaseTraits<SIGNED_INTEGER,
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date32>>,
-               cudf::detail::unwrapped_type_t<cudf::date32>> {};
+               cudf::detail::unwrapped_type_t<cudf::date32>> {
+};
 
 template <>
 struct NumericTraits<cudf::timestamp>
@@ -493,7 +540,8 @@ struct NumericTraits<cudf::timestamp>
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::timestamp>>,
-               cudf::detail::unwrapped_type_t<cudf::timestamp>> {};
+               cudf::detail::unwrapped_type_t<cudf::timestamp>> {
+};
 
 template <>
 struct NumericTraits<cudf::date64>
@@ -501,7 +549,8 @@ struct NumericTraits<cudf::date64>
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::date64>>,
-               cudf::detail::unwrapped_type_t<cudf::date64>> {};
+               cudf::detail::unwrapped_type_t<cudf::date64>> {
+};
 
 template <>
 struct NumericTraits<cudf::category>
@@ -509,7 +558,8 @@ struct NumericTraits<cudf::category>
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::category>>,
-               cudf::detail::unwrapped_type_t<cudf::category>> {};
+               cudf::detail::unwrapped_type_t<cudf::category>> {
+};
 
 template <>
 struct NumericTraits<cudf::nvstring_category>
@@ -517,7 +567,8 @@ struct NumericTraits<cudf::nvstring_category>
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::nvstring_category>>,
-               cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {};
+               cudf::detail::unwrapped_type_t<cudf::nvstring_category>> {
+};
 
 template <>
 struct NumericTraits<cudf::bool8>
@@ -525,7 +576,8 @@ struct NumericTraits<cudf::bool8>
                true,
                false,
                std::make_unsigned_t<cudf::detail::unwrapped_type_t<cudf::bool8>>,
-               cudf::detail::unwrapped_type_t<cudf::bool8>> {};
+               cudf::detail::unwrapped_type_t<cudf::bool8>> {
+};
 
 }  // namespace cub
 

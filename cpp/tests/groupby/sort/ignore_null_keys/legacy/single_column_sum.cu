@@ -58,7 +58,8 @@ using TestingTypes = ::testing::Types<KV<int8_t, int8_t>,
 
 TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
 
-TYPED_TEST(SingleColumnSum, OneGroupNoNulls) {
+TYPED_TEST(SingleColumnSum, OneGroupNoNulls)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -74,7 +75,8 @@ TYPED_TEST(SingleColumnSum, OneGroupNoNulls) {
     column_wrapper<ResultValue>({sum}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys) {
+TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -92,7 +94,8 @@ TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys) {
     column_wrapper<ResultValue>{});
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupAllNullValues) {
+TYPED_TEST(SingleColumnSum, OneGroupAllNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -109,7 +112,8 @@ TYPED_TEST(SingleColumnSum, OneGroupAllNullValues) {
     column_wrapper<ResultValue>(1, true));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupEvenNullKeys) {
+TYPED_TEST(SingleColumnSum, OneGroupEvenNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -127,7 +131,8 @@ TYPED_TEST(SingleColumnSum, OneGroupEvenNullKeys) {
     column_wrapper<ResultValue>({sum}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -147,7 +152,8 @@ TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys) {
     column_wrapper<ResultValue>({sum}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues) {
+TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -165,7 +171,8 @@ TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues) {
     column_wrapper<ResultValue>({sum}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupOddNullValues) {
+TYPED_TEST(SingleColumnSum, OneGroupOddNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
@@ -185,7 +192,8 @@ TYPED_TEST(SingleColumnSum, OneGroupOddNullValues) {
     column_wrapper<ResultValue>({sum}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
+TYPED_TEST(SingleColumnSum, FourGroupsNoNulls)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -203,7 +211,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
     column_wrapper<ResultValue>{R(1), R(5), R(9), R(13)});
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
+TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -219,7 +228,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
     column_wrapper<Key>({T(1), T(2), T(3), T(4)}, [](auto index) { return true; }),
     column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
+TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -236,7 +246,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
     column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValues) {
+TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValues)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -253,7 +264,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValues) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValues) {
+TYPED_TEST(SingleColumnSum, FourGroupsOddNullValues)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -270,7 +282,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValues) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -288,7 +301,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesOddNullKeys) {
+TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesOddNullKeys)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -306,7 +320,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesOddNullKeys) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -326,7 +341,8 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>(4, true));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUnique) {
+TYPED_TEST(SingleColumnSum, EightKeysAllUnique)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -342,7 +358,8 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUnique) {
     column_wrapper<ResultValue>(8, [](auto index) { return R(index); }));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenKeysNull) {
+TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenKeysNull)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -359,7 +376,8 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenKeysNull) {
     column_wrapper<ResultValue>({R(2), R(6), R(10), R(14)}));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenValuesNull) {
+TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenValuesNull)
+{
   using Key         = typename SingleColumnSum<TypeParam>::KeyType;
   using Value       = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;

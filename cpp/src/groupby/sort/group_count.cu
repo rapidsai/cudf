@@ -22,16 +22,20 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 std::unique_ptr<column> group_count_valid(column_view const& values,
                                           rmm::device_vector<size_type> const& group_labels,
                                           size_type num_groups,
                                           rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream) {
+                                          cudaStream_t stream)
+{
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
@@ -71,7 +75,8 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& group_offsets,
                                         size_type num_groups,
                                         rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
 
   auto result = make_numeric_column(

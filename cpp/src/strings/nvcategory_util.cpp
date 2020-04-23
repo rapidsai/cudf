@@ -12,8 +12,10 @@
 #include <utilities/legacy/error_utils.hpp>
 #include <utility>
 
-namespace {
-NVCategory* combine_column_categories(const gdf_column* const input_columns[], int num_columns) {
+namespace
+{
+NVCategory* combine_column_categories(const gdf_column* const input_columns[], int num_columns)
+{
   std::vector<NVCategory*> cats;
   std::transform(
     input_columns, input_columns + num_columns, std::back_inserter(cats), [&](const gdf_column* c) {
@@ -23,14 +25,16 @@ NVCategory* combine_column_categories(const gdf_column* const input_columns[], i
   return NVCategory::create_from_categories(cats);
 }
 
-gdf_error free_nvcategory(gdf_column* column) {
+gdf_error free_nvcategory(gdf_column* column)
+{
   NVCategory::destroy(static_cast<NVCategory*>(column->dtype_info.category));
   column->dtype_info.category = nullptr;
   return GDF_SUCCESS;
 }
 }  // namespace
 
-gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table) {
+gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table)
+{
   GDF_REQUIRE(source_table.num_columns() == destination_table.num_columns(),
               GDF_TABLES_SIZE_MISMATCH);
   for (int i = 0; i < source_table.num_columns(); i++) {
@@ -45,7 +49,8 @@ gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destinat
   return GDF_SUCCESS;
 }
 
-gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
+gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category)
+{
   GDF_REQUIRE(nv_category != nullptr, GDF_INVALID_API_CALL);
   GDF_REQUIRE(column->dtype == GDF_STRING_CATEGORY, GDF_UNSUPPORTED_DTYPE);
 
@@ -107,7 +112,8 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
 
 gdf_error validate_categories(const gdf_column* const input_columns[],
                               int num_columns,
-                              cudf::size_type& total_count) {
+                              cudf::size_type& total_count)
+{
   total_count = 0;
   for (int i = 0; i < num_columns; ++i) {
     const gdf_column* current_column = input_columns[i];
@@ -122,7 +128,8 @@ gdf_error validate_categories(const gdf_column* const input_columns[],
 
 gdf_error concat_categories(const gdf_column* const input_columns[],
                             gdf_column* output_column,
-                            int num_columns) {
+                            int num_columns)
+{
   cudf::size_type total_count;
   gdf_error err = validate_categories(input_columns, num_columns, total_count);
   GDF_REQUIRE(err == GDF_SUCCESS, err);
@@ -141,7 +148,8 @@ gdf_error concat_categories(const gdf_column* const input_columns[],
 
 gdf_error sync_column_categories(const gdf_column* const input_columns[],
                                  gdf_column* output_columns[],
-                                 int num_columns) {
+                                 int num_columns)
+{
   GDF_REQUIRE(num_columns > 0, GDF_DATASET_EMPTY);
   cudf::size_type total_count;
 

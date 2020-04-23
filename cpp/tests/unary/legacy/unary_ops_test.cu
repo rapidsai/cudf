@@ -24,9 +24,11 @@
 #include <random>
 #include <vector>
 
-struct col_cast_test : public GdfTest {};
+struct col_cast_test : public GdfTest {
+};
 
-TEST_F(col_cast_test, usage_example) {
+TEST_F(col_cast_test, usage_example)
+{
   // gdf_column input examples for int32, int64, float32, float64, date32, date64 and timestamp (in
   // milliseconds)
 
@@ -230,7 +232,8 @@ TEST_F(col_cast_test, usage_example) {
   }
 }
 
-TEST_F(col_cast_test, dataPtrFailureTest) {
+TEST_F(col_cast_test, dataPtrFailureTest)
+{
   std::vector<int32_t> inputData = {-1528, 1, 19382};
   auto inputCol                  = cudf::test::column_wrapper<int32_t>(inputData);
 
@@ -241,7 +244,8 @@ TEST_F(col_cast_test, dataPtrFailureTest) {
   EXPECT_THROW(cudf::cast(inputCol, GDF_FLOAT32), cudf::logic_error);
 }
 
-TEST_F(col_cast_test, inputValidMaskFailureTest) {
+TEST_F(col_cast_test, inputValidMaskFailureTest)
+{
   std::vector<int32_t> inputData = {-1528, 1, 19382};
   auto inputCol                  = cudf::test::column_wrapper<int32_t>(inputData);
 
@@ -277,7 +281,8 @@ struct DisType<double, TFROM> {
 // Generates random values between 0 and the maximum possible value of the data type with the
 // minimum max() value
 template <typename TOUT, typename TFROM>
-void fill_with_random_values(std::vector<TFROM> &input, size_t size) {
+void fill_with_random_values(std::vector<TFROM> &input, size_t size)
+{
   std::random_device rd;
   std::default_random_engine eng(rd());
 
@@ -296,7 +301,8 @@ void fill_with_random_values(std::vector<TFROM> &input, size_t size) {
 }
 
 // Generates random bitmaps
-void fill_random_bitmap(std::vector<cudf::valid_type> &valid_input, size_t size) {
+void fill_random_bitmap(std::vector<cudf::valid_type> &valid_input, size_t size)
+{
   std::random_device rd;
   std::default_random_engine eng(rd());
 
@@ -310,11 +316,13 @@ void fill_random_bitmap(std::vector<cudf::valid_type> &valid_input, size_t size)
 
 // CPU casting
 
-struct col_cast_CPU_VS_GPU_TEST : public GdfTest {};
+struct col_cast_CPU_VS_GPU_TEST : public GdfTest {
+};
 
 template <typename T, typename Tout>
 struct HostUnaryOp {
-  static gdf_error launch(gdf_column *input, gdf_column *output) {
+  static gdf_error launch(gdf_column *input, gdf_column *output)
+  {
     /* check for size of the columns */
     if (input->size != output->size) { return GDF_COLUMN_SIZE_MISMATCH; }
 
@@ -326,14 +334,16 @@ struct HostUnaryOp {
   }
 };
 
-#define DEF_HOST_CAST_IMPL(VFROM, VTO, TFROM, TTO)                                    \
-  gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) { \
-    return HostUnaryOp<TFROM, TTO>::launch(input, output);                            \
+#define DEF_HOST_CAST_IMPL(VFROM, VTO, TFROM, TTO)                                  \
+  gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output) \
+  {                                                                                 \
+    return HostUnaryOp<TFROM, TTO>::launch(input, output);                          \
   }
 
 // Comparing CPU and GPU casting results
 #define DEF_CAST_IMPL_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)                      \
-  TEST_F(col_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {                                \
+  TEST_F(col_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO)                                  \
+  {                                                                                   \
     {                                                                                 \
       int colSize = 1024;                                                             \
       std::vector<TFROM> inputData(colSize);                                          \
@@ -385,11 +395,13 @@ DEF_CAST_TYPE_TEST(i64, GDF_INT64, int64_t)
 DEF_CAST_TYPE_TEST(f32, GDF_FLOAT32, float)
 DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
 
-struct col_cast_swap_TEST : public GdfTest {};
+struct col_cast_swap_TEST : public GdfTest {
+};
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value
 #define DEF_CAST_SWAP_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)                     \
-  TEST_F(col_cast_swap_TEST, VFROM##_to_##VTO) {                                     \
+  TEST_F(col_cast_swap_TEST, VFROM##_to_##VTO)                                       \
+  {                                                                                  \
     {                                                                                \
       int colSize = 1024;                                                            \
       std::vector<TFROM> inputData(colSize);                                         \
@@ -410,7 +422,8 @@ struct col_cast_swap_TEST : public GdfTest {};
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value
 #define DEF_CAST_SWAP_TEST_TO_TIMESTAMP(VFROM, VVFROM, TFROM)                        \
-  TEST_F(col_cast_swap_TEST, VFROM##_to_timestamp) {                                 \
+  TEST_F(col_cast_swap_TEST, VFROM##_to_timestamp)                                   \
+  {                                                                                  \
     {                                                                                \
       int colSize = 1024;                                                            \
       std::vector<TFROM> inputData(colSize);                                         \
@@ -449,7 +462,8 @@ DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date32, GDF_DATE32, int32_t)
 DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date64, GDF_DATE64, int64_t)
 
 struct generateValidRandom {
-  __host__ __device__ cudf::valid_type operator()(int idx) {
+  __host__ __device__ cudf::valid_type operator()(int idx)
+  {
     thrust::default_random_engine eng;
     thrust::uniform_int_distribution<cudf::valid_type> int_dis;
     eng.discard(idx);
@@ -457,9 +471,11 @@ struct generateValidRandom {
   }
 };
 
-struct gdf_unaryops_output_valid_TEST : public GdfTest {};
+struct gdf_unaryops_output_valid_TEST : public GdfTest {
+};
 
-TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
+TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype)
+{
   // The output datatype is set by the casting function
   {
     const int colSize = 1024;
@@ -503,9 +519,11 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
   }
 }
 
-struct gdf_date_casting_TEST : public GdfTest {};
+struct gdf_date_casting_TEST : public GdfTest {
+};
 
-TEST_F(gdf_date_casting_TEST, date32_to_date64) {
+TEST_F(gdf_date_casting_TEST, date32_to_date64)
+{
   // date32 to date64
   {
     std::vector<cudf::date32> inputData = {
@@ -622,7 +640,8 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
   }
 }
 
-TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
+TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask)
+{
   // date32 to date64 over valid bitmask
   {
     std::vector<cudf::date32> inputData = {
@@ -659,7 +678,8 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
   }
 }
 
-TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
+TEST_F(gdf_date_casting_TEST, date32_to_timestamp)
+{
   // date32 to timestamp s
   {
     std::vector<cudf::date32> inputData = {
@@ -965,7 +985,8 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
   }
 }
 
-TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
+TEST_F(gdf_date_casting_TEST, date64_to_timestamp)
+{
   // date64 to timestamp ms, internally the output is equal to the input
   {
     int colSize = 30;
@@ -1303,9 +1324,11 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
   }
 }
 
-struct gdf_timestamp_casting_TEST : public GdfTest {};
+struct gdf_timestamp_casting_TEST : public GdfTest {
+};
 
-TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
+TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp)
+{
   // timestamp to timestamp from s to ms
   {
     // timestamps with seconds
@@ -2340,13 +2363,15 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 }
 
 template <typename T>
-struct gdf_logical_test : public GdfTest {};
+struct gdf_logical_test : public GdfTest {
+};
 
 using type_list = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 
 TYPED_TEST_CASE(gdf_logical_test, type_list);
 
-TYPED_TEST(gdf_logical_test, LogicalNot) {
+TYPED_TEST(gdf_logical_test, LogicalNot)
+{
   const int colSize = 1000;
 
   // init input vector
@@ -2374,13 +2399,15 @@ template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename T>
-struct IsNull : public GdfTest {};
+struct IsNull : public GdfTest {
+};
 
 using test_types = ::testing::Types<int64_t>;
 
 TYPED_TEST_CASE(IsNull, test_types);
 
-TYPED_TEST(IsNull, sample) {
+TYPED_TEST(IsNull, sample)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 5000;
@@ -2395,7 +2422,8 @@ TYPED_TEST(IsNull, sample) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNull, all_valid) {
+TYPED_TEST(IsNull, all_valid)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 50;
@@ -2410,7 +2438,8 @@ TYPED_TEST(IsNull, all_valid) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNull, all_invalid) {
+TYPED_TEST(IsNull, all_invalid)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 50;
@@ -2425,7 +2454,8 @@ TYPED_TEST(IsNull, all_invalid) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNull, empty_column) {
+TYPED_TEST(IsNull, empty_column)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 0;
@@ -2441,13 +2471,15 @@ TYPED_TEST(IsNull, empty_column) {
 }
 
 template <typename T>
-struct IsNotNull : public GdfTest {};
+struct IsNotNull : public GdfTest {
+};
 
 using test_types = ::testing::Types<int64_t>;
 
 TYPED_TEST_CASE(IsNotNull, test_types);
 
-TYPED_TEST(IsNotNull, sample) {
+TYPED_TEST(IsNotNull, sample)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 5000;
@@ -2462,7 +2494,8 @@ TYPED_TEST(IsNotNull, sample) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNotNull, all_valid) {
+TYPED_TEST(IsNotNull, all_valid)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 50;
@@ -2477,7 +2510,8 @@ TYPED_TEST(IsNotNull, all_valid) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNotNull, all_invalid) {
+TYPED_TEST(IsNotNull, all_invalid)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 50;
@@ -2492,7 +2526,8 @@ TYPED_TEST(IsNotNull, all_invalid) {
   EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNotNull, empty_column) {
+TYPED_TEST(IsNotNull, empty_column)
+{
   using T = TypeParam;
 
   cudf::size_type NUM_ELEM = 0;

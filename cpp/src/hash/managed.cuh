@@ -20,20 +20,23 @@
 #include <new>
 
 struct managed {
-  static void *operator new(size_t n) {
+  static void *operator new(size_t n)
+  {
     void *ptr          = 0;
     cudaError_t result = cudaMallocManaged(&ptr, n);
     if (cudaSuccess != result || 0 == ptr) throw std::bad_alloc();
     return ptr;
   }
 
-  static void operator delete(void *ptr) noexcept {
+  static void operator delete(void *ptr) noexcept
+  {
     auto const free_result = cudaFree(ptr);
     assert(free_result == cudaSuccess);
   }
 };
 
-inline bool isPtrManaged(cudaPointerAttributes attr) {
+inline bool isPtrManaged(cudaPointerAttributes attr)
+{
 #if CUDART_VERSION >= 10000
   return (attr.type == cudaMemoryTypeManaged);
 #else

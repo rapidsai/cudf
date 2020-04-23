@@ -19,12 +19,14 @@
 
 using namespace cudf::test;  // this will make reading code way easier
 
-namespace std {
+namespace std
+{
 template <class T, class U>
 constexpr bool is_same_v = std::is_same<T, U>::value;
 }
 
-namespace {
+namespace
+{
 // Work around to remove paranthesis surrounding a type
 template <typename T>
 struct argument_type;
@@ -62,7 +64,8 @@ struct argument_type<T(U)> {
  * @return std::string The demangled name of `T`
  *---------------------------------------------------------------------------**/
 template <typename T>
-std::string type_name() {
+std::string type_name()
+{
   int status;
   char *realname;
   realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
@@ -71,21 +74,24 @@ std::string type_name() {
   return name;
 }
 
-TEST(TypeList, GetSize) {
+TEST(TypeList, GetSize)
+{
   static_assert(GetSize<Types<>> == 0, "");
   static_assert(GetSize<Types<int>> == 1, "");
   static_assert(GetSize<Types<int, int>> == 2, "");
   static_assert(GetSize<Types<int, void>> == 2, "");
 }
 
-TEST(TypeList, GetType) {
+TEST(TypeList, GetType)
+{
   EXPECT_SAME_TYPE((GetType<int, 0>), int);
   EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 0>), int);
   EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 1>), float);
   EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 2>), double);
 }
 
-TEST(TypeList, Concat) {
+TEST(TypeList, Concat)
+{
   EXPECT_SAME_TYPE(Concat<>, Types<>);
   EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>>), (Types<long, void *, char *>));
 
@@ -98,7 +104,8 @@ TEST(TypeList, Concat) {
                    (Types<long, void *, char *, float, char, double, int *, long *, unsigned>));
 }
 
-TEST(TypeList, Flatten) {
+TEST(TypeList, Flatten)
+{
   EXPECT_SAME_TYPE(Flatten<Types<>>, Types<>);
   EXPECT_SAME_TYPE(Flatten<Types<int>>, Types<int>);
   EXPECT_SAME_TYPE((Flatten<Types<int, double>>), (Types<int, double>));
@@ -106,7 +113,8 @@ TEST(TypeList, Flatten) {
   EXPECT_SAME_TYPE((Flatten<Types<Types<int, Types<double>>, float>>), (Types<int, double, float>));
 }
 
-TEST(TypeList, CrossProduct) {
+TEST(TypeList, CrossProduct)
+{
   EXPECT_SAME_TYPE(CrossProduct<>, Types<>);
   EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<>>), Types<>);
   EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<int>>), Types<>);
@@ -147,7 +155,8 @@ TEST(TypeList, CrossProduct) {
                    (Types<Types<int, int>, Types<int, float>>));
 }
 
-TEST(TypeList, AllSame) {
+TEST(TypeList, AllSame)
+{
   static_assert(AllSame::Call<Types<int, int>>::value, "");
   static_assert(AllSame::Call<Types<int, int>>::value, "");
   static_assert(!AllSame::Call<Types<bool, int>>::value, "");
@@ -160,7 +169,8 @@ TEST(TypeList, AllSame) {
   static_assert(!AllSame::Call<int, int, float>::value, "");
 }
 
-TEST(TypeList, Exists) {
+TEST(TypeList, Exists)
+{
   static_assert(Exists<int, Types<int, char, float>>, "");
   static_assert(!Exists<int, Types<double, char, float>>, "");
   static_assert(!Exists<int, Types<>>, "");
@@ -169,7 +179,8 @@ TEST(TypeList, Exists) {
   static_assert(Exists<int, Types<int>>, "");
 }
 
-TEST(TypeList, ContainedIn) {
+TEST(TypeList, ContainedIn)
+{
   static_assert(ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value, "");
   static_assert(!ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value, "");
   static_assert(!ContainedIn<Types<>>::Call<Types<int, float>>::value, "");
@@ -181,7 +192,8 @@ TEST(TypeList, ContainedIn) {
   static_assert(!ContainedIn<Types<Types<int, float>, Types<int>>>::Call<Types<>>::value, "");
 }
 
-TEST(TypeList, RemoveIf) {
+TEST(TypeList, RemoveIf)
+{
   EXPECT_SAME_TYPE((RemoveIf<AllSame, Types<>>), Types<>);
 
   EXPECT_SAME_TYPE((RemoveIf<AllSame, Types<Types<int, int, int>>>), Types<>);
@@ -204,7 +216,8 @@ TEST(TypeList, RemoveIf) {
                    (Types<Types<char, char>, Types<int, int>>));
 }
 
-TEST(TypeList, Transform) {
+TEST(TypeList, Transform)
+{
   EXPECT_SAME_TYPE((Transform<Repeat<2>, Types<int, float>>),
                    (Types<Types<int, int>, Types<float, float>>));
 
@@ -215,7 +228,8 @@ TEST(TypeList, Transform) {
   EXPECT_SAME_TYPE((Transform<Repeat<0>, Types<>>), Types<>);
 }
 
-TEST(TypeList, Append) {
+TEST(TypeList, Append)
+{
   EXPECT_SAME_TYPE(Append<Types<>>, Types<>);
   EXPECT_SAME_TYPE((Append<Types<>, int>), Types<int>);
   EXPECT_SAME_TYPE(Append<Types<int>>, Types<int>);
@@ -223,7 +237,8 @@ TEST(TypeList, Append) {
   EXPECT_SAME_TYPE((Append<Types<int>, float, char>), (Types<int, float, char>));
 }
 
-TEST(TypeList, Remove) {
+TEST(TypeList, Remove)
+{
   EXPECT_SAME_TYPE((Remove<Types<int, float, char>, 1>), (Types<int, char>));
   EXPECT_SAME_TYPE((Remove<Types<int, float, char>, 0, 2>), Types<float>);
   EXPECT_SAME_TYPE((Remove<Types<int, char>>), (Types<int, char>));
@@ -232,7 +247,8 @@ TEST(TypeList, Remove) {
   EXPECT_SAME_TYPE(Remove<Types<>>, Types<>);
 }
 
-TEST(TypeList, Unique) {
+TEST(TypeList, Unique)
+{
   EXPECT_SAME_TYPE(Unique<Types<>>, Types<>);
   EXPECT_SAME_TYPE((Unique<Types<int, char, float>>), (Types<int, char, float>));
   EXPECT_SAME_TYPE((Unique<Types<int, int, float>>), (Types<int, float>));

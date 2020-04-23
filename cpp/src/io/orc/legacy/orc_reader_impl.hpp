@@ -28,10 +28,12 @@
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
-namespace cudf {
-namespace io {
-namespace orc {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
 // Forward internal classes
 class OrcMetadata;
 class OrcStreamInfo;
@@ -39,7 +41,8 @@ class OrcStreamInfo;
 /**
  * @brief Implementation for ORC reader
  **/
-class reader::Impl {
+class reader::Impl
+{
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

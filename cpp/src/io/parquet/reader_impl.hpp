@@ -35,12 +35,16 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace parquet {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace parquet
+{
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
@@ -50,7 +54,8 @@ class metadata;
 /**
  * @brief Implementation for Parquet reader
  */
-class reader::impl {
+class reader::impl
+{
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

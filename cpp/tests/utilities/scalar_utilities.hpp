@@ -18,9 +18,10 @@
 
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**
  * @brief Verifies the equality of two scalars.
  *

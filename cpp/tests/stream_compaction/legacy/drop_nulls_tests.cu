@@ -29,9 +29,11 @@
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
-struct DropNullsErrorTest : GdfTest {};
+struct DropNullsErrorTest : GdfTest {
+};
 
-TEST_F(DropNullsErrorTest, EmptyInput) {
+TEST_F(DropNullsErrorTest, EmptyInput)
+{
   gdf_column bad_input{};
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
 
@@ -64,7 +66,8 @@ TEST_F(DropNullsErrorTest, EmptyInput) {
  * to the specified expected result column.
  */
 template <typename T>
-void DropNulls(column_wrapper<T> const &source, column_wrapper<T> const &expected) {
+void DropNulls(column_wrapper<T> const &source, column_wrapper<T> const &expected)
+{
   cudf::table result;
   cudf::table source_table{const_cast<gdf_column *>(source.get())};
   EXPECT_NO_THROW(result = cudf::drop_nulls(source_table, source_table));
@@ -105,13 +108,15 @@ using test_types = ::testing::Types<int8_t,
                                     cudf::nvstring_category>;
 TYPED_TEST_CASE(DropNullsTest, test_types);
 
-TYPED_TEST(DropNullsTest, Identity) {
+TYPED_TEST(DropNullsTest, Identity)
+{
   auto col = this->factory.make(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   DropNulls<TypeParam>(col, col);
 }
 
-TYPED_TEST(DropNullsTest, AllNull) {
+TYPED_TEST(DropNullsTest, AllNull)
+{
   DropNulls<TypeParam>(this->factory.make(
                          column_size,
                          [](cudf::size_type row) { return row; },
@@ -119,7 +124,8 @@ TYPED_TEST(DropNullsTest, AllNull) {
                        column_wrapper<TypeParam>(0, false));
 }
 
-TYPED_TEST(DropNullsTest, EvensNull) {
+TYPED_TEST(DropNullsTest, EvensNull)
+{
   DropNulls<TypeParam>(this->factory.make(
                          column_size,
                          [](cudf::size_type row) { return row; },
@@ -130,7 +136,8 @@ TYPED_TEST(DropNullsTest, EvensNull) {
                          [](cudf::size_type row) { return true; }));
 }
 
-TYPED_TEST(DropNullsTest, NonalignedGap) {
+TYPED_TEST(DropNullsTest, NonalignedGap)
+{
   const int start{1}, end{column_size / 4};
 
   DropNulls<TypeParam>(
@@ -144,12 +151,14 @@ TYPED_TEST(DropNullsTest, NonalignedGap) {
       [](cudf::size_type row) { return true; }));
 }
 
-TYPED_TEST(DropNullsTest, NoNullMask) {
+TYPED_TEST(DropNullsTest, NoNullMask)
+{
   DropNulls<TypeParam>(this->factory.make(column_size, [](cudf::size_type row) { return row; }),
                        this->factory.make(column_size, [](cudf::size_type row) { return row; }));
 }
 
-struct DropNullsTableTest : GdfTest {};
+struct DropNullsTableTest : GdfTest {
+};
 
 static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factory;
 
@@ -160,7 +169,8 @@ static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factor
 void DropNullsTable(cudf::table const &source,
                     cudf::table const &keys,
                     cudf::table const &expected,
-                    cudf::size_type keep_thresh = -1) {
+                    cudf::size_type keep_thresh = -1)
+{
   cudf::table result;
   if (keep_thresh >= 0)
     EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys, keep_thresh));
@@ -187,7 +197,8 @@ void DropNullsTable(cudf::table const &source,
   result.destroy();
 }
 
-TEST_F(DropNullsTableTest, Identity) {
+TEST_F(DropNullsTableTest, Identity)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<float> float_column(
@@ -212,7 +223,8 @@ TEST_F(DropNullsTableTest, Identity) {
   DropNullsTable(table_source, table_source, table_expected);
 }
 
-TEST_F(DropNullsTableTest, AllNull) {
+TEST_F(DropNullsTableTest, AllNull)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size,
     [](cudf::size_type row) { return row; },
@@ -242,7 +254,8 @@ TEST_F(DropNullsTableTest, AllNull) {
   DropNullsTable(table_source, table_source, table_expected);
 }
 
-TEST_F(DropNullsTableTest, EvensNull) {
+TEST_F(DropNullsTableTest, EvensNull)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size,
     [](cudf::size_type row) { return row; },
@@ -294,7 +307,8 @@ TEST_F(DropNullsTableTest, EvensNull) {
   DropNullsTable(table_source, table_source, table_expected);
 }
 
-TEST_F(DropNullsTableTest, OneColumnEvensNull) {
+TEST_F(DropNullsTableTest, OneColumnEvensNull)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<float> float_column(
@@ -346,7 +360,8 @@ TEST_F(DropNullsTableTest, OneColumnEvensNull) {
   DropNullsTable(table_source, table_source, table_source, 0);
 }
 
-TEST_F(DropNullsTableTest, SomeNullMasks) {
+TEST_F(DropNullsTableTest, SomeNullMasks)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, false);
   cudf::test::column_wrapper<float> float_column(
@@ -409,7 +424,8 @@ TEST_F(DropNullsTableTest, SomeNullMasks) {
   DropNullsTable(table_source, subset_columns2, table_expected, 1);
 }
 
-TEST_F(DropNullsTableTest, NonalignedGap) {
+TEST_F(DropNullsTableTest, NonalignedGap)
+{
   const int start{1}, end{column_size / 4};
 
   cudf::test::column_wrapper<int32_t> int_column(
@@ -463,7 +479,8 @@ TEST_F(DropNullsTableTest, NonalignedGap) {
   DropNullsTable(table_source, table_source, table_expected);
 }
 
-TEST_F(DropNullsTableTest, NoNullMask) {
+TEST_F(DropNullsTableTest, NoNullMask)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, false);
   cudf::test::column_wrapper<float> float_column(

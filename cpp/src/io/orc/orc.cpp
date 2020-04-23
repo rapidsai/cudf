@@ -17,11 +17,14 @@
 #include "orc.h"
 #include <string.h>
 
-namespace cudf {
-namespace io {
-namespace orc {
-
-void ProtobufReader::skip_struct_field(int t) {
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
+void ProtobufReader::skip_struct_field(int t)
+{
   switch (t) {
     case PB_TYPE_VARINT: get_u32(); break;
     case PB_TYPE_FIXED64: skip_bytes(8); break;
@@ -33,11 +36,12 @@ void ProtobufReader::skip_struct_field(int t) {
   }
 }
 
-#define ORC_BEGIN_STRUCT(st)                                              \
-  bool ProtobufReader::read(st *s, size_t maxlen) { /*printf(#st "\n");*/ \
-    const uint8_t *end = std::min(m_cur + maxlen, m_end);                 \
-    while (m_cur < end) {                                                 \
-      int fld = get_u32();                                                \
+#define ORC_BEGIN_STRUCT(st)                              \
+  bool ProtobufReader::read(st *s, size_t maxlen)         \
+  { /*printf(#st "\n");*/                                 \
+    const uint8_t *end = std::min(m_cur + maxlen, m_end); \
+    while (m_cur < end) {                                 \
+      int fld = get_u32();                                \
       switch (fld) {
 #define ORC_FLD_UINT64(id, m)   \
   case (id)*8 + PB_TYPE_VARINT: \
@@ -189,7 +193,8 @@ ORC_FLD_REPEATED_STRUCT(1, stripeStats)
 ORC_END_STRUCT()
 
 // return the column name
-std::string FileFooter::GetColumnName(uint32_t column_id) {
+std::string FileFooter::GetColumnName(uint32_t column_id)
+{
   std::string s       = "";
   uint32_t parent_idx = column_id, idx, field_idx;
   do {
@@ -210,7 +215,8 @@ std::string FileFooter::GetColumnName(uint32_t column_id) {
 }
 
 // Initializes the parent_idx field in the schema
-bool ProtobufReader::InitSchema(FileFooter *ff) {
+bool ProtobufReader::InitSchema(FileFooter *ff)
+{
   int32_t schema_size = (int32_t)ff->types.size();
   for (int32_t i = 0; i < schema_size; i++) {
     int32_t num_children = (int32_t)ff->types[i].subtypes.size();
@@ -242,8 +248,9 @@ bool ProtobufReader::InitSchema(FileFooter *ff) {
  */
 /* ----------------------------------------------------------------------------*/
 
-#define PBW_BEGIN_STRUCT(st)                  \
-  size_t ProtobufWriter::write(const st *s) { \
+#define PBW_BEGIN_STRUCT(st)                \
+  size_t ProtobufWriter::write(const st *s) \
+  {                                         \
     size_t struct_size = 0;
 
 #define PBW_FLD_UINT(id, m)                         \
@@ -321,7 +328,8 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t data_ofs,
                                          int32_t data2_blk,
                                          int32_t data2_ofs,
-                                         TypeKind kind) {
+                                         TypeKind kind)
+{
   size_t sz = 0, lpos;
   putb(1 * 8 + PB_TYPE_FIXEDLEN);  // 1:RowIndex.entry
   lpos = m_buf->size();
@@ -434,7 +442,8 @@ PBW_END_STRUCT()
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
-  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize), m_decompressor(nullptr) {
+  : m_kind(kind), m_log2MaxRatio(24), m_blockSize(blockSize), m_decompressor(nullptr)
+{
   if (kind != NONE) {
     int stream_type;
     switch (kind) {
@@ -459,7 +468,8 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   }
 }
 
-OrcDecompressor::~OrcDecompressor() {
+OrcDecompressor::~OrcDecompressor()
+{
   if (m_decompressor) { delete m_decompressor; }
 }
 
@@ -475,7 +485,8 @@ OrcDecompressor::~OrcDecompressor() {
  */
 /* ----------------------------------------------------------------------------*/
 
-const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen) {
+const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen)
+{
   // If uncompressed, just pass-through the input
   if (m_kind == NONE) {
     *dstLen = srcLen;

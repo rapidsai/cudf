@@ -24,13 +24,16 @@
 #include <cstdint>
 #include <type_traits>
 
-namespace cudf {
-namespace library {
-namespace operation {
-
+namespace cudf
+{
+namespace library
+{
+namespace operation
+{
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Add {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs + (TypeCommon)rhs);
   }
@@ -38,7 +41,8 @@ struct Add {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Sub {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs - (TypeCommon)rhs);
   }
@@ -46,7 +50,8 @@ struct Sub {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs * (TypeCommon)rhs);
   }
@@ -54,7 +59,8 @@ struct Mul {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Div {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs / (TypeCommon)rhs);
   }

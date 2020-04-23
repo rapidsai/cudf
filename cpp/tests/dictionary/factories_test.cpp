@@ -21,9 +21,11 @@
 #include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
-struct DictionaryFactoriesTest : public cudf::test::BaseFixture {};
+struct DictionaryFactoriesTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryFactoriesTest, CreateFromColumnViews) {
+TEST_F(DictionaryFactoriesTest, CreateFromColumnViews)
+{
   std::vector<const char*> h_keys{"aaa", "ccc", "ddd", "www"};
   cudf::test::strings_column_wrapper keys(h_keys.begin(), h_keys.end());
   cudf::test::fixed_width_column_wrapper<int32_t> values{2, 0, 3, 1, 2, 2, 2, 3, 0};
@@ -35,7 +37,8 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumnViews) {
   cudf::test::expect_columns_equal(view.indices(), values);
 }
 
-TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls) {
+TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls)
+{
   cudf::test::fixed_width_column_wrapper<float> keys{-11.75, 4.25, 7.125, 0.5, 12.0};
   std::vector<int32_t> h_values{0, 3, 2, -1, 1, 4, 0};
   cudf::test::fixed_width_column_wrapper<int32_t> indices(
@@ -50,7 +53,8 @@ TEST_F(DictionaryFactoriesTest, ColumnViewsWithNulls) {
   cudf::test::expect_columns_equal(view.indices(), values_expected);
 }
 
-TEST_F(DictionaryFactoriesTest, CreateFromColumns) {
+TEST_F(DictionaryFactoriesTest, CreateFromColumns)
+{
   std::vector<std::string> h_keys{"pear", "apple", "fruit", "macintosh"};
   cudf::test::strings_column_wrapper keys(h_keys.begin(), h_keys.end());
   std::vector<int32_t> h_values{1, 2, 3, 1, 2, 3, 0};
@@ -66,7 +70,8 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns) {
   cudf::test::expect_columns_equal(view.indices(), values_expected);
 }
 
-TEST_F(DictionaryFactoriesTest, ColumnsWithNulls) {
+TEST_F(DictionaryFactoriesTest, ColumnsWithNulls)
+{
   std::vector<int64_t> h_keys{-1234567890, -987654321, 0, 19283714};
   cudf::test::fixed_width_column_wrapper<int64_t> keys(h_keys.begin(), h_keys.end());
   std::vector<int32_t> h_values{1, 2, 3, 1, 2, 3, 0};
@@ -85,13 +90,15 @@ TEST_F(DictionaryFactoriesTest, ColumnsWithNulls) {
   cudf::test::expect_columns_equal(view.indices(), values_expected);
 }
 
-TEST_F(DictionaryFactoriesTest, KeysWithNulls) {
+TEST_F(DictionaryFactoriesTest, KeysWithNulls)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> keys{{0, 1, 2, 3, 4}, {1, 1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> indices{5, 4, 3, 2, 1, 0};
   EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);
 }
 
-TEST_F(DictionaryFactoriesTest, IndicesWithNulls) {
+TEST_F(DictionaryFactoriesTest, IndicesWithNulls)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> keys{0, 1, 2, 3, 4};
   cudf::test::fixed_width_column_wrapper<int32_t> indices{{5, 4, 3, 2, 1, 0}, {1, 1, 1, 0, 1, 0}};
   EXPECT_THROW(
@@ -99,7 +106,8 @@ TEST_F(DictionaryFactoriesTest, IndicesWithNulls) {
     cudf::logic_error);
 }
 
-TEST_F(DictionaryFactoriesTest, InvalidIndices) {
+TEST_F(DictionaryFactoriesTest, InvalidIndices)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> keys{0, 1, 2, 3, 4};
   cudf::test::fixed_width_column_wrapper<int16_t> indices{5, 4, 3, 2, 1, 0};
   EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);

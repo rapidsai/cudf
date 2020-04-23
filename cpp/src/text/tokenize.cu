@@ -27,16 +27,19 @@
 
 #include <thrust/transform.h>
 
-namespace nvtext {
-namespace detail {
-namespace {
-
+namespace nvtext
+{
+namespace detail
+{
+namespace
+{
 // common pattern for token_count functions
 template <typename TokenCounter>
 std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                              TokenCounter tokenizer,
                                              rmm::mr::device_memory_resource* mr,
-                                             cudaStream_t stream) {
+                                             cudaStream_t stream)
+{
   // create output column
   auto token_counts = cudf::make_numeric_column(
     cudf::data_type{cudf::INT32}, strings_count, cudf::mask_state::UNALLOCATED, stream, mr);
@@ -55,7 +58,8 @@ template <typename Tokenizer>
 std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                                           Tokenizer tokenizer,
                                           rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream) {
+                                          cudaStream_t stream)
+{
   auto execpol = rmm::exec_policy(stream);
   // get the number of tokens in each string
   auto const token_counts = token_count_fn(strings_count, tokenizer, mr, stream);
@@ -89,7 +93,8 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
 std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
                                        cudf::string_scalar const& delimiter,
                                        rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
@@ -100,7 +105,8 @@ std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::string_scalar const& delimiter,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
@@ -112,7 +118,8 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
 std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
                                        cudf::strings_column_view const& delimiters,
                                        rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   CUDF_EXPECTS(delimiters.size() > 0, "Parameter delimiters must not be empty");
   CUDF_EXPECTS(!delimiters.has_nulls(), "Parameter delimiters must not have nulls");
   auto strings_column    = cudf::column_device_view::create(strings.parent(), stream);
@@ -130,7 +137,8 @@ std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::strings_column_view const& delimiters,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+{
   CUDF_EXPECTS(delimiters.size() > 0, "Parameter delimiters must not be empty");
   CUDF_EXPECTS(!delimiters.has_nulls(), "Parameter delimiters must not have nulls");
   auto strings_column    = cudf::column_device_view::create(strings.parent(), stream);
@@ -150,28 +158,32 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
 
 std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
                                        cudf::string_scalar const& delimiter,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::tokenize(strings, delimiter, mr);
 }
 
 std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
                                        cudf::strings_column_view const& delimiters,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::tokenize(strings, delimiters, mr);
 }
 
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::string_scalar const& delimiter,
-                                           rmm::mr::device_memory_resource* mr) {
+                                           rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::count_tokens(strings, delimiter, mr);
 }
 
 std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
                                            cudf::strings_column_view const& delimiters,
-                                           rmm::mr::device_memory_resource* mr) {
+                                           rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::count_tokens(strings, delimiters, mr);
 }

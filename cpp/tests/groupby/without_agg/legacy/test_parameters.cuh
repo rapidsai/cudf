@@ -39,11 +39,13 @@ enum struct agg_op {
 template <agg_op op>
 struct AggOp {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return static_cast<T>(0);
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return static_cast<T>(0);
   }
 };
@@ -51,11 +53,13 @@ struct AggOp {
 template <>
 struct AggOp<agg_op::MIN> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return (a < b) ? a : b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -63,11 +67,13 @@ struct AggOp<agg_op::MIN> {
 template <>
 struct AggOp<agg_op::MAX> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return (a > b) ? a : b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -75,11 +81,13 @@ struct AggOp<agg_op::MAX> {
 template <>
 struct AggOp<agg_op::SUM> {
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     return a + b;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     return a;
   }
 };
@@ -88,12 +96,14 @@ template <>
 struct AggOp<agg_op::CNT> {
   size_t count{0};
   template <typename T>
-  T operator()(const T a, const T b) {
+  T operator()(const T a, const T b)
+  {
     count = a + 1;
     return count;
   }
   template <typename T>
-  T operator()(const T a) {
+  T operator()(const T a)
+  {
     count = 1;
     return count;
   }
@@ -103,7 +113,8 @@ template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
 template <agg_op, gdf_method, typename, typename>
-struct TestParameters {};
+struct TestParameters {
+};
 
 // This structure is used to nest the group operations, group method and
 // number/types of columns for use with Google Test type-parameterized

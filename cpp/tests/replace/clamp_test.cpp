@@ -25,9 +25,11 @@
 
 #include <gtest/gtest.h>
 
-struct ClampErrorTest : public cudf::test::BaseFixture {};
+struct ClampErrorTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ClampErrorTest, MisMatchingScalarTypes) {
+TEST_F(ClampErrorTest, MisMatchingScalarTypes)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT64));
@@ -38,7 +40,8 @@ TEST_F(ClampErrorTest, MisMatchingScalarTypes) {
   EXPECT_THROW(cudf::experimental::clamp(input, *lo, *hi), cudf::logic_error);
 }
 
-TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes) {
+TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -49,7 +52,8 @@ TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes) {
   EXPECT_THROW(cudf::experimental::clamp(input, *lo, *hi), cudf::logic_error);
 }
 
-TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes) {
+TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -65,7 +69,8 @@ TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes) {
                cudf::logic_error);
 }
 
-TEST_F(ClampErrorTest, InValidCase1) {
+TEST_F(ClampErrorTest, InValidCase1)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -81,7 +86,8 @@ TEST_F(ClampErrorTest, InValidCase1) {
                cudf::logic_error);
 }
 
-TEST_F(ClampErrorTest, InValidCase2) {
+TEST_F(ClampErrorTest, InValidCase2)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -97,9 +103,11 @@ TEST_F(ClampErrorTest, InValidCase2) {
                cudf::logic_error);
 }
 
-struct ClampEmptyCaseTest : public cudf::test::BaseFixture {};
+struct ClampEmptyCaseTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid) {
+TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(false);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -112,7 +120,8 @@ TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid) {
   cudf::test::expect_columns_equal(input, got->view());
 }
 
-TEST_F(ClampEmptyCaseTest, EmptyInput) {
+TEST_F(ClampEmptyCaseTest, EmptyInput)
+{
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
   lo->set_valid(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::INT32));
@@ -136,7 +145,8 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
                                           T lo_replace,
                                           bool lo_replace_validity,
                                           T hi_replace,
-                                          bool hi_replace_validity) {
+                                          bool hi_replace_validity)
+  {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     std::unique_ptr<cudf::scalar> lo_scalar{nullptr};
     std::unique_ptr<cudf::scalar> hi_scalar{nullptr};
@@ -188,7 +198,8 @@ using Types = cudf::test::FixedWidthTypes;
 
 TYPED_TEST_CASE(ClampTestNumeric, Types);
 
-TYPED_TEST(ClampTestNumeric, WithNoNull) {
+TYPED_TEST(ClampTestNumeric, WithNoNull)
+{
   using T = TypeParam;
 
   T lo       = 2;
@@ -202,7 +213,8 @@ TYPED_TEST(ClampTestNumeric, WithNoNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampTestNumeric, LowerNull) {
+TYPED_TEST(ClampTestNumeric, LowerNull)
+{
   using T = TypeParam;
 
   T lo       = 2;
@@ -216,7 +228,8 @@ TYPED_TEST(ClampTestNumeric, LowerNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampTestNumeric, UpperNull) {
+TYPED_TEST(ClampTestNumeric, UpperNull)
+{
   using T = TypeParam;
 
   T lo       = 2;
@@ -230,7 +243,8 @@ TYPED_TEST(ClampTestNumeric, UpperNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampTestNumeric, InputNull) {
+TYPED_TEST(ClampTestNumeric, InputNull)
+{
   using T = TypeParam;
 
   T lo       = 2;
@@ -246,7 +260,8 @@ TYPED_TEST(ClampTestNumeric, InputNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampTestNumeric, InputNulliWithReplace) {
+TYPED_TEST(ClampTestNumeric, InputNulliWithReplace)
+{
   using T = TypeParam;
 
   T lo         = 2;
@@ -266,11 +281,13 @@ TYPED_TEST(ClampTestNumeric, InputNulliWithReplace) {
 }
 
 template <typename T>
-struct ClampFloatTest : public cudf::test::BaseFixture {};
+struct ClampFloatTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
 
-TYPED_TEST(ClampFloatTest, WithNANandNoNull) {
+TYPED_TEST(ClampFloatTest, WithNANandNoNull)
+{
   using T          = TypeParam;
   using ScalarType = cudf::experimental::scalar_type_t<T>;
 
@@ -293,7 +310,8 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampFloatTest, WithNANandNull) {
+TYPED_TEST(ClampFloatTest, WithNANandNull)
+{
   using T          = TypeParam;
   using ScalarType = cudf::experimental::scalar_type_t<T>;
 
@@ -318,7 +336,8 @@ TYPED_TEST(ClampFloatTest, WithNANandNull) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TYPED_TEST(ClampFloatTest, SignOfAFloat) {
+TYPED_TEST(ClampFloatTest, SignOfAFloat)
+{
   using T          = TypeParam;
   using ScalarType = cudf::experimental::scalar_type_t<T>;
 
@@ -352,9 +371,11 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-struct ClampStringTest : public cudf::test::BaseFixture {};
+struct ClampStringTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ClampStringTest, WithNullableColumn) {
+TEST_F(ClampStringTest, WithNullableColumn)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
@@ -375,7 +396,8 @@ TEST_F(ClampStringTest, WithNullableColumn) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(ClampStringTest, WithNonNullableColumn) {
+TEST_F(ClampStringTest, WithNonNullableColumn)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end());
@@ -394,7 +416,8 @@ TEST_F(ClampStringTest, WithNonNullableColumn) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(ClampStringTest, WithNullableColumnNullLow) {
+TEST_F(ClampStringTest, WithNullableColumnNullLow)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
@@ -415,7 +438,8 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(ClampStringTest, WithNullableColumnNullHigh) {
+TEST_F(ClampStringTest, WithNullableColumnNullHigh)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
@@ -436,7 +460,8 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull) {
+TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
@@ -452,7 +477,8 @@ TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull) {
   cudf::test::expect_columns_equal(input, got->view());
 }
 
-TEST_F(ClampStringTest, WithReplaceString) {
+TEST_F(ClampStringTest, WithReplaceString)
+{
   std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 

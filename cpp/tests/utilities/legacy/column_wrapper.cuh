@@ -51,9 +51,10 @@
   } while (0)
 #endif
 
-namespace {
-
-gdf_dtype_extra_info copy_extra_info(gdf_column const& column) {
+namespace
+{
+gdf_dtype_extra_info copy_extra_info(gdf_column const& column)
+{
   gdf_dtype_extra_info extra_info = column.dtype_info;
 
   // make a copy of the category if there is one
@@ -65,9 +66,10 @@ gdf_dtype_extra_info copy_extra_info(gdf_column const& column) {
 
 };  // namespace
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_column used for unit testing.
  *
@@ -149,7 +151,8 @@ struct column_wrapper {
    * @param other The column_wraper to copy
    *---------------------------------------------------------------------------**/
   column_wrapper(column_wrapper<ColumnType> const& other)
-    : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column} {
+    : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column}
+  {
     the_column.data       = data.data().get();
     the_column.valid      = bitmask.data().get();
     the_column.dtype_info = copy_extra_info(other);
@@ -158,7 +161,8 @@ struct column_wrapper {
   column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
 
   // column data and bitmask destroyed by device_vector dtor
-  ~column_wrapper() {
+  ~column_wrapper()
+  {
     if (std::is_same<ColumnType, cudf::nvstring_category>::value) {
       if (nullptr != the_column.dtype_info.category) {
         NVCategory::destroy(reinterpret_cast<NVCategory*>(the_column.dtype_info.category));
@@ -197,7 +201,8 @@ struct column_wrapper {
    * @param column_size The desired size of the column
    * @param allocate_bitmask Optionally allocate a zero-initialized bitmask
    *---------------------------------------------------------------------------**/
-  column_wrapper(cudf::size_type column_size, bool allocate_bitmask = false) {
+  column_wrapper(cudf::size_type column_size, bool allocate_bitmask = false)
+  {
     std::vector<ColumnType> host_data(column_size);
     std::vector<cudf::valid_type> host_bitmask;
 
@@ -221,7 +226,8 @@ struct column_wrapper {
   template <typename ValueInitializerType>
   column_wrapper(cudf::size_type column_size,
                  ValueInitializerType value_initalizer,
-                 bool allocate_bitmask = false) {
+                 bool allocate_bitmask = false)
+  {
     std::vector<ColumnType> host_data(column_size);
     std::vector<cudf::valid_type> host_bitmask;
 
@@ -245,7 +251,8 @@ struct column_wrapper {
    * @param host_bitmask The validity bitmask to use for the column
    *---------------------------------------------------------------------------**/
   column_wrapper(std::vector<ColumnType> const& host_data,
-                 std::vector<cudf::valid_type> const& host_bitmask) {
+                 std::vector<cudf::valid_type> const& host_bitmask)
+  {
     initialize_with_host_data(host_data, host_bitmask);
   }
 
@@ -270,7 +277,9 @@ struct column_wrapper {
    * @param list initializer_list to use for column's data
    *---------------------------------------------------------------------------**/
   column_wrapper(std::initializer_list<ColumnType> list)
-    : column_wrapper{std::vector<ColumnType>(list)} {}
+    : column_wrapper{std::vector<ColumnType>(list)}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using an already existing gdf_column*
@@ -281,7 +290,8 @@ struct column_wrapper {
    *
    * @param column The gdf_column* that contains the originating data
    *---------------------------------------------------------------------------**/
-  column_wrapper(const gdf_column& column) {
+  column_wrapper(const gdf_column& column)
+  {
     CUDF_EXPECTS(gdf_dtype_of<ColumnType>() == column.dtype,
                  "Type mismatch between column_wrapper and gdf_column");
 
@@ -323,7 +333,8 @@ struct column_wrapper {
    * @param bit_initializer The unary callable to initialize the bitmask
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
-  column_wrapper(std::vector<ColumnType> const& host_data, BitInitializerType bit_initializer) {
+  column_wrapper(std::vector<ColumnType> const& host_data, BitInitializerType bit_initializer)
+  {
     const size_t num_masks = gdf_valid_allocation_size(host_data.size());
     const cudf::size_type num_rows{static_cast<cudf::size_type>(host_data.size())};
 
@@ -348,7 +359,9 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   template <typename BitInitializerType>
   column_wrapper(std::initializer_list<ColumnType> list, BitInitializerType bit_initializer)
-    : column_wrapper{std::vector<ColumnType>(list), bit_initializer} {}
+    : column_wrapper{std::vector<ColumnType>(list), bit_initializer}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column wrapper using lambda initializers for both
@@ -372,7 +385,8 @@ struct column_wrapper {
   template <typename ValueInitializerType, typename BitInitializerType>
   column_wrapper(cudf::size_type column_size,
                  ValueInitializerType value_initalizer,
-                 BitInitializerType bit_initializer) {
+                 BitInitializerType bit_initializer)
+  {
     const size_t num_masks = gdf_valid_allocation_size(column_size);
 
     // Initialize the values and bitmask using the initializers
@@ -400,7 +414,8 @@ struct column_wrapper {
    * @param string_values The array of strings to initialize column category
    * values
    *---------------------------------------------------------------------------**/
-  column_wrapper(cudf::size_type column_size, char const** string_values) {
+  column_wrapper(cudf::size_type column_size, char const** string_values)
+  {
     // Initialize the values and bitmask using the initializers
     std::vector<ColumnType> host_data(column_size);
 
@@ -436,7 +451,8 @@ struct column_wrapper {
   template <typename BitInitializerType>
   column_wrapper(cudf::size_type column_size,
                  char const** string_values,
-                 BitInitializerType bit_initializer) {
+                 BitInitializerType bit_initializer)
+  {
     const size_t num_masks = gdf_valid_allocation_size(column_size);
 
     // Initialize the values and bitmask using the initializers
@@ -477,7 +493,8 @@ struct column_wrapper {
    * the second is the column's bitmask.
    *
    *---------------------------------------------------------------------------**/
-  auto to_host() const {
+  auto to_host() const
+  {
     cudf::size_type const num_masks{gdf_valid_allocation_size(the_column.size)};
     std::vector<ColumnType> host_data;
     std::vector<cudf::valid_type> host_bitmask;
@@ -507,7 +524,8 @@ struct column_wrapper {
    * @brief Prints the values of the underlying gdf_column.
    *
    *---------------------------------------------------------------------------**/
-  void print() const {
+  void print() const
+  {
     // TODO Move the implementation of `print_gdf_column` here once it's
     // removed from usage elsewhere
     print_gdf_column(&the_column);
@@ -519,7 +537,8 @@ struct column_wrapper {
    * @brief Prints the values of the underlying gdf_column to a string
    *
    *---------------------------------------------------------------------------**/
-  std::string to_str() const {
+  std::string to_str() const
+  {
     std::ostringstream buffer;
     print_gdf_column(&the_column, 1, buffer);
     return buffer.str();
@@ -570,7 +589,8 @@ struct column_wrapper {
    *---------------------------------------------------------------------------**/
   void initialize_with_host_data(
     std::vector<ColumnType> const& host_data,
-    std::vector<cudf::valid_type> const& host_bitmask = std::vector<cudf::valid_type>{}) {
+    std::vector<cudf::valid_type> const& host_bitmask = std::vector<cudf::valid_type>{})
+  {
     // thrust::device_vector takes care of host to device copy assignment
     data = host_data;
 

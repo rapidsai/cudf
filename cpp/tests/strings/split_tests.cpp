@@ -30,9 +30,11 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct StringsSplitTest : public cudf::test::BaseFixture {};
+struct StringsSplitTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsSplitTest, Split) {
+TEST_F(StringsSplitTest, Split)
+{
   std::vector<const char*> h_strings{"Héllo thesé", nullptr, "are some", "tést String", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -61,7 +63,8 @@ TEST_F(StringsSplitTest, Split) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, SplitWhitespace) {
+TEST_F(StringsSplitTest, SplitWhitespace)
+{
   std::vector<const char*> h_strings{"Héllo thesé", nullptr, "are\tsome", "tést\nString", "  "};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -89,7 +92,8 @@ TEST_F(StringsSplitTest, SplitWhitespace) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, RSplit) {
+TEST_F(StringsSplitTest, RSplit)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b ", " a  bbb   c"};
   cudf::test::strings_column_wrapper strings(
@@ -127,7 +131,8 @@ TEST_F(StringsSplitTest, RSplit) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, RSplitWhitespace) {
+TEST_F(StringsSplitTest, RSplitWhitespace)
+{
   std::vector<const char*> h_strings{"héllo", nullptr, "a_bc_déf", "", " a\tb ", " a\r bbb   c"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -161,7 +166,8 @@ TEST_F(StringsSplitTest, RSplitWhitespace) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns) {
+TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::split(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 1);
@@ -172,7 +178,8 @@ TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns) {
 }
 
 // This test specifically for https://github.com/rapidsai/custrings/issues/119
-TEST_F(StringsSplitTest, AllNullsCase) {
+TEST_F(StringsSplitTest, AllNullsCase)
+{
   std::vector<const char*> h_strings{nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -187,7 +194,8 @@ TEST_F(StringsSplitTest, AllNullsCase) {
   EXPECT_TRUE(column.null_count() == column.size());
 }
 
-TEST_F(StringsSplitTest, ContiguousSplitRecord) {
+TEST_F(StringsSplitTest, ContiguousSplitRecord)
+{
   std::vector<const char*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -221,7 +229,8 @@ TEST_F(StringsSplitTest, ContiguousSplitRecord) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousSplitRecordWithMaxSplit) {
+TEST_F(StringsSplitTest, ContiguousSplitRecordWithMaxSplit)
+{
   std::vector<const char*> h_strings{" Héllo thesé", nullptr, "are some  ", "tést String", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -255,7 +264,8 @@ TEST_F(StringsSplitTest, ContiguousSplitRecordWithMaxSplit) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespace) {
+TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespace)
+{
   std::vector<const char*> h_strings{
     "   Héllo thesé", nullptr, "are\tsome  ", "tést\nString", "  "};
   cudf::test::strings_column_wrapper strings(
@@ -290,7 +300,8 @@ TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespace) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespaceWithMaxSplit) {
+TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespaceWithMaxSplit)
+{
   std::vector<const char*> h_strings{
     "   Héllo thesé  ", nullptr, "are\tsome  ", "tést\nString", "  "};
   cudf::test::strings_column_wrapper strings(
@@ -325,7 +336,8 @@ TEST_F(StringsSplitTest, ContiguousSplitRecordWhitespaceWithMaxSplit) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousRSplitRecord) {
+TEST_F(StringsSplitTest, ContiguousRSplitRecord)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b ", " a  bbb   c"};
   cudf::test::strings_column_wrapper strings(
@@ -372,7 +384,8 @@ TEST_F(StringsSplitTest, ContiguousRSplitRecord) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousRSplitRecordWithMaxSplit) {
+TEST_F(StringsSplitTest, ContiguousRSplitRecordWithMaxSplit)
+{
   std::vector<const char*> h_strings{"héllo",
                                      nullptr,
                                      "a_bc_déf",
@@ -426,7 +439,8 @@ TEST_F(StringsSplitTest, ContiguousRSplitRecordWithMaxSplit) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespace) {
+TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespace)
+{
   std::vector<const char*> h_strings{"héllo", nullptr, "a_bc_déf", "", " a\tb ", " a\r bbb   c"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -463,7 +477,8 @@ TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespace) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespaceWithMaxSplit) {
+TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespaceWithMaxSplit)
+{
   std::vector<const char*> h_strings{
     "  héllo Asher ", nullptr, "   a_bc_déf   ", "", " a\tb ", " a\r bbb   c"};
   cudf::test::strings_column_wrapper strings(
@@ -501,7 +516,8 @@ TEST_F(StringsSplitTest, ContiguousRSplitRecordWhitespaceWithMaxSplit) {
   }
 }
 
-TEST_F(StringsSplitTest, ContiguousSplitRecordZeroSizeStringsColumns) {
+TEST_F(StringsSplitTest, ContiguousSplitRecordZeroSizeStringsColumns)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto split_record_result = cudf::strings::contiguous_split_record(zero_size_strings_column);
   EXPECT_TRUE(split_record_result.column_views.size() == 0);
@@ -509,7 +525,8 @@ TEST_F(StringsSplitTest, ContiguousSplitRecordZeroSizeStringsColumns) {
   EXPECT_TRUE(rsplit_record_result.column_views.size() == 0);
 }
 
-TEST_F(StringsSplitTest, Partition) {
+TEST_F(StringsSplitTest, Partition)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b "};
   std::vector<const char*> h_expecteds{
@@ -548,7 +565,8 @@ TEST_F(StringsSplitTest, Partition) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, PartitionWhitespace) {
+TEST_F(StringsSplitTest, PartitionWhitespace)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a bc déf", "a  bc", " ab cd", "ab cd ", "", "a_b"};
   std::vector<const char*> h_expecteds{"héllo", nullptr, "a",      "a",   "",      "ab",  "", "a_b",
@@ -587,7 +605,8 @@ TEST_F(StringsSplitTest, PartitionWhitespace) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, RPartition) {
+TEST_F(StringsSplitTest, RPartition)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a_bc_déf", "a__bc", "_ab_cd", "ab_cd_", "", " a b "};
   std::vector<const char*> h_expecteds{"",      nullptr, "a_bc", "a_", "_ab", "ab_cd", "", "",
@@ -626,7 +645,8 @@ TEST_F(StringsSplitTest, RPartition) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, RPartitionWhitespace) {
+TEST_F(StringsSplitTest, RPartitionWhitespace)
+{
   std::vector<const char*> h_strings{
     "héllo", nullptr, "a bc déf", "a  bc", " ab cd", "ab cd ", "", "a_b"};
   std::vector<const char*> h_expecteds{"",      nullptr, "a bc", "a ", " ab", "ab cd", "", "",
@@ -665,7 +685,8 @@ TEST_F(StringsSplitTest, RPartitionWhitespace) {
   cudf::test::expect_tables_equal(*results, *expected);
 }
 
-TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns) {
+TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::partition(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 0);
@@ -673,7 +694,8 @@ TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns) {
   EXPECT_TRUE(results->num_columns() == 0);
 }
 
-TEST_F(StringsSplitTest, InvalidParameter) {
+TEST_F(StringsSplitTest, InvalidParameter)
+{
   std::vector<const char*> h_strings{"string left intentionally blank"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto strings_view = cudf::strings_column_view(strings);

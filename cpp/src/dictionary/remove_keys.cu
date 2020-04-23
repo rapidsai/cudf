@@ -28,11 +28,14 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace dictionary
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Return a new dictionary by removing identified keys from the provided dictionary.
  *
@@ -52,7 +55,8 @@ std::unique_ptr<column> remove_keys_fn(
   dictionary_column_view const& dictionary_column,
   KeysKeeper keys_to_keep_fn,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   // create keys positions column to identify original key positions after removing they keys
   auto const keys_view = dictionary_column.keys();
   auto execpol         = rmm::exec_policy(stream);
@@ -119,7 +123,8 @@ std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
   auto const keys_view = dictionary_column.keys();
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
@@ -135,7 +140,8 @@ std::unique_ptr<column> remove_keys(
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   // locate the keys to remove
   auto const keys    = dictionary_column.keys();
   auto const indices = dictionary_column.indices();
@@ -170,12 +176,14 @@ std::unique_ptr<column> remove_unused_keys(
 
 std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
                                     column_view const& keys_to_remove,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   return detail::remove_keys(dictionary_column, keys_to_remove, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
-                                           rmm::mr::device_memory_resource* mr) {
+                                           rmm::mr::device_memory_resource* mr)
+{
   return detail::remove_unused_keys(dictionary_column, mr);
 }
 

@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct StringsExtractTests : public cudf::test::BaseFixture {};
+struct StringsExtractTests : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsExtractTests, ExtractTest) {
+TEST_F(StringsExtractTests, ExtractTest)
+{
   std::vector<const char*> h_strings{
     "First Last", "Joe Schmoe", "John Smith", "Jane Smith", "Beyonce", "Sting", nullptr, ""};
 
@@ -73,7 +75,8 @@ TEST_F(StringsExtractTests, ExtractTest) {
   cudf::test::expect_tables_equal(*results, expected);
 }
 
-TEST_F(StringsExtractTests, ExtractDomainTest) {
+TEST_F(StringsExtractTests, ExtractDomainTest)
+{
   cudf::test::strings_column_wrapper strings({"http://www.google.com",
                                               "gmail.com",
                                               "github.com",
@@ -113,7 +116,8 @@ TEST_F(StringsExtractTests, ExtractDomainTest) {
   cudf::test::expect_tables_equal(*results, expected);
 }
 
-TEST_F(StringsExtractTests, ExtractEventTest) {
+TEST_F(StringsExtractTests, ExtractEventTest)
+{
   std::vector<std::string> patterns({"(^[0-9]+\\.?[0-9]*),",
                                      "search_name=\"([0-9A-Za-z\\s\\-\\(\\)]+)",
                                      "message.ip=\"([\\w\\.]+)",
@@ -143,7 +147,8 @@ TEST_F(StringsExtractTests, ExtractEventTest) {
   }
 }
 
-TEST_F(StringsExtractTests, MediumRegex) {
+TEST_F(StringsExtractTests, MediumRegex)
+{
   // This results in 95 regex instructions and falls in the 'medium' range.
   std::string medium_regex =
     "hello @abc @def (world) The quick brown @fox jumps over the lazy @dog hello "
@@ -171,7 +176,8 @@ TEST_F(StringsExtractTests, MediumRegex) {
   cudf::test::expect_columns_equal(results->get_column(0), expected);
 }
 
-TEST_F(StringsExtractTests, LargeRegex) {
+TEST_F(StringsExtractTests, LargeRegex)
+{
   // This results in 115 regex instructions and falls in the 'large' range.
   std::string large_regex =
     "hello @abc @def world The (quick) brown @fox jumps over the lazy @dog hello "

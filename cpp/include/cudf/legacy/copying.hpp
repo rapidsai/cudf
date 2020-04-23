@@ -23,8 +23,8 @@
 // Forward declaration
 typedef struct CUstream_st* cudaStream_t;
 
-namespace cudf {
-
+namespace cudf
+{
 /** ---------------------------------------------------------------------------*
  * @brief Indicates when to allocate a mask, based on an existing mask.
  * ---------------------------------------------------------------------------**/

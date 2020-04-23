@@ -28,10 +28,10 @@
  * @brief Concrete type definitions for int32_t and int64_t timestamps in
  * varying resolutions as durations since the UNIX epoch.
  *---------------------------------------------------------------------------**/
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
 using time_point = simt::std::chrono::time_point<simt::std::chrono::system_clock, Duration>;
@@ -88,7 +88,8 @@ static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 
 }  // namespace cudf
 
-namespace std {
+namespace std
+{
 /**---------------------------------------------------------------------------*
  * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
  *
@@ -97,13 +98,16 @@ namespace std {
 #define TIMESTAMP_LIMITS(TypeName)                                  \
   template <>                                                       \
   struct numeric_limits<TypeName> {                                 \
-    static constexpr TypeName max() noexcept {                      \
+    static constexpr TypeName max() noexcept                        \
+    {                                                               \
       return std::numeric_limits<typename TypeName::rep>::max();    \
     }                                                               \
-    static constexpr TypeName lowest() noexcept {                   \
+    static constexpr TypeName lowest() noexcept                     \
+    {                                                               \
       return std::numeric_limits<typename TypeName::rep>::lowest(); \
     }                                                               \
-    static constexpr TypeName min() noexcept {                      \
+    static constexpr TypeName min() noexcept                        \
+    {                                                               \
       return std::numeric_limits<typename TypeName::rep>::min();    \
     }                                                               \
   }

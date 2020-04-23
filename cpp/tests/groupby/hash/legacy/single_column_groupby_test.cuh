@@ -28,14 +28,16 @@
 #include <utility>
 #include "../../common/legacy/groupby_test.hpp"
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 template <cudf::groupby::operators op, typename Key, typename Value, typename ResultValue>
 void single_column_groupby_test(column_wrapper<Key> keys,
                                 column_wrapper<Value> values,
                                 column_wrapper<Key> expected_keys,
-                                column_wrapper<ResultValue> expected_values) {
+                                column_wrapper<ResultValue> expected_values)
+{
   using namespace cudf::test;
   using namespace cudf::groupby::hash;
   using namespace cudf::groupby;
@@ -80,7 +82,8 @@ inline void multi_column_groupby_test(cudf::table const& keys,
                                       cudf::table const& values,
                                       std::vector<cudf::groupby::operators> const& ops,
                                       cudf::table const& expected_keys,
-                                      cudf::table const& expected_values) {
+                                      cudf::table const& expected_values)
+{
   using namespace cudf::test;
   using namespace cudf::groupby::hash;
 

@@ -29,14 +29,16 @@
 #include <string>
 #include <unordered_map>
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 /**
  * @brief Class used to handle compilation and execution of JIT kernels
  *
  */
-class launcher {
+class launcher
+{
  public:
   launcher() = delete;
 
@@ -79,7 +81,8 @@ class launcher {
    * @return launcher& ref to this launcehr object
    */
   launcher& set_kernel_inst(const std::string& kernel_name,
-                            const std::vector<std::string>& arguments) {
+                            const std::vector<std::string>& arguments)
+  {
     kernel_inst = cache_instance.getKernelInstantiation(kernel_name, program, arguments);
     return *this;
   }
@@ -92,7 +95,8 @@ class launcher {
    * @return Return GDF_SUCCESS if successful
    */
   template <typename... Args>
-  void launch(Args... args) {
+  void launch(Args... args)
+  {
     get_kernel().configure_1d_max_occupancy(0, 0, 0, stream).launch(args...);
   }
 

@@ -27,13 +27,16 @@
 
 using cudf::experimental::scalar_type_t;
 
-namespace cudf {
-namespace test {
-namespace {
-
+namespace cudf
+{
+namespace test
+{
+namespace
+{
 struct compare_scalar_functor {
   template <typename T>
-  void operator()(cudf::scalar const& lhs, cudf::scalar const& rhs) {
+  void operator()(cudf::scalar const& lhs, cudf::scalar const& rhs)
+  {
     auto lhs_t = static_cast<scalar_type_t<T> const&>(lhs);
     auto rhs_t = static_cast<scalar_type_t<T> const&>(rhs);
     EXPECT_EQ(lhs_t.value(), rhs_t.value());
@@ -41,14 +44,16 @@ struct compare_scalar_functor {
 };
 
 template <>
-void compare_scalar_functor::operator()<float>(cudf::scalar const& lhs, cudf::scalar const& rhs) {
+void compare_scalar_functor::operator()<float>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
   auto lhs_t = static_cast<scalar_type_t<float> const&>(lhs);
   auto rhs_t = static_cast<scalar_type_t<float> const&>(rhs);
   EXPECT_FLOAT_EQ(lhs_t.value(), rhs_t.value());
 }
 
 template <>
-void compare_scalar_functor::operator()<double>(cudf::scalar const& lhs, cudf::scalar const& rhs) {
+void compare_scalar_functor::operator()<double>(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
   auto lhs_t = static_cast<scalar_type_t<double> const&>(lhs);
   auto rhs_t = static_cast<scalar_type_t<double> const&>(rhs);
   EXPECT_DOUBLE_EQ(lhs_t.value(), rhs_t.value());
@@ -56,13 +61,15 @@ void compare_scalar_functor::operator()<double>(cudf::scalar const& lhs, cudf::s
 
 template <>
 void compare_scalar_functor::operator()<cudf::dictionary32>(cudf::scalar const& lhs,
-                                                            cudf::scalar const& rhs) {
+                                                            cudf::scalar const& rhs)
+{
   CUDF_FAIL("Unsupported scalar compare type: dictionary");
 }
 
 }  // anonymous namespace
 
-void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs) {
+void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs)
+{
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.is_valid(), rhs.is_valid());
 

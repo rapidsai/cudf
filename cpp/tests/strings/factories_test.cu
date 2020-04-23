@@ -30,9 +30,11 @@
 #include <cstring>
 #include <vector>
 
-struct StringsFactoriesTest : public cudf::test::BaseFixture {};
+struct StringsFactoriesTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsFactoriesTest, CreateColumnFromPair) {
+TEST_F(StringsFactoriesTest, CreateColumnFromPair)
+{
   std::vector<const char*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
                                           "a slow moving turtlé cannot catch the bird",
@@ -92,7 +94,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair) {
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
 }
 
-TEST_F(StringsFactoriesTest, CreateColumnFromOffsets) {
+TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
+{
   std::vector<const char*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
                                           "a slow moving turtlé cannot catch the bird",
@@ -151,7 +154,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets) {
   cudf::test::expect_columns_equal(column->view(), column2->view());
 }
 
-TEST_F(StringsFactoriesTest, CreateScalar) {
+TEST_F(StringsFactoriesTest, CreateScalar)
+{
   std::string value = "test string";
   auto s            = cudf::make_string_scalar(value);
   auto string_s     = static_cast<cudf::string_scalar*>(s.get());
@@ -161,7 +165,8 @@ TEST_F(StringsFactoriesTest, CreateScalar) {
   EXPECT_TRUE(s->is_valid());
 }
 
-TEST_F(StringsFactoriesTest, EmptyStringsColumn) {
+TEST_F(StringsFactoriesTest, EmptyStringsColumn)
+{
   rmm::device_vector<char> d_chars;
   rmm::device_vector<cudf::size_type> d_offsets(1, 0);
   rmm::device_vector<cudf::bitmask_type> d_nulls;
@@ -174,7 +179,8 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn) {
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsFactoriesTest, CreateOffsets) {
+TEST_F(StringsFactoriesTest, CreateOffsets)
+{
   std::vector<std::string> strings      = {"this", "is", "a", "column", "of", "strings"};
   cudf::test::strings_column_wrapper sw = {strings.begin(), strings.end()};
   cudf::column_view col(sw);

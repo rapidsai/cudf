@@ -35,7 +35,8 @@ constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
  * occupancy for the specified number of insertions
  *---------------------------------------------------------------------------**/
 inline size_t compute_hash_table_size(cudf::size_type num_keys_to_insert,
-                                      uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY) {
+                                      uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY)
+{
   assert(desired_occupancy != 0);
   assert(desired_occupancy <= 100);
   double const grow_factor{100.0 / desired_occupancy};
@@ -47,7 +48,8 @@ inline size_t compute_hash_table_size(cudf::size_type num_keys_to_insert,
 }
 
 template <typename pair_type>
-__forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __restrict__ const ptr) {
+__forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __restrict__ const ptr)
+{
   if (sizeof(uint4) == sizeof(pair_type)) {
     union pair_type2vec_type {
       uint4 vec_val;
@@ -87,7 +89,8 @@ __forceinline__ __device__ pair_type load_pair_vectorized(const pair_type* __res
 
 template <typename pair_type>
 __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ const ptr,
-                                                      const pair_type val) {
+                                                      const pair_type val)
+{
   if (sizeof(uint4) == sizeof(pair_type)) {
     union pair_type2vec_type {
       uint4 vec_val;
@@ -129,7 +132,8 @@ template <typename value_type, typename size_type, typename key_type, typename e
 __global__ void init_hashtbl(value_type* __restrict__ const hashtbl_values,
                              const size_type n,
                              const key_type key_val,
-                             const elem_type elem_val) {
+                             const elem_type elem_val)
+{
   const size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < n) {
     store_pair_vectorized(hashtbl_values + idx, thrust::make_pair(key_val, elem_val));
@@ -142,13 +146,15 @@ struct equal_to {
   using first_argument_type  = T;
   using second_argument_type = T;
   __forceinline__ __host__ __device__ constexpr bool operator()(
-    const first_argument_type& lhs, const second_argument_type& rhs) const {
+    const first_argument_type& lhs, const second_argument_type& rhs) const
+  {
     return lhs == rhs;
   }
 };
 
 template <typename Iterator>
-class cycle_iterator_adapter {
+class cycle_iterator_adapter
+{
  public:
   using value_type      = typename std::iterator_traits<Iterator>::value_type;
   using difference_type = typename std::iterator_traits<Iterator>::difference_type;
@@ -161,9 +167,12 @@ class cycle_iterator_adapter {
   __host__ __device__ explicit cycle_iterator_adapter(const iterator_type& begin,
                                                       const iterator_type& end,
                                                       const iterator_type& current)
-    : m_begin(begin), m_end(end), m_current(current) {}
+    : m_begin(begin), m_end(end), m_current(current)
+  {
+  }
 
-  __host__ __device__ cycle_iterator_adapter& operator++() {
+  __host__ __device__ cycle_iterator_adapter& operator++()
+  {
     if (m_end == (m_current + 1))
       m_current = m_begin;
     else
@@ -171,7 +180,8 @@ class cycle_iterator_adapter {
     return *this;
   }
 
-  __host__ __device__ const cycle_iterator_adapter& operator++() const {
+  __host__ __device__ const cycle_iterator_adapter& operator++() const
+  {
     if (m_end == (m_current + 1))
       m_current = m_begin;
     else
@@ -179,7 +189,8 @@ class cycle_iterator_adapter {
     return *this;
   }
 
-  __host__ __device__ cycle_iterator_adapter& operator++(int) {
+  __host__ __device__ cycle_iterator_adapter& operator++(int)
+  {
     cycle_iterator_adapter<iterator_type> old(m_begin, m_end, m_current);
     if (m_end == (m_current + 1))
       m_current = m_begin;
@@ -188,7 +199,8 @@ class cycle_iterator_adapter {
     return old;
   }
 
-  __host__ __device__ const cycle_iterator_adapter& operator++(int) const {
+  __host__ __device__ const cycle_iterator_adapter& operator++(int) const
+  {
     cycle_iterator_adapter<iterator_type> old(m_begin, m_end, m_current);
     if (m_end == (m_current + 1))
       m_current = m_begin;
@@ -197,7 +209,8 @@ class cycle_iterator_adapter {
     return old;
   }
 
-  __host__ __device__ bool equal(const cycle_iterator_adapter<iterator_type>& other) const {
+  __host__ __device__ bool equal(const cycle_iterator_adapter<iterator_type>& other) const
+  {
     return m_current == other.m_current && m_begin == other.m_begin && m_end == other.m_end;
   }
 
@@ -217,13 +230,15 @@ class cycle_iterator_adapter {
 
 template <class T>
 __host__ __device__ bool operator==(const cycle_iterator_adapter<T>& lhs,
-                                    const cycle_iterator_adapter<T>& rhs) {
+                                    const cycle_iterator_adapter<T>& rhs)
+{
   return lhs.equal(rhs);
 }
 
 template <class T>
 __host__ __device__ bool operator!=(const cycle_iterator_adapter<T>& lhs,
-                                    const cycle_iterator_adapter<T>& rhs) {
+                                    const cycle_iterator_adapter<T>& rhs)
+{
   return !lhs.equal(rhs);
 }
 

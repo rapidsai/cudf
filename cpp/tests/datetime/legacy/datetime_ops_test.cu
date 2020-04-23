@@ -30,9 +30,11 @@
 
 #include <cstdlib>
 
-struct gdf_extract_from_datetime_example_test : public GdfTest {};
+struct gdf_extract_from_datetime_example_test : public GdfTest {
+};
 
-TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
+TEST_F(gdf_extract_from_datetime_example_test, usage_example)
+{
   // gdf_column input examples for date32, date64 and timestamp (in seconds)
 
   std::vector<int32_t> inputDate32Data = {
@@ -324,7 +326,8 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 }
 
 struct gdf_extract_from_datetime_test : public GdfTest {
-  void SetUp() {
+  void SetUp()
+  {
     inputYears   = {2018, 2018, 1919, 2020, 1970, 2043, 1998, 1815, 1969, 1969,
                   1969, 1906, 1908, 1917, 1932, 1981, 1989, 1991, 1993, 2009,
                   2018, 2024, 1915, 1939, 1944, 1969, 1976, 1998, 2010, 2031};
@@ -352,7 +355,8 @@ struct gdf_extract_from_datetime_test : public GdfTest {
 
   void TearDown() {}
 
-  void validate_output(gdf_error gdfError, std::vector<int16_t>& correct_result) {
+  void validate_output(gdf_error gdfError, std::vector<int16_t>& correct_result)
+  {
     EXPECT_TRUE(gdfError == GDF_SUCCESS);
 
     std::vector<int16_t> results(colSize);
@@ -361,7 +365,8 @@ struct gdf_extract_from_datetime_test : public GdfTest {
     for (int i = 0; i < colSize; i++) { EXPECT_TRUE(results[i] == correct_result[i]); }
   }
 
-  void test_all_extract_functions(gdf_column& inputCol) {
+  void test_all_extract_functions(gdf_column& inputCol)
+  {
     gdf_error gdfError = gdf_extract_datetime_year(&inputCol, &outputCol);
     validate_output(gdfError, inputYears);
 
@@ -395,7 +400,8 @@ struct gdf_extract_from_datetime_test : public GdfTest {
   rmm::device_vector<cudf::valid_type> outputValidDev;
 };
 
-TEST_F(gdf_extract_from_datetime_test, date64Tests) {
+TEST_F(gdf_extract_from_datetime_test, date64Tests)
+{
   // extract from milliseconds
   {
     std::vector<int64_t> inputData = {
@@ -610,9 +616,11 @@ TEST_F(gdf_extract_from_datetime_test, date64Tests) {
   }
 }
 
-struct gdf_extract_datetime_TEST : public GdfTest {};
+struct gdf_extract_datetime_TEST : public GdfTest {
+};
 
-TEST_F(gdf_extract_datetime_TEST, date32Tests) {
+TEST_F(gdf_extract_datetime_TEST, date32Tests)
+{
   int colSize = 8;
 
   gdf_column inputCol{};
@@ -696,7 +704,8 @@ TEST_F(gdf_extract_datetime_TEST, date32Tests) {
   }
 }
 
-TEST_F(gdf_extract_datetime_TEST, testErrors) {
+TEST_F(gdf_extract_datetime_TEST, testErrors)
+{
   // WRONG SIZE OF OUTPUT
   {
     int colSize = 8;

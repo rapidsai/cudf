@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Transposes a table.
  *        Stores output in a contiguous column, exposing the transposed table as

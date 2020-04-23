@@ -27,12 +27,14 @@
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 
 template <typename T>
-struct ScatterTest : GdfTest {};
+struct ScatterTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(ScatterTest, test_types);
 
-TYPED_TEST(ScatterTest, DtypeMistach) {
+TYPED_TEST(ScatterTest, DtypeMistach)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type target_size{1000};
 
@@ -56,7 +58,8 @@ TYPED_TEST(ScatterTest, DtypeMistach) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScatterTest, NumColumnsMismatch) {
+TYPED_TEST(ScatterTest, NumColumnsMismatch)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type target_size{1000};
 
@@ -84,7 +87,8 @@ TYPED_TEST(ScatterTest, NumColumnsMismatch) {
 
 // This also test the case where the source column has a valid bitmask while
 // the target column does not.
-TYPED_TEST(ScatterTest, IdentityTest) {
+TYPED_TEST(ScatterTest, IdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type target_size{1000};
 
@@ -115,7 +119,8 @@ TYPED_TEST(ScatterTest, IdentityTest) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScatterTest, ReverseIdentityTest) {
+TYPED_TEST(ScatterTest, ReverseIdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type target_size{1000};
 
@@ -164,7 +169,8 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScatterTest, AllNull) {
+TYPED_TEST(ScatterTest, AllNull)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type target_size{1000};
 
@@ -209,7 +215,8 @@ TYPED_TEST(ScatterTest, AllNull) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScatterTest, EveryOtherNull) {
+TYPED_TEST(ScatterTest, EveryOtherNull)
+{
   constexpr cudf::size_type source_size{1234};
   constexpr cudf::size_type target_size{source_size};
 
@@ -268,7 +275,8 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 }
 
 // The test to test against BUG #2007
-TYPED_TEST(ScatterTest, PreserveDestBitmask) {
+TYPED_TEST(ScatterTest, PreserveDestBitmask)
+{
   cudf::test::column_wrapper<int64_t> source_column({10, -1}, [](auto index) { return false; });
   // So source is {@, @}
   cudf::test::column_wrapper<int64_t> target_column({10, -1, 6, 7},

@@ -17,9 +17,10 @@
 #include <algorithm>
 #include <fstream>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
 #define bswap_32(v) _byteswap_ulong(v)
@@ -73,7 +74,8 @@ struct dst_transition_s {
  *
  * @return position after parsing the name
  **/
-static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end) {
+static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end)
+{
   if (cur < end) {
     int c = *cur;
     if (c == '<') {
@@ -100,7 +102,8 @@ static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end) {
  *
  * @return position after parsing the number
  **/
-static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval) {
+static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval)
+{
   int64_t v = 0;
   while (cur < end) {
     uint32_t c = *cur - '0';
@@ -121,7 +124,8 @@ static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end,
  *
  * @return position after parsing the UTC offset
  **/
-static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff) {
+static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff)
+{
   int64_t v = 0;
   if (cur < end) {
     int64_t scale = 60 * 60;
@@ -152,7 +156,8 @@ static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end,
  **/
 static const uint8_t *posix_parse_transition(const uint8_t *cur,
                                              const uint8_t *end,
-                                             dst_transition_s *ptrans) {
+                                             dst_transition_s *ptrans)
+{
   int type  = 0;
   int month = 0;
   int week  = 0;
@@ -197,7 +202,8 @@ static const uint8_t *posix_parse_transition(const uint8_t *cur,
  *
  * @return 1 if leap year, zero otherwise
  **/
-static int IsLeapYear(uint32_t year) {
+static int IsLeapYear(uint32_t year)
+{
   return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 }
 
@@ -209,7 +215,8 @@ static int IsLeapYear(uint32_t year) {
  *
  * @return number of days in the month
  **/
-static int DaysInMonth(int month, int is_leap) {
+static int DaysInMonth(int month, int is_leap)
+{
   return (month == 2) ? 28 + is_leap : (30 + ((0x55aa >> month) & 1));
 }
 
@@ -221,7 +228,8 @@ static int DaysInMonth(int month, int is_leap) {
  *
  * @return transition time in seconds from the beginning of the year
  **/
-static int64_t GetTransitionTime(const dst_transition_s *trans, int year) {
+static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
+{
   int64_t t = trans->time;
   int day   = trans->day;
 
@@ -259,7 +267,8 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year) {
  *
  * @return gmt offset
  **/
-static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts) {
+static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
+{
   uint32_t num_entries = (uint32_t)(table.size() >> 1);
   uint32_t dst_cycle   = 0;
   int64_t first_transition, last_transition;
@@ -310,7 +319,8 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts) {
  *
  * @return true if successful, false if failed to find/parse the timezone information
  **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name) {
+bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name)
+{
   using std::ios_base;
   std::string tz_filename("/usr/share/zoneinfo/");
   std::ifstream fin;

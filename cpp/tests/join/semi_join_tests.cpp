@@ -28,9 +28,11 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-struct JoinTest : public cudf::test::BaseFixture {};
+struct JoinTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(JoinTest, LeftSemiJoin) {
+TEST_F(JoinTest, LeftSemiJoin)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result"};
@@ -87,7 +89,8 @@ TEST_F(JoinTest, LeftSemiJoin) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftSemiJoin_with_a_string_key) {
+TEST_F(JoinTest, LeftSemiJoin_with_a_string_key)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result"};
@@ -144,7 +147,8 @@ TEST_F(JoinTest, LeftSemiJoin_with_a_string_key) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftSemiJoin_with_null) {
+TEST_F(JoinTest, LeftSemiJoin_with_null)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
@@ -201,7 +205,8 @@ TEST_F(JoinTest, LeftSemiJoin_with_null) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftAntiJoin) {
+TEST_F(JoinTest, LeftAntiJoin)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result"};
@@ -258,7 +263,8 @@ TEST_F(JoinTest, LeftAntiJoin) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftAntiJoin_with_a_string_key) {
+TEST_F(JoinTest, LeftAntiJoin_with_a_string_key)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result"};
@@ -315,7 +321,8 @@ TEST_F(JoinTest, LeftAntiJoin_with_a_string_key) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftAntiJoin_with_null) {
+TEST_F(JoinTest, LeftAntiJoin_with_null)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
@@ -372,7 +379,8 @@ TEST_F(JoinTest, LeftAntiJoin_with_null) {
   expect_columns_equal(join_table->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftSemiAntiJoin_exceptions) {
+TEST_F(JoinTest, LeftSemiAntiJoin_exceptions)
+{
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
 
   column_wrapper<int32_t> b_0{10, 20, 20, 50};
@@ -426,7 +434,8 @@ TEST_F(JoinTest, LeftSemiAntiJoin_exceptions) {
                cudf::logic_error);
 }
 
-TEST_F(JoinTest, LeftSemiJoin_empty_result) {
+TEST_F(JoinTest, LeftSemiJoin_empty_result)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
@@ -489,7 +498,8 @@ TEST_F(JoinTest, LeftSemiJoin_empty_result) {
   expect_columns_equal(join_table2->get_column(2), expect_3);
 }
 
-TEST_F(JoinTest, LeftAntiJoin_empty_result) {
+TEST_F(JoinTest, LeftAntiJoin_empty_result)
+{
   std::vector<const char*> a_strings{
     "quick", "accénted", "turtlé", "composéd", "result", "", "words"};
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
@@ -552,7 +562,8 @@ TEST_F(JoinTest, LeftAntiJoin_empty_result) {
   expect_columns_equal(join_table2->get_column(2), expect_3);
 }
 
-TEST_F(JoinTest, LeftSemiAntiJoin_empty_table) {
+TEST_F(JoinTest, LeftSemiAntiJoin_empty_table)
+{
   std::vector<const char*> a_strings{};
   std::vector<const char*> b_strings{"quick", "words", "result", nullptr};
   std::vector<const char*> e_strings{};
@@ -640,7 +651,8 @@ TEST_F(JoinTest, LeftSemiAntiJoin_empty_table) {
   expect_columns_equal(join_table5->get_column(3), expect_3);
 }
 
-TEST_F(JoinTest, LeftAntiJoin_empty_right_table) {
+TEST_F(JoinTest, LeftAntiJoin_empty_right_table)
+{
   std::vector<const char*> a_strings{"quick", "words", "result", nullptr};
   std::vector<const char*> b_strings{};
   std::vector<const char*> e_strings{"quick", "words", "result", nullptr};

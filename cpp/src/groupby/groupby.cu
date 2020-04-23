@@ -34,10 +34,12 @@
 #include <memory>
 #include <utility>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
 // Constructor
 groupby::groupby(table_view const& keys,
                  include_nulls include_null_keys,
@@ -48,13 +50,16 @@ groupby::groupby(table_view const& keys,
     _include_null_keys{include_null_keys},
     _keys_are_sorted{keys_are_sorted},
     _column_order{column_order},
-    _null_precedence{null_precedence} {}
+    _null_precedence{null_precedence}
+{
+}
 
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   std::vector<aggregation_request> const& requests,
   cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -73,9 +78,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
 // Needs to be in source file because sort_groupby_helper was forward declared
 groupby::~groupby() = default;
 
-namespace {
+namespace
+{
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(std::vector<aggregation_request> const& requests) {
+auto empty_results(std::vector<aggregation_request> const& requests)
+{
   std::vector<aggregation_result> empty_results;
 
   std::transform(
@@ -97,7 +104,8 @@ auto empty_results(std::vector<aggregation_request> const& requests) {
 }
 
 /// Verifies the agg requested on the request's values is valid
-void verify_valid_requests(std::vector<aggregation_request> const& requests) {
+void verify_valid_requests(std::vector<aggregation_request> const& requests)
+{
   CUDF_EXPECTS(std::all_of(requests.begin(),
                            requests.end(),
                            [](auto const& request) {
@@ -115,7 +123,8 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests) {
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr) {
+  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
     std::all_of(requests.begin(),
@@ -130,7 +139,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
   return dispatch_aggregation(requests, 0, mr);
 }
 
-groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr) {
+groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   auto grouped_keys = helper().sorted_keys(mr, 0);
 
@@ -149,7 +159,8 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 }
 
 // Get the sort helper object
-detail::sort::sort_groupby_helper& groupby::helper() {
+detail::sort::sort_groupby_helper& groupby::helper()
+{
   if (_helper) return *_helper;
   _helper = std::make_unique<detail::sort::sort_groupby_helper>(
     _keys, _include_null_keys, _keys_are_sorted);

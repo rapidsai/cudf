@@ -25,9 +25,11 @@
 #include <tests/utilities/column_wrapper.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 
-struct ColumnDeviceViewTest : public cudf::test::BaseFixture {};
+struct ColumnDeviceViewTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ColumnDeviceViewTest, Sample) {
+TEST_F(ColumnDeviceViewTest, Sample)
+{
   using T             = int32_t;
   cudaStream_t stream = 0;
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});
@@ -44,7 +46,8 @@ TEST_F(ColumnDeviceViewTest, Sample) {
   cudf::test::expect_columns_equal(input, output->view());
 }
 
-TEST_F(ColumnDeviceViewTest, MismatchingType) {
+TEST_F(ColumnDeviceViewTest, MismatchingType)
+{
   using T             = int32_t;
   cudaStream_t stream = 0;
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});

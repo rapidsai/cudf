@@ -32,11 +32,13 @@
 #include <unordered_map>
 #include <vector>
 
-namespace cudf {
-namespace groupby {
-
+namespace cudf
+{
+namespace groupby
+{
 std::vector<SimpleAggRequestCounter> compound_to_simple(
-  std::vector<AggRequestType> const& compound_requests) {
+  std::vector<AggRequestType> const& compound_requests)
+{
   // Contructs a mapping of every value column to the minimal set of simple
   // ops to be performed on that column
   std::unordered_map<gdf_column*, std::multiset<operators>> columns_to_ops;
@@ -73,12 +75,14 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
 
 struct avg_result_type {
   template <typename SourceType>
-  gdf_dtype operator()() {
+  gdf_dtype operator()()
+  {
     return cudf::gdf_dtype_of<target_type_t<SourceType, MEAN>>();
   }
 };
 
-gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t stream) {
+gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t stream)
+{
   CUDF_EXPECTS(sum.size == count.size, "Size mismatch between sum and count columns.");
   gdf_column* avg               = new gdf_column{};
   gdf_binary_operator avg_binop = GDF_DIV;
@@ -106,7 +110,8 @@ gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t strea
 table compute_original_requests(std::vector<AggRequestType> const& original_requests,
                                 std::vector<SimpleAggRequestCounter> const& simple_requests,
                                 table simple_outputs,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   // Maps the requested simple aggregation to a resulting output column paired
   // with a counter of how many times said column is needed
   std::map<AggRequestType, std::pair<gdf_column*, cudf::size_type>> simple_requests_to_outputs;

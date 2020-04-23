@@ -89,7 +89,8 @@ __inline__ __device__ constexpr int64_t secondsSinceEpoch(
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__inline__ __device__ T convertStrToInteger(const char *data, long start, long end) {
+__inline__ __device__ T convertStrToInteger(const char *data, long start, long end)
+{
   T value = 0;
 
   long index = start;
@@ -120,7 +121,8 @@ __inline__ __device__ T convertStrToInteger(const char *data, long start, long e
 __inline__ __device__ long findFirstOccurrence(const char *data,
                                                long start_idx,
                                                long end_idx,
-                                               char c) {
+                                               char c)
+{
   for (long i = start_idx; i <= end_idx; ++i) {
     if (data[i] == c) { return i; }
   }
@@ -144,7 +146,8 @@ __inline__ __device__ long findFirstOccurrence(const char *data,
 __inline__ __device__ int32_t parseDateFormat(const char *data,
                                               long start_idx,
                                               long end_idx,
-                                              bool dayfirst) {
+                                              bool dayfirst)
+{
   int day, month, year;
   int32_t e = -1;
 
@@ -172,7 +175,8 @@ __inline__ __device__ int32_t parseDateFormat(const char *data,
 __inline__ __device__ int64_t parseDateTimeFormat(const char *data,
                                                   long start,
                                                   long end,
-                                                  bool dayfirst) {
+                                                  bool dayfirst)
+{
   int day, month, year;
   int hour, minute, second, millisecond = 0;
   int64_t answer = -1;
@@ -226,7 +230,8 @@ __inline__ __device__ int64_t parseDateTimeFormat(const char *data,
  * @return T/F - false indicates that an error occurred
  */
 __inline__ __device__ bool extractDate(
-  const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day) {
+  const char *data, long sIdx, long eIdx, bool dayfirst, int *year, int *month, int *day)
+{
   char sep = '/';
 
   long sep_pos = findFirstOccurrence(data, sIdx, eIdx, sep);
@@ -306,7 +311,8 @@ __inline__ __device__ bool extractDate(
  * @param[out] millisecond The millisecond (0 if not present)
  */
 __inline__ __device__ void extractTime(
-  const char *data, long start, long end, int *hour, int *minute, int *second, int *millisecond) {
+  const char *data, long start, long end, int *hour, int *minute, int *second, int *millisecond)
+{
   constexpr char sep = ':';
 
   // Adjust for AM/PM and any whitespace before
@@ -343,17 +349,21 @@ __inline__ __device__ void extractTime(
 }
 
 // User-defined literals to clarify numbers and units for time calculation
-__inline__ __device__ constexpr uint32_t operator"" _days(unsigned long long int days) {
+__inline__ __device__ constexpr uint32_t operator"" _days(unsigned long long int days)
+{
   return days;
 }
-__inline__ __device__ constexpr uint32_t operator"" _erasInDays(unsigned long long int eras) {
+__inline__ __device__ constexpr uint32_t operator"" _erasInDays(unsigned long long int eras)
+{
   // multiply by number of days within an era (400 year span)
   return eras * 146097_days;
 }
-__inline__ __device__ constexpr uint32_t operator"" _years(unsigned long long int years) {
+__inline__ __device__ constexpr uint32_t operator"" _years(unsigned long long int years)
+{
   return years;
 }
-__inline__ __device__ constexpr uint32_t operator"" _erasInYears(unsigned long long int eras) {
+__inline__ __device__ constexpr uint32_t operator"" _erasInYears(unsigned long long int eras)
+{
   return (eras * 1_erasInDays) / 365_days;
 }
 
@@ -370,7 +380,8 @@ __inline__ __device__ constexpr uint32_t operator"" _erasInYears(unsigned long l
  *
  * @return days since March 1, 0000
  */
-__inline__ __device__ constexpr int32_t daysSinceBaseline(int year, int month, int day) {
+__inline__ __device__ constexpr int32_t daysSinceBaseline(int year, int month, int day)
+{
   // More details of this formula are located in cuDF datetime_ops
   // In brief, the calculation is split over several components:
   //     era: a 400 year range, where the date cycle repeats exactly
@@ -401,7 +412,8 @@ __inline__ __device__ constexpr int32_t daysSinceBaseline(int year, int month, i
  *
  * @return days since epoch
  */
-__inline__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day) {
+__inline__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int day)
+{
   // Shift the start date to epoch to match unix time
   static_assert(daysSinceBaseline(1970, 1, 1) == 719468_days,
                 "Baseline to epoch returns incorrect number of days");
@@ -425,7 +437,8 @@ __inline__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int 
  * @return seconds since epoch
  */
 __inline__ __device__ constexpr int64_t secondsSinceEpoch(
-  int year, int month, int day, int hour, int minute, int second) {
+  int year, int month, int day, int hour, int minute, int second)
+{
   // Leverage the function to find the days since epoch
   const auto days = daysSinceEpoch(year, month, day);
 

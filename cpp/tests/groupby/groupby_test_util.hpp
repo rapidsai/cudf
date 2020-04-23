@@ -27,16 +27,18 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 enum class force_use_sort_impl : bool { NO, YES };
 
 inline void test_groups(column_view const& keys,
                         column_view const& expect_grouped_keys,
                         std::vector<size_type> const& expect_group_offsets,
                         column_view const& values                = {},
-                        column_view const& expect_grouped_values = {}) {
+                        column_view const& expect_grouped_values = {})
+{
   experimental::groupby::groupby gb(table_view({keys}));
   experimental::groupby::groupby::groups gb_groups;
 
@@ -67,7 +69,8 @@ inline void test_single_agg(column_view const& keys,
                             include_nulls include_null_keys        = include_nulls::NO,
                             sorted keys_are_sorted                 = sorted::NO,
                             std::vector<order> const& column_order = {},
-                            std::vector<null_order> const& null_precedence = {}) {
+                            std::vector<null_order> const& null_precedence = {})
+{
   std::vector<experimental::groupby::aggregation_request> requests;
   requests.emplace_back(experimental::groupby::aggregation_request());
   requests[0].values = values;
@@ -99,12 +102,14 @@ inline void test_single_agg(column_view const& keys,
   }
 }
 
-inline auto all_valid() {
+inline auto all_valid()
+{
   auto all_valid = make_counting_transform_iterator(0, [](auto i) { return true; });
   return all_valid;
 }
 
-inline auto all_null() {
+inline auto all_null()
+{
   auto all_null = make_counting_transform_iterator(0, [](auto i) { return false; });
   return all_null;
 }

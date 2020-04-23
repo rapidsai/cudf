@@ -19,14 +19,17 @@
 #include <vector>
 
 template <typename T>
-class MergeTest : public GdfTest {};
+class MergeTest : public GdfTest
+{
+};
 
 using test_types = ::testing::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8, cudf::nvstring_category>;
 
 TYPED_TEST_CASE(MergeTest, test_types);
 
-TYPED_TEST(MergeTest, MismatchedNumColumns) {
+TYPED_TEST(MergeTest, MismatchedNumColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -46,7 +49,8 @@ TYPED_TEST(MergeTest, MismatchedNumColumns) {
                cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, MismatchedColumnDypes) {
+TYPED_TEST(MergeTest, MismatchedColumnDypes)
+{
   cudf::size_type inputRows = 4;
 
   cudf::test::column_wrapper<int32_t> leftColWrap1(inputRows,
@@ -64,7 +68,8 @@ TYPED_TEST(MergeTest, MismatchedColumnDypes) {
     cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, EmptyKeyColumns) {
+TYPED_TEST(MergeTest, EmptyKeyColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -82,7 +87,8 @@ TYPED_TEST(MergeTest, EmptyKeyColumns) {
     cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, TooManyKeyColumns) {
+TYPED_TEST(MergeTest, TooManyKeyColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -100,7 +106,8 @@ TYPED_TEST(MergeTest, TooManyKeyColumns) {
     cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, EmptyOrderTypes) {
+TYPED_TEST(MergeTest, EmptyOrderTypes)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -118,7 +125,8 @@ TYPED_TEST(MergeTest, EmptyOrderTypes) {
     cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, TooManyOrderTypes) {
+TYPED_TEST(MergeTest, TooManyOrderTypes)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -136,7 +144,8 @@ TYPED_TEST(MergeTest, TooManyOrderTypes) {
     cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, MismatchedKeyColumnsAndOrderTypes) {
+TYPED_TEST(MergeTest, MismatchedKeyColumnsAndOrderTypes)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 4;
@@ -157,7 +166,8 @@ TYPED_TEST(MergeTest, MismatchedKeyColumnsAndOrderTypes) {
                cudf::logic_error);
 }
 
-TYPED_TEST(MergeTest, MergeWithEmptyColumn) {
+TYPED_TEST(MergeTest, MergeWithEmptyColumn)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 50000;
@@ -182,7 +192,8 @@ TYPED_TEST(MergeTest, MergeWithEmptyColumn) {
   EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
 
-TYPED_TEST(MergeTest, Merge1KeyColumns) {
+TYPED_TEST(MergeTest, Merge1KeyColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 50000;
@@ -244,7 +255,8 @@ TYPED_TEST(MergeTest, Merge1KeyColumns) {
   EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
-TYPED_TEST(MergeTest, Merge2KeyColumns) {
+TYPED_TEST(MergeTest, Merge2KeyColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 50000;
@@ -306,7 +318,8 @@ TYPED_TEST(MergeTest, Merge2KeyColumns) {
   EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
-TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
+TYPED_TEST(MergeTest, Merge1KeyNullColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 50000;
@@ -359,7 +372,8 @@ TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
   EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
 
-TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
+TYPED_TEST(MergeTest, Merge2KeyNullColumns)
+{
   cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
   cudf::size_type inputRows = 50000;

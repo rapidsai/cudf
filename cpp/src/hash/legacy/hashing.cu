@@ -30,8 +30,8 @@
 constexpr int BLOCK_SIZE      = 256;
 constexpr int ROWS_PER_THREAD = 1;
 
-namespace {
-
+namespace
+{
 /**
  * @brief  This function determines if a number is a power of 2.
  *
@@ -40,7 +40,8 @@ namespace {
  * @returns True if the number is a power of 2.
  */
 template <typename T>
-bool is_power_two(T number) {
+bool is_power_two(T number)
+{
   return (0 == (number & (number - 1)));
 }
 
@@ -50,9 +51,12 @@ bool is_power_two(T number) {
 template <template <typename> class hash_function>
 struct row_hasher_initial_values {
   row_hasher_initial_values(device_table const &table_to_hash, hash_value_type *initial_hash_values)
-    : the_table{table_to_hash}, initial_hash_values(initial_hash_values) {}
+    : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
+  {
+  }
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(cudf::size_type row_index) const
+  {
     return hash_row<true, hash_function>(the_table, row_index, initial_hash_values);
   }
 
@@ -67,7 +71,8 @@ template <template <typename> class hash_function>
 struct row_hasher {
   row_hasher(device_table const &table_to_hash) : the_table{table_to_hash} {}
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(cudf::size_type row_index) const
+  {
     return hash_row<true, hash_function>(the_table, row_index);
   }
 
@@ -95,7 +100,8 @@ gdf_error gdf_hash(int num_cols,
                    gdf_column **input,
                    gdf_hash_func hash,
                    hash_value_type *initial_hash_values,
-                   gdf_column *output) {
+                   gdf_column *output)
+{
   // Ensure inputs aren't null
   if ((0 == num_cols) || (nullptr == input) || (nullptr == output)) { return GDF_DATASET_EMPTY; }
 
@@ -175,7 +181,8 @@ template <typename hash_value_t, typename output_type>
 struct fast_modulo_partitioner {
   fast_modulo_partitioner(int num_partitions) : fast_divisor{num_partitions} {}
 
-  __host__ __device__ output_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ output_type operator()(hash_value_t hash_value) const
+  {
     // Using int_fastdiv casts 'hash_value' to an int, which can
     // result in negative modulos, requiring taking the absolute value
     // Because of the casting it can also return results that are not
@@ -198,7 +205,8 @@ template <typename hash_value_t>
 struct modulo_partitioner {
   modulo_partitioner(cudf::size_type num_partitions) : divisor{num_partitions} {}
 
-  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const
+  {
     return hash_value % divisor;
   }
 
@@ -217,11 +225,13 @@ struct modulo_partitioner {
 /* ----------------------------------------------------------------------------*/
 template <typename hash_value_t>
 struct bitwise_partitioner {
-  bitwise_partitioner(cudf::size_type num_partitions) : divisor{(num_partitions - 1)} {
+  bitwise_partitioner(cudf::size_type num_partitions) : divisor{(num_partitions - 1)}
+  {
     assert(is_power_two(num_partitions));
   }
 
-  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const
+  {
     return hash_value & (divisor);
   }
 
@@ -255,7 +265,8 @@ __global__ void compute_row_partition_numbers(device_table the_table,
                                               const partitioner_type the_partitioner,
                                               cudf::size_type *row_partition_numbers,
                                               cudf::size_type *block_partition_sizes,
-                                              cudf::size_type *global_partition_sizes) {
+                                              cudf::size_type *global_partition_sizes)
+{
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ cudf::size_type shared_partition_sizes[];
 
@@ -323,7 +334,8 @@ __global__ void compute_row_partition_numbers(device_table the_table,
 __global__ void compute_row_output_locations(cudf::size_type *row_partition_numbers,
                                              const cudf::size_type num_rows,
                                              const cudf::size_type num_partitions,
-                                             cudf::size_type *block_partition_offsets) {
+                                             cudf::size_type *block_partition_offsets)
+{
   // Shared array that holds the offset of this blocks partitions in
   // global memory
   extern __shared__ cudf::size_type shared_partition_offsets[];
@@ -383,7 +395,8 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                                cudf::table const &table_to_hash,
                                const cudf::size_type num_partitions,
                                cudf::size_type *partition_offsets,
-                               cudf::table &partitioned_output) {
+                               cudf::table &partitioned_output)
+{
   const cudf::size_type num_rows = table_to_hash.num_rows();
 
   constexpr cudf::size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
@@ -533,7 +546,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              int num_partitions,
                              gdf_column *partitioned_output[],
                              int partition_offsets[],
-                             gdf_hash_func hash) {
+                             gdf_hash_func hash)
+{
   // Ensure all the inputs are non-zero and not null
   if ((0 == num_input_cols) || (0 == num_cols_to_hash) || (0 == num_partitions) ||
       (nullptr == input) || (nullptr == partitioned_output) || (nullptr == columns_to_hash) ||

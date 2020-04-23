@@ -29,11 +29,14 @@
 
 #include <regex>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 using backref_type = thrust::pair<size_type, size_type>;
 
 /**
@@ -49,7 +52,8 @@ using backref_type = thrust::pair<size_type, size_type>;
  *    returned string is:  'hello  and '
  * ```
  */
-std::string parse_backrefs(std::string const& repl, std::vector<backref_type>& backrefs) {
+std::string parse_backrefs(std::string const& repl, std::vector<backref_type>& backrefs)
+{
   std::string str = repl;  // make a modifiable copy
   std::smatch m;
   std::regex ex("(\\\\\\d+)");  // this searches for backslash-number(s); example "\1"
@@ -99,7 +103,8 @@ struct backrefs_fn {
   const int32_t* d_offsets{};  // these are null when
   char* d_chars{};             // only computing size
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     u_char data1[stack_size];
     u_char data2[stack_size];
@@ -162,7 +167,8 @@ std::unique_ptr<column> replace_with_backrefs(
   std::string const& pattern,
   std::string const& repl,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -232,7 +238,8 @@ std::unique_ptr<column> replace_with_backrefs(
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
                                               std::string const& pattern,
                                               std::string const& repl,
-                                              rmm::mr::device_memory_resource* mr) {
+                                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace_with_backrefs(strings, pattern, repl, mr);
 }

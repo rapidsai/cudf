@@ -32,18 +32,22 @@
 #include <iterator>
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-namespace {
-
-inline bool __device__ out_of_bounds(size_type size, size_type idx) {
+namespace cudf
+{
+namespace experimental
+{
+namespace
+{
+inline bool __device__ out_of_bounds(size_type size, size_type idx)
+{
   return idx < 0 || idx >= size;
 }
 
 struct shift_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args) {
+    Args&&... args)
+  {
     CUDF_FAIL("shift does not support non-fixed-width types.");
   }
 
@@ -53,7 +57,8 @@ struct shift_functor {
     size_type offset,
     scalar const& fill_value,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
@@ -111,7 +116,8 @@ std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
                               rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
                "shift requires each fill value type to match the corrosponding column type.");

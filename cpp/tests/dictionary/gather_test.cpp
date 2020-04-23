@@ -24,9 +24,11 @@
 
 #include <vector>
 
-struct DictionaryGatherTest : public cudf::test::BaseFixture {};
+struct DictionaryGatherTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryGatherTest, Gather) {
+TEST_F(DictionaryGatherTest, Gather)
+{
   cudf::test::strings_column_wrapper strings{
     "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   auto dictionary = cudf::dictionary::encode(strings);
@@ -42,7 +44,8 @@ TEST_F(DictionaryGatherTest, Gather) {
   cudf::test::expect_columns_equal(expected, decoded->view());
 }
 
-TEST_F(DictionaryGatherTest, GatherWithNulls) {
+TEST_F(DictionaryGatherTest, GatherWithNulls)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> data{{1, 5, 5, 3, 7, 1}, {0, 1, 0, 1, 1, 1}};
 
   auto dictionary = cudf::dictionary::encode(data);
@@ -58,7 +61,8 @@ TEST_F(DictionaryGatherTest, GatherWithNulls) {
   cudf::test::expect_columns_equal(expected, result_decoded->view());
 }
 
-TEST_F(DictionaryGatherTest, SortStrings) {
+TEST_F(DictionaryGatherTest, SortStrings)
+{
   std::vector<std::string> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
@@ -76,7 +80,8 @@ TEST_F(DictionaryGatherTest, SortStrings) {
   cudf::test::expect_columns_equal(expected, result_decoded->view());
 }
 
-TEST_F(DictionaryGatherTest, SortFloat) {
+TEST_F(DictionaryGatherTest, SortFloat)
+{
   std::vector<double> h_data{1.25, -5.75, 8.125, 1e9, 9.7};
   cudf::test::fixed_width_column_wrapper<double> data(h_data.begin(), h_data.end());
 

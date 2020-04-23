@@ -18,8 +18,10 @@
 #include <cudf/types.hpp>
 #include <vector>
 
-namespace cudf {
-namespace detail {
+namespace cudf
+{
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
@@ -39,7 +41,8 @@ namespace detail {
  *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class column_view_base {
+class column_view_base
+{
  public:
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -55,7 +58,8 @@ class column_view_base {
    * @return T const* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
-  T const* head() const noexcept {
+  T const* head() const noexcept
+  {
     return static_cast<T const*>(_data);
   }
 
@@ -71,7 +75,8 @@ class column_view_base {
    * @return T const* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* data() const noexcept {
+  T const* data() const noexcept
+  {
     return head<T>() + _offset;
   }
 
@@ -83,7 +88,8 @@ class column_view_base {
    * @return T const* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* begin() const noexcept {
+  T const* begin() const noexcept
+  {
     return data<T>();
   }
 
@@ -95,7 +101,8 @@ class column_view_base {
    * @return T const* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* end() const noexcept {
+  T const* end() const noexcept
+  {
     return begin<T>() + size();
   }
 
@@ -244,7 +251,8 @@ class column_view_base {
                    size_type offset              = 0);
 };
 
-class mutable_column_view_base : public column_view_base {
+class mutable_column_view_base : public column_view_base
+{
  public:
  protected:
 };
@@ -269,7 +277,8 @@ class mutable_column_view_base : public column_view_base {
  * memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class column_view : public detail::column_view_base {
+class column_view : public detail::column_view_base
+{
  public:
   column_view()                   = default;
   ~column_view()                  = default;
@@ -353,7 +362,8 @@ class column_view : public detail::column_view_base {
  *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class mutable_column_view : public detail::column_view_base {
+class mutable_column_view : public detail::column_view_base
+{
  public:
   mutable_column_view() = default;
 
@@ -415,7 +425,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
-  T* head() const noexcept {
+  T* head() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
@@ -431,7 +442,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* data() const noexcept {
+  T* data() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
@@ -443,7 +455,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* begin() const noexcept {
+  T* begin() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
@@ -455,7 +468,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* end() const noexcept {
+  T* end() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
@@ -466,7 +480,8 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    *---------------------------------------------------------------------------**/
-  bitmask_type* null_mask() const noexcept {
+  bitmask_type* null_mask() const noexcept
+  {
     return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
 
@@ -485,7 +500,8 @@ class mutable_column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
    *---------------------------------------------------------------------------**/
-  mutable_column_view child(size_type child_index) const noexcept {
+  mutable_column_view child(size_type child_index) const noexcept
+  {
     return mutable_children[child_index];
   }
 

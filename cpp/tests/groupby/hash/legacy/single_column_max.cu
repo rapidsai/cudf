@@ -28,7 +28,8 @@
 
 #include <random>
 
-namespace {
+namespace
+{
 /**---------------------------------------------------------------------------*
  * @brief Return last odd index in a container containing `size` items
  *---------------------------------------------------------------------------**/
@@ -69,7 +70,8 @@ using column_wrapper = cudf::test::column_wrapper<T>;
 
 TYPED_TEST_CASE(SingleColumnMax, TestingTypes);
 
-TYPED_TEST(SingleColumnMax, OneGroupNoNulls) {
+TYPED_TEST(SingleColumnMax, OneGroupNoNulls)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -82,7 +84,8 @@ TYPED_TEST(SingleColumnMax, OneGroupNoNulls) {
     column_wrapper<ResultValue>({ResultValue(size - 1)}));
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupAllNullKeys) {
+TYPED_TEST(SingleColumnMax, OneGroupAllNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -98,7 +101,8 @@ TYPED_TEST(SingleColumnMax, OneGroupAllNullKeys) {
     column_wrapper<ResultValue>{});
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupAllNullValues) {
+TYPED_TEST(SingleColumnMax, OneGroupAllNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -113,7 +117,8 @@ TYPED_TEST(SingleColumnMax, OneGroupAllNullValues) {
     column_wrapper<ResultValue>(1, true));
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupEvenNullKeys) {
+TYPED_TEST(SingleColumnMax, OneGroupEvenNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -127,7 +132,8 @@ TYPED_TEST(SingleColumnMax, OneGroupEvenNullKeys) {
     column_wrapper<ResultValue>({Value(last_odd_index(size))}));
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnMax, OneGroupOddNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -141,7 +147,8 @@ TYPED_TEST(SingleColumnMax, OneGroupOddNullKeys) {
     column_wrapper<ResultValue>({Value(last_even_index(size))}));
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupEvenNullValues) {
+TYPED_TEST(SingleColumnMax, OneGroupEvenNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -155,7 +162,8 @@ TYPED_TEST(SingleColumnMax, OneGroupEvenNullValues) {
     column_wrapper<ResultValue>({Value(last_odd_index(size))}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, OneGroupOddNullValues) {
+TYPED_TEST(SingleColumnMax, OneGroupOddNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
@@ -169,7 +177,8 @@ TYPED_TEST(SingleColumnMax, OneGroupOddNullValues) {
     column_wrapper<ResultValue>({Value(last_even_index(size))}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsNoNulls) {
+TYPED_TEST(SingleColumnMax, FourGroupsNoNulls)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -185,7 +194,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsNoNulls) {
     column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsEvenNullKeys) {
+TYPED_TEST(SingleColumnMax, FourGroupsEvenNullKeys)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -200,7 +210,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsEvenNullKeys) {
     column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsOddNullKeys) {
+TYPED_TEST(SingleColumnMax, FourGroupsOddNullKeys)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -215,7 +226,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsOddNullKeys) {
     column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValues) {
+TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValues)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -230,7 +242,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValues) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsOddNullValues) {
+TYPED_TEST(SingleColumnMax, FourGroupsOddNullValues)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -245,7 +258,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsOddNullValues) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -261,7 +275,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsEvenNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesOddNullKeys) {
+TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesOddNullKeys)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -277,7 +292,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesOddNullKeys) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -295,7 +311,8 @@ TYPED_TEST(SingleColumnMax, FourGroupsOddNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>(4, true));
 }
 
-TYPED_TEST(SingleColumnMax, EightKeysAllUnique) {
+TYPED_TEST(SingleColumnMax, EightKeysAllUnique)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -309,7 +326,8 @@ TYPED_TEST(SingleColumnMax, EightKeysAllUnique) {
     column_wrapper<ResultValue>(8, [](auto index) { return R(index); }));
 }
 
-TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenKeysNull) {
+TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenKeysNull)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -324,7 +342,8 @@ TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenKeysNull) {
     column_wrapper<ResultValue>({R(2), R(6), R(10), R(14)}));
 }
 
-TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenValuesNull) {
+TYPED_TEST(SingleColumnMax, EightKeysAllUniqueEvenValuesNull)
+{
   using Key         = typename SingleColumnMax<TypeParam>::KeyType;
   using Value       = typename SingleColumnMax<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;

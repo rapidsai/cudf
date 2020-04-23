@@ -20,11 +20,14 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 #define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
 
-namespace cudf {
-namespace binops {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace binops
+{
+namespace jit
+{
+namespace code
+{
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;

@@ -18,8 +18,8 @@
 #include <rmm/rmm_api.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Google Benchmark fixture for libcudf benchmarks
  *
@@ -51,9 +51,11 @@ namespace cudf {
  *
  * BENCHMARK_REGISTER_F(my_benchmark, my_test_name)->Range(128, 512);
  */
-class benchmark : public ::benchmark::Fixture {
+class benchmark : public ::benchmark::Fixture
+{
  public:
-  virtual void SetUp(const ::benchmark::State& state) {
+  virtual void SetUp(const ::benchmark::State& state)
+  {
     rmmOptions_t options{PoolAllocation, 0, false};
     rmmInitialize(&options);
   }
@@ -62,7 +64,8 @@ class benchmark : public ::benchmark::Fixture {
 
   // eliminate partial override warnings (see benchmark/benchmark.h)
   virtual void SetUp(::benchmark::State& st) { SetUp(const_cast<const ::benchmark::State&>(st)); }
-  virtual void TearDown(::benchmark::State& st) {
+  virtual void TearDown(::benchmark::State& st)
+  {
     TearDown(const_cast<const ::benchmark::State&>(st));
   }
 };

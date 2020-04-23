@@ -38,12 +38,16 @@
 
 #include "chunked_state.hpp"
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace orc {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace orc
+{
 // Forward internal classes
 class orc_column_view;
 
@@ -53,7 +57,8 @@ using namespace cudf::io;
 /**
  * @brief Implementation for ORC writer
  **/
-class writer::impl {
+class writer::impl
+{
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
 
@@ -310,7 +315,8 @@ class writer::impl {
    * @param num_rows Number of rows
    **/
   template <typename T = size_t>
-  constexpr inline auto div_by_rowgroups(T num_rows) const {
+  constexpr inline auto div_by_rowgroups(T num_rows) const
+  {
     return cudf::util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
   }
 
@@ -321,7 +327,8 @@ class writer::impl {
    * @param modulus Number to use for division
    **/
   template <typename T = size_t>
-  constexpr inline auto div_rowgroups_by(T modulus) const {
+  constexpr inline auto div_rowgroups_by(T modulus) const
+  {
     return cudf::util::div_rounding_up_unsafe<T, T>(row_index_stride_, modulus);
   }
 

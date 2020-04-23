@@ -30,12 +30,14 @@
 #include <random>
 
 template <typename T>
-struct GatherTest : GdfTest {};
+struct GatherTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(GatherTest, test_types);
 
-TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
+TYPED_TEST(GatherTest, MultiColReverseIdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -100,7 +102,8 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
   }
 }
 
-TYPED_TEST(GatherTest, MultiColNullTest) {
+TYPED_TEST(GatherTest, MultiColNullTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -165,7 +168,8 @@ TYPED_TEST(GatherTest, MultiColNullTest) {
   }
 }
 
-TYPED_TEST(GatherTest, MultiColInPlaceTest) {
+TYPED_TEST(GatherTest, MultiColInPlaceTest)
+{
   constexpr cudf::size_type source_size{1000};
 
   static_assert(0 == source_size % 2, "Size of source data must be a multiple of 2.");
@@ -218,7 +222,8 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
   }
 }
 
-TYPED_TEST(GatherTest, DtypeMistach) {
+TYPED_TEST(GatherTest, DtypeMistach)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -237,7 +242,8 @@ TYPED_TEST(GatherTest, DtypeMistach) {
                cudf::logic_error);
 }
 
-TYPED_TEST(GatherTest, DestMissingValid) {
+TYPED_TEST(GatherTest, DestMissingValid)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -256,7 +262,8 @@ TYPED_TEST(GatherTest, DestMissingValid) {
                cudf::logic_error);
 }
 
-TYPED_TEST(GatherTest, NumColumnsMismatch) {
+TYPED_TEST(GatherTest, NumColumnsMismatch)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -277,7 +284,8 @@ TYPED_TEST(GatherTest, NumColumnsMismatch) {
                cudf::logic_error);
 }
 
-TYPED_TEST(GatherTest, IdentityTest) {
+TYPED_TEST(GatherTest, IdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -302,7 +310,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   expect_columns_are_equal<TypeParam>(source_column, destination_column);
 }
 
-TYPED_TEST(GatherTest, ReverseIdentityTest) {
+TYPED_TEST(GatherTest, ReverseIdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -357,7 +366,8 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   }
 }
 
-TYPED_TEST(GatherTest, AllNull) {
+TYPED_TEST(GatherTest, AllNull)
+{
   constexpr cudf::size_type source_size{1000};
   constexpr cudf::size_type destination_size{1000};
 
@@ -396,7 +406,8 @@ TYPED_TEST(GatherTest, AllNull) {
   }
 }
 
-TYPED_TEST(GatherTest, EveryOtherNull) {
+TYPED_TEST(GatherTest, EveryOtherNull)
+{
   constexpr cudf::size_type source_size{1234};
   constexpr cudf::size_type destination_size{source_size};
 

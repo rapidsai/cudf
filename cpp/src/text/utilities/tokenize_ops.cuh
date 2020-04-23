@@ -19,9 +19,10 @@
 
 #include <thrust/logical.h>
 
-namespace nvtext {
-namespace detail {
-
+namespace nvtext
+{
+namespace detail
+{
 using string_index_pair = thrust::pair<const char*, cudf::size_type>;
 using position_pair     = thrust::pair<cudf::size_type, cudf::size_type>;
 
@@ -44,7 +45,9 @@ struct characters_tokenizer {
       spaces{true},
       itr{d_str.begin()},
       start_position(0),
-      end_position(d_str.length()) {}
+      end_position(d_str.length())
+  {
+  }
 
   /**
    * @brief Return true if the given character is a delimiter.
@@ -54,7 +57,8 @@ struct characters_tokenizer {
    * @param chr The character to test.
    * @return true if the character is a delimiter
    */
-  __device__ bool is_delimiter(cudf::char_utf8 chr) {
+  __device__ bool is_delimiter(cudf::char_utf8 chr)
+  {
     return d_delimiter.empty() ? (chr <= ' ') :  // whitespace check
              thrust::any_of(thrust::seq,
                             d_delimiter.begin(),
@@ -74,7 +78,8 @@ struct characters_tokenizer {
    *
    * @return true if a token has been found
    */
-  __device__ bool next_token() {
+  __device__ bool next_token()
+  {
     if (itr != d_str.begin()) {  // skip these 2 lines the first time through
       start_position = end_position + 1;
       ++itr;
@@ -104,7 +109,8 @@ struct characters_tokenizer {
    * @brief Returns the byte offsets for the current token
    * within this string.
    */
-  __device__ position_pair token_byte_positions() {
+  __device__ position_pair token_byte_positions()
+  {
     return position_pair{d_str.byte_offset(start_position), d_str.byte_offset(end_position)};
   }
 
@@ -139,7 +145,8 @@ struct strings_tokenizer {
    * @param idx Index of the string to tokenize in the d_strings column.
    * @return The number of tokens for this string.
    */
-  __device__ cudf::size_type operator()(cudf::size_type idx) {
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     auto d_str = d_strings.element<cudf::string_view>(idx);
     // create tokenizer for this string
@@ -183,7 +190,8 @@ struct multi_delimiter_strings_tokenizer {
    * @param idx Index of the string to tokenize in the d_strings column.
    * @return The number of tokens for this string.
    */
-  __device__ cudf::size_type operator()(cudf::size_type idx) {
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view d_str   = d_strings.element<cudf::string_view>(idx);
     auto d_str_tokens         = d_tokens ? d_tokens + d_offsets[idx] : nullptr;

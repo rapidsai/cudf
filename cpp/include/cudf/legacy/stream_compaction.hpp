@@ -20,8 +20,8 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Filters a table using a column of boolean values as a mask.
  *

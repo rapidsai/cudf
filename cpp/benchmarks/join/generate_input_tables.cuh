@@ -29,7 +29,8 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
 
-__global__ static void init_curand(curandState* state, const int nstates) {
+__global__ static void init_curand(curandState* state, const int nstates)
+{
   int ithread = threadIdx.x + blockIdx.x * blockDim.x;
 
   if (ithread < nstates) { curand_init(1234ULL, ithread, 0, state + ithread); }
@@ -43,7 +44,8 @@ __global__ static void init_build_tbl(key_type* const build_tbl,
                                       key_type* const lottery,
                                       const size_type lottery_size,
                                       curandState* state,
-                                      const int num_states) {
+                                      const int num_states)
+{
   static_assert(std::is_signed<key_type>::value, "key_type needs to be signed for lottery to work");
 
   const int start_idx   = blockIdx.x * blockDim.x + threadIdx.x;
@@ -91,7 +93,8 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
                                const size_type lottery_size,
                                const double selectivity,
                                curandState* state,
-                               const int num_states) {
+                               const int num_states)
+{
   const int start_idx    = blockIdx.x * blockDim.x + threadIdx.x;
   const size_type stride = blockDim.x * gridDim.x;
   assert(start_idx < num_states);
@@ -158,7 +161,8 @@ void generate_input_tables(key_type* const build_tbl,
                            const size_type probe_tbl_size,
                            const double selectivity,
                            const key_type rand_max,
-                           const bool uniq_build_tbl_keys) {
+                           const bool uniq_build_tbl_keys)
+{
   // With large values of rand_max the a lot of temporary storage is needed for the lottery. At the
   // expense of not being that accurate with applying the selectivity an especially more memory
   // efficient implementations would be to partition the random numbers into two intervals and then

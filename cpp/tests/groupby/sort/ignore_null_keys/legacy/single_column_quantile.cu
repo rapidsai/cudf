@@ -52,7 +52,8 @@ using quantile_args = cudf::groupby::sort::quantile_args;
 // TODO: tests for cudf::bool8
 TYPED_TEST_CASE(SingleColumnQuantile, TestingTypes);
 
-TYPED_TEST(SingleColumnQuantile, TestQuantile0) {
+TYPED_TEST(SingleColumnQuantile, TestQuantile0)
+{
   using Key                     = typename SingleColumnQuantile<TypeParam>::KeyType;
   using Value                   = typename SingleColumnQuantile<TypeParam>::ValueType;
   using ResultValue             = cudf::test::expected_result_t<Value, op>;
@@ -71,7 +72,8 @@ TYPED_TEST(SingleColumnQuantile, TestQuantile0) {
     column_wrapper<ResultValue>{R(1), R(5)});
 }
 
-TYPED_TEST(SingleColumnQuantile, TestQuantile1) {
+TYPED_TEST(SingleColumnQuantile, TestQuantile1)
+{
   using Key                     = typename SingleColumnQuantile<TypeParam>::KeyType;
   using Value                   = typename SingleColumnQuantile<TypeParam>::ValueType;
   using ResultValue             = cudf::test::expected_result_t<Value, op>;

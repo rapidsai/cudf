@@ -27,16 +27,19 @@
 
 using namespace numeric;
 
-struct FixedPointTest : public cudf::test::BaseFixture {};
+struct FixedPointTest : public cudf::test::BaseFixture {
+};
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {};
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
 
 TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
 
-TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
+TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX num0{1.234567, scale_type{0}};
@@ -56,7 +59,8 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction) {
   EXPECT_EQ(1.234567, static_cast<double>(num6));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction) {
+TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX num0{-1.234567, scale_type{0}};
@@ -76,7 +80,8 @@ TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction) {
   EXPECT_EQ(-1.234567, static_cast<double>(num6));
 }
 
-TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
+TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX a{1.1, scale_type{-1}};
@@ -100,7 +105,8 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction) {
   EXPECT_EQ(0.000123, static_cast<double>(y));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
+TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction)
+{
   using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
   binary_fp num0{10, scale_type{0}};
@@ -128,7 +134,8 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction) {
   EXPECT_EQ(1.4375, static_cast<double>(num9));
 }
 
-TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction) {
+TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction)
+{
   using binary_fp = fixed_point<TypeParam, Radix::BASE_2>;
 
   binary_fp num0{1.25, scale_type{-2}};
@@ -138,7 +145,8 @@ TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction) {
   EXPECT_EQ(2.125, static_cast<double>(num1));
 }
 
-TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath) {
+TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX ONE{1, scale_type{-2}};
@@ -156,7 +164,8 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath) {
   EXPECT_EQ(SIX / TWO, THREE);
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
+TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX ONE_1{1, scale_type{1}};
@@ -185,7 +194,8 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision) {
   EXPECT_EQ(static_cast<int32_t>(n), 30);
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding) {
+TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   decimalXX ZERO_FROM_FOUR_0{4, scale_type{0}};
@@ -199,7 +209,8 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding) {
   EXPECT_TRUE(TEN_FROM_FIVE_0 == TEN_FROM_FIVE_1);
 }
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
+TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
+{
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 
   std::vector<decimalXX> vec1(1000);
@@ -224,7 +235,8 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust) {
   EXPECT_EQ(vec2, vec3);
 }
 
-TEST_F(FixedPointTest, OverflowDecimal32) {
+TEST_F(FixedPointTest, OverflowDecimal32)
+{
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
 #if defined(__CUDACC_DEBUG__)
@@ -252,7 +264,8 @@ TEST_F(FixedPointTest, OverflowDecimal32) {
 #endif
 }
 
-TEST_F(FixedPointTest, OverflowDecimal64) {
+TEST_F(FixedPointTest, OverflowDecimal64)
+{
   using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
 
 #if defined(__CUDACC_DEBUG__)
@@ -284,7 +297,8 @@ template <typename ValueType, typename Binop>
 void integer_vector_test(ValueType const initial_value,
                          int32_t const size,
                          int32_t const scale,
-                         Binop binop) {
+                         Binop binop)
+{
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
   std::vector<decimal32> vec1(size);
@@ -309,7 +323,8 @@ void integer_vector_test(ValueType const initial_value,
   EXPECT_EQ(vec2, vec3);
 }
 
-TEST_F(FixedPointTest, Decimal32IntVector) {
+TEST_F(FixedPointTest, Decimal32IntVector)
+{
   integer_vector_test(0, 10, -2, std::plus<>());
   integer_vector_test(0, 1000, -2, std::plus<>());
 
@@ -321,7 +336,8 @@ template <typename ValueType, typename Binop>
 void float_vector_test(ValueType const initial_value,
                        int32_t const size,
                        int32_t const scale,
-                       Binop binop) {
+                       Binop binop)
+{
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
   std::vector<decimal32> vec1(size);
@@ -338,7 +354,8 @@ void float_vector_test(ValueType const initial_value,
   EXPECT_TRUE(equal);
 }
 
-TEST_F(FixedPointTest, Decimal32FloatVector) {
+TEST_F(FixedPointTest, Decimal32FloatVector)
+{
   float_vector_test(0.1, 1000, -2, std::plus<>());
   float_vector_test(0.15, 1000, -2, std::plus<>());
 
@@ -351,7 +368,8 @@ struct cast_to_int32_fn {
   int32_t __host__ __device__ operator()(decimal32 fp) { return static_cast<int32_t>(fp); }
 };
 
-TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
+TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
+{
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
   thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});

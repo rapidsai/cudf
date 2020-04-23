@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {};
+struct StringsConvertTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConvertTest, ToFloats32) {
+TEST_F(StringsConvertTest, ToFloats32)
+{
   std::vector<const char*> h_strings{"1234",
                                      nullptr,
                                      "-876",
@@ -76,7 +78,8 @@ TEST_F(StringsConvertTest, ToFloats32) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, FromFloats32) {
+TEST_F(StringsConvertTest, FromFloats32)
+{
   std::vector<float> h_floats{
     100, 654321.25, -12761.125, 0, 5, -4, std::numeric_limits<float>::quiet_NaN(), 839542223232.79};
   std::vector<const char*> h_expected{
@@ -97,7 +100,8 @@ TEST_F(StringsConvertTest, FromFloats32) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, ToFloats64) {
+TEST_F(StringsConvertTest, ToFloats64)
+{
   std::vector<const char*> h_strings{"1234",
                                      nullptr,
                                      "-876",
@@ -146,7 +150,8 @@ TEST_F(StringsConvertTest, ToFloats64) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, FromFloats64) {
+TEST_F(StringsConvertTest, FromFloats64)
+{
   std::vector<double> h_floats{100,
                                654321.25,
                                -12761.125,
@@ -173,19 +178,22 @@ TEST_F(StringsConvertTest, FromFloats64) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat) {
+TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::FLOAT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_floats(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsConvertTest, ZeroSizeFloatsColumn) {
+TEST_F(StringsConvertTest, ZeroSizeFloatsColumn)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::to_floats(zero_size_column, cudf::data_type{cudf::FLOAT32});
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(StringsConvertTest, FromToFloatsError) {
+TEST_F(StringsConvertTest, FromToFloatsError)
+{
   auto dtype  = cudf::data_type{cudf::INT32};
   auto column = cudf::make_numeric_column(dtype, 100);
   EXPECT_THROW(cudf::strings::from_floats(column->view()), cudf::logic_error);

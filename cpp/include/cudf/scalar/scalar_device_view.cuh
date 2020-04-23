@@ -19,15 +19,16 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief A non-owning view of scalar from device that is trivially copyable
  * and usable in CUDA device code.
  */
-class scalar_device_view_base {
+class scalar_device_view_base
+{
  public:
   ~scalar_device_view_base() = default;
 
@@ -65,7 +66,8 @@ class scalar_device_view_base {
  * @brief A type of scalar_device_view where the value is a fixed width type
  */
 template <typename T>
-class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
+class fixed_width_scalar_device_view : public detail::scalar_device_view_base
+{
  public:
   using value_type = T;
 
@@ -105,7 +107,9 @@ class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
    * validity of the stored value
    */
   fixed_width_scalar_device_view(data_type type, T* data, bool* is_valid)
-    : detail::scalar_device_view_base(type, is_valid), _data(data) {}
+    : detail::scalar_device_view_base(type, is_valid), _data(data)
+  {
+  }
 };
 
 }  // namespace detail
@@ -114,21 +118,27 @@ class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
  * @brief A type of scalar_device_view that stores a pointer to a numerical value
  */
 template <typename T>
-class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view<T>
+{
  public:
   numeric_scalar_device_view(data_type type, T* data, bool* is_valid)
-    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid) {}
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  {
+  }
 };
 
 /**
  * @brief A type of scalar_device_view that stores a pointer to a string value
  */
-class string_scalar_device_view : public detail::scalar_device_view_base {
+class string_scalar_device_view : public detail::scalar_device_view_base
+{
  public:
   using ValueType = cudf::string_view;
 
   string_scalar_device_view(data_type type, const char* data, bool* is_valid, size_type size)
-    : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size) {}
+    : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
+  {
+  }
 
   /**
    * @brief Returns string_view of the value of this scalar.
@@ -154,24 +164,29 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
  * @brief A type of scalar_device_view that stores a pointer to a timestamp value
  */
 template <typename T>
-class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+class timestamp_scalar_device_view : public detail::fixed_width_scalar_device_view<T>
+{
  public:
   timestamp_scalar_device_view(data_type type, T* data, bool* is_valid)
-    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid) {}
+    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  {
+  }
 };
 
 /**
  * @brief Get the device view of a numeric_scalar
  */
 template <typename T>
-auto get_scalar_device_view(numeric_scalar<T>& s) {
+auto get_scalar_device_view(numeric_scalar<T>& s)
+{
   return numeric_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
 /**
  * @brief Get the device view of a string_scalar
  */
-inline auto get_scalar_device_view(string_scalar& s) {
+inline auto get_scalar_device_view(string_scalar& s)
+{
   return string_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size());
 }
 
@@ -179,7 +194,8 @@ inline auto get_scalar_device_view(string_scalar& s) {
  * @brief Get the device view of a timestamp_scalar
  */
 template <typename T>
-auto get_scalar_device_view(timestamp_scalar<T>& s) {
+auto get_scalar_device_view(timestamp_scalar<T>& s)
+{
   return timestamp_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 

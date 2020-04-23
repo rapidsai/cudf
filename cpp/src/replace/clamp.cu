@@ -28,18 +28,22 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
+namespace
+{
 template <typename Transformer>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_char_column(
   cudf::column_device_view input,
   size_type null_count,
   Transformer offsets_transformer,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   std::unique_ptr<column> offsets_column{};
   auto strings_count = input.size();
 
@@ -73,7 +77,8 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                                                   ScalarIterator const& hi_itr,
                                                   ScalarIterator const& hi_replace_itr,
                                                   rmm::mr::device_memory_resource* mr,
-                                                  cudaStream_t stream) {
+                                                  cudaStream_t stream)
+{
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
   size_type null_count     = input.parent().null_count();
@@ -152,7 +157,8 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   auto output =
     detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
   // mask will not change
@@ -208,7 +214,8 @@ std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::colu
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
 
@@ -220,7 +227,8 @@ std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<cudf::col
   ScalarIterator const& hi_itr,
   ScalarIterator const& hi_replace_itr,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   CUDF_FAIL("dictionary type not supported");
 }
 
@@ -233,7 +241,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               ScalarIterator const& hi_itr,
                               ScalarIterator const& hi_replace_itr,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
 }
 
@@ -246,7 +255,8 @@ struct dispatch_clamp {
     scalar const& hi,
     scalar const& hi_replace,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream                 = 0) {
+    cudaStream_t stream                 = 0)
+  {
     auto lo_itr         = make_pair_iterator<T>(lo);
     auto hi_itr         = make_pair_iterator<T>(hi);
     auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
@@ -272,7 +282,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& hi,
                               scalar const& hi_replace,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
   CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");
@@ -302,7 +313,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo_replace,
                               scalar const& hi,
                               scalar const& hi_replace,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo_replace, hi, hi_replace, mr);
 }
@@ -311,7 +323,8 @@ std::unique_ptr<column> clamp(column_view const& input,
 std::unique_ptr<column> clamp(column_view const& input,
                               scalar const& lo,
                               scalar const& hi,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::clamp(input, lo, lo, hi, hi, mr);
 }

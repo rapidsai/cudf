@@ -26,14 +26,16 @@
 #include <cudf/types.hpp>
 
 // Forward declarations
-namespace arrow {
-namespace io {
+namespace arrow
+{
+namespace io
+{
 class RandomAccessFile;
 }
 }  // namespace arrow
 
-namespace cudf {
-
+namespace cudf
+{
 /**---------------------------------------------------------------------------*
  * @brief Input source info for `xxx_read_arg` arguments
  *---------------------------------------------------------------------------**/
@@ -45,9 +47,13 @@ struct source_info {
 
   explicit source_info(const std::string& file_path) : type(FILE_PATH), filepath(file_path) {}
   explicit source_info(const char* host_buffer, size_t size)
-    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size))
+  {
+  }
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
@@ -61,9 +67,13 @@ struct sink_info {
 
   explicit sink_info(const std::string& file_path) : type(FILE_PATH), filepath(file_path) {}
   explicit sink_info(const char* host_buffer, size_t size)
-    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size))
+  {
+  }
   explicit sink_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*

@@ -42,7 +42,8 @@ constexpr int bytes_per_find_thread = 64;
 using pos_key_pair = thrust::pair<uint64_t, char>;
 
 template <typename T>
-constexpr T divCeil(T dividend, T divisor) noexcept {
+constexpr T divCeil(T dividend, T divisor) noexcept
+{
   return (dividend + divisor - 1) / divisor;
 }
 
@@ -50,7 +51,8 @@ constexpr T divCeil(T dividend, T divisor) noexcept {
  * @brief Sets the specified element of the array to the passed value
  *---------------------------------------------------------------------------**/
 template <class T, class V>
-__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v) {
+__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v)
+{
   array[idx] = t;
 }
 
@@ -62,7 +64,8 @@ template <class T, class V>
 __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
                                            cudf::size_type idx,
                                            const T& t,
-                                           const V& v) {
+                                           const V& v)
+{
   array[idx] = {t, v};
 }
 
@@ -71,10 +74,9 @@ __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
  * Does not do anything, indexing is not allowed with void* arrays.
  *---------------------------------------------------------------------------**/
 template <class T, class V>
-__device__ __forceinline__ void setElement(void* array,
-                                           cudf::size_type idx,
-                                           const T& t,
-                                           const V& v) {}
+__device__ __forceinline__ void setElement(void* array, cudf::size_type idx, const T& t, const V& v)
+{
+}
 
 /**---------------------------------------------------------------------------*
  * @brief CUDA kernel that finds all occurrences of a character in the given
@@ -91,12 +93,9 @@ __device__ __forceinline__ void setElement(void* array,
  * @return void
  *---------------------------------------------------------------------------**/
 template <class T>
-__global__ void countAndSetPositions(char* data,
-                                     uint64_t size,
-                                     uint64_t offset,
-                                     const char key,
-                                     cudf::size_type* count,
-                                     T* positions) {
+__global__ void countAndSetPositions(
+  char* data, uint64_t size, uint64_t offset, const char key, cudf::size_type* count, T* positions)
+{
   // thread IDs range per block, so also need the block id
   const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
   const uint64_t did = tid * bytes_per_find_thread;
@@ -136,7 +135,8 @@ cudf::size_type findAllFromSet(const char* h_data,
                                size_t h_size,
                                const std::vector<char>& keys,
                                uint64_t result_offset,
-                               T* positions) {
+                               T* positions)
+{
   rmm::device_buffer d_chunk(std::min(max_chunk_bytes, h_size));
   rmm::device_vector<cudf::size_type> d_count(1, 0);
 
@@ -182,7 +182,8 @@ cudf::size_type findAllFromSet(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  *---------------------------------------------------------------------------**/
-cudf::size_type countAllFromSet(const char* h_data, size_t h_size, const std::vector<char>& keys) {
+cudf::size_type countAllFromSet(const char* h_data, size_t h_size, const std::vector<char>& keys)
+{
   return findAllFromSet<void>(h_data, h_size, keys, 0, nullptr);
 }
 
@@ -220,13 +221,15 @@ struct BlockSumArray {
  * times smaller than the previous one, rounded down.
  * Objects of this type own the allocated memory.
  **/
-class BlockSumPyramid {
+class BlockSumPyramid
+{
   const uint16_t aggregation_rate_ = 32;  ///< Aggregation rate between each level of the pyramid
   thrust::host_vector<BlockSumArray> h_levels_;  ///< Host: pyramid levels (lowest to highest)
   rmm::device_vector<BlockSumArray> d_levels_;   ///< Device: pyramid levels (lowest to highest)
 
  public:
-  BlockSumPyramid(int input_count) {
+  BlockSumPyramid(int input_count)
+  {
     // input parameter is the number of elements aggregated with this pyramid
     int prev_count      = input_count;
     int prev_block_size = 1;
@@ -252,7 +255,8 @@ class BlockSumPyramid {
   BlockSumPyramid(BlockSumPyramid&) = delete;
   BlockSumPyramid& operator=(BlockSumPyramid&) = delete;
 
-  ~BlockSumPyramid() {
+  ~BlockSumPyramid()
+  {
     for (auto& level : h_levels_) { RMM_FREE(level.d_sums, 0); }
   }
 };
@@ -280,7 +284,8 @@ __global__ void sumBracketsKernel(pos_key_pair* brackets,
                                   const char* open_chars,
                                   const char* close_chars,
                                   int bracket_char_cnt,
-                                  BlockSumArray sum_array) {
+                                  BlockSumArray sum_array)
+{
   const uint64_t sum_idx      = threadIdx.x + (blockDim.x * blockIdx.x);
   const uint64_t first_in_idx = sum_idx * sum_array.block_size;
 
@@ -319,7 +324,8 @@ void sumBrackets(pos_key_pair* brackets,
                  char* open_chars,
                  char* close_chars,
                  int bracket_char_cnt,
-                 const BlockSumArray& sum_array) {
+                 const BlockSumArray& sum_array)
+{
   int block_size    = 0;
   int min_grid_size = 0;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, sumBracketsKernel));
@@ -339,7 +345,8 @@ void sumBrackets(pos_key_pair* brackets,
  *
  * @return void
  *---------------------------------------------------------------------------**/
-__global__ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate) {
+__global__ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggregate)
+{
   const uint64_t aggregate_idx   = threadIdx.x + (blockDim.x * blockIdx.x);
   const int aggregate_group_size = aggregate.block_size / elements.block_size;
   const uint64_t first_in_idx    = aggregate_idx * aggregate_group_size;
@@ -362,7 +369,8 @@ __global__ void aggregateSumKernel(BlockSumArray elements, BlockSumArray aggrega
  *
  * @return void
  *---------------------------------------------------------------------------**/
-void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate) {
+void aggregateSum(const BlockSumArray& elements, const BlockSumArray& aggregate)
+{
   int block_size    = 0;
   int min_grid_size = 0;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, aggregateSumKernel));
@@ -399,7 +407,8 @@ __global__ void assignLevelsKernel(const pos_key_pair* brackets,
                                    const char* open_chars,
                                    const char* close_chars,
                                    int bracket_char_cnt,
-                                   int16_t* levels) {
+                                   int16_t* levels)
+{
   // Process the number of elements equal to the aggregation rate, if the pyramid is used
   // Process all elements otherwise
   const auto to_process            = pyramid_height != 0 ? sum_pyramid[0].block_size : count;
@@ -465,7 +474,8 @@ void assignLevels(pos_key_pair* brackets,
                   char* open_chars,
                   char* close_chars,
                   int bracket_char_cnt,
-                  int16_t* levels) {
+                  int16_t* levels)
+{
   int block_size    = 0;
   int min_grid_size = 0;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, assignLevelsKernel));
@@ -502,7 +512,8 @@ void assignLevels(pos_key_pair* brackets,
 rmm::device_vector<int16_t> getBracketLevels(pos_key_pair* brackets,
                                              int count,
                                              const std::string& open_chars,
-                                             const std::string& close_chars) {
+                                             const std::string& close_chars)
+{
   // TODO: consider moving sort() out of this function
   thrust::sort(rmm::exec_policy()->on(0), brackets, brackets + count);
 

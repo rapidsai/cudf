@@ -21,13 +21,17 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/binaryop.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
+struct BinaryOperationIntegrationTest : public GdfTest {
+};
 
-struct BinaryOperationIntegrationTest : public GdfTest {};
-
-TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
+{
   using ADD = cudf::library::operation::Add<int32_t, float, int64_t>;
 
   auto lhs = cudf::test::scalar_wrapper<float>{100};
@@ -42,7 +46,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64) {
   ASSERT_BINOP(out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64)
+{
   using SUB = cudf::library::operation::Sub<int32_t, float, int64_t>;
 
   auto lhs = cudf::test::scalar_wrapper<float>{10000};
@@ -57,7 +62,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Scalar_Vector_SI32_FP32_SI64) {
   ASSERT_BINOP(out, lhs, rhs, SUB());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32)
+{
   using ADD = cudf::library::operation::Add<int8_t, int16_t, int32_t>;
 
   auto lhs = cudf::test::column_wrapper<int16_t>(
@@ -72,7 +78,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Scalar_SI08_SI16_SI32) {
   ASSERT_BINOP(out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
+TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08)
+{
   using ADD = cudf::library::operation::Add<int32_t, double, int8_t>;
 
   auto lhs = cudf::test::column_wrapper<double>(
@@ -90,7 +97,8 @@ TEST_F(BinaryOperationIntegrationTest, Add_Vector_Vector_SI32_FP64_SI08) {
   ASSERT_BINOP(out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64)
+{
   using SUB = cudf::library::operation::Sub<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -108,7 +116,8 @@ TEST_F(BinaryOperationIntegrationTest, Sub_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, SUB());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64)
+{
   using MUL = cudf::library::operation::Mul<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -126,7 +135,8 @@ TEST_F(BinaryOperationIntegrationTest, Mul_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, MUL());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64)
+{
   using DIV = cudf::library::operation::Div<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -144,7 +154,8 @@ TEST_F(BinaryOperationIntegrationTest, Div_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, DIV());
 }
 
-TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64)
+{
   using TRUEDIV = cudf::library::operation::TrueDiv<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -162,7 +173,8 @@ TEST_F(BinaryOperationIntegrationTest, TrueDiv_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, TRUEDIV());
 }
 
-TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64)
+{
   using FLOORDIV = cudf::library::operation::FloorDiv<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -180,7 +192,8 @@ TEST_F(BinaryOperationIntegrationTest, FloorDiv_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, FLOORDIV());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64)
+{
   using MOD = cudf::library::operation::Mod<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -198,7 +211,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, MOD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32) {
+TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32)
+{
   using MOD = cudf::library::operation::Mod<float, float, float>;
 
   auto lhs = cudf::test::column_wrapper<float>(
@@ -216,7 +230,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP32) {
   ASSERT_BINOP(out, lhs, rhs, MOD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64) {
+TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64)
+{
   using MOD = cudf::library::operation::Mod<double, double, double>;
 
   auto lhs = cudf::test::column_wrapper<double>(
@@ -234,7 +249,8 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64) {
   ASSERT_BINOP(out, lhs, rhs, MOD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64)
+{
   using POW = cudf::library::operation::Pow<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -250,7 +266,8 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64) {
   ASSERT_BINOP(out, lhs, rhs, POW());
 }
 
-TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32) {
+TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32)
+{
   using AND = cudf::library::operation::BitwiseAnd<int16_t, int64_t, int32_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -266,7 +283,8 @@ TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32) {
   ASSERT_BINOP(out, lhs, rhs, AND());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32) {
+TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32)
+{
   using OR = cudf::library::operation::BitwiseOr<int64_t, int16_t, int32_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -282,7 +300,8 @@ TEST_F(BinaryOperationIntegrationTest, Or_Vector_Vector_SI64_SI16_SI32) {
   ASSERT_BINOP(out, lhs, rhs, OR());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
+TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64)
+{
   using XOR = cudf::library::operation::BitwiseXor<int32_t, int16_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int32_t>(
@@ -298,7 +317,8 @@ TEST_F(BinaryOperationIntegrationTest, Xor_Vector_Vector_SI32_SI16_SI64) {
   ASSERT_BINOP(out, lhs, rhs, XOR());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) {
+TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8)
+{
   using AND = cudf::library::operation::LogicalAnd<int16_t, double, int8_t>;
 
   auto lhs = cudf::test::column_wrapper<double>(
@@ -316,7 +336,8 @@ TEST_F(BinaryOperationIntegrationTest, Logical_And_Vector_Vector_SI16_FP64_SI8) 
   ASSERT_BINOP(out, lhs, rhs, AND());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32) {
+TEST_F(BinaryOperationIntegrationTest, Logical_Or_Vector_Vector_B8_SI16_FP32)
+{
   using OR = cudf::library::operation::LogicalOr<cudf::bool8, int16_t, float>;
 
   auto lhs = cudf::test::column_wrapper<int16_t>(

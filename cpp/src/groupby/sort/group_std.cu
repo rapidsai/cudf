@@ -27,13 +27,16 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
+namespace
+{
 template <typename ResultType, typename T>
 struct var_transform {
   column_device_view d_values;
@@ -42,7 +45,8 @@ struct var_transform {
   size_type const* d_group_labels;
   size_type ddof;
 
-  __device__ ResultType operator()(size_type i) {
+  __device__ ResultType operator()(size_type i)
+  {
     if (d_values.is_null(i)) return 0.0;
 
     ResultType x         = d_values.element<T>(i);
@@ -66,7 +70,8 @@ struct var_functor {
     rmm::device_vector<size_type> const& group_labels,
     size_type ddof,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
 // Running this in debug build causes a runtime error:
 // `reduce_by_key failed on 2nd step: invalid device function`
 #if !defined(__CUDACC_DEBUG__)
@@ -121,7 +126,8 @@ struct var_functor {
 
   template <typename T, typename... Args>
   std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    Args&&... args) {
+    Args&&... args)
+  {
     CUDF_FAIL("Only numeric types are supported in std/variance");
   }
 };
@@ -134,7 +140,8 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   rmm::device_vector<size_type> const& group_labels,
                                   size_type ddof,
                                   rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   return type_dispatcher(
     values.type(), var_functor{}, values, group_means, group_sizes, group_labels, ddof, mr, stream);
 }

@@ -25,31 +25,39 @@
 #include <tuple>
 
 template <typename Tuple, typename F, std::size_t... Indices>
-void tuple_for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>) {
+void tuple_for_each_impl(Tuple&& tuple, F&& f, std::index_sequence<Indices...>)
+{
   (void)std::initializer_list<int>{
     ((void)(f(std::get<Indices>(std::forward<Tuple>(tuple)))), int{})...};
 }
 
 template <typename F, typename... Args>
-void tuple_for_each(const std::tuple<Args...>& tuple, F&& f) {
+void tuple_for_each(const std::tuple<Args...>& tuple, F&& f)
+{
   tuple_for_each_impl(tuple, std::forward<F>(f), std::index_sequence_for<Args...>{});
 }
 
-class TraitsTest : public ::testing::Test {};
+class TraitsTest : public ::testing::Test
+{
+};
 
 template <typename T>
-class TypedTraitsTest : public TraitsTest {};
+class TypedTraitsTest : public TraitsTest
+{
+};
 
 TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);
 
-TEST_F(TraitsTest, NumericDataTypesAreNumeric) {
+TEST_F(TraitsTest, NumericDataTypesAreNumeric)
+{
   using namespace cudf::test;
   EXPECT_TRUE(std::all_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
     return cudf::is_numeric(cudf::data_type{type});
   }));
 }
 
-TEST_F(TraitsTest, TimestampDataTypesAreNotNumeric) {
+TEST_F(TraitsTest, TimestampDataTypesAreNotNumeric)
+{
   using namespace cudf::test;
   EXPECT_TRUE(
     std::none_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
@@ -67,7 +75,8 @@ TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
 }
 */
 
-TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps) {
+TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps)
+{
   using namespace cudf::test;
   EXPECT_TRUE(
     std::none_of(numeric_type_ids.begin(), numeric_type_ids.end(), [](cudf::type_id type) {
@@ -75,7 +84,8 @@ TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps) {
     }));
 }
 
-TEST_F(TraitsTest, TimestampDataTypesAreTimestamps) {
+TEST_F(TraitsTest, TimestampDataTypesAreTimestamps)
+{
   using namespace cudf::test;
   EXPECT_TRUE(
     std::all_of(timestamp_type_ids.begin(), timestamp_type_ids.end(), [](cudf::type_id type) {
@@ -83,15 +93,18 @@ TEST_F(TraitsTest, TimestampDataTypesAreTimestamps) {
     }));
 }
 
-TYPED_TEST(TypedTraitsTest, RelationallyComparable) {
+TYPED_TEST(TypedTraitsTest, RelationallyComparable)
+{
   // All the test types should be comparable with themselves
   bool comparable = cudf::is_relationally_comparable<TypeParam, TypeParam>();
   EXPECT_TRUE(comparable);
 }
 
-TYPED_TEST(TypedTraitsTest, NotRelationallyComparable) {
+TYPED_TEST(TypedTraitsTest, NotRelationallyComparable)
+{
   // No type should be comparable with an empty dummy type
-  struct foo {};
+  struct foo {
+  };
   bool comparable = cudf::is_relationally_comparable<foo, TypeParam>();
   EXPECT_FALSE(comparable);
 

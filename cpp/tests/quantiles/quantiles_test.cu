@@ -33,19 +33,22 @@ using namespace cudf;
 using namespace test;
 
 template <typename T>
-struct QuantilesTest : public BaseFixture {};
+struct QuantilesTest : public BaseFixture {
+};
 
 using TestTypes = AllTypes;
 
 TYPED_TEST_CASE(QuantilesTest, TestTypes);
 
-TYPED_TEST(QuantilesTest, TestZeroColumns) {
+TYPED_TEST(QuantilesTest, TestZeroColumns)
+{
   auto input = table_view(std::vector<column_view>{});
 
   EXPECT_THROW(experimental::quantiles(input, {0.0f}), logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows) {
+TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows)
+{
   using T = TypeParam;
 
   auto input_a = fixed_width_column_wrapper<T>({});
@@ -54,7 +57,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnZeroRows) {
   EXPECT_THROW(experimental::quantiles(input, {0.0f}), logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles) {
+TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles)
+{
   using T = TypeParam;
 
   auto input_a = fixed_width_column_wrapper<T>({1}, {1});
@@ -66,7 +70,8 @@ TYPED_TEST(QuantilesTest, TestZeroRequestedQuantiles) {
   expect_tables_equal(expected->view(), actual->view());
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch) {
+TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch)
+{
   using T = TypeParam;
 
   auto input_a = fixed_width_column_wrapper<T>({});
@@ -82,7 +87,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnOrderCountMismatch) {
                logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch) {
+TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch)
+{
   using T = TypeParam;
 
   auto input_a = fixed_width_column_wrapper<T>({});
@@ -98,7 +104,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnNullOrderCountMismatch) {
                logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation) {
+TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation)
+{
   using T = TypeParam;
 
   auto input_a = fixed_width_column_wrapper<T>({});
@@ -112,7 +119,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnArithmeticInterpolation) {
                logic_error);
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted) {
+TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted)
+{
   using T = TypeParam;
 
   auto input_a = strings_column_wrapper(
@@ -141,7 +149,8 @@ TYPED_TEST(QuantilesTest, TestMultiColumnUnsorted) {
   expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted) {
+TYPED_TEST(QuantilesTest, TestMultiColumnAssumedSorted)
+{
   using T = TypeParam;
 
   auto input_a = strings_column_wrapper(

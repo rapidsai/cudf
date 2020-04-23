@@ -20,12 +20,14 @@
 #include <cudf/legacy/unary.hpp>
 #include <iostream>
 
-namespace cudf {
-namespace datetime {
-
-namespace detail {
-
-gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit) {
+namespace cudf
+{
+namespace datetime
+{
+namespace detail
+{
+gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit)
+{
   if (lhs_unit == TIME_UNIT_NONE || rhs_unit == TIME_UNIT_NONE) {
     return TIME_UNIT_NONE;
   } else if (lhs_unit == TIME_UNIT_ns) {
@@ -51,7 +53,8 @@ gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit) 
 }  // namespace detail
 
 std::pair<gdf_column, gdf_column> cast_to_common_resolution(gdf_column const& lhs,
-                                                            gdf_column const& rhs) {
+                                                            gdf_column const& rhs)
+{
   gdf_column lhs_out = cudf::empty_like(lhs);
   gdf_column rhs_out = cudf::empty_like(rhs);
 

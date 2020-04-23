@@ -22,11 +22,13 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 template <typename V>
-struct groupby_count_test : public cudf::test::BaseFixture {};
+struct groupby_count_test : public cudf::test::BaseFixture {
+};
 
 // TODO (dm): Either make it all types or don't make it typed test
 TYPED_TEST_CASE(groupby_count_test, cudf::test::NumericTypes);

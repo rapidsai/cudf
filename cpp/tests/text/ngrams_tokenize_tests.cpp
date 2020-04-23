@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {};
+struct TextNgramsTokenizeTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TextNgramsTokenizeTest, Tokenize) {
+TEST_F(TextNgramsTokenizeTest, Tokenize)
+{
   std::vector<const char*> h_strings{"the fox jumped over the dog",
                                      "the dog chased  the cat",
                                      " the cat chased the mouse ",
@@ -94,7 +96,8 @@ TEST_F(TextNgramsTokenizeTest, Tokenize) {
   }
 }
 
-TEST_F(TextNgramsTokenizeTest, TokenizeOneGram) {
+TEST_F(TextNgramsTokenizeTest, TokenizeOneGram)
+{
   cudf::test::strings_column_wrapper strings{"aaa bbb", "  ccc  ddd  ", "eee"};
   cudf::strings_column_view strings_view(strings);
 
@@ -103,7 +106,8 @@ TEST_F(TextNgramsTokenizeTest, TokenizeOneGram) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest) {
+TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest)
+{
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto results = nvtext::ngrams_tokenize(strings_view);
@@ -111,7 +115,8 @@ TEST_F(TextNgramsTokenizeTest, TokenizeEmptyTest) {
   EXPECT_EQ(results->has_nulls(), false);
 }
 
-TEST_F(TextNgramsTokenizeTest, TokenizeErrorTest) {
+TEST_F(TextNgramsTokenizeTest, TokenizeErrorTest)
+{
   cudf::test::strings_column_wrapper strings{"this column intentionally left blank"};
   cudf::strings_column_view strings_view(strings);
   EXPECT_THROW(nvtext::ngrams_tokenize(strings_view, 0), cudf::logic_error);

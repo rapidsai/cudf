@@ -27,11 +27,13 @@
 using namespace cudf::test;
 
 template <typename T>
-struct TileTest : public BaseFixture {};
+struct TileTest : public BaseFixture {
+};
 
 TYPED_TEST_CASE(TileTest, cudf::test::AllTypes);
 
-TYPED_TEST(TileTest, NoColumns) {
+TYPED_TEST(TileTest, NoColumns)
+{
   using T = TypeParam;
 
   cudf::table_view in(std::vector<cudf::column_view>{});
@@ -43,7 +45,8 @@ TYPED_TEST(TileTest, NoColumns) {
   cudf::test::expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(TileTest, NoRows) {
+TYPED_TEST(TileTest, NoRows)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> in_a({});
@@ -56,7 +59,8 @@ TYPED_TEST(TileTest, NoRows) {
   cudf::test::expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(TileTest, OneColumn) {
+TYPED_TEST(TileTest, OneColumn)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> in_a({-1, 0, 1});
@@ -70,7 +74,8 @@ TYPED_TEST(TileTest, OneColumn) {
   cudf::test::expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(TileTest, OneColumnNullable) {
+TYPED_TEST(TileTest, OneColumnNullable)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> in_a({-1, 0, 1}, {1, 0, 0});
@@ -84,7 +89,8 @@ TYPED_TEST(TileTest, OneColumnNullable) {
   cudf::test::expect_tables_equal(expected, actual->view());
 }
 
-TYPED_TEST(TileTest, OneColumnNegativeCount) {
+TYPED_TEST(TileTest, OneColumnNegativeCount)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> in_a({-1, 0, 1}, {1, 0, 0});
@@ -93,7 +99,8 @@ TYPED_TEST(TileTest, OneColumnNegativeCount) {
   EXPECT_THROW(cudf::experimental::tile(in, -1), cudf::logic_error);
 }
 
-TYPED_TEST(TileTest, OneColumnZeroCount) {
+TYPED_TEST(TileTest, OneColumnZeroCount)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> in_a({-1, 0, 1}, {1, 0, 0});

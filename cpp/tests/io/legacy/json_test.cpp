@@ -46,9 +46,11 @@ TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
 /**
  * @brief Base test fixture for JSON reader tests
  **/
-struct gdf_json_test : public GdfTest {};
+struct gdf_json_test : public GdfTest {
+};
 
-TEST_F(gdf_json_test, SquareBrackets) {
+TEST_F(gdf_json_test, SquareBrackets)
+{
   const std::string json_file(
     "{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
     "\"index\":[\"row 1\",\"row 2\"] , "
@@ -71,7 +73,8 @@ TEST_F(gdf_json_test, SquareBrackets) {
 }
 
 using pos_key_pair = thrust::pair<uint64_t, char>;
-TEST_F(gdf_json_test, BracketsLevels) {
+TEST_F(gdf_json_test, BracketsLevels)
+{
   // Generate square brackets consistent with 'split' json format
   const int rows      = 1000000;
   const int file_size = rows * 4 + 1;
@@ -105,7 +108,8 @@ TEST_F(gdf_json_test, BracketsLevels) {
   EXPECT_THAT(h_lvls, ::testing::ElementsAreArray(expected));
 }
 
-TEST_F(gdf_json_test, BasicJsonLines) {
+TEST_F(gdf_json_test, BasicJsonLines)
+{
   std::string data = "[1, 1.1]\n[2, 2.2]\n[3, 3.3]\n";
 
   cudf::json_read_arg args(cudf::source_info(data.c_str(), data.size()));
@@ -129,7 +133,8 @@ TEST_F(gdf_json_test, BasicJsonLines) {
               ::testing::ElementsAre(1.1, 2.2, 3.3));
 }
 
-TEST_F(gdf_json_test, JsonLinesStrings) {
+TEST_F(gdf_json_test, JsonLinesStrings)
+{
   std::string data = "[1, 1.1, \"aa \"]\n[2, 2.2, \"  bbb\"]";
 
   cudf::json_read_arg args(cudf::source_info{data.c_str(), data.size()});
@@ -155,7 +160,8 @@ TEST_F(gdf_json_test, JsonLinesStrings) {
   checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
 }
 
-TEST_F(gdf_json_test, JsonLinesDtypeInference) {
+TEST_F(gdf_json_test, JsonLinesDtypeInference)
+{
   std::string data = "[100, 1.1, \"aa \"]\n[200, 2.2, \"  bbb\"]";
 
   cudf::json_read_arg args(cudf::source_info{data.c_str(), data.size()});
@@ -181,7 +187,8 @@ TEST_F(gdf_json_test, JsonLinesDtypeInference) {
   checkStrColumn(df.get_column(2), {"aa ", "  bbb"});
 }
 
-TEST_F(gdf_json_test, JsonLinesFileInput) {
+TEST_F(gdf_json_test, JsonLinesFileInput)
+{
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[11, 1.1]\n[22, 2.2]";
@@ -208,7 +215,8 @@ TEST_F(gdf_json_test, JsonLinesFileInput) {
               ::testing::ElementsAre(1.1, 2.2));
 }
 
-TEST_F(gdf_json_test, JsonLinesByteRange) {
+TEST_F(gdf_json_test, JsonLinesByteRange)
+{
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesByteRangeTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << "[1000]\n[2000]\n[3000]\n[4000]\n[5000]\n[6000]\n[7000]\n[8000]\n[9000]\n";
@@ -232,7 +240,8 @@ TEST_F(gdf_json_test, JsonLinesByteRange) {
               ::testing::ElementsAre(3000, 4000, 5000));
 }
 
-TEST_F(gdf_json_test, JsonLinesObjects) {
+TEST_F(gdf_json_test, JsonLinesObjects)
+{
   const std::string fname = temp_env->get_temp_dir() + "JsonLinesObjectsTest.json";
   std::ofstream outfile(fname, std::ofstream::out);
   outfile << " {\"co\\\"l1\" : 1, \"col2\" : 2.0} \n";
@@ -256,7 +265,8 @@ TEST_F(gdf_json_test, JsonLinesObjects) {
   EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(2.0));
 }
 
-TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
+TEST_F(gdf_json_test, JsonLinesObjectsStrings)
+{
   std::string data =
     "{\"col1\":100, \"col2\":1.1, \"col3\":\"aaa\"}\n"
     "{\"col1\":200, \"col2\":2.2, \"col3\":\"bbb\"}\n";
@@ -284,7 +294,8 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   checkStrColumn(df.get_column(2), {"aaa", "bbb"});
 }
 
-TEST_F(gdf_json_test, ArrowFileSource) {
+TEST_F(gdf_json_test, ArrowFileSource)
+{
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);

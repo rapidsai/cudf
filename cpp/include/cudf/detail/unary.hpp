@@ -19,10 +19,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/unary.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**
  * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between
  * [`begin, `end`) `true` indicates the value is satisfies the predicate and `false` indicates it
@@ -47,7 +49,8 @@ std::unique_ptr<column> true_if(
   size_type size,
   Predicate p,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();

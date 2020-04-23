@@ -28,9 +28,11 @@
 
 #include <cstdlib>
 
-struct gdf_hashing_test : public GdfTest {};
+struct gdf_hashing_test : public GdfTest {
+};
 
-TEST_F(gdf_hashing_test, allDtypesTest) {
+TEST_F(gdf_hashing_test, allDtypesTest)
+{
   int nrows = 5;
   int ncols = 7;
 

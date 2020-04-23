@@ -27,12 +27,14 @@
 
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
-  __device__ bool operator()(cudf::size_type element_index) const noexcept {
+  __device__ bool operator()(cudf::size_type element_index) const noexcept
+  {
     return cudf::bit_is_set(_null_mask, element_index);
   }
 };
 
-std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits) {
+std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& bits)
+{
   for (auto _bit : bits) stream << int(_bit);
   return stream;
 }
@@ -40,7 +42,8 @@ std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
-                            thrust::host_vector<bool> const& expect) {
+                            thrust::host_vector<bool> const& expect)
+  {
     auto itb_dev = thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
                                                    valid_bit_functor{bitmask});
     thrust::device_vector<bool> result(itb_dev + start_bit, itb_dev + start_bit + expect.size());
@@ -51,7 +54,8 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
   void test_set_null_range(cudf::size_type size,
                            cudf::size_type begin,
                            cudf::size_type end,
-                           bool valid) {
+                           bool valid)
+  {
     thrust::host_vector<bool> expected(end - begin, valid);
     // TEST
     rmm::device_buffer mask = create_null_mask(size, cudf::mask_state::UNINITIALIZED);
@@ -60,7 +64,8 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
     expect_bitmask_equal(static_cast<cudf::bitmask_type*>(mask.data()), begin, expected);
   }
 
-  void test_null_partition(cudf::size_type size, cudf::size_type middle, bool valid) {
+  void test_null_partition(cudf::size_type size, cudf::size_type middle, bool valid)
+  {
     thrust::host_vector<bool> expected(size);
     std::generate(expected.begin(), expected.end(), [n = 0, middle, valid]() mutable {
       auto i = n++;
@@ -75,7 +80,8 @@ struct SetBitmaskTest : public cudf::test::BaseFixture {
 };
 
 // tests for set_null_mask
-TEST_F(SetBitmaskTest, fill_range) {
+TEST_F(SetBitmaskTest, fill_range)
+{
   cudf::size_type size = 121;
   for (auto begin = 0; begin < size; begin += 5)
     for (auto end = begin + 1; end <= size; end += 7) {
@@ -84,7 +90,8 @@ TEST_F(SetBitmaskTest, fill_range) {
     }
 }
 
-TEST_F(SetBitmaskTest, null_mask_partition) {
+TEST_F(SetBitmaskTest, null_mask_partition)
+{
   cudf::size_type size = 64;
   for (auto middle = 1; middle < size; middle++) {
     this->test_null_partition(size, middle, true);
@@ -92,7 +99,8 @@ TEST_F(SetBitmaskTest, null_mask_partition) {
   }
 }
 
-TEST_F(SetBitmaskTest, error_range) {
+TEST_F(SetBitmaskTest, error_range)
+{
   cudf::size_type size = 121;
   using size_pair      = std::pair<cudf::size_type, cudf::size_type>;
   std::vector<size_pair> begin_end_fail{

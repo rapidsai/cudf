@@ -34,25 +34,30 @@
 #include <algorithm>
 #include <array>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace orc {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace orc
+{
 // Import functionality that's independent of legacy code
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
-namespace {
-
+namespace
+{
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
  **/
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             bool decimals_as_float) {
+                             bool decimals_as_float)
+{
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
     case orc::BYTE: return type_id::INT8;
@@ -85,7 +90,8 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
 /**
  * @brief Function that translates cuDF time unit to ORC clock frequency
  **/
-constexpr int32_t to_clockrate(type_id timestamp_type_id) {
+constexpr int32_t to_clockrate(type_id timestamp_type_id)
+{
   switch (timestamp_type_id) {
     case type_id::TIMESTAMP_SECONDS: return 1;
     case type_id::TIMESTAMP_MILLISECONDS: return 1000;
@@ -96,7 +102,8 @@ constexpr int32_t to_clockrate(type_id timestamp_type_id) {
 }
 
 constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
-  const orc::StreamKind kind, uint32_t skip_count, bool non_child) {
+  const orc::StreamKind kind, uint32_t skip_count, bool non_child)
+{
   switch (kind) {
     case orc::DATA:
       skip_count += 1;
@@ -124,11 +131,13 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  **/
-class metadata {
+class metadata
+{
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
  public:
-  explicit metadata(datasource *const src) : source(src) {
+  explicit metadata(datasource *const src) : source(src)
+  {
     const auto len         = source->size();
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
@@ -169,7 +178,8 @@ class metadata {
                       size_type max_stripe_count,
                       const size_type *stripe_indices,
                       size_type &row_start,
-                      size_type &row_count) {
+                      size_type &row_count)
+  {
     std::vector<OrcStripeInfo> selection;
 
     if (stripe_indices) {
@@ -247,7 +257,8 @@ class metadata {
    *
    * @return List of ORC column indexes
    **/
-  auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column) {
+  auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column)
+  {
     std::vector<int> selection;
 
     if (not use_names.empty()) {
@@ -292,8 +303,8 @@ class metadata {
   datasource *const source;
 };
 
-namespace {
-
+namespace
+{
 /**
  * @brief Struct that maps ORC streams to columns
  **/
@@ -305,7 +316,9 @@ struct orc_stream_info {
       dst_pos(dst_pos_),
       length(length_),
       gdf_idx(gdf_idx_),
-      stripe_idx(stripe_idx_) {}
+      stripe_idx(stripe_idx_)
+  {
+  }
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
   uint32_t length;      // length in file
@@ -325,7 +338,8 @@ size_t gather_stream_info(const size_t stripe_index,
                           bool use_index,
                           size_t *num_dictionary_entries,
                           hostdevice_vector<gpu::ColumnDesc> &chunks,
-                          std::vector<orc_stream_info> &stream_info) {
+                          std::vector<orc_stream_info> &stream_info)
+{
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset    = 0;
   uint64_t dst_offset    = 0;
@@ -393,7 +407,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   size_t num_stripes,
   rmm::device_vector<gpu::RowGroup> &row_groups,
   size_t row_index_stride,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   // Parse the columns' compressed info
   hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, stream_info.size(), stream);
   for (const auto &info : stream_info) {
@@ -534,7 +549,8 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                       const rmm::device_vector<gpu::RowGroup> &row_groups,
                                       size_t row_index_stride,
                                       std::vector<column_buffer> &out_buffers,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   const auto num_columns = out_buffers.size();
   const auto num_stripes = chunks.size() / out_buffers.size();
 
@@ -588,7 +604,8 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 reader::impl::impl(std::unique_ptr<datasource> source,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr) {
+  : _source(std::move(source)), _mr(mr)
+{
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
@@ -614,7 +631,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type stripe,
                                        size_type max_stripe_count,
                                        const size_type *stripe_indices,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
@@ -827,47 +845,55 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 reader::reader(std::string filepath,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(const char *buffer,
                size_t length,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+{
+}
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream)
+{
   return _impl->read(0, -1, -1, -1, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_stripe(size_type stripe,
                                         size_type stripe_count,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   return _impl->read(0, -1, stripe, stripe_count, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_stripes(const std::vector<size_type> &stripe_list,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   return _impl->read(
     0, -1, -1, static_cast<size_type>(stripe_list.size()), stripe_list.data(), stream);
 }
 
 // Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows,
-                                      size_type num_rows,
-                                      cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
+{
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
 }
 

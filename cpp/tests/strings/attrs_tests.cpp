@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct StringsAttributesTest : public cudf::test::BaseFixture {};
+struct StringsAttributesTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsAttributesTest, CodePoints) {
+TEST_F(StringsAttributesTest, CodePoints)
+{
   std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -44,7 +46,8 @@ TEST_F(StringsAttributesTest, CodePoints) {
   }
 }
 
-TEST_F(StringsAttributesTest, ZeroSizeStringsColumn) {
+TEST_F(StringsAttributesTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   cudf::column_view expected_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
@@ -57,7 +60,8 @@ TEST_F(StringsAttributesTest, ZeroSizeStringsColumn) {
   cudf::test::expect_columns_equal(results->view(), expected_column);
 }
 
-TEST_F(StringsAttributesTest, StringsLengths) {
+TEST_F(StringsAttributesTest, StringsLengths)
+{
   std::vector<const char*> h_strings{
     "eee", "bb", nullptr, "", "aa", "ééé", " something a bit longer "};
   cudf::test::strings_column_wrapper strings(

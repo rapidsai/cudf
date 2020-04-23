@@ -19,10 +19,12 @@
 
 #include "reduction_functions.cuh"
 
-namespace cudf {
-namespace reduction {
-namespace simple {
-
+namespace cudf
+{
+namespace reduction
+{
+namespace simple
+{
 /** --------------------------------------------------------------------------*
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
@@ -39,7 +41,8 @@ namespace simple {
 template <typename ElementType, typename ResultType, typename Op, bool has_nulls>
 gdf_scalar simple_reduction(gdf_column const& col,
                             gdf_dtype const output_dtype,
-                            cudaStream_t stream) {
+                            cudaStream_t stream)
+{
   gdf_scalar scalar;
   scalar.dtype        = output_dtype;
   scalar.is_valid     = false;  // the scalar is not valid for error case
@@ -74,7 +77,8 @@ template <typename ElementType, typename Op>
 struct result_type_dispatcher {
  private:
   template <typename ResultType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     // for single step reductions,
     // the available combination of input and output dtypes are
     //  - same dtypes (including cudf::wrappers)
@@ -88,7 +92,8 @@ struct result_type_dispatcher {
 
  public:
   template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
-  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream) {
+  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+  {
     if (cudf::has_nulls(col)) {
       return simple_reduction<ElementType, ResultType, Op, true>(col, output_dtype, stream);
     } else {
@@ -97,7 +102,8 @@ struct result_type_dispatcher {
   }
 
   template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
-  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream) {
+  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+  {
     CUDF_FAIL("input data type is not convertible to output data type");
   }
 };
@@ -109,7 +115,8 @@ struct element_type_dispatcher {
   // return true if ElementType is arithmetic type or bool8, or
   // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
   template <typename ElementType>
-  static constexpr bool is_supported_v() {
+  static constexpr bool is_supported_v()
+  {
     return std::is_arithmetic<ElementType>::value ||
            std::is_same<ElementType, cudf::bool8>::value ||
            std::is_same<Op, cudf::reduction::op::min>::value ||
@@ -118,13 +125,15 @@ struct element_type_dispatcher {
 
  public:
   template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream) {
+  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+  {
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, stream);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream) {
+  gdf_scalar operator()(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+  {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"
       " are not supported for non-arithmetic types");

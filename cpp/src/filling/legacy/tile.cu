@@ -28,11 +28,12 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
-namespace cudf {
-
-namespace detail {
-
-cudf::table tile(const cudf::table &in, gdf_size_type count, cudaStream_t stream = 0) {
+namespace cudf
+{
+namespace detail
+{
+cudf::table tile(const cudf::table &in, gdf_size_type count, cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 
   gdf_size_type num_rows = in.num_rows();

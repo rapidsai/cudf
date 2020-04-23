@@ -36,14 +36,16 @@
 
 using bit_mask::bit_mask_t;
 
-namespace {  // anonymous
+namespace
+{  // anonymous
 
 static constexpr int warp_size  = 32;
 static constexpr int BLOCK_SIZE = 256;
 
 // returns the block_sum using the given shared array of warp sums.
 template <typename T>
-__device__ T sum_warps(T* warp_smem) {
+__device__ T sum_warps(T* warp_smem)
+{
   T block_sum = 0;
 
   if (threadIdx.x < warp_size) {
@@ -61,7 +63,8 @@ __device__ auto get_new_value(cudf::size_type idx,
                               const T* __restrict__ values_to_replace_begin,
                               const T* __restrict__ values_to_replace_end,
                               const T* __restrict__ d_replacement_values,
-                              bit_mask_t const* __restrict__ replacement_valid) {
+                              bit_mask_t const* __restrict__ replacement_valid)
+{
   auto found_ptr =
     thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[idx]);
   T new_value{0};
@@ -115,7 +118,8 @@ __global__ void replace_kernel(const T* __restrict__ input_data,
                                const T* __restrict__ values_to_replace_begin,
                                const T* __restrict__ values_to_replace_end,
                                const T* __restrict__ d_replacement_values,
-                               bit_mask_t const* __restrict__ replacement_valid) {
+                               bit_mask_t const* __restrict__ replacement_valid)
+{
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
@@ -196,7 +200,8 @@ struct replace_kernel_forwarder {
                   const gdf_column& values_to_replace,
                   const gdf_column& replacement_values,
                   gdf_column& output,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     const bool input_has_nulls       = cudf::has_nulls(input_col);
     const bool replacement_has_nulls = cudf::has_nulls(replacement_values);
 
@@ -253,13 +258,15 @@ struct replace_kernel_forwarder {
 };
 }  // end anonymous namespace
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 gdf_column find_and_replace_all(const gdf_column& input_col,
                                 const gdf_column& values_to_replace,
                                 const gdf_column& replacement_values,
-                                cudaStream_t stream = 0) {
+                                cudaStream_t stream = 0)
+{
   if (0 == input_col.size) { return cudf::empty_like(input_col); }
 
   if (0 == values_to_replace.size || 0 == replacement_values.size) {
@@ -318,13 +325,15 @@ gdf_column find_and_replace_all(const gdf_column& input_col,
 /* ----------------------------------------------------------------------------*/
 gdf_column find_and_replace_all(const gdf_column& input_col,
                                 const gdf_column& values_to_replace,
-                                const gdf_column& replacement_values) {
+                                const gdf_column& replacement_values)
+{
   return detail::find_and_replace_all(input_col, values_to_replace, replacement_values);
 }
 
 }  // namespace cudf
 
-namespace {  // anonymous
+namespace
+{  // anonymous
 
 using bit_mask::bit_mask_t;
 
@@ -333,7 +342,8 @@ __global__ void replace_nulls_with_scalar(cudf::size_type size,
                                           const Type* __restrict__ in_data,
                                           const bit_mask_t* __restrict__ in_valid,
                                           const Type* __restrict__ replacement,
-                                          Type* __restrict__ out_data) {
+                                          Type* __restrict__ out_data)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -352,7 +362,8 @@ __global__ void replace_nulls_with_column(cudf::size_type size,
                                           const Type* __restrict__ in_data,
                                           const bit_mask_t* __restrict__ in_valid,
                                           const Type* __restrict__ replacement,
-                                          Type* __restrict__ out_data) {
+                                          Type* __restrict__ out_data)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -379,7 +390,8 @@ struct replace_nulls_column_kernel_forwarder {
                   cudf::valid_type* d_in_valid,
                   const void* d_replacement,
                   void* d_out_data,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
@@ -404,7 +416,8 @@ struct replace_nulls_scalar_kernel_forwarder {
                   cudf::valid_type* d_in_valid,
                   const void* replacement,
                   void* d_out_data,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement      = static_cast<const col_type*>(replacement);
@@ -425,12 +438,14 @@ struct replace_nulls_scalar_kernel_forwarder {
 
 }  // end anonymous namespace
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   if (input.size == 0) { return cudf::empty_like(input); }
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
@@ -458,7 +473,8 @@ gdf_column replace_nulls(const gdf_column& input,
 
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_scalar& replacement,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   if (input.size == 0) { return cudf::empty_like(input); }
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
@@ -482,11 +498,13 @@ gdf_column replace_nulls(const gdf_column& input,
 
 }  // namespace detail
 
-gdf_column replace_nulls(const gdf_column& input, const gdf_column& replacement) {
+gdf_column replace_nulls(const gdf_column& input, const gdf_column& replacement)
+{
   return detail::replace_nulls(input, replacement, 0);
 }
 
-gdf_column replace_nulls(const gdf_column& input, const gdf_scalar& replacement) {
+gdf_column replace_nulls(const gdf_column& input, const gdf_scalar& replacement)
+{
   return detail::replace_nulls(input, replacement, 0);
 }
 

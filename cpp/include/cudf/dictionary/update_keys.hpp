@@ -18,9 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-namespace cudf {
-namespace dictionary {
-
+namespace cudf
+{
+namespace dictionary
+{
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.

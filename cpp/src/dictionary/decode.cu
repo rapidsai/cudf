@@ -22,16 +22,19 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
-
+namespace cudf
+{
+namespace dictionary
+{
+namespace detail
+{
 /**
  * @brief Decode a column from a dictionary.
  */
 std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   if (source.size() == 0) return make_empty_column(data_type{EMPTY});
 
   column_view indices{cudf::data_type{cudf::INT32},
@@ -55,7 +58,8 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
 }  // namespace detail
 
 std::unique_ptr<column> decode(dictionary_column_view const& source,
-                               rmm::mr::device_memory_resource* mr) {
+                               rmm::mr::device_memory_resource* mr)
+{
   return detail::decode(source, mr);
 }
 

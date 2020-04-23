@@ -29,18 +29,23 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/sequence.h>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
+namespace
+{
 // Functor to identify unique elements in a sorted order table/column
 template <bool has_nulls, typename ReturnType, typename Iterator>
 struct unique_comparator {
   unique_comparator(table_device_view device_table, Iterator const sorted_order)
-    : comparator(device_table, device_table, true), permute(sorted_order) {}
-  __device__ ReturnType operator()(size_type index) const noexcept {
+    : comparator(device_table, device_table, true), permute(sorted_order)
+  {
+  }
+  __device__ ReturnType operator()(size_type index) const noexcept
+  {
     return index == 0 || not comparator(permute[index], permute[index - 1]);
   };
 
@@ -52,7 +57,8 @@ struct unique_comparator {
 // Assign rank from 1 to n unique values. Equal values get same rank value.
 rmm::device_vector<size_type> sorted_dense_rank(column_view input_col,
                                                 column_view sorted_order_view,
-                                                cudaStream_t stream) {
+                                                cudaStream_t stream)
+{
   auto device_table     = table_device_view::create(table_view{{input_col}}, stream);
   auto const input_size = input_col.size();
   rmm::device_vector<size_type> dense_rank_sorted(input_size);
@@ -106,7 +112,8 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
                                outputIterator rank_iter,
                                TieBreaker tie_breaker,
                                Transformer transformer,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   auto const input_size = sorted_order_view.size();
   rmm::device_vector<TieType> tie_sorted(input_size, 0);
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
@@ -134,7 +141,8 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
 template <typename outputType>
 void rank_first(column_view sorted_order_view,
                 mutable_column_view rank_mutable_view,
-                cudaStream_t stream) {
+                cudaStream_t stream)
+{
   // stable sort order ranking (no ties)
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
                   thrust::make_counting_iterator<size_type>(1),
@@ -147,7 +155,8 @@ template <typename outputType>
 void rank_dense(rmm::device_vector<size_type> const &dense_rank_sorted,
                 column_view sorted_order_view,
                 mutable_column_view rank_mutable_view,
-                cudaStream_t stream) {
+                cudaStream_t stream)
+{
   // All equal values have same rank and rank always increases by 1 between groups
   thrust::scatter(rmm::exec_policy(stream)->on(stream),
                   dense_rank_sorted.begin(),
@@ -160,7 +169,8 @@ template <typename outputType>
 void rank_min(rmm::device_vector<size_type> const &group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
-              cudaStream_t stream) {
+              cudaStream_t stream)
+{
   // min of first in the group
   // All equal values have min of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, min), scatter
@@ -177,7 +187,8 @@ template <typename outputType>
 void rank_max(rmm::device_vector<size_type> const &group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
-              cudaStream_t stream) {
+              cudaStream_t stream)
+{
   // max of first in the group
   // All equal values have max of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, max), scatter
@@ -193,7 +204,8 @@ void rank_max(rmm::device_vector<size_type> const &group_keys,
 void rank_average(rmm::device_vector<size_type> const &group_keys,
                   column_view sorted_order_view,
                   mutable_column_view rank_mutable_view,
-                  cudaStream_t stream) {
+                  cudaStream_t stream)
+{
   // k, k+1, .. k+n-1
   // average = (n*k+ n*(n-1)/2)/n
   // average = k + (n-1)/2 = min + (count-1)/2
@@ -227,7 +239,8 @@ std::unique_ptr<column> rank(column_view const &input,
                              null_order null_precedence,
                              bool percentage,
                              rmm::mr::device_memory_resource *mr,
-                             cudaStream_t stream = 0) {
+                             cudaStream_t stream = 0)
+{
   data_type const output_type = (percentage or method == rank_method::AVERAGE)
                                   ? data_type(FLOAT64)
                                   : data_type(type_to_id<size_type>());
@@ -323,7 +336,8 @@ std::unique_ptr<column> rank(column_view const &input,
                              include_nulls _include_nulls,
                              null_order null_precedence,
                              bool percentage,
-                             rmm::mr::device_memory_resource *mr) {
+                             rmm::mr::device_memory_resource *mr)
+{
   return detail::rank(input, method, column_order, _include_nulls, null_precedence, percentage, mr);
 }
 }  // namespace experimental

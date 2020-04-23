@@ -25,7 +25,8 @@
 #include "cudf/sorting.hpp"
 
 template <typename T>
-class PartitionTest : public cudf::test::BaseFixture {
+class PartitionTest : public cudf::test::BaseFixture
+{
   using value_type = cudf::test::GetType<T, 0>;
   using map_type   = cudf::test::GetType<T, 1>;
 };
@@ -40,7 +41,8 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 // Exceptional cases
-TYPED_TEST(PartitionTest, EmptyInputs) {
+TYPED_TEST(PartitionTest, EmptyInputs)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -56,7 +58,8 @@ TYPED_TEST(PartitionTest, EmptyInputs) {
   cudf::test::expect_columns_equal(empty_column, result.first->get_column(0));
 }
 
-TYPED_TEST(PartitionTest, MapInputSizeMismatch) {
+TYPED_TEST(PartitionTest, MapInputSizeMismatch)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -66,7 +69,8 @@ TYPED_TEST(PartitionTest, MapInputSizeMismatch) {
   EXPECT_THROW(cudf::experimental::partition(cudf::table_view{{input}}, map, 3), cudf::logic_error);
 }
 
-TYPED_TEST(PartitionTest, MapWithNullsThrows) {
+TYPED_TEST(PartitionTest, MapWithNullsThrows)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -86,7 +90,8 @@ TYPED_TEST(PartitionTest, MapWithNullsThrows) {
  */
 void expect_equal_partitions(cudf::table_view expected,
                              cudf::table_view actual,
-                             std::vector<cudf::size_type> const& offsets) {
+                             std::vector<cudf::size_type> const& offsets)
+{
   // Need to convert partition offsets into split points by dropping the first
   // and last element
   std::vector<cudf::size_type> split_points;
@@ -110,7 +115,8 @@ void run_partition_test(cudf::table_view table_to_partition,
                         cudf::column_view partition_map,
                         cudf::size_type num_partitions,
                         cudf::table_view expected_partitioned_table,
-                        std::vector<cudf::size_type> const& expected_offsets) {
+                        std::vector<cudf::size_type> const& expected_offsets)
+{
   auto result = cudf::experimental::partition(table_to_partition, partition_map, num_partitions);
   auto const& actual_partitioned_table = result.first;
   auto const& actual_offsets           = result.second;
@@ -120,7 +126,8 @@ void run_partition_test(cudf::table_view table_to_partition,
 }
 
 // Normal cases
-TYPED_TEST(PartitionTest, Identity) {
+TYPED_TEST(PartitionTest, Identity)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -135,7 +142,8 @@ TYPED_TEST(PartitionTest, Identity) {
   run_partition_test(table_to_partition, map, 6, table_to_partition, expected_offsets);
 }
 
-TYPED_TEST(PartitionTest, Reverse) {
+TYPED_TEST(PartitionTest, Reverse)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -154,7 +162,8 @@ TYPED_TEST(PartitionTest, Reverse) {
   run_partition_test(table_to_partition, map, 6, expected_partitioned_table, expected_offsets);
 }
 
-TYPED_TEST(PartitionTest, SinglePartition) {
+TYPED_TEST(PartitionTest, SinglePartition)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 
@@ -173,7 +182,8 @@ TYPED_TEST(PartitionTest, SinglePartition) {
   run_partition_test(table_to_partition, map, 1, expected_partitioned_table, expected_offsets);
 }
 
-TYPED_TEST(PartitionTest, EmptyPartitions) {
+TYPED_TEST(PartitionTest, EmptyPartitions)
+{
   using value_type = cudf::test::GetType<TypeParam, 0>;
   using map_type   = cudf::test::GetType<TypeParam, 1>;
 

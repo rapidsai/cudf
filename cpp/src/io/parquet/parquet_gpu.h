@@ -22,11 +22,14 @@
 #include <io/statistics/column_stats.h>
 #include "parquet_common.h"
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace parquet
+{
+namespace gpu
+{
 /**
  * @brief Enums for the flags in the page header
  **/
@@ -102,7 +105,9 @@ struct ColumnChunkDesc {
       codec(codec_),
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
-      ts_clock_rate(ts_clock_rate_) {}
+      ts_clock_rate(ts_clock_rate_)
+  {
+  }
 
   uint8_t *compressed_data;     // pointer to compressed column chunk data
   size_t compressed_size;       // total compressed data size for this chunk
@@ -181,7 +186,8 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  **/
 inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
-                                                          uint32_t num_pages = 1) {
+                                                          uint32_t num_pages = 1)
+{
   return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
 }
 

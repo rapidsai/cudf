@@ -25,9 +25,10 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 using time_point_ms =
   simt::std::chrono::time_point<simt::std::chrono::system_clock, simt::std::chrono::milliseconds>;
 
@@ -48,7 +49,8 @@ using time_point_ms =
 template <typename T, bool nullable = false>
 inline cudf::test::fixed_width_column_wrapper<T> generate_timestamps(int32_t count,
                                                                      time_point_ms start,
-                                                                     time_point_ms stop) {
+                                                                     time_point_ms stop)
+{
   using Rep        = typename T::rep;
   using Period     = typename T::period;
   using ToDuration = simt::std::chrono::duration<Rep, Period>;

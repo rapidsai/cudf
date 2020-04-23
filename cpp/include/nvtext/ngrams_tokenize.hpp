@@ -19,8 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext {
-
+namespace nvtext
+{
 /**
  * @brief Returns a single column of strings by tokenizing the input strings
  * column and then producing ngrams of each string.

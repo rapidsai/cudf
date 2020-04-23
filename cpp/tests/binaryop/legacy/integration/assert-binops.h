@@ -25,15 +25,18 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
-namespace cudf {
-namespace test {
-namespace binop {
-
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::scalar_wrapper<TypeLhs>& lhs,
                   cudf::test::column_wrapper<TypeRhs>& rhs,
-                  TypeOpe&& ope) {
+                  TypeOpe&& ope)
+{
   auto lhs_h    = lhs.value();
   auto rhs_h    = rhs.to_host();
   auto rhs_data = std::get<0>(rhs_h);
@@ -59,7 +62,8 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeLhs>& lhs,
                   cudf::test::scalar_wrapper<TypeRhs>& rhs,
-                  TypeOpe&& ope) {
+                  TypeOpe&& ope)
+{
   auto rhs_h    = rhs.value();
   auto lhs_h    = lhs.to_host();
   auto lhs_data = std::get<0>(lhs_h);
@@ -85,7 +89,8 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeLhs>& lhs,
                   cudf::test::column_wrapper<TypeRhs>& rhs,
-                  TypeOpe&& ope) {
+                  TypeOpe&& ope)
+{
   auto lhs_h    = lhs.to_host();
   auto lhs_data = std::get<0>(lhs_h);
   auto rhs_h    = rhs.to_host();
@@ -119,7 +124,8 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
                   cudf::test::column_wrapper<TypeLhs>& lhs,
                   cudf::test::column_wrapper<TypeRhs>& rhs,
-                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope) {
+                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& ope)
+{
   auto lhs_h    = lhs.to_host();
   auto lhs_data = std::get<0>(lhs_h);
   auto rhs_h    = rhs.to_host();

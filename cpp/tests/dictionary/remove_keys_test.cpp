@@ -24,9 +24,11 @@
 
 #include <vector>
 
-struct DictionaryRemoveKeysTest : public cudf::test::BaseFixture {};
+struct DictionaryRemoveKeysTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryRemoveKeysTest, StringsColumn) {
+TEST_F(DictionaryRemoveKeysTest, StringsColumn)
+{
   cudf::test::strings_column_wrapper strings{
     "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper del_keys{"ddd", "bbb", "fff"};
@@ -57,7 +59,8 @@ TEST_F(DictionaryRemoveKeysTest, StringsColumn) {
   }
 }
 
-TEST_F(DictionaryRemoveKeysTest, FloatColumn) {
+TEST_F(DictionaryRemoveKeysTest, FloatColumn)
+{
   cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
   cudf::test::fixed_width_column_wrapper<float> del_keys{4.25, -11.75, 5.0};
 
@@ -82,7 +85,8 @@ TEST_F(DictionaryRemoveKeysTest, FloatColumn) {
   }
 }
 
-TEST_F(DictionaryRemoveKeysTest, WithNull) {
+TEST_F(DictionaryRemoveKeysTest, WithNull)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 0},
                                                         {1, 1, 1, 1, 1, 0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int64_t> del_keys{0, 111, 777};
@@ -107,7 +111,8 @@ TEST_F(DictionaryRemoveKeysTest, WithNull) {
   }
 }
 
-TEST_F(DictionaryRemoveKeysTest, Errors) {
+TEST_F(DictionaryRemoveKeysTest, Errors)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> input{1, 2, 3};
   auto const dictionary = cudf::dictionary::encode(input);
 

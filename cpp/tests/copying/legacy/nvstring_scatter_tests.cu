@@ -26,9 +26,11 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
 
-struct ScatterTest : GdfTest {};
+struct ScatterTest : GdfTest {
+};
 
-TEST_F(ScatterTest, ScatterNVString) {
+TEST_F(ScatterTest, ScatterNVString)
+{
   bool print          = false;
   const int rows_size = 12;
   const size_t length = 2;

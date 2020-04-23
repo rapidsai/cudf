@@ -46,7 +46,8 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
 template <typename T>
 std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns,
                                                                      cudf::size_type num_rows,
-                                                                     bool include_validity) {
+                                                                     bool include_validity)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
@@ -74,7 +75,8 @@ std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_
 }
 
 // Base test fixture for tests
-struct OrcWriterTest : public cudf::test::BaseFixture {};
+struct OrcWriterTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -96,7 +98,8 @@ using SupportedTimestampTypes =
 TYPED_TEST_CASE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
-struct OrcChunkedWriterTest : public cudf::test::BaseFixture {};
+struct OrcChunkedWriterTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -107,11 +110,12 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
 
-namespace {
-
+namespace
+{
 // Generates a vector of uniform random values of type T
 template <typename T>
-inline auto random_values(size_t size) {
+inline auto random_values(size_t size)
+{
   std::vector<T> values(size);
 
   using T1 = T;
@@ -131,7 +135,8 @@ inline auto random_values(size_t size) {
 }
 
 // Helper function to compare two tables
-void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rhs) {
+void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
+{
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   auto expected = lhs.begin();
   auto result   = rhs.begin();
@@ -140,7 +145,8 @@ void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rh
 
 }  // namespace
 
-TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
+TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -164,7 +170,8 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
+TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
@@ -188,7 +195,8 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
+TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
+{
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam(std::rand() / 10); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -213,7 +221,8 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
+TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
+{
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam(std::rand() / 10); });
   auto validity =
@@ -239,7 +248,8 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TEST_F(OrcWriterTest, MultiColumn) {
+TEST_F(OrcWriterTest, MultiColumn)
+{
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -289,7 +299,8 @@ TEST_F(OrcWriterTest, MultiColumn) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcWriterTest, MultiColumnWithNulls) {
+TEST_F(OrcWriterTest, MultiColumnWithNulls)
+{
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -347,7 +358,8 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcWriterTest, Strings) {
+TEST_F(OrcWriterTest, Strings)
+{
   std::vector<const char*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   const auto num_rows = strings.size();
@@ -385,7 +397,8 @@ TEST_F(OrcWriterTest, Strings) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcWriterTest, HostBuffer) {
+TEST_F(OrcWriterTest, HostBuffer)
+{
   constexpr auto num_rows = 100 << 10;
   const auto seq_col      = random_values<int>(num_rows);
   const auto validity =
@@ -413,7 +426,8 @@ TEST_F(OrcWriterTest, HostBuffer) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(OrcChunkedWriterTest, SingleTable) {
+TEST_F(OrcChunkedWriterTest, SingleTable)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
@@ -429,7 +443,8 @@ TEST_F(OrcChunkedWriterTest, SingleTable) {
   expect_tables_equal(*result.tbl, *table1);
 }
 
-TEST_F(OrcChunkedWriterTest, SimpleTable) {
+TEST_F(OrcChunkedWriterTest, SimpleTable)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
@@ -449,7 +464,8 @@ TEST_F(OrcChunkedWriterTest, SimpleTable) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(OrcChunkedWriterTest, LargeTables) {
+TEST_F(OrcChunkedWriterTest, LargeTables)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
@@ -469,7 +485,8 @@ TEST_F(OrcChunkedWriterTest, LargeTables) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(OrcChunkedWriterTest, ManyTables) {
+TEST_F(OrcChunkedWriterTest, ManyTables)
+{
   srand(31337);
   std::vector<std::unique_ptr<table>> tables;
   std::vector<table_view> table_views;
@@ -496,7 +513,8 @@ TEST_F(OrcChunkedWriterTest, ManyTables) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TEST_F(OrcChunkedWriterTest, Strings) {
+TEST_F(OrcChunkedWriterTest, Strings)
+{
   std::vector<std::unique_ptr<cudf::column>> cols;
 
   bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
@@ -526,7 +544,8 @@ TEST_F(OrcChunkedWriterTest, Strings) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TEST_F(OrcChunkedWriterTest, MismatchedTypes) {
+TEST_F(OrcChunkedWriterTest, MismatchedTypes)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
   auto table2 = create_random_fixed_table<float>(4, 4, true);
@@ -539,7 +558,8 @@ TEST_F(OrcChunkedWriterTest, MismatchedTypes) {
   cudf_io::write_orc_chunked_end(state);
 }
 
-TEST_F(OrcChunkedWriterTest, MismatchedStructure) {
+TEST_F(OrcChunkedWriterTest, MismatchedStructure)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
   auto table2 = create_random_fixed_table<int>(3, 4, true);
@@ -552,7 +572,8 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure) {
   cudf_io::write_orc_chunked_end(state);
 }
 
-TEST_F(OrcChunkedWriterTest, ReadStripes) {
+TEST_F(OrcChunkedWriterTest, ReadStripes)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
@@ -573,7 +594,8 @@ TEST_F(OrcChunkedWriterTest, ReadStripes) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(OrcChunkedWriterTest, ReadStripesError) {
+TEST_F(OrcChunkedWriterTest, ReadStripesError)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
@@ -590,7 +612,8 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError) {
   EXPECT_THROW(cudf_io::read_orc(read_args), cudf::logic_error);
 }
 
-TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize) {
+TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
+{
   // write out two 31 row tables and make sure they get
   // read back with all their validity bits in the right place
 
@@ -637,7 +660,8 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2) {
+TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
+{
   // write out two 33 row tables and make sure they get
   // read back with all their validity bits in the right place
 

@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief A wrapper class for operations on a dictionary column.
  *
@@ -28,7 +28,8 @@ namespace cudf {
  * The indices represent the corresponding positions of each element's
  * value in the keys.
  */
-class dictionary_column_view : private column_view {
+class dictionary_column_view : private column_view
+{
  public:
   dictionary_column_view(column_view const& dictionary_column);
   dictionary_column_view(dictionary_column_view&& dictionary_view)      = default;

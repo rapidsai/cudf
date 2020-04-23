@@ -38,7 +38,8 @@ struct ScanTest : public GdfTest {
   void scan_test(std::vector<int> const& int_values,
                  std::vector<int> const& exact_values,
                  gdf_scan_op op,
-                 bool inclusive) {
+                 bool inclusive)
+  {
     bool do_print = false;
 
     this->val_check(int_values, do_print, "input = ");
@@ -77,7 +78,8 @@ struct ScanTest : public GdfTest {
   }
 
   template <typename Ti>
-  void val_check(std::vector<Ti> const& v, bool do_print = false, const char* msg = nullptr) {
+  void val_check(std::vector<Ti> const& v, bool do_print = false, const char* msg = nullptr)
+  {
     if (do_print) {
       std::cout << msg << " {";
       std::for_each(v.begin(), v.end(), [](Ti i) { std::cout << ", " << i; });
@@ -88,7 +90,8 @@ struct ScanTest : public GdfTest {
 
   // make sure all elements in the range of sint8([-128, 127])
   template <typename Ti>
-  void range_check(std::vector<Ti> const& v) {
+  void range_check(std::vector<Ti> const& v)
+  {
     std::for_each(v.begin(), v.end(), [](Ti i) {
       ASSERT_GE(static_cast<int>(i), -128);
       ASSERT_LT(static_cast<int>(i), 128);
@@ -101,7 +104,8 @@ using Types = testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, c
 TYPED_TEST_CASE(ScanTest, Types);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(ScanTest, Min) {
+TYPED_TEST(ScanTest, Min)
+{
   std::vector<int> v({123, 64, 63, 99, -5, 123, -16, -120, -111});
   std::vector<int> exact;
   int acc(v[0]);
@@ -114,7 +118,8 @@ TYPED_TEST(ScanTest, Min) {
   this->scan_test(v, exact, GDF_SCAN_MIN, true);
 }
 
-TYPED_TEST(ScanTest, Max) {
+TYPED_TEST(ScanTest, Max)
+{
   std::vector<int> v({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
 
   std::vector<int> exact;
@@ -128,7 +133,8 @@ TYPED_TEST(ScanTest, Max) {
   this->scan_test(v, exact, GDF_SCAN_MAX, true);
 }
 
-TYPED_TEST(ScanTest, Product) {
+TYPED_TEST(ScanTest, Product)
+{
   std::vector<int> v({5, -1, 1, 3, -2, 4});
 
   std::vector<int> exact;
@@ -141,7 +147,8 @@ TYPED_TEST(ScanTest, Product) {
   this->scan_test(v, exact, GDF_SCAN_PRODUCT, true);
 }
 
-TYPED_TEST(ScanTest, Sum) {
+TYPED_TEST(ScanTest, Sum)
+{
   std::vector<int> v({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
 
   std::vector<int> exact;

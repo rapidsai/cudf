@@ -18,8 +18,8 @@
 
 #include "cudf/cudf.h"
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Types of unary operations that can be performed on data.
  */

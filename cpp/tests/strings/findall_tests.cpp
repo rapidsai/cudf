@@ -25,9 +25,11 @@
 #include <gmock/gmock.h>
 #include <vector>
 
-struct StringsFindallTests : public cudf::test::BaseFixture {};
+struct StringsFindallTests : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsFindallTests, FindallTest) {
+TEST_F(StringsFindallTests, FindallTest)
+{
   std::vector<const char*> h_strings{
     "First Last", "Joe Schmoe", "John Smith", "Jane Smith", "Beyonce", "Sting", nullptr, ""};
 
@@ -74,7 +76,8 @@ TEST_F(StringsFindallTests, FindallTest) {
   cudf::test::expect_tables_equal(*results, expected);
 }
 
-TEST_F(StringsFindallTests, MediumRegex) {
+TEST_F(StringsFindallTests, MediumRegex)
+{
   // This results in 15 regex instructions and falls in the 'medium' range.
   std::string medium_regex = "(\\w+) (\\w+) (\\d+)";
 
@@ -103,7 +106,8 @@ TEST_F(StringsFindallTests, MediumRegex) {
   cudf::test::expect_columns_equal(results->get_column(1), expected2);
 }
 
-TEST_F(StringsFindallTests, LargeRegex) {
+TEST_F(StringsFindallTests, LargeRegex)
+{
   // This results in 115 regex instructions and falls in the 'large' range.
   std::string large_regex =
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "

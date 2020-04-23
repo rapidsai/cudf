@@ -25,7 +25,8 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-__global__ void gpu_atomic_test(T* result, T* data, size_t size) {
+__global__ void gpu_atomic_test(T* result, T* data, size_t size)
+{
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;
 
@@ -40,7 +41,8 @@ __global__ void gpu_atomic_test(T* result, T* data, size_t size) {
 }
 
 template <typename T, typename BinaryOp>
-__device__ T atomic_op(T* addr, T const& value, BinaryOp op) {
+__device__ T atomic_op(T* addr, T const& value, BinaryOp op)
+{
   T old_value = *addr;
   T assumed;
 
@@ -55,7 +57,8 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op) {
 }
 
 template <typename T>
-__global__ void gpu_atomicCAS_test(T* result, T* data, size_t size) {
+__global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
+{
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;
 
@@ -70,12 +73,14 @@ __global__ void gpu_atomicCAS_test(T* result, T* data, size_t size) {
 }
 
 template <typename T>
-typename std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs) {
+typename std::enable_if_t<!cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs)
+{
   return std::accumulate(xs.begin(), xs.end(), T{0});
 }
 
 template <typename T>
-typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs) {
+typename std::enable_if_t<cudf::is_timestamp<T>(), T> accumulate(std::vector<T> const& xs)
+{
   auto ys = std::vector<typename T::rep>(xs.size());
   std::transform(
     xs.begin(), xs.end(), ys.begin(), [](T const& ts) { return ts.time_since_epoch().count(); });
@@ -87,7 +92,8 @@ struct AtomicsTest : public cudf::test::BaseFixture {
   void atomic_test(std::vector<int> const& v_input,
                    bool is_cas_test,
                    int block_size = 0,
-                   int grid_size  = 1) {
+                   int grid_size  = 1)
+  {
     size_t vec_size = v_input.size();
 
     // use transform from std::vector<int> instead.
@@ -139,7 +145,8 @@ struct AtomicsTest : public cudf::test::BaseFixture {
 TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypes);
 
 // tests for atomicAdd/Min/Max
-TYPED_TEST(AtomicsTest, atomicOps) {
+TYPED_TEST(AtomicsTest, atomicOps)
+{
   bool is_cas_test = false;
   std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
   this->atomic_test(input_array, is_cas_test);
@@ -149,7 +156,8 @@ TYPED_TEST(AtomicsTest, atomicOps) {
 }
 
 // tests for atomicCAS
-TYPED_TEST(AtomicsTest, atomicCAS) {
+TYPED_TEST(AtomicsTest, atomicCAS)
+{
   bool is_cas_test = true;
   std::vector<int> input_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
   this->atomic_test(input_array, is_cas_test);
@@ -159,7 +167,8 @@ TYPED_TEST(AtomicsTest, atomicCAS) {
 }
 
 // tests for atomicAdd/Min/Max
-TYPED_TEST(AtomicsTest, atomicOpsGrid) {
+TYPED_TEST(AtomicsTest, atomicOpsGrid)
+{
   bool is_cas_test = false;
   int block_size   = 3;
   int grid_size    = 4;
@@ -172,7 +181,8 @@ TYPED_TEST(AtomicsTest, atomicOpsGrid) {
 }
 
 // tests for atomicCAS
-TYPED_TEST(AtomicsTest, atomicCASGrid) {
+TYPED_TEST(AtomicsTest, atomicCASGrid)
+{
   bool is_cas_test = true;
   int block_size   = 3;
   int grid_size    = 4;
@@ -185,7 +195,8 @@ TYPED_TEST(AtomicsTest, atomicCASGrid) {
 }
 
 // tests for large array
-TYPED_TEST(AtomicsTest, atomicOpsRandom) {
+TYPED_TEST(AtomicsTest, atomicOpsRandom)
+{
   bool is_cas_test = false;
   int block_size   = 256;
   int grid_size    = 64;
@@ -199,7 +210,8 @@ TYPED_TEST(AtomicsTest, atomicOpsRandom) {
   this->atomic_test(input_array, is_cas_test, block_size, grid_size);
 }
 
-TYPED_TEST(AtomicsTest, atomicCASRandom) {
+TYPED_TEST(AtomicsTest, atomicCASRandom)
+{
   bool is_cas_test = true;
   int block_size   = 256;
   int grid_size    = 64;
@@ -214,7 +226,8 @@ TYPED_TEST(AtomicsTest, atomicCASRandom) {
 }
 
 template <typename T>
-__global__ void gpu_atomic_bitwiseOp_test(T* result, T* data, size_t size) {
+__global__ void gpu_atomic_bitwiseOp_test(T* result, T* data, size_t size)
+{
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;
 
@@ -230,7 +243,8 @@ __global__ void gpu_atomic_bitwiseOp_test(T* result, T* data, size_t size) {
 
 template <typename T>
 struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
-  void atomic_test(std::vector<uint64_t> const& v_input, int block_size = 0, int grid_size = 1) {
+  void atomic_test(std::vector<uint64_t> const& v_input, int block_size = 0, int grid_size = 1)
+  {
     size_t vec_size = v_input.size();
     std::vector<T> v(vec_size);
     std::transform(v_input.begin(), v_input.end(), v.begin(), [](int x) {
@@ -280,7 +294,8 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
     EXPECT_EQ(host_result[5], exact[2]) << "atomicXor test(2) failed";
   }
 
-  void print_exact(const T* v, const char* msg) {
+  void print_exact(const T* v, const char* msg)
+  {
     std::cout << std::hex << std::showbase;
     std::cout << "The " << msg << " = {" << +v[0] << ", " << +v[1] << ", " << +v[2] << "}"
               << std::endl;
@@ -292,7 +307,8 @@ using BitwiseOpTestingTypes =
 
 TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
 
-TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps) {
+TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
+{
   {  // test for AND, XOR
     std::vector<uint64_t> input_array(
       {0xfcfcfcfcfcfcfc7f, 0x7f7f7f7f7f7ffc, 0xfffddffddffddfdf, 0x7f7f7f7f7f7ffc});

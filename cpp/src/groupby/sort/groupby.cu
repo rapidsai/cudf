@@ -37,11 +37,14 @@
 #include <unordered_map>
 #include <utility>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 /**
  * @brief Functor to dispatch aggregation with
  *
@@ -58,10 +61,14 @@ struct store_result_functor {
                        experimental::detail::result_cache& cache,
                        cudaStream_t stream,
                        rmm::mr::device_memory_resource* mr)
-    : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr) {}
+    : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr)
+  {
+  }
 
   template <aggregation::Kind k>
-  void operator()(std::unique_ptr<aggregation> const& agg) {}
+  void operator()(std::unique_ptr<aggregation> const& agg)
+  {
+  }
 
  private:
   /**
@@ -70,7 +77,8 @@ struct store_result_functor {
    * Computes the grouped values from @p values on first invocation and returns
    * the stored result on subsequent invocation
    */
-  column_view get_grouped_values() {
+  column_view get_grouped_values()
+  {
     // TODO (dm): After implementing single pass mutli-agg, explore making a
     //            cache of all grouped value columns rather than one at a time
     if (grouped_values)
@@ -90,7 +98,8 @@ struct store_result_functor {
    * Computes the grouped and sorted (within each group) values from @p values
    * on first invocation and returns the stored result on subsequent invocation
    */
-  column_view get_sorted_values() {
+  column_view get_sorted_values()
+  {
     if (not sorted_values) sorted_values = helper.sorted_values(values);
     return sorted_values->view();
   };
@@ -110,7 +119,8 @@ struct store_result_functor {
 
 template <>
 void store_result_functor::operator()<aggregation::COUNT_VALID>(
-  std::unique_ptr<aggregation> const& agg) {
+  std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -124,7 +134,8 @@ void store_result_functor::operator()<aggregation::COUNT_VALID>(
 
 template <>
 void store_result_functor::operator()<aggregation::COUNT_ALL>(
-  std::unique_ptr<aggregation> const& agg) {
+  std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -132,7 +143,8 @@ void store_result_functor::operator()<aggregation::COUNT_ALL>(
 }
 
 template <>
-void store_result_functor::operator()<aggregation::SUM>(std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::SUM>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -142,8 +154,8 @@ void store_result_functor::operator()<aggregation::SUM>(std::unique_ptr<aggregat
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMAX>(
-  std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::ARGMAX>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -157,8 +169,8 @@ void store_result_functor::operator()<aggregation::ARGMAX>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMIN>(
-  std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::ARGMIN>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -172,7 +184,8 @@ void store_result_functor::operator()<aggregation::ARGMIN>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MIN>(std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::MIN>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
@@ -202,7 +215,8 @@ void store_result_functor::operator()<aggregation::MIN>(std::unique_ptr<aggregat
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MAX>(std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::MAX>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
@@ -232,7 +246,8 @@ void store_result_functor::operator()<aggregation::MAX>(std::unique_ptr<aggregat
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MEAN>(std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::MEAN>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto sum_agg   = make_sum_aggregation();
@@ -256,7 +271,8 @@ void store_result_functor::operator()<aggregation::MEAN>(std::unique_ptr<aggrega
 
 template <>
 void store_result_functor::operator()<aggregation::VARIANCE>(
-  std::unique_ptr<aggregation> const& agg) {
+  std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto var_agg   = static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
@@ -278,7 +294,8 @@ void store_result_functor::operator()<aggregation::VARIANCE>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::STD>(std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::STD>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto std_agg = static_cast<experimental::detail::std_var_aggregation const*>(agg.get());
@@ -293,7 +310,8 @@ void store_result_functor::operator()<aggregation::STD>(std::unique_ptr<aggregat
 
 template <>
 void store_result_functor::operator()<aggregation::QUANTILE>(
-  std::unique_ptr<aggregation> const& agg) {
+  std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
@@ -313,8 +331,8 @@ void store_result_functor::operator()<aggregation::QUANTILE>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MEDIAN>(
-  std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::MEDIAN>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
@@ -333,8 +351,8 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::NUNIQUE>(
-  std::unique_ptr<aggregation> const& agg) {
+void store_result_functor::operator()<aggregation::NUNIQUE>(std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto nunique_agg = static_cast<experimental::detail::nunique_aggregation const*>(agg.get());
@@ -351,7 +369,8 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
 
 template <>
 void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
-  std::unique_ptr<aggregation> const& agg) {
+  std::unique_ptr<aggregation> const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto nth_element_agg =
@@ -384,7 +403,8 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
   std::vector<aggregation_request> const& requests,
   cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count

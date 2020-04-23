@@ -24,15 +24,18 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 struct dispatch_nan_to_null {
   template <typename T>
   std::enable_if_t<std::is_floating_point<T>::value,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
-  operator()(column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  operator()(column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
     auto input_device_view_ptr = column_device_view::create(input, stream);
     auto input_device_view     = *input_device_view_ptr;
 
@@ -69,13 +72,15 @@ struct dispatch_nan_to_null {
   template <typename T>
   std::enable_if_t<!std::is_floating_point<T>::value,
                    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>>
-  operator()(column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  operator()(column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  {
     CUDF_FAIL("Input column can't be a non-floating type");
   }
 };
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  column_view const& input, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
   if (input.size() == 0) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   return cudf::experimental::type_dispatcher(
@@ -85,7 +90,8 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
 }  // namespace detail
 
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> nans_to_nulls(
-  column_view const& input, rmm::mr::device_memory_resource* mr) {
+  column_view const& input, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::nans_to_nulls(input, mr);
 }

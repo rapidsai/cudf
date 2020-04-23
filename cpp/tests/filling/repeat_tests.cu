@@ -34,7 +34,8 @@
 
 template <typename T>
 class RepeatTypedTestFixture : public cudf::test::BaseFixture,
-                               cudf::test::UniformRandomGenerator<cudf::size_type> {
+                               cudf::test::UniformRandomGenerator<cudf::size_type>
+{
  public:
   RepeatTypedTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
@@ -43,7 +44,8 @@ class RepeatTypedTestFixture : public cudf::test::BaseFixture,
 
 TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount) {
+TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
+{
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
@@ -72,7 +74,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount) {
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount) {
+TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
+{
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
@@ -106,7 +109,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount) {
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-TYPED_TEST(RepeatTypedTestFixture, RepeatNullable) {
+TYPED_TEST(RepeatTypedTestFixture, RepeatNullable)
+{
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
@@ -147,7 +151,8 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatNullable) {
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput) {
+TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
+{
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
@@ -168,14 +173,16 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput) {
 }
 
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
-                                cudf::test::UniformRandomGenerator<cudf::size_type> {
+                                cudf::test::UniformRandomGenerator<cudf::size_type>
+{
  public:
   RepeatStringTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
   cudf::size_type repeat_count() { return this->generate(); }
 };
 
-TEST_F(RepeatStringTestFixture, RepeatNullable) {
+TEST_F(RepeatStringTestFixture, RepeatNullable)
+{
   constexpr cudf::size_type num_values{10};
 
   std::vector<std::string> input_values(num_values);
@@ -215,7 +222,8 @@ TEST_F(RepeatStringTestFixture, RepeatNullable) {
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-TEST_F(RepeatStringTestFixture, ZeroSizeInput) {
+TEST_F(RepeatStringTestFixture, ZeroSizeInput)
+{
   std::vector<std::string> input_values{};
   auto input = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 
@@ -231,9 +239,12 @@ TEST_F(RepeatStringTestFixture, ZeroSizeInput) {
   cudf::test::expect_columns_equal(p_ret->view().column(0), expected);
 }
 
-class RepeatErrorTestFixture : public cudf::test::BaseFixture {};
+class RepeatErrorTestFixture : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(RepeatErrorTestFixture, LengthMismatch) {
+TEST_F(RepeatErrorTestFixture, LengthMismatch)
+{
   auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
 
@@ -246,7 +257,8 @@ TEST_F(RepeatErrorTestFixture, LengthMismatch) {
   EXPECT_THROW(auto p_ret = cudf::experimental::repeat(input_table, count), cudf::logic_error);
 }
 
-TEST_F(RepeatErrorTestFixture, CountHasNulls) {
+TEST_F(RepeatErrorTestFixture, CountHasNulls)
+{
   auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
 
@@ -261,7 +273,8 @@ TEST_F(RepeatErrorTestFixture, CountHasNulls) {
   EXPECT_THROW(auto ret = cudf::experimental::repeat(input_table, count), cudf::logic_error);
 }
 
-TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow) {
+TEST_F(RepeatErrorTestFixture, NegativeCountOrOverflow)
+{
   auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
 

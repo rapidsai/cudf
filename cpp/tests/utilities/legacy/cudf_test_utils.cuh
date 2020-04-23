@@ -69,7 +69,8 @@ template <typename Element>
 void print_typed_column(const Element* __restrict__ col_data,
                         cudf::valid_type* __restrict__ validity_mask,
                         const size_t size_in_elements,
-                        unsigned min_element_print_width = 1) {
+                        unsigned min_element_print_width = 1)
+{
   static_assert(not std::is_same<Element, void>::value,
                 "Can't print void* columns - a concrete type is needed");
   if (col_data == nullptr) {
@@ -118,7 +119,8 @@ void print_typed_column(const Element* __restrict__ col_data,
  * characters when printed.
  */
 template <typename Element>
-inline void print_typed_column(const gdf_column& column, unsigned min_element_print_width = 1) {
+inline void print_typed_column(const gdf_column& column, unsigned min_element_print_width = 1)
+{
   print_typed_column<Element>(
     static_cast<const Element*>(column.data), column.valid, column.size, min_element_print_width);
 }
@@ -161,7 +163,8 @@ void print_valid_data(const cudf::valid_type* validity_mask,
 template <typename ColumnType>
 gdf_col_pointer create_gdf_column(
   std::vector<ColumnType> const& host_vector,
-  std::vector<cudf::valid_type> const& valid_vector = std::vector<cudf::valid_type>()) {
+  std::vector<cudf::valid_type> const& valid_vector = std::vector<cudf::valid_type>())
+{
   // Get the corresponding gdf_dtype for the ColumnType
   gdf_dtype gdf_col_type{cudf::gdf_dtype_of<ColumnType>()};
 
@@ -214,7 +217,8 @@ gdf_col_pointer create_gdf_column(
 template <typename T, typename valid_initializer_t>
 gdf_col_pointer init_gdf_column(std::vector<T> data,
                                 size_t col_index,
-                                valid_initializer_t bit_initializer) {
+                                valid_initializer_t bit_initializer)
+{
   const size_t num_rows  = data.size();
   const size_t num_masks = gdf_valid_allocation_size(num_rows);
 
@@ -235,7 +239,8 @@ template <typename valid_initializer_t, std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type convert_tuple_to_gdf_columns(
   std::vector<gdf_col_pointer>& gdf_columns,
   std::tuple<std::vector<Tp>...>& t,
-  valid_initializer_t bit_initializer) {
+  valid_initializer_t bit_initializer)
+{
   // bottom of compile-time recursion
   // purposely empty...
 }
@@ -244,7 +249,8 @@ template <typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if < I<sizeof...(Tp), void>::type convert_tuple_to_gdf_columns(
                                      std::vector<gdf_col_pointer>& gdf_columns,
                                      std::tuple<std::vector<Tp>...>& t,
-                                     valid_initializer_t bit_initializer) {
+                                     valid_initializer_t bit_initializer)
+{
   const size_t column = I;
 
   // Creates a gdf_column for the current vector and pushes it onto
@@ -258,7 +264,8 @@ template <typename valid_initializer_t, std::size_t I = 0, typename... Tp>
 // Converts a tuple of host vectors into a vector of gdf_columns
 template <typename valid_initializer_t, typename... Tp>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...>& host_columns,
-                                                    valid_initializer_t bit_initializer) {
+                                                    valid_initializer_t bit_initializer)
+{
   std::vector<gdf_col_pointer> gdf_columns;
   convert_tuple_to_gdf_columns(gdf_columns, host_columns, bit_initializer);
   return gdf_columns;
@@ -267,7 +274,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 // Overload for default initialization of validity bitmasks which
 // sets every element to valid
 template <typename... Tp>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...>& host_columns) {
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...>& host_columns)
+{
   return initialize_gdf_columns(host_columns,
                                 [](const size_t row, const size_t col) { return true; });
 }
@@ -276,7 +284,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 // and a validity mask initializer function
 template <typename T, typename valid_initializer_t>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector<std::vector<T>> columns,
-                                                    valid_initializer_t bit_initializer) {
+                                                    valid_initializer_t bit_initializer)
+{
   std::vector<gdf_col_pointer> gdf_columns;
 
   size_t col = 0;
@@ -291,7 +300,8 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector<std::vector<T>> 
 }
 
 template <typename T>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector<std::vector<T>> columns) {
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::vector<std::vector<T>> columns)
+{
   return initialize_gdf_columns(columns, [](size_t row, size_t col) { return true; });
 }
 

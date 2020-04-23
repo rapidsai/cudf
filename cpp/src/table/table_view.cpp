@@ -23,12 +23,13 @@
 #include <cassert>
 #include <vector>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 template <typename ColumnView>
-table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols} {
+table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
+{
   if (num_columns() > 0) {
     std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
       CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
@@ -40,7 +41,8 @@ table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols
 }
 
 template <typename ViewType>
-auto concatenate_column_views(std::vector<ViewType> const& views) {
+auto concatenate_column_views(std::vector<ViewType> const& views)
+{
   using ColumnView = typename ViewType::ColumnView;
   std::vector<ColumnView> concat_cols;
   for (auto& view : views) { concat_cols.insert(concat_cols.end(), view.begin(), view.end()); }
@@ -48,7 +50,8 @@ auto concatenate_column_views(std::vector<ViewType> const& views) {
 }
 
 template <typename ColumnView>
-ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const {
+ColumnView const& table_view_base<ColumnView>::column(size_type column_index) const
+{
   return _columns.at(column_index);
 }
 
@@ -60,7 +63,8 @@ template class table_view_base<mutable_column_view>;
 }  // namespace detail
 
 // Returns a table_view with set of specified columns
-table_view table_view::select(std::vector<size_type> const& column_indices) const {
+table_view table_view::select(std::vector<size_type> const& column_indices) const
+{
   std::vector<column_view> columns(column_indices.size());
   std::transform(column_indices.begin(), column_indices.end(), columns.begin(), [this](auto index) {
     return this->column(index);
@@ -69,15 +73,20 @@ table_view table_view::select(std::vector<size_type> const& column_indices) cons
 }
 
 // Convert mutable view to immutable view
-mutable_table_view::operator table_view() {
+mutable_table_view::operator table_view()
+{
   std::vector<column_view> cols{begin(), end()};
   return table_view{cols};
 }
 
 table_view::table_view(std::vector<table_view> const& views)
-  : table_view{concatenate_column_views(views)} {}
+  : table_view{concatenate_column_views(views)}
+{
+}
 
 mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const& views)
-  : mutable_table_view{concatenate_column_views(views)} {}
+  : mutable_table_view{concatenate_column_views(views)}
+{
+}
 
 }  // namespace cudf

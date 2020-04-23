@@ -43,9 +43,10 @@
 
 using bit_mask::bit_mask_t;
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value> * = nullptr>
   void operator()(table const *source_table,
@@ -54,7 +55,8 @@ struct dispatch_map_type {
                   bool check_bounds,
                   bool ignore_out_of_bounds,
                   bool sync_nvstring_category = false,
-                  bool allow_negative_indices = false) {
+                  bool allow_negative_indices = false)
+  {
     map_type const *typed_gather_map = static_cast<map_type const *>(gather_map.data);
 
     if (check_bounds) {
@@ -97,7 +99,8 @@ struct dispatch_map_type {
                   bool check_bounds,
                   bool ignore_out_of_bounds,
                   bool sync_nvstring_category = false,
-                  bool allow_negative_indices = false) {
+                  bool allow_negative_indices = false)
+  {
     CUDF_FAIL("Gather map must be an integral type.");
   }
 };
@@ -108,7 +111,8 @@ void gather(table const *source_table,
             bool check_bounds,
             bool ignore_out_of_bounds,
             bool sync_nvstring_category,
-            bool allow_negative_indices) {
+            bool allow_negative_indices)
+{
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -138,7 +142,8 @@ void gather(table const *source_table,
             bool check_bounds,
             bool ignore_out_of_bounds,
             bool sync_nvstring_category,
-            bool allow_negative_indices) {
+            bool allow_negative_indices)
+{
   gdf_column gather_map_column{};
   gdf_column_view(&gather_map_column,
                   const_cast<cudf::size_type *>(gather_map),
@@ -156,7 +161,8 @@ void gather(table const *source_table,
 
 }  // namespace detail
 
-table gather(table const *source_table, gdf_column const &gather_map, bool check_bounds) {
+table gather(table const *source_table, gdf_column const &gather_map, bool check_bounds)
+{
   table destination_table = cudf::allocate_like(*source_table, gather_map.size);
   detail::gather(source_table, gather_map, &destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, destination_table);
@@ -166,7 +172,8 @@ table gather(table const *source_table, gdf_column const &gather_map, bool check
 void gather(table const *source_table,
             gdf_column const &gather_map,
             table *destination_table,
-            bool check_bounds) {
+            bool check_bounds)
+{
   detail::gather(source_table, gather_map, destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }
@@ -174,7 +181,8 @@ void gather(table const *source_table,
 void gather(table const *source_table,
             cudf::size_type const gather_map[],
             table *destination_table,
-            bool check_bounds) {
+            bool check_bounds)
+{
   detail::gather(source_table, gather_map, destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }

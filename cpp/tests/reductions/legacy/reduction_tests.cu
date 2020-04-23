@@ -35,7 +35,8 @@
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 template <typename T>
-std::vector<T> convert_values(std::vector<int> const& int_values) {
+std::vector<T> convert_values(std::vector<int> const& int_values)
+{
   std::vector<T> v(int_values.size());
   std::transform(
     int_values.begin(), int_values.end(), v.begin(), [](int x) { return static_cast<T>(x); });
@@ -44,7 +45,8 @@ std::vector<T> convert_values(std::vector<int> const& int_values) {
 
 template <typename T>
 cudf::test::column_wrapper<T> construct_null_column(std::vector<T> const& values,
-                                                    std::vector<bool> const& bools) {
+                                                    std::vector<bool> const& bools)
+{
   if (values.size() > bools.size()) { throw std::logic_error("input vector size mismatch."); }
   return cudf::test::column_wrapper<T>(
     values.size(),
@@ -55,7 +57,8 @@ cudf::test::column_wrapper<T> construct_null_column(std::vector<T> const& values
 template <typename T>
 std::vector<T> replace_nulls(std::vector<T> const& values,
                              std::vector<bool> const& bools,
-                             T identity) {
+                             T identity)
+{
   std::vector<T> v(values.size());
   std::transform(values.begin(), values.end(), bools.begin(), v.begin(), [identity](T x, bool b) {
     return (b) ? x : identity;
@@ -82,7 +85,8 @@ struct ReductionTest : public GdfTest {
                       bool succeeded_condition,
                       cudf::reduction::operators op,
                       gdf_dtype output_dtype = N_GDF_TYPES,
-                      cudf::size_type ddof   = 1) {
+                      cudf::size_type ddof   = 1)
+  {
     const gdf_column* underlying_column = col.get();
     thrust::device_vector<T_out> dev_result(1);
 
@@ -118,7 +122,8 @@ using AllTypes = testing::Types<int8_t,
 TYPED_TEST_CASE(ReductionTest, AllTypes);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(ReductionTest, MinMax) {
+TYPED_TEST(ReductionTest, MinMax)
+{
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
@@ -150,7 +155,8 @@ TYPED_TEST(ReductionTest, MinMax) {
   this->reduction_test(col_nulls, expected_max_null_result, result_error, cudf::reduction::MAX);
 }
 
-TYPED_TEST(ReductionTest, Product) {
+TYPED_TEST(ReductionTest, Product)
+{
   using T = TypeParam;
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
@@ -178,7 +184,8 @@ TYPED_TEST(ReductionTest, Product) {
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::reduction::PRODUCT);
 }
 
-TYPED_TEST(ReductionTest, Sum) {
+TYPED_TEST(ReductionTest, Sum)
+{
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
@@ -199,7 +206,8 @@ TYPED_TEST(ReductionTest, Sum) {
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::reduction::SUM);
 }
 
-TYPED_TEST(ReductionTest, SumOfSquare) {
+TYPED_TEST(ReductionTest, SumOfSquare)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
@@ -232,7 +240,8 @@ struct ReductionAnyAllTest : public ReductionTest<cudf::bool8> {
   ~ReductionAnyAllTest() {}
 };
 
-TEST_F(ReductionAnyAllTest, AnyAllTrueTrue) {
+TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
+{
   using T = cudf::bool8;
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
@@ -256,7 +265,8 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue) {
   this->reduction_test(col_nulls, expected, result_error, cudf::reduction::ALL);
 }
 
-TEST_F(ReductionAnyAllTest, AnyAllFalseFalse) {
+TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
+{
   using T = cudf::bool8;
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
@@ -292,7 +302,8 @@ using MultiStepReductionTypes = testing::Types<int8_t, int16_t, int32_t, int64_t
 
 TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
 
-TYPED_TEST(MultiStepReductionTest, Mean) {
+TYPED_TEST(MultiStepReductionTest, Mean)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
@@ -317,7 +328,8 @@ TYPED_TEST(MultiStepReductionTest, Mean) {
   this->reduction_test(col_nulls, expected_value_nulls, true, cudf::reduction::MEAN, GDF_FLOAT64);
 }
 
-TYPED_TEST(MultiStepReductionTest, var_std) {
+TYPED_TEST(MultiStepReductionTest, var_std)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
@@ -368,7 +380,8 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
   void reduction_error_check(cudf::test::column_wrapper<T>& col,
                              bool succeeded_condition,
                              cudf::reduction::operators op,
-                             gdf_dtype output_dtype) {
+                             gdf_dtype output_dtype)
+  {
     const gdf_column* underlying_column = col.get();
     auto statement = [&]() { cudf::reduce(underlying_column, op, output_dtype); };
 
@@ -382,7 +395,8 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
 
 TYPED_TEST_CASE(ReductionMultiStepErrorCheck, AllTypes);
 
-TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling) {
+TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2});
   std::vector<bool> host_bools({1, 0});
@@ -427,7 +441,8 @@ struct ReductionDtypeTest : public GdfTest {
                       bool succeeded_condition,
                       cudf::reduction::operators op,
                       gdf_dtype out_dtype,
-                      bool expected_overflow = false) {
+                      bool expected_overflow = false)
+  {
     std::vector<T_in> input_values = convert_values<T_in>(int_values);
     cudf::test::column_wrapper<T_in> const col(input_values);
 
@@ -445,7 +460,8 @@ struct ReductionDtypeTest : public GdfTest {
 };
 
 // test case for different output precision
-TEST_F(ReductionDtypeTest, different_precision) {
+TEST_F(ReductionDtypeTest, different_precision)
+{
   constexpr bool expected_overflow = true;
   std::vector<int> int_values({6, -14, 13, 109, -13, -20, 0, 98, 122, 123});
   int expected_value = std::accumulate(int_values.begin(), int_values.end(), 0);
@@ -553,10 +569,12 @@ TEST_F(ReductionDtypeTest, different_precision) {
     int_values, static_cast<int64_t>(expected_value), false, cudf::reduction::SUM, GDF_INT64);
 }
 
-struct ReductionErrorTest : public GdfTest {};
+struct ReductionErrorTest : public GdfTest {
+};
 
 // test case for empty input cases
-TEST_F(ReductionErrorTest, empty_column) {
+TEST_F(ReductionErrorTest, empty_column)
+{
   using T        = int32_t;
   auto statement = [](const gdf_column* col) {
     cudf::test::scalar_wrapper<T> result = cudf::reduce(col, cudf::reduction::SUM, GDF_INT64);
@@ -592,7 +610,8 @@ struct ReductionParamTest : public ReductionTest<double>,
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
-TEST_P(ReductionParamTest, std_var) {
+TEST_P(ReductionParamTest, std_var)
+{
   int ddof = GetParam();
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});

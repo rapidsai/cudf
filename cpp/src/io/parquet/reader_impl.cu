@@ -34,18 +34,22 @@
 #include <array>
 #include <regex>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace parquet {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace parquet
+{
 // Import functionality that's independent of legacy code
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-namespace {
-
+namespace
+{
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
@@ -53,7 +57,8 @@ constexpr type_id to_type_id(parquet::Type physical,
                              parquet::ConvertedType logical,
                              bool strings_to_categorical,
                              type_id timestamp_type_id,
-                             int32_t decimal_scale) {
+                             int32_t decimal_scale)
+{
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -100,7 +105,8 @@ constexpr type_id to_type_id(parquet::Type physical,
 /**
  * @brief Function that translates cuDF time unit to Parquet clock frequency
  */
-constexpr int32_t to_clockrate(type_id timestamp_type_id) {
+constexpr int32_t to_clockrate(type_id timestamp_type_id)
+{
   switch (timestamp_type_id) {
     case type_id::TIMESTAMP_SECONDS: return 1;
     case type_id::TIMESTAMP_MILLISECONDS: return 1000;
@@ -114,7 +120,8 @@ constexpr int32_t to_clockrate(type_id timestamp_type_id) {
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
-T required_bits(uint32_t max_level) {
+T required_bits(uint32_t max_level)
+{
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
@@ -122,7 +129,8 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,
                                                      int8_t converted,
-                                                     int32_t length) {
+                                                     int32_t length)
+{
   int32_t type_width = (physical == parquet::FIXED_LEN_BYTE_ARRAY) ? length : 0;
   int32_t clock_rate = 0;
   if (column_type_id == type_id::INT8) {
@@ -149,7 +157,8 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
-  explicit metadata(datasource *source) {
+  explicit metadata(datasource *source)
+  {
     constexpr auto header_len = sizeof(file_header_s);
     constexpr auto ender_len  = sizeof(file_ender_s);
 
@@ -174,13 +183,15 @@ struct metadata : public FileMetaData {
   inline int get_num_row_groups() const { return row_groups.size(); }
   inline int get_num_columns() const { return row_groups[0].columns.size(); }
 
-  std::string get_column_name(const std::vector<std::string> &path_in_schema) {
+  std::string get_column_name(const std::vector<std::string> &path_in_schema)
+  {
     std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
     for (size_t i = 1; i < path_in_schema.size(); i++) { s += "." + path_in_schema[i]; }
     return s;
   }
 
-  std::vector<std::string> get_column_names() {
+  std::vector<std::string> get_column_names()
+  {
     std::vector<std::string> all_names;
     if (row_groups.size() != 0) {
       for (const auto &chunk : row_groups[0].columns) {
@@ -199,7 +210,8 @@ struct metadata : public FileMetaData {
    *
    * @return comma-separated index column names in quotes
    */
-  std::string get_pandas_index() {
+  std::string get_pandas_index()
+  {
     auto it = std::find_if(key_value_metadata.begin(),
                            key_value_metadata.end(),
                            [](const auto &item) { return item.key == "pandas"; });
@@ -231,7 +243,8 @@ struct metadata : public FileMetaData {
    *
    * @param names List of column names to load, where index column name(s) will be added
    */
-  void add_pandas_index_names(std::vector<std::string> &names) {
+  void add_pandas_index_names(std::vector<std::string> &names)
+  {
     auto str = get_pandas_index();
     if (str.length() != 0) {
       std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
@@ -263,7 +276,8 @@ struct metadata : public FileMetaData {
                          size_type max_rowgroup_count,
                          const size_type *row_group_indices,
                          size_type &row_start,
-                         size_type &row_count) {
+                         size_type &row_count)
+  {
     std::vector<std::pair<size_type, size_t>> selection;
 
     if (row_group_indices) {
@@ -312,7 +326,8 @@ struct metadata : public FileMetaData {
    *
    * @return List of column names
    */
-  auto select_columns(std::vector<std::string> use_names, bool include_index) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index)
+  {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto names = get_column_names();
@@ -341,7 +356,8 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
                                       size_t begin_chunk,
                                       size_t end_chunk,
                                       const std::vector<size_t> &column_chunk_offsets,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   // Transfer chunk data, coalescing adjacent chunks
   for (size_t chunk = begin_chunk; chunk < end_chunk;) {
     const size_t io_offset   = column_chunk_offsets[chunk];
@@ -376,7 +392,8 @@ void reader::impl::read_column_chunks(std::vector<rmm::device_buffer> &page_data
 }
 
 size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(
@@ -395,7 +412,8 @@ size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> 
 
 void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                        hostdevice_vector<gpu::PageInfo> &pages,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info     = pages.device_ptr(page_count);
@@ -413,7 +431,8 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &
 rmm::device_buffer reader::impl::decompress_page_data(
   hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
   hostdevice_vector<gpu::PageInfo> &pages,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   auto for_each_codec_page = [&](parquet::Compression codec, const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
       const auto page_stride = chunks[c].max_num_pages;
@@ -529,7 +548,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
                                     size_t total_rows,
                                     const std::vector<int> &chunk_map,
                                     std::vector<column_buffer> &out_buffers,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc &chunk) {
     return (chunk.data_type & 0x7) == BYTE_ARRAY && chunk.num_dict_pages > 0;
   };
@@ -587,7 +607,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 reader::impl::impl(std::unique_ptr<datasource> source,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr) {
+  : _source(std::move(source)), _mr(mr)
+{
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 
@@ -606,7 +627,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type row_group,
                                        size_type max_rowgroup_count,
                                        const size_type *row_group_indices,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
 
@@ -776,47 +798,55 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 reader::reader(std::string filepath,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(const char *buffer,
                size_t length,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+{
+}
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream)
+{
   return _impl->read(0, -1, -1, -1, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_row_group(size_type row_group,
                                            size_type row_group_count,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+{
   return _impl->read(0, -1, row_group, row_group_count, nullptr, stream);
 }
 
 // Forward to implementation
 table_with_metadata reader::read_row_groups(const std::vector<size_type> &row_group_list,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream)
+{
   return _impl->read(
     0, -1, -1, static_cast<size_type>(row_group_list.size()), row_group_list.data(), stream);
 }
 
 // Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows,
-                                      size_type num_rows,
-                                      cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
+{
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, -1, -1, nullptr, stream);
 }
 

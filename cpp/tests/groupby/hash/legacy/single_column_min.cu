@@ -58,7 +58,8 @@ using column_wrapper = cudf::test::column_wrapper<T>;
 
 TYPED_TEST_CASE(SingleColumnMin, TestingTypes);
 
-TYPED_TEST(SingleColumnMin, OneGroupNoNulls) {
+TYPED_TEST(SingleColumnMin, OneGroupNoNulls)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -71,7 +72,8 @@ TYPED_TEST(SingleColumnMin, OneGroupNoNulls) {
     column_wrapper<ResultValue>({ResultValue(0)}));
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupAllNullKeys) {
+TYPED_TEST(SingleColumnMin, OneGroupAllNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -87,7 +89,8 @@ TYPED_TEST(SingleColumnMin, OneGroupAllNullKeys) {
     column_wrapper<ResultValue>{});
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupAllNullValues) {
+TYPED_TEST(SingleColumnMin, OneGroupAllNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -102,7 +105,8 @@ TYPED_TEST(SingleColumnMin, OneGroupAllNullValues) {
     column_wrapper<ResultValue>(1, true));
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupEvenNullKeys) {
+TYPED_TEST(SingleColumnMin, OneGroupEvenNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -116,7 +120,8 @@ TYPED_TEST(SingleColumnMin, OneGroupEvenNullKeys) {
     column_wrapper<ResultValue>({Value(1)}));
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnMin, OneGroupOddNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -130,7 +135,8 @@ TYPED_TEST(SingleColumnMin, OneGroupOddNullKeys) {
     column_wrapper<ResultValue>({Value(0)}));
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupEvenNullValues) {
+TYPED_TEST(SingleColumnMin, OneGroupEvenNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -145,7 +151,8 @@ TYPED_TEST(SingleColumnMin, OneGroupEvenNullValues) {
     column_wrapper<ResultValue>({Value(1)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, OneGroupOddNullValues) {
+TYPED_TEST(SingleColumnMin, OneGroupOddNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
@@ -160,7 +167,8 @@ TYPED_TEST(SingleColumnMin, OneGroupOddNullValues) {
     column_wrapper<ResultValue>({Value(0)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsNoNulls) {
+TYPED_TEST(SingleColumnMin, FourGroupsNoNulls)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -176,7 +184,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsNoNulls) {
     column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsEvenNullKeys) {
+TYPED_TEST(SingleColumnMin, FourGroupsEvenNullKeys)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -191,7 +200,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsEvenNullKeys) {
     column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsOddNullKeys) {
+TYPED_TEST(SingleColumnMin, FourGroupsOddNullKeys)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -206,7 +216,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullKeys) {
     column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValues) {
+TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValues)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -221,7 +232,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValues) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsOddNullValues) {
+TYPED_TEST(SingleColumnMin, FourGroupsOddNullValues)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -236,7 +248,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullValues) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -252,7 +265,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsEvenNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>({R(1), R(3), R(5), R(7)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesOddNullKeys) {
+TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesOddNullKeys)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -268,7 +282,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesOddNullKeys) {
     column_wrapper<ResultValue>({R(0), R(2), R(4), R(6)}, [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesEvenNullKeys) {
+TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesEvenNullKeys)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -286,7 +301,8 @@ TYPED_TEST(SingleColumnMin, FourGroupsOddNullValuesEvenNullKeys) {
     column_wrapper<ResultValue>(4, true));
 }
 
-TYPED_TEST(SingleColumnMin, EightKeysAllUnique) {
+TYPED_TEST(SingleColumnMin, EightKeysAllUnique)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -300,7 +316,8 @@ TYPED_TEST(SingleColumnMin, EightKeysAllUnique) {
     column_wrapper<ResultValue>(8, [](auto index) { return R(index); }));
 }
 
-TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenKeysNull) {
+TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenKeysNull)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -315,7 +332,8 @@ TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenKeysNull) {
     column_wrapper<ResultValue>({R(2), R(6), R(10), R(14)}));
 }
 
-TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenValuesNull) {
+TYPED_TEST(SingleColumnMin, EightKeysAllUniqueEvenValuesNull)
+{
   using Key         = typename SingleColumnMin<TypeParam>::KeyType;
   using Value       = typename SingleColumnMin<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;

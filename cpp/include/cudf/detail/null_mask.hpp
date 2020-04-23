@@ -19,10 +19,10 @@
 
 #include <vector>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @copydoc cudf::segmented_count_set_bits
  *

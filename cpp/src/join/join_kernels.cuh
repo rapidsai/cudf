@@ -22,12 +22,12 @@
 
 #include "join_common_utils.hpp"
 
-namespace cudf {
-
-namespace experimental {
-
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /* --------------------------------------------------------------------------*/
 /**
 * @brief  Adds a pair of indices to the shared memory cache
@@ -47,7 +47,8 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
                                              size_type* current_idx_shared,
                                              const int warp_id,
                                              size_type* joined_shared_l,
-                                             size_type* joined_shared_r) {
+                                             size_type* joined_shared_r)
+{
   size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
   // its guaranteed to fit into the shared cache
@@ -71,7 +72,8 @@ template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
-                                 int* error) {
+                                 int* error)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < build_table_num_rows) {
@@ -112,7 +114,8 @@ __global__ void compute_join_output_size(multimap_type multi_map,
                                          row_hash hash_probe,
                                          row_equality check_row_equality,
                                          const cudf::size_type probe_table_num_rows,
-                                         size_type* output_size) {
+                                         size_type* output_size)
+{
   // This kernel probes multiple elements in the probe_table and store the number of matches found
   // inside a register. A block reduction is used at the end to calculate the matches per thread
   // block, and atomically add to the global 'output_size'. Compared to probing one element per
@@ -196,7 +199,8 @@ __device__ void flush_output_cache(const unsigned int activemask,
                                    size_type join_shared_l[num_warps][output_cache_size],
                                    size_type join_shared_r[num_warps][output_cache_size],
                                    size_type* output_l,
-                                   size_type* output_r) {
+                                   size_type* output_r)
+{
   // count how many active threads participating here which could be less than warp_size
   int num_threads               = __popc(activemask);
   cudf::size_type output_offset = 0;
@@ -253,7 +257,8 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  cudf::size_type* current_idx,
                                  const cudf::size_type max_size,
                                  bool flip_results,
-                                 const size_type offset = 0) {
+                                 const size_type offset = 0)
+{
   constexpr int num_warps = block_size / experimental::detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];
   __shared__ size_type join_shared_l[num_warps][output_cache_size];

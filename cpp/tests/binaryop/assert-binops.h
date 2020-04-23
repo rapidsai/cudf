@@ -27,16 +27,19 @@
 
 #include <limits>
 
-namespace cudf {
-namespace test {
-namespace binop {
-
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
 template <typename TypeOut,
           typename TypeLhs,
           typename TypeRhs,
           typename TypeOp,
           typename ScalarType = cudf::experimental::scalar_type_t<TypeLhs>>
-void ASSERT_BINOP(column_view const& out, scalar const& lhs, column_view const& rhs, TypeOp&& op) {
+void ASSERT_BINOP(column_view const& out, scalar const& lhs, column_view const& rhs, TypeOp&& op)
+{
   auto lhs_h    = static_cast<ScalarType const&>(lhs).operator TypeLhs();
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);
   auto rhs_data = rhs_h.first;
@@ -75,7 +78,8 @@ template <typename TypeOut,
           typename TypeRhs,
           typename TypeOp,
           typename ScalarType = cudf::experimental::scalar_type_t<TypeRhs>>
-void ASSERT_BINOP(column_view const& out, column_view const& lhs, scalar const& rhs, TypeOp&& op) {
+void ASSERT_BINOP(column_view const& out, column_view const& lhs, scalar const& rhs, TypeOp&& op)
+{
   auto rhs_h    = static_cast<ScalarType const&>(rhs).operator TypeRhs();
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
@@ -113,7 +117,8 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOp>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   column_view const& rhs,
-                  TypeOp&& op) {
+                  TypeOp&& op)
+{
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);
@@ -170,7 +175,8 @@ template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 void ASSERT_BINOP(column_view const& out,
                   column_view const& lhs,
                   column_view const& rhs,
-                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& op) {
+                  cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>&& op)
+{
   auto lhs_h    = cudf::test::to_host<TypeLhs>(lhs);
   auto lhs_data = lhs_h.first;
   auto rhs_h    = cudf::test::to_host<TypeRhs>(rhs);

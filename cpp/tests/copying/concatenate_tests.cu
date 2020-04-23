@@ -47,7 +47,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements)} {
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements)}
+  {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
     thrust::sequence(thrust::device, typed_data, typed_data + data_size());
@@ -68,7 +69,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
 
-TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns) {
+TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns)
+{
   cudf::test::fixed_width_column_wrapper<TypeParam> empty_first{};
   cudf::test::fixed_width_column_wrapper<TypeParam> empty_second{};
   cudf::test::fixed_width_column_wrapper<TypeParam> empty_third{};
@@ -81,12 +83,14 @@ TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns) {
   EXPECT_EQ(concat->type(), expected_type);
 }
 
-TYPED_TEST(TypedColumnTest, ConcatenateNoColumns) {
+TYPED_TEST(TypedColumnTest, ConcatenateNoColumns)
+{
   std::vector<column_view> columns_to_concat{};
   EXPECT_THROW(cudf::concatenate(columns_to_concat), cudf::logic_error);
 }
 
-TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
+TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
+{
   cudf::column original{this->type(), this->num_elements(), this->data, this->mask};
   std::vector<cudf::size_type> indices{0,
                                        this->num_elements() / 3,
@@ -101,9 +105,11 @@ TYPED_TEST(TypedColumnTest, ConcatenateColumnView) {
   cudf::test::expect_columns_equal(original, *concatenated_col);
 }
 
-struct StringColumnTest : public cudf::test::BaseFixture {};
+struct StringColumnTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringColumnTest, ConcatenateColumnView) {
+TEST_F(StringColumnTest, ConcatenateColumnView)
+{
   std::vector<const char*> h_strings{"aaa",
                                      "bb",
                                      "",
@@ -138,9 +144,11 @@ TEST_F(StringColumnTest, ConcatenateColumnView) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-struct TableTest : public cudf::test::BaseFixture {};
+struct TableTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TableTest, ConcatenateTables) {
+TEST_F(TableTest, ConcatenateTables)
+{
   std::vector<const char*> h_strings{
     "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit"};
 
@@ -176,7 +184,8 @@ TEST_F(TableTest, ConcatenateTables) {
   cudf::test::expect_tables_equal(*concat_table, gold_table);
 }
 
-TEST_F(TableTest, ConcatenateTablesWithOffsets) {
+TEST_F(TableTest, ConcatenateTablesWithOffsets)
+{
   column_wrapper<int32_t> col1_1{{5, 4, 3, 5, 8, 5, 6}};
   cudf::test::strings_column_wrapper col2_1(
     {"dada", "egg", "avocado", "dada", "kite", "dog", "ln"});
@@ -235,7 +244,8 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets) {
   }
 }
 
-TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls) {
+TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> col1_1{{5, 4, 3, 5, 8, 5, 6},
                                                          {0, 1, 1, 1, 1, 1, 1}};
   cudf::test::strings_column_wrapper col2_1({"dada", "egg", "avocado", "dada", "kite", "dog", "ln"},

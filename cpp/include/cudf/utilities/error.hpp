@@ -16,7 +16,8 @@
 #define RMM_TRY_CUDAERROR(x) \
   if ((x) != RMM_SUCCESS) CUDA_TRY(cudaPeekAtLastError());
 
-namespace cudf {
+namespace cudf
+{
 /**---------------------------------------------------------------------------*
  * @brief Exception thrown when logical precondition is violated.
  *
@@ -80,17 +81,20 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_FAIL(reason) \
   throw cudf::logic_error("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
-namespace cudf {
-namespace detail {
-
-inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line) {
+namespace cudf
+{
+namespace detail
+{
+inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line)
+{
   // todo: throw cuda_error if the error is from cuda
   throw cudf::logic_error(std::string{"RMM error encountered at: " + std::string{file} + ":" +
                                       std::to_string(line) + ": " + std::to_string(error) + " " +
                                       rmmGetErrorString(error)});
 }
 
-inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line) {
+inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
+{
   throw cudf::cuda_error(std::string{"CUDA error encountered at: " + std::string{file} + ":" +
                                      std::to_string(line) + ": " + std::to_string(error) + " " +
                                      cudaGetErrorName(error) + " " + cudaGetErrorString(error)});

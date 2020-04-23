@@ -30,7 +30,8 @@ template <typename T>
 using scalar_wrapper = cudf::test::scalar_wrapper<T>;
 
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -39,13 +40,15 @@ T random_int(T min, T max) {
 }
 
 template <typename T>
-struct RepeatTest : GdfTest {};
+struct RepeatTest : GdfTest {
+};
 
 using test_types = ::testing::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(RepeatTest, test_types);
 
-TYPED_TEST(RepeatTest, RepeatScalarCount) {
+TYPED_TEST(RepeatTest, RepeatScalarCount)
+{
   using T = TypeParam;
 
   cudf::size_type repeat_count = 10;
@@ -73,7 +76,8 @@ TYPED_TEST(RepeatTest, RepeatScalarCount) {
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, Repeat) {
+TYPED_TEST(RepeatTest, Repeat)
+{
   using T = TypeParam;
 
   // Making the ranges that will be filled
@@ -116,7 +120,8 @@ TYPED_TEST(RepeatTest, Repeat) {
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, RepeatNullable) {
+TYPED_TEST(RepeatTest, RepeatNullable)
+{
   using T = TypeParam;
 
   // Making the ranges that will be filled
@@ -169,7 +174,8 @@ TYPED_TEST(RepeatTest, RepeatNullable) {
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(RepeatTest, ZeroSizeInput) {
+TYPED_TEST(RepeatTest, ZeroSizeInput)
+{
   using T = TypeParam;
 
   auto values = column_wrapper<T>{};

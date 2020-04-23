@@ -23,8 +23,8 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /*
  * @brief Interface to parse Avro data to cuDF columns.
  *

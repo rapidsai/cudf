@@ -33,7 +33,8 @@ struct CopyRangeTest : GdfTest {
             column_wrapper<T> const &expected,
             cudf::size_type out_begin,
             cudf::size_type out_end,
-            cudf::size_type in_begin) {
+            cudf::size_type in_begin)
+  {
     gdf_column dest_cpy = cudf::copy(*dest.get());
 
     EXPECT_NO_THROW(cudf::copy_range(&dest_cpy, *source.get(), out_begin, out_end, in_begin));
@@ -66,7 +67,8 @@ struct row_value {
 auto valid   = [](cudf::size_type row) { return true; };
 auto depends = [](cudf::size_type row) { return (row % 2 == 0); };
 
-TYPED_TEST(CopyRangeTest, CopyWithNulls) {
+TYPED_TEST(CopyRangeTest, CopyWithNulls)
+{
   using T = TypeParam;
 
   cudf::size_type size      = this->column_size;
@@ -95,7 +97,8 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls) {
              in_begin);
 }
 
-TYPED_TEST(CopyRangeTest, CopyNoNulls) {
+TYPED_TEST(CopyRangeTest, CopyNoNulls)
+{
   using T = TypeParam;
 
   cudf::size_type size      = this->column_size;
@@ -122,9 +125,11 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls) {
              in_begin);
 }
 
-struct CopyRangeErrorTest : GdfTest {};
+struct CopyRangeErrorTest : GdfTest {
+};
 
-TEST_F(CopyRangeErrorTest, InvalidColumn) {
+TEST_F(CopyRangeErrorTest, InvalidColumn)
+{
   column_wrapper<int32_t> source(100, row_value{1});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(nullptr, *source.get(), 0, 10, 0),
                             "Null gdf_column pointer");
@@ -144,7 +149,8 @@ TEST_F(CopyRangeErrorTest, InvalidColumn) {
                             "Null column data with non-zero size");
 }
 
-TEST_F(CopyRangeErrorTest, InvalidRange) {
+TEST_F(CopyRangeErrorTest, InvalidRange)
+{
   column_wrapper<int32_t> dest(100, row_value{1});
   column_wrapper<int32_t> source(100, row_value{2});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 95),
@@ -159,7 +165,8 @@ TEST_F(CopyRangeErrorTest, InvalidRange) {
                             "Range is empty or reversed");
 }
 
-TEST_F(CopyRangeErrorTest, DTypeMismatch) {
+TEST_F(CopyRangeErrorTest, DTypeMismatch)
+{
   column_wrapper<int32_t> dest(100, row_value{1});
   column_wrapper<float> source(100, row_value{2});
   CUDF_EXPECT_THROW_MESSAGE(cudf::copy_range(dest.get(), *source.get(), 0, 10, 0),

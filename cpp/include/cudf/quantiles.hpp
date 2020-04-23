@@ -20,9 +20,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**
  * @brief Computes quantiles with interpolation.
 

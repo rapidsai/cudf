@@ -28,26 +28,32 @@
 #include <vector>
 
 // Forward declarations
-namespace arrow {
-namespace io {
+namespace arrow
+{
+namespace io
+{
 class RandomAccessFile;
 }
 }  // namespace arrow
 
 // <io/utilities/data_sink.hpp>
-namespace cudf {
-namespace io {
+namespace cudf
+{
+namespace io
+{
 class data_sink;
 }
 }  // namespace cudf
 
 //! cuDF interfaces
-namespace cudf {
+namespace cudf
+{
 //! In-development features
-namespace experimental {
+namespace experimental
+{
 //! IO interfaces
-namespace io {
-
+namespace io
+{
 /**
  * @brief Compression algorithms
  */
@@ -150,14 +156,19 @@ struct source_info {
 
   source_info() = default;
 
-  explicit source_info(const std::string& file_path)
-    : type(io_type::FILEPATH), filepath(file_path) {}
+  explicit source_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path)
+  {
+  }
 
   explicit source_info(const char* host_buffer, size_t size)
-    : type(io_type::HOST_BUFFER), buffer(host_buffer, size) {}
+    : type(io_type::HOST_BUFFER), buffer(host_buffer, size)
+  {
+  }
 
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+    : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
 };
 
 /**
@@ -176,7 +187,9 @@ struct sink_info {
   explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
 
   explicit sink_info(class cudf::io::data_sink* user_sink_)
-    : type(io_type::USER_SINK), user_sink(user_sink_) {}
+    : type(io_type::USER_SINK), user_sink(user_sink_)
+  {
+  }
 };
 
 }  // namespace io

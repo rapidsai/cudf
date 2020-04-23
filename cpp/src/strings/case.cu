@@ -28,11 +28,14 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -59,14 +62,16 @@ struct upper_lower_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ special_case_mapping get_special_case_mapping(uint32_t code_point) {
+  __device__ special_case_mapping get_special_case_mapping(uint32_t code_point)
+  {
     return d_special_case_mapping[get_special_case_hash_index(code_point)];
   }
 
   // compute-size / copy the bytes representing the special case mapping for this codepoint
   __device__ int32_t handle_special_case_bytes(uint32_t code_point,
                                                char*& d_buffer,
-                                               detail::character_flags_table_type flag) {
+                                               detail::character_flags_table_type flag)
+  {
     special_case_mapping m = get_special_case_mapping(code_point);
     size_type bytes        = 0;
 
@@ -83,7 +88,8 @@ struct upper_lower_fn {
     return bytes;
   }
 
-  __device__ int32_t operator()(size_type idx) {
+  __device__ int32_t operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return 0;  // null string
     string_view d_str = d_column.template element<string_view>(idx);
     int32_t bytes     = 0;
@@ -129,7 +135,8 @@ struct upper_lower_fn {
 std::unique_ptr<column> convert_case(strings_column_view const& strings,
                                      character_flags_table_type case_flag,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
 
@@ -183,7 +190,8 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
 std::unique_ptr<column> to_lower(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   character_flags_table_type case_flag = IS_UPPER(0xFF);  // convert only upper case characters
   return convert_case(strings, case_flag, mr, stream);
 }
@@ -192,7 +200,8 @@ std::unique_ptr<column> to_lower(
 std::unique_ptr<column> to_upper(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   character_flags_table_type case_flag = IS_LOWER(0xFF);  // convert only lower case characters
   return convert_case(strings, case_flag, mr, stream);
 }
@@ -201,7 +210,8 @@ std::unique_ptr<column> to_upper(
 std::unique_ptr<column> swapcase(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   // convert only upper or lower case characters
   character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
   return convert_case(strings, case_flag, mr, stream);
@@ -212,19 +222,22 @@ std::unique_ptr<column> swapcase(
 // APIs
 
 std::unique_ptr<column> to_lower(strings_column_view const& strings,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::to_lower(strings, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::to_upper(strings, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::swapcase(strings, mr);
 }

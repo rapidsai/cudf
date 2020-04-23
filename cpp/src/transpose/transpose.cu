@@ -25,12 +25,14 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
                                                          rmm::mr::device_memory_resource* mr,
-                                                         cudaStream_t stream) {
+                                                         cudaStream_t stream)
+{
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     return std::make_pair(std::make_unique<column>(), table_view{});
@@ -58,7 +60,8 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 }  // namespace detail
 
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
-                                                         rmm::mr::device_memory_resource* mr) {
+                                                         rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::transpose(input, mr);
 }

@@ -23,11 +23,14 @@
 
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 /**
  * @brief Internal API to calculate groupwise sum
  *

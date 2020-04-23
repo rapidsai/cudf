@@ -50,7 +50,8 @@ template <typename T>
 void test_column(
   cudf::test::column_wrapper<T> const& col,
   std::vector<T> const& expected_values,
-  std::vector<cudf::valid_type> const& expected_bitmask = std::vector<cudf::valid_type>{}) {
+  std::vector<cudf::valid_type> const& expected_bitmask = std::vector<cudf::valid_type>{})
+{
   gdf_column const* underlying_column = col.get();
   ASSERT_NE(nullptr, underlying_column);
   EXPECT_EQ(expected_values.size(), static_cast<size_t>(underlying_column->size));
@@ -126,7 +127,8 @@ void test_column(
   EXPECT_TRUE(col == *col.get());
 }
 
-TYPED_TEST(ColumnWrapperTest, DefaultConstructor) {
+TYPED_TEST(ColumnWrapperTest, DefaultConstructor)
+{
   cudf::test::column_wrapper<TypeParam> const col_wrapper{};
   gdf_column const* col = col_wrapper.get();
   EXPECT_EQ(col->dtype, cudf::gdf_dtype_of<TypeParam>());
@@ -139,7 +141,8 @@ TYPED_TEST(ColumnWrapperTest, DefaultConstructor) {
   EXPECT_EQ(col->dtype_info.time_unit, TIME_UNIT_NONE);
 }
 
-TYPED_TEST(ColumnWrapperTest, ConstructFromGdfColumn) {
+TYPED_TEST(ColumnWrapperTest, ConstructFromGdfColumn)
+{
   std::vector<TypeParam> data{TypeParam{1}, TypeParam{2}, TypeParam{42}, TypeParam{37}};
   rmm::device_vector<TypeParam> d_data = data;
   gdf_column gdf_col{};
@@ -150,14 +153,16 @@ TYPED_TEST(ColumnWrapperTest, ConstructFromGdfColumn) {
   test_column(col_wrapper, data);
 }
 
-TYPED_TEST(ColumnWrapperTest, SizeConstructor) {
+TYPED_TEST(ColumnWrapperTest, SizeConstructor)
+{
   cudf::size_type const size{this->random_size()};
   cudf::test::column_wrapper<TypeParam> const col(size);
   std::vector<TypeParam> expected_values(size);
   test_column(col, expected_values);
 }
 
-TYPED_TEST(ColumnWrapperTest, SizeConstructorWithBitmask) {
+TYPED_TEST(ColumnWrapperTest, SizeConstructorWithBitmask)
+{
   cudf::size_type const size{this->random_size()};
   cudf::test::column_wrapper<TypeParam> const col(size, true);
   std::vector<TypeParam> expected_values(size);
@@ -165,7 +170,8 @@ TYPED_TEST(ColumnWrapperTest, SizeConstructorWithBitmask) {
   test_column(col, expected_values, expected_bitmask);
 }
 
-TYPED_TEST(ColumnWrapperTest, InitializerListConstructor) {
+TYPED_TEST(ColumnWrapperTest, InitializerListConstructor)
+{
   std::initializer_list<TypeParam> list{
     TypeParam(1), TypeParam(2), TypeParam(3), TypeParam(4), TypeParam(42), TypeParam(137)};
   cudf::test::column_wrapper<TypeParam> const col{list};
@@ -173,7 +179,8 @@ TYPED_TEST(ColumnWrapperTest, InitializerListConstructor) {
   test_column(col, expected_values);
 }
 
-TYPED_TEST(ColumnWrapperTest, InitializerListBitInitializer) {
+TYPED_TEST(ColumnWrapperTest, InitializerListBitInitializer)
+{
   auto even_bits_null = [](auto row) { return (row % 2); };
   std::initializer_list<TypeParam> list{
     TypeParam(1), TypeParam(2), TypeParam(3), TypeParam(4), TypeParam(42), TypeParam(137)};
@@ -186,7 +193,8 @@ TYPED_TEST(ColumnWrapperTest, InitializerListBitInitializer) {
   test_column(col, expected_values, expected_bitmask);
 }
 
-TYPED_TEST(ColumnWrapperTest, ValueBitmaskVectorConstructor) {
+TYPED_TEST(ColumnWrapperTest, ValueBitmaskVectorConstructor)
+{
   cudf::size_type const size{this->random_size()};
 
   std::vector<TypeParam> expected_values(size);
@@ -202,7 +210,8 @@ TYPED_TEST(ColumnWrapperTest, ValueBitmaskVectorConstructor) {
   test_column(col, expected_values, expected_bitmask);
 }
 
-TYPED_TEST(ColumnWrapperTest, ValueVectorConstructor) {
+TYPED_TEST(ColumnWrapperTest, ValueVectorConstructor)
+{
   cudf::size_type const size{this->random_size()};
 
   std::vector<TypeParam> expected_values(size);
@@ -216,7 +225,8 @@ TYPED_TEST(ColumnWrapperTest, ValueVectorConstructor) {
   test_column(col, expected_values);
 }
 
-TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
+TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor)
+{
   cudf::size_type const size{this->random_size()};
 
   cudf::test::column_wrapper<TypeParam> col(
@@ -232,7 +242,8 @@ TYPED_TEST(ColumnWrapperTest, ValueBitInitConstructor) {
   test_column(col, expected_values, expected_bitmask);
 }
 
-TYPED_TEST(ColumnWrapperTest, ValueVectorBitmaskInitConstructor) {
+TYPED_TEST(ColumnWrapperTest, ValueVectorBitmaskInitConstructor)
+{
   cudf::size_type const size{this->random_size()};
 
   std::vector<TypeParam> expected_values(size);
@@ -251,7 +262,8 @@ TYPED_TEST(ColumnWrapperTest, ValueVectorBitmaskInitConstructor) {
   test_column(col, expected_values, expected_bitmask);
 }
 
-TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
+TYPED_TEST(ColumnWrapperTest, CopyConstructor)
+{
   cudf::size_type const size{this->random_size()};
 
   cudf::test::column_wrapper<TypeParam> const source(
@@ -301,7 +313,8 @@ TYPED_TEST(ColumnWrapperTest, CopyConstructor) {
   EXPECT_TRUE(source == copy);
 }
 
-TYPED_TEST(ColumnWrapperTest, EqualColumnsNoNulls) {
+TYPED_TEST(ColumnWrapperTest, EqualColumnsNoNulls)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values(size);
   std::generate(values.begin(), values.end(), [this]() { return TypeParam(this->generator()); });
@@ -312,7 +325,8 @@ TYPED_TEST(ColumnWrapperTest, EqualColumnsNoNulls) {
   EXPECT_TRUE(col1 == col2);
 }
 
-TYPED_TEST(ColumnWrapperTest, EqualColumnsWithNulls) {
+TYPED_TEST(ColumnWrapperTest, EqualColumnsWithNulls)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values(size);
   std::generate(values.begin(), values.end(), [this]() { return TypeParam(this->generator()); });
@@ -325,7 +339,8 @@ TYPED_TEST(ColumnWrapperTest, EqualColumnsWithNulls) {
   EXPECT_TRUE(col1 == col2);
 }
 
-TYPED_TEST(ColumnWrapperTest, UnEqualColumnsNoNulls) {
+TYPED_TEST(ColumnWrapperTest, UnEqualColumnsNoNulls)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values1(size);
   std::generate(values1.begin(), values1.end(), [this]() { return TypeParam(this->generator()); });
@@ -339,7 +354,8 @@ TYPED_TEST(ColumnWrapperTest, UnEqualColumnsNoNulls) {
   EXPECT_FALSE(col1 == col2);
 }
 
-TYPED_TEST(ColumnWrapperTest, UnEqualColumnsWithNulls) {
+TYPED_TEST(ColumnWrapperTest, UnEqualColumnsWithNulls)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values(size);
   std::generate(values.begin(), values.end(), [this]() { return TypeParam(this->generator()); });
@@ -353,7 +369,8 @@ TYPED_TEST(ColumnWrapperTest, UnEqualColumnsWithNulls) {
   EXPECT_FALSE(col1 == col2);
 }
 
-TYPED_TEST(ColumnWrapperTest, AllInvalid) {
+TYPED_TEST(ColumnWrapperTest, AllInvalid)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values(size);
   std::generate(values.begin(), values.end(), [this]() { return TypeParam(this->generator()); });
@@ -369,7 +386,8 @@ TYPED_TEST(ColumnWrapperTest, AllInvalid) {
   for (cudf::size_type i = 0; i < size; ++i) { EXPECT_FALSE(gdf_is_valid(bitmask.data(), i)); }
 }
 
-TYPED_TEST(ColumnWrapperTest, AllValid) {
+TYPED_TEST(ColumnWrapperTest, AllValid)
+{
   cudf::size_type const size{this->random_size()};
   std::vector<TypeParam> values(size);
   std::generate(values.begin(), values.end(), [this]() { return TypeParam(this->generator()); });

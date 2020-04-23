@@ -20,11 +20,13 @@
 
 #include <memory>
 
-namespace cudf {
+namespace cudf
+{
 //! `datetime` APIs
-namespace datetime {
-namespace detail {
-
+namespace datetime
+{
+namespace detail
+{
 enum class datetime_component {
   INVALID = 0,
   YEAR,

@@ -23,10 +23,12 @@
 #include <cudf/legacy/binaryop.hpp>
 #include <string>
 
-namespace cudf {
-namespace binops {
-namespace jit {
-
+namespace cudf
+{
+namespace binops
+{
+namespace jit
+{
 std::string getOperatorName(gdf_binary_operator ope);
 
 }

@@ -13,13 +13,16 @@
 #include <tests/utilities/type_lists.hpp>
 
 template <typename T>
-class GatherTest : public cudf::test::BaseFixture {};
+class GatherTest : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
 
 // This test exercises using different iterator types as gather map inputs
 // to cudf::detail::gather -- device_vector and raw pointers.
-TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
+TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
+{
   constexpr cudf::size_type source_size{1000};
   rmm::device_vector<cudf::size_type> gather_map(source_size);
   thrust::sequence(thrust::device, gather_map.begin(), gather_map.end());
@@ -54,7 +57,8 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest) {
   }
 }
 
-TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
+TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
+{
   constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -80,7 +84,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest) {
   }
 }
 
-TYPED_TEST(GatherTest, IdentityTest) {
+TYPED_TEST(GatherTest, IdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -99,7 +104,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
   cudf::test::expect_tables_equal(source_table, result->view());
 }
 
-TYPED_TEST(GatherTest, ReverseIdentityTest) {
+TYPED_TEST(GatherTest, ReverseIdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
 
   auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -122,7 +128,8 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
   }
 }
 
-TYPED_TEST(GatherTest, EveryOtherNullOdds) {
+TYPED_TEST(GatherTest, EveryOtherNullOdds)
+{
   constexpr cudf::size_type source_size{1000};
 
   // Every other element is valid
@@ -153,7 +160,8 @@ TYPED_TEST(GatherTest, EveryOtherNullOdds) {
   }
 }
 
-TYPED_TEST(GatherTest, EveryOtherNullEvens) {
+TYPED_TEST(GatherTest, EveryOtherNullEvens)
+{
   constexpr cudf::size_type source_size{1000};
 
   // Every other element is valid
@@ -185,7 +193,8 @@ TYPED_TEST(GatherTest, EveryOtherNullEvens) {
   }
 }
 
-TYPED_TEST(GatherTest, AllNull) {
+TYPED_TEST(GatherTest, AllNull)
+{
   constexpr cudf::size_type source_size{1000};
 
   // Every element is invalid
@@ -212,7 +221,8 @@ TYPED_TEST(GatherTest, AllNull) {
   cudf::test::expect_tables_equal(source_table, result->view());
 }
 
-TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
+TYPED_TEST(GatherTest, MultiColReverseIdentityTest)
+{
   constexpr cudf::size_type source_size{1000};
 
   constexpr cudf::size_type n_cols = 3;
@@ -246,7 +256,8 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
   }
 }
 
-TYPED_TEST(GatherTest, MultiColNulls) {
+TYPED_TEST(GatherTest, MultiColNulls)
+{
   constexpr cudf::size_type source_size{1000};
 
   static_assert(0 == source_size % 2, "Size of source data must be a multiple of 2.");
@@ -290,9 +301,12 @@ TYPED_TEST(GatherTest, MultiColNulls) {
   }
 }
 
-class GatherTestStr : public cudf::test::BaseFixture {};
+class GatherTestStr : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(GatherTestStr, StringColumn) {
+TEST_F(GatherTestStr, StringColumn)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{1, 2, 3, 4, 5, 6}, {1, 1, 0, 1, 0, 1}};
   cudf::test::strings_column_wrapper col2{{"This", "is", "not", "a", "string", "type"},
                                           {1, 1, 1, 1, 1, 0}};
@@ -309,7 +323,8 @@ TEST_F(GatherTestStr, StringColumn) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(GatherTestStr, Gather) {
+TEST_F(GatherTestStr, Gather)
+{
   std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
@@ -335,7 +350,8 @@ TEST_F(GatherTestStr, Gather) {
   cudf::test::expect_columns_equal(results->view().column(0), expected);
 }
 
-TEST_F(GatherTestStr, GatherIgnoreOutOfBounds) {
+TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
+{
   std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
@@ -355,7 +371,8 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds) {
   cudf::test::expect_columns_equal(results->view().column(0), expected);
 }
 
-TEST_F(GatherTestStr, GatherZeroSizeStringsColumn) {
+TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   rmm::device_vector<cudf::size_type> gather_map{};
   auto results = cudf::experimental::detail::gather(

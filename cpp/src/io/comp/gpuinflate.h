@@ -19,9 +19,10 @@
 
 #include <stdint.h>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 /**
  * @brief Input parameters for the decompression interface
  **/

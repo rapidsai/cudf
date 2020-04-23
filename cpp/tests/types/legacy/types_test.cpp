@@ -32,7 +32,8 @@ struct WrappersTest : public ::testing::Test {
 
   WrappersTest()
     : dist{std::numeric_limits<UnderlyingType>::lowest(),
-           std::numeric_limits<UnderlyingType>::max()} {
+           std::numeric_limits<UnderlyingType>::max()}
+  {
     // Use constant seed for deterministic results
     rng.seed(0);
   }
@@ -47,7 +48,8 @@ using WrappersTestBool8 = WrappersTest<cudf::bool8>;
 
 template <typename SourceType>
 struct Bool8CtorTest : public ::testing::Test {
-  Bool8CtorTest() {
+  Bool8CtorTest()
+  {
     // Use constant seed for deterministic results
     rng.seed(0);
   }
@@ -106,7 +108,8 @@ TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
  */
 static constexpr int NUM_TRIALS{10000};
 
-TYPED_TEST(WrappersTest, ConstructorTest) {
+TYPED_TEST(WrappersTest, ConstructorTest)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -116,7 +119,8 @@ TYPED_TEST(WrappersTest, ConstructorTest) {
   }
 }
 
-TYPED_TEST(WrappersTest, AssignmentTest) {
+TYPED_TEST(WrappersTest, AssignmentTest)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -131,7 +135,8 @@ TYPED_TEST(WrappersTest, AssignmentTest) {
   }
 }
 
-TYPED_TEST(WrappersTest, UnwrapWrapperTest) {
+TYPED_TEST(WrappersTest, UnwrapWrapperTest)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -148,7 +153,8 @@ TYPED_TEST(WrappersTest, UnwrapWrapperTest) {
   }
 }
 
-TYPED_TEST(WrappersTest, UnwrapFundamentalTest) {
+TYPED_TEST(WrappersTest, UnwrapFundamentalTest)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -162,7 +168,8 @@ TYPED_TEST(WrappersTest, UnwrapFundamentalTest) {
   }
 }
 
-TYPED_TEST(WrappersTest, ArithmeticOperators) {
+TYPED_TEST(WrappersTest, ArithmeticOperators)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -187,7 +194,8 @@ TYPED_TEST(WrappersTest, ArithmeticOperators) {
   }
 }
 
-TYPED_TEST(WrappersNoBoolTest, BooleanOperators) {
+TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -219,7 +227,8 @@ TYPED_TEST(WrappersNoBoolTest, BooleanOperators) {
 }
 
 // Ensure bool8 constructor is correctly casting the input type to a bool
-TEST_F(WrappersTestBool8, BooleanConstructor) {
+TEST_F(WrappersTestBool8, BooleanConstructor)
+{
   using UnderlyingType = cudf::bool8::value_type;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     UnderlyingType t{this->rand()};
@@ -229,7 +238,8 @@ TEST_F(WrappersTestBool8, BooleanConstructor) {
 }
 
 // Just for booleans
-TEST_F(WrappersTestBool8, BooleanOperatorsBool8) {
+TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
+{
   for (int i = 0; i < NUM_TRIALS; ++i) {
     bool const t0{this->rand()};
     bool const t1{this->rand()};
@@ -288,7 +298,8 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8) {
 // This ensures that casting cudf::bool8 to int, doing arithmetic, and casting
 // the result to bool results in the right answer. If the arithmetic is done
 // on random underlying values you can get the wrong answer.
-TEST_F(WrappersTestBool8, CastArithmeticTest) {
+TEST_F(WrappersTestBool8, CastArithmeticTest)
+{
   cudf::bool8 w1{42};
   cudf::bool8 w2{static_cast<char>(-42)};
 
@@ -300,7 +311,8 @@ TEST_F(WrappersTestBool8, CastArithmeticTest) {
 }
 
 // Ensure bool8 constructor is correctly casting the input type to a bool
-TYPED_TEST(Bool8CtorTest, Bool8CastTest) {
+TYPED_TEST(Bool8CtorTest, Bool8CastTest)
+{
   using SourceType = TypeParam;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     SourceType t{this->rand()};
@@ -309,7 +321,8 @@ TYPED_TEST(Bool8CtorTest, Bool8CastTest) {
   }
 }
 
-TYPED_TEST(WrappersTest, CompoundAssignmentOperators) {
+TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   for (int i = 0; i < NUM_TRIALS; ++i) {
@@ -342,7 +355,8 @@ TYPED_TEST(WrappersTest, CompoundAssignmentOperators) {
   }
 }
 
-TYPED_TEST(WrappersTest, NumericLimitsTest) {
+TYPED_TEST(WrappersTest, NumericLimitsTest)
+{
   using UnderlyingType = typename TypeToUse<TypeParam>::type;
 
   EXPECT_EQ(static_cast<UnderlyingType>(std::numeric_limits<TypeParam>::max()),

@@ -25,12 +25,12 @@
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
 
-namespace cudf {
-
-namespace experimental {
-
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Gives an estimate of the size of the join output produced when
@@ -55,7 +55,8 @@ template <join_kind JoinKind, typename multimap_type>
 size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -169,7 +170,8 @@ size_type estimate_join_output_size(table_device_view build_table,
  */
 /* ----------------------------------------------------------------------------*/
 inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
-get_trivial_left_join_indices(table_view const& left, cudaStream_t stream) {
+get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
+{
   rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(
     rmm::exec_policy(stream)->on(stream), left_indices.begin(), left_indices.end(), 0);
@@ -203,7 +205,8 @@ std::enable_if_t<(JoinKind != join_kind::FULL_JOIN),
 get_base_hash_join_indices(table_view const& left,
                            table_view const& right,
                            bool flip_join_indices,
-                           cudaStream_t stream) {
+                           cudaStream_t stream)
+{
   // The `right` table is always used for building the hash map. We want to build the hash map
   // on the smaller table. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {

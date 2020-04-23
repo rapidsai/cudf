@@ -23,12 +23,13 @@
 #include <limits>
 #include <random>
 
-namespace {
-
+namespace
+{
 using cudf::test::fixed_width_column_wrapper;
 
 template <typename T, typename F>
-auto generate_vectors(size_t ncols, size_t nrows, F generator) {
+auto generate_vectors(size_t ncols, size_t nrows, F generator)
+{
   std::vector<std::vector<T>> values(ncols);
 
   std::for_each(values.begin(), values.end(), [generator, nrows](std::vector<T>& col) {
@@ -40,7 +41,8 @@ auto generate_vectors(size_t ncols, size_t nrows, F generator) {
 }
 
 template <typename T>
-auto transpose_vectors(std::vector<std::vector<T>> const& input) {
+auto transpose_vectors(std::vector<std::vector<T>> const& input)
+{
   if (input.empty()) { return input; }
   size_t ncols = input.size();
   size_t nrows = input.front().size();
@@ -57,7 +59,8 @@ auto transpose_vectors(std::vector<std::vector<T>> const& input) {
 }
 
 template <typename T>
-auto make_columns(std::vector<std::vector<T>> const& values) {
+auto make_columns(std::vector<std::vector<T>> const& values)
+{
   std::vector<fixed_width_column_wrapper<T>> columns;
   columns.reserve(values.size());
 
@@ -68,7 +71,8 @@ auto make_columns(std::vector<std::vector<T>> const& values) {
 
 template <typename T>
 auto make_columns(std::vector<std::vector<T>> const& values,
-                  std::vector<std::vector<cudf::size_type>> const& valids) {
+                  std::vector<std::vector<cudf::size_type>> const& valids)
+{
   std::vector<fixed_width_column_wrapper<T>> columns;
   columns.reserve(values.size());
 
@@ -80,7 +84,8 @@ auto make_columns(std::vector<std::vector<T>> const& values,
 }
 
 template <typename T>
-auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols) {
+auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols)
+{
   std::vector<cudf::column_view> views(cols.size());
 
   std::transform(
@@ -92,7 +97,8 @@ auto make_table_view(std::vector<fixed_width_column_wrapper<T>> const& cols) {
 }
 
 template <typename T>
-void run_test(size_t ncols, size_t nrows, bool add_nulls) {
+void run_test(size_t ncols, size_t nrows, bool add_nulls)
+{
   std::mt19937 rng(1);
 
   // Generate values as vector of vectors
@@ -145,7 +151,9 @@ void run_test(size_t ncols, size_t nrows, bool add_nulls) {
 }  // namespace
 
 template <typename T>
-class TransposeTest : public cudf::test::BaseFixture {};
+class TransposeTest : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(TransposeTest, cudf::test::FixedWidthTypes);
 
@@ -171,7 +179,8 @@ TYPED_TEST(TransposeTest, EmptyTable) { run_test<TypeParam>(0, 0, false); }
 
 TYPED_TEST(TransposeTest, EmptyColumns) { run_test<TypeParam>(10, 0, false); }
 
-TYPED_TEST(TransposeTest, MismatchedColumns) {
+TYPED_TEST(TransposeTest, MismatchedColumns)
+{
   fixed_width_column_wrapper<TypeParam> col1{{1, 2, 3}};
   fixed_width_column_wrapper<int8_t> col2{{4, 5, 6}};
   fixed_width_column_wrapper<float> col3{{7, 8, 9}};

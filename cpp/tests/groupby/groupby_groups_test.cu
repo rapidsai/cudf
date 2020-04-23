@@ -22,17 +22,21 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace test {
-
-struct groupby_group_keys_test : public BaseFixture {};
+namespace cudf
+{
+namespace test
+{
+struct groupby_group_keys_test : public BaseFixture {
+};
 
 template <typename V>
-struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {};
+struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(groupby_group_keys_and_values_test, NumericTypes);
 
-TEST_F(groupby_group_keys_test, basic) {
+TEST_F(groupby_group_keys_test, basic)
+{
   using K = int32_t;
 
   fixed_width_column_wrapper<K> keys{1, 1, 2, 1, 2, 3};
@@ -41,7 +45,8 @@ TEST_F(groupby_group_keys_test, basic) {
   test_groups(keys, expect_grouped_keys, expect_group_offsets);
 }
 
-TEST_F(groupby_group_keys_test, empty_keys) {
+TEST_F(groupby_group_keys_test, empty_keys)
+{
   using K = int32_t;
 
   fixed_width_column_wrapper<K> keys{};
@@ -50,7 +55,8 @@ TEST_F(groupby_group_keys_test, empty_keys) {
   test_groups(keys, expect_grouped_keys, expect_group_offsets);
 }
 
-TEST_F(groupby_group_keys_test, all_null_keys) {
+TEST_F(groupby_group_keys_test, all_null_keys)
+{
   using K = int32_t;
 
   fixed_width_column_wrapper<K> keys({1, 1, 2, 3, 1, 2}, all_null());
@@ -59,7 +65,8 @@ TEST_F(groupby_group_keys_test, all_null_keys) {
   test_groups(keys, expect_grouped_keys, expect_group_offsets);
 }
 
-TYPED_TEST(groupby_group_keys_and_values_test, basic_with_values) {
+TYPED_TEST(groupby_group_keys_and_values_test, basic_with_values)
+{
   using K = int32_t;
   using V = TypeParam;
 
@@ -71,7 +78,8 @@ TYPED_TEST(groupby_group_keys_and_values_test, basic_with_values) {
   test_groups(keys, expect_grouped_keys, expect_group_offsets, values, expect_grouped_values);
 }
 
-TYPED_TEST(groupby_group_keys_and_values_test, some_nulls) {
+TYPED_TEST(groupby_group_keys_and_values_test, some_nulls)
+{
   using K = int32_t;
   using V = TypeParam;
 

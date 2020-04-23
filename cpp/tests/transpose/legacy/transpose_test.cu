@@ -56,7 +56,8 @@
 
 /** performs a device to host copy */
 template <typename Type>
-void updateHost(Type* hPtr, const Type* dPtr, size_t len) {
+void updateHost(Type* hPtr, const Type* dPtr, size_t len)
+{
   CUDA_CHECK(cudaMemcpy(hPtr, dPtr, len * sizeof(Type), cudaMemcpyDeviceToHost));
 }
 
@@ -74,7 +75,8 @@ template <typename T, typename L>
 ::testing::AssertionResult devArrMatch(const T* expected,
                                        const T* actual,
                                        size_t size,
-                                       L eq_compare) {
+                                       L eq_compare)
+{
   std::shared_ptr<T> exp_h(new T[size]);
   std::shared_ptr<T> act_h(new T[size]);
   updateHost<T>(exp_h.get(), expected, size);
@@ -93,7 +95,8 @@ template <typename T, typename L>
 template <typename T>
 struct CompareApproxAbs {
   CompareApproxAbs(T eps_) : eps(eps_) {}
-  bool operator()(const T& a, const T& b) const {
+  bool operator()(const T& a, const T& b) const
+  {
     T diff  = abs(abs(a) - abs(b));
     T m     = std::max(abs(a), abs(b));
     T ratio = m >= eps ? diff / m : diff;
@@ -105,9 +108,11 @@ struct CompareApproxAbs {
 };
 
 template <typename T>
-class TransposeTest : public GdfTest {
+class TransposeTest : public GdfTest
+{
  protected:
-  void make_input() {
+  void make_input()
+  {
     // generate random numbers for the input vector of vectors
     std::mt19937 rng(1);
     auto generator = [&]() { return rng() % std::numeric_limits<T>::max() + 1; };
@@ -130,7 +135,8 @@ class TransposeTest : public GdfTest {
     }
   }
 
-  void create_gdf_output_buffers() {
+  void create_gdf_output_buffers()
+  {
     out_columns.resize(_nrows);
 
     for (auto& c : out_columns) { c.resize(_ncols); }
@@ -138,7 +144,8 @@ class TransposeTest : public GdfTest {
     out_gdf_columns = initialize_gdf_columns(out_columns);
   }
 
-  void compute_gdf_result(void) {
+  void compute_gdf_result(void)
+  {
     std::vector<gdf_column*> in_gdf_column_ptr(in_gdf_columns.size());
     std::vector<gdf_column*> out_gdf_column_ptr(out_gdf_columns.size());
 
@@ -153,7 +160,8 @@ class TransposeTest : public GdfTest {
     gdf_transpose(in_gdf_columns.size(), in_gdf_column_ptr.data(), out_gdf_column_ptr.data());
   }
 
-  void create_reference_output(void) {
+  void create_reference_output(void)
+  {
     // create vec of vec (dim transpose of in_columns)
 
     ref_data.resize(_nrows);
@@ -175,20 +183,23 @@ class TransposeTest : public GdfTest {
     }
   }
 
-  void compare_gdf_result(void) {
+  void compare_gdf_result(void)
+  {
     // new num cols = old _nrows
     for (size_t i = 0; i < _nrows; i++) {
       ASSERT_TRUE(gdf_equal_columns(*ref_gdf_columns[i].get(), *out_gdf_columns[i].get()));
     }
   }
 
-  void set_params(size_t ncols, size_t nrows, bool add_nulls = false) {
+  void set_params(size_t ncols, size_t nrows, bool add_nulls = false)
+  {
     _nrows     = nrows;
     _ncols     = ncols;
     _add_nulls = add_nulls;
   }
 
-  void run_test(void) {
+  void run_test(void)
+  {
     make_input();
     create_gdf_output_buffers();
     compute_gdf_result();
@@ -213,63 +224,72 @@ using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t>;
 
 TYPED_TEST_CASE(TransposeTest, TestTypes);
 
-TYPED_TEST(TransposeTest, SingleValue) {
+TYPED_TEST(TransposeTest, SingleValue)
+{
   size_t num_cols = 1;
   size_t num_rows = 1;
   this->set_params(num_cols, num_rows);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, SingleColumn) {
+TYPED_TEST(TransposeTest, SingleColumn)
+{
   size_t num_cols = 1;
   size_t num_rows = 1000;
   this->set_params(num_cols, num_rows);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, SingleColumnNulls) {
+TYPED_TEST(TransposeTest, SingleColumnNulls)
+{
   size_t num_cols = 1;
   size_t num_rows = 1000;
   this->set_params(num_cols, num_rows, true);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, Square) {
+TYPED_TEST(TransposeTest, Square)
+{
   size_t num_cols = 100;
   size_t num_rows = 100;
   this->set_params(num_cols, num_rows);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, SquareNulls) {
+TYPED_TEST(TransposeTest, SquareNulls)
+{
   size_t num_cols = 100;
   size_t num_rows = 100;
   this->set_params(num_cols, num_rows, true);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, Slim) {
+TYPED_TEST(TransposeTest, Slim)
+{
   size_t num_cols = 10;
   size_t num_rows = 1000;
   this->set_params(num_cols, num_rows);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, SlimNulls) {
+TYPED_TEST(TransposeTest, SlimNulls)
+{
   size_t num_cols = 10;
   size_t num_rows = 1000;
   this->set_params(num_cols, num_rows, true);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, Fat) {
+TYPED_TEST(TransposeTest, Fat)
+{
   size_t num_cols = 1000;
   size_t num_rows = 10;
   this->set_params(num_cols, num_rows);
   this->run_test();
 }
 
-TYPED_TEST(TransposeTest, FatNulls) {
+TYPED_TEST(TransposeTest, FatNulls)
+{
   size_t num_cols = 1000;
   size_t num_rows = 10;
   this->set_params(num_cols, num_rows, true);

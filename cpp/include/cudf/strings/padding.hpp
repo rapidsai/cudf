@@ -19,9 +19,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Pad types for the pad method specify where the pad
  * character should be placed.

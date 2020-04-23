@@ -24,13 +24,17 @@
 
 #include <vector>
 
-struct StringsCharsTest : public cudf::test::BaseFixture {};
+struct StringsCharsTest : public cudf::test::BaseFixture {
+};
 
 class StringsCharsTestTypes
   : public StringsCharsTest,
-    public testing::WithParamInterface<cudf::strings::string_character_types> {};
+    public testing::WithParamInterface<cudf::strings::string_character_types>
+{
+};
 
-TEST_P(StringsCharsTestTypes, AllTypes) {
+TEST_P(StringsCharsTestTypes, AllTypes)
+{
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
@@ -90,7 +94,8 @@ INSTANTIATE_TEST_CASE_P(StringsCharsTestAllTypes,
                           cudf::strings::string_character_types::UPPER,
                           cudf::strings::string_character_types::LOWER}));
 
-TEST_F(StringsCharsTest, LowerUpper) {
+TEST_F(StringsCharsTest, LowerUpper)
+{
   cudf::test::strings_column_wrapper strings({"a1", "A1", "a!", "A!", "!1", "aA"});
   auto strings_view = cudf::strings_column_view(strings);
   auto verify_types =
@@ -109,7 +114,8 @@ TEST_F(StringsCharsTest, LowerUpper) {
   }
 }
 
-TEST_F(StringsCharsTest, Alphanumeric) {
+TEST_F(StringsCharsTest, Alphanumeric)
+{
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
@@ -144,7 +150,8 @@ TEST_F(StringsCharsTest, Alphanumeric) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCharsTest, AlphaNumericSpace) {
+TEST_F(StringsCharsTest, AlphaNumericSpace)
+{
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
@@ -181,7 +188,8 @@ TEST_F(StringsCharsTest, AlphaNumericSpace) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCharsTest, Numerics) {
+TEST_F(StringsCharsTest, Numerics)
+{
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
                                      nullptr,
@@ -219,7 +227,8 @@ TEST_F(StringsCharsTest, Numerics) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCharsTest, EmptyStringsColumn) {
+TEST_F(StringsCharsTest, EmptyStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::all_characters_of_type(
@@ -231,7 +240,8 @@ TEST_F(StringsCharsTest, EmptyStringsColumn) {
   EXPECT_EQ(0, view.num_children());
 }
 
-TEST_F(StringsCharsTest, Integers) {
+TEST_F(StringsCharsTest, Integers)
+{
   cudf::test::strings_column_wrapper strings1(
     {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10"});
   auto results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
@@ -247,7 +257,8 @@ TEST_F(StringsCharsTest, Integers) {
   EXPECT_TRUE(cudf::strings::all_integer(cudf::strings_column_view(strings2)));
 }
 
-TEST_F(StringsCharsTest, Floats) {
+TEST_F(StringsCharsTest, Floats)
+{
   cudf::test::strings_column_wrapper strings1({"+175",
                                                "-34",
                                                "9.8",
@@ -276,7 +287,8 @@ TEST_F(StringsCharsTest, Floats) {
   EXPECT_TRUE(cudf::strings::all_float(cudf::strings_column_view(strings2)));
 }
 
-TEST_F(StringsCharsTest, EmptyStrings) {
+TEST_F(StringsCharsTest, EmptyStrings)
+{
   cudf::test::strings_column_wrapper strings({"", "", ""});
   auto strings_view = cudf::strings_column_view(strings);
   cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 0});

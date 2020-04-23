@@ -35,11 +35,13 @@
 #include <tests/copying/slice_tests.cuh>
 
 template <typename T>
-struct SliceTest : public cudf::test::BaseFixture {};
+struct SliceTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
 
-TYPED_TEST(SliceTest, NumericColumnsWithNulls) {
+TYPED_TEST(SliceTest, NumericColumnsWithNulls)
+{
   using T = TypeParam;
 
   cudf::size_type start = 0;
@@ -61,7 +63,8 @@ TYPED_TEST(SliceTest, NumericColumnsWithNulls) {
   }
 }
 
-TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn) {
+TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn)
+{
   using T = TypeParam;
 
   cudf::size_type start = 0;
@@ -84,9 +87,11 @@ TYPED_TEST(SliceTest, NumericColumnsWithNullsAsColumn) {
   }
 }
 
-struct SliceStringTest : public SliceTest<std::string> {};
+struct SliceStringTest : public SliceTest<std::string> {
+};
 
-TEST_F(SliceStringTest, StringWithNulls) {
+TEST_F(SliceStringTest, StringWithNulls)
+{
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -106,7 +111,8 @@ TEST_F(SliceStringTest, StringWithNulls) {
   }
 }
 
-TEST_F(SliceStringTest, StringWithNullsAsColumn) {
+TEST_F(SliceStringTest, StringWithNullsAsColumn)
+{
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
   auto valids = cudf::test::make_counting_transform_iterator(
@@ -128,9 +134,11 @@ TEST_F(SliceStringTest, StringWithNullsAsColumn) {
   }
 }
 
-struct SliceCornerCases : public SliceTest<int8_t> {};
+struct SliceCornerCases : public SliceTest<int8_t> {
+};
 
-TEST_F(SliceCornerCases, EmptyColumn) {
+TEST_F(SliceCornerCases, EmptyColumn)
+{
   cudf::column col{};
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
@@ -141,7 +149,8 @@ TEST_F(SliceCornerCases, EmptyColumn) {
   EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceCornerCases, EmptyIndices) {
+TEST_F(SliceCornerCases, EmptyIndices)
+{
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
   auto valids           = cudf::test::make_counting_transform_iterator(
@@ -158,7 +167,8 @@ TEST_F(SliceCornerCases, EmptyIndices) {
   EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceCornerCases, InvalidSetOfIndices) {
+TEST_F(SliceCornerCases, InvalidSetOfIndices)
+{
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
   auto valids           = cudf::test::make_counting_transform_iterator(
@@ -170,7 +180,8 @@ TEST_F(SliceCornerCases, InvalidSetOfIndices) {
   EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
 }
 
-TEST_F(SliceCornerCases, ImproperRange) {
+TEST_F(SliceCornerCases, ImproperRange)
+{
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
   auto valids           = cudf::test::make_counting_transform_iterator(
@@ -183,7 +194,8 @@ TEST_F(SliceCornerCases, ImproperRange) {
   EXPECT_THROW(cudf::experimental::slice(col, indices), cudf::logic_error);
 }
 
-TEST_F(SliceCornerCases, NegativeOffset) {
+TEST_F(SliceCornerCases, NegativeOffset)
+{
   cudf::size_type start = 0;
   cudf::size_type size  = 10;
   auto valids           = cudf::test::make_counting_transform_iterator(
@@ -197,11 +209,13 @@ TEST_F(SliceCornerCases, NegativeOffset) {
 }
 
 template <typename T>
-struct SliceTableTest : public cudf::test::BaseFixture {};
+struct SliceTableTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(SliceTableTest, cudf::test::NumericTypes);
 
-TYPED_TEST(SliceTableTest, NumericColumnsWithNulls) {
+TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
+{
   using T = TypeParam;
 
   cudf::size_type start    = 0;
@@ -225,9 +239,11 @@ TYPED_TEST(SliceTableTest, NumericColumnsWithNulls) {
   }
 }
 
-struct SliceStringTableTest : public SliceTableTest<std::string> {};
+struct SliceStringTableTest : public SliceTableTest<std::string> {
+};
 
-TEST_F(SliceStringTableTest, StringWithNulls) {
+TEST_F(SliceStringTableTest, StringWithNulls)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
@@ -256,9 +272,11 @@ TEST_F(SliceStringTableTest, StringWithNulls) {
   }
 }
 
-struct SliceTableCornerCases : public SliceTableTest<int8_t> {};
+struct SliceTableCornerCases : public SliceTableTest<int8_t> {
+};
 
-TEST_F(SliceTableCornerCases, EmptyTable) {
+TEST_F(SliceTableCornerCases, EmptyTable)
+{
   std::vector<cudf::size_type> indices{1, 3, 2, 4, 5, 9};
 
   cudf::experimental::table src_table{};
@@ -269,7 +287,8 @@ TEST_F(SliceTableCornerCases, EmptyTable) {
   EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceTableCornerCases, EmptyIndices) {
+TEST_F(SliceTableCornerCases, EmptyIndices)
+{
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
   auto valids              = cudf::test::make_counting_transform_iterator(
@@ -287,7 +306,8 @@ TEST_F(SliceTableCornerCases, EmptyIndices) {
   EXPECT_EQ(expected, result.size());
 }
 
-TEST_F(SliceTableCornerCases, InvalidSetOfIndices) {
+TEST_F(SliceTableCornerCases, InvalidSetOfIndices)
+{
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
   auto valids              = cudf::test::make_counting_transform_iterator(
@@ -302,7 +322,8 @@ TEST_F(SliceTableCornerCases, InvalidSetOfIndices) {
   EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
 }
 
-TEST_F(SliceTableCornerCases, ImproperRange) {
+TEST_F(SliceTableCornerCases, ImproperRange)
+{
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
   auto valids              = cudf::test::make_counting_transform_iterator(
@@ -317,7 +338,8 @@ TEST_F(SliceTableCornerCases, ImproperRange) {
   EXPECT_THROW(cudf::experimental::slice(src_table, indices), cudf::logic_error);
 }
 
-TEST_F(SliceTableCornerCases, NegativeOffset) {
+TEST_F(SliceTableCornerCases, NegativeOffset)
+{
   cudf::size_type start    = 0;
   cudf::size_type col_size = 10;
   auto valids              = cudf::test::make_counting_transform_iterator(

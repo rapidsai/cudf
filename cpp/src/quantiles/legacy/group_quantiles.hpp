@@ -23,9 +23,10 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <vector>
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief Internal API to calculate groupwise quantiles
  *

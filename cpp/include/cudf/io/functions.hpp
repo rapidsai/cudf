@@ -32,12 +32,14 @@
 #include <vector>
 
 //! cuDF interfaces
-namespace cudf {
+namespace cudf
+{
 //! In-development features
-namespace experimental {
+namespace experimental
+{
 //! IO interfaces
-namespace io {
-
+namespace io
+{
 /**
  * @brief Settings to use for `read_avro()`
  */
@@ -324,7 +326,9 @@ struct write_orc_args {
       table(table_),
       metadata(metadata_),
       compression(compression_),
-      enable_statistics(stats_en) {}
+      enable_statistics(stats_en)
+  {
+  }
 };
 
 /**
@@ -363,14 +367,18 @@ struct write_orc_chunked_args {
                                   const table_metadata_with_nullability* metadata_ = nullptr,
                                   compression_type compression_ = compression_type::AUTO,
                                   bool stats_en                 = true)
-    : sink(sink_), metadata(metadata_), compression(compression_), enable_statistics(stats_en) {}
+    : sink(sink_), metadata(metadata_), compression(compression_), enable_statistics(stats_en)
+  {
+  }
 };
 
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace orc {
+namespace detail
+{
+namespace orc
+{
 struct orc_chunked_state;
 };
 };  // namespace detail
@@ -511,7 +519,9 @@ struct write_parquet_args {
       compression(compression_),
       stats_level(stats_lvl_),
       table(table_),
-      metadata(metadata_) {}
+      metadata(metadata_)
+  {
+  }
 };
 
 /**
@@ -567,14 +577,18 @@ struct write_parquet_chunked_args {
     const table_metadata_with_nullability* metadata_ = nullptr,
     compression_type compression_                    = compression_type::AUTO,
     statistics_freq stats_lvl_                       = statistics_freq::STATISTICS_ROWGROUP)
-    : sink(sink_), compression(compression_), stats_level(stats_lvl_), metadata(metadata_) {}
+    : sink(sink_), compression(compression_), stats_level(stats_lvl_), metadata(metadata_)
+  {
+  }
 };
 
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace parquet {
+namespace detail
+{
+namespace parquet
+{
 struct pq_chunked_state;
 };
 };  // namespace detail

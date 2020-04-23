@@ -56,9 +56,10 @@ THE SOFTWARE.
 #include "brotli_dict.h"
 #include "gpuinflate.h"
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 #define HUFFTAB_LUT1_BITS 8
 #define HUFFCODE(len, sym) ((uint16_t)(((sym) << 4) + (len)))
 #define BROTLI_CODE_LENGTH_CODES 18
@@ -159,7 +160,8 @@ struct debrotli_state_s {
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
 
 /// @brief initializes the bit reader
-__device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, size_t pos = 0) {
+__device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, size_t pos = 0)
+{
   const uint8_t *p      = base + pos;
   uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
   p -= prefix_bytes;
@@ -173,17 +175,20 @@ __device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, s
 }
 
 // return next 32 bits
-inline __device__ uint32_t next32bits(const debrotli_state_s *s) {
+inline __device__ uint32_t next32bits(const debrotli_state_s *s)
+{
   return __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
 }
 
 /// return next n bits
-inline __device__ uint32_t showbits(const debrotli_state_s *s, uint32_t n) {
+inline __device__ uint32_t showbits(const debrotli_state_s *s, uint32_t n)
+{
   uint32_t next32 = __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
   return (next32 & ((1 << n) - 1));
 }
 
-inline __device__ void skipbits(debrotli_state_s *s, uint32_t n) {
+inline __device__ void skipbits(debrotli_state_s *s, uint32_t n)
+{
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 8;
@@ -195,13 +200,15 @@ inline __device__ void skipbits(debrotli_state_s *s, uint32_t n) {
   s->bitpos = bitpos;
 }
 
-inline __device__ uint32_t getbits(debrotli_state_s *s, uint32_t n) {
+inline __device__ uint32_t getbits(debrotli_state_s *s, uint32_t n)
+{
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
   return bits;
 }
 
-inline __device__ uint32_t getbits_bytealign(debrotli_state_s *s) {
+inline __device__ uint32_t getbits_bytealign(debrotli_state_s *s)
+{
   uint32_t n    = (uint32_t)((-(int32_t)s->bitpos) & 7);
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
@@ -225,7 +232,8 @@ inline __device__ uint32_t getbits_bytealign(debrotli_state_s *s) {
  * 65..128    xxxxxx1101
  * 129..256   xxxxxxx1111
  **/
-static __device__ uint32_t getbits_u8vlc(debrotli_state_s *s) {
+static __device__ uint32_t getbits_u8vlc(debrotli_state_s *s)
+{
   uint32_t next32 = next32bits(s);
   uint32_t v, len;
   if (!(next32 & 1)) {
@@ -241,7 +249,8 @@ static __device__ uint32_t getbits_u8vlc(debrotli_state_s *s) {
 }
 
 /// Decode a Huffman code with 8-bit initial lookup
-static __device__ uint32_t getvlc(debrotli_state_s *s, const uint16_t *lut) {
+static __device__ uint32_t getvlc(debrotli_state_s *s, const uint16_t *lut)
+{
   uint32_t next32 = next32bits(s);
   uint32_t vlc, len;
   lut += next32 & ((1 << HUFFTAB_LUT1_BITS) - 1);
@@ -260,7 +269,8 @@ static __device__ uint32_t getvlc(debrotli_state_s *s, const uint16_t *lut) {
 }
 
 /// Alloc bytes from the local (shared mem) heap
-static __device__ uint8_t *local_alloc(debrotli_state_s *s, uint32_t bytes) {
+static __device__ uint8_t *local_alloc(debrotli_state_s *s, uint32_t bytes)
+{
   int heap_used = s->heap_used;
   int len       = (bytes + 7) >> 3;
   if (heap_used + len <= s->heap_limit) {
@@ -274,7 +284,8 @@ static __device__ uint8_t *local_alloc(debrotli_state_s *s, uint32_t bytes) {
 
 /// Shrink the size of the local heap, returns ptr to end (used for stack-like intermediate
 /// allocations at the end of the heap)
-static __device__ uint8_t *local_heap_shrink(debrotli_state_s *s, uint32_t bytes) {
+static __device__ uint8_t *local_heap_shrink(debrotli_state_s *s, uint32_t bytes)
+{
   int heap_used  = s->heap_used;
   int heap_limit = s->heap_limit;
   int len        = (bytes + 7) >> 3;
@@ -287,7 +298,8 @@ static __device__ uint8_t *local_heap_shrink(debrotli_state_s *s, uint32_t bytes
   }
 }
 
-static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes) {
+static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
+{
   int len        = (bytes + 7) >> 3;
   int heap_limit = s->heap_limit + len;
   s->heap_limit  = (uint16_t)heap_limit;
@@ -296,7 +308,8 @@ static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes) {
 /// Alloc memory from the fixed-size heap shared between all blocks
 static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
                                           uint8_t *ext_heap_base,
-                                          uint32_t ext_heap_size) {
+                                          uint32_t ext_heap_size)
+{
   uint32_t len                = (bytes + 0xf) & ~0xf;
   volatile uint32_t *heap_ptr = (volatile uint32_t *)ext_heap_base;
   uint32_t first_free_block   = ~0;
@@ -367,7 +380,8 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
 static __device__ void ext_heap_free(void *ptr,
                                      uint32_t bytes,
                                      uint8_t *ext_heap_base,
-                                     uint32_t ext_heap_size) {
+                                     uint32_t ext_heap_size)
+{
   uint32_t len                = (bytes + 0xf) & ~0xf;
   volatile uint32_t *heap_ptr = (volatile uint32_t *)ext_heap_base;
   uint32_t first_free_block   = ~0;
@@ -441,7 +455,8 @@ static __device__ void ext_heap_free(void *ptr,
 static __device__ uint32_t BuildSimpleHuffmanTable(uint16_t *lut,
                                                    int root_bits,
                                                    uint16_t *val,
-                                                   uint32_t num_symbols) {
+                                                   uint32_t num_symbols)
+{
   uint32_t table_size      = 1;
   const uint32_t goal_size = 1U << root_bits;
   switch (num_symbols) {
@@ -511,7 +526,8 @@ static __device__ uint32_t BuildSimpleHuffmanTable(uint16_t *lut,
   return goal_size;
 }
 
-static __device__ void BuildCodeLengthsHuffmanTable(huff_scratch_s *hs) {
+static __device__ void BuildCodeLengthsHuffmanTable(huff_scratch_s *hs)
+{
   uint32_t code;   // current table entry
   int symbol;      // symbol index in original or sorted table
   int key;         // prefix code
@@ -569,7 +585,8 @@ static __device__ void BuildCodeLengthsHuffmanTable(huff_scratch_s *hs) {
 // Returns the table width of the next 2nd level table. |count| is the histogram
 // of bit lengths for the remaining symbols, |len| is the code length of the
 // next processed symbol.
-static __device__ int NextTableBitSize(const uint16_t *const count, int len, int root_bits) {
+static __device__ int NextTableBitSize(const uint16_t *const count, int len, int root_bits)
+{
   int left = 1 << (len - root_bits);
   while (len < 15) {
     left -= count[len];
@@ -583,7 +600,8 @@ static __device__ int NextTableBitSize(const uint16_t *const count, int len, int
 static __device__ uint32_t BuildHuffmanTable(uint16_t *root_lut,
                                              int root_bits,
                                              const uint16_t *const symbol_lists,
-                                             uint16_t *count) {
+                                             uint16_t *count)
+{
   uint32_t code;     // current table entry
   uint16_t *lut;     // next available space in table
   int len;           // current code length
@@ -831,7 +849,8 @@ invalid.
 static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
                                              uint32_t alphabet_size,
                                              uint32_t max_symbol,
-                                             uint16_t *vlctab) {
+                                             uint16_t *vlctab)
+{
   uint32_t prefix_code_type;
 
   prefix_code_type = getbits(s, 2);
@@ -1011,7 +1030,8 @@ formula :
 
 window size = (1 << WBITS) - 16
 **/
-static __device__ void DecodeStreamHeader(debrotli_state_s *s) {
+static __device__ void DecodeStreamHeader(debrotli_state_s *s)
+{
   uint32_t next32 = next32bits(s);
   uint32_t wbits = 0, len = 0;
   if ((next32 & 1) == 0) {
@@ -1096,7 +1116,8 @@ not set(if the ignored bits are not all zeros, the stream should be rejected
 as invalid)
 **/
 
-static __device__ void DecodeMetaBlockHeader(debrotli_state_s *s) {
+static __device__ void DecodeMetaBlockHeader(debrotli_state_s *s)
+{
   uint32_t next32 = next32bits(s);
   uint32_t len = 1, is_empty = 0;
   s->is_last = (uint8_t)(next32 & 1);
@@ -1179,7 +1200,8 @@ appears only if NBLTYPESD >= 2
 
 **/
 
-static __device__ void DecodeHuffmanTables(debrotli_state_s *s) {
+static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
+{
   for (int b = 0; b < 3; b++) {
     uint32_t nbltypes     = 1 + getbits_u8vlc(s);
     s->num_block_types[b] = nbltypes;
@@ -1226,9 +1248,8 @@ static __device__ void DecodeHuffmanTables(debrotli_state_s *s) {
  * Most of input values are 0 and 1. To reduce number of branches, we replace
  * inner for loop with do-while.
  **/
-static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s,
-                                                   uint8_t *v,
-                                                   uint32_t v_len) {
+static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s, uint8_t *v, uint32_t v_len)
+{
   // Reinitialize elements that could have been changed.
   uint32_t i           = 1;
   uint32_t upper_bound = s->mtf_upper_bound;
@@ -1264,7 +1285,8 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s,
 static __device__ uint32_t DecodeContextMap(debrotli_state_s *s,
                                             uint8_t *context_map,
                                             uint32_t context_map_size,
-                                            uint16_t *context_map_vlc) {
+                                            uint16_t *context_map_vlc)
+{
   uint32_t num_htrees = getbits_u8vlc(s) + 1;
   uint32_t bits, context_index, max_run_length_prefix, alphabet_size;
 
@@ -1297,7 +1319,9 @@ static __device__ uint32_t DecodeContextMap(debrotli_state_s *s,
         s->error = -1;
         break;
       }
-      do { context_map[context_index++] = 0; } while (--reps);
+      do {
+        context_map[context_index++] = 0;
+      } while (--reps);
     }
   }
   bits = getbits(s, 1);
@@ -1305,7 +1329,8 @@ static __device__ uint32_t DecodeContextMap(debrotli_state_s *s,
   return num_htrees;
 }
 
-static __device__ void DetectTrivialLiteralBlockTypes(debrotli_state_s *s) {
+static __device__ void DetectTrivialLiteralBlockTypes(debrotli_state_s *s)
+{
   uint32_t i;
   for (i = 0; i < s->num_block_types[0]; i++) {
     uint32_t offset = i << 6;
@@ -1346,7 +1371,8 @@ only zero values
 static __device__ debrotli_huff_tree_group_s *HuffmanTreeGroupInit(debrotli_state_s *s,
                                                                    uint32_t alphabet_size,
                                                                    uint32_t max_symbol,
-                                                                   uint32_t ntrees) {
+                                                                   uint32_t ntrees)
+{
   debrotli_huff_tree_group_s *group = (debrotli_huff_tree_group_s *)local_alloc(
     s, sizeof(debrotli_huff_tree_group_s) + ntrees * sizeof(uint16_t *) - sizeof(uint16_t *));
   group->alphabet_size = (uint16_t)alphabet_size;
@@ -1356,8 +1382,8 @@ static __device__ debrotli_huff_tree_group_s *HuffmanTreeGroupInit(debrotli_stat
   return group;
 }
 
-static __device__ void HuffmanTreeGroupAlloc(debrotli_state_s *s,
-                                             debrotli_huff_tree_group_s *group) {
+static __device__ void HuffmanTreeGroupAlloc(debrotli_state_s *s, debrotli_huff_tree_group_s *group)
+{
   if (!group->htrees[0]) {
     uint32_t alphabet_size  = group->alphabet_size;
     uint32_t ntrees         = group->num_htrees;
@@ -1373,7 +1399,8 @@ static __device__ void HuffmanTreeGroupAlloc(debrotli_state_s *s,
 
 // Decodes a series of Huffman table using ReadHuffmanCode function.
 static __device__ void HuffmanTreeGroupDecode(debrotli_state_s *s,
-                                              debrotli_huff_tree_group_s *group) {
+                                              debrotli_huff_tree_group_s *group)
+{
   uint16_t *next = group->htrees[0];
 
   for (int htree_index = 0; htree_index < group->num_htrees; htree_index++) {
@@ -1386,7 +1413,8 @@ static __device__ void HuffmanTreeGroupDecode(debrotli_state_s *s,
 
 static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s *s,
                                                uint8_t *fb_heap_base,
-                                               uint32_t fb_heap_size) {
+                                               uint32_t fb_heap_size)
+{
   uint32_t bits, npostfix, ndirect, nbltypesl;
   uint32_t context_map_size;
   uint16_t *context_map_vlc;
@@ -1449,8 +1477,8 @@ static __device__ void DecodeHuffmanTreeGroups(debrotli_state_s *s,
   HuffmanTreeGroupDecode(s, s->distance_hgroup);
 }
 
-static __device__ int PrepareLiteralDecoding(debrotli_state_s *s,
-                                             const uint8_t *&context_map_slice) {
+static __device__ int PrepareLiteralDecoding(debrotli_state_s *s, const uint8_t *&context_map_slice)
+{
   int context_mode;
   uint32_t block_type     = s->block_type_rb[1];
   uint32_t context_offset = block_type << 6;
@@ -1460,7 +1488,8 @@ static __device__ int PrepareLiteralDecoding(debrotli_state_s *s,
 }
 
 /// Decodes a command or literal and updates block type ring-buffer. Reads 3..54 bits.
-static __device__ uint32_t DecodeBlockTypeAndLength(debrotli_state_s *s, int tree_type) {
+static __device__ uint32_t DecodeBlockTypeAndLength(debrotli_state_s *s, int tree_type)
+{
   uint32_t max_block_type = s->num_block_types[tree_type];
   if (max_block_type > 1) {
     const uint16_t *len_tree  = s->block_type_vlc[tree_type];
@@ -1487,7 +1516,8 @@ static __device__ uint32_t DecodeBlockTypeAndLength(debrotli_state_s *s, int tre
   }
 }
 
-inline __device__ int ToUpperCase(uint8_t *p) {
+inline __device__ int ToUpperCase(uint8_t *p)
+{
   if (p[0] < 0xC0) {
     if (p[0] >= 'a' && p[0] <= 'z') { p[0] ^= 32; }
     return 1;
@@ -1505,7 +1535,8 @@ inline __device__ int ToUpperCase(uint8_t *p) {
 static __device__ int TransformDictionaryWord(uint8_t *dst,
                                               const uint8_t *word,
                                               int len,
-                                              int transform_idx) {
+                                              int transform_idx)
+{
   int idx               = 0;
   const uint8_t *prefix = BROTLI_TRANSFORM_PREFIX(transform_idx);
   uint8_t type          = BROTLI_TRANSFORM_TYPE(transform_idx);
@@ -1544,9 +1575,8 @@ static __device__ int TransformDictionaryWord(uint8_t *dst,
 }
 
 /// ProcessCommands, actual decoding: 1 warp, most work done by thread0
-static __device__ void ProcessCommands(debrotli_state_s *s,
-                                       const brotli_dictionary_s *words,
-                                       int t) {
+static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_dictionary_s *words, int t)
+{
   int32_t meta_block_len = s->meta_block_len;
   uint8_t *out           = s->out;
   int32_t pos            = 0;
@@ -1828,7 +1858,8 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
                       gpu_inflate_status_s *outputs,
                       uint8_t *scratch,
                       uint32_t scratch_size,
-                      uint32_t count) {
+                      uint32_t count)
+{
   __shared__ __align__(16) debrotli_state_s state_g;
 
   int t                     = threadIdx.x;
@@ -1919,7 +1950,8 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
   }
 }
 
-size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs) {
+size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
+{
   int sm_count = 0;
   int dev      = 0;
   uint32_t max_fb_size, min_fb_size, fb_size;
@@ -1955,7 +1987,8 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs,
                                   void *scratch,
                                   size_t scratch_size,
                                   int count,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   uint32_t count32 = (count > 0) ? count : 0;
   uint32_t fb_heap_size;
   uint8_t *scratch_u8 = (uint8_t *)scratch;

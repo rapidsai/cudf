@@ -32,10 +32,12 @@
 #include <iostream>
 #include <vector>
 
-struct ReplaceErrorTest : public cudf::test::BaseFixture {};
+struct ReplaceErrorTest : public cudf::test::BaseFixture {
+};
 
 // Error: old-values and new-values size mismatch
-TEST_F(ReplaceErrorTest, SizeMismatch) {
+TEST_F(ReplaceErrorTest, SizeMismatch)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13}};
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
@@ -47,7 +49,8 @@ TEST_F(ReplaceErrorTest, SizeMismatch) {
 }
 
 // Error: column type mismatch
-TEST_F(ReplaceErrorTest, TypeMismatch) {
+TEST_F(ReplaceErrorTest, TypeMismatch)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
   cudf::test::fixed_width_column_wrapper<float> gdf_values_to_replace_column{{10, 11, 12}};
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_replacement_values_column{{15, 16, 17}};
@@ -59,7 +62,8 @@ TEST_F(ReplaceErrorTest, TypeMismatch) {
 }
 
 // Error: nulls in old-values
-TEST_F(ReplaceErrorTest, NullInOldValues) {
+TEST_F(ReplaceErrorTest, NullInOldValues)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_input_column{{7, 5, 6, 3, 1, 2, 8, 4}};
   cudf::test::fixed_width_column_wrapper<int32_t> gdf_values_to_replace_column{{10, 11, 12, 13},
                                                                                {1, 0, 0, 1}};
@@ -71,10 +75,12 @@ TEST_F(ReplaceErrorTest, NullInOldValues) {
     cudf::logic_error);
 }
 
-struct ReplaceStringsTest : public cudf::test::BaseFixture {};
+struct ReplaceStringsTest : public cudf::test::BaseFixture {
+};
 
 // Strings test
-TEST_F(ReplaceStringsTest, Strings) {
+TEST_F(ReplaceStringsTest, Strings)
+{
   std::vector<std::string> input{"a", "b", "c", "d", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{"a"};
   std::vector<std::string> replacement{"z"};
@@ -96,7 +102,8 @@ TEST_F(ReplaceStringsTest, Strings) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsReplacementNulls) {
+TEST_F(ReplaceStringsTest, StringsReplacementNulls)
+{
   std::vector<std::string> input{"a", "b", "c", "d", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"z", ""};
@@ -119,7 +126,8 @@ TEST_F(ReplaceStringsTest, StringsReplacementNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsResultAllNulls) {
+TEST_F(ReplaceStringsTest, StringsResultAllNulls)
+{
   std::vector<std::string> input{"b", "b", "b", "b", "b", "b", "b", "b"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"a", ""};
@@ -142,7 +150,8 @@ TEST_F(ReplaceStringsTest, StringsResultAllNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsResultAllEmpty) {
+TEST_F(ReplaceStringsTest, StringsResultAllEmpty)
+{
   std::vector<std::string> input{"b", "b", "b", "b", "b", "b", "b", "b"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"a", ""};
@@ -165,7 +174,8 @@ TEST_F(ReplaceStringsTest, StringsResultAllEmpty) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsInputNulls) {
+TEST_F(ReplaceStringsTest, StringsInputNulls)
+{
   std::vector<std::string> input{"a", "b", "", "", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"z", "y"};
@@ -187,7 +197,8 @@ TEST_F(ReplaceStringsTest, StringsInputNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls) {
+TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls)
+{
   std::vector<std::string> input{"a", "b", "", "", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"z", ""};
@@ -211,7 +222,8 @@ TEST_F(ReplaceStringsTest, StringsInputAndReplacementNulls) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsEmptyReplacement) {
+TEST_F(ReplaceStringsTest, StringsEmptyReplacement)
+{
   std::vector<std::string> input{"a", "b", "", "", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{};
   std::vector<std::string> replacement{};
@@ -233,7 +245,8 @@ TEST_F(ReplaceStringsTest, StringsEmptyReplacement) {
 }
 
 // Strings test
-TEST_F(ReplaceStringsTest, StringsLargeScale) {
+TEST_F(ReplaceStringsTest, StringsLargeScale)
+{
   std::vector<std::string> input{"a", "b", "", "", "e", "f", "g", "h"};
   std::vector<std::string> values_to_replace{"a", "b"};
   std::vector<std::string> replacement{"z", ""};
@@ -275,7 +288,8 @@ TEST_F(ReplaceStringsTest, StringsLargeScale) {
 //// This is the main test feature
 template <class T>
 struct ReplaceTest : cudf::test::BaseFixture {
-  ReplaceTest() {
+  ReplaceTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -305,7 +319,8 @@ void test_replace(
   std::vector<T> const& replacement_values_column,
   std::vector<cudf::valid_type> const& input_column_valid       = std::vector<cudf::valid_type>{},
   std::vector<cudf::valid_type> const& replacement_values_valid = std::vector<cudf::valid_type>{},
-  bool print                                                    = false) {
+  bool print                                                    = false)
+{
   cudf::test::fixed_width_column_wrapper<T> gdf_input_column(input_column.begin(),
                                                              input_column.end());
   if (input_column_valid.size() > 0) {
@@ -378,7 +393,8 @@ using Types = cudf::test::NumericTypes;
 TYPED_TEST_CASE(ReplaceTest, Types);
 
 // Simple test, replacing all even gdf_replacement_values_column
-TYPED_TEST(ReplaceTest, ReplaceEvenPosition) {
+TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({1, 2, 3, 4, 5, 6, 7, 8});
   std::vector<T> values_to_replace_column  = cudf::test::make_type_param_vector<T>({2, 6, 4, 8});
@@ -388,7 +404,8 @@ TYPED_TEST(ReplaceTest, ReplaceEvenPosition) {
 }
 
 // Similar test as ReplaceEvenPosition, but with unordered data
-TYPED_TEST(ReplaceTest, Unordered) {
+TYPED_TEST(ReplaceTest, Unordered)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<T> values_to_replace_column  = cudf::test::make_type_param_vector<T>({2, 6, 4, 8});
@@ -398,7 +415,8 @@ TYPED_TEST(ReplaceTest, Unordered) {
 }
 
 // Testing with Nothing To Replace
-TYPED_TEST(ReplaceTest, NothingToReplace) {
+TYPED_TEST(ReplaceTest, NothingToReplace)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<T> values_to_replace_column  = cudf::test::make_type_param_vector<T>({10, 11, 12});
@@ -408,7 +426,8 @@ TYPED_TEST(ReplaceTest, NothingToReplace) {
 }
 
 // Testing with empty Data
-TYPED_TEST(ReplaceTest, EmptyData) {
+TYPED_TEST(ReplaceTest, EmptyData)
+{
   using T = TypeParam;
   std::vector<T> input_column{{}};
   std::vector<T> values_to_replace_column  = cudf::test::make_type_param_vector<T>({10, 11, 12});
@@ -418,7 +437,8 @@ TYPED_TEST(ReplaceTest, EmptyData) {
 }
 
 // Testing with empty Replace
-TYPED_TEST(ReplaceTest, EmptyReplace) {
+TYPED_TEST(ReplaceTest, EmptyReplace)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<T> values_to_replace_column{};
@@ -428,7 +448,8 @@ TYPED_TEST(ReplaceTest, EmptyReplace) {
 }
 
 // Testing with input column containing nulls
-TYPED_TEST(ReplaceTest, NullsInData) {
+TYPED_TEST(ReplaceTest, NullsInData)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<cudf::valid_type> input_column_valid{1, 1, 1, 0, 0, 1, 1, 1};
@@ -440,7 +461,8 @@ TYPED_TEST(ReplaceTest, NullsInData) {
 }
 
 // Testing with replacement column containing nulls
-TYPED_TEST(ReplaceTest, NullsInNewValues) {
+TYPED_TEST(ReplaceTest, NullsInNewValues)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<T> values_to_replace_column  = cudf::test::make_type_param_vector<T>({2, 6, 4, 8});
@@ -455,7 +477,8 @@ TYPED_TEST(ReplaceTest, NullsInNewValues) {
 }
 
 // Testing with both replacement and input column containing nulls
-TYPED_TEST(ReplaceTest, NullsInBoth) {
+TYPED_TEST(ReplaceTest, NullsInBoth)
+{
   using T                     = TypeParam;
   std::vector<T> input_column = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
   std::vector<cudf::valid_type> input_column_valid{1, 1, 1, 0, 0, 1, 1, 1};
@@ -471,7 +494,8 @@ TYPED_TEST(ReplaceTest, NullsInBoth) {
 }
 
 // Test with much larger data sets
-TYPED_TEST(ReplaceTest, LargeScaleReplaceTest) {
+TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
+{
   const size_t DATA_SIZE    = 1000000;
   const size_t REPLACE_SIZE = 10000;
 

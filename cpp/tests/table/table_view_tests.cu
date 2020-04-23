@@ -28,11 +28,13 @@
 
 // Compares two tables row by row, if table1 row is less than table2, then corresponding row value
 // in `ouput` would be `true`/1 else `false`/0.
-struct TableViewTest : public cudf::test::BaseFixture {};
+struct TableViewTest : public cudf::test::BaseFixture {
+};
 void row_comparison(cudf::table_view input1,
                     cudf::table_view input2,
                     cudf::mutable_column_view output,
-                    std::vector<cudf::order> const& column_order) {
+                    std::vector<cudf::order> const& column_order)
+{
   cudaStream_t stream = 0;
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
@@ -50,7 +52,8 @@ void row_comparison(cudf::table_view input1,
                     comparator);
 }
 
-TEST_F(TableViewTest, EmptyColumnedTable) {
+TEST_F(TableViewTest, EmptyColumnedTable)
+{
   std::vector<cudf::column_view> cols{};
 
   cudf::table_view input(cols);
@@ -59,7 +62,8 @@ TEST_F(TableViewTest, EmptyColumnedTable) {
   EXPECT_EQ(input.num_columns(), expected);
 }
 
-TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase) {
+TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{1, 2, 3, 4}};
   cudf::test::fixed_width_column_wrapper<int16_t> col2{{0, 1, 4, 3}};
   std::vector<cudf::order> column_order{cudf::order::DESCENDING};
@@ -75,7 +79,8 @@ TEST_F(TableViewTest, TestLexicographicalComparatorTwoTableCase) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(TableViewTest, TestLexicographicalComparatorSameTable) {
+TEST_F(TableViewTest, TestLexicographicalComparatorSameTable)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{1, 2, 3, 4}};
   std::vector<cudf::order> column_order{cudf::order::DESCENDING};
 
@@ -89,7 +94,8 @@ TEST_F(TableViewTest, TestLexicographicalComparatorSameTable) {
   cudf::test::expect_columns_equal(expected, got->view());
 }
 
-TEST_F(TableViewTest, Select) {
+TEST_F(TableViewTest, Select)
+{
   using cudf::test::expect_columns_equal;
   using cudf::test::fixed_width_column_wrapper;
 
@@ -104,7 +110,8 @@ TEST_F(TableViewTest, Select) {
   expect_columns_equal(t.column(3), selected.column(1));
 }
 
-TEST_F(TableViewTest, SelectOutOfBounds) {
+TEST_F(TableViewTest, SelectOutOfBounds)
+{
   using cudf::test::fixed_width_column_wrapper;
 
   fixed_width_column_wrapper<int8_t> col1{{1, 2, 3, 4}};
@@ -116,7 +123,8 @@ TEST_F(TableViewTest, SelectOutOfBounds) {
   EXPECT_THROW(t.select({2, 3, 4}), std::out_of_range);
 }
 
-TEST_F(TableViewTest, SelectNoColumns) {
+TEST_F(TableViewTest, SelectNoColumns)
+{
   using cudf::test::fixed_width_column_wrapper;
 
   fixed_width_column_wrapper<int8_t> col1{{1, 2, 3, 4}};

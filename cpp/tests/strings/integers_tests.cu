@@ -26,9 +26,11 @@
 #include <string>
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {};
+struct StringsConvertTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConvertTest, ToInteger) {
+TEST_F(StringsConvertTest, ToInteger)
+{
   std::vector<const char*> h_strings{
     "eee", "1234", nullptr, "", "-9832", "93.24", "765é", "-1.78e+5", "2147483647", "-2147483648"};
   cudf::test::strings_column_wrapper strings(
@@ -47,7 +49,8 @@ TEST_F(StringsConvertTest, ToInteger) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, FromInteger) {
+TEST_F(StringsConvertTest, FromInteger)
+{
   int32_t minint = std::numeric_limits<int32_t>::min();
   int32_t maxint = std::numeric_limits<int32_t>::max();
   std::vector<int32_t> h_integers{100, 987654321, 0, 0, -12761, 0, 5, -4, maxint, minint};
@@ -69,19 +72,22 @@ TEST_F(StringsConvertTest, FromInteger) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeStringsColumn) {
+TEST_F(StringsConvertTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::INT32}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_integers(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsConvertTest, ZeroSizeIntegersColumn) {
+TEST_F(StringsConvertTest, ZeroSizeIntegersColumn)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::to_integers(zero_size_column, cudf::data_type{cudf::INT32});
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(StringsConvertTest, EmptyStringsColumn) {
+TEST_F(StringsConvertTest, EmptyStringsColumn)
+{
   cudf::test::strings_column_wrapper strings({"", "", ""});
   auto results =
     cudf::strings::to_integers(cudf::strings_column_view(strings), cudf::data_type{cudf::INT64});
@@ -90,12 +96,15 @@ TEST_F(StringsConvertTest, EmptyStringsColumn) {
 }
 
 template <typename T>
-class StringsIntegerConvertTest : public StringsConvertTest {};
+class StringsIntegerConvertTest : public StringsConvertTest
+{
+};
 
 using IntegerTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
 TYPED_TEST_CASE(StringsIntegerConvertTest, IntegerTypes);
 
-TYPED_TEST(StringsIntegerConvertTest, FromToInteger) {
+TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
+{
   thrust::device_vector<TypeParam> d_integers(255);
   thrust::sequence(
     thrust::device, d_integers.begin(), d_integers.end(), -(TypeParam)(d_integers.size() / 2));
@@ -131,12 +140,15 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger) {
 
 //
 template <typename T>
-class StringsFloatConvertTest : public StringsConvertTest {};
+class StringsFloatConvertTest : public StringsConvertTest
+{
+};
 
 using FloatTypes = cudf::test::Types<float, double>;
 TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
 
-TYPED_TEST(StringsFloatConvertTest, FromToIntegerError) {
+TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
+{
   auto dtype  = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
   auto column = cudf::make_numeric_column(dtype, 100);
   EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
@@ -145,7 +157,8 @@ TYPED_TEST(StringsFloatConvertTest, FromToIntegerError) {
   EXPECT_THROW(cudf::strings::to_integers(column->view(), dtype), cudf::logic_error);
 }
 
-TEST_F(StringsConvertTest, HexToInteger) {
+TEST_F(StringsConvertTest, HexToInteger)
+{
   std::vector<const char*> h_strings{
     "1234", nullptr, "98BEEF", "1a5", "CAFE", "2face", "0xAABBCCDD", "112233445566"};
   cudf::test::strings_column_wrapper strings(

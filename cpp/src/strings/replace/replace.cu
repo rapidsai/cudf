@@ -24,11 +24,14 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Used as template parameter to divide size calculation from
  * the actual string operation within a function.
@@ -54,7 +57,8 @@ struct replace_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;  // null string
     string_view d_str = d_strings.element<string_view>(idx);
     auto max_n        = max_repl;
@@ -93,7 +97,8 @@ std::unique_ptr<column> replace(
   string_scalar const& repl,
   int32_t maxrepl                     = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
@@ -136,7 +141,8 @@ std::unique_ptr<column> replace(
                              mr);
 }
 
-namespace {
+namespace
+{
 /**
  * @brief Function logic for the replace_slice API.
  *
@@ -150,7 +156,8 @@ struct replace_slice_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;  // null string
     string_view d_str = d_strings.element<string_view>(idx);
     auto length       = d_str.length();
@@ -180,7 +187,8 @@ std::unique_ptr<column> replace_slice(
   size_type start,
   size_type stop                      = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
@@ -223,8 +231,8 @@ std::unique_ptr<column> replace_slice(
                              mr);
 }
 
-namespace {
-
+namespace
+{
 /**
  * @brief Function logic for the replace_multi API.
  *
@@ -238,7 +246,8 @@ struct replace_multi_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     char* out_ptr     = nullptr;
@@ -283,7 +292,8 @@ std::unique_ptr<column> replace(
   strings_column_view const& targets,
   strings_column_view const& repls,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
@@ -334,7 +344,8 @@ std::unique_ptr<column> replace_nulls(
   strings_column_view const& strings,
   string_scalar const& repl           = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
@@ -385,7 +396,8 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
                                 string_scalar const& repl,
                                 int32_t maxrepl,
-                                rmm::mr::device_memory_resource* mr) {
+                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace(strings, target, repl, maxrepl, mr);
 }
@@ -394,7 +406,8 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       string_scalar const& repl,
                                       size_type start,
                                       size_type stop,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace_slice(strings, repl, start, stop, mr);
 }
@@ -402,14 +415,16 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
                                 strings_column_view const& repls,
-                                rmm::mr::device_memory_resource* mr) {
+                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace(strings, targets, repls, mr);
 }
 
 std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       string_scalar const& repl,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace_nulls(strings, repl, mr);
 }

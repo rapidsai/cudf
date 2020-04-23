@@ -76,7 +76,8 @@ struct OrderByTest : public GdfTest {
   gdf_column* gdf_raw_sort_order_types;
   gdf_column* gdf_raw_output_indices_column;
 
-  OrderByTest() {
+  OrderByTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -98,7 +99,8 @@ struct OrderByTest : public GdfTest {
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const& host_vector,
                                     cudf::valid_type* host_valid,
-                                    const cudf::size_type n_count) {
+                                    const cudf::size_type n_count)
+  {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type = GDF_INT8;
     if (std::is_same<col_type, int8_t>::value)
@@ -172,7 +174,8 @@ struct OrderByTest : public GdfTest {
     std::vector<gdf_col_pointer>& gdf_columns,
     std::tuple<std::vector<Tp>...>& t,
     std::vector<host_valid_pointer>& valids,
-    const cudf::size_type n_count) {
+    const cudf::size_type n_count)
+  {
     // bottom of compile-time recursion
     // purposely empty...
   }
@@ -181,7 +184,8 @@ struct OrderByTest : public GdfTest {
                                        std::vector<gdf_col_pointer>& gdf_columns,
                                        std::tuple<std::vector<Tp>...>& t,
                                        std::vector<host_valid_pointer>& valids,
-                                       const cudf::size_type n_count) {
+                                       const cudf::size_type n_count)
+  {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
     if (valids.size() != 0) {
@@ -197,7 +201,8 @@ struct OrderByTest : public GdfTest {
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer> initialize_gdf_columns(multi_column_t host_columns,
                                                       std::vector<host_valid_pointer>& valids,
-                                                      const cudf::size_type n_count) {
+                                                      const cudf::size_type n_count)
+  {
     std::vector<gdf_col_pointer> gdf_columns;
     convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
     return gdf_columns;
@@ -219,7 +224,8 @@ struct OrderByTest : public GdfTest {
                     size_t orderby_column_range,
                     const cudf::size_type n_count = 0,
                     bool random_order_type_values = true,
-                    bool print                    = false) {
+                    bool print                    = false)
+  {
     initialize_tuple(orderby_columns, orderby_column_length, orderby_column_range);
 
     auto n_columns = std::tuple_size<multi_column_t>::value;
@@ -242,7 +248,8 @@ struct OrderByTest : public GdfTest {
     }
   }
 
-  void create_gdf_output_buffers(const size_t orderby_column_length) {
+  void create_gdf_output_buffers(const size_t orderby_column_length)
+  {
     std::vector<int> temp(orderby_column_length, 0);
     gdf_output_indices_column     = create_gdf_column(temp, nullptr, 0);
     gdf_raw_output_indices_column = gdf_output_indices_column.get();
@@ -254,7 +261,8 @@ struct OrderByTest : public GdfTest {
     std::tuple<std::vector<Tp>...>& t,
     std::vector<host_valid_pointer>& valids,
     std::vector<int8_t>& asc_desc,
-    std::vector<size_t>& indices) {
+    std::vector<size_t>& indices)
+  {
     // bottom of compile-time recursion
     // purposely empty...
   }
@@ -263,7 +271,8 @@ struct OrderByTest : public GdfTest {
     I<sizeof...(Tp), void>::type sort_multi_column(std::tuple<std::vector<Tp>...>& t,
                                                    std::vector<host_valid_pointer>& valids,
                                                    std::vector<int8_t>& asc_desc,
-                                                   std::vector<size_t>& indices) {
+                                                   std::vector<size_t>& indices)
+  {
     const size_t col_index = sizeof...(Tp) - I - 1;
 
     // First column have higher priority so we sort back to front
@@ -312,7 +321,8 @@ struct OrderByTest : public GdfTest {
    * @returns A vector of 'size_t' sorted indices
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<size_t> compute_reference_solution(bool print = false) {
+  std::vector<size_t> compute_reference_solution(bool print = false)
+  {
     const size_t colums_size = std::get<0>(orderby_columns).size();
 
     std::vector<size_t> reference_result(colums_size);
@@ -342,7 +352,8 @@ struct OrderByTest : public GdfTest {
   /* ----------------------------------------------------------------------------*/
   std::vector<size_t> compute_gdf_result(bool use_default_sort_order = false,
                                          bool print                  = false,
-                                         gdf_error expected_result   = GDF_SUCCESS) {
+                                         gdf_error expected_result   = GDF_SUCCESS)
+  {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
     gdf_error result_error{GDF_SUCCESS};
@@ -445,7 +456,8 @@ TYPED_TEST_CASE(OrderByTest, Implementations);
 
 // This test is used for debugging purposes and is disabled by default.
 // The input sizes are small and has a large amount of debug printing enabled.
-TYPED_TEST(OrderByTest, DISABLED_DebugTest) {
+TYPED_TEST(OrderByTest, DISABLED_DebugTest)
+{
   this->create_input(5, 2, 1, true, true);
   this->create_gdf_output_buffers(5);
 
@@ -462,7 +474,8 @@ TYPED_TEST(OrderByTest, DISABLED_DebugTest) {
   }
 }
 
-TYPED_TEST(OrderByTest, EqualValues) {
+TYPED_TEST(OrderByTest, EqualValues)
+{
   this->create_input(100, 1);
   this->create_gdf_output_buffers(100);
 
@@ -479,7 +492,8 @@ TYPED_TEST(OrderByTest, EqualValues) {
   }
 }
 
-TYPED_TEST(OrderByTest, EqualValuesNull) {
+TYPED_TEST(OrderByTest, EqualValuesNull)
+{
   this->create_input(100, 1, 100);
   this->create_gdf_output_buffers(100);
 
@@ -496,7 +510,8 @@ TYPED_TEST(OrderByTest, EqualValuesNull) {
   }
 }
 
-TYPED_TEST(OrderByTest, MaxRandomValues) {
+TYPED_TEST(OrderByTest, MaxRandomValues)
+{
   this->create_input(10000, RAND_MAX);
   this->create_gdf_output_buffers(10000);
 
@@ -513,7 +528,8 @@ TYPED_TEST(OrderByTest, MaxRandomValues) {
   }
 }
 
-TYPED_TEST(OrderByTest, MaxRandomValuesAndNulls) {
+TYPED_TEST(OrderByTest, MaxRandomValuesAndNulls)
+{
   this->create_input(10000, RAND_MAX, 2000);
   this->create_gdf_output_buffers(10000);
 
@@ -530,7 +546,8 @@ TYPED_TEST(OrderByTest, MaxRandomValuesAndNulls) {
   }
 }
 
-TYPED_TEST(OrderByTest, EmptyColumns) {
+TYPED_TEST(OrderByTest, EmptyColumns)
+{
   this->create_input(0, 100);
   this->create_gdf_output_buffers(0);
 
@@ -552,7 +569,8 @@ TYPED_TEST(OrderByTest, EmptyColumns) {
  * sort in ascendig.
  **/
 
-TYPED_TEST(OrderByTest, EqualValuesDefaultSort) {
+TYPED_TEST(OrderByTest, EqualValuesDefaultSort)
+{
   this->create_input(100, 1, 0, false);
   this->create_gdf_output_buffers(100);
 
@@ -569,7 +587,8 @@ TYPED_TEST(OrderByTest, EqualValuesDefaultSort) {
   }
 }
 
-TYPED_TEST(OrderByTest, EqualValuesNullDefaultSort) {
+TYPED_TEST(OrderByTest, EqualValuesNullDefaultSort)
+{
   this->create_input(100, 1, 100, false);
   this->create_gdf_output_buffers(100);
 
@@ -586,7 +605,8 @@ TYPED_TEST(OrderByTest, EqualValuesNullDefaultSort) {
   }
 }
 
-TYPED_TEST(OrderByTest, MaxRandomValuesDefaultSort) {
+TYPED_TEST(OrderByTest, MaxRandomValuesDefaultSort)
+{
   this->create_input(10000, RAND_MAX, 0, false);
   this->create_gdf_output_buffers(10000);
 
@@ -603,7 +623,8 @@ TYPED_TEST(OrderByTest, MaxRandomValuesDefaultSort) {
   }
 }
 
-TYPED_TEST(OrderByTest, MaxRandomValuesAndNullsDefaultSort) {
+TYPED_TEST(OrderByTest, MaxRandomValuesAndNullsDefaultSort)
+{
   this->create_input(10000, RAND_MAX, 2000, false);
   this->create_gdf_output_buffers(10000);
 
@@ -620,7 +641,8 @@ TYPED_TEST(OrderByTest, MaxRandomValuesAndNullsDefaultSort) {
   }
 }
 
-TYPED_TEST(OrderByTest, EmptyColumnsDefaultSort) {
+TYPED_TEST(OrderByTest, EmptyColumnsDefaultSort)
+{
   this->create_input(0, 100, 0, false);
   this->create_gdf_output_buffers(0);
 

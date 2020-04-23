@@ -22,10 +22,12 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Returns a new strings column using the specified Filter to select
  * strings from the lhs iterator or the rhs iterator.
@@ -56,7 +58,8 @@ std::unique_ptr<cudf::column> copy_if_else(
   StringPairIterRight rhs_begin,
   Filter filter_fn,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 

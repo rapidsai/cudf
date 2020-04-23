@@ -29,11 +29,13 @@
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
-struct ApplyBooleanMaskErrorTest : GdfTest {};
+struct ApplyBooleanMaskErrorTest : GdfTest {
+};
 
 // Test ill-formed inputs
 
-TEST_F(ApplyBooleanMaskErrorTest, NullPtrs) {
+TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
+{
   constexpr cudf::size_type column_size{1000};
 
   gdf_column bad_input, bad_mask;
@@ -86,7 +88,8 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs) {
   }
 }
 
-TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch) {
+TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)
+{
   constexpr cudf::size_type column_size{1000};
   constexpr cudf::size_type mask_size{500};
 
@@ -100,7 +103,8 @@ TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch) {
   CUDF_EXPECT_THROW_MESSAGE(cudf::apply_boolean_mask(table_source, mask), "Column size mismatch");
 }
 
-TEST_F(ApplyBooleanMaskErrorTest, NonBooleanMask) {
+TEST_F(ApplyBooleanMaskErrorTest, NonBooleanMask)
+{
   constexpr cudf::size_type column_size{1000};
 
   column_wrapper<int32_t> source(column_size);
@@ -147,7 +151,8 @@ TYPED_TEST_CASE(ApplyBooleanMaskTest, test_types);
 template <typename T>
 void BooleanMaskTest(column_wrapper<T> const &source,
                      column_wrapper<cudf::bool8> const &mask,
-                     column_wrapper<T> const &expected) {
+                     column_wrapper<T> const &expected)
+{
   cudf::table result;
 
   EXPECT_NO_THROW(result =
@@ -169,7 +174,8 @@ void BooleanMaskTest(column_wrapper<T> const &source,
   result.destroy();
 }
 
-TEST_F(ApplyBooleanMaskErrorTest, Bug2141) {
+TEST_F(ApplyBooleanMaskErrorTest, Bug2141)
+{
   // This bug found an error (cudf Issue #2141) where the kernel wouldn't
   // properly store some valid bits when the indices overlapped a warp
   // boundary within a block
@@ -203,7 +209,8 @@ TEST_F(ApplyBooleanMaskErrorTest, Bug2141) {
                          [](cudf::size_type row) { return true; }));
 }
 
-TEST_F(ApplyBooleanMaskErrorTest, Gaps) {
+TEST_F(ApplyBooleanMaskErrorTest, Gaps)
+{
   std::vector<int> valids{3,   4,   5,   259, 260, 261, 262, 291, 292, 293, 294,
                           323, 324, 325, 326, 355, 356, 357, 387, 388, 389, 419,
                           420, 421, 451, 452, 453, 483, 484, 485, 506, 507, 508};
@@ -226,7 +233,8 @@ TEST_F(ApplyBooleanMaskErrorTest, Gaps) {
 
 constexpr cudf::size_type column_size{100000};
 
-TYPED_TEST(ApplyBooleanMaskTest, Identity) {
+TYPED_TEST(ApplyBooleanMaskTest, Identity)
+{
   BooleanMaskTest<TypeParam>(this->factory.make(
                                column_size,
                                [](cudf::size_type row) { return row; },
@@ -241,7 +249,8 @@ TYPED_TEST(ApplyBooleanMaskTest, Identity) {
                                [](cudf::size_type row) { return true; }));
 }
 
-TYPED_TEST(ApplyBooleanMaskTest, MaskAllNullOrFalse) {
+TYPED_TEST(ApplyBooleanMaskTest, MaskAllNullOrFalse)
+{
   column_wrapper<TypeParam> input = this->factory.make(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   column_wrapper<TypeParam> expected(0, false);
@@ -261,7 +270,8 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskAllNullOrFalse) {
                              expected);
 }
 
-TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse) {
+TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse)
+{
   BooleanMaskTest<TypeParam>(this->factory.make(
                                column_size,
                                [](cudf::size_type row) { return row; },
@@ -276,7 +286,8 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalse) {
                                [](cudf::size_type row) { return true; }));
 }
 
-TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalseOrNull) {
+TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalseOrNull)
+{
   // mix it up a bit by setting the input odd values to be null
   // Since the bool mask has even values null, the output
   // vector should have all values nulled
@@ -305,7 +316,8 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalseOrNull) {
     expected);
 }
 
-TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap) {
+TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
+{
   std::vector<cudf::size_type> column_sizes{8, 20, 60, 2700, 100000, 1000000};
 
   for (auto column_size : column_sizes) {
@@ -327,7 +339,8 @@ TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap) {
   }
 }
 
-TYPED_TEST(ApplyBooleanMaskTest, NoNullMask) {
+TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
+{
   BooleanMaskTest<TypeParam>(
     this->factory.make(column_size, [](cudf::size_type row) { return row; }),
     column_wrapper<cudf::bool8>(
@@ -337,13 +350,15 @@ TYPED_TEST(ApplyBooleanMaskTest, NoNullMask) {
     this->factory.make(column_size / 2, [](cudf::size_type row) { return 2 * row + 1; }));
 }
 
-struct ApplyBooleanMaskTableTest : GdfTest {};
+struct ApplyBooleanMaskTableTest : GdfTest {
+};
 
 static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factory;
 
 void BooleanMaskTableTest(cudf::table const &source,
                           cudf::test::column_wrapper<cudf::bool8> const &mask,
-                          cudf::table &expected) {
+                          cudf::table &expected)
+{
   cudf::table result;
   EXPECT_NO_THROW(result = cudf::apply_boolean_mask(source, mask));
 
@@ -366,7 +381,8 @@ void BooleanMaskTableTest(cudf::table const &source,
   }
 }
 
-TEST_F(ApplyBooleanMaskTableTest, Identity) {
+TEST_F(ApplyBooleanMaskTableTest, Identity)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<float> float_column(
@@ -394,7 +410,8 @@ TEST_F(ApplyBooleanMaskTableTest, Identity) {
   BooleanMaskTableTest(table_source, mask, table_expected);
 }
 
-TEST_F(ApplyBooleanMaskTableTest, MaskAllNullOrFalse) {
+TEST_F(ApplyBooleanMaskTableTest, MaskAllNullOrFalse)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<float> float_column(
@@ -430,7 +447,8 @@ TEST_F(ApplyBooleanMaskTableTest, MaskAllNullOrFalse) {
                        table_expected);
 }
 
-TEST_F(ApplyBooleanMaskTableTest, MaskEvensFalseOrNull) {
+TEST_F(ApplyBooleanMaskTableTest, MaskEvensFalseOrNull)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size,
     [](cudf::size_type row) { return row; },
@@ -494,7 +512,8 @@ TEST_F(ApplyBooleanMaskTableTest, MaskEvensFalseOrNull) {
                        table_expected);
 }
 
-TEST_F(ApplyBooleanMaskTableTest, NonalignedGap) {
+TEST_F(ApplyBooleanMaskTableTest, NonalignedGap)
+{
   const int start{1}, end{column_size / 4};
 
   cudf::test::column_wrapper<int32_t> int_column(
@@ -548,7 +567,8 @@ TEST_F(ApplyBooleanMaskTableTest, NonalignedGap) {
     table_expected);
 }
 
-TEST_F(ApplyBooleanMaskTableTest, NoNullMask) {
+TEST_F(ApplyBooleanMaskTableTest, NoNullMask)
+{
   cudf::test::column_wrapper<int32_t> int_column(
     column_size, [](cudf::size_type row) { return row; }, false);
   cudf::test::column_wrapper<float> float_column(

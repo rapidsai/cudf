@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct DictionaryAddKeysTest : public cudf::test::BaseFixture {};
+struct DictionaryAddKeysTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryAddKeysTest, StringsColumn) {
+TEST_F(DictionaryAddKeysTest, StringsColumn)
+{
   std::vector<const char*> h_strings{"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "fff", "aaa"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::vector<const char*> h_new_keys{"ddd", "bbb", "eee"};
@@ -47,7 +49,8 @@ TEST_F(DictionaryAddKeysTest, StringsColumn) {
   cudf::test::expect_columns_equal(view.indices(), indices_expected);
 }
 
-TEST_F(DictionaryAddKeysTest, FloatColumn) {
+TEST_F(DictionaryAddKeysTest, FloatColumn)
+{
   cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
   cudf::test::fixed_width_column_wrapper<float> new_keys{4.25, -11.75, 5.0};
 
@@ -63,7 +66,8 @@ TEST_F(DictionaryAddKeysTest, FloatColumn) {
   cudf::test::expect_columns_equal(view.indices(), expected);
 }
 
-TEST_F(DictionaryAddKeysTest, WithNull) {
+TEST_F(DictionaryAddKeysTest, WithNull)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> input{{555, 0, 333, 111, 222, 222, 222, 555, 0},
                                                         {1, 1, 1, 0, 1, 1, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int64_t> new_keys{0, 111, 444, 777};
@@ -76,7 +80,8 @@ TEST_F(DictionaryAddKeysTest, WithNull) {
   cudf::test::expect_columns_equal(decoded->view(), input);  // new keys should not change anything
 }
 
-TEST_F(DictionaryAddKeysTest, Errors) {
+TEST_F(DictionaryAddKeysTest, Errors)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> input{1, 2, 3};
   auto dictionary = cudf::dictionary::encode(input);
 

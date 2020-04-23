@@ -37,19 +37,23 @@ TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
 /**
  * @brief Base test fixture for CSV reader/writer tests
  **/
-struct CsvTest : public GdfTest {};
+struct CsvTest : public GdfTest {
+};
 
 /**
  * @brief Test fixture for source content parameterized tests
  **/
-struct CsvValueParamTest : public CsvTest, public testing::WithParamInterface<const char*> {};
+struct CsvValueParamTest : public CsvTest, public testing::WithParamInterface<const char*> {
+};
 
-MATCHER_P(FloatNearPointwise, tolerance, "Out of range") {
+MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
+{
   return (std::get<0>(arg) > std::get<1>(arg) - tolerance &&
           std::get<0>(arg) < std::get<1>(arg) + tolerance);
 }
 
-TEST_F(CsvTest, DetectColumns) {
+TEST_F(CsvTest, DetectColumns)
+{
   const std::string fname = temp_env->get_temp_dir() + "DetectColumnsTest.csv";
 
   // types are  { "int", "float64", "int" };
@@ -78,7 +82,8 @@ TEST_F(CsvTest, DetectColumns) {
   }
 }
 
-TEST_F(CsvTest, UseColumns) {
+TEST_F(CsvTest, UseColumns)
+{
   const std::string fname = temp_env->get_temp_dir() + "UseColumnsTest.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -106,7 +111,8 @@ TEST_F(CsvTest, UseColumns) {
   }
 }
 
-TEST_F(CsvTest, Numbers) {
+TEST_F(CsvTest, Numbers)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvNumbersTest.csv";
 
   constexpr int num_rows = 4;
@@ -162,7 +168,8 @@ TEST_F(CsvTest, Numbers) {
   }
 }
 
-TEST_F(CsvTest, MortPerf) {
+TEST_F(CsvTest, MortPerf)
+{
   const std::string fname = "Performance_2000Q1.txt";
   if (checkFile(fname)) {
     cudf::csv_read_arg args(cudf::source_info{fname});
@@ -171,7 +178,8 @@ TEST_F(CsvTest, MortPerf) {
   }
 }
 
-TEST_F(CsvTest, Strings) {
+TEST_F(CsvTest, Strings)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvStringsTest.csv";
   std::vector<std::string> names{"line", "verse"};
 
@@ -197,7 +205,8 @@ TEST_F(CsvTest, Strings) {
   }
 }
 
-TEST_F(CsvTest, QuotedStrings) {
+TEST_F(CsvTest, QuotedStrings)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvQuotedStringsTest.csv";
   std::vector<std::string> names{"line", "verse"};
 
@@ -223,7 +232,8 @@ TEST_F(CsvTest, QuotedStrings) {
   }
 }
 
-TEST_F(CsvTest, IgnoreQuotes) {
+TEST_F(CsvTest, IgnoreQuotes)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvIgnoreQuotesTest.csv";
   std::vector<std::string> names{"line", "verse"};
 
@@ -251,7 +261,8 @@ TEST_F(CsvTest, IgnoreQuotes) {
   }
 }
 
-TEST_F(CsvTest, Booleans) {
+TEST_F(CsvTest, Booleans)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvBooleansTest.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -286,7 +297,8 @@ TEST_F(CsvTest, Booleans) {
   }
 }
 
-TEST_F(CsvTest, Dates) {
+TEST_F(CsvTest, Dates)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvDatesTest.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -322,7 +334,8 @@ TEST_F(CsvTest, Dates) {
   }
 }
 
-TEST_F(CsvTest, Timestamps) {
+TEST_F(CsvTest, Timestamps)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvTimestamps.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -354,9 +367,11 @@ TEST_F(CsvTest, Timestamps) {
   }
 }
 
-struct gdf_csv_test : public GdfTest {};
+struct gdf_csv_test : public GdfTest {
+};
 
-TEST_F(gdf_csv_test, TimestampSeconds) {
+TEST_F(gdf_csv_test, TimestampSeconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvTimestampSeconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -382,7 +397,8 @@ TEST_F(gdf_csv_test, TimestampSeconds) {
   }
 }
 
-TEST_F(gdf_csv_test, TimestampMilliseconds) {
+TEST_F(gdf_csv_test, TimestampMilliseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvTimestampMilliseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -414,7 +430,8 @@ TEST_F(gdf_csv_test, TimestampMilliseconds) {
   }
 }
 
-TEST_F(gdf_csv_test, TimestampMicroseconds) {
+TEST_F(gdf_csv_test, TimestampMicroseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvTimestampMicroseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -446,7 +463,8 @@ TEST_F(gdf_csv_test, TimestampMicroseconds) {
   }
 }
 
-TEST_F(gdf_csv_test, TimestampNanoseconds) {
+TEST_F(gdf_csv_test, TimestampNanoseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvTimestampNanoseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -478,7 +496,8 @@ TEST_F(gdf_csv_test, TimestampNanoseconds) {
   }
 }
 
-TEST_F(gdf_csv_test, DatesCastToTimestampSeconds) {
+TEST_F(gdf_csv_test, DatesCastToTimestampSeconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CastToTimestampSeconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -516,7 +535,8 @@ TEST_F(gdf_csv_test, DatesCastToTimestampSeconds) {
   }
 }
 
-TEST_F(gdf_csv_test, DatesCastToTimestampMilliseconds) {
+TEST_F(gdf_csv_test, DatesCastToTimestampMilliseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CastToTimestampMilliseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -554,7 +574,8 @@ TEST_F(gdf_csv_test, DatesCastToTimestampMilliseconds) {
   }
 }
 
-TEST_F(gdf_csv_test, DatesCastToTimestampMicroseconds) {
+TEST_F(gdf_csv_test, DatesCastToTimestampMicroseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CastToTimestampMicroseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -592,7 +613,8 @@ TEST_F(gdf_csv_test, DatesCastToTimestampMicroseconds) {
   }
 }
 
-TEST_F(gdf_csv_test, DatesCastToTimestampNanoseconds) {
+TEST_F(gdf_csv_test, DatesCastToTimestampNanoseconds)
+{
   const std::string fname = temp_env->get_temp_dir() + "CastToTimestampNanoseconds.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -630,7 +652,8 @@ TEST_F(gdf_csv_test, DatesCastToTimestampNanoseconds) {
   }
 }
 
-TEST_F(CsvTest, FloatingPoint) {
+TEST_F(CsvTest, FloatingPoint)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvFloatingPoint.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -658,7 +681,8 @@ TEST_F(CsvTest, FloatingPoint) {
   }
 }
 
-TEST_F(CsvTest, Category) {
+TEST_F(CsvTest, Category)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvCategory.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -683,7 +707,8 @@ TEST_F(CsvTest, Category) {
   }
 }
 
-TEST_F(CsvTest, SkiprowsNrows) {
+TEST_F(CsvTest, SkiprowsNrows)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvSkiprowsNrows.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -709,7 +734,8 @@ TEST_F(CsvTest, SkiprowsNrows) {
   }
 }
 
-TEST_F(CsvTest, ByteRange) {
+TEST_F(CsvTest, ByteRange)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvByteRange.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -734,7 +760,8 @@ TEST_F(CsvTest, ByteRange) {
   }
 }
 
-TEST_F(CsvTest, BlanksAndComments) {
+TEST_F(CsvTest, BlanksAndComments)
+{
   const std::string fname = temp_env->get_temp_dir() + "BlanksAndComments.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -758,7 +785,8 @@ TEST_F(CsvTest, BlanksAndComments) {
   }
 }
 
-TEST_P(CsvValueParamTest, EmptyFileSource) {
+TEST_P(CsvValueParamTest, EmptyFileSource)
+{
   const std::string fname = temp_env->get_temp_dir() + "EmptyFileSource.csv";
 
   std::ofstream outfile{fname, std::ofstream::out};
@@ -772,7 +800,8 @@ TEST_P(CsvValueParamTest, EmptyFileSource) {
 }
 INSTANTIATE_TEST_CASE_P(CsvReader, CsvValueParamTest, testing::Values("", "\n"));
 
-TEST_F(CsvTest, ArrowFileSource) {
+TEST_F(CsvTest, ArrowFileSource)
+{
   const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);
@@ -794,7 +823,8 @@ TEST_F(CsvTest, ArrowFileSource) {
   EXPECT_THAT(col.hostdata(), ::testing::ElementsAre(9, 8, 7, 6, 5, 4, 3, 2));
 }
 
-TEST_F(CsvTest, Writer) {
+TEST_F(CsvTest, Writer)
+{
   const std::string fname = temp_env->get_temp_dir() + "CsvWriteTest.csv";
 
   std::ofstream outfile(fname, std::ofstream::out);

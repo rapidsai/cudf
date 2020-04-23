@@ -61,7 +61,8 @@ template <JoinType join_type, typename multimap_type>
 gdf_error estimate_join_output_size(device_table const &build_table,
                                     device_table const &probe_table,
                                     multimap_type hash_table,
-                                    cudf::size_type *join_output_size_estimate) {
+                                    cudf::size_type *join_output_size_estimate)
+{
   const cudf::size_type build_table_num_rows{build_table.num_rows()};
   const cudf::size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -192,7 +193,8 @@ gdf_error compute_hash_join(gdf_column *const output_l,
                             gdf_column *const output_r,
                             cudf::table const &left_table,
                             cudf::table const &right_table,
-                            bool flip_results = false) {
+                            bool flip_results = false)
+{
   gdf_error gdf_error_code{GDF_SUCCESS};
 
   gdf_column_view(output_l, nullptr, nullptr, 0, N_GDF_TYPES);

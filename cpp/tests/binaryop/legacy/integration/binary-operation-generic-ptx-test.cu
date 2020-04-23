@@ -21,13 +21,17 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/binaryop.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
+struct BinaryOperationGenericPTXTest : public GdfTest {
+};
 
-struct BinaryOperationGenericPTXTest : public GdfTest {};
-
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)
+{
   // c = a*a*a + b
   const char* ptx =
     R"***(
@@ -91,7 +95,8 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32) {
   gdf_column_free(&cpp_output_col);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32)
+{
   using dtype = int;
 
   // c = a*a*a + b
@@ -158,7 +163,8 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
   gdf_column_free(&cpp_output_col);
 }
 
-TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
+TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64)
+{
   // c = a*a*a + b*b
   const char* ptx =
     R"***(

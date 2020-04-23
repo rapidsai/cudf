@@ -26,15 +26,20 @@
 #include <cudf/types.hpp>
 
 // Forward declarations
-namespace arrow {
-namespace io {
+namespace arrow
+{
+namespace io
+{
 class RandomAccessFile;
 }
 }  // namespace arrow
 
-namespace cudf {
-namespace io {
-namespace avro {
+namespace cudf
+{
+namespace io
+{
+namespace avro
+{
 /**---------------------------------------------------------------------------*
  * @brief Options for the Avro reader
  *---------------------------------------------------------------------------**/
@@ -55,7 +60,8 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache Avro data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader {
+class reader
+{
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -98,7 +104,8 @@ class reader {
 
 }  // namespace avro
 
-namespace json {
+namespace json
+{
 /**---------------------------------------------------------------------------*
  * @brief Options for the JSON reader
  *---------------------------------------------------------------------------**/
@@ -118,13 +125,16 @@ struct reader_options {
    * @param[in] dtype Ordered list of data types; deduced from dataset if empty
    *---------------------------------------------------------------------------**/
   reader_options(bool lines, std::string compression, std::vector<std::string> dtype)
-    : lines(lines), compression(compression), dtype(std::move(dtype)) {}
+    : lines(lines), compression(compression), dtype(std::move(dtype))
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse JSON input and convert it into a cudf::table.
  *---------------------------------------------------------------------------**/
-class reader {
+class reader
+{
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -171,7 +181,8 @@ class reader {
 
 }  // namespace json
 
-namespace csv {
+namespace csv
+{
 /**---------------------------------------------------------------------------*
  * @brief Quoting behavior for CSV readers/writers
  *---------------------------------------------------------------------------**/
@@ -259,7 +270,8 @@ struct reader_options {
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse CSV input and convert it into gdf columns.
  *---------------------------------------------------------------------------**/
-class reader {
+class reader
+{
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -321,7 +333,8 @@ class reader {
 
 }  // namespace csv
 
-namespace orc {
+namespace orc
+{
 /**---------------------------------------------------------------------------*
  * @brief Options for the ORC reader
  *---------------------------------------------------------------------------**/
@@ -355,13 +368,16 @@ struct reader_options {
       use_np_dtypes(np_compat),
       timestamp_unit(timestamp_time_unit),
       decimals_as_float(decimals_as_float_),
-      forced_decimals_scale(forced_decimals_scale_) {}
+      forced_decimals_scale(forced_decimals_scale_)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache ORC data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader {
+class reader
+{
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
@@ -413,7 +429,8 @@ class reader {
 
 }  // namespace orc
 
-namespace parquet {
+namespace parquet
+{
 /**---------------------------------------------------------------------------*
  * @brief Options for the Parquet reader
  *---------------------------------------------------------------------------**/
@@ -441,13 +458,16 @@ struct reader_options {
     : columns(std::move(cols)),
       strings_to_categorical(strings_as_category),
       use_pandas_metadata(read_pandas_indexes),
-      timestamp_unit(timestamp_time_unit) {}
+      timestamp_unit(timestamp_time_unit)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Class to read Apache Parquet data into cuDF columns
  *---------------------------------------------------------------------------**/
-class reader {
+class reader
+{
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;

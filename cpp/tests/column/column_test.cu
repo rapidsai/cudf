@@ -38,7 +38,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
 
   TypedColumnTest()
     : data{_num_elements * cudf::size_of(type())},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements)} {
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements)}
+  {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
     thrust::sequence(thrust::device, typed_data, typed_data + data.size());
@@ -64,7 +65,8 @@ TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
  *
  * @param col The `column` to verify
  *---------------------------------------------------------------------------**/
-void verify_column_views(cudf::column col) {
+void verify_column_views(cudf::column col)
+{
   cudf::column_view view                 = col;
   cudf::mutable_column_view mutable_view = col;
   EXPECT_EQ(col.type(), view.type());
@@ -82,42 +84,48 @@ void verify_column_views(cudf::column col) {
   EXPECT_EQ(view.offset(), mutable_view.offset());
 }
 
-TYPED_TEST(TypedColumnTest, DefaultNullCountNoMask) {
+TYPED_TEST(TypedColumnTest, DefaultNullCountNoMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data};
   EXPECT_FALSE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, DefaultNullCountEmptyMask) {
+TYPED_TEST(TypedColumnTest, DefaultNullCountEmptyMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, rmm::device_buffer{}};
   EXPECT_FALSE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, DefaultNullCountAllValid) {
+TYPED_TEST(TypedColumnTest, DefaultNullCountAllValid)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   EXPECT_TRUE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, ExplicitNullCountAllValid) {
+TYPED_TEST(TypedColumnTest, ExplicitNullCountAllValid)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask, 0};
   EXPECT_TRUE(col.nullable());
   EXPECT_FALSE(col.has_nulls());
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, DefaultNullCountAllNull) {
+TYPED_TEST(TypedColumnTest, DefaultNullCountAllNull)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_null_mask};
   EXPECT_TRUE(col.nullable());
   EXPECT_TRUE(col.has_nulls());
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, ExplicitNullCountAllNull) {
+TYPED_TEST(TypedColumnTest, ExplicitNullCountAllNull)
+{
   cudf::column col{
     this->type(), this->num_elements(), this->data, this->all_null_mask, this->num_elements()};
   EXPECT_TRUE(col.nullable());
@@ -125,42 +133,49 @@ TYPED_TEST(TypedColumnTest, ExplicitNullCountAllNull) {
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, SetNullCountNoMask) {
+TYPED_TEST(TypedColumnTest, SetNullCountNoMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data};
   EXPECT_THROW(col.set_null_count(1), cudf::logic_error);
 }
 
-TYPED_TEST(TypedColumnTest, SetEmptyNullMaskNonZeroNullCount) {
+TYPED_TEST(TypedColumnTest, SetEmptyNullMaskNonZeroNullCount)
+{
   cudf::column col{this->type(), this->num_elements(), this->data};
   rmm::device_buffer empty_null_mask{};
   EXPECT_THROW(col.set_null_mask(empty_null_mask, this->num_elements()), cudf::logic_error);
 }
 
-TYPED_TEST(TypedColumnTest, SetInvalidSizeNullMaskNonZeroNullCount) {
+TYPED_TEST(TypedColumnTest, SetInvalidSizeNullMaskNonZeroNullCount)
+{
   cudf::column col{this->type(), this->num_elements(), this->data};
   auto invalid_size_null_mask =
     create_null_mask(std::min(this->num_elements() - 50, 0), cudf::mask_state::ALL_VALID);
   EXPECT_THROW(col.set_null_mask(invalid_size_null_mask, this->num_elements()), cudf::logic_error);
 }
 
-TYPED_TEST(TypedColumnTest, SetNullCountEmptyMask) {
+TYPED_TEST(TypedColumnTest, SetNullCountEmptyMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, rmm::device_buffer{}};
   EXPECT_THROW(col.set_null_count(1), cudf::logic_error);
 }
 
-TYPED_TEST(TypedColumnTest, SetNullCountAllValid) {
+TYPED_TEST(TypedColumnTest, SetNullCountAllValid)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   EXPECT_NO_THROW(col.set_null_count(0));
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, SetNullCountAllNull) {
+TYPED_TEST(TypedColumnTest, SetNullCountAllNull)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_null_mask};
   EXPECT_NO_THROW(col.set_null_count(this->num_elements()));
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, ResetNullCountAllNull) {
+TYPED_TEST(TypedColumnTest, ResetNullCountAllNull)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_null_mask};
 
   EXPECT_EQ(this->num_elements(), col.null_count());
@@ -168,14 +183,16 @@ TYPED_TEST(TypedColumnTest, ResetNullCountAllNull) {
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, ResetNullCountAllValid) {
+TYPED_TEST(TypedColumnTest, ResetNullCountAllValid)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   EXPECT_EQ(0, col.null_count());
   EXPECT_NO_THROW(col.set_null_count(cudf::UNKNOWN_NULL_COUNT));
   EXPECT_EQ(0, col.null_count());
 }
 
-TYPED_TEST(TypedColumnTest, CopyDataNoMask) {
+TYPED_TEST(TypedColumnTest, CopyDataNoMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_FALSE(col.nullable());
@@ -191,7 +208,8 @@ TYPED_TEST(TypedColumnTest, CopyDataNoMask) {
   cudf::test::expect_equal_buffers(v.head(), this->data.data(), this->data.size());
 }
 
-TYPED_TEST(TypedColumnTest, MoveDataNoMask) {
+TYPED_TEST(TypedColumnTest, MoveDataNoMask)
+{
   void* original_data = this->data.data();
   cudf::column col{this->type(), this->num_elements(), std::move(this->data)};
   EXPECT_EQ(this->type(), col.type());
@@ -207,7 +225,8 @@ TYPED_TEST(TypedColumnTest, MoveDataNoMask) {
   EXPECT_EQ(v.head(), original_data);
 }
 
-TYPED_TEST(TypedColumnTest, CopyDataAndMask) {
+TYPED_TEST(TypedColumnTest, CopyDataAndMask)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   EXPECT_EQ(this->type(), col.type());
   EXPECT_TRUE(col.nullable());
@@ -225,7 +244,8 @@ TYPED_TEST(TypedColumnTest, CopyDataAndMask) {
   cudf::test::expect_equal_buffers(v.null_mask(), this->all_valid_mask.data(), this->mask.size());
 }
 
-TYPED_TEST(TypedColumnTest, MoveDataAndMask) {
+TYPED_TEST(TypedColumnTest, MoveDataAndMask)
+{
   void* original_data = this->data.data();
   void* original_mask = this->all_valid_mask.data();
   cudf::column col{
@@ -244,7 +264,8 @@ TYPED_TEST(TypedColumnTest, MoveDataAndMask) {
   EXPECT_EQ(v.null_mask(), original_mask);
 }
 
-TYPED_TEST(TypedColumnTest, CopyConstructorNoMask) {
+TYPED_TEST(TypedColumnTest, CopyConstructorNoMask)
+{
   cudf::column original{this->type(), this->num_elements(), this->data};
   cudf::column copy{original};
   verify_column_views(copy);
@@ -256,7 +277,8 @@ TYPED_TEST(TypedColumnTest, CopyConstructorNoMask) {
   EXPECT_NE(original_view.head(), copy_view.head());
 }
 
-TYPED_TEST(TypedColumnTest, CopyConstructorWithMask) {
+TYPED_TEST(TypedColumnTest, CopyConstructorWithMask)
+{
   cudf::column original{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   cudf::column copy{original};
   verify_column_views(copy);
@@ -269,7 +291,8 @@ TYPED_TEST(TypedColumnTest, CopyConstructorWithMask) {
   EXPECT_NE(original_view.null_mask(), copy_view.null_mask());
 }
 
-TYPED_TEST(TypedColumnTest, MoveConstructorNoMask) {
+TYPED_TEST(TypedColumnTest, MoveConstructorNoMask)
+{
   cudf::column original{this->type(), this->num_elements(), this->data};
 
   auto original_data = original.view().head();
@@ -286,7 +309,8 @@ TYPED_TEST(TypedColumnTest, MoveConstructorNoMask) {
   EXPECT_EQ(original_data, moved_to_view.head());
 }
 
-TYPED_TEST(TypedColumnTest, MoveConstructorWithMask) {
+TYPED_TEST(TypedColumnTest, MoveConstructorWithMask)
+{
   cudf::column original{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   auto original_data = original.view().head();
   auto original_mask = original.view().null_mask();
@@ -302,7 +326,8 @@ TYPED_TEST(TypedColumnTest, MoveConstructorWithMask) {
   EXPECT_EQ(original_mask, moved_to_view.null_mask());
 }
 
-TYPED_TEST(TypedColumnTest, ConstructWithChildren) {
+TYPED_TEST(TypedColumnTest, ConstructWithChildren)
+{
   std::vector<std::unique_ptr<cudf::column>> children;
   children.emplace_back(std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_id::INT8}, 42, this->data, this->all_valid_mask));
@@ -323,7 +348,8 @@ TYPED_TEST(TypedColumnTest, ConstructWithChildren) {
   EXPECT_EQ(314, col.child(1).size());
 }
 
-TYPED_TEST(TypedColumnTest, ReleaseNoChildren) {
+TYPED_TEST(TypedColumnTest, ReleaseNoChildren)
+{
   cudf::column col{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   auto original_data = col.view().head();
   auto original_mask = col.view().null_mask();
@@ -338,7 +364,8 @@ TYPED_TEST(TypedColumnTest, ReleaseNoChildren) {
   EXPECT_EQ(0, col.num_children());
 }
 
-TYPED_TEST(TypedColumnTest, ReleaseWithChildren) {
+TYPED_TEST(TypedColumnTest, ReleaseWithChildren)
+{
   std::vector<std::unique_ptr<cudf::column>> children;
   children.emplace_back(std::make_unique<cudf::column>(
     this->type(), this->num_elements(), this->data, this->all_valid_mask));
@@ -364,7 +391,8 @@ TYPED_TEST(TypedColumnTest, ReleaseWithChildren) {
   EXPECT_EQ(0, col.num_children());
 }
 
-TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask) {
+TYPED_TEST(TypedColumnTest, ColumnViewConstructorWithMask)
+{
   cudf::column original{this->type(), this->num_elements(), this->data, this->all_valid_mask};
   cudf::column_view original_view = original;
   cudf::column copy{original_view};

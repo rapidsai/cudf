@@ -32,11 +32,14 @@
 #include <cmath>
 #include <limits>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief This function converts the given string into a
  * floating point double value.
@@ -46,7 +49,8 @@ namespace {
  *
  * This function will also handle scientific notation format.
  */
-__device__ inline double stod(string_view const& d_str) {
+__device__ inline double stod(string_view const& d_str)
+{
   const char* in_ptr = d_str.data();
   const char* end    = in_ptr + d_str.size_bytes();
   if (end == in_ptr) return 0.0;
@@ -120,7 +124,8 @@ template <typename FloatType>
 struct string_to_float_fn {
   const column_device_view strings_column;  // strings to convert
 
-  __device__ FloatType operator()(size_type idx) {
+  __device__ FloatType operator()(size_type idx)
+  {
     if (strings_column.is_null(idx)) return static_cast<FloatType>(0);
     // the cast to FloatType will create predictable results
     // for floats that are larger than the FloatType can hold
@@ -138,7 +143,8 @@ struct dispatch_to_floats_fn {
             std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
-                  cudaStream_t stream) const {
+                  cudaStream_t stream) const
+  {
     auto d_results = output_column.data<FloatType>();
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       thrust::make_counting_iterator<size_type>(0),
@@ -148,7 +154,8 @@ struct dispatch_to_floats_fn {
   }
   // non-integral types throw an exception
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const {
+  void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const
+  {
     CUDF_FAIL("Output for to_floats must be a float type.");
   }
 };
@@ -160,7 +167,8 @@ std::unique_ptr<column> to_floats(
   strings_column_view const& strings,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(output_type, 0);
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -186,14 +194,16 @@ std::unique_ptr<column> to_floats(
 
 std::unique_ptr<column> to_floats(strings_column_view const& strings,
                                   data_type output_type,
-                                  rmm::mr::device_memory_resource* mr) {
+                                  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::to_floats(strings, output_type, mr);
 }
 
-namespace detail {
-namespace {
-
+namespace detail
+{
+namespace
+{
 /**
  * @brief Code logic for converting float value into a string.
  *
@@ -218,7 +228,8 @@ struct ftos_converter {
   const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
 
   // utility for quickly converting known integer range to character array
-  __device__ char* int2str(int value, char* output) {
+  __device__ char* int2str(int value, char* output)
+  {
     if (value == 0) {
       *output++ = '0';
       return output;
@@ -241,7 +252,8 @@ struct ftos_converter {
   __device__ int dissect_value(double value,
                                unsigned int& integer,
                                unsigned int& decimal,
-                               int& exp10) {
+                               int& exp10)
+  {
     int decimal_places = significant_digits - 1;
     // normalize step puts value between lower-limit and upper-limit
     // by adjusting the exponent up or down
@@ -302,7 +314,8 @@ struct ftos_converter {
    * @param output Memory to write output characters.
    * @return Number of bytes written.
    */
-  __device__ int float_to_string(double value, char* output) {
+  __device__ int float_to_string(double value, char* output)
+  {
     // check for valid value
     if (std::isnan(value)) {
       memcpy(output, "NaN", 3);
@@ -368,7 +381,8 @@ struct ftos_converter {
    * @param value Float value to convert.
    * @return Number of bytes required.
    */
-  __device__ int compute_ftos_size(double value) {
+  __device__ int compute_ftos_size(double value)
+  {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
     if (value < 0.0) {
@@ -414,7 +428,8 @@ template <typename FloatType>
 struct float_to_string_size_fn {
   column_device_view d_column;
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return 0;
     FloatType value = d_column.element<FloatType>(idx);
     ftos_converter fts;
@@ -428,7 +443,8 @@ struct float_to_string_fn {
   const int32_t* d_offsets;
   char* d_chars;
 
-  __device__ void operator()(size_type idx) {
+  __device__ void operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return;
     FloatType value = d_column.element<FloatType>(idx);
     ftos_converter fts;
@@ -446,7 +462,8 @@ struct dispatch_from_floats_fn {
             std::enable_if_t<std::is_floating_point<FloatType>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& floats,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const {
+                                     cudaStream_t stream) const
+  {
     size_type strings_count = floats.size();
     auto column             = column_device_view::create(floats, stream);
     auto d_column           = *column;
@@ -485,7 +502,8 @@ struct dispatch_from_floats_fn {
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      rmm::mr::device_memory_resource*,
-                                     cudaStream_t) const {
+                                     cudaStream_t) const
+  {
     CUDF_FAIL("Values for from_floats function must be a float type.");
   }
 };
@@ -496,7 +514,8 @@ struct dispatch_from_floats_fn {
 std::unique_ptr<column> from_floats(
   column_view const& floats,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = floats.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
 
@@ -508,8 +527,8 @@ std::unique_ptr<column> from_floats(
 
 // external API
 
-std::unique_ptr<column> from_floats(column_view const& floats,
-                                    rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::from_floats(floats, mr);
 }

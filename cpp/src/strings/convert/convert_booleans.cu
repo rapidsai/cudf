@@ -29,16 +29,19 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 // Convert strings column to boolean column
 std::unique_ptr<column> to_booleans(
   strings_column_view const& strings,
   string_scalar const& true_string    = string_scalar("true"),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
 
@@ -77,20 +80,22 @@ std::unique_ptr<column> to_booleans(
 // external API
 std::unique_ptr<column> to_booleans(strings_column_view const& strings,
                                     string_scalar const& true_string,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::to_booleans(strings, true_string, mr);
 }
 
-namespace detail {
-
+namespace detail
+{
 // Convert boolean column to strings column
 std::unique_ptr<column> from_booleans(
   column_view const& booleans,
   string_scalar const& true_string    = string_scalar("true"),
   string_scalar const& false_string   = string_scalar("false"),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = booleans.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -155,7 +160,8 @@ std::unique_ptr<column> from_booleans(
 std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       string_scalar const& true_string,
                                       string_scalar const& false_string,
-                                      rmm::mr::device_memory_resource* mr) {
+                                      rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::from_booleans(booleans, true_string, false_string, mr);
 }

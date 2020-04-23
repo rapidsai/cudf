@@ -23,11 +23,14 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 //
 // This is the functor for the url_encode() method below.
 // Specific requirements are documented in custrings issue #321.
@@ -43,7 +46,8 @@ struct url_encoder_fn {
   char* d_chars{};
 
   // utility to create 2-byte hex characters from single binary byte
-  __device__ void byte_to_hex(uint8_t byte, char* hex) {
+  __device__ void byte_to_hex(uint8_t byte, char* hex)
+  {
     hex[0] = '0';
     if (byte >= 16) {
       uint8_t hibyte = byte / 16;
@@ -53,7 +57,8 @@ struct url_encoder_fn {
     hex[1] = byte < 10 ? '0' + byte : 'A' + (byte - 10);
   }
 
-  __device__ bool should_not_url_encode(char ch) {
+  __device__ bool should_not_url_encode(char ch)
+  {
     return (
       (ch >= '0' && ch <= '9') ||  // these are the characters
       (ch >= 'A' && ch <= 'Z') ||  // that are not to be url encoded
@@ -64,7 +69,8 @@ struct url_encoder_fn {
   }
 
   // main part of the functor the performs the url-encoding
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     //
@@ -109,7 +115,8 @@ struct url_encoder_fn {
 std::unique_ptr<column> url_encode(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -149,14 +156,16 @@ std::unique_ptr<column> url_encode(
 
 // external API
 std::unique_ptr<column> url_encode(strings_column_view const& strings,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::url_encode(strings, mr);
 }
 
-namespace detail {
-namespace {
-
+namespace detail
+{
+namespace
+{
 //
 // This is the functor for the url_decode() method below.
 // Specific requirements are documented in custrings issue #321.
@@ -173,7 +182,8 @@ struct url_decoder_fn {
   char* d_chars{};
 
   // utility to convert a hex char into a single byte
-  __device__ uint8_t hex_char_to_byte(char ch) {
+  __device__ uint8_t hex_char_to_byte(char ch)
+  {
     if (ch >= '0' && ch <= '9') return (ch - '0');
     if (ch >= 'A' && ch <= 'F') return (ch - 'A' + 10);  // in hex A=10,B=11,...,F=15
     if (ch >= 'a' && ch <= 'f') return (ch - 'a' + 10);  // same for lower case
@@ -181,7 +191,8 @@ struct url_decoder_fn {
   }
 
   // main functor method executed on each string
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     char* out_ptr = d_chars ? out_ptr = d_chars + d_offsets[idx] : nullptr;
@@ -208,7 +219,8 @@ struct url_decoder_fn {
 std::unique_ptr<column> url_decode(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -251,7 +263,8 @@ std::unique_ptr<column> url_decode(
 // external API
 
 std::unique_ptr<column> url_decode(strings_column_view const& strings,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::url_decode(strings, mr);
 }

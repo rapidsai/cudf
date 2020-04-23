@@ -18,10 +18,12 @@
 
 #include <cudf/binaryop.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *

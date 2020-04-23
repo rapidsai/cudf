@@ -26,10 +26,12 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
-namespace cudf {
-namespace experimental {
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace
+{
 // Launch configuration for optimized hash partition
 constexpr size_type OPTIMIZED_BLOCK_SIZE                     = 512;
 constexpr size_type OPTIMIZED_ROWS_PER_THREAD                = 8;
@@ -45,7 +47,8 @@ constexpr size_type FALLBACK_ROWS_PER_THREAD = 1;
  * that uses the modulo operation.
  */
 template <typename hash_value_t>
-class modulo_partitioner {
+class modulo_partitioner
+{
  public:
   modulo_partitioner(size_type num_partitions) : divisor{num_partitions} {}
 
@@ -56,7 +59,8 @@ class modulo_partitioner {
 };
 
 template <typename T>
-bool is_power_two(T number) {
+bool is_power_two(T number)
+{
   return (0 == (number & (number - 1)));
 }
 
@@ -68,13 +72,16 @@ bool is_power_two(T number) {
  * via a single bitwise AND as: n & (d - 1)
  */
 template <typename hash_value_t>
-class bitwise_partitioner {
+class bitwise_partitioner
+{
  public:
-  bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)} {
+  bitwise_partitioner(size_type num_partitions) : mask{(num_partitions - 1)}
+  {
     assert(is_power_two(num_partitions));
   }
 
-  __device__ size_type operator()(hash_value_t hash_value) const {
+  __device__ size_type operator()(hash_value_t hash_value) const
+  {
     return hash_value & mask;  // hash_value & (num_partitions - 1)
   }
 
@@ -117,7 +124,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
                                               size_type* __restrict__ row_partition_numbers,
                                               size_type* __restrict__ row_partition_offset,
                                               size_type* __restrict__ block_partition_sizes,
-                                              size_type* __restrict__ global_partition_sizes) {
+                                              size_type* __restrict__ global_partition_sizes)
+{
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
 
@@ -187,7 +195,8 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
 __global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
                                              const size_type num_rows,
                                              const size_type num_partitions,
-                                             size_type* __restrict__ block_partition_offsets) {
+                                             size_type* __restrict__ block_partition_offsets)
+{
   // Shared array that holds the offset of this blocks partitions in
   // global memory
   extern __shared__ size_type shared_partition_offsets[];
@@ -248,7 +257,8 @@ __global__ void copy_block_partitions(InputIter input_iter,
                                       size_type const* __restrict__ row_partition_numbers,
                                       size_type const* __restrict__ row_partition_offset,
                                       size_type const* __restrict__ block_partition_sizes,
-                                      size_type const* __restrict__ scanned_block_partition_sizes) {
+                                      size_type const* __restrict__ scanned_block_partition_sizes)
+{
   extern __shared__ char shared_memory[];
   auto block_output = reinterpret_cast<DataType*>(shared_memory);
   auto partition_offset_shared =
@@ -335,7 +345,8 @@ void copy_block_partitions_impl(InputIter const input,
                                 size_type const* block_partition_sizes,
                                 size_type const* scanned_block_partition_sizes,
                                 size_type grid_size,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   // We need 3 chunks of shared memory:
   // 1. BLOCK_SIZE * ROWS_PER_THREAD elements of size_type for copying to output
   // 2. num_partitions + 1 elements of size_type for per-block partition offsets
@@ -361,7 +372,8 @@ rmm::device_vector<size_type> compute_gather_map(size_type num_rows,
                                                  size_type const* block_partition_sizes,
                                                  size_type const* scanned_block_partition_sizes,
                                                  size_type grid_size,
-                                                 cudaStream_t stream) {
+                                                 cudaStream_t stream)
+{
   auto sequence = thrust::make_counting_iterator(0);
   rmm::device_vector<size_type> gather_map(num_rows);
 
@@ -389,7 +401,8 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
 
     copy_block_partitions_impl(input.data<DataType>(),
@@ -415,7 +428,8 @@ struct copy_block_partitions_dispatcher {
                                      size_type const* scanned_block_partition_sizes,
                                      size_type grid_size,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     // Use move_to_output_buffer to create an equivalent gather map
     auto gather_map = compute_gather_map(input.size(),
                                          num_partitions,
@@ -445,7 +459,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   table_view const& table_to_hash,
   size_type num_partitions,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   auto const num_rows = table_to_hash.num_rows();
 
   bool const use_optimization{num_partitions <= THRESHOLD_FOR_OPTIMIZED_PARTITION_KERNEL};
@@ -643,7 +658,8 @@ struct dispatch_map_type {
              column_view const& partition_map,
              size_type num_partitions,
              rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const {
+             cudaStream_t stream) const
+  {
     // Build a histogram of the number of rows in each partition
     rmm::device_vector<size_type> histogram(num_partitions + 1);
     std::size_t temp_storage_bytes{};
@@ -709,19 +725,22 @@ struct dispatch_map_type {
              column_view const& partition_map,
              size_type num_partitions,
              rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const {
+             cudaStream_t stream) const
+  {
     CUDF_FAIL("Unexpected, non-integral partition map.");
   }
 };
 }  // namespace
 
-namespace detail {
+namespace detail
+{
 std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream = 0) {
+  cudaStream_t stream = 0)
+{
   auto table_to_hash = input.select(columns_to_hash);
 
   // Return empty result if there are no partitions or nothing to hash
@@ -741,7 +760,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partitio
   column_view const& partition_map,
   size_type num_partitions,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream = 0) {
+  cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(t.num_rows() == partition_map.size(),
                "Size mismatch between table and partition map.");
   CUDF_EXPECTS(not partition_map.has_nulls(), "Unexpected null values in partition_map.");
@@ -760,7 +780,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::hash_partition(input, columns_to_hash, num_partitions, mr);
 }
@@ -770,7 +791,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> partitio
   table_view const& t,
   column_view const& partition_map,
   size_type num_partitions,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::partition(t, partition_map, num_partitions, mr);
 }

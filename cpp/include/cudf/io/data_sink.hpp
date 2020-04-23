@@ -23,13 +23,15 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 /**
  * @brief Interface class for storing the output data from the writers
  **/
-class data_sink {
+class data_sink
+{
  public:
   /**
    * @brief Create a sink from a file path
@@ -113,7 +115,8 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
+  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream)
+  {
     CUDF_FAIL("data_sink classes that support device_write must override this function.");
   }
 

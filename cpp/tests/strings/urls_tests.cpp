@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {};
+struct StringsConvertTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConvertTest, UrlEncode) {
+TEST_F(StringsConvertTest, UrlEncode)
+{
   std::vector<const char*> h_strings{"www.nvidia.com/rapids?p=é",
                                      "/_file-7.txt",
                                      "a b+c~d",
@@ -61,7 +63,8 @@ TEST_F(StringsConvertTest, UrlEncode) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, UrlDecode) {
+TEST_F(StringsConvertTest, UrlDecode)
+{
   std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9",
                                      "/_file-1234567890.txt",
                                      "a%20b%2Bc~defghijklmnopqrstuvwxyz",
@@ -95,7 +98,8 @@ TEST_F(StringsConvertTest, UrlDecode) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn) {
+TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::url_encode(zero_size_column);
   cudf::test::expect_strings_empty(results->view());

@@ -27,8 +27,8 @@
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief A wrapper for a set of gdf_columns of equal number of rows.
  *
@@ -111,7 +111,8 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column* get_column(cudf::size_type index) {
+  gdf_column* get_column(cudf::size_type index)
+  {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -122,7 +123,8 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column const* get_column(cudf::size_type index) const {
+  gdf_column const* get_column(cudf::size_type index) const
+  {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -137,7 +139,8 @@ struct table {
    * @brief Returns the number of rows in the table
    *
    *---------------------------------------------------------------------------**/
-  cudf::size_type num_rows() const {
+  cudf::size_type num_rows() const
+  {
     if (not _columns.empty()) { return this->get_column(0)->size; }
     return 0;
   }

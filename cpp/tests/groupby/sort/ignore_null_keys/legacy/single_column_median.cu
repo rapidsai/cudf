@@ -51,7 +51,8 @@ using TestingTypes = ::testing::Types<KV<int32_t, int32_t>>;
 
 TYPED_TEST_CASE(SingleColumnMedian, TestingTypes);
 
-TYPED_TEST(SingleColumnMedian, TestMedium0) {
+TYPED_TEST(SingleColumnMedian, TestMedium0)
+{
   using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
   using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -67,7 +68,8 @@ TYPED_TEST(SingleColumnMedian, TestMedium0) {
     column_wrapper<ResultValue>{R(1), R(5)});
 }
 
-TYPED_TEST(SingleColumnMedian, TestMedium1) {
+TYPED_TEST(SingleColumnMedian, TestMedium1)
+{
   using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
   using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -84,7 +86,8 @@ TYPED_TEST(SingleColumnMedian, TestMedium1) {
     column_wrapper<ResultValue>{R(3), R(2), R(2)});
 }
 
-TYPED_TEST(SingleColumnMedian, TestMedium2) {
+TYPED_TEST(SingleColumnMedian, TestMedium2)
+{
   using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
   using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -136,7 +139,8 @@ TYPED_TEST(SingleColumnMedian, TestMedium2) {
                                              column_wrapper<ResultValue>{R(6), R(3), R(3), R(3.5)});
 }
 
-TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys) {
+TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys)
+{
   using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
   using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;

@@ -16,12 +16,13 @@
 
 #include "reduction_functions.cuh"
 
-namespace cudf {
-
+namespace cudf
+{
 gdf_scalar reduce(const gdf_column *col,
                   cudf::reduction::operators op,
                   gdf_dtype output_dtype,
-                  cudf::size_type ddof) {
+                  cudf::size_type ddof)
+{
   gdf_scalar scalar;
   scalar.dtype    = output_dtype;
   scalar.is_valid = false;  // the scalar is not valid for error case

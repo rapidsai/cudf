@@ -32,7 +32,8 @@ struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
 
 TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator) {
+TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   cudf::test::fixed_width_column_wrapper<TypeParam> col(sequence, sequence);
@@ -44,7 +45,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator) {
   EXPECT_FALSE(view.has_nulls());
   EXPECT_EQ(view.offset(), 0);
 }
-TYPED_TEST(FixedWidthColumnWrapperTest, EmptyList) {
+TYPED_TEST(FixedWidthColumnWrapperTest, EmptyList)
+{
   cudf::test::fixed_width_column_wrapper<TypeParam> col{};
   cudf::column_view view = col;
   EXPECT_EQ(view.size(), 0);
@@ -55,7 +57,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, EmptyList) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableIteratorConstructor) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableIteratorConstructor)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -71,7 +74,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableIteratorConstructor) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableListConstructor) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableListConstructor)
+{
   cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5});
 
   cudf::column_view view = col;
@@ -83,7 +87,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NonNullableListConstructor) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllValid) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllValid)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -101,7 +106,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllValid) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllValid) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllValid)
+{
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5}, all_valid);
@@ -114,7 +120,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllValid) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllNull) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllNull)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -133,7 +140,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableIteratorConstructorAllNull) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllNull) {
+TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllNull)
+{
   auto all_null = cudf::test::make_counting_transform_iterator(0, [](auto i) { return false; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5}, all_null);
@@ -147,7 +155,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, NullableListConstructorAllNull) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid) {
+TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid)
+{
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5}, all_valid);
@@ -161,7 +170,8 @@ TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllValid) {
   EXPECT_EQ(view.offset(), 0);
 }
 
-TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull) {
+TYPED_TEST(FixedWidthColumnWrapperTest, ReleaseWrapperAllNull)
+{
   auto all_null = cudf::test::make_counting_transform_iterator(0, [](auto i) { return false; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> col({1, 2, 3, 4, 5}, all_null);

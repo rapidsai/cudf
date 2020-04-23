@@ -25,17 +25,19 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace cudf {
+namespace cudf
+{
 //! Utility functions
-namespace util {
-
+namespace util
+{
 /**
  * Finds the smallest integer not less than `number_to_round` and modulo `S` is
  * zero. This function assumes that `number_to_round` is non-negative and
  * `modulus` is positive.
  */
 template <typename S>
-inline S round_up_safe(S number_to_round, S modulus) {
+inline S round_up_safe(S number_to_round, S modulus)
+{
   auto remainder = number_to_round % modulus;
   if (remainder == 0) { return number_to_round; }
   auto rounded_up = number_to_round - remainder + modulus;
@@ -51,7 +53,8 @@ inline S round_up_safe(S number_to_round, S modulus) {
  * `modulus` is positive.
  */
 template <typename S>
-inline S round_down_safe(S number_to_round, S modulus) {
+inline S round_down_safe(S number_to_round, S modulus)
+{
   auto remainder    = number_to_round % modulus;
   auto rounded_down = number_to_round - remainder;
   return rounded_down;
@@ -70,16 +73,18 @@ inline S round_down_safe(S number_to_round, S modulus) {
  * the result will be incorrect
  */
 template <typename S, typename T>
-constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept {
+constexpr inline S div_rounding_up_unsafe(const S& dividend, const T& divisor) noexcept
+{
   return (dividend + divisor - 1) / divisor;
 }
 
-namespace detail {
-
+namespace detail
+{
 template <typename I>
 constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
                                         I dividend,
-                                        I divisor) noexcept {
+                                        I divisor) noexcept
+{
   // TODO: This could probably be implemented faster
   return (dividend > divisor) ? 1 + div_rounding_up_unsafe(dividend - divisor, divisor)
                               : (dividend > 0);
@@ -88,7 +93,8 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, false>,
 template <typename I>
 constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
                                         I dividend,
-                                        I divisor) noexcept {
+                                        I divisor) noexcept
+{
   auto quotient  = dividend / divisor;
   auto remainder = dividend % divisor;
   return quotient + (remainder != 0);
@@ -109,13 +115,15 @@ constexpr inline I div_rounding_up_safe(std::integral_constant<bool, true>,
  * approach of using (dividend + divisor - 1) / divisor
  */
 template <typename I>
-constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept {
+constexpr inline I div_rounding_up_safe(I dividend, I divisor) noexcept
+{
   using i_is_a_signed_type = std::integral_constant<bool, std::is_signed<I>::value>;
   return detail::div_rounding_up_safe(i_is_a_signed_type{}, dividend, divisor);
 }
 
 template <typename I>
-constexpr inline bool is_a_power_of_two(I val) noexcept {
+constexpr inline bool is_a_power_of_two(I val) noexcept
+{
   static_assert(std::is_integral<I>::value, "This function only applies to integral types");
   return ((val - 1) & val) == 0;
 }

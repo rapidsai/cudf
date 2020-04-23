@@ -17,11 +17,14 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
+namespace gpu
+{
 struct compressed_stream_s {
   CompressedStreamInfo info;
   gpu_inflate_input_s ctl;
@@ -29,7 +32,8 @@ struct compressed_stream_s {
 
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
-  CompressedStreamInfo *strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr) {
+  CompressedStreamInfo *strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr)
+{
   __shared__ compressed_stream_s strm_g[4];
 
   volatile compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
@@ -123,7 +127,8 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128, 8)
-  gpuPostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_streams) {
+  gpuPostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_streams)
+{
   __shared__ compressed_stream_s strm_g[4];
 
   volatile compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
@@ -231,7 +236,8 @@ enum row_entry_state_e {
  **/
 static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
                                                       const uint8_t *start,
-                                                      const uint8_t *end) {
+                                                      const uint8_t *end)
+{
   const uint8_t *cur      = start;
   row_entry_state_e state = NOT_FOUND;
   uint32_t length = 0, strm_idx_id = s->chunk.skip_count >> 8, idx_id = 1, ci_id = CI_PRESENT,
@@ -320,7 +326,8 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
  * @param[in] num_rowgroups Number of index entries to read
  *
  **/
-static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_rowgroups) {
+static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_rowgroups)
+{
   const uint8_t *index_data = s->chunk.streams[CI_INDEX];
   int index_data_len        = s->chunk.strm_len[CI_INDEX];
   for (int i = 0; i < num_rowgroups; i++) {
@@ -357,7 +364,8 @@ static __device__ void gpuReadRowGroupIndexEntries(rowindex_state_s *s, int num_
 static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s *s,
                                                     int ci_id,
                                                     int num_rowgroups,
-                                                    int t) {
+                                                    int t)
+{
   int32_t strm_len = s->chunk.strm_len[ci_id];
   if (strm_len > 0) {
     int32_t compressed_offset = (t < num_rowgroups) ? s->compressed_offset[t][ci_id] : 0;
@@ -408,7 +416,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
                         uint32_t num_columns,
                         uint32_t num_stripes,
                         uint32_t num_rowgroups,
-                        uint32_t rowidx_stride) {
+                        uint32_t rowidx_stride)
+{
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s *const s = &state_g;
   uint32_t chunk_id         = blockIdx.y * num_columns + blockIdx.x;
@@ -472,7 +481,8 @@ cudaError_t __host__ ParseCompressedStripeData(CompressedStreamInfo *strm_info,
                                                int32_t num_streams,
                                                uint32_t compression_block_size,
                                                uint32_t log2maxcr,
-                                               cudaStream_t stream) {
+                                               cudaStream_t stream)
+{
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream>>>(
@@ -482,7 +492,8 @@ cudaError_t __host__ ParseCompressedStripeData(CompressedStreamInfo *strm_info,
 
 cudaError_t __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
                                                  int32_t num_streams,
-                                                 cudaStream_t stream) {
+                                                 cudaStream_t stream)
+{
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream>>>(strm_info, num_streams);
@@ -509,7 +520,8 @@ cudaError_t __host__ ParseRowGroupIndex(RowGroup *row_groups,
                                         uint32_t num_stripes,
                                         uint32_t num_rowgroups,
                                         uint32_t rowidx_stride,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   dim3 dim_block(128, 1);
   dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
   gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream>>>(

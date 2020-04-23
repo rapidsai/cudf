@@ -22,9 +22,11 @@
 
 #include <vector>
 
-struct DictionaryEncodeTest : public cudf::test::BaseFixture {};
+struct DictionaryEncodeTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryEncodeTest, EncodeStringColumn) {
+TEST_F(DictionaryEncodeTest, EncodeStringColumn)
+{
   std::vector<const char*> h_strings{"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
@@ -41,7 +43,8 @@ TEST_F(DictionaryEncodeTest, EncodeStringColumn) {
   cudf::test::expect_columns_equal(view.indices(), indices_expected);
 }
 
-TEST_F(DictionaryEncodeTest, EncodeFloat) {
+TEST_F(DictionaryEncodeTest, EncodeFloat)
+{
   cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
 
   auto dictionary = cudf::dictionary::encode(input);
@@ -54,7 +57,8 @@ TEST_F(DictionaryEncodeTest, EncodeFloat) {
   cudf::test::expect_columns_equal(view.indices(), expected);
 }
 
-TEST_F(DictionaryEncodeTest, EncodeWithNull) {
+TEST_F(DictionaryEncodeTest, EncodeWithNull)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> input{{444, 0, 333, 111, 222, 222, 222, 444, 000},
                                                         {1, 1, 1, 1, 1, 0, 1, 1, 1}};
 
@@ -68,7 +72,8 @@ TEST_F(DictionaryEncodeTest, EncodeWithNull) {
   cudf::test::expect_columns_equal(view.indices(), expected);
 }
 
-TEST_F(DictionaryEncodeTest, InvalidEncode) {
+TEST_F(DictionaryEncodeTest, InvalidEncode)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> input{0, 1, 2, 3, -1, -2, -3};
 
   EXPECT_THROW(cudf::dictionary::encode(input, cudf::data_type{cudf::type_id::INT16}),

@@ -8,8 +8,8 @@
 
 #include <cudf/types.h>
 
-namespace without_agg {
-
+namespace without_agg
+{
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
@@ -19,12 +19,14 @@ enum struct GroupByOutType {
 };
 
 template <GroupByOutType, typename>
-struct TestParameters {};
+struct TestParameters {
+};
 
 // helper function to tuple_each a tuple of any size
 template <class Tuple, typename Func, std::size_t N>
 struct TupleEach {
-  static void tuple_each(Tuple &t, Func &f) {
+  static void tuple_each(Tuple &t, Func &f)
+  {
     TupleEach<Tuple, Func, N - 1>::tuple_each(t, f);
     f(std::get<N - 1>(t));
   }
@@ -36,7 +38,8 @@ struct TupleEach<Tuple, Func, 1> {
 };
 
 template <typename Tuple, typename Func>
-void tuple_each(Tuple &t, Func &&f) {
+void tuple_each(Tuple &t, Func &&f)
+{
   TupleEach<Tuple, Func, std::tuple_size<Tuple>::value>::tuple_each(t, f);
 }
 // end helper function

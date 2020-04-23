@@ -17,9 +17,10 @@
 
 #include <cudf/dlpack.hpp>
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief Convert a DLPack DLTensor into a cudf table
  *

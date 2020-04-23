@@ -19,9 +19,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Replaces target string within each string with the specified
  * replacement string.

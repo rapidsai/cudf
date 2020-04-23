@@ -19,10 +19,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Returns a single column by vertically concatenating the given vector of
  * strings columns.

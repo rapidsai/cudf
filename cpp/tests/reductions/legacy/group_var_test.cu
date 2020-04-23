@@ -22,13 +22,15 @@
 #include <gtest/gtest.h>
 
 struct GroupVarTest : public GdfTest {
-  auto all_valid() {
+  auto all_valid()
+  {
     auto all_valid = [](cudf::size_type) { return true; };
     return all_valid;
   }
 };
 
-TEST_F(GroupVarTest, SingleColumn) {
+TEST_F(GroupVarTest, SingleColumn)
+{
   auto keys = cudf::test::column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto vals = cudf::test::column_wrapper<float>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -48,7 +50,8 @@ TEST_F(GroupVarTest, SingleColumn) {
   cudf::test::detail::expect_values_are_equal({val_table.get_column(0)}, {expect_vals.get()});
 }
 
-TEST_F(GroupVarTest, MultiColumn) {
+TEST_F(GroupVarTest, MultiColumn)
+{
   auto keys  = cudf::test::column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto vals0 = cudf::test::column_wrapper<float>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   auto vals1 = cudf::test::column_wrapper<float>{1, 4, 6, 3, 4, 8, 0, 6, 6, 2};
@@ -71,7 +74,8 @@ TEST_F(GroupVarTest, MultiColumn) {
   cudf::test::detail::expect_tables_are_equal(val_table, {expect_vals0.get(), expect_vals1.get()});
 }
 
-TEST_F(GroupVarTest, SingleColumnNullable) {
+TEST_F(GroupVarTest, SingleColumnNullable)
+{
   std::vector<int32_t> keys_data{1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4};
   std::vector<bool> keys_valid{1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1};
   std::vector<double> vals_data{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};

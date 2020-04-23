@@ -18,11 +18,14 @@
 
 #include "avro_common.h"
 
-namespace cudf {
-namespace io {
-namespace avro {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace avro
+{
+namespace gpu
+{
 /**
  * @brief Struct to describe the output of a string datatype
  **/

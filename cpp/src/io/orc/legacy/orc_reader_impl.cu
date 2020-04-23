@@ -30,10 +30,12 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf {
-namespace io {
-namespace orc {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
 static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
                 !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
               "Unexpected sizeof(CompressedStreamInfo)");
@@ -49,7 +51,8 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 && !(sizeof(orc::gpu::ColumnDe
 /**
  * @brief Function that translates cuDF time unit to ORC clock frequency
  **/
-constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
+constexpr int32_t to_clockrate(gdf_time_unit time_unit)
+{
   switch (time_unit) {
     case TIME_UNIT_s: return 1;
     case TIME_UNIT_ms: return 1000;
@@ -65,7 +68,8 @@ constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(const orc::SchemaType &schema,
                                                               bool use_np_dtypes,
                                                               gdf_time_unit ts_unit,
-                                                              bool decimals_as_float) {
+                                                              bool decimals_as_float)
+{
   switch (schema.kind) {
     case orc::BOOLEAN: return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::BYTE: return std::make_pair(GDF_INT8, gdf_dtype_extra_info{TIME_UNIT_NONE});
@@ -99,7 +103,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(const orc::SchemaT
 }
 
 constexpr std::pair<orc::gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
-  const orc::StreamKind kind, uint32_t skip_count, bool non_child) {
+  const orc::StreamKind kind, uint32_t skip_count, bool non_child)
+{
   switch (kind) {
     case orc::DATA:
       skip_count += 1;
@@ -125,11 +130,13 @@ constexpr std::pair<orc::gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
  **/
-class OrcMetadata {
+class OrcMetadata
+{
   using OrcStripeInfo = std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:
-  explicit OrcMetadata(datasource *const src) : source(src) {
+  explicit OrcMetadata(datasource *const src) : source(src)
+  {
     const auto len         = source->size();
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
@@ -166,7 +173,8 @@ class OrcMetadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(int stripe, int &row_start, int &row_count) {
+  auto select_stripes(int stripe, int &row_start, int &row_count)
+  {
     std::vector<OrcStripeInfo> selection;
 
     if (stripe != -1) {
@@ -229,7 +237,8 @@ class OrcMetadata {
    *
    * @return List of ORC column indexes
    **/
-  auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column) {
+  auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column)
+  {
     std::vector<int> selection;
 
     if (not use_names.empty()) {
@@ -265,7 +274,8 @@ class OrcMetadata {
   inline int get_row_index_stride() const { return ff.rowIndexStride; }
 
  private:
-  void print_postscript(size_t ps_length) const {
+  void print_postscript(size_t ps_length) const
+  {
     LOG_PRINTF("\n[+] PostScript:\n");
     LOG_PRINTF(" postscriptLength = %zd\n", ps_length);
     LOG_PRINTF(" footerLength = %zd\n", (size_t)ps.footerLength);
@@ -279,7 +289,8 @@ class OrcMetadata {
     LOG_PRINTF(" magic = \"%s\"\n", ps.magic.c_str());
   }
 
-  void print_filefooter() const {
+  void print_filefooter() const
+  {
     LOG_PRINTF("\n[+] FileFooter:\n");
     LOG_PRINTF(" headerLength = %zd\n", ff.headerLength);
     LOG_PRINTF(" contentLength = %zd\n", ff.contentLength);
@@ -346,7 +357,9 @@ struct OrcStreamInfo {
       dst_pos(dst_pos_),
       length(length_),
       gdf_idx(gdf_idx_),
-      stripe_idx(stripe_idx_) {}
+      stripe_idx(stripe_idx_)
+  {
+  }
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to the beginning of the compressed stripe data
   uint32_t length;      // length in file
@@ -363,7 +376,8 @@ size_t reader::Impl::gather_stream_info(const size_t stripe_index,
                                         bool use_index,
                                         size_t *num_dictionary_entries,
                                         hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-                                        std::vector<OrcStreamInfo> &stream_info) {
+                                        std::vector<OrcStreamInfo> &stream_info)
+{
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset    = 0;
   uint64_t dst_offset    = 0;
@@ -428,7 +442,8 @@ rmm::device_buffer reader::Impl::decompress_stripe_data(
   std::vector<OrcStreamInfo> &stream_info,
   size_t num_stripes,
   rmm::device_vector<orc::gpu::RowGroup> &row_groups,
-  size_t row_index_stride) {
+  size_t row_index_stride)
+{
   // Parse the columns' compressed info
   hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
   for (const auto &info : stream_info) {
@@ -556,7 +571,8 @@ void reader::Impl::decode_stream_data(hostdevice_vector<orc::gpu::ColumnDesc> &c
                                       const std::vector<int64_t> &timezone_table,
                                       rmm::device_vector<orc::gpu::RowGroup> &row_groups,
                                       size_t row_index_stride,
-                                      const std::vector<gdf_column_wrapper> &columns) {
+                                      const std::vector<gdf_column_wrapper> &columns)
+{
   const size_t num_columns = columns.size();
   const size_t num_stripes = chunks.size() / columns.size();
   const size_t num_rows    = columns[0]->size;
@@ -615,7 +631,8 @@ void reader::Impl::decode_stream_data(hostdevice_vector<orc::gpu::ColumnDesc> &c
 }
 
 reader::Impl::Impl(std::unique_ptr<datasource> source, reader_options const &options)
-  : source_(std::move(source)) {
+  : source_(std::move(source))
+{
   // Open and parse the source Parquet dataset metadata
   md_ = std::make_unique<OrcMetadata>(source_.get());
 
@@ -636,7 +653,8 @@ reader::Impl::Impl(std::unique_ptr<datasource> source, reader_options const &opt
   decimals_as_int_scale_ = options.forced_decimals_scale;
 }
 
-table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
+table reader::Impl::read(int skip_rows, int num_rows, int stripe)
+{
   // Select only stripes required (aka row groups)
   const auto selected_stripes = md_->select_stripes(stripe, skip_rows, num_rows);
   const int num_columns       = selected_cols_.size();
@@ -823,17 +841,24 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(filepath), options))
+{
+}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options))
+{
+}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(file), options))
+{
+}
 
 table reader::read_all() { return impl_->read(0, -1, -1); }
 
-table reader::read_rows(size_t skip_rows, size_t num_rows) {
+table reader::read_rows(size_t skip_rows, size_t num_rows)
+{
   return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
 }
 

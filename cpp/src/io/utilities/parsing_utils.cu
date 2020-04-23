@@ -11,12 +11,14 @@
 
 #include <algorithm>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace
+{
 // When processing the input in chunks, this is the maximum size of each chunk.
 // Only one chunk is loaded on the GPU at a time, so this value is chosen to
 // be small enough to fit on the GPU in most cases.
@@ -27,7 +29,8 @@ constexpr int bytes_per_find_thread = 64;
 using pos_key_pair = thrust::pair<uint64_t, char>;
 
 template <typename T>
-constexpr T divCeil(T dividend, T divisor) noexcept {
+constexpr T divCeil(T dividend, T divisor) noexcept
+{
   return (dividend + divisor - 1) / divisor;
 }
 
@@ -35,7 +38,8 @@ constexpr T divCeil(T dividend, T divisor) noexcept {
  * @brief Sets the specified element of the array to the passed value
  **/
 template <class T, class V>
-__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v) {
+__device__ __forceinline__ void setElement(T* array, cudf::size_type idx, const T& t, const V& v)
+{
   array[idx] = t;
 }
 
@@ -47,7 +51,8 @@ template <class T, class V>
 __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
                                            cudf::size_type idx,
                                            const T& t,
-                                           const V& v) {
+                                           const V& v)
+{
   array[idx] = {t, v};
 }
 
@@ -56,10 +61,9 @@ __device__ __forceinline__ void setElement(thrust::pair<T, V>* array,
  * Does not do anything, indexing is not allowed with void* arrays.
  **/
 template <class T, class V>
-__device__ __forceinline__ void setElement(void* array,
-                                           cudf::size_type idx,
-                                           const T& t,
-                                           const V& v) {}
+__device__ __forceinline__ void setElement(void* array, cudf::size_type idx, const T& t, const V& v)
+{
+}
 
 /**
  * @brief CUDA kernel that finds all occurrences of a character in the given
@@ -81,7 +85,8 @@ __global__ void count_and_set_positions(const char* data,
                                         uint64_t offset,
                                         const char key,
                                         cudf::size_type* count,
-                                        T* positions) {
+                                        T* positions)
+{
   // thread IDs range per block, so also need the block id
   const uint64_t tid = threadIdx.x + (blockDim.x * blockIdx.x);
   const uint64_t did = tid * bytes_per_find_thread;
@@ -106,7 +111,8 @@ template <class T>
 cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions) {
+                                  T* positions)
+{
   int block_size    = 0;  // suggested thread count to use
   int min_grid_size = 0;  // minimum block count required
   CUDA_TRY(
@@ -131,7 +137,8 @@ cudf::size_type find_all_from_set(const char* h_data,
                                   size_t h_size,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions) {
+                                  T* positions)
+{
   rmm::device_buffer d_chunk(std::min(max_chunk_bytes, h_size));
   rmm::device_vector<cudf::size_type> d_count(1, 0);
 
@@ -186,21 +193,21 @@ template cudf::size_type find_all_from_set<pos_key_pair>(const char* h_data,
                                                          uint64_t result_offset,
                                                          pos_key_pair* positions);
 
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
-                                   const std::vector<char>& keys) {
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys)
+{
   return find_all_from_set<void>(d_data, keys, 0, nullptr);
 }
 
-cudf::size_type count_all_from_set(const char* h_data,
-                                   size_t h_size,
-                                   const std::vector<char>& keys) {
+cudf::size_type count_all_from_set(const char* h_data, size_t h_size, const std::vector<char>& keys)
+{
   return find_all_from_set<void>(h_data, h_size, keys, 0, nullptr);
 }
 
 std::string infer_compression_type(
   const compression_type& compression_arg,
   const std::string& filename,
-  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map) {
+  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map)
+{
   auto str_tolower = [](const auto& begin, const auto& end) {
     std::string out;
     std::transform(begin, end, std::back_inserter(out), ::tolower);

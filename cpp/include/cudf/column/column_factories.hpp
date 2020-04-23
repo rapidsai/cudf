@@ -20,8 +20,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Creates an empty column of the specified @p type
  *
@@ -84,7 +84,8 @@ std::unique_ptr<column> make_numeric_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
   return std::make_unique<column>(type,
                                   size,
@@ -145,7 +146,8 @@ std::unique_ptr<column> make_timestamp_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
   return std::make_unique<column>(type,
                                   size,
@@ -206,7 +208,8 @@ std::unique_ptr<column> make_fixed_width_column(
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
   if (is_timestamp(type)) {
     return make_timestamp_column(type, size, std::forward<B>(null_mask), null_count, stream, mr);

@@ -19,13 +19,13 @@
 
 #include <cudf/types.h>
 
-namespace cudf {
-
+namespace cudf
+{
 // Forward declaration
 struct table;
 
-namespace detail {
-
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Gathers the rows (including null values) of a set of source columns
  * into a set of destination columns.

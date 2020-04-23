@@ -24,16 +24,21 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 struct compute_pad_output_length_fn {
   column_device_view d_strings;
   size_type width;
   size_type fill_char_size;
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     size_type bytes   = d_str.size_bytes();
@@ -52,7 +57,8 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
                             pad_side side                       = pad_side::RIGHT,
                             std::string const& fill_char        = " ",
                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                            cudaStream_t stream                 = 0) {
+                            cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
@@ -142,7 +148,8 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
 std::unique_ptr<column> zfill(strings_column_view const& strings,
                               size_type width,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -195,14 +202,16 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
                             size_type width,
                             pad_side side,
                             std::string const& fill_char,
-                            rmm::mr::device_memory_resource* mr) {
+                            rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::pad(strings, width, side, fill_char, mr);
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& strings,
                               size_type width,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::zfill(strings, width, mr);
 }

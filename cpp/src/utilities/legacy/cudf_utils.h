@@ -16,7 +16,8 @@
  * @brief Sets a @ref gdf_column 's (uninitialized) null_count value by
  * counting the zeros in its validity indicator bits (if it has them).
  **---------------------------------------------------------------------------*/
-inline void set_null_count(gdf_column& column) {
+inline void set_null_count(gdf_column& column)
+{
   if (column.valid == nullptr) {
     column.null_count = 0;
   } else {
@@ -38,7 +39,8 @@ inline void set_null_count(gdf_column& column) {
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int* d_types) {
+inline gdf_error soa_col_info(gdf_column* cols, size_t ncols, void** d_cols, int* d_types)
+{
   std::vector<void*> v_cols(ncols, nullptr);
   std::vector<int> v_types(ncols, 0);
   for (size_t i = 0; i < ncols; ++i) {
@@ -73,7 +75,8 @@ inline gdf_error soa_col_info(gdf_column const* const* cols,
                               size_t ncols,
                               void** d_cols,
                               cudf::valid_type** d_valids,
-                              int* d_types) {
+                              int* d_types)
+{
   std::vector<void*> v_cols(ncols, nullptr);
   std::vector<cudf::valid_type*> v_valids(ncols, nullptr);
   std::vector<int> v_types(ncols, 0);
@@ -100,7 +103,8 @@ inline gdf_error soa_col_info(gdf_column const* const* cols,
   return GDF_SUCCESS;
 }
 
-inline bool isDeviceType(cudaPointerAttributes attrib) {
+inline bool isDeviceType(cudaPointerAttributes attrib)
+{
 #if CUDART_VERSION >= 10000
   return (attrib.type == cudaMemoryTypeDevice);
 #else

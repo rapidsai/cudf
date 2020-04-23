@@ -38,10 +38,12 @@
 #include <iostream>
 #include <random>
 
-namespace cudf {
-namespace test {
-
-std::string random_string(size_t len, std::string const &allowed_chars) {
+namespace cudf
+{
+namespace test
+{
+std::string random_string(size_t len, std::string const &allowed_chars)
+{
   std::mt19937_64 gen{std::random_device()()};
   std::uniform_int_distribution<size_t> dist{0, allowed_chars.length() - 1};
 
@@ -50,7 +52,8 @@ std::string random_string(size_t len, std::string const &allowed_chars) {
   return ret;
 }
 
-gdf_column *create_nv_category_column(cudf::size_type num_rows, bool repeat_strings) {
+gdf_column *create_nv_category_column(cudf::size_type num_rows, bool repeat_strings)
+{
   const char **string_host_data = new const char *[num_rows];
 
   for (cudf::size_type row_index = 0; row_index < num_rows; row_index++) {
@@ -84,7 +87,8 @@ gdf_column *create_nv_category_column(cudf::size_type num_rows, bool repeat_stri
 }
 
 gdf_column *create_nv_category_column_strings(const char **string_host_data,
-                                              cudf::size_type num_rows) {
+                                              cudf::size_type num_rows)
+{
   NVCategory *category = NVCategory::create_from_array(string_host_data, num_rows);
 
   gdf_column *column = new gdf_column{};
@@ -101,7 +105,8 @@ gdf_column *create_nv_category_column_strings(const char **string_host_data,
   return column;
 }
 
-const char **generate_string_data(cudf::size_type num_rows, size_t length, bool print) {
+const char **generate_string_data(cudf::size_type num_rows, size_t length, bool print)
+{
   const char **string_host_data = new const char *[num_rows];
 
   for (cudf::size_type row_index = 0; row_index < num_rows; row_index++) {
@@ -118,7 +123,8 @@ const char **generate_string_data(cudf::size_type num_rows, size_t length, bool 
 }
 
 std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(
-  gdf_column *column) {
+  gdf_column *column)
+{
   if (column->dtype == GDF_STRING_CATEGORY && column->dtype_info.category != nullptr &&
       column->size > 0) {
     NVStrings *tptr =

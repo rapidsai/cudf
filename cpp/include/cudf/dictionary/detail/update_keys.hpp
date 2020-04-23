@@ -18,10 +18,12 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
-
+namespace cudf
+{
+namespace dictionary
+{
+namespace detail
+{
 /**
  * @copydoc cudf::dictionary::add_keys(dictionary_column_view const&,column_view
  * const&,mm::mr::device_memory_resource*)

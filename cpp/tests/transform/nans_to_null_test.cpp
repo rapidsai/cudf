@@ -25,7 +25,8 @@
 
 template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
-  void run_test(cudf::column_view const& input, cudf::column_view const& expected) {
+  void run_test(cudf::column_view const& input, cudf::column_view const& expected)
+  {
     auto got_mask = cudf::experimental::nans_to_nulls(input);
     cudf::column got(input);
     got.set_null_mask(std::move(*(got_mask.first)));
@@ -36,7 +37,8 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
   }
 
   std::unique_ptr<cudf::column> create_expected(std::vector<T> const& input,
-                                                std::vector<bool> const& mask = {}) {
+                                                std::vector<bool> const& mask = {})
+  {
     std::vector<T> expected(input);
     std::vector<bool> expected_mask;
 
@@ -63,7 +65,8 @@ using test_types = ::testing::Types<float, double>;
 
 TYPED_TEST_CASE(NaNsToNullTest, test_types);
 
-TYPED_TEST(NaNsToNullTest, WithMask) {
+TYPED_TEST(NaNsToNullTest, WithMask)
+{
   using T = TypeParam;
 
   std::vector<T> input   = {1, NAN, 3, NAN, 5, NAN};
@@ -74,7 +77,8 @@ TYPED_TEST(NaNsToNullTest, WithMask) {
   this->run_test(input_column, expected_column->view());
 }
 
-TYPED_TEST(NaNsToNullTest, WithNoMask) {
+TYPED_TEST(NaNsToNullTest, WithNoMask)
+{
   using T = TypeParam;
 
   std::vector<T> input = {1, NAN, 3, NAN, 5, NAN};
@@ -83,7 +87,8 @@ TYPED_TEST(NaNsToNullTest, WithNoMask) {
   this->run_test(input_column, expected_column->view());
 }
 
-TYPED_TEST(NaNsToNullTest, NoNANWithMask) {
+TYPED_TEST(NaNsToNullTest, NoNANWithMask)
+{
   using T = TypeParam;
 
   std::vector<T> input   = {1, 2, 3, 4, 5, 6};
@@ -94,7 +99,8 @@ TYPED_TEST(NaNsToNullTest, NoNANWithMask) {
   this->run_test(input_column, expected_column->view());
 }
 
-TYPED_TEST(NaNsToNullTest, NoNANNoMask) {
+TYPED_TEST(NaNsToNullTest, NoNANNoMask)
+{
   using T = TypeParam;
 
   std::vector<T> input = {1, 2, 3, 4, 5, 6};
@@ -103,7 +109,8 @@ TYPED_TEST(NaNsToNullTest, NoNANNoMask) {
   this->run_test(input_column, expected_column->view());
 }
 
-TYPED_TEST(NaNsToNullTest, EmptyColumn) {
+TYPED_TEST(NaNsToNullTest, EmptyColumn)
+{
   using T = TypeParam;
 
   std::vector<T> input = {};
@@ -112,9 +119,11 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn) {
   this->run_test(input_column, expected_column->view());
 }
 
-struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
+struct NaNsToNullFailTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(NaNsToNullFailTest, StringType) {
+TEST_F(NaNsToNullFailTest, StringType)
+{
   std::vector<std::string> strings{
     "", "this", "is", "a", "column", "of", "strings", "with", "in", "valid"};
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end());
@@ -122,7 +131,8 @@ TEST_F(NaNsToNullFailTest, StringType) {
   EXPECT_THROW(cudf::experimental::nans_to_nulls(input), cudf::logic_error);
 }
 
-TEST_F(NaNsToNullFailTest, IntegerType) {
+TEST_F(NaNsToNullFailTest, IntegerType)
+{
   std::vector<int32_t> input = {1, 2, 3, 4, 5, 6};
   auto input_column = cudf::test::fixed_width_column_wrapper<int32_t>(input.begin(), input.end());
 

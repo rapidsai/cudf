@@ -25,11 +25,12 @@
 
 #include <algorithm>
 
-namespace cudf {
-
-namespace detail {
-
-gdf_column stack(const cudf::table &values, cudaStream_t stream = 0) {
+namespace cudf
+{
+namespace detail
+{
+gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
+{
   gdf_dtype dtype        = values.get_column(0)->dtype;
   gdf_size_type num_cols = values.num_columns();
   gdf_size_type num_rows = values.num_rows();

@@ -10,8 +10,8 @@
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <memory>
 
-namespace {
-
+namespace
+{
 constexpr int WARP_SIZE     = 32;
 constexpr int MAX_GRID_SIZE = (1 << 16) - 1;
 
@@ -29,7 +29,8 @@ template <typename ColumnType>
 __global__ void gpu_transpose(ColumnType **in_cols,
                               ColumnType **out_cols,
                               cudf::size_type ncols,
-                              cudf::size_type nrows) {
+                              cudf::size_type nrows)
+{
   cudf::size_type x = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::size_type y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -55,7 +56,8 @@ __global__ void gpu_transpose_valids(cudf::valid_type **in_cols_valid,
                                      cudf::valid_type **out_cols_valid,
                                      cudf::size_type *out_cols_null_count,
                                      cudf::size_type ncols,
-                                     cudf::size_type nrows) {
+                                     cudf::size_type nrows)
+{
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -103,7 +105,8 @@ struct launch_kernel {
                        cudf::size_type *out_cols_nullct_ptr,
                        cudf::size_type ncols,
                        cudf::size_type nrows,
-                       bool has_null) {
+                       bool has_null)
+  {
     dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
     dim3 dimGrid(std::min((ncols + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
                  std::min((nrows + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
@@ -126,7 +129,8 @@ struct launch_kernel {
 
 }  // namespace
 
-gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols) {
+gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols)
+{
   // Make sure the inputs are not null
   GDF_REQUIRE((ncols > 0) && (nullptr != in_cols) && (nullptr != out_cols), GDF_DATASET_EMPTY)
 

@@ -30,9 +30,10 @@
 #include <tuple>
 #include <vector>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 void run_rank_test(table_view input,
                    table_view expected,
                    rank_method method,
@@ -40,7 +41,8 @@ void run_rank_test(table_view input,
                    include_nulls _include_nulls,
                    null_order null_precedence,
                    bool percentage,
-                   bool debug = false) {
+                   bool debug = false)
+{
   int i = 0;
   for (auto &&input_column : input) {
     // Rank
@@ -76,7 +78,8 @@ struct Rank : public BaseFixture {
                      column_view const col1_rank,
                      column_view const col2_rank,
                      column_view const col3_rank,
-                     bool percentage = false) {
+                     bool percentage = false)
+  {
     if (std::is_same<T, bool>::value) return;
     for (auto const &test_case : {
            // Non-null column
@@ -108,7 +111,8 @@ TYPED_TEST_CASE(Rank, NumericTypes);
 
 // fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
 //                                        3,   2,   1,   4,   6,   5
-TYPED_TEST(Rank, first_asce_keep) {
+TYPED_TEST(Rank, first_asce_keep)
+{
   // ASCENDING
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, -1, 3, 5, 4}, {1, 1, 0, 1, 1, 1}};  // KEEP
@@ -116,14 +120,16 @@ TYPED_TEST(Rank, first_asce_keep) {
   this->run_all_tests(rank_method::FIRST, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, first_asce_top) {
+TYPED_TEST(Rank, first_asce_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 2, 1, 4, 6, 5}};  // BEFORE = TOP
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 3, 6, 4}};
   this->run_all_tests(rank_method::FIRST, asce_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, first_asce_bottom) {
+TYPED_TEST(Rank, first_asce_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 4, 6, 5}};
   ;
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, 6, 3, 5, 4}};  // AFTER  = BOTTOM
@@ -131,7 +137,8 @@ TYPED_TEST(Rank, first_asce_bottom) {
   this->run_all_tests(rank_method::FIRST, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, first_desc_keep) {
+TYPED_TEST(Rank, first_desc_keep)
+{
   // DESCENDING
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 5, -1, 3, 1, 4}, {1, 1, 0, 1, 1, 1}};  // KEEP
@@ -139,182 +146,208 @@ TYPED_TEST(Rank, first_desc_keep) {
   this->run_all_tests(rank_method::FIRST, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, first_desc_top) {
+TYPED_TEST(Rank, first_desc_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 6, 1, 4, 2, 5}};  // AFTER  = TOP
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 4, 1, 5}};
   this->run_all_tests(rank_method::FIRST, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, first_desc_bottom) {
+TYPED_TEST(Rank, first_desc_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 3, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 5, 6, 3, 1, 4}};  // BEFORE = BOTTOM
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 4, 1, 5}};
   this->run_all_tests(rank_method::FIRST, desc_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_asce_keep) {
+TYPED_TEST(Rank, dense_asce_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 4, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, -1, 2, 3, 2}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 3, 1, 2, 4, 2}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::DENSE, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_asce_top) {
+TYPED_TEST(Rank, dense_asce_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 4, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 2, 1, 3, 4, 3}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 3, 1, 2, 4, 2}};
   this->run_all_tests(rank_method::DENSE, asce_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_asce_bottom) {
+TYPED_TEST(Rank, dense_asce_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 4, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, 4, 2, 3, 2}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 3, 1, 2, 4, 2}};
   this->run_all_tests(rank_method::DENSE, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_desc_keep) {
+TYPED_TEST(Rank, dense_desc_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 3, 4, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 3, -1, 2, 1, 2}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 4, 3, 1, 3}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::DENSE, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_desc_top) {
+TYPED_TEST(Rank, dense_desc_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 3, 4, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 4, 1, 3, 2, 3}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 4, 3, 1, 3}};
   this->run_all_tests(rank_method::DENSE, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, dense_desc_bottom) {
+TYPED_TEST(Rank, dense_desc_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 3, 4, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 3, 4, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 4, 3, 1, 3}};
   this->run_all_tests(rank_method::DENSE, desc_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_asce_keep) {
+TYPED_TEST(Rank, min_asce_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 6, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, -1, 2, 5, 2}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 2, 6, 2}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::MIN, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_asce_top) {
+TYPED_TEST(Rank, min_asce_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 6, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 2, 1, 3, 6, 3}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 2, 6, 2}};
   this->run_all_tests(rank_method::MIN, asce_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_asce_bottom) {
+TYPED_TEST(Rank, min_asce_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{3, 2, 1, 3, 6, 3}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 1, 6, 2, 5, 2}};
   fixed_width_column_wrapper<size_type> col3_rank{{2, 5, 1, 2, 6, 2}};
   this->run_all_tests(rank_method::MIN, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_desc_keep) {
+TYPED_TEST(Rank, min_desc_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 5, -1, 2, 1, 2}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 3, 1, 3}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::MIN, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_desc_top) {
+TYPED_TEST(Rank, min_desc_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{3, 6, 1, 3, 2, 3}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 3, 1, 3}};
   this->run_all_tests(rank_method::MIN, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, min_desc_bottom) {
+TYPED_TEST(Rank, min_desc_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{2, 5, 6, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col2_rank{{2, 5, 6, 2, 1, 2}};
   fixed_width_column_wrapper<size_type> col3_rank{{3, 2, 6, 3, 1, 3}};
   this->run_all_tests(rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_asce_keep) {
+TYPED_TEST(Rank, max_asce_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{5, 2, 1, 5, 6, 5}};
   fixed_width_column_wrapper<size_type> col2_rank{{4, 1, -1, 4, 5, 4}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{4, 5, 1, 4, 6, 4}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::MAX, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_asce_top) {
+TYPED_TEST(Rank, max_asce_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{5, 2, 1, 5, 6, 5}};
   fixed_width_column_wrapper<size_type> col2_rank{{5, 2, 1, 5, 6, 5}};
   fixed_width_column_wrapper<size_type> col3_rank{{4, 5, 1, 4, 6, 4}};
   this->run_all_tests(rank_method::MAX, asce_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_asce_bottom) {
+TYPED_TEST(Rank, max_asce_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{5, 2, 1, 5, 6, 5}};
   fixed_width_column_wrapper<size_type> col2_rank{{4, 1, 6, 4, 5, 4}};
   fixed_width_column_wrapper<size_type> col3_rank{{4, 5, 1, 4, 6, 4}};
   this->run_all_tests(rank_method::MAX, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_desc_keep) {
+TYPED_TEST(Rank, max_desc_keep)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{4, 5, 6, 4, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{4, 5, -1, 4, 1, 4}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<size_type> col3_rank{{5, 2, 6, 5, 1, 5}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::MAX, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_desc_top) {
+TYPED_TEST(Rank, max_desc_top)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{4, 5, 6, 4, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{5, 6, 1, 5, 2, 5}};
   fixed_width_column_wrapper<size_type> col3_rank{{5, 2, 6, 5, 1, 5}};
   this->run_all_tests(rank_method::MAX, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, max_desc_bottom) {
+TYPED_TEST(Rank, max_desc_bottom)
+{
   fixed_width_column_wrapper<size_type> col1_rank{{4, 5, 6, 4, 1, 4}};
   fixed_width_column_wrapper<size_type> col2_rank{{4, 5, 6, 4, 1, 4}};
   fixed_width_column_wrapper<size_type> col3_rank{{5, 2, 6, 5, 1, 5}};
   this->run_all_tests(rank_method::MAX, desc_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_asce_keep) {
+TYPED_TEST(Rank, average_asce_keep)
+{
   fixed_width_column_wrapper<double> col1_rank{{4, 2, 1, 4, 6, 4}};
   fixed_width_column_wrapper<double> col2_rank{{3, 1, -1, 3, 5, 3}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<double> col3_rank{{3, 5, 1, 3, 6, 3}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::AVERAGE, asce_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_asce_top) {
+TYPED_TEST(Rank, average_asce_top)
+{
   fixed_width_column_wrapper<double> col1_rank{{4, 2, 1, 4, 6, 4}};
   fixed_width_column_wrapper<double> col2_rank{{4, 2, 1, 4, 6, 4}};
   fixed_width_column_wrapper<double> col3_rank{{3, 5, 1, 3, 6, 3}};
   this->run_all_tests(rank_method::AVERAGE, asce_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_asce_bottom) {
+TYPED_TEST(Rank, average_asce_bottom)
+{
   fixed_width_column_wrapper<double> col1_rank{{4, 2, 1, 4, 6, 4}};
   fixed_width_column_wrapper<double> col2_rank{{3, 1, 6, 3, 5, 3}};
   fixed_width_column_wrapper<double> col3_rank{{3, 5, 1, 3, 6, 3}};
   this->run_all_tests(rank_method::AVERAGE, asce_bottom, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_desc_keep) {
+TYPED_TEST(Rank, average_desc_keep)
+{
   fixed_width_column_wrapper<double> col1_rank{{3, 5, 6, 3, 1, 3}};
   fixed_width_column_wrapper<double> col2_rank{{3, 5, -1, 3, 1, 3}, {1, 1, 0, 1, 1, 1}};
   fixed_width_column_wrapper<double> col3_rank{{4, 2, 6, 4, 1, 4}, {1, 1, 1, 1, 1, 1}};
   this->run_all_tests(rank_method::AVERAGE, desc_keep, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_desc_top) {
+TYPED_TEST(Rank, average_desc_top)
+{
   fixed_width_column_wrapper<double> col1_rank{{3, 5, 6, 3, 1, 3}};
   fixed_width_column_wrapper<double> col2_rank{{4, 6, 1, 4, 2, 4}};
   fixed_width_column_wrapper<double> col3_rank{{4, 2, 6, 4, 1, 4}};
   this->run_all_tests(rank_method::AVERAGE, desc_top, col1_rank, col2_rank, col3_rank);
 }
 
-TYPED_TEST(Rank, average_desc_bottom) {
+TYPED_TEST(Rank, average_desc_bottom)
+{
   fixed_width_column_wrapper<double> col1_rank{{3, 5, 6, 3, 1, 3}};
   fixed_width_column_wrapper<double> col2_rank{{3, 5, 6, 3, 1, 3}};
   fixed_width_column_wrapper<double> col3_rank{{4, 2, 6, 4, 1, 4}};
@@ -322,7 +355,8 @@ TYPED_TEST(Rank, average_desc_bottom) {
 }
 
 // percentage==true (dense, not-dense)
-TYPED_TEST(Rank, dense_asce_keep_pct) {
+TYPED_TEST(Rank, dense_asce_keep_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{0.75, 0.5, 0.25, 0.75, 1., 0.75}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{
     {2.0 / 3.0, 1.0 / 3.0, -1., 2.0 / 3.0, 1., 2.0 / 3.0}, {1, 1, 0, 1, 1, 1}};
@@ -331,21 +365,24 @@ TYPED_TEST(Rank, dense_asce_keep_pct) {
   this->run_all_tests(rank_method::DENSE, asce_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
-TYPED_TEST(Rank, dense_asce_top_pct) {
+TYPED_TEST(Rank, dense_asce_top_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{0.75, 0.5, 0.25, 0.75, 1., 0.75}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{{0.75, 0.5, 0.25, 0.75, 1., 0.75}};
   cudf::test::fixed_width_column_wrapper<double> col3_rank{{0.5, 0.75, 0.25, 0.5, 1., 0.5}};
   this->run_all_tests(rank_method::DENSE, asce_top, col1_rank, col2_rank, col3_rank, true);
 }
 
-TYPED_TEST(Rank, dense_asce_bottom_pct) {
+TYPED_TEST(Rank, dense_asce_bottom_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{{0.75, 0.5, 0.25, 0.75, 1., 0.75}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{{0.5, 0.25, 1., 0.5, 0.75, 0.5}};
   cudf::test::fixed_width_column_wrapper<double> col3_rank{{0.5, 0.75, 0.25, 0.5, 1., 0.5}};
   this->run_all_tests(rank_method::DENSE, asce_bottom, col1_rank, col2_rank, col3_rank, true);
 }
 
-TYPED_TEST(Rank, min_desc_keep_pct) {
+TYPED_TEST(Rank, min_desc_keep_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{
     {1.0 / 3.0, 5.0 / 6.0, 1., 1.0 / 3.0, 1.0 / 6.0, 1.0 / 3.0}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{{0.4, 1., -1., 0.4, 0.2, 0.4},
@@ -355,7 +392,8 @@ TYPED_TEST(Rank, min_desc_keep_pct) {
   this->run_all_tests(rank_method::MIN, desc_keep, col1_rank, col2_rank, col3_rank, true);
 }
 
-TYPED_TEST(Rank, min_desc_top_pct) {
+TYPED_TEST(Rank, min_desc_top_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{
     {1.0 / 3.0, 5.0 / 6.0, 1., 1.0 / 3.0, 1.0 / 6.0, 1.0 / 3.0}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{
@@ -365,7 +403,8 @@ TYPED_TEST(Rank, min_desc_top_pct) {
   this->run_all_tests(rank_method::MIN, desc_top, col1_rank, col2_rank, col3_rank, true);
 }
 
-TYPED_TEST(Rank, min_desc_bottom_pct) {
+TYPED_TEST(Rank, min_desc_bottom_pct)
+{
   cudf::test::fixed_width_column_wrapper<double> col1_rank{
     {1.0 / 3.0, 5.0 / 6.0, 1., 1.0 / 3.0, 1.0 / 6.0, 1.0 / 3.0}};
   cudf::test::fixed_width_column_wrapper<double> col2_rank{

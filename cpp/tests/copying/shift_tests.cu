@@ -32,7 +32,8 @@ using TestTypes = cudf::test::Types<int32_t>;
 
 template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
-  cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   auto s = new ScalarType(0, false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
@@ -41,7 +42,8 @@ template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   auto s = new ScalarType(value, true, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
@@ -53,11 +55,13 @@ template <typename T>
 auto highest = std::numeric_limits<T>::max();
 
 template <typename T>
-struct ShiftTest : public cudf::test::BaseFixture {};
+struct ShiftTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(ShiftTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(ShiftTest, OneColumnEmpty) {
+TYPED_TEST(ShiftTest, OneColumnEmpty)
+{
   using T = TypeParam;
 
   std::vector<T> vals{};
@@ -72,7 +76,8 @@ TYPED_TEST(ShiftTest, OneColumnEmpty) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, TwoColumnsEmpty) {
+TYPED_TEST(ShiftTest, TwoColumnsEmpty)
+{
   using T = TypeParam;
 
   std::vector<T> vals{};
@@ -87,7 +92,8 @@ TYPED_TEST(ShiftTest, TwoColumnsEmpty) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, OneColumn) {
+TYPED_TEST(ShiftTest, OneColumn)
+{
   using T = TypeParam;
 
   auto input = fixed_width_column_wrapper<T>{lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T>};
@@ -99,7 +105,8 @@ TYPED_TEST(ShiftTest, OneColumn) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, OneColumnNegativeShift) {
+TYPED_TEST(ShiftTest, OneColumnNegativeShift)
+{
   using T = TypeParam;
 
   auto input = fixed_width_column_wrapper<T>{lowest<T>, T(1), T(2), T(3), T(4), T(5), highest<T>};
@@ -111,7 +118,8 @@ TYPED_TEST(ShiftTest, OneColumnNegativeShift) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, OneColumnNullFill) {
+TYPED_TEST(ShiftTest, OneColumnNullFill)
+{
   using T = TypeParam;
 
   auto input = fixed_width_column_wrapper<T>{lowest<T>, T(5), T(0), T(3), T(0), T(1), highest<T>};
@@ -125,7 +133,8 @@ TYPED_TEST(ShiftTest, OneColumnNullFill) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, TwoColumnsNullableInput) {
+TYPED_TEST(ShiftTest, TwoColumnsNullableInput)
+{
   using T = TypeParam;
 
   auto input    = fixed_width_column_wrapper<T>({1, 2, 3, 4, 5}, {0, 1, 1, 1, 0});
@@ -137,7 +146,8 @@ TYPED_TEST(ShiftTest, TwoColumnsNullableInput) {
   cudf::test::expect_columns_equal(expected, *actual);
 }
 
-TYPED_TEST(ShiftTest, MismatchFillValueDtypes) {
+TYPED_TEST(ShiftTest, MismatchFillValueDtypes)
+{
   using T = TypeParam;
 
   if (std::is_same<T, int>::value) { return; }

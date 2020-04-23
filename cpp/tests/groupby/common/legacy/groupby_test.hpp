@@ -29,10 +29,12 @@
 #include <gtest/gtest.h>
 #include <utility>
 
-namespace cudf {
-namespace test {
-namespace detail {
-
+namespace cudf
+{
+namespace test
+{
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Performs a sort-by-key on tables.
  *
@@ -44,7 +46,8 @@ namespace detail {
  * @return std::pair<table, table> A pair whose first element contains the
  * sorted keys and second element contains reordered values.
  *---------------------------------------------------------------------------**/
-inline std::pair<table, table> sort_by_key(cudf::table const& keys, cudf::table const& values) {
+inline std::pair<table, table> sort_by_key(cudf::table const& keys, cudf::table const& values)
+{
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(), "Size mismatch between keys and values");
   rmm::device_vector<cudf::size_type> sorted_indices(keys.num_rows());
   gdf_column gdf_sorted_indices;
@@ -67,7 +70,8 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys, cudf::table 
 
 struct column_equality {
   template <typename T>
-  bool operator()(gdf_column lhs, gdf_column rhs) const {
+  bool operator()(gdf_column lhs, gdf_column rhs) const
+  {
     std::unique_ptr<column_wrapper<T>> lhs_col;
     std::unique_ptr<column_wrapper<T>> rhs_col;
     lhs_col.reset(new column_wrapper<T>(lhs));
@@ -83,7 +87,8 @@ struct column_equality {
  * @param lhs The first table
  * @param rhs The second table
  *---------------------------------------------------------------------------**/
-inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& rhs) {
+inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& rhs)
+{
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
   EXPECT_TRUE(std::equal(
@@ -98,7 +103,8 @@ inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& r
  * @param lhs The first array
  * @param rhs The second array
  *---------------------------------------------------------------------------**/
-inline void expect_values_are_equal(std::vector<gdf_column*> lhs, std::vector<gdf_column*> rhs) {
+inline void expect_values_are_equal(std::vector<gdf_column*> lhs, std::vector<gdf_column*> rhs)
+{
   EXPECT_EQ(lhs.size(), rhs.size());
   for (size_t i = 0; i < lhs.size(); i++) { EXPECT_EQ(lhs[i]->size, rhs[i]->size); }
 
@@ -109,7 +115,8 @@ inline void expect_values_are_equal(std::vector<gdf_column*> lhs, std::vector<gd
 }
 
 template <class table_type>
-inline void destroy_columns(table_type* t) {
+inline void destroy_columns(table_type* t)
+{
   std::for_each(t->begin(), t->end(), [](gdf_column* col) {
     gdf_column_free(col);
     delete col;

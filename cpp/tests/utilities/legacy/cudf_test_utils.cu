@@ -25,19 +25,20 @@
 
 #include <cudf/legacy/functions.h>
 
-namespace {
-
+namespace
+{
 static constexpr char null_signifier = '@';
 
-namespace detail {
-
+namespace detail
+{
 // When streaming char-like types, the standard library streams tend to treat
 // them as characters rather than numbers, e.g. you would get an 'a' instead of 97.
 // The following function(s) ensure we "promote" such values to integers before
 // they're streamed
 
 template <typename T>
-const T& promote_for_streaming(const T& x) {
+const T& promote_for_streaming(const T& x)
+{
   return x;
 }
 
@@ -49,7 +50,8 @@ int promote_for_streaming(const signed char& x) { return x; }
 
 struct column_printer {
   template <typename Element>
-  void operator()(gdf_column const* the_column, unsigned min_printing_width, std::ostream& stream) {
+  void operator()(gdf_column const* the_column, unsigned min_printing_width, std::ostream& stream)
+  {
     cudf::size_type num_rows{the_column->size};
 
     Element const* column_data{static_cast<Element const*>(the_column->data)};
@@ -142,9 +144,12 @@ struct elements_equal {
    * treated as equal to other nulls. Defaults to true.
    *---------------------------------------------------------------------------**/
   __host__ __device__ elements_equal(gdf_column lhs, gdf_column rhs, bool nulls_are_equal = true)
-    : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
+    : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal}
+  {
+  }
 
-  __device__ bool operator()(cudf::size_type row) {
+  __device__ bool operator()(cudf::size_type row)
+  {
     bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
     bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
@@ -172,7 +177,8 @@ struct elements_equal {
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
 template <typename T>
-bool gdf_equal_columns(gdf_column const& left, gdf_column const& right) {
+bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
+{
   if (left.size != right.size) return false;
   if (left.dtype != right.dtype) return false;
   if (left.null_count != right.null_count) return false;
@@ -230,11 +236,12 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right) {
   }
 }
 
-namespace {
-
+namespace
+{
 struct columns_equal {
   template <typename T>
-  bool operator()(gdf_column const& left, gdf_column const& right) {
+  bool operator()(gdf_column const& left, gdf_column const& right)
+  {
     return gdf_equal_columns<T>(left, right);
   }
 };
@@ -242,20 +249,23 @@ struct columns_equal {
 };  // namespace
 
 // Type-erased version of gdf_equal_columns
-bool gdf_equal_columns(gdf_column const& left, gdf_column const& right) {
+bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
+{
   return cudf::type_dispatcher(left.dtype, columns_equal{}, left, right);
 }
 
 void print_gdf_column(gdf_column const* the_column,
                       unsigned min_printing_width,
-                      std::ostream& stream) {
+                      std::ostream& stream)
+{
   cudf::type_dispatcher(
     the_column->dtype, column_printer{}, the_column, min_printing_width, stream);
 }
 
 void print_valid_data(const cudf::valid_type* validity_mask,
                       const size_t num_rows,
-                      std::ostream& stream) {
+                      std::ostream& stream)
+{
   cudaError_t error;
   cudaPointerAttributes attrib;
   cudaPointerGetAttributes(&attrib, validity_mask);
@@ -279,7 +289,8 @@ void print_valid_data(const cudf::valid_type* validity_mask,
 }
 
 cudf::size_type count_valid_bits_host(std::vector<cudf::valid_type> const& masks,
-                                      cudf::size_type const num_rows) {
+                                      cudf::size_type const num_rows)
+{
   if ((0 == num_rows) || (0 == masks.size())) { return 0; }
 
   cudf::size_type count{0};

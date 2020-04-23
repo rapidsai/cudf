@@ -28,12 +28,14 @@
 
 #include <chrono>
 
-struct BitMaskTest : public GdfTest {};
+struct BitMaskTest : public GdfTest {
+};
 
 //
 //  Kernel to count bits set in the bit mask
 //
-__global__ void count_bits_g(int *counter, BitMask bits) {
+__global__ void count_bits_g(int *counter, BitMask bits)
+{
   int index  = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
 
@@ -71,7 +73,8 @@ __global__ void set_bit(cudf::size_type bit, BitMask bits) { bits.set_bit_unsafe
 //
 //  Kernel to do safe bit set/clear
 //
-__global__ void test_safe_set_clear_g(BitMask bits) {
+__global__ void test_safe_set_clear_g(BitMask bits)
+{
   int index = threadIdx.x;
 
   if ((index % 2) == 0) {
@@ -85,10 +88,8 @@ __global__ void test_safe_set_clear_g(BitMask bits) {
   }
 }
 
-__host__ gdf_error count_bits(cudf::size_type *count,
-                              const BitMask &bit_mask,
-                              int a = 1,
-                              int b = 1) {
+__host__ gdf_error count_bits(cudf::size_type *count, const BitMask &bit_mask, int a = 1, int b = 1)
+{
   int *count_d;
   CUDA_TRY(cudaMalloc(&count_d, sizeof(int)));
   CUDA_TRY(cudaMemset(count_d, 0, sizeof(int)));
@@ -101,7 +102,8 @@ __host__ gdf_error count_bits(cudf::size_type *count,
   return GDF_SUCCESS;
 }
 
-TEST_F(BitMaskTest, NoValids) {
+TEST_F(BitMaskTest, NoValids)
+{
   const int num_rows = 100;
 
   bit_mask_t *bits = nullptr;
@@ -117,7 +119,8 @@ TEST_F(BitMaskTest, NoValids) {
   EXPECT_EQ(cudf::size_type{0}, local_count);
 }
 
-TEST_F(BitMaskTest, AllValids) {
+TEST_F(BitMaskTest, AllValids)
+{
   const int num_rows = 100;
 
   bit_mask_t *bits = nullptr;
@@ -133,7 +136,8 @@ TEST_F(BitMaskTest, AllValids) {
   EXPECT_EQ(cudf::size_type{100}, local_count);
 }
 
-TEST_F(BitMaskTest, FirstRowValid) {
+TEST_F(BitMaskTest, FirstRowValid)
+{
   const int num_rows = 4;
 
   bit_mask_t *bits = nullptr;
@@ -156,7 +160,8 @@ TEST_F(BitMaskTest, FirstRowValid) {
   EXPECT_EQ(temp, bit_mask_t{0x1});
 }
 
-TEST_F(BitMaskTest, EveryOtherBit) {
+TEST_F(BitMaskTest, EveryOtherBit)
+{
   const int num_rows = 8;
 
   bit_mask_t *bits = nullptr;
@@ -182,7 +187,8 @@ TEST_F(BitMaskTest, EveryOtherBit) {
   EXPECT_EQ(temp, bit_mask_t{0x55});
 }
 
-TEST_F(BitMaskTest, OtherEveryOtherBit) {
+TEST_F(BitMaskTest, OtherEveryOtherBit)
+{
   const int num_rows = 8;
 
   bit_mask_t *bits = nullptr;
@@ -208,7 +214,8 @@ TEST_F(BitMaskTest, OtherEveryOtherBit) {
   EXPECT_EQ(temp, bit_mask_t{0xAA});
 }
 
-TEST_F(BitMaskTest, 15rows) {
+TEST_F(BitMaskTest, 15rows)
+{
   const int num_rows = 15;
 
   bit_mask_t *bits = nullptr;
@@ -227,7 +234,8 @@ TEST_F(BitMaskTest, 15rows) {
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
 
-TEST_F(BitMaskTest, 5rows) {
+TEST_F(BitMaskTest, 5rows)
+{
   const int num_rows = 5;
 
   bit_mask_t *bits = nullptr;
@@ -245,7 +253,8 @@ TEST_F(BitMaskTest, 5rows) {
   EXPECT_EQ(cudf::size_type{1}, local_count);
 }
 
-TEST_F(BitMaskTest, 10ValidRows) {
+TEST_F(BitMaskTest, 10ValidRows)
+{
   const int num_rows = 10;
 
   bit_mask_t *bits = nullptr;
@@ -261,7 +270,8 @@ TEST_F(BitMaskTest, 10ValidRows) {
   EXPECT_EQ(cudf::size_type{10}, local_count);
 }
 
-TEST_F(BitMaskTest, MultipleOfEight) {
+TEST_F(BitMaskTest, MultipleOfEight)
+{
   const int num_rows = 1024;
 
   bit_mask_t *bits = nullptr;
@@ -279,7 +289,8 @@ TEST_F(BitMaskTest, MultipleOfEight) {
   EXPECT_EQ(cudf::size_type{128}, local_count);
 }
 
-TEST_F(BitMaskTest, NotMultipleOfEight) {
+TEST_F(BitMaskTest, NotMultipleOfEight)
+{
   const int num_rows = 1023;
 
   bit_mask_t *bits = nullptr;
@@ -297,7 +308,8 @@ TEST_F(BitMaskTest, NotMultipleOfEight) {
   EXPECT_EQ(cudf::size_type{127}, local_count);
 }
 
-TEST_F(BitMaskTest, TenThousandRows) {
+TEST_F(BitMaskTest, TenThousandRows)
+{
   const int num_rows = 10000;
 
   bit_mask_t *bits = nullptr;
@@ -313,7 +325,8 @@ TEST_F(BitMaskTest, TenThousandRows) {
   EXPECT_EQ(cudf::size_type{10000}, local_count);
 }
 
-TEST_F(BitMaskTest, PerformanceTest) {
+TEST_F(BitMaskTest, PerformanceTest)
+{
   const int num_rows = 100000000;
 
   bit_mask_t *bits = nullptr;
@@ -347,7 +360,8 @@ TEST_F(BitMaskTest, PerformanceTest) {
   free(local_valid);
 }
 
-TEST_F(BitMaskTest, CudaThreadingTest) {
+TEST_F(BitMaskTest, CudaThreadingTest)
+{
   const int num_rows = 100000;
   bit_mask_t *bits   = nullptr;
 
@@ -365,7 +379,8 @@ TEST_F(BitMaskTest, CudaThreadingTest) {
   EXPECT_EQ(GDF_SUCCESS, bit_mask::destroy_bit_mask(bits));
 }
 
-TEST_F(BitMaskTest, PaddingTest) {
+TEST_F(BitMaskTest, PaddingTest)
+{
   //
   //  Set the number of rows to 32, we'll try padding to
   //  256 bytes.

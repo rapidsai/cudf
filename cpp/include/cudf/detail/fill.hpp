@@ -21,10 +21,12 @@
 
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in-place in a column with a
  * scalar value.

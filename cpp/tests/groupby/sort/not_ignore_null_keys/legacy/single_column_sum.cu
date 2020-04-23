@@ -50,7 +50,8 @@ using TestingTypes = ::testing::Types<KV<int8_t, int8_t>>;
 
 TYPED_TEST_CASE(SingleColumnSumSql, TestingTypes);
 
-TYPED_TEST(SingleColumnSumSql, HalfWithNullKeys) {
+TYPED_TEST(SingleColumnSumSql, HalfWithNullKeys)
+{
   using Key             = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value           = typename SingleColumnSumSql<TypeParam>::ValueType;
   using ResultValue     = cudf::test::expected_result_t<Value, op>;
@@ -68,7 +69,8 @@ TYPED_TEST(SingleColumnSumSql, HalfWithNullKeys) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnSumSql, OneGroupNoNulls) {
+TYPED_TEST(SingleColumnSumSql, OneGroupNoNulls)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value       = typename SingleColumnSumSql<TypeParam>::ValueType;
@@ -86,7 +88,8 @@ TYPED_TEST(SingleColumnSumSql, OneGroupNoNulls) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnSumSql, OneGroupAllNullKeys) {
+TYPED_TEST(SingleColumnSumSql, OneGroupAllNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value       = typename SingleColumnSumSql<TypeParam>::ValueType;
@@ -106,7 +109,8 @@ TYPED_TEST(SingleColumnSumSql, OneGroupAllNullKeys) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnSumSql, OneGroupAllNullValues) {
+TYPED_TEST(SingleColumnSumSql, OneGroupAllNullValues)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value       = typename SingleColumnSumSql<TypeParam>::ValueType;
@@ -125,7 +129,8 @@ TYPED_TEST(SingleColumnSumSql, OneGroupAllNullValues) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnSumSql, OneGroupEvenNullKeys) {
+TYPED_TEST(SingleColumnSumSql, OneGroupEvenNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value       = typename SingleColumnSumSql<TypeParam>::ValueType;
@@ -145,7 +150,8 @@ TYPED_TEST(SingleColumnSumSql, OneGroupEvenNullKeys) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnSumSql, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnSumSql, OneGroupOddNullKeys)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnSumSql<TypeParam>::KeyType;
   using Value       = typename SingleColumnSumSql<TypeParam>::ValueType;

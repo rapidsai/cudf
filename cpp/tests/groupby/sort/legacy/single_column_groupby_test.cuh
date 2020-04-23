@@ -29,9 +29,10 @@
 #include <gtest/gtest.h>
 #include <utility>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 template <cudf::groupby::operators const_expr_op,
           typename Key,
           typename Value,
@@ -41,7 +42,8 @@ void single_column_groupby_test(cudf::groupby::sort::operation&& op,
                                 column_wrapper<Value> values,
                                 column_wrapper<Key> expected_keys,
                                 column_wrapper<ResultValue> expected_values,
-                                bool ignore_null_keys = true) {
+                                bool ignore_null_keys = true)
+{
   using namespace cudf::test;
   using namespace cudf::groupby::sort;
 
@@ -80,7 +82,8 @@ inline void multi_column_groupby_test(cudf::table const& keys,
                                       std::vector<cudf::groupby::operators> const& ops,
                                       cudf::table const& expected_keys,
                                       cudf::table const& expected_values,
-                                      bool ignore_null_keys = true) {
+                                      bool ignore_null_keys = true)
+{
   using namespace cudf::test;
   using namespace cudf::groupby::sort;
 

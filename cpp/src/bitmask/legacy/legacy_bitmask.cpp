@@ -18,8 +18,8 @@
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
 
-namespace {
-
+namespace
+{
 // Buffers are padded to 64-byte boundaries (for SIMD) static
 static constexpr int32_t kArrowAlignment = 64;
 
@@ -33,7 +33,8 @@ static constexpr int32_t kArrowIpcAlignment = 8;
 static constexpr int32_t kCudfIpcAlignment = 4;
 
 // todo, enable arrow ipc utils, and remove this method
-static cudf::size_type PaddedLength(int64_t nbytes, int32_t alignment = kArrowAlignment) {
+static cudf::size_type PaddedLength(int64_t nbytes, int32_t alignment = kArrowAlignment)
+{
   return ((nbytes + alignment - 1) / alignment) * alignment;
 }
 
@@ -41,11 +42,13 @@ static cudf::size_type PaddedLength(int64_t nbytes, int32_t alignment = kArrowAl
 
 // Calculates number of bytes for valid bitmask for a column of a specified
 // size
-cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size) {
+cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size)
+{
   static_assert(sizeof(cudf::valid_type) == 1, "cudf::valid_type assumed to be 1 byte");
   return PaddedLength((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE, kArrowAlignment);
 }
 
-cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size) {
+cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size)
+{
   return ((column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE);
 }

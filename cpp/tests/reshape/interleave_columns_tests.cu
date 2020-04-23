@@ -26,17 +26,20 @@
 using namespace cudf::test;
 
 template <typename T>
-struct InterleaveColumnsTest : public BaseFixture {};
+struct InterleaveColumnsTest : public BaseFixture {
+};
 
 TYPED_TEST_CASE(InterleaveColumnsTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(InterleaveColumnsTest, NoColumns) {
+TYPED_TEST(InterleaveColumnsTest, NoColumns)
+{
   cudf::table_view in(std::vector<cudf::column_view>{});
 
   EXPECT_THROW(cudf::experimental::interleave_columns(in), cudf::logic_error);
 }
 
-TYPED_TEST(InterleaveColumnsTest, OneColumn) {
+TYPED_TEST(InterleaveColumnsTest, OneColumn)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({-1, 0, 1});
@@ -49,7 +52,8 @@ TYPED_TEST(InterleaveColumnsTest, OneColumn) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, TwoColumns) {
+TYPED_TEST(InterleaveColumnsTest, TwoColumns)
+{
   using T = TypeParam;
 
   auto a = fixed_width_column_wrapper<T>({0, 2});
@@ -66,7 +70,8 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumns) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, ThreeColumns) {
+TYPED_TEST(InterleaveColumnsTest, ThreeColumns)
+{
   using T = TypeParam;
 
   auto a = fixed_width_column_wrapper<T>({0, 3, 6});
@@ -81,7 +86,8 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumns) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, OneColumnEmpty) {
+TYPED_TEST(InterleaveColumnsTest, OneColumnEmpty)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({});
@@ -94,7 +100,8 @@ TYPED_TEST(InterleaveColumnsTest, OneColumnEmpty) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, ThreeColumnsEmpty) {
+TYPED_TEST(InterleaveColumnsTest, ThreeColumnsEmpty)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({});
@@ -109,7 +116,8 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsEmpty) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, OneColumnNullable) {
+TYPED_TEST(InterleaveColumnsTest, OneColumnNullable)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({1, 2, 3}, {0, 1, 0});
@@ -122,7 +130,8 @@ TYPED_TEST(InterleaveColumnsTest, OneColumnNullable) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, TwoColumnNullable) {
+TYPED_TEST(InterleaveColumnsTest, TwoColumnNullable)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({1, 2, 3}, {0, 1, 0});
@@ -136,7 +145,8 @@ TYPED_TEST(InterleaveColumnsTest, TwoColumnNullable) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable) {
+TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable)
+{
   using T = TypeParam;
 
   fixed_width_column_wrapper<T> a({1, 4, 7}, {1, 0, 1});
@@ -152,7 +162,8 @@ TYPED_TEST(InterleaveColumnsTest, ThreeColumnsNullable) {
   cudf::test::expect_columns_equal(expected, actual->view());
 }
 
-TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes) {
+TYPED_TEST(InterleaveColumnsTest, MismatchedDtypes)
+{
   using T = TypeParam;
 
   if (not std::is_same<int, T>::value) {

@@ -26,12 +26,12 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/detail/gather.cuh>
 
-namespace cudf {
-
-namespace experimental {
-
-namespace {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace
+{
 struct tile_functor {
   size_type count;
   size_type __device__ operator()(size_type i) { return i % count; }
@@ -41,7 +41,8 @@ struct tile_functor {
 
 std::unique_ptr<table> tile(const table_view &in,
                             size_type count,
-                            rmm::mr::device_memory_resource *mr) {
+                            rmm::mr::device_memory_resource *mr)
+{
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(count >= 0, "Count cannot be negative");
 

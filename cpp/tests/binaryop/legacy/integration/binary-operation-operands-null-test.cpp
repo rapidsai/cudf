@@ -21,17 +21,21 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/binaryop.hpp>
 
-namespace cudf {
-namespace test {
-namespace binop {
-
-struct BinaryOperationOperandsNullTest : public GdfTest {};
+namespace cudf
+{
+namespace test
+{
+namespace binop
+{
+struct BinaryOperationOperandsNullTest : public GdfTest {
+};
 
 /*
  * Kernels v_v_s, using int64_t
  * Output:Vector, OperandX:Vector, OperandY:Scalar
  */
-TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNull) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNull)
+{
   using ADD = cudf::library::operation::Add<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -46,7 +50,8 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNull
   ASSERT_BINOP(out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNotNull) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNotNull)
+{
   using ADD = cudf::library::operation::Add<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -65,7 +70,8 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Scalar_SI64_WithScalarOperandNotN
  * Kernels v_v_s, using double
  * Output:Vector, OperandX:Vector, OperandY:Scalar
  */
-TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNull) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNull)
+{
   using ADD = cudf::library::operation::Add<double, double, double>;
 
   auto lhs = cudf::test::column_wrapper<double>(
@@ -80,7 +86,8 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNull
   ASSERT_BINOP(out, lhs, rhs, ADD());
 }
 
-TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNotNull) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNotNull)
+{
   using ADD = cudf::library::operation::Add<double, double, double>;
 
   auto lhs = cudf::test::column_wrapper<double>(
@@ -99,7 +106,8 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64_WithScalarOperandNotN
  * Kernels v_v_v, using int64_t
  * Output:Vector, OperandX:Vector, OperandY:Vector
  */
-TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_int64_t) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_int64_t)
+{
   using ADD = cudf::library::operation::Add<int64_t, int64_t, int64_t>;
 
   auto lhs = cudf::test::column_wrapper<int64_t>(
@@ -121,7 +129,8 @@ TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_int64_t) {
  * Kernels v_v_v, using double
  * Output:Vector, OperandX:Vector, OperandY:Vector
  */
-TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64) {
+TEST_F(BinaryOperationOperandsNullTest, Vector_Vector_FP64)
+{
   using ADD = cudf::library::operation::Add<double, double, double>;
 
   auto lhs = cudf::test::column_wrapper<double>(

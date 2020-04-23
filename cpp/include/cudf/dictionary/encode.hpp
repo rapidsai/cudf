@@ -24,10 +24,11 @@
  * @brief Dictionary encode and decode APIs.
  */
 
-namespace cudf {
+namespace cudf
+{
 //! Dictionary column APIs.
-namespace dictionary {
-
+namespace dictionary
+{
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *

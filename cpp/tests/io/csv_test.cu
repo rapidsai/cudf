@@ -53,7 +53,8 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 // Base test fixture for tests
-struct CsvReaderTest : public cudf::test::BaseFixture {};
+struct CsvReaderTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for timestamp type tests
 template <typename T>
@@ -65,11 +66,12 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
-namespace {
-
+namespace
+{
 // Generates a vector of uniform random values of type T
 template <typename T>
-inline auto random_values(size_t size) {
+inline auto random_values(size_t size)
+{
   std::vector<T> values(size);
 
   using T1 = T;
@@ -88,27 +90,31 @@ inline auto random_values(size_t size) {
   return values;
 }
 
-MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range") {
+MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
+{
   return (std::get<0>(arg) > std::get<1>(arg) - tolerance &&
           std::get<0>(arg) < std::get<1>(arg) + tolerance);
 }
 
 // Helper function to compare two floating-point column contents
 template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs) {
+void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
+{
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first,
               ::testing::Pointwise(FloatNearPointwise(1e-6), lhs));
 }
 
 // Helper function to compare two column contents
 template <typename T, typename std::enable_if_t<!std::is_floating_point<T>::value>* = nullptr>
-void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs) {
+void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
+{
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
 }
 
 }  // namespace
 
-TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn) {
+TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
+{
   constexpr auto num_rows = 10;
   auto sequence           = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
@@ -128,7 +134,8 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn) {
   expect_column_data_equal(std::vector<TypeParam>(sequence, sequence + num_rows), view.column(0));
 }
 
-TEST_F(CsvReaderTest, MultiColumn) {
+TEST_F(CsvReaderTest, MultiColumn)
+{
   constexpr auto num_rows = 10;
   auto int8_values        = random_values<int8_t>(num_rows);
   auto int16_values       = random_values<int16_t>(num_rows);
@@ -179,7 +186,8 @@ TEST_F(CsvReaderTest, MultiColumn) {
   expect_column_data_equal(float64_values, view.column(10));
 }
 
-TEST_F(CsvReaderTest, Booleans) {
+TEST_F(CsvReaderTest, Booleans)
+{
   auto filepath = temp_env->get_temp_dir() + "Booleans.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -208,7 +216,8 @@ TEST_F(CsvReaderTest, Booleans) {
   expect_column_data_equal(std::vector<bool>{true, true, false, true, false}, view.column(3));
 }
 
-TEST_F(CsvReaderTest, Dates) {
+TEST_F(CsvReaderTest, Dates)
+{
   auto filepath = temp_env->get_temp_dir() + "Dates.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -241,7 +250,8 @@ TEST_F(CsvReaderTest, Dates) {
                            view.column(0));
 }
 
-TEST_F(CsvReaderTest, DatesCastToTimestampSeconds) {
+TEST_F(CsvReaderTest, DatesCastToTimestampSeconds)
+{
   auto filepath = temp_env->get_temp_dir() + "DatesCastToTimestampS.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -275,7 +285,8 @@ TEST_F(CsvReaderTest, DatesCastToTimestampSeconds) {
                            view.column(0));
 }
 
-TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds) {
+TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds)
+{
   auto filepath = temp_env->get_temp_dir() + "DatesCastToTimestampMs.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -309,7 +320,8 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds) {
                            view.column(0));
 }
 
-TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds) {
+TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds)
+{
   auto filepath = temp_env->get_temp_dir() + "DatesCastToTimestampUs.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -343,7 +355,8 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds) {
                            view.column(0));
 }
 
-TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds) {
+TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds)
+{
   auto filepath = temp_env->get_temp_dir() + "DatesCastToTimestampNs.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -377,7 +390,8 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds) {
                            view.column(0));
 }
 
-TEST_F(CsvReaderTest, FloatingPoint) {
+TEST_F(CsvReaderTest, FloatingPoint)
+{
   auto filepath = temp_env->get_temp_dir() + "FloatingPoint.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -404,7 +418,8 @@ TEST_F(CsvReaderTest, FloatingPoint) {
   ASSERT_EQ((1u << ref_vals.size()) - 1, bitmask[0]);
 }
 
-TEST_F(CsvReaderTest, Strings) {
+TEST_F(CsvReaderTest, Strings)
+{
   std::vector<std::string> names{"line", "verse"};
 
   auto filepath = temp_env->get_temp_dir() + "Strings.csv";
@@ -432,7 +447,8 @@ TEST_F(CsvReaderTest, Strings) {
     view.column(1));
 }
 
-TEST_F(CsvReaderTest, DISABLED_StringsQuotes) {
+TEST_F(CsvReaderTest, DISABLED_StringsQuotes)
+{
   std::vector<std::string> names{"line", "verse"};
 
   auto filepath = temp_env->get_temp_dir() + "StringsQuotes.csv";
@@ -459,7 +475,8 @@ TEST_F(CsvReaderTest, DISABLED_StringsQuotes) {
     std::vector<std::string>{"abc,\ndef, ghi", "jkl, `mno`, pqr", "stu `vwx` yz"}, view.column(1));
 }
 
-TEST_F(CsvReaderTest, StringsQuotesIgnored) {
+TEST_F(CsvReaderTest, StringsQuotesIgnored)
+{
   std::vector<std::string> names{"line", "verse"};
 
   auto filepath = temp_env->get_temp_dir() + "StringsQuotesIgnored.csv";
@@ -488,7 +505,8 @@ TEST_F(CsvReaderTest, StringsQuotesIgnored) {
     view.column(1));
 }
 
-TEST_F(CsvReaderTest, SkiprowsNrows) {
+TEST_F(CsvReaderTest, SkiprowsNrows)
+{
   auto filepath = temp_env->get_temp_dir() + "SkiprowsNrows.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -511,7 +529,8 @@ TEST_F(CsvReaderTest, SkiprowsNrows) {
   expect_column_data_equal(std::vector<int32_t>{5, 6}, view.column(0));
 }
 
-TEST_F(CsvReaderTest, ByteRange) {
+TEST_F(CsvReaderTest, ByteRange)
+{
   auto filepath = temp_env->get_temp_dir() + "ByteRange.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -533,7 +552,8 @@ TEST_F(CsvReaderTest, ByteRange) {
   expect_column_data_equal(std::vector<int32_t>{4000, 5000, 6000}, view.column(0));
 }
 
-TEST_F(CsvReaderTest, ByteRangeStrings) {
+TEST_F(CsvReaderTest, ByteRangeStrings)
+{
   std::string input = "\"a\"\n\"b\"\n\"c\"";
   cudf_io::read_csv_args in_args{cudf_io::source_info{input.c_str(), input.size()}};
   in_args.names             = {"A"};
@@ -549,7 +569,8 @@ TEST_F(CsvReaderTest, ByteRangeStrings) {
   expect_column_data_equal(std::vector<std::string>{"c"}, view.column(0));
 }
 
-TEST_F(CsvReaderTest, BlanksAndComments) {
+TEST_F(CsvReaderTest, BlanksAndComments)
+{
   auto filepath = temp_env->get_temp_dir() + "BlanksAndComments.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -570,7 +591,8 @@ TEST_F(CsvReaderTest, BlanksAndComments) {
   expect_column_data_equal(std::vector<int32_t>{1, 3, 4, 5, 8, 9}, view.column(0));
 }
 
-TEST_F(CsvReaderTest, EmptyFile) {
+TEST_F(CsvReaderTest, EmptyFile)
+{
   auto filepath = temp_env->get_temp_dir() + "EmptyFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -584,7 +606,8 @@ TEST_F(CsvReaderTest, EmptyFile) {
   EXPECT_EQ(0, view.num_columns());
 }
 
-TEST_F(CsvReaderTest, NoDataFile) {
+TEST_F(CsvReaderTest, NoDataFile)
+{
   auto filepath = temp_env->get_temp_dir() + "NoDataFile.csv";
   {
     std::ofstream outfile{filepath, std::ofstream::out};
@@ -598,7 +621,8 @@ TEST_F(CsvReaderTest, NoDataFile) {
   EXPECT_EQ(0, view.num_columns());
 }
 
-TEST_F(CsvReaderTest, ArrowFileSource) {
+TEST_F(CsvReaderTest, ArrowFileSource)
+{
   auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -619,7 +643,8 @@ TEST_F(CsvReaderTest, ArrowFileSource) {
   expect_column_data_equal(std::vector<int8_t>{9, 8, 7, 6, 5, 4, 3, 2}, view.column(0));
 }
 
-TEST_F(CsvReaderTest, InvalidFloatingPoint) {
+TEST_F(CsvReaderTest, InvalidFloatingPoint)
+{
   const auto filepath = temp_env->get_temp_dir() + "InvalidFloatingPoint.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
@@ -643,7 +668,8 @@ TEST_F(CsvReaderTest, InvalidFloatingPoint) {
   ASSERT_EQ(0u, col_data.second[0]);
 }
 
-TEST_F(CsvReaderTest, StringInference) {
+TEST_F(CsvReaderTest, StringInference)
+{
   std::string buffer = "\"-1\"\n";
   cudf_io::read_csv_args in_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};
   in_args.header    = -1;

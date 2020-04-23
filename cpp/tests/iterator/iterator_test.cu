@@ -38,7 +38,8 @@
 // ---------------------------------------------------------------------------
 
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -46,7 +47,8 @@ T random_int(T min, T max) {
   return uniform(engine);
 }
 
-bool random_bool() {
+bool random_bool()
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<int> uniform{0, 1};
@@ -55,11 +57,13 @@ bool random_bool() {
 }
 
 template <typename T>
-std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs) {
+std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
+{
   return os << "[" << rhs.value << ", " << rhs.value_squared << ", " << rhs.count << "] ";
 };
 
-auto strings_to_string_views(std::vector<std::string>& input_strings) {
+auto strings_to_string_views(std::vector<std::string>& input_strings)
+{
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   std::vector<char> chars;
   std::vector<int32_t> offsets;
@@ -85,7 +89,8 @@ template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
   // iterator test case which uses cub
   template <typename InputIterator, typename T_output>
-  void iterator_test_cub(T_output expected, InputIterator d_in, int num_items) {
+  void iterator_test_cub(T_output expected, InputIterator d_in, int num_items)
+  {
     T_output init{0};
     thrust::device_vector<T_output> dev_result(1, init);
 
@@ -118,7 +123,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
   template <typename InputIterator, typename T_output>
   void iterator_test_thrust(thrust::host_vector<T_output>& expected,
                             InputIterator d_in,
-                            int num_items) {
+                            int num_items)
+  {
     InputIterator d_in_last = d_in + num_items;
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
     thrust::device_vector<T_output> dev_expected(expected);
@@ -150,7 +156,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
   template <typename T_output>
   void evaluate(T_output expected,
                 thrust::device_vector<T_output>& dev_result,
-                const char* msg = nullptr) {
+                const char* msg = nullptr)
+  {
     thrust::host_vector<T_output> hos_result(dev_result);
 
     EXPECT_EQ(expected, hos_result[0]) << msg;
@@ -162,7 +169,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
   template <typename T_output>
   void values_equal_test(thrust::host_vector<T_output>& expected,
-                         const cudf::column_device_view& col) {
+                         const cudf::column_device_view& col)
+  {
     if (col.nullable()) {
       auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(col, T_output{0});
       iterator_test_thrust(expected, it_dev, col.size());
@@ -178,7 +186,8 @@ using TestingTypes = cudf::test::AllTypes;
 TYPED_TEST_CASE(IteratorTest, TestingTypes);
 
 // tests for non-null iterator (pointer of device array)
-TYPED_TEST(IteratorTest, non_null_iterator) {
+TYPED_TEST(IteratorTest, non_null_iterator)
+{
   using T         = TypeParam;
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
   thrust::device_vector<T> dev_array(host_array);
@@ -201,7 +210,8 @@ TYPED_TEST(IteratorTest, non_null_iterator) {
 // Actually, we can use cub for reduction with nulls without creating custom
 // kernel or multiple steps. We may accelarate the reduction for a column using
 // cub
-TYPED_TEST(IteratorTest, null_iterator) {
+TYPED_TEST(IteratorTest, null_iterator)
+{
   using T = TypeParam;
   T init  = T{0};
   // data and valid arrays
@@ -233,7 +243,8 @@ TYPED_TEST(IteratorTest, null_iterator) {
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by transform_iterator and
 // cudf::experimental::detail::make_null_replacement_iterator(col, T{0})
-TYPED_TEST(IteratorTest, null_iterator_upcast) {
+TYPED_TEST(IteratorTest, null_iterator_upcast)
+{
   const int column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
@@ -274,7 +285,8 @@ TYPED_TEST(IteratorTest, null_iterator_upcast) {
 // by make_transform_iterator(
 //        cudf::experimental::detail::make_null_replacement_iterator(col, T{0}),
 //        cudf::detail::transformer_squared<T_upcast>)
-TYPED_TEST(IteratorTest, null_iterator_square) {
+TYPED_TEST(IteratorTest, null_iterator_square)
+{
   const int column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
@@ -311,7 +323,8 @@ TYPED_TEST(IteratorTest, null_iterator_square) {
   this->iterator_test_cub(expected_value, it_dev_squared, d_col->size());
 }
 
-TYPED_TEST(IteratorTest, large_size_reduction) {
+TYPED_TEST(IteratorTest, large_size_reduction)
+{
   using T = TypeParam;
 
   const int column_size{1000000};
@@ -351,7 +364,8 @@ struct transformer_pair_meanvar {
   using ResultType = thrust::pair<cudf::meanvar<ElementType>, bool>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  ResultType operator()(thrust::pair<ElementType, bool> const& pair) {
+  ResultType operator()(thrust::pair<ElementType, bool> const& pair)
+  {
     ElementType v = pair.first;
     return {{v, static_cast<ElementType>(v * v), (pair.second) ? 1 : 0}, pair.second};
   };
@@ -360,7 +374,8 @@ struct transformer_pair_meanvar {
 struct sum_if_not_null {
   template <typename T>
   CUDA_HOST_DEVICE_CALLABLE thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                             const thrust::pair<T, bool>& rhs) {
+                                                             const thrust::pair<T, bool>& rhs)
+  {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
     else if (lhs.second)
@@ -371,7 +386,8 @@ struct sum_if_not_null {
 };
 
 template <typename T>
-struct PairIteratorTest : public cudf::test::BaseFixture {};
+struct PairIteratorTest : public cudf::test::BaseFixture {
+};
 TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
@@ -379,7 +395,8 @@ TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
 #if !defined(__CUDACC_DEBUG__)
 // This test computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It would be useful for `var`, `std` operation
-TYPED_TEST(PairIteratorTest, mean_var_output) {
+TYPED_TEST(PairIteratorTest, mean_var_output)
+{
   using T        = TypeParam;
   using T_output = cudf::meanvar<T>;
   transformer_pair_meanvar<T> transformer{};
@@ -430,7 +447,8 @@ TYPED_TEST(PairIteratorTest, mean_var_output) {
 }
 #endif
 
-TYPED_TEST(IteratorTest, error_handling) {
+TYPED_TEST(IteratorTest, error_handling)
+{
   using T         = TypeParam;
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});
@@ -476,9 +494,11 @@ TYPED_TEST(IteratorTest, error_handling) {
   }
 }
 
-struct StringIteratorTest : public IteratorTest<cudf::string_view> {};
+struct StringIteratorTest : public IteratorTest<cudf::string_view> {
+};
 
-TEST_F(StringIteratorTest, string_view_null_iterator) {
+TEST_F(StringIteratorTest, string_view_null_iterator)
+{
   using T = cudf::string_view;
   // T init = T{"", 0};
   std::string zero("zero");
@@ -514,7 +534,8 @@ TEST_F(StringIteratorTest, string_view_null_iterator) {
   // this->values_equal_test(replaced_array, *d_col); //string_view{0} is invalid
 }
 
-TEST_F(StringIteratorTest, string_view_no_null_iterator) {
+TEST_F(StringIteratorTest, string_view_no_null_iterator)
+{
   using T = cudf::string_view;
   // T init = T{"", 0};
   std::string zero("zero");
@@ -539,7 +560,8 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator) {
   this->iterator_test_thrust(all_array, it_dev, host_values.size());
 }
 
-TYPED_TEST(IteratorTest, nonull_pair_iterator) {
+TYPED_TEST(IteratorTest, nonull_pair_iterator)
+{
   using T = TypeParam;
   // data and valid arrays
   auto host_values_std =
@@ -561,7 +583,8 @@ TYPED_TEST(IteratorTest, nonull_pair_iterator) {
   this->iterator_test_thrust(replaced_array, it_dev, host_values.size());
 }
 
-TYPED_TEST(IteratorTest, null_pair_iterator) {
+TYPED_TEST(IteratorTest, null_pair_iterator)
+{
   using T = TypeParam;
   // data and valid arrays
   auto host_values = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
@@ -601,7 +624,8 @@ TYPED_TEST(IteratorTest, null_pair_iterator) {
   this->iterator_test_thrust(host_bools, itb_dev, host_values.size());
 }
 
-TYPED_TEST(IteratorTest, scalar_iterator) {
+TYPED_TEST(IteratorTest, scalar_iterator)
+{
   using T = TypeParam;
   T init  = static_cast<T>(random_int(-128, 128));
   // data and valid arrays
@@ -630,7 +654,8 @@ TYPED_TEST(IteratorTest, scalar_iterator) {
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
 
-TYPED_TEST(IteratorTest, null_scalar_iterator) {
+TYPED_TEST(IteratorTest, null_scalar_iterator)
+{
   using T = TypeParam;
   T init  = static_cast<T>(random_int(-128, 128));
   // data and valid arrays

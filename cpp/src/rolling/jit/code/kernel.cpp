@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-namespace cudf {
-namespace experimental {
-namespace rolling {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace rolling
+{
+namespace jit
+{
+namespace code
+{
 const char* kernel_headers =
   R"***(
 #include <cudf/types.hpp>

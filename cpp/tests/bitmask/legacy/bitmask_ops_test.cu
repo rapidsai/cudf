@@ -29,9 +29,11 @@
 
 #include <chrono>
 
-struct ValidsTest : public GdfTest {};
+struct ValidsTest : public GdfTest {
+};
 
-TEST_F(ValidsTest, NoValids) {
+TEST_F(ValidsTest, NoValids)
+{
   const int num_rows = 100;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
@@ -47,7 +49,8 @@ TEST_F(ValidsTest, NoValids) {
   EXPECT_EQ(0, count);
 }
 
-TEST_F(ValidsTest, NullValids) {
+TEST_F(ValidsTest, NullValids)
+{
   int count{-1};
   const cudf::size_type size{100};
   gdf_error error_code = gdf_count_nonzero_mask(nullptr, size, &count);
@@ -56,7 +59,8 @@ TEST_F(ValidsTest, NullValids) {
   EXPECT_EQ(size, count);
 }
 
-TEST_F(ValidsTest, NullCount) {
+TEST_F(ValidsTest, NullCount)
+{
   std::vector<int> data(0);
   std::vector<cudf::valid_type> valid{0x0};
   auto input_gdf_col   = create_gdf_column(data, valid);
@@ -65,7 +69,8 @@ TEST_F(ValidsTest, NullCount) {
   ASSERT_EQ(GDF_DATASET_EMPTY, error_code) << "Expected failure for null input.";
 }
 
-TEST_F(ValidsTest, FirstRowValid) {
+TEST_F(ValidsTest, FirstRowValid)
+{
   std::vector<int> data(4);
   std::vector<cudf::valid_type> valid{0x1};
 
@@ -79,7 +84,8 @@ TEST_F(ValidsTest, FirstRowValid) {
   EXPECT_EQ(1, count);
 }
 
-TEST_F(ValidsTest, EightRowsValid) {
+TEST_F(ValidsTest, EightRowsValid)
+{
   std::vector<int> data(8);
   std::vector<cudf::valid_type> valid{0xFF};
 
@@ -93,7 +99,8 @@ TEST_F(ValidsTest, EightRowsValid) {
   EXPECT_EQ(8, count);
 }
 
-TEST_F(ValidsTest, EveryOtherBit) {
+TEST_F(ValidsTest, EveryOtherBit)
+{
   std::vector<int> data(8);
   std::vector<cudf::valid_type> valid{0xAA};
 
@@ -107,7 +114,8 @@ TEST_F(ValidsTest, EveryOtherBit) {
   EXPECT_EQ(4, count);
 }
 
-TEST_F(ValidsTest, OtherEveryOtherBit) {
+TEST_F(ValidsTest, OtherEveryOtherBit)
+{
   std::vector<int> data(8);
   std::vector<cudf::valid_type> valid{0x55};
 
@@ -121,7 +129,8 @@ TEST_F(ValidsTest, OtherEveryOtherBit) {
   EXPECT_EQ(4, count);
 }
 
-TEST_F(ValidsTest, 15rows) {
+TEST_F(ValidsTest, 15rows)
+{
   const int num_rows = 15;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
@@ -137,7 +146,8 @@ TEST_F(ValidsTest, 15rows) {
   EXPECT_EQ(2, count);
 }
 
-TEST_F(ValidsTest, 5rows) {
+TEST_F(ValidsTest, 5rows)
+{
   const int num_rows = 5;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
@@ -153,7 +163,8 @@ TEST_F(ValidsTest, 5rows) {
   EXPECT_EQ(1, count);
 }
 
-TEST_F(ValidsTest, 10ValidRows) {
+TEST_F(ValidsTest, 10ValidRows)
+{
   const int num_rows = 10;
   std::vector<float> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
@@ -169,7 +180,8 @@ TEST_F(ValidsTest, 10ValidRows) {
   EXPECT_EQ(10, count);
 }
 
-TEST_F(ValidsTest, MultipleOfEight) {
+TEST_F(ValidsTest, MultipleOfEight)
+{
   const int num_rows = 1024;
   std::vector<int> data(num_rows);
 
@@ -186,7 +198,8 @@ TEST_F(ValidsTest, MultipleOfEight) {
   EXPECT_EQ(128, count);
 }
 
-TEST_F(ValidsTest, NotMultipleOfEight) {
+TEST_F(ValidsTest, NotMultipleOfEight)
+{
   const int num_rows = 1023;
   std::vector<int> data(num_rows);
 
@@ -203,7 +216,8 @@ TEST_F(ValidsTest, NotMultipleOfEight) {
   EXPECT_EQ(127, count);
 }
 
-TEST_F(ValidsTest, TenThousandRows) {
+TEST_F(ValidsTest, TenThousandRows)
+{
   const int num_rows = 10000;
   std::vector<int> data(num_rows);
 
@@ -220,7 +234,8 @@ TEST_F(ValidsTest, TenThousandRows) {
   EXPECT_EQ(10000, count);
 }
 
-TEST_F(ValidsTest, DISABLED_PerformanceTest) {
+TEST_F(ValidsTest, DISABLED_PerformanceTest)
+{
   const int num_rows = 100000000;
   std::vector<int> data(num_rows);
 
@@ -241,13 +256,15 @@ TEST_F(ValidsTest, DISABLED_PerformanceTest) {
   std::cout << "Elapsed time (ms): " << elapsed_seconds.count() * 1000 << std::endl;
 }
 
-struct RowBitmaskTest : public GdfTest {};
+struct RowBitmaskTest : public GdfTest {
+};
 
 template <typename Predicate>
 struct validity_checker {
   validity_checker(Predicate _p, bit_mask::bit_mask_t* _bitmask) : p{_p}, bitmask{_bitmask} {}
 
-  __device__ inline bool operator()(cudf::size_type index) {
+  __device__ inline bool operator()(cudf::size_type index)
+  {
     return p(index) == bit_mask::is_valid(bitmask, index);
   }
 
@@ -263,7 +280,8 @@ struct all_null {
   __host__ __device__ inline bool operator()(cudf::size_type index) { return false; }
 };
 
-TEST_F(RowBitmaskTest, NoBitmasks) {
+TEST_F(RowBitmaskTest, NoBitmasks)
+{
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
   cudf::test::column_wrapper<float> col1(size);
@@ -281,7 +299,8 @@ TEST_F(RowBitmaskTest, NoBitmasks) {
   EXPECT_TRUE(result);
 }
 
-TEST_F(RowBitmaskTest, BitmasksAllNull) {
+TEST_F(RowBitmaskTest, BitmasksAllNull)
+{
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size, true);
   cudf::test::column_wrapper<float> col1(size, true);
@@ -299,7 +318,8 @@ TEST_F(RowBitmaskTest, BitmasksAllNull) {
   EXPECT_TRUE(result);
 }
 
-TEST_F(RowBitmaskTest, BitmasksAllValid) {
+TEST_F(RowBitmaskTest, BitmasksAllValid)
+{
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(
     size, [](cudf::size_type i) { return i; }, all_valid{});
@@ -320,7 +340,8 @@ TEST_F(RowBitmaskTest, BitmasksAllValid) {
   EXPECT_TRUE(result);
 }
 
-TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid) {
+TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid)
+{
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
   cudf::test::column_wrapper<int> col1(
@@ -344,7 +365,8 @@ struct odds_are_null {
   __device__ inline bool operator()(cudf::size_type i) { return i % 2; }
 };
 
-TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskOddsNull) {
+TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskOddsNull)
+{
   cudf::size_type const size{1000};
   cudf::test::column_wrapper<int> col0(size);
   cudf::test::column_wrapper<int> col1(

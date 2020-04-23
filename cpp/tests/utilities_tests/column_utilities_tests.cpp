@@ -35,12 +35,14 @@ struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {};
+struct ColumnUtilitiesTestNumeric : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
 TYPED_TEST_CASE(ColumnUtilitiesTestNumeric, cudf::test::NumericTypes);
 
-TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
+TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -54,7 +56,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost) {
   EXPECT_TRUE(std::equal(data.begin(), data.end(), host_data.first.begin()));
 }
 
-TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset) {
+TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -73,7 +76,8 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset) {
   EXPECT_TRUE(std::equal(expected_data.begin(), expected_data.end(), host_data.first.begin()));
 }
 
-TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
+TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -97,7 +101,8 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset) {
   EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, expected_data.size()));
 }
 
-TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
+TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
 
@@ -117,16 +122,19 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid) {
   EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
 }
 
-struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {};
+struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest) {
+TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
+{
   cudf::test::fixed_width_column_wrapper<double> col1{10. / 3, 22. / 7};
   cudf::test::fixed_width_column_wrapper<double> col2{31. / 3 - 21. / 3, 19. / 7 + 3. / 7};
 
   cudf::test::expect_columns_equivalent(col1, col2);
 }
 
-TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest) {
+TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
+{
   auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
@@ -134,9 +142,11 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest) {
   cudf::test::expect_columns_equivalent(col1, col2);
 }
 
-struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
+struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(ColumnUtilitiesStringsTest, StringsToHost) {
+TEST_F(ColumnUtilitiesStringsTest, StringsToHost)
+{
   std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -149,7 +159,8 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHost) {
   }
 }
 
-TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls) {
+TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls)
+{
   std::vector<const char*> h_strings{nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -161,7 +172,8 @@ TEST_F(ColumnUtilitiesStringsTest, StringsToHostAllNulls) {
   EXPECT_TRUE(std::all_of(results.begin(), results.end(), [](auto s) { return s.empty(); }));
 }
 
-TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric)
+{
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({1, 2, 3, 4, 5});
@@ -180,7 +192,8 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnNumeric) {
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
 
-TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
+TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids)
+{
   const char* delimiter = ",";
 
   cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col{{1, 2, 3, 4, 5}, {1, 0, 1, 0, 1}};
@@ -194,7 +207,8 @@ TYPED_TEST(ColumnUtilitiesTestNumeric, PrintColumnWithInvalids) {
   EXPECT_EQ(cudf::test::to_string(cudf_col, delimiter), tmp.str());
 }
 
-TEST_F(ColumnUtilitiesStringsTest, StringsToString) {
+TEST_F(ColumnUtilitiesStringsTest, StringsToString)
+{
   const char* delimiter = ",";
 
   std::vector<const char*> h_strings{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};

@@ -34,14 +34,16 @@
 #include <iostream>
 #include <tuple>
 
-namespace detail {
-
+namespace detail
+{
 template <typename T>
-inline std::string to_string(T val) {
+inline std::string to_string(T val)
+{
   return std::to_string(cudf::detail::unwrap(val));
 }
 
-inline std::string to_string(cudf::bool8 val) {
+inline std::string to_string(cudf::bool8 val)
+{
   return {cudf::detail::unwrap(val) ? "true" : "false"};
 }
 
@@ -60,7 +62,8 @@ enum : bool {
 };
 
 template <class T>
-typename std::enable_if_t<std::is_floating_point<T>::value, bool> almost_equal(T x, T y, int ulp) {
+typename std::enable_if_t<std::is_floating_point<T>::value, bool> almost_equal(T x, T y, int ulp)
+{
   // the machine epsilon has to be scaled to the magnitude of the values used
   // and multiplied by the desired precision in ULPs (units in the last place)
   return std::abs(x - y) <= std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp
@@ -69,7 +72,8 @@ typename std::enable_if_t<std::is_floating_point<T>::value, bool> almost_equal(T
 }
 
 template <class T>
-typename std::enable_if_t<!std::is_floating_point<T>::value, bool> almost_equal(T x, T y, int) {
+typename std::enable_if_t<!std::is_floating_point<T>::value, bool> almost_equal(T x, T y, int)
+{
   return x == y;
 }
 
@@ -86,7 +90,8 @@ void expect_column_values_are_equal(cudf::size_type common_size,
                                     const cudf::valid_type* rhs_validity_on_host,
                                     const std::string& rhs_name,
                                     bool treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
-                                    bool print_all_unequal_pairs       = dont_print_unequal_pairs) {
+                                    bool print_all_unequal_pairs       = dont_print_unequal_pairs)
+{
   auto lhs_non_nullable = (lhs_validity_on_host == nullptr);
   auto rhs_non_nullable = (rhs_validity_on_host == nullptr);
   auto max_name_length  = std::max(lhs_name.length(), rhs_name.length());
@@ -117,7 +122,8 @@ void expect_column_values_are_equal(cudf::size_type common_size,
 // `cudf::util::have_same_type` essentially.
 inline bool expect_columns_have_same_type(const gdf_column& validated_column_1,
                                           const gdf_column& validated_column_2,
-                                          bool ignore_extra_type_info = false) noexcept {
+                                          bool ignore_extra_type_info = false) noexcept
+{
   EXPECT_EQ(validated_column_1.dtype, validated_column_2.dtype);
   if (validated_column_1.dtype != validated_column_2.dtype) { return false; }
   EXPECT_EQ(cudf::is_nullable(validated_column_1), cudf::is_nullable(validated_column_2));
@@ -138,7 +144,8 @@ void expect_columns_are_equal(cudf::test::column_wrapper<E> const& lhs,
                               cudf::test::column_wrapper<E> const& rhs,
                               const std::string& rhs_name,
                               bool treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
-                              bool print_all_unequal_pairs       = dont_print_unequal_pairs) {
+                              bool print_all_unequal_pairs       = dont_print_unequal_pairs)
+{
   const gdf_column& lhs_gdf_column = *(lhs.get());
   const gdf_column& rhs_gdf_column = *(rhs.get());
   cudf::validate(lhs_gdf_column);
@@ -178,7 +185,8 @@ template <typename E>
 void expect_columns_are_equal(cudf::test::column_wrapper<E> const& actual,
                               cudf::test::column_wrapper<E> const& expected,
                               bool treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
-                              bool print_all_unequal_pairs       = dont_print_unequal_pairs) {
+                              bool print_all_unequal_pairs       = dont_print_unequal_pairs)
+{
   return expect_columns_are_equal<E>(
     expected, "Expected", actual, "Actual", treat_distinct_nulls_as_equal, print_all_unequal_pairs);
 }

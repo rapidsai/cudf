@@ -29,14 +29,16 @@
 #include <thrust/transform.h>
 #include <vector>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 using string_index_pair = thrust::pair<const char*, size_type>;
 
-namespace {
-
+namespace
+{
 /**
  * @brief Common token counter for all split methods in this file.
  */
@@ -46,7 +48,8 @@ struct token_counter_fn {
   size_type tokens;
 
   // returns the number of possible tokens in each string
-  __device__ size_type operator()(size_type idx) const {
+  __device__ size_type operator()(size_type idx) const
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return 1;
@@ -107,7 +110,8 @@ struct split_tokenizer_fn {
   __device__ string_index_pair operator()(size_type idx,
                                           size_type col_idx,
                                           size_type column_count,
-                                          size_type const* d_token_counts) const {
+                                          size_type const* d_token_counts) const
+  {
     // token_count already includes the max-split value
     size_type token_count = d_token_counts[idx];
     if (col_idx >= token_count || d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
@@ -147,7 +151,8 @@ struct rsplit_tokenizer_fn {
   __device__ string_index_pair operator()(size_type idx,
                                           size_type col_idx,
                                           size_type column_count,
-                                          size_type const* d_token_counts) const {
+                                          size_type const* d_token_counts) const
+  {
     // token_count already includes the max-split value
     size_type token_count = d_token_counts[idx];
     if (col_idx >= token_count || d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
@@ -188,7 +193,8 @@ struct whitespace_token_counter_fn {
   size_type tokens;  // maximum number of tokens
 
   // count the 'words' only between non-whitespace characters
-  __device__ size_type operator()(size_type idx) const {
+  __device__ size_type operator()(size_type idx) const
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str = d_strings.element<string_view>(idx);
     size_type dcount  = 0;
@@ -255,7 +261,8 @@ struct whitespace_split_tokenizer_fn {
   __device__ string_index_pair operator()(size_type idx,
                                           size_type col_idx,
                                           size_type column_count,
-                                          size_type const* d_token_counts) const {
+                                          size_type const* d_token_counts) const
+  {
     size_type token_count = d_token_counts[idx];
     if (col_idx >= token_count || d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
@@ -309,7 +316,8 @@ struct whitespace_rsplit_tokenizer_fn {
   __device__ string_index_pair operator()(size_type idx,
                                           size_type col_idx,
                                           size_type column_count,
-                                          size_type const* d_token_counts) const {
+                                          size_type const* d_token_counts) const
+  {
     size_type token_count = d_token_counts[idx];
     if (col_idx >= token_count || d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
@@ -355,7 +363,8 @@ struct whitespace_rsplit_tokenizer_fn {
 // start at that alignment.
 static constexpr size_type split_align = 64;
 
-__device__ size_type compute_memory_size(size_type token_count, size_type token_size_sum) {
+__device__ size_type compute_memory_size(size_type token_count, size_type token_size_sum)
+{
   return cudf::experimental::detail::round_up_pow2(token_size_sum, split_align) +
          cudf::experimental::detail::round_up_pow2(
            (token_count + 1) * static_cast<size_type>(sizeof(size_type)), split_align);
@@ -385,7 +394,8 @@ struct token_reader_fn {
   __device__ size_type compute_token_char_bytes(string_view const& d_str,
                                                 size_type start_pos,
                                                 size_type end_pos,
-                                                size_type delimiter_pos) const {
+                                                size_type delimiter_pos) const
+  {
     if (last) {
       return dir == Dir::FORWARD ? d_str.byte_offset(end_pos) - d_str.byte_offset(start_pos)
                                  : d_str.byte_offset(end_pos);
@@ -398,7 +408,8 @@ struct token_reader_fn {
 
   // returns a tuple of token count, sum of token sizes in bytes, and required
   // memory block size
-  __device__ thrust::tuple<size_type, size_type, size_type> operator()(size_type idx) const {
+  __device__ thrust::tuple<size_type, size_type, size_type> operator()(size_type idx) const
+  {
     if (has_validity && d_strings.is_null(idx)) {
       return thrust::make_tuple<size_type, size_type, size_type>(0, 0, 0);
     }
@@ -445,10 +456,8 @@ struct token_copier_fn {
 
   template <bool last>
   __device__ thrust::pair<size_type, size_type> compute_src_byte_offset_and_token_char_bytes(
-    string_view const& d_str,
-    size_type start_pos,
-    size_type end_pos,
-    size_type delimiter_pos) const {
+    string_view const& d_str, size_type start_pos, size_type end_pos, size_type delimiter_pos) const
+  {
     if (last) {
       auto const src_byte_offset  = dir == Dir::FORWARD ? d_str.byte_offset(start_pos) : 0;
       auto const token_char_bytes = dir == Dir::FORWARD
@@ -466,7 +475,8 @@ struct token_copier_fn {
     }
   }
 
-  __device__ void operator()(copy_info const info) const {
+  __device__ void operator()(copy_info const info) const
+  {
     if (info.token_count == 0) { return; }
 
     auto memory_ptr = static_cast<char*>(info.memory_ptr);
@@ -544,7 +554,8 @@ struct whitespace_token_reader_fn {
   template <bool last>
   __device__ size_type compute_token_char_bytes(string_view const& d_str,
                                                 size_type cur_pos,
-                                                size_type to_token_pos) const {
+                                                size_type to_token_pos) const
+  {
     if (last) {
       return dir == Dir::FORWARD
                ? d_str.byte_offset(d_str.length()) - d_str.byte_offset(to_token_pos)
@@ -556,7 +567,8 @@ struct whitespace_token_reader_fn {
     }
   }
 
-  __device__ thrust::tuple<size_type, size_type, size_type> operator()(size_type idx) const {
+  __device__ thrust::tuple<size_type, size_type, size_type> operator()(size_type idx) const
+  {
     if (has_validity && d_strings.is_null(idx)) {
       return thrust::make_tuple<size_type, size_type, size_type>(0, 0, 0);
     }
@@ -617,7 +629,8 @@ struct whitespace_token_copier_fn {
     string_view const& d_str,
     size_type cur_pos,
     size_type to_token_pos,
-    size_type remaining_bytes) const {
+    size_type remaining_bytes) const
+  {
     if (last) {
       auto const token_char_bytes = remaining_bytes;
       auto const src_byte_offset  = dir == Dir::FORWARD
@@ -634,7 +647,8 @@ struct whitespace_token_copier_fn {
     }
   }
 
-  __device__ void operator()(copy_info const info) const {
+  __device__ void operator()(copy_info const info) const
+  {
     if (info.token_count == 0) { return; }
 
     auto memory_ptr = static_cast<char*>(info.memory_ptr);
@@ -711,7 +725,8 @@ std::unique_ptr<experimental::table> split_fn(size_type strings_count,
                                               TokenCounter counter,
                                               Tokenizer tokenizer,
                                               rmm::mr::device_memory_resource* mr,
-                                              cudaStream_t stream) {
+                                              cudaStream_t stream)
+{
   auto execpol = rmm::exec_policy(stream);
   // compute the number of tokens per string
   size_type columns_count = 0;
@@ -764,7 +779,8 @@ contiguous_split_record_result contiguous_split_record_fn(strings_column_view co
                                                           TokenReader reader,
                                                           TokenCopier copier,
                                                           rmm::mr::device_memory_resource* mr,
-                                                          cudaStream_t stream) {
+                                                          cudaStream_t stream)
+{
   // read each string element of the input column to count the number of tokens
   // and compute the memory offsets
 
@@ -850,7 +866,8 @@ std::unique_ptr<experimental::table> split(
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
@@ -878,7 +895,8 @@ std::unique_ptr<experimental::table> rsplit(
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
@@ -907,7 +925,8 @@ contiguous_split_record_result contiguous_split_record(
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
   // makes consistent with Pandas
@@ -940,7 +959,8 @@ contiguous_split_record_result contiguous_split_record(
 std::unique_ptr<experimental::table> split(strings_column_view const& strings,
                                            string_scalar const& delimiter,
                                            size_type maxsplit,
-                                           rmm::mr::device_memory_resource* mr) {
+                                           rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::split(strings, delimiter, maxsplit, mr);
 }
@@ -948,7 +968,8 @@ std::unique_ptr<experimental::table> split(strings_column_view const& strings,
 std::unique_ptr<experimental::table> rsplit(strings_column_view const& strings,
                                             string_scalar const& delimiter,
                                             size_type maxsplit,
-                                            rmm::mr::device_memory_resource* mr) {
+                                            rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::rsplit(strings, delimiter, maxsplit, mr);
 }
@@ -956,7 +977,8 @@ std::unique_ptr<experimental::table> rsplit(strings_column_view const& strings,
 contiguous_split_record_result contiguous_split_record(strings_column_view const& strings,
                                                        string_scalar const& delimiter,
                                                        size_type maxsplit,
-                                                       rmm::mr::device_memory_resource* mr) {
+                                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::contiguous_split_record<detail::Dir::FORWARD>(strings, delimiter, maxsplit, mr, 0);
 }
@@ -964,7 +986,8 @@ contiguous_split_record_result contiguous_split_record(strings_column_view const
 contiguous_split_record_result contiguous_rsplit_record(strings_column_view const& strings,
                                                         string_scalar const& delimiter,
                                                         size_type maxsplit,
-                                                        rmm::mr::device_memory_resource* mr) {
+                                                        rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::contiguous_split_record<detail::Dir::BACKWARD>(
     strings, delimiter, maxsplit, mr, 0);

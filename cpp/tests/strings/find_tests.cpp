@@ -27,9 +27,11 @@
 
 #include <vector>
 
-struct StringsFindTest : public cudf::test::BaseFixture {};
+struct StringsFindTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsFindTest, Find) {
+TEST_F(StringsFindTest, Find)
+{
   std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "lease", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -97,7 +99,8 @@ TEST_F(StringsFindTest, Find) {
   }
 }
 
-TEST_F(StringsFindTest, ZeroSizeStringsColumn) {
+TEST_F(StringsFindTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::find(strings_view, cudf::string_scalar("é"));
@@ -112,7 +115,8 @@ TEST_F(StringsFindTest, ZeroSizeStringsColumn) {
   EXPECT_EQ(results->size(), 0);
 }
 
-TEST_F(StringsFindTest, AllEmpty) {
+TEST_F(StringsFindTest, AllEmpty)
+{
   std::vector<std::string> h_strings{"", "", "", "", ""};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
 
@@ -136,7 +140,8 @@ TEST_F(StringsFindTest, AllEmpty) {
   cudf::test::expect_columns_equal(*results, expected8);
 }
 
-TEST_F(StringsFindTest, AllNull) {
+TEST_F(StringsFindTest, AllNull)
+{
   std::vector<const char*> h_strings{nullptr, nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -168,9 +173,12 @@ TEST_F(StringsFindTest, AllNull) {
   cudf::test::expect_columns_equal(*results, expected8);
 }
 
-class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<int32_t> {};
+class FindParmsTest : public StringsFindTest, public testing::WithParamInterface<int32_t>
+{
+};
 
-TEST_P(FindParmsTest, Find) {
+TEST_P(FindParmsTest, Find)
+{
   std::vector<std::string> h_strings{"hello", "", "these", "are stl", "safe"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::size_type position = GetParam();

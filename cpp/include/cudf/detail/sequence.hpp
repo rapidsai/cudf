@@ -20,10 +20,12 @@
 #include <cudf/filling.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**
  * @copydoc cudf::experimental::sequence(size_type size, scalar const& init, scalar const& step,
  *                                       rmm::mr::device_memory_resource* mr =

@@ -19,9 +19,10 @@
 #include <cudf/types.hpp>
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 enum class unary_op : int32_t {
   SIN,         // < Trigonometric sine
   COS,         // < Trigonometric cosine

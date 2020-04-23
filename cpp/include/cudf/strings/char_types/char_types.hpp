@@ -18,9 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
@@ -44,13 +45,15 @@ enum string_character_types : uint32_t {
 };
 
 // OR operators for combining types
-string_character_types operator|(string_character_types lhs, string_character_types rhs) {
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
   return static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |
     static_cast<std::underlying_type_t<string_character_types>>(rhs));
 }
 
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs) {
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
+{
   lhs = static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |
     static_cast<std::underlying_type_t<string_character_types>>(rhs));

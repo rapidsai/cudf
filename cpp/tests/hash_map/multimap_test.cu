@@ -40,7 +40,8 @@ struct KeyValueTypes {
 // A new instance of this class will be created for each *TEST(MultimapTest,
 // ...) Put all repeated stuff for each test here
 template <class T>
-class MultimapTest : public GdfTest {
+class MultimapTest : public GdfTest
+{
  public:
   using key_type   = typename T::key_type;
   using value_type = typename T::value_type;
@@ -60,7 +61,8 @@ class MultimapTest : public GdfTest {
   const size_type size;
 
   MultimapTest(const size_type hash_table_size = 100)
-    : the_map(multimap_type::create(hash_table_size)), size(hash_table_size) {
+    : the_map(multimap_type::create(hash_table_size)), size(hash_table_size)
+  {
     CUDA_TRY(cudaStreamSynchronize(0));
   }
 
@@ -81,7 +83,8 @@ typedef ::testing::Types<KeyValueTypes<int, int>,
 
 TYPED_TEST_CASE(MultimapTest, Implementations);
 
-TYPED_TEST(MultimapTest, InitialState) {
+TYPED_TEST(MultimapTest, InitialState)
+{
   using key_type   = typename TypeParam::key_type;
   using value_type = typename TypeParam::value_type;
 
@@ -90,7 +93,8 @@ TYPED_TEST(MultimapTest, InitialState) {
   EXPECT_NE(begin, end);
 }
 
-TYPED_TEST(MultimapTest, CheckUnusedValues) {
+TYPED_TEST(MultimapTest, CheckUnusedValues)
+{
   EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
 
   auto begin = this->the_map->begin();

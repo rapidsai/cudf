@@ -42,8 +42,8 @@
 #include <utility>
 #include <vector>
 
-namespace {
-
+namespace
+{
 template <typename T>
 using VectorT = rmm::device_vector<T>;
 /**
@@ -79,7 +79,8 @@ degenerate_partitions(cudf::table_view const& input,
                       cudf::size_type num_partitions,
                       cudf::size_type start_partition,
                       rmm::mr::device_memory_resource* mr,
-                      cudaStream_t stream) {
+                      cudaStream_t stream)
+{
   auto nrows = input.num_rows();
 
   // iterator for partition index rotated right by start_partition positions:
@@ -169,16 +170,19 @@ degenerate_partitions(cudf::table_view const& input,
 }
 }  // namespace
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_partition(
   table_view const& input,
   cudf::size_type num_partitions,
   cudf::size_type start_partition     = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto nrows = input.num_rows();
 
   CUDF_EXPECTS(num_partitions > 0, "Incorrect number of partitions. Must be greater than 0.");
@@ -287,7 +291,8 @@ std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_typ
 round_robin_partition(table_view const& input,
                       cudf::size_type num_partitions,
                       cudf::size_type start_partition     = 0,
-                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   CUDF_FUNC_RANGE();
   return cudf::experimental::detail::round_robin_partition(
     input, num_partitions, start_partition, mr);

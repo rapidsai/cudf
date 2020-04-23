@@ -27,10 +27,12 @@
 #include <nvtext/generate_ngrams.hpp>
 #include <strings/utilities.cuh>
 
-namespace nvtext {
-namespace detail {
-namespace {
-
+namespace nvtext
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Generate ngrams from strings column.
  *
@@ -54,7 +56,8 @@ struct ngram_generator_fn {
    * @param idx Index of the kernel thread.
    * @return Number of bytes required for the string for this thread.
    */
-  __device__ cudf::size_type operator()(cudf::size_type idx) {
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
     char* out_ptr         = d_chars ? d_chars + d_offsets[idx] : nullptr;
     cudf::size_type bytes = 0;
     for (cudf::size_type n = 0; n < ngrams; ++n) {
@@ -76,7 +79,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
   cudf::size_type ngrams               = 2,
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
-  cudaStream_t stream                  = 0) {
+  cudaStream_t stream                  = 0)
+{
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
   CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
@@ -157,7 +161,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
 std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& strings,
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& separator,
-                                              rmm::mr::device_memory_resource* mr) {
+                                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::generate_ngrams(strings, ngrams, separator, mr);
 }

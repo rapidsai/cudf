@@ -28,10 +28,10 @@
 #include <utilities/legacy/column_utils.hpp>
 #include <utilities/legacy/cuda_utils.hpp>
 
-namespace cudf {
-
-namespace {
-
+namespace cudf
+{
+namespace
+{
 using bit_mask_t = bit_mask::bit_mask_t;
 
 /**
@@ -44,7 +44,8 @@ template <typename ColumnType>
 __global__ void slice_data_kernel(ColumnType* output_data,
                                   ColumnType const* input_data,
                                   cudf::size_type const* indices,
-                                  cudf::size_type const indices_position) {
+                                  cudf::size_type const indices_position)
+{
   cudf::size_type input_offset =
     indices[indices_position * 2]; /**< The start index position of the input data. */
   cudf::size_type row_size = indices[indices_position * 2 + 1] - input_offset;
@@ -73,7 +74,8 @@ __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
                                      cudf::size_type const input_size,
                                      cudf::size_type const* indices,
                                      cudf::size_type const indices_size,
-                                     cudf::size_type const indices_position) {
+                                     cudf::size_type const indices_position)
+{
   // Obtain the indices for copying
   cudf::size_type input_index_begin = indices[indices_position * 2];
   cudf::size_type input_index_end   = indices[indices_position * 2 + 1];
@@ -125,7 +127,8 @@ __global__ void slice_bitmask_kernel(bit_mask_t* output_bitmask,
   }
 }
 
-class Slice {
+class Slice
+{
  public:
   Slice(gdf_column const& input_column,
         cudf::size_type const* indices,
@@ -136,11 +139,14 @@ class Slice {
       indices_(indices),
       num_indices_(num_indices),
       output_columns_(output_columns),
-      streams_(streams) {}
+      streams_(streams)
+  {
+  }
 
  public:
   template <typename ColumnType>
-  void operator()() {
+  void operator()()
+  {
     cudf::size_type columns_quantity = output_columns_.size();
 
     // Perform operation
@@ -217,7 +223,8 @@ class Slice {
   }
 
  private:
-  cudaStream_t get_stream(cudf::size_type index) {
+  cudaStream_t get_stream(cudf::size_type index)
+  {
     if (streams_.size() == 0) { return cudaStream_t{nullptr}; }
     return streams_[index % streams_.size()];
   }
@@ -230,12 +237,13 @@ class Slice {
 };
 }  // namespace
 
-namespace detail {
-
+namespace detail
+{
 std::vector<gdf_column*> slice(gdf_column const& input_column,
                                cudf::size_type const* indices,
                                cudf::size_type num_indices,
-                               std::vector<cudaStream_t> const& streams) {
+                               std::vector<cudaStream_t> const& streams)
+{
   std::vector<gdf_column*> output_columns;
 
   if (num_indices == 0 || indices == nullptr) { return output_columns; }
@@ -275,7 +283,8 @@ std::vector<gdf_column*> slice(gdf_column const& input_column,
 
 std::vector<gdf_column*> slice(gdf_column const& input_column,
                                cudf::size_type const* indices,
-                               cudf::size_type num_indices) {
+                               cudf::size_type num_indices)
+{
   return cudf::detail::slice(input_column, indices, num_indices);
 }
 

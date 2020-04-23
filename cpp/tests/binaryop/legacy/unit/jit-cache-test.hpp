@@ -35,20 +35,23 @@ struct JitCacheTest : public GdfTest, public cudf::jit::cudfJitCache {
 
   virtual ~JitCacheTest() {}
 
-  virtual void SetUp() {
+  virtual void SetUp()
+  {
     purgeFileCache();
     warmUp();
   }
 
   virtual void TearDown() { purgeFileCache(); }
 
-  void purgeFileCache() {
+  void purgeFileCache()
+  {
 #if defined(JITIFY_USE_CACHE)
     boost::filesystem::remove_all(cudf::jit::getCacheDir());
 #endif
   }
 
-  void warmUp() {
+  void warmUp()
+  {
     // Prime up the cache so that the in-memory and file cache is populated
 
     // Single value column

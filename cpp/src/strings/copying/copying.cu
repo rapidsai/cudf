@@ -24,17 +24,20 @@
 
 #include <thrust/sequence.h>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 // new strings column from subset of this strings instance
 std::unique_ptr<cudf::column> slice(strings_column_view const& strings,
                                     size_type start,
                                     size_type end,
                                     size_type step,
                                     cudaStream_t stream,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
   if (step == 0) step = 1;

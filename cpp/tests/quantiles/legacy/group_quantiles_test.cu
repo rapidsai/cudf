@@ -20,9 +20,11 @@
 
 #include <gtest/gtest.h>
 
-struct group_quantile : public GdfTest {};
+struct group_quantile : public GdfTest {
+};
 
-TEST_F(group_quantile, SingleColumn) {
+TEST_F(group_quantile, SingleColumn)
+{
   auto keys = cudf::test::column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto vals = cudf::test::column_wrapper<float>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -44,7 +46,8 @@ TEST_F(group_quantile, SingleColumn) {
     << "Expected: " << expect_vals.to_str() << "  Actual: " << result_vals.to_str();
 }
 
-TEST_F(group_quantile, SingleColumnMultiQuant) {
+TEST_F(group_quantile, SingleColumnMultiQuant)
+{
   auto keys = cudf::test::column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto vals = cudf::test::column_wrapper<float>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -66,7 +69,8 @@ TEST_F(group_quantile, SingleColumnMultiQuant) {
     << "Expected: " << expect_vals.to_str() << "  Actual: " << result_vals.to_str();
 }
 
-TEST_F(group_quantile, MultiColumn) {
+TEST_F(group_quantile, MultiColumn)
+{
   auto keys  = cudf::test::column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   auto vals0 = cudf::test::column_wrapper<float>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   auto vals1 = cudf::test::column_wrapper<float>{9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
@@ -94,7 +98,8 @@ TEST_F(group_quantile, MultiColumn) {
     << "Expected: " << expect_vals1.to_str() << "  Actual: " << result_vals1.to_str();
 }
 
-TEST_F(group_quantile, SingleColumnNullable) {
+TEST_F(group_quantile, SingleColumnNullable)
+{
   std::vector<int32_t> keys_data{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   std::vector<bool> keys_valid{1, 1, 1, 1, 1, 1, 1, 0, 1, 1};
   std::vector<double> vals_data{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};

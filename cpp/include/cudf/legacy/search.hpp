@@ -20,8 +20,8 @@
 #include "cudf/cudf.h"
 #include "cudf/types.hpp"
 
-namespace cudf {
-
+namespace cudf
+{
 /**---------------------------------------------------------------------------*
  * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order

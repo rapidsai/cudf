@@ -20,10 +20,12 @@
 
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Internal API to repeat rows of a Table.
  *

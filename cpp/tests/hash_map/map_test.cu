@@ -44,7 +44,8 @@ struct InsertTest : public cudf::test::BaseFixture {
   using pair_type  = typename T::pair_type;
   using map_type   = typename T::map_type;
 
-  InsertTest() {
+  InsertTest()
+  {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
@@ -73,7 +74,8 @@ template <typename map_type, typename pair_type>
 struct insert_pair {
   insert_pair(map_type _map) : map{_map} {}
 
-  __device__ bool operator()(pair_type const& pair) {
+  __device__ bool operator()(pair_type const& pair)
+  {
     auto result = map.insert(pair);
     if (result.first == map.end()) { return false; }
     return result.second;
@@ -86,7 +88,8 @@ template <typename map_type, typename pair_type>
 struct find_pair {
   find_pair(map_type _map) : map{_map} {}
 
-  __device__ bool operator()(pair_type const& pair) {
+  __device__ bool operator()(pair_type const& pair)
+  {
     auto result = map.find(pair.first);
     if (result == map.end()) { return false; }
     return *result == pair;
@@ -98,7 +101,8 @@ template <typename pair_type,
           typename key_type   = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
 struct unique_pair_generator {
-  __device__ pair_type operator()(cudf::size_type i) {
+  __device__ pair_type operator()(cudf::size_type i)
+  {
     return thrust::make_pair(key_type(i), value_type(i));
   }
 };
@@ -118,13 +122,15 @@ template <typename pair_type,
           typename value_type = typename pair_type::second_type>
 struct identical_key_generator {
   identical_key_generator(key_type k = 42) : key{k} {}
-  __device__ pair_type operator()(cudf::size_type i) {
+  __device__ pair_type operator()(cudf::size_type i)
+  {
     return thrust::make_pair(key, value_type(i));
   }
   key_type key;
 };
 
-TYPED_TEST(InsertTest, UniqueKeysUniqueValues) {
+TYPED_TEST(InsertTest, UniqueKeysUniqueValues)
+{
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
   thrust::tabulate(this->pairs.begin(), this->pairs.end(), unique_pair_generator<pair_type>{});
@@ -137,7 +143,8 @@ TYPED_TEST(InsertTest, UniqueKeysUniqueValues) {
     this->pairs.begin(), this->pairs.end(), find_pair<map_type, pair_type>{*this->map}));
 }
 
-TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues) {
+TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues)
+{
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
   thrust::tabulate(this->pairs.begin(), this->pairs.end(), identical_pair_generator<pair_type>{});
@@ -153,7 +160,8 @@ TYPED_TEST(InsertTest, IdenticalKeysIdenticalValues) {
     this->pairs.begin(), this->pairs.end(), find_pair<map_type, pair_type>{*this->map}));
 }
 
-TYPED_TEST(InsertTest, IdenticalKeysUniqueValues) {
+TYPED_TEST(InsertTest, IdenticalKeysUniqueValues)
+{
   using map_type  = typename TypeParam::map_type;
   using pair_type = typename TypeParam::pair_type;
   thrust::tabulate(this->pairs.begin(), this->pairs.end(), identical_key_generator<pair_type>{});

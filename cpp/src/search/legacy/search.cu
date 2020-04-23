@@ -28,10 +28,10 @@
 #include <thrust/binary_search.h>
 #include <thrust/device_vector.h>
 
-namespace cudf {
-
-namespace {
-
+namespace cudf
+{
+namespace
+{
 template <typename DataIterator, typename ValuesIterator, typename Comparator>
 void launch_search(DataIterator it_data,
                    ValuesIterator it_vals,
@@ -40,7 +40,8 @@ void launch_search(DataIterator it_data,
                    void* output,
                    Comparator comp,
                    bool find_first,
-                   cudaStream_t stream) {
+                   cudaStream_t stream)
+{
   if (find_first) {
     thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                         it_data,
@@ -62,14 +63,15 @@ void launch_search(DataIterator it_data,
 
 }  // namespace
 
-namespace detail {
-
+namespace detail
+{
 gdf_column search_ordered(table const& t,
                           table const& values,
                           bool find_first,
                           std::vector<bool> const& desc_flags,
                           bool nulls_as_largest,
-                          cudaStream_t stream = 0) {
+                          cudaStream_t stream = 0)
+{
   // Allocate result column
   gdf_column result_like{};
   result_like.dtype = GDF_INT32;
@@ -126,13 +128,16 @@ gdf_column search_ordered(table const& t,
 template <bool nullable = true>
 struct compare_with_value {
   compare_with_value(device_table t, device_table val, bool nulls_are_equal = true)
-    : compare(t, val, nulls_are_equal) {}
+    : compare(t, val, nulls_are_equal)
+  {
+  }
 
   __device__ bool operator()(cudf::size_type i) { return compare(i, 0); }
   row_equality_comparator<nullable> compare;
 };
 
-bool contains(gdf_column const& column, gdf_scalar const& value, cudaStream_t stream = 0) {
+bool contains(gdf_column const& column, gdf_scalar const& value, cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(column.dtype == value.dtype, "DTYPE mismatch");
 
   // No element to compare against
@@ -174,18 +179,21 @@ bool contains(gdf_column const& column, gdf_scalar const& value, cudaStream_t st
 gdf_column lower_bound(table const& t,
                        table const& values,
                        std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest) {
+                       bool nulls_as_largest)
+{
   return detail::search_ordered(t, values, true, desc_flags, nulls_as_largest);
 }
 
 gdf_column upper_bound(table const& t,
                        table const& values,
                        std::vector<bool> const& desc_flags,
-                       bool nulls_as_largest) {
+                       bool nulls_as_largest)
+{
   return detail::search_ordered(t, values, false, desc_flags, nulls_as_largest);
 }
 
-bool contains(gdf_column const& column, gdf_scalar const& value) {
+bool contains(gdf_column const& column, gdf_scalar const& value)
+{
   return detail::contains(column, value);
 }
 }  // namespace cudf

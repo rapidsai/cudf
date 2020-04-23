@@ -21,7 +21,8 @@
 #include <cudf/cudf.h>
 #include <table/legacy/device_table.cuh>
 
-namespace {
+namespace
+{
 enum class State { False = 0, True = 1, Undecided = 2 };
 
 template <bool nullable = true>
@@ -31,7 +32,8 @@ struct elements_are_equal {
                                              cudf::size_type lhs_index,
                                              gdf_column const &rhs,
                                              cudf::size_type rhs_index,
-                                             bool nulls_are_equal = false) {
+                                             bool nulls_are_equal = false)
+  {
     if (nullable) {
       bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
       bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
@@ -66,7 +68,8 @@ __device__ inline bool rows_equal(device_table const &lhs,
                                   const cudf::size_type lhs_index,
                                   device_table const &rhs,
                                   const cudf::size_type rhs_index,
-                                  bool nulls_are_equal = false) {
+                                  bool nulls_are_equal = false)
+{
   auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](gdf_column const &l,
                                                                 gdf_column const &r) {
     return cudf::type_dispatcher(
@@ -93,7 +96,9 @@ struct row_equality_comparator {
    * Use this constructor when you will be comparing two rows from the same table
    */
   row_equality_comparator(device_table const &lhs, bool nulls_are_equal = false)
-    : _lhs{lhs}, _rhs{lhs}, _nulls_are_equal{nulls_are_equal} {}
+    : _lhs{lhs}, _rhs{lhs}, _nulls_are_equal{nulls_are_equal}
+  {
+  }
 
   /**
    * @brief  Constructor for row_equality_comparator
@@ -108,7 +113,9 @@ struct row_equality_comparator {
   row_equality_comparator(device_table const &lhs,
                           device_table const &rhs,
                           bool nulls_are_equal = false)
-    : _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal} {}
+    : _lhs{lhs}, _rhs{rhs}, _nulls_are_equal{nulls_are_equal}
+  {
+  }
 
   /**
    * @brief  Functor to compute if two rows are equal.
@@ -119,7 +126,8 @@ struct row_equality_comparator {
    * @returns true      If the two rows are element-wise equal
    * @returns false     If any element differs between the two rows
    */
-  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const {
+  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const
+  {
     return rows_equal<nullable>(_lhs, lhs_index, _rhs, rhs_index, _nulls_are_equal);
   }
 
@@ -129,7 +137,8 @@ struct row_equality_comparator {
   bool _nulls_are_equal;
 };
 
-namespace {
+namespace
+{
 template <bool nullable = true>
 struct typed_row_inequality_comparator {
   template <typename ColType>
@@ -137,7 +146,8 @@ struct typed_row_inequality_comparator {
                               cudf::size_type rhs_row,
                               gdf_column const *lhs_column,
                               gdf_column const *rhs_column,
-                              bool nulls_are_smallest) {
+                              bool nulls_are_smallest)
+  {
     const ColType lhs_data = static_cast<const ColType *>(lhs_column->data)[lhs_row];
     const ColType rhs_data = static_cast<const ColType *>(rhs_column->data)[rhs_row];
 
@@ -190,10 +200,9 @@ struct row_inequality_comparator {
   row_inequality_comparator(device_table const &lhs,
                             bool nulls_are_smallest            = true,
                             int8_t const *const asc_desc_flags = nullptr)
-    : _lhs(lhs),
-      _rhs(lhs),
-      _nulls_are_smallest(nulls_are_smallest),
-      _asc_desc_flags(asc_desc_flags) {}
+    : _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
+  {
+  }
 
   /**
    * @brief  Constructor for inequality comparator
@@ -210,10 +219,9 @@ struct row_inequality_comparator {
                             device_table const &rhs,
                             bool nulls_are_smallest            = true,
                             int8_t const *const asc_desc_flags = nullptr)
-    : _lhs(lhs),
-      _rhs(rhs),
-      _nulls_are_smallest(nulls_are_smallest),
-      _asc_desc_flags(asc_desc_flags) {}
+    : _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
+  {
+  }
 
   /**
    * @brief  Inquality operator comparator
@@ -226,7 +234,8 @@ struct row_inequality_comparator {
    * @returns false     If the elements from the two rows do not fulfill the inequality as defined
    * by asc_desc_flags and nulls_are_smallest
    */
-  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const {
+  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const
+  {
     State state = State::Undecided;
     for (cudf::size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index) {
       gdf_dtype col_type = _lhs.get_column(col_index)->dtype;

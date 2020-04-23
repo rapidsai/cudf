@@ -25,9 +25,11 @@
 #include <tests/utilities/table_utilities.hpp>
 #include <tests/utilities/type_lists.hpp>
 
-struct ApplyBooleanMask : public cudf::test::BaseFixture {};
+struct ApplyBooleanMask : public cudf::test::BaseFixture {
+};
 
-TEST_F(ApplyBooleanMask, NonNullBooleanMask) {
+TEST_F(ApplyBooleanMask, NonNullBooleanMask)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -45,7 +47,8 @@ TEST_F(ApplyBooleanMask, NonNullBooleanMask) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(ApplyBooleanMask, NullBooleanMask) {
+TEST_F(ApplyBooleanMask, NullBooleanMask)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -63,7 +66,8 @@ TEST_F(ApplyBooleanMask, NullBooleanMask) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(ApplyBooleanMask, EmptyMask) {
+TEST_F(ApplyBooleanMask, EmptyMask)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -80,7 +84,8 @@ TEST_F(ApplyBooleanMask, EmptyMask) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(ApplyBooleanMask, WrongMaskType) {
+TEST_F(ApplyBooleanMask, WrongMaskType)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -92,7 +97,8 @@ TEST_F(ApplyBooleanMask, WrongMaskType) {
   EXPECT_THROW(cudf::experimental::apply_boolean_mask(input, boolean_mask), cudf::logic_error);
 }
 
-TEST_F(ApplyBooleanMask, MaskAndInputSizeMismatch) {
+TEST_F(ApplyBooleanMask, MaskAndInputSizeMismatch)
+{
   cudf::test::fixed_width_column_wrapper<int16_t> col1{{true, false, true, false, true, false},
                                                        {1, 1, 0, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int32_t> col2{{10, 40, 70, 5, 2, 10}, {1, 1, 0, 1, 1, 0}};
@@ -103,7 +109,8 @@ TEST_F(ApplyBooleanMask, MaskAndInputSizeMismatch) {
   EXPECT_THROW(cudf::experimental::apply_boolean_mask(input, boolean_mask), cudf::logic_error);
 }
 
-TEST_F(ApplyBooleanMask, StringColumnTest) {
+TEST_F(ApplyBooleanMask, StringColumnTest)
+{
   cudf::test::strings_column_wrapper col1{
     {"This", "is", "the", "a", "k12", "string", "table", "column"}, {1, 1, 1, 1, 1, 0, 1, 1}};
   cudf::table_view input{{col1}};
@@ -118,7 +125,8 @@ TEST_F(ApplyBooleanMask, StringColumnTest) {
   cudf::test::expect_tables_equal(expected, got->view());
 }
 
-TEST_F(ApplyBooleanMask, withoutNullString) {
+TEST_F(ApplyBooleanMask, withoutNullString)
+{
   cudf::test::strings_column_wrapper col1({"d", "e", "a", "d", "k", "d", "l"});
   cudf::table_view cudf_table_in_view{{col1}};
 
@@ -135,7 +143,8 @@ TEST_F(ApplyBooleanMask, withoutNullString) {
   cudf::test::expect_tables_equal(expect_cudf_table_view, tableView);
 }
 
-TEST_F(ApplyBooleanMask, NoNullInput) {
+TEST_F(ApplyBooleanMask, NoNullInput)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> col(
     {9668, 9590, 9526, 9205, 9434, 9347, 9160, 9569, 9143, 9807, 9606, 9446, 9279, 9822, 9691});
   cudf::test::fixed_width_column_wrapper<bool> mask({false,

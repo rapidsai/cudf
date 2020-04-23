@@ -31,9 +31,10 @@
  *
  */
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -41,7 +42,8 @@ namespace experimental {
  * Other kinds of aggregations may derive from this class to encapsulate
  * additional information needed to compute the aggregation.
  */
-class aggregation {
+class aggregation
+{
  public:
   /**
    * @brief Possible aggregation operations

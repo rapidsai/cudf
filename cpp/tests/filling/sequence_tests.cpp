@@ -30,15 +30,20 @@ using namespace cudf;
 using namespace cudf::test;
 
 template <typename T>
-class SequenceTypedTestFixture : public cudf::test::BaseFixture {};
+class SequenceTypedTestFixture : public cudf::test::BaseFixture
+{
+};
 
-class SequenceTestFixture : public cudf::test::BaseFixture {};
+class SequenceTestFixture : public cudf::test::BaseFixture
+{
+};
 
 using NumericTypesNoBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(SequenceTypedTestFixture, NumericTypesNoBool);
 
-TYPED_TEST(SequenceTypedTestFixture, Incrementing) {
+TYPED_TEST(SequenceTypedTestFixture, Incrementing)
+{
   using T = TypeParam;
 
   numeric_scalar<T> init(0);
@@ -54,7 +59,8 @@ TYPED_TEST(SequenceTypedTestFixture, Incrementing) {
   expect_columns_equal(*result, expected_w);
 }
 
-TYPED_TEST(SequenceTypedTestFixture, Decrementing) {
+TYPED_TEST(SequenceTypedTestFixture, Decrementing)
+{
   using T = TypeParam;
 
   numeric_scalar<T> init(0);
@@ -70,7 +76,8 @@ TYPED_TEST(SequenceTypedTestFixture, Decrementing) {
   expect_columns_equal(*result, expected_w);
 }
 
-TYPED_TEST(SequenceTypedTestFixture, EmptyOutput) {
+TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
+{
   using T = TypeParam;
 
   numeric_scalar<T> init(0);
@@ -86,7 +93,8 @@ TYPED_TEST(SequenceTypedTestFixture, EmptyOutput) {
   expect_columns_equal(*result, expected_w);
 }
 
-TEST_F(SequenceTestFixture, BadTypes) {
+TEST_F(SequenceTestFixture, BadTypes)
+{
   string_scalar string_init("zero");
   string_scalar string_step("???");
   EXPECT_THROW(cudf::experimental::sequence(10, string_init, string_step), cudf::logic_error);
@@ -100,7 +108,8 @@ TEST_F(SequenceTestFixture, BadTypes) {
   EXPECT_THROW(cudf::experimental::sequence(10, ts_init, ts_step), cudf::logic_error);
 }
 
-TEST_F(SequenceTestFixture, MismatchedInputs) {
+TEST_F(SequenceTestFixture, MismatchedInputs)
+{
   numeric_scalar<int> init(0);
   numeric_scalar<float> step(-5);
   EXPECT_THROW(cudf::experimental::sequence(10, init, step), cudf::logic_error);
@@ -114,7 +123,8 @@ TEST_F(SequenceTestFixture, MismatchedInputs) {
   EXPECT_THROW(cudf::experimental::sequence(10, init3, step3), cudf::logic_error);
 }
 
-TYPED_TEST(SequenceTypedTestFixture, DefaultStep) {
+TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
+{
   using T = TypeParam;
 
   numeric_scalar<T> init(0);

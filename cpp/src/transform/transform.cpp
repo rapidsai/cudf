@@ -29,18 +29,21 @@
 
 #include <types.hpp.jit>
 
-namespace cudf {
-namespace experimental {
-namespace transformation {
-
-namespace jit {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace transformation
+{
+namespace jit
+{
 void unary_operation(mutable_column_view output,
                      column_view input,
                      const std::string& udf,
                      data_type output_type,
                      bool is_ptx,
-                     cudaStream_t stream) {
+                     cudaStream_t stream)
+{
   std::string hash = "prog_transform.experimental" + std::to_string(std::hash<std::string>{}(udf));
 
   std::string cuda_source;
@@ -71,14 +74,15 @@ void unary_operation(mutable_column_view output,
 }  // namespace jit
 }  // namespace transformation
 
-namespace detail {
-
+namespace detail
+{
 std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
                                   rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
 
   std::unique_ptr<column> output = make_numeric_column(
@@ -100,7 +104,8 @@ std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
-                                  rmm::mr::device_memory_resource* mr) {
+                                  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::transform(input, unary_udf, output_type, is_ptx, mr);
 }

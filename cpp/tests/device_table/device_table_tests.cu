@@ -46,14 +46,17 @@ struct all_rows_equal {
   bool nulls_are_equal;
 
   all_rows_equal(device_table _lhs, device_table _rhs, bool _nulls_are_equal = false)
-    : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal} {}
+    : lhs{_lhs}, rhs{_rhs}, nulls_are_equal{_nulls_are_equal}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns true if row `lhs_index` in the `lhs` table is equal to every
    * row in the `rhs` table.
    *
    *---------------------------------------------------------------------------**/
-  __device__ bool operator()(int lhs_index) {
+  __device__ bool operator()(int lhs_index)
+  {
     auto row_equality = [this, lhs_index](cudf::size_type rhs_index) {
       return rows_equal<nullable>(lhs, lhs_index, rhs, rhs_index, nulls_are_equal);
     };
@@ -71,9 +74,12 @@ struct row_comparison {
   using index_pair = thrust::tuple<cudf::size_type, cudf::size_type>;
 
   row_comparison(device_table _lhs, device_table _rhs, bool _nulls_are_equal = false)
-    : comp{_lhs, _rhs, _nulls_are_equal} {}
+    : comp{_lhs, _rhs, _nulls_are_equal}
+  {
+  }
 
-  __device__ bool operator()(index_pair const& indices) {
+  __device__ bool operator()(index_pair const& indices)
+  {
     return comp(thrust::get<0>(indices), thrust::get<1>(indices));
   }
 };
@@ -82,12 +88,14 @@ template <bool nullable>
 struct row_hasher {
   device_table t;
   row_hasher(device_table _t) : t{_t} {}
-  __device__ hash_value_type operator()(cudf::size_type row_index) {
+  __device__ hash_value_type operator()(cudf::size_type row_index)
+  {
     return hash_row<nullable>(t, row_index);
   }
 };
 
-TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
+TEST_F(DeviceTableTest, AllRowsEqualNoNulls)
+{
   const int val{42};
   auto init_values = [val](auto index) { return val; };
   auto all_valid   = [](auto index) { return true; };
@@ -120,7 +128,8 @@ TEST_F(DeviceTableTest, AllRowsEqualNoNulls) {
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(), row_hashes.begin()));
 }
 
-TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
+TEST_F(DeviceTableTest, AllRowsEqualWithNulls)
+{
   const int val{42};
   auto init_values = [val](auto index) { return val; };
   auto all_valid   = [](auto index) { return true; };
@@ -156,7 +165,8 @@ TEST_F(DeviceTableTest, AllRowsEqualWithNulls) {
   EXPECT_TRUE(thrust::equal(row_hashes.begin() + 1, row_hashes.end(), row_hashes.begin()));
 }
 
-TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
+TEST_F(DeviceTableTest, AllRowsDifferentWithNulls)
+{
   int const val{42};
   auto init_values = [val](auto index) { return index; };
   auto all_valid   = [](auto index) { return true; };
@@ -214,7 +224,8 @@ TEST_F(DeviceTableTest, AllRowsDifferentWithNulls) {
   }
 }
 
-TEST_F(DeviceTableTest, TwoTablesAllRowsEqual) {
+TEST_F(DeviceTableTest, TwoTablesAllRowsEqual)
+{
   int const val{42};
   auto init_values   = [val](auto index) { return index; };
   auto random_values = [](auto index) { return std::default_random_engine{}(); };
@@ -261,13 +272,15 @@ struct row_copier {
 
   row_copier(device_table _target, device_table _source) : target{_target}, source{_source} {}
 
-  __device__ void operator()(index_pair const& indices) {
+  __device__ void operator()(index_pair const& indices)
+  {
     copy_row<update_target_bitmask>(
       target, thrust::get<0>(indices), source, thrust::get<1>(indices));
   }
 };
 
-TEST_F(DeviceTableTest, CopyRowsNoNulls) {
+TEST_F(DeviceTableTest, CopyRowsNoNulls)
+{
   int const val{42};
   auto init_values = [val](auto index) { return index; };
   auto all_valid   = [](auto index) { return true; };
@@ -322,7 +335,8 @@ struct verify_bitmask {
   __device__ bool operator()(cudf::size_type i) { return bit_mask::is_valid(bitmask, i); }
 };
 
-TEST_F(DeviceTableTest, CopyRowsSourceNullTargetValid) {
+TEST_F(DeviceTableTest, CopyRowsSourceNullTargetValid)
+{
   int const val{42};
   auto init_values = [val](auto index) { return index; };
   auto all_valid   = [](auto index) { return true; };
@@ -378,7 +392,8 @@ TEST_F(DeviceTableTest, CopyRowsSourceNullTargetValid) {
     row_comparison<true>{*source_table, *target_table, false}));
 }
 
-TEST_F(DeviceTableTest, CopyRowsSourceValidTargetNull) {
+TEST_F(DeviceTableTest, CopyRowsSourceValidTargetNull)
+{
   int const val{42};
   auto init_values = [val](auto index) { return index; };
   auto all_valid   = [](auto index) { return true; };
@@ -442,7 +457,8 @@ TEST_F(DeviceTableTest, CopyRowsSourceValidTargetNull) {
                              verify_bitmask{row_bitmask.data().get()}));
 }
 
-TEST_F(DeviceTableTest, CopyRowsSourceNoBitmaskTargetNull) {
+TEST_F(DeviceTableTest, CopyRowsSourceNoBitmaskTargetNull)
+{
   auto init_values = [](auto index) { return index; };
 
   cudf::test::column_wrapper<int32_t> source_col0(size, init_values);

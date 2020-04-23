@@ -43,9 +43,12 @@ struct compare_timestamp_elements_to_primitive_representation {
 
   compare_timestamp_elements_to_primitive_representation(cudf::column_device_view& _primitives,
                                                          cudf::column_device_view& _timestamps)
-    : primitives(_primitives), timestamps(_timestamps) {}
+    : primitives(_primitives), timestamps(_timestamps)
+  {
+  }
 
-  __host__ __device__ bool operator()(const int32_t element_index) {
+  __host__ __device__ bool operator()(const int32_t element_index)
+  {
     using Primitive = typename Timestamp::rep;
     auto primitive  = primitives.element<Primitive>(element_index);
     auto timestamp  = timestamps.element<Timestamp>(element_index);
@@ -55,7 +58,8 @@ struct compare_timestamp_elements_to_primitive_representation {
 
 TYPED_TEST_CASE(TimestampColumnTest, cudf::test::TimestampTypes);
 
-TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation) {
+TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation)
+{
   using T   = TypeParam;
   using Rep = typename T::rep;
   using namespace cudf::test;
@@ -94,9 +98,12 @@ struct compare_timestamp_elements {
   compare_timestamp_elements(gdf_binary_operator _comp,
                              cudf::column_device_view& _lhs,
                              cudf::column_device_view& _rhs)
-    : comp(_comp), lhs(_lhs), rhs(_rhs) {}
+    : comp(_comp), lhs(_lhs), rhs(_rhs)
+  {
+  }
 
-  __host__ __device__ bool operator()(const int32_t element_index) {
+  __host__ __device__ bool operator()(const int32_t element_index)
+  {
     auto lhs_elt = lhs.element<Timestamp>(element_index);
     auto rhs_elt = rhs.element<Timestamp>(element_index);
     switch (comp) {
@@ -109,7 +116,8 @@ struct compare_timestamp_elements {
   }
 };
 
-TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
+TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
+{
   using T = TypeParam;
   using namespace cudf::test;
   using namespace simt::std::chrono;
@@ -157,7 +165,8 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
                                           *cudf::column_device_view::create(timestamp_rhs_col)}));
 }
 
-TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm) {
+TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)
+{
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
   auto column =
     cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
@@ -174,7 +183,8 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm) {
   EXPECT_EQ(0, column->num_children());
 }
 
-TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm) {
+TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm)
+{
   rmm::device_buffer null_mask{};
   auto column =
     cudf::make_timestamp_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},

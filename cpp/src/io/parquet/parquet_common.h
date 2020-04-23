@@ -17,10 +17,12 @@
 #ifndef __IO_PARQUET_COMMON_H__
 #define __IO_PARQUET_COMMON_H__
 
-namespace cudf {
-namespace io {
-namespace parquet {
-
+namespace cudf
+{
+namespace io
+{
+namespace parquet
+{
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  **/

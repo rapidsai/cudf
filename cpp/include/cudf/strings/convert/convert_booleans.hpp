@@ -19,9 +19,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Returns a new BOOL8 column by parsing boolean values from the strings
  * in the provided strings column.

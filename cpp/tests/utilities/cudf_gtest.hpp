@@ -46,8 +46,8 @@
 #undef Templates
 #undef Templates0
 
-namespace testing {
-
+namespace testing
+{
 template <class... TYPES>
 struct Types {
   using type = Types;
@@ -61,12 +61,13 @@ struct Types<T, TYPES...> {
   using type = Types;
 };
 
-namespace internal {
-
+namespace internal
+{
 using Types0 = Types<>;
 
 template <GTEST_TEMPLATE_... TYPES>
-struct Templates {};
+struct Templates {
+};
 
 template <GTEST_TEMPLATE_ HEAD, GTEST_TEMPLATE_... TAIL>
 struct Templates<HEAD, TAIL...> {

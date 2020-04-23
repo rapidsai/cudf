@@ -34,7 +34,8 @@ struct SingleColumnGroupby : public GdfTest {
 
   struct column_equality {
     template <typename T>
-    bool operator()(gdf_column lhs, gdf_column rhs) const {
+    bool operator()(gdf_column lhs, gdf_column rhs) const
+    {
       std::unique_ptr<column_wrapper<T>> lhs_col;
       std::unique_ptr<column_wrapper<T>> rhs_col;
       lhs_col.reset(new column_wrapper<T>(lhs));
@@ -44,7 +45,8 @@ struct SingleColumnGroupby : public GdfTest {
     }
   };
 
-  void expect_tables_are_equal(cudf::table const &lhs, cudf::table const &rhs) {
+  void expect_tables_are_equal(cudf::table const &lhs, cudf::table const &rhs)
+  {
     EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
     EXPECT_EQ(lhs.num_rows(), rhs.num_rows());
     EXPECT_TRUE(std::equal(lhs.begin(),
@@ -57,7 +59,8 @@ struct SingleColumnGroupby : public GdfTest {
   }
 
   std::pair<cudf::table, gdf_column> gdf_solution(cudf::table const &input_keys,
-                                                  bool ignore_null_keys) {
+                                                  bool ignore_null_keys)
+  {
     gdf_context context;
     if (not ignore_null_keys) {  // SQL
       context.flag_groupby_include_nulls = true;
@@ -73,7 +76,8 @@ struct SingleColumnGroupby : public GdfTest {
       input_keys, groupby_col_indices.size(), groupby_col_indices.data(), &context);
   }
 
-  inline void destroy_table(cudf::table *t) {
+  inline void destroy_table(cudf::table *t)
+  {
     std::for_each(t->begin(), t->end(), [](gdf_column *col) {
       gdf_column_free(col);
       delete col;
@@ -83,7 +87,8 @@ struct SingleColumnGroupby : public GdfTest {
   void evaluate_test(column_wrapper<KeyType> keys,
                      column_wrapper<KeyType> sorted_keys,
                      column_wrapper<cudf::size_type> column_offsets,
-                     bool ignore_null_keys = true) {
+                     bool ignore_null_keys = true)
+  {
     using namespace cudf::test;
 
     cudf::table input_keys{keys.get()};
@@ -112,7 +117,8 @@ using TestingTypes = ::testing::
 
 TYPED_TEST_CASE(SingleColumnGroupby, TestingTypes);
 
-TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsPandasStyle) {
+TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsPandasStyle)
+{
   constexpr int size{10};
   using T = typename SingleColumnGroupby<TypeParam>::Key;
 
@@ -124,7 +130,8 @@ TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsPandasStyle) {
                       ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsSqlStyle) {
+TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsSqlStyle)
+{
   constexpr int size{10};
   using T = typename SingleColumnGroupby<TypeParam>::Key;
 
@@ -136,7 +143,8 @@ TYPED_TEST(SingleColumnGroupby, OneGroupNoNullsSqlStyle) {
                       ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysPandasStyle) {
+TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysPandasStyle)
+{
   constexpr int size{10};
   using T = typename SingleColumnGroupby<TypeParam>::Key;
 
@@ -150,7 +158,8 @@ TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysPandasStyle) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysSqlStyle) {
+TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysSqlStyle)
+{
   constexpr int size{10};
   using T = typename SingleColumnGroupby<TypeParam>::Key;
 
@@ -165,7 +174,8 @@ TYPED_TEST(SingleColumnGroupby, OneGroupEvenNullKeysSqlStyle) {
     ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, EightKeysAllUniquePandasStyle) {
+TYPED_TEST(SingleColumnGroupby, EightKeysAllUniquePandasStyle)
+{
   using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = true;
 
@@ -175,7 +185,8 @@ TYPED_TEST(SingleColumnGroupby, EightKeysAllUniquePandasStyle) {
                       ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueSqlStyle) {
+TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueSqlStyle)
+{
   using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = false;
 
@@ -185,7 +196,8 @@ TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueSqlStyle) {
                       ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullPandasStyle) {
+TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullPandasStyle)
+{
   using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = true;
 
@@ -196,7 +208,8 @@ TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullPandasStyle) {
                       ignore_null_keys);
 }
 
-TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullSqlStyle) {
+TYPED_TEST(SingleColumnGroupby, EightKeysAllUniqueEvenKeysNullSqlStyle)
+{
   using T               = typename SingleColumnGroupby<TypeParam>::Key;
   bool ignore_null_keys = false;
 

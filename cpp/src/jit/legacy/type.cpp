@@ -21,9 +21,10 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 /**---------------------------------------------------------------------------*
  * @brief Functor to get type name in string
  *
@@ -45,7 +46,8 @@ namespace jit {
  *---------------------------------------------------------------------------**/
 struct type_name {
   template <class T>
-  CUDA_HOST_DEVICE_CALLABLE std::string operator()() {
+  CUDA_HOST_DEVICE_CALLABLE std::string operator()()
+  {
 #if defined(__clang__) || defined(__GNUC__)
     std::string p           = __PRETTY_FUNCTION__;
     std::string search_str  = "T = ";

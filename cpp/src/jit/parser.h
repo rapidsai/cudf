@@ -22,9 +22,10 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 /**
  * @brief Parse and transform a piece of PTX code that contains the implementation
  * of a `__device__` function into a CUDA `__device__` `__inline__` function.
@@ -35,7 +36,8 @@ namespace jit {
  * @param `output_arg_type` The output type of the PTX function, e.g. "int", "int64_t"
  * @return The output CUDA `__device__` `__inline__` function
  */
-class ptx_parser {
+class ptx_parser
+{
  private:
   std::string ptx;
 
@@ -222,7 +224,8 @@ class ptx_parser {
 inline std::string parse_single_function_ptx(const std::string& src,
                                              const std::string& function_name,
                                              const std::string& output_arg_type,
-                                             const std::set<int>& pointer_arg_list = {0}) {
+                                             const std::set<int>& pointer_arg_list = {0})
+{
   ptx_parser instance(src, function_name, output_arg_type, pointer_arg_list);
 
   return instance.parse();

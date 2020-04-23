@@ -16,7 +16,8 @@
 
 #pragma once
 
-namespace cudf {
+namespace cudf
+{
 // joins
 
 /**

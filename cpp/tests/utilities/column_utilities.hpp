@@ -23,9 +23,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**
  * @brief Verifies the property equality of two columns.
  *
@@ -141,7 +142,8 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
+{
   thrust::host_vector<T> host_data(c.size());
   CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
   return {host_data, bitmask_to_host(c)};
@@ -158,8 +160,8 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(
-  column_view c) {
+inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
+{
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);

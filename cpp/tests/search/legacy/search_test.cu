@@ -22,9 +22,12 @@
 using cudf::test::column_wrapper;
 using cudf::test::scalar_wrapper;
 
-class SearchTest : public GdfTest {};
+class SearchTest : public GdfTest
+{
+};
 
-TEST_F(SearchTest, empty_table) {
+TEST_F(SearchTest, empty_table)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{};
@@ -40,7 +43,8 @@ TEST_F(SearchTest, empty_table) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, empty_values) {
+TEST_F(SearchTest, empty_values)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{10, 20, 30, 40, 50};
@@ -56,7 +60,8 @@ TEST_F(SearchTest, empty_values) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, non_null_column__find_first) {
+TEST_F(SearchTest, non_null_column__find_first)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{10, 20, 30, 40, 50};
@@ -72,7 +77,8 @@ TEST_F(SearchTest, non_null_column__find_first) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, non_null_column__find_last) {
+TEST_F(SearchTest, non_null_column__find_last)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{10, 20, 30, 40, 50};
@@ -88,7 +94,8 @@ TEST_F(SearchTest, non_null_column__find_last) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_first) {
+TEST_F(SearchTest, non_null_column_desc__find_first)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{50, 40, 30, 20, 10};
@@ -106,7 +113,8 @@ TEST_F(SearchTest, non_null_column_desc__find_first) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_last) {
+TEST_F(SearchTest, non_null_column_desc__find_last)
+{
   using element_type = int64_t;
 
   auto column = column_wrapper<element_type>{50, 40, 30, 20, 10};
@@ -124,7 +132,8 @@ TEST_F(SearchTest, non_null_column_desc__find_last) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
+{
   using element_type = int64_t;
 
   std::vector<element_type> column_data{10, 60, 10, 20, 30, 40, 50};
@@ -152,7 +161,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
+{
   using element_type = int64_t;
 
   std::vector<element_type> column_data{10, 60, 10, 20, 30, 40, 50};
@@ -180,7 +190,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
+{
   using element_type = int64_t;
 
   std::vector<element_type> column_data{10, 20, 30, 40, 50, 10, 60};
@@ -208,7 +219,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
+{
   using element_type = int64_t;
 
   std::vector<element_type> column_data{10, 20, 30, 40, 50, 10, 60};
@@ -236,7 +248,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_first) {
+TEST_F(SearchTest, table__find_first)
+{
   auto column_0 = column_wrapper<int32_t>{10, 20, 20, 20, 20, 20, 50};
   auto column_1 = column_wrapper<float>{5.0, .5, .5, .7, .7, .7, .7};
   auto column_2 = column_wrapper<int8_t>{90, 77, 78, 61, 62, 63, 41};
@@ -267,7 +280,8 @@ TEST_F(SearchTest, table__find_first) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_last) {
+TEST_F(SearchTest, table__find_last)
+{
   auto column_0 = column_wrapper<int32_t>{10, 20, 20, 20, 20, 20, 50};
   auto column_1 = column_wrapper<float>{5.0, .5, .5, .7, .7, .7, .7};
   auto column_2 = column_wrapper<int8_t>{90, 77, 78, 61, 62, 63, 41};
@@ -298,7 +312,8 @@ TEST_F(SearchTest, table__find_last) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table_partial_desc__find_first) {
+TEST_F(SearchTest, table_partial_desc__find_first)
+{
   auto column_0 = column_wrapper<int32_t>{50, 20, 20, 20, 20, 20, 10};
   auto column_1 = column_wrapper<float>{.7, .5, .5, .7, .7, .7, 5.0};
   auto column_2 = column_wrapper<int8_t>{41, 78, 77, 63, 62, 61, 90};
@@ -328,7 +343,8 @@ TEST_F(SearchTest, table_partial_desc__find_first) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table_partial_desc__find_last) {
+TEST_F(SearchTest, table_partial_desc__find_last)
+{
   auto column_0 = column_wrapper<int32_t>{50, 20, 20, 20, 20, 20, 10};
   auto column_1 = column_wrapper<float>{.7, .5, .5, .7, .7, .7, 5.0};
   auto column_2 = column_wrapper<int8_t>{41, 78, 77, 63, 62, 61, 90};
@@ -359,7 +375,8 @@ TEST_F(SearchTest, table_partial_desc__find_last) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_smallest) {
+TEST_F(SearchTest, table__find_first__nulls_as_smallest)
+{
   std::vector<int32_t> column_0_data{30, 10, 10, 20, 20, 20, 20, 20, 20, 20, 50};
   std::vector<bool> column_0_valid{0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   std::vector<float> column_1_data{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7};
@@ -410,7 +427,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_smallest) {
+TEST_F(SearchTest, table__find_last__nulls_as_smallest)
+{
   std::vector<int32_t> column_0_data{30, 10, 10, 20, 20, 20, 20, 20, 20, 20, 50};
   std::vector<bool> column_0_valid{0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   std::vector<float> column_1_data{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7};
@@ -461,7 +479,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_largest) {
+TEST_F(SearchTest, table__find_first__nulls_as_largest)
+{
   std::vector<int32_t> column_0_data{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30};
   std::vector<bool> column_0_valid{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0};
   std::vector<float> column_1_data{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5};
@@ -512,7 +531,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_largest) {
+TEST_F(SearchTest, table__find_last__nulls_as_largest)
+{
   std::vector<int32_t> column_0_data{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30};
   std::vector<bool> column_0_valid{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0};
   std::vector<float> column_1_data{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5};
@@ -563,7 +583,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest) {
   ASSERT_EQ(result, expect) << "  Actual:" << result.to_str() << "Expected:" << expect.to_str();
 }
 
-TEST_F(SearchTest, contains_true) {
+TEST_F(SearchTest, contains_true)
+{
   using element_type = int64_t;
   bool expect        = true;
   bool result        = false;
@@ -576,7 +597,8 @@ TEST_F(SearchTest, contains_true) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_false) {
+TEST_F(SearchTest, contains_false)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -589,7 +611,8 @@ TEST_F(SearchTest, contains_false) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_value) {
+TEST_F(SearchTest, contains_empty_value)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -602,7 +625,8 @@ TEST_F(SearchTest, contains_empty_value) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_column) {
+TEST_F(SearchTest, contains_empty_column)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -615,7 +639,8 @@ TEST_F(SearchTest, contains_empty_column) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_true) {
+TEST_F(SearchTest, contains_nullable_column_true)
+{
   using element_type = int64_t;
   bool result        = false;
   bool expect        = true;
@@ -632,7 +657,8 @@ TEST_F(SearchTest, contains_nullable_column_true) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_false) {
+TEST_F(SearchTest, contains_nullable_column_false)
+{
   using element_type = int64_t;
   bool result        = false;
   bool expect        = false;

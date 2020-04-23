@@ -38,7 +38,8 @@ using cudf::size_type;
 using cudf::test::fixed_width_column_wrapper;
 
 template <typename T>
-class GroupedRollingTest : public cudf::test::BaseFixture {
+class GroupedRollingTest : public cudf::test::BaseFixture
+{
  protected:
   // input as column_wrapper
   void run_test_col(cudf::table_view const& keys,
@@ -47,7 +48,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                     size_type const& preceding_window,
                     size_type const& following_window,
                     size_type min_periods,
-                    std::unique_ptr<cudf::experimental::aggregation> const& op) {
+                    std::unique_ptr<cudf::experimental::aggregation> const& op)
+  {
     std::unique_ptr<cudf::column> output;
 
     // wrap windows
@@ -78,7 +80,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                         std::vector<size_type> const& expected_grouping,
                         size_type preceding_window,
                         size_type following_window,
-                        size_type min_periods) {
+                        size_type min_periods)
+  {
     // Skip grouping-tests on bool8 keys. sort_helper does not support this.
     if (cudf::is_boolean(keys.column(0).type())) { return; }
 
@@ -140,7 +143,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     std::vector<size_type> const& group_offsets,
     size_type const& preceding_window,
     size_type const& following_window,
-    size_type min_periods) {
+    size_type min_periods)
+  {
     size_type num_rows = input.size();
     thrust::host_vector<cudf::size_type> ref_data(num_rows);
     thrust::host_vector<bool> ref_valid(num_rows);
@@ -187,7 +191,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window,
                                                         size_type const& following_window,
-                                                        size_type min_periods) {
+                                                        size_type min_periods)
+  {
     size_type num_rows = input.size();
     thrust::host_vector<OutputType> ref_data(num_rows);
     thrust::host_vector<bool> ref_valid(num_rows);
@@ -243,7 +248,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_col,
                                                         size_type const& following_window_col,
-                                                        size_type min_periods) {
+                                                        size_type min_periods)
+  {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
@@ -253,7 +259,8 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
     std::vector<size_type> const& group_offsets,
     size_type const& preceding_window,
     size_type const& following_window,
-    size_type min_periods) {
+    size_type min_periods)
+  {
     // unroll aggregation types
     switch (op->kind) {
       case cudf::experimental::aggregation::SUM:
@@ -293,10 +300,13 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
 // // ------------- expected failures --------------------
 
-class GroupedRollingErrorTest : public cudf::test::BaseFixture {};
+class GroupedRollingErrorTest : public cudf::test::BaseFixture
+{
+};
 
 // negative sizes
-TEST_F(GroupedRollingErrorTest, NegativeMinPeriods) {
+TEST_F(GroupedRollingErrorTest, NegativeMinPeriods)
+{
   // Construct agg column.
   const std::vector<size_type> col_data{0, 1, 2, 0, 4};
   const std::vector<bool> col_valid{1, 1, 1, 0, 1};
@@ -314,7 +324,8 @@ TEST_F(GroupedRollingErrorTest, NegativeMinPeriods) {
                cudf::logic_error);
 }
 
-TEST_F(GroupedRollingErrorTest, EmptyInput) {
+TEST_F(GroupedRollingErrorTest, EmptyInput)
+{
   cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
   std::unique_ptr<cudf::column> output;
   const cudf::table_view grouping_keys{std::vector<cudf::column_view>{}};
@@ -324,7 +335,8 @@ TEST_F(GroupedRollingErrorTest, EmptyInput) {
 }
 
 // incorrect type/aggregation combo: sum of timestamps
-TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported) {
+TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
+{
   constexpr size_type size{10};
   fixed_width_column_wrapper<cudf::timestamp_D> input_D(thrust::make_counting_iterator(0),
                                                         thrust::make_counting_iterator(size));
@@ -361,7 +373,8 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported) {
 
 TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys) {
+TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
+{
   const auto col_data =
     cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
@@ -389,7 +402,8 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys) {
 }
 
 // all rows are invalid
-TYPED_TEST(GroupedRollingTest, AllInvalid) {
+TYPED_TEST(GroupedRollingTest, AllInvalid)
+{
   const auto col_data =
     cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
@@ -417,7 +431,8 @@ TYPED_TEST(GroupedRollingTest, AllInvalid) {
 }
 
 // window = following_window = 0
-TYPED_TEST(GroupedRollingTest, ZeroWindow) {
+TYPED_TEST(GroupedRollingTest, ZeroWindow)
+{
   const auto col_data =
     cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
   const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
@@ -448,7 +463,8 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow) {
 
 using GroupedRollingTestStrings = GroupedRollingTest<cudf::string_view>;
 
-TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators) {
+TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators)
+{
   cudf::test::strings_column_wrapper input{{"This", "is", "not", "a", "string", "type"},
                                            {1, 1, 1, 0, 1, 0}};
 
@@ -466,7 +482,8 @@ TEST_F(GroupedRollingTestStrings, StringsUnsupportedOperators) {
 }
 
 template <typename T>
-class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
+class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture
+{
  protected:
   // input as column_wrapper
   void run_test_col(cudf::table_view const& keys,
@@ -476,7 +493,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                     size_type const& preceding_window_in_days,
                     size_type const& following_window_in_days,
                     size_type min_periods,
-                    std::unique_ptr<cudf::experimental::aggregation> const& op) {
+                    std::unique_ptr<cudf::experimental::aggregation> const& op)
+  {
     std::unique_ptr<cudf::column> output;
 
     // wrap windows
@@ -519,7 +537,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                         std::vector<size_type> const& expected_grouping,
                         size_type preceding_window_in_days,
                         size_type following_window_in_days,
-                        size_type min_periods) {
+                        size_type min_periods)
+  {
     // Skip grouping-tests on bool8 keys. sort_helper does not support this.
     if (cudf::is_boolean(keys.column(0).type())) { return; }
 
@@ -588,7 +607,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     std::vector<size_type> const& group_offsets,
     size_type const& preceding_window_in_days,
     size_type const& following_window_in_days,
-    size_type min_periods) {
+    size_type min_periods)
+  {
     assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
@@ -648,7 +668,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_in_days,
                                                         size_type const& following_window_in_days,
-                                                        size_type min_periods) {
+                                                        size_type min_periods)
+  {
     assert(timestamp_column.type().id() == cudf::TIMESTAMP_DAYS);  // Testing with DAYS.
 
     auto timestamp_vec = cudf::test::to_host<int32_t>(timestamp_column).first;
@@ -716,7 +737,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_col,
                                                         size_type const& following_window_col,
-                                                        size_type min_periods) {
+                                                        size_type min_periods)
+  {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
@@ -727,7 +749,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
     std::vector<size_type> const& group_offsets,
     size_type const& preceding_window,
     size_type const& following_window,
-    size_type min_periods) {
+    size_type min_periods)
+  {
     // unroll aggregation types
     switch (op->kind) {
       case cudf::experimental::aggregation::SUM:
@@ -771,7 +794,8 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithGroupKeysAndTimeRanges) {
+TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithGroupKeysAndTimeRanges)
+{
   const size_type DATA_SIZE{static_cast<size_type>(18)};
   const std::vector<TypeParam> col_data(DATA_SIZE, 1);
   const std::vector<bool> col_mask(DATA_SIZE, true);

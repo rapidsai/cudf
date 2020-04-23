@@ -36,10 +36,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /** -------------------------------------------------------------------------*
  * @brief value accessor of column with null bitmask
  * A unary functor returns scalar value at `id`.
@@ -65,7 +67,8 @@ struct null_replaced_value_accessor {
    * @param[in] null_replacement The value to return for null elements
    * -------------------------------------------------------------------------**/
   null_replaced_value_accessor(column_device_view const& _col, Element null_val)
-    : col{_col}, null_replacement{null_val} {
+    : col{_col}, null_replacement{null_val}
+  {
     CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == col.type(),
                  "the data type mismatch");
     // verify valid is non-null, otherwise, is_valid_nocheck() will crash
@@ -73,7 +76,8 @@ struct null_replaced_value_accessor {
   }
 
   CUDA_DEVICE_CALLABLE
-  Element operator()(cudf::size_type i) const {
+  Element operator()(cudf::size_type i) const
+  {
     return col.is_valid_nocheck(i) ? col.element<Element>(i) : null_replacement;
   }
 };
@@ -93,7 +97,8 @@ struct validity_accessor {
    * @brief constructor
    * @param[in] _col column device view of cudf column
    * -------------------------------------------------------------------------**/
-  validity_accessor(column_device_view const& _col) : col{_col} {
+  validity_accessor(column_device_view const& _col) : col{_col}
+  {
     // verify valid is non-null, otherwise, is_valid() will crash
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
@@ -121,7 +126,8 @@ struct validity_accessor {
  */
 template <typename Element>
 auto make_null_replacement_iterator(column_device_view const& column,
-                                    Element const null_replacement = Element{0}) {
+                                    Element const null_replacement = Element{0})
+{
   return thrust::make_transform_iterator(
     thrust::counting_iterator<cudf::size_type>{0},
     null_replaced_value_accessor<Element>{column, null_replacement});
@@ -149,7 +155,8 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * element in a pair
  */
 template <typename Element, bool has_nulls = false>
-auto make_pair_iterator(column_device_view const& column) {
+auto make_pair_iterator(column_device_view const& column)
+{
   return column.pair_begin<Element, has_nulls>();
 }
 
@@ -165,7 +172,8 @@ auto make_pair_iterator(column_device_view const& column) {
  * @param column The column to iterate
  * @return auto Iterator that returns validities of column elements.
  */
-auto inline make_validity_iterator(column_device_view const& column) {
+auto inline make_validity_iterator(column_device_view const& column)
+{
   return thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
                                          validity_accessor{column});
 }
@@ -185,7 +193,8 @@ auto inline make_validity_iterator(column_device_view const& column) {
  * @return auto Iterator that returns scalar value
  */
 template <typename Element>
-auto inline make_scalar_iterator(scalar const& scalar_value) {
+auto inline make_scalar_iterator(scalar const& scalar_value)
+{
   CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
                "the data type mismatch");
   CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
@@ -212,7 +221,8 @@ auto inline make_scalar_iterator(scalar const& scalar_value) {
  * @return auto Iterator that returns scalar, and validity of the scalar in a pair
  */
 template <typename Element, bool = false>
-auto inline make_pair_iterator(scalar const& scalar_value) {
+auto inline make_pair_iterator(scalar const& scalar_value)
+{
   CUDF_EXPECTS(data_type(experimental::type_to_id<Element>()) == scalar_value.type(),
                "the data type mismatch");
   using ScalarType = experimental::scalar_type_t<Element>;

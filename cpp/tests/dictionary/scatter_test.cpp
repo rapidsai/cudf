@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct DictionaryScatterTest : public cudf::test::BaseFixture {};
+struct DictionaryScatterTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(DictionaryScatterTest, Scatter) {
+TEST_F(DictionaryScatterTest, Scatter)
+{
   cudf::test::strings_column_wrapper strings_source{"xxx", "bbb", "aaa", "ccc"};
   auto source = cudf::dictionary::encode(strings_source);
   cudf::test::strings_column_wrapper strings_target{
@@ -63,7 +65,8 @@ TEST_F(DictionaryScatterTest, Scatter) {
   EXPECT_EQ(0, decoded->size());
 }
 
-TEST_F(DictionaryScatterTest, WithNulls) {
+TEST_F(DictionaryScatterTest, WithNulls)
+{
   cudf::test::fixed_width_column_wrapper<int64_t> data_source{{1, 5, 7, 9}, {0, 1, 1, 1}};
   auto source = cudf::dictionary::encode(data_source);
   cudf::test::fixed_width_column_wrapper<int64_t> data_target{{1, 5, 5, 3, 7, 1, 4, 2},
@@ -83,7 +86,8 @@ TEST_F(DictionaryScatterTest, WithNulls) {
   cudf::test::expect_columns_equal(expected, decoded->view());
 }
 
-TEST_F(DictionaryScatterTest, Error) {
+TEST_F(DictionaryScatterTest, Error)
+{
   cudf::test::strings_column_wrapper strings_source{"this string intentionally left blank"};
   auto source = cudf::dictionary::encode(strings_source);
   cudf::test::fixed_width_column_wrapper<int64_t> integers_target({1, 2, 3});

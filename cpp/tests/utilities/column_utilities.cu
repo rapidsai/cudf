@@ -33,12 +33,14 @@
 #include <gmock/gmock.h>
 #include <numeric>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 // Property comparison
 template <bool check_exact_equality>
-void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
+void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs)
+{
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
   if (lhs.size() > 0 and check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
@@ -47,21 +49,25 @@ void column_property_comparison(cudf::column_view const& lhs, cudf::column_view 
   // TODO: compare children properties?
 }
 
-void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
+void expect_column_properties_equal(column_view const& lhs, column_view const& rhs)
+{
   column_property_comparison<true>(lhs, rhs);
 }
 
-void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs) {
+void expect_column_properties_equivalent(column_view const& lhs, column_view const& rhs)
+{
   column_property_comparison<false>(lhs, rhs);
 }
 
-class corresponding_rows_unequal {
+class corresponding_rows_unequal
+{
   table_device_view d_lhs;
   table_device_view d_rhs;
 
  public:
   corresponding_rows_unequal(table_device_view d_lhs, table_device_view d_rhs)
-    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs) {
+    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs)
+  {
     CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
                  "Unsupported number of columns");
   }
@@ -69,7 +75,8 @@ class corresponding_rows_unequal {
   struct typed_element_unequal {
     template <typename T>
     __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
-      column_device_view const& lhs, column_device_view const& rhs, size_type index) {
+      column_device_view const& lhs, column_device_view const& rhs, size_type index)
+    {
       if (lhs.is_valid(index) and rhs.is_valid(index)) {
         int ulp = 4;  // value taken from google test
         T x     = lhs.element<T>(index);
@@ -83,8 +90,8 @@ class corresponding_rows_unequal {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(
-      Args... args) {
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
+    {
       // Non-floating point inequality is checked already
       return true;
     }
@@ -92,7 +99,8 @@ class corresponding_rows_unequal {
 
   cudf::experimental::row_equality_comparator<true> comp;
 
-  __device__ bool operator()(size_type index) {
+  __device__ bool operator()(size_type index)
+  {
     if (not comp(index, index)) {
       return thrust::any_of(thrust::seq,
                             thrust::make_counting_iterator(0),
@@ -108,13 +116,15 @@ class corresponding_rows_unequal {
   }
 };
 
-class corresponding_rows_not_equivalent {
+class corresponding_rows_not_equivalent
+{
   table_device_view d_lhs;
   table_device_view d_rhs;
 
  public:
   corresponding_rows_not_equivalent(table_device_view d_lhs, table_device_view d_rhs)
-    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs) {
+    : d_lhs(d_lhs), d_rhs(d_rhs), comp(d_lhs, d_rhs)
+  {
     CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
                  "Unsupported number of columns");
   }
@@ -122,7 +132,8 @@ class corresponding_rows_not_equivalent {
   struct typed_element_not_equivalent {
     template <typename T>
     __device__ std::enable_if_t<std::is_floating_point<T>::value, bool> operator()(
-      column_device_view const& lhs, column_device_view const& rhs, size_type index) {
+      column_device_view const& lhs, column_device_view const& rhs, size_type index)
+    {
       if (lhs.is_valid(index) and rhs.is_valid(index)) {
         int ulp = 4;  // value taken from google test
         T x     = lhs.element<T>(index);
@@ -136,8 +147,8 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(
-      Args... args) {
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
+    {
       // Non-floating point inequality is checked already
       return true;
     }
@@ -145,7 +156,8 @@ class corresponding_rows_not_equivalent {
 
   cudf::experimental::row_equality_comparator<true> comp;
 
-  __device__ bool operator()(size_type index) {
+  __device__ bool operator()(size_type index)
+  {
     if (not comp(index, index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
@@ -156,12 +168,13 @@ class corresponding_rows_not_equivalent {
   }
 };
 
-namespace {
-
+namespace
+{
 template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs,
                        cudf::column_view const& rhs,
-                       bool print_all_differences) {
+                       bool print_all_differences)
+{
   column_property_comparison<check_exact_equality>(lhs, rhs);
 
   using ComparatorType = std::conditional_t<check_exact_equality,
@@ -233,18 +246,21 @@ void column_comparison(cudf::column_view const& lhs,
 
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
-                          bool print_all_differences) {
+                          bool print_all_differences)
+{
   column_comparison<true>(lhs, rhs, print_all_differences);
 }
 
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               bool print_all_differences) {
+                               bool print_all_differences)
+{
   column_comparison<false>(lhs, rhs, print_all_differences);
 }
 
 // Bitwise equality
-void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes) {
+void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes)
+{
   if (size_bytes > 0) {
     EXPECT_NE(nullptr, lhs);
     EXPECT_NE(nullptr, rhs);
@@ -255,7 +271,8 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 }
 
 // copy column bitmask to host (used by to_host())
-std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
+std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
+{
   if (c.nullable()) {
     auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
     std::vector<bitmask_type> host_bitmask(num_bitmasks);
@@ -280,7 +297,8 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c) {
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
     auto h_data = cudf::test::to_host<Element>(col);
 
     out.resize(col.size());
@@ -303,7 +321,8 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
     //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
@@ -315,7 +334,8 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
     //
     //  Implementation for strings, call special to_host variant
     //
@@ -333,7 +353,8 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string>& out) {
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out)
+  {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
@@ -352,13 +373,15 @@ struct column_view_printer {
   }
 };
 
-std::vector<std::string> to_strings(cudf::column_view const& col) {
+std::vector<std::string> to_strings(cudf::column_view const& col)
+{
   std::vector<std::string> reply;
   cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply);
   return reply;
 }
 
-std::string to_string(cudf::column_view const& col, std::string const& delimiter) {
+std::string to_string(cudf::column_view const& col, std::string const& delimiter)
+{
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col);
 
@@ -370,13 +393,15 @@ std::string to_string(cudf::column_view const& col, std::string const& delimiter
   return buffer.str();
 }
 
-void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter) {
+void print(cudf::column_view const& col, std::ostream& os, std::string const& delimiter)
+{
   os << to_string(col, delimiter) << std::endl;
 }
 
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,
-                         size_type number_of_elements) {
+                         size_type number_of_elements)
+{
   return std::all_of(thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(number_of_elements),
                      [&expected_mask, &got_mask](auto index) {

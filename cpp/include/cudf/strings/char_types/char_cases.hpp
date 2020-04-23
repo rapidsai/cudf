@@ -15,10 +15,12 @@
  */
 #pragma once
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Regenerates the special case mapping tables used to handle non-trivial unicode
  * character case conversions.

@@ -23,9 +23,10 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 
-namespace cudf {
-namespace jit {
-
+namespace cudf
+{
+namespace jit
+{
 std::string getTypeName(gdf_dtype type);
 
 }

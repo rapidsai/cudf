@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct StringsReplaceTests : public cudf::test::BaseFixture {};
+struct StringsReplaceTests : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsReplaceTests, ReplaceRegexTest) {
+TEST_F(StringsReplaceTests, ReplaceRegexTest)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
@@ -57,7 +59,8 @@ TEST_F(StringsReplaceTests, ReplaceRegexTest) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceMultiRegexTest) {
+TEST_F(StringsReplaceTests, ReplaceMultiRegexTest)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
@@ -92,7 +95,8 @@ TEST_F(StringsReplaceTests, ReplaceMultiRegexTest) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, InvalidRegex) {
+TEST_F(StringsReplaceTests, InvalidRegex)
+{
   cudf::test::strings_column_wrapper strings(
     {"abc*def|ghi+jkl", ""});  // these do not really matter
   auto strings_view = cudf::strings_column_view(strings);
@@ -112,7 +116,8 @@ TEST_F(StringsReplaceTests, InvalidRegex) {
                cudf::logic_error);
 }
 
-TEST_F(StringsReplaceTests, WithEmptyPattern) {
+TEST_F(StringsReplaceTests, WithEmptyPattern)
+{
   std::vector<const char*> h_strings{"asd", "xcv"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -128,7 +133,8 @@ TEST_F(StringsReplaceTests, WithEmptyPattern) {
   cudf::test::expect_columns_equal(*results, strings);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest) {
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest)
+{
   std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "the fat cat lays next to the other accénted cat",
                                      "a slow moving turtlé cannot catch the bird",
@@ -161,7 +167,8 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2) {
+TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2)
+{
   cudf::test::strings_column_wrapper strings(
     {"A543", "Z756", "", "tést-string", "two-thréé four-fivé", "abcd-éfgh", "tést-string-again"});
   auto strings_view         = cudf::strings_column_view(strings);
@@ -179,7 +186,8 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexTest2) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, MediumReplaceRegex) {
+TEST_F(StringsReplaceTests, MediumReplaceRegex)
+{
   // This results in 95 regex instructions and falls in the 'medium' range.
   std::string medium_regex =
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
@@ -206,7 +214,8 @@ TEST_F(StringsReplaceTests, MediumReplaceRegex) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsReplaceTests, LargeReplaceRegex) {
+TEST_F(StringsReplaceTests, LargeReplaceRegex)
+{
   // This results in 117 regex instructions and falls in the 'large' range.
   std::string large_regex =
     "hello @abc @def world The (quick) brown @fox jumps over the lazy @dog hello "

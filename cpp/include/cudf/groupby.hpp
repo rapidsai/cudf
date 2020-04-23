@@ -23,14 +23,17 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
+namespace cudf
+{
+namespace experimental
+{
 //! `groupby` APIs
-namespace groupby {
-
-namespace detail {
-namespace sort {
-
+namespace groupby
+{
+namespace detail
+{
+namespace sort
+{
 class sort_groupby_helper;
 
 }  // namespace sort
@@ -67,7 +70,8 @@ struct aggregation_result {
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
-class groupby {
+class groupby
+{
  public:
   groupby() = delete;
   ~groupby();

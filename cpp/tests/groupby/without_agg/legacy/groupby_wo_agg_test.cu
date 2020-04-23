@@ -45,8 +45,8 @@
 #include <utilities/legacy/cudf_utils.h>
 #include <utilities/legacy/bit_util.cuh>
 
-namespace without_agg {
-
+namespace without_agg
+{
 // A new instance of this class will be created for each *TEST(GroupByWoAggTest, ...)
 // Put all repeated setup and validation stuff here
 template <class test_parameters>
@@ -94,7 +94,8 @@ struct GroupByWoAggTest : public GdfTest {
   std::vector<gdf_column*> gdf_raw_input_key_columns;
   gdf_column* gdf_raw_input_val_column;
 
-  GroupByWoAggTest() {
+  GroupByWoAggTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -124,7 +125,8 @@ struct GroupByWoAggTest : public GdfTest {
                     const size_t value_per_key,
                     const size_t max_key,
                     const size_t max_val,
-                    bool print = false) {
+                    bool print = false)
+  {
     size_t shuffle_seed = rand();
     initialize_keys(input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(input_value, key_count, value_per_key, max_val, shuffle_seed);
@@ -148,7 +150,8 @@ struct GroupByWoAggTest : public GdfTest {
     }
   }
 
-  map_t compute_reference_solution() {
+  map_t compute_reference_solution()
+  {
     map_t key_val_map;
     for (size_t i = 0; i < input_value.size(); ++i) {
       auto l_key = extractKey(input_key, i);
@@ -163,7 +166,8 @@ struct GroupByWoAggTest : public GdfTest {
    * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result() {
+  void compute_gdf_result()
+  {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
     gdf_column** group_by_input_key = this->gdf_raw_input_key_columns.data();
@@ -194,7 +198,8 @@ struct GroupByWoAggTest : public GdfTest {
     });
   }
 
-  void compare_gdf_result(map_t& reference_map) {
+  void compare_gdf_result(map_t& reference_map)
+  {
     ASSERT_EQ(cpu_out_indices.size(), reference_map.size())
       << "Size of gdf result does not match reference result\n";
 
@@ -210,7 +215,8 @@ struct GroupByWoAggTest : public GdfTest {
     }
   }
 
-  void print_reference_solution(map_t& dicc) {
+  void print_reference_solution(map_t& dicc)
+  {
     std::stringstream ss;
     ss << "reference solution:\n";
     for (auto& iter : dicc) {
@@ -223,7 +229,8 @@ struct GroupByWoAggTest : public GdfTest {
 
 TYPED_TEST_CASE(GroupByWoAggTest, Implementations);
 
-TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest) {
+TYPED_TEST(GroupByWoAggTest, GroupbyExampleTest)
+{
   const size_t num_keys           = 3;
   const size_t num_values_per_key = 8;
   const size_t max_key            = num_keys * 2;
@@ -264,7 +271,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
 
   size_t shuffle_seed;
 
-  GroupValidTest() {
+  GroupValidTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -286,7 +294,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
                                const size_t value_per_key,
                                const size_t max_key,
                                const size_t max_val,
-                               bool print = false) {
+                               bool print = false)
+  {
     initialize_keys(this->input_key, key_count, value_per_key, max_key, shuffle_seed);
     initialize_values(this->input_value, key_count, value_per_key, max_val, shuffle_seed);
 
@@ -327,7 +336,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
                                             const size_t value_per_key,
                                             const size_t max_key,
                                             const size_t max_val,
-                                            bool print = false) {
+                                            bool print = false)
+  {
     // Init Valids
     auto column_length = this->input_value.size();
     auto n_tuples      = std::tuple_size<multi_column_t>::value;
@@ -337,7 +347,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
 
   std::basic_string<bool> get_input_key_valids(std::vector<host_valid_pointer>& valids,
                                                int i,
-                                               bool& all_valid_key) {
+                                               bool& all_valid_key)
+  {
     std::basic_string<bool> valid_key;
     std::for_each(
       valids.begin(), valids.end(), [&i, &valid_key, &all_valid_key](host_valid_pointer& valid) {
@@ -348,7 +359,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
     return valid_key;
   }
 
-  map_t compute_reference_solution_with_nulls(void) {
+  map_t compute_reference_solution_with_nulls(void)
+  {
     map_t key_val_map;
 
     for (size_t i = 0; i < this->input_value.size(); i++) {
@@ -376,7 +388,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
    * @Synopsis  Computes the gdf result of grouping the input_keys and input_value
    */
   /* ----------------------------------------------------------------------------*/
-  void compute_gdf_result_with_nulls() {
+  void compute_gdf_result_with_nulls()
+  {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
     gdf_column** group_by_input_key = this->gdf_raw_input_key_columns.data();
@@ -408,7 +421,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
     });
   }
 
-  void compare_gdf_result_with_nulls(map_t& reference_map) {
+  void compare_gdf_result_with_nulls(map_t& reference_map)
+  {
     size_t ref_size = this->cpu_out_indices.size();
     for (size_t i = 0; i < ref_size; ++i) {
       bool all_valid_key = true;
@@ -431,7 +445,8 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters> {
 
 TYPED_TEST_CASE(GroupValidTest, ValidTestImplementations);
 
-TYPED_TEST(GroupValidTest, GroupbyValidExampleTest) {
+TYPED_TEST(GroupValidTest, GroupbyValidExampleTest)
+{
   const size_t num_keys           = 3;
   const size_t num_values_per_key = 8;
   const size_t max_key            = num_keys * 2;
@@ -445,7 +460,8 @@ TYPED_TEST(GroupValidTest, GroupbyValidExampleTest) {
   this->compare_gdf_result_with_nulls(reference_map);
 }
 
-TYPED_TEST(GroupValidTest, AllKeysDifferent) {
+TYPED_TEST(GroupValidTest, AllKeysDifferent)
+{
   const size_t num_keys           = 1 << 5;
   const size_t num_values_per_key = 1;
   const size_t max_key            = num_keys * 2;

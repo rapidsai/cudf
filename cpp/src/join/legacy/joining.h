@@ -46,7 +46,8 @@ gdf_error join_hash(cudf::table const &left_table,
                     cudf::table const &right_table,
                     gdf_column *const output_l,
                     gdf_column *const output_r,
-                    bool flip_indices = false) {
+                    bool flip_indices = false)
+{
   // Hash table is built on the right table.
   // For inner joins, doesn't matter which table is build/probe, so we want
   // to build the hash table on the smaller table.
@@ -80,7 +81,8 @@ gdf_error sort_join(gdf_column *leftcol,
                     gdf_column *rightcol,
                     gdf_column *const output_l,
                     gdf_column *const output_r,
-                    bool flip_indices = false) {
+                    bool flip_indices = false)
+{
   if ((leftcol->null_count != 0) || (rightcol->null_count != 0)) {
     return GDF_VALIDITY_UNSUPPORTED;
   }

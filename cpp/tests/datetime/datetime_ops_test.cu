@@ -37,7 +37,8 @@ using NonTimestampTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::tes
 
 TYPED_TEST_CASE(NonTimestampTest, NonTimestampTypes);
 
-TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp) {
+TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
+{
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -56,9 +57,11 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp) {
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
 }
 
-struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {};
+struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents) {
+TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
+{
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
@@ -131,7 +134,8 @@ struct TypedDatetimeOpsTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(TypedDatetimeOpsTest, cudf::test::TimestampTypes);
 
-TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns) {
+TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
+{
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -152,7 +156,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns) {
   expect_columns_equal(*extract_second(timestamps), int16s);
 }
 
-TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
+TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
+{
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -188,7 +193,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents) {
   expect_columns_equal(*extract_second(timestamps), expected_seconds);
 }
 
-TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponents) {
+TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponents)
+{
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
@@ -243,7 +249,8 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
   expect_columns_equal(*extract_second(timestamps), expected_seconds);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds) {
+TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
+{
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace simt::std::chrono;
@@ -281,7 +288,8 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds) {
                        true);
 }
 
-TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate) {
+TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
+{
   using namespace cudf::test;
   using namespace cudf::datetime;
   using namespace simt::std::chrono;

@@ -47,8 +47,10 @@ using TestingTypes = ::testing::Types<int8_t,
 
 TYPED_TEST_CASE(TableTest, TestingTypes);
 
-namespace {
-void columns_are_equal(gdf_column const* lhs, gdf_column const* rhs) {
+namespace
+{
+void columns_are_equal(gdf_column const* lhs, gdf_column const* rhs)
+{
   EXPECT_EQ(lhs->data, rhs->data);
   EXPECT_EQ(lhs->valid, rhs->valid);
   EXPECT_EQ(lhs->dtype, rhs->dtype);
@@ -57,7 +59,8 @@ void columns_are_equal(gdf_column const* lhs, gdf_column const* rhs) {
 }
 }  // namespace
 
-TYPED_TEST(TableTest, SingleColumn) {
+TYPED_TEST(TableTest, SingleColumn)
+{
   const auto size = this->random_size();
   cudf::test::column_wrapper<TypeParam> col(size);
   gdf_column* gdf_col = col.get();
@@ -67,7 +70,8 @@ TYPED_TEST(TableTest, SingleColumn) {
   columns_are_equal(gdf_col, table.get_column(0));
 }
 
-TYPED_TEST(TableTest, MultiColumn) {
+TYPED_TEST(TableTest, MultiColumn)
+{
   const auto size = this->random_size();
   cudf::test::column_wrapper<TypeParam> col0(size);
   cudf::test::column_wrapper<double> col1(size);
@@ -89,7 +93,8 @@ TYPED_TEST(TableTest, MultiColumn) {
   columns_are_equal(cols[2], table.get_column(2));
 }
 
-TYPED_TEST(TableTest, ConstructColumns) {
+TYPED_TEST(TableTest, ConstructColumns)
+{
   const auto size = this->random_size();
   std::vector<gdf_dtype> dtypes{GDF_INT8, GDF_INT32, GDF_FLOAT32, cudf::gdf_dtype_of<TypeParam>()};
 
@@ -118,7 +123,8 @@ TYPED_TEST(TableTest, ConstructColumns) {
   });
 }
 
-TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
+TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls)
+{
   const auto size = this->random_size();
   std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8, cudf::gdf_dtype_of<TypeParam>()};
 
@@ -152,7 +158,8 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
   });
 }
 
-TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
+TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid)
+{
   const auto size = this->random_size();
   std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8, cudf::gdf_dtype_of<TypeParam>()};
 
@@ -186,7 +193,8 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
   });
 }
 
-TYPED_TEST(TableTest, GetTableWithSelectedColumns) {
+TYPED_TEST(TableTest, GetTableWithSelectedColumns)
+{
   column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
   column_wrapper<int16_t> col2 =
     column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
@@ -207,7 +215,8 @@ TYPED_TEST(TableTest, GetTableWithSelectedColumns) {
   columns_are_equal(table.get_column(3), selected_table.get_column(1));
 }
 
-TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns) {
+TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns)
+{
   column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
   column_wrapper<int16_t> col2 =
     column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
@@ -221,7 +230,8 @@ TYPED_TEST(TableTest, SelectingMoreThanNumberOfColumns) {
                             "Requested too many columns.");
 }
 
-TYPED_TEST(TableTest, SelectingNoColumns) {
+TYPED_TEST(TableTest, SelectingNoColumns)
+{
   column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
   column_wrapper<int16_t> col2 =
     column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
@@ -236,7 +246,8 @@ TYPED_TEST(TableTest, SelectingNoColumns) {
   EXPECT_EQ(selected_table.num_columns(), 0);
 }
 
-TYPED_TEST(TableTest, ConcatTables) {
+TYPED_TEST(TableTest, ConcatTables)
+{
   column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
   column_wrapper<int16_t> col2 =
     column_wrapper<int16_t>({1, 2, 3, 4}, [](auto row) { return true; });
@@ -253,7 +264,8 @@ TYPED_TEST(TableTest, ConcatTables) {
   columns_are_equal(concated_table.get_column(1), col2.get());
 }
 
-TYPED_TEST(TableTest, ConcatTablesRowsMismatch) {
+TYPED_TEST(TableTest, ConcatTablesRowsMismatch)
+{
   column_wrapper<int8_t> col1 = column_wrapper<int8_t>({1, 2, 3, 4}, [](auto row) { return true; });
   column_wrapper<int16_t> col2 = column_wrapper<int16_t>({1, 2, 3}, [](auto row) { return true; });
 
@@ -267,7 +279,8 @@ TYPED_TEST(TableTest, ConcatTablesRowsMismatch) {
   CUDF_EXPECT_THROW_MESSAGE(cudf::concat(table1, table2), "Number of rows mismatch");
 }
 
-TYPED_TEST(TableTest, ConcatEmptyTables) {
+TYPED_TEST(TableTest, ConcatEmptyTables)
+{
   cudf::table table1 = cudf::table{};
   cudf::table table2 = cudf::table{};
 

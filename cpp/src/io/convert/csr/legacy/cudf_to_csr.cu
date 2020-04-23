@@ -54,7 +54,8 @@ __device__ T convertDataElement(gdf_column *gdf, int idx, gdf_dtype dtype);
 
 __device__ int whichBitmapCSR(int record) { return (record / 8); }
 __device__ int whichBitCSR(int bit) { return (bit % 8); }
-__device__ int checkBitCSR(cudf::valid_type data, int bit) {
+__device__ int checkBitCSR(cudf::valid_type data, int bit)
+{
   cudf::valid_type bitMask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
   return (data & bitMask[bit]);
 }
@@ -81,7 +82,8 @@ __device__ int checkBitCSR(cudf::valid_type data, int bit) {
  *
  * @return gdf_error code
  */
-gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
+gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn)
+{
   int64_t numNull         = 0;
   int64_t nnz             = 0;
   cudf::size_type numRows = gdfData[0]->size;
@@ -177,7 +179,8 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 }
 
 template <typename T>
-gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type *offsets) {
+gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type *offsets)
+{
   cudf::size_type numCols = csrReturn->cols;
   cudf::size_type numRows = csrReturn->rows;
 
@@ -226,7 +229,8 @@ __global__ void cudaCreateCSR(void *data,
                               T *A,
                               int64_t *JA,
                               cudf::size_type *offsets,
-                              cudf::size_type numRows) {
+                              cudf::size_type numRows)
+{
   int tid =
     threadIdx.x + (blockDim.x * blockIdx.x);  // get the tread ID which is also the row number
 
@@ -258,7 +262,8 @@ __global__ void cudaCreateCSR(void *data,
 __global__ void determineValidRecCount(cudf::valid_type *valid,
                                        cudf::size_type numRows,
                                        cudf::size_type numCol,
-                                       cudf::size_type *offset) {
+                                       cudf::size_type *offset)
+{
   int tid =
     threadIdx.x + (blockDim.x * blockIdx.x);  // get the tread ID which is also the row number
 
@@ -276,7 +281,8 @@ __global__ void determineValidRecCount(cudf::valid_type *valid,
  * Convert the data element into a common format
  */
 template <typename T>
-__device__ T convertDataElement(void *data, int tid, gdf_dtype dtype) {
+__device__ T convertDataElement(void *data, int tid, gdf_dtype dtype)
+{
   T answer;
 
   switch (dtype) {

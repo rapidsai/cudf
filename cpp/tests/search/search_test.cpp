@@ -20,7 +20,8 @@
 
 #include "cudf/search.hpp"
 
-struct SearchTest : public cudf::test::BaseFixture {};
+struct SearchTest : public cudf::test::BaseFixture {
+};
 
 using cudf::numeric_scalar;
 using cudf::size_type;
@@ -28,7 +29,8 @@ using cudf::string_scalar;
 using cudf::test::expect_columns_equal;
 using cudf::test::fixed_width_column_wrapper;
 
-TEST_F(SearchTest, empty_table) {
+TEST_F(SearchTest, empty_table)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{};
@@ -45,7 +47,8 @@ TEST_F(SearchTest, empty_table) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, empty_values) {
+TEST_F(SearchTest, empty_values)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{10, 20, 30, 40, 50};
@@ -62,7 +65,8 @@ TEST_F(SearchTest, empty_values) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column__find_first) {
+TEST_F(SearchTest, non_null_column__find_first)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{10, 20, 30, 40, 50};
@@ -79,7 +83,8 @@ TEST_F(SearchTest, non_null_column__find_first) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column__find_last) {
+TEST_F(SearchTest, non_null_column__find_last)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{10, 20, 30, 40, 50};
@@ -96,7 +101,8 @@ TEST_F(SearchTest, non_null_column__find_last) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_first) {
+TEST_F(SearchTest, non_null_column_desc__find_first)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{50, 40, 30, 20, 10};
@@ -113,7 +119,8 @@ TEST_F(SearchTest, non_null_column_desc__find_first) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_last) {
+TEST_F(SearchTest, non_null_column_desc__find_last)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{50, 40, 30, 20, 10};
@@ -130,7 +137,8 @@ TEST_F(SearchTest, non_null_column_desc__find_last) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{{10, 60, 10, 20, 30, 40, 50},
@@ -150,7 +158,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{{10, 60, 10, 20, 30, 40, 50},
@@ -170,7 +179,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{{10, 20, 30, 40, 50, 10, 60},
@@ -189,7 +199,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> column{{10, 20, 30, 40, 50, 10, 60},
@@ -208,7 +219,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first) {
+TEST_F(SearchTest, table__find_first)
+{
   fixed_width_column_wrapper<int32_t> column_0{10, 20, 20, 20, 20, 20, 50};
   fixed_width_column_wrapper<float> column_1{5.0, .5, .5, .7, .7, .7, .7};
   fixed_width_column_wrapper<int8_t> column_2{90, 77, 78, 61, 62, 63, 41};
@@ -250,7 +262,8 @@ TEST_F(SearchTest, table__find_first) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last) {
+TEST_F(SearchTest, table__find_last)
+{
   fixed_width_column_wrapper<int32_t> column_0{10, 20, 20, 20, 20, 20, 50};
   fixed_width_column_wrapper<float> column_1{5.0, .5, .5, .7, .7, .7, .7};
   fixed_width_column_wrapper<int8_t> column_2{90, 77, 78, 61, 62, 63, 41};
@@ -292,7 +305,8 @@ TEST_F(SearchTest, table__find_last) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table_partial_desc__find_first) {
+TEST_F(SearchTest, table_partial_desc__find_first)
+{
   fixed_width_column_wrapper<int32_t> column_0{50, 20, 20, 20, 20, 20, 10};
   fixed_width_column_wrapper<float> column_1{.7, .5, .5, .7, .7, .7, 5.0};
   fixed_width_column_wrapper<int8_t> column_2{41, 78, 77, 63, 62, 61, 90};
@@ -334,7 +348,8 @@ TEST_F(SearchTest, table_partial_desc__find_first) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table_partial_desc__find_last) {
+TEST_F(SearchTest, table_partial_desc__find_last)
+{
   fixed_width_column_wrapper<int32_t> column_0{50, 20, 20, 20, 20, 20, 10};
   fixed_width_column_wrapper<float> column_1{.7, .5, .5, .7, .7, .7, 5.0};
   fixed_width_column_wrapper<int8_t> column_2{41, 78, 77, 63, 62, 61, 90};
@@ -376,7 +391,8 @@ TEST_F(SearchTest, table_partial_desc__find_last) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_smallest) {
+TEST_F(SearchTest, table__find_first__nulls_as_smallest)
+{
   fixed_width_column_wrapper<int32_t> column_0{{30, 10, 10, 20, 20, 20, 20, 20, 20, 20, 50},
                                                {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   fixed_width_column_wrapper<float> column_1{{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7},
@@ -416,7 +432,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_smallest) {
+TEST_F(SearchTest, table__find_last__nulls_as_smallest)
+{
   fixed_width_column_wrapper<int32_t> column_0{{30, 10, 10, 20, 20, 20, 20, 20, 20, 20, 50},
                                                {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   fixed_width_column_wrapper<float> column_1{{.5, 6.0, 5.0, .5, .5, .5, .5, .7, .7, .7, .7},
@@ -456,7 +473,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_largest) {
+TEST_F(SearchTest, table__find_first__nulls_as_largest)
+{
   fixed_width_column_wrapper<int32_t> column_0{{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
                                                {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
   fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
@@ -496,7 +514,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_largest) {
+TEST_F(SearchTest, table__find_last__nulls_as_largest)
+{
   fixed_width_column_wrapper<int32_t> column_0{{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
                                                {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
   fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
@@ -536,7 +555,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, contains_true) {
+TEST_F(SearchTest, contains_true)
+{
   using element_type = int64_t;
   bool expect        = true;
   bool result        = false;
@@ -549,7 +569,8 @@ TEST_F(SearchTest, contains_true) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_false) {
+TEST_F(SearchTest, contains_false)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -562,7 +583,8 @@ TEST_F(SearchTest, contains_false) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_value) {
+TEST_F(SearchTest, contains_empty_value)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -575,7 +597,8 @@ TEST_F(SearchTest, contains_empty_value) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_column) {
+TEST_F(SearchTest, contains_empty_column)
+{
   using element_type = int64_t;
   bool expect        = false;
   bool result        = false;
@@ -588,7 +611,8 @@ TEST_F(SearchTest, contains_empty_column) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_true) {
+TEST_F(SearchTest, contains_nullable_column_true)
+{
   using element_type = int64_t;
   bool result        = false;
   bool expect        = true;
@@ -602,7 +626,8 @@ TEST_F(SearchTest, contains_nullable_column_true) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_false) {
+TEST_F(SearchTest, contains_nullable_column_false)
+{
   using element_type = int64_t;
   bool result        = false;
   bool expect        = false;
@@ -616,7 +641,8 @@ TEST_F(SearchTest, contains_nullable_column_false) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, empty_table_string) {
+TEST_F(SearchTest, empty_table_string)
+{
   std::vector<const char *> h_col_strings{};
   std::vector<const char *> h_val_strings{"0", "10", "11", "30", "32", "40", "47", "50", "7", "90"};
 
@@ -644,7 +670,8 @@ TEST_F(SearchTest, empty_table_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, empty_values_string) {
+TEST_F(SearchTest, empty_values_string)
+{
   std::vector<const char *> h_col_strings{"10", "20", "30", "40", "50"};
   std::vector<const char *> h_val_strings{};
 
@@ -672,7 +699,8 @@ TEST_F(SearchTest, empty_values_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column__find_first_string) {
+TEST_F(SearchTest, non_null_column__find_first_string)
+{
   std::vector<const char *> h_col_strings{"10", "20", "30", "40", "50"};
   std::vector<const char *> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -701,7 +729,8 @@ TEST_F(SearchTest, non_null_column__find_first_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column__find_last_string) {
+TEST_F(SearchTest, non_null_column__find_last_string)
+{
   std::vector<const char *> h_col_strings{"10", "20", "30", "40", "50"};
   std::vector<const char *> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -730,7 +759,8 @@ TEST_F(SearchTest, non_null_column__find_last_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_first_string) {
+TEST_F(SearchTest, non_null_column_desc__find_first_string)
+{
   std::vector<const char *> h_col_strings{"50", "40", "30", "20", "10"};
   std::vector<const char *> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -759,7 +789,8 @@ TEST_F(SearchTest, non_null_column_desc__find_first_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column_desc__find_last_string) {
+TEST_F(SearchTest, non_null_column_desc__find_last_string)
+{
   std::vector<const char *> h_col_strings{"50", "40", "30", "20", "10"};
   std::vector<const char *> h_val_strings{
     "00", "07", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -788,7 +819,8 @@ TEST_F(SearchTest, non_null_column_desc__find_last_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string)
+{
   std::vector<const char *> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
   std::vector<const char *> h_val_strings{
     nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -817,7 +849,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string)
+{
   std::vector<const char *> h_col_strings{nullptr, nullptr, "10", "20", "30", "40", "50"};
   std::vector<const char *> h_val_strings{
     nullptr, "08", "10", "11", "30", "32", "40", "47", "50", "90"};
@@ -846,7 +879,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string) {
+TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string)
+{
   std::vector<const char *> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
   std::vector<const char *> h_val_strings{
     "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr};
@@ -875,7 +909,8 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest_string) {
+TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest_string)
+{
   cudf::test::strings_column_wrapper column({"N", "N", "N", "N", "Y", "Y", "Y", "Y"},
                                             {1, 1, 1, 1, 1, 1, 1, 1});
 
@@ -893,7 +928,8 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string) {
+TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string)
+{
   std::vector<const char *> h_col_strings{"10", "20", "30", "40", "50", nullptr, nullptr};
   std::vector<const char *> h_val_strings{
     "08", "10", "11", "30", "32", "40", "47", "50", "90", nullptr};
@@ -922,7 +958,8 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first_string) {
+TEST_F(SearchTest, table__find_first_string)
+{
   std::vector<const char *> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
   std::vector<const char *> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
 
@@ -990,7 +1027,8 @@ TEST_F(SearchTest, table__find_first_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last_string) {
+TEST_F(SearchTest, table__find_last_string)
+{
   std::vector<const char *> h_col_0_strings{"10", "20", "20", "20", "20", "20", "50"};
   std::vector<const char *> h_col_2_strings{"90", "77", "78", "61", "62", "63", "41"};
 
@@ -1058,7 +1096,8 @@ TEST_F(SearchTest, table__find_last_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table_partial_desc__find_first_string) {
+TEST_F(SearchTest, table_partial_desc__find_first_string)
+{
   std::vector<const char *> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
   std::vector<const char *> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
 
@@ -1126,7 +1165,8 @@ TEST_F(SearchTest, table_partial_desc__find_first_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table_partial_desc__find_last_string) {
+TEST_F(SearchTest, table_partial_desc__find_last_string)
+{
   std::vector<const char *> h_col_0_strings{"50", "20", "20", "20", "20", "20", "10"};
   std::vector<const char *> h_col_2_strings{"41", "78", "77", "63", "62", "61", "90"};
 
@@ -1195,7 +1235,8 @@ TEST_F(SearchTest, table_partial_desc__find_last_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_smallest_string) {
+TEST_F(SearchTest, table__find_first__nulls_as_smallest_string)
+{
   std::vector<const char *> h_col_0_strings{
     nullptr, "10", "10", "20", "20", "20", "20", "20", "20", "20", "50"};
   std::vector<const char *> h_col_2_strings{
@@ -1261,7 +1302,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_smallest_string) {
+TEST_F(SearchTest, table__find_last__nulls_as_smallest_string)
+{
   std::vector<const char *> h_col_0_strings{
     nullptr, "10", "10", "20", "20", "20", "20", "20", "20", "20", "50"};
   std::vector<const char *> h_col_2_strings{
@@ -1327,7 +1369,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_first__nulls_as_largest_string) {
+TEST_F(SearchTest, table__find_first__nulls_as_largest_string)
+{
   std::vector<const char *> h_col_0_strings{
     "10", "10", "20", "20", "20", "20", "20", "20", "20", "50", nullptr};
   std::vector<const char *> h_col_2_strings{
@@ -1393,7 +1436,8 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, table__find_last__nulls_as_largest_string) {
+TEST_F(SearchTest, table__find_last__nulls_as_largest_string)
+{
   std::vector<const char *> h_col_0_strings{
     "10", "10", "20", "20", "20", "20", "20", "20", "20", "50", nullptr};
   std::vector<const char *> h_col_2_strings{
@@ -1459,7 +1503,8 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, contains_true_string) {
+TEST_F(SearchTest, contains_true_string)
+{
   std::vector<const char *> h_col_strings{"00", "01", "17", "19", "23", "29", "71"};
   string_scalar scalar{"23"};
 
@@ -1477,7 +1522,8 @@ TEST_F(SearchTest, contains_true_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_false_string) {
+TEST_F(SearchTest, contains_false_string)
+{
   std::vector<const char *> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
   string_scalar scalar{"24"};
 
@@ -1495,7 +1541,8 @@ TEST_F(SearchTest, contains_false_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_value_string) {
+TEST_F(SearchTest, contains_empty_value_string)
+{
   std::vector<const char *> h_col_strings{"0", "1", "17", "19", "23", "29", "71"};
   string_scalar scalar{"23", false};
 
@@ -1513,7 +1560,8 @@ TEST_F(SearchTest, contains_empty_value_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_empty_column_string) {
+TEST_F(SearchTest, contains_empty_column_string)
+{
   std::vector<const char *> h_col_strings{};
   string_scalar scalar{"24"};
 
@@ -1531,7 +1579,8 @@ TEST_F(SearchTest, contains_empty_column_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_true_string) {
+TEST_F(SearchTest, contains_nullable_column_true_string)
+{
   std::vector<const char *> h_col_strings{nullptr, nullptr, "17", "19", "23", "29", "71"};
   string_scalar scalar{"23"};
 
@@ -1549,7 +1598,8 @@ TEST_F(SearchTest, contains_nullable_column_true_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_nullable_column_false_string) {
+TEST_F(SearchTest, contains_nullable_column_false_string)
+{
   std::vector<const char *> h_col_strings{nullptr, nullptr, "17", "19", nullptr, "29", "71"};
   string_scalar scalar{"23"};
 
@@ -1567,7 +1617,8 @@ TEST_F(SearchTest, contains_nullable_column_false_string) {
   ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_some) {
+TEST_F(SearchTest, multi_contains_some)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{0, 1, 17, 19, 23, 29, 71};
@@ -1580,7 +1631,8 @@ TEST_F(SearchTest, multi_contains_some) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_none) {
+TEST_F(SearchTest, multi_contains_none)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{0, 1, 17, 19, 23, 29, 71};
@@ -1593,7 +1645,8 @@ TEST_F(SearchTest, multi_contains_none) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_some_string) {
+TEST_F(SearchTest, multi_contains_some_string)
+{
   std::vector<const char *> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
   std::vector<const char *> h_needles_strings{"17", "19", "45", "72"};
 
@@ -1608,7 +1661,8 @@ TEST_F(SearchTest, multi_contains_some_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_none_string) {
+TEST_F(SearchTest, multi_contains_none_string)
+{
   std::vector<const char *> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
   std::vector<const char *> h_needles_strings{"2", "3"};
 
@@ -1623,7 +1677,8 @@ TEST_F(SearchTest, multi_contains_none_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_some_with_nulls) {
+TEST_F(SearchTest, multi_contains_some_with_nulls)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{{0, 1, 17, 19, 23, 29, 71},
@@ -1637,7 +1692,8 @@ TEST_F(SearchTest, multi_contains_some_with_nulls) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_none_with_nulls) {
+TEST_F(SearchTest, multi_contains_none_with_nulls)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{{0, 1, 17, 19, 23, 29, 71},
@@ -1651,7 +1707,8 @@ TEST_F(SearchTest, multi_contains_none_with_nulls) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_some_string_with_nulls) {
+TEST_F(SearchTest, multi_contains_some_string_with_nulls)
+{
   std::vector<const char *> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
   std::vector<const char *> h_needles_strings{"17", "23", nullptr, "72"};
 
@@ -1674,7 +1731,8 @@ TEST_F(SearchTest, multi_contains_some_string_with_nulls) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_none_string_with_nulls) {
+TEST_F(SearchTest, multi_contains_none_string_with_nulls)
+{
   std::vector<const char *> h_haystack_strings{"0", "1", nullptr, "19", "23", "29", "71"};
   std::vector<const char *> h_needles_strings{"2", nullptr};
 
@@ -1697,7 +1755,8 @@ TEST_F(SearchTest, multi_contains_none_string_with_nulls) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_empty_column) {
+TEST_F(SearchTest, multi_contains_empty_column)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{};
@@ -1710,7 +1769,8 @@ TEST_F(SearchTest, multi_contains_empty_column) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_empty_column_string) {
+TEST_F(SearchTest, multi_contains_empty_column_string)
+{
   std::vector<const char *> h_haystack_strings{};
   std::vector<const char *> h_needles_strings{"17", "19", "45", "72"};
 
@@ -1725,7 +1785,8 @@ TEST_F(SearchTest, multi_contains_empty_column_string) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_empty_input_set) {
+TEST_F(SearchTest, multi_contains_empty_input_set)
+{
   using element_type = int64_t;
 
   fixed_width_column_wrapper<element_type> haystack{0, 1, 17, 19, 23, 29, 71};
@@ -1738,7 +1799,8 @@ TEST_F(SearchTest, multi_contains_empty_input_set) {
   expect_columns_equal(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_empty_input_set_string) {
+TEST_F(SearchTest, multi_contains_empty_input_set_string)
+{
   std::vector<const char *> h_haystack_strings{"0", "1", "17", "19", "23", "29", "71"};
   std::vector<const char *> h_needles_strings{};
 

@@ -20,9 +20,10 @@
 
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**---------------------------------------------------------------------------*
  * @brief Fills a range of elements in-place in a column with a scalar value.
  *

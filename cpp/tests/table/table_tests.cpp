@@ -39,9 +39,11 @@ using column_view = cudf::column_view;
 using TView       = cudf::table_view;
 using Table       = cudf::experimental::table;
 
-struct TableTest : public cudf::test::BaseFixture {};
+struct TableTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TableTest, EmptyColumnedTable) {
+TEST_F(TableTest, EmptyColumnedTable)
+{
   std::vector<column_view> cols{};
 
   TView input(cols);
@@ -50,7 +52,8 @@ TEST_F(TableTest, EmptyColumnedTable) {
   EXPECT_EQ(input.num_columns(), expected);
 }
 
-TEST_F(TableTest, ValidateConstructorTableViewToTable) {
+TEST_F(TableTest, ValidateConstructorTableViewToTable)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int8_t> col2{{1, 2, 3, 4}};
 
@@ -66,7 +69,8 @@ TEST_F(TableTest, ValidateConstructorTableViewToTable) {
   EXPECT_EQ(input_table.num_rows(), out_table.num_rows());
 }
 
-TEST_F(TableTest, GetTableWithSelectedColumns) {
+TEST_F(TableTest, GetTableWithSelectedColumns)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int16_t> col2{{1, 2, 3, 4}};
   column_wrapper<int32_t> col3{{4, 5, 6, 7}};
@@ -85,7 +89,8 @@ TEST_F(TableTest, GetTableWithSelectedColumns) {
   cudf::test::expect_columns_equal(t.view().column(3), selected_tview.column(1));
 }
 
-TEST_F(TableTest, SelectingOutOfBounds) {
+TEST_F(TableTest, SelectingOutOfBounds)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
@@ -98,7 +103,8 @@ TEST_F(TableTest, SelectingOutOfBounds) {
   EXPECT_THROW(t.select(std::vector<cudf::size_type>{0, 1, 2}), std::out_of_range);
 }
 
-TEST_F(TableTest, SelectingNoColumns) {
+TEST_F(TableTest, SelectingNoColumns)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
@@ -111,7 +117,8 @@ TEST_F(TableTest, SelectingNoColumns) {
   EXPECT_EQ(selected_table.num_columns(), 0);
 }
 
-TEST_F(TableTest, CreateFromViewVector) {
+TEST_F(TableTest, CreateFromViewVector)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int16_t> col2{{1, 2, 3, 4}};
 
@@ -123,7 +130,8 @@ TEST_F(TableTest, CreateFromViewVector) {
   cudf::test::expect_columns_equal(final_view.column(1), views[1].column(0));
 }
 
-TEST_F(TableTest, CreateFromViewVectorRowsMismatch) {
+TEST_F(TableTest, CreateFromViewVectorRowsMismatch)
+{
   column_wrapper<int8_t> col1{{1, 2, 3, 4}};
   column_wrapper<int16_t> col2{{1, 2, 3}};
 
@@ -133,7 +141,8 @@ TEST_F(TableTest, CreateFromViewVectorRowsMismatch) {
   EXPECT_THROW(TView{views}, cudf::logic_error);
 }
 
-TEST_F(TableTest, CreateFromViewVectorEmptyTables) {
+TEST_F(TableTest, CreateFromViewVectorEmptyTables)
+{
   std::vector<TView> views;
   views.emplace_back(std::vector<column_view>{});
   views.emplace_back(std::vector<column_view>{});

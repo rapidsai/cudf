@@ -31,7 +31,8 @@ void BM_contiguous_split_common(benchmark::State& state,
                                 std::vector<T>& src_cols,
                                 int64_t num_rows,
                                 int64_t num_splits,
-                                int64_t bytes_total) {
+                                int64_t bytes_total)
+{
   // generate splits
   cudf::size_type split_stride = num_rows / num_splits;
   std::vector<cudf::size_type> splits;
@@ -55,9 +56,12 @@ void BM_contiguous_split_common(benchmark::State& state,
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total);
 }
 
-class ContiguousSplit : public cudf::benchmark {};
+class ContiguousSplit : public cudf::benchmark
+{
+};
 
-void BM_contiguous_split(benchmark::State& state) {
+void BM_contiguous_split(benchmark::State& state)
+{
   int64_t total_desired_bytes = state.range(0);
   cudf::size_type num_cols    = state.range(1);
   cudf::size_type num_splits  = state.range(2);
@@ -88,14 +92,18 @@ void BM_contiguous_split(benchmark::State& state) {
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
 
-class ContiguousSplitStrings : public cudf::benchmark {};
+class ContiguousSplitStrings : public cudf::benchmark
+{
+};
 
-int rand_range(int r) {
+int rand_range(int r)
+{
   return static_cast<int>((static_cast<float>(rand()) / static_cast<float>(RAND_MAX)) *
                           (float)(r - 1));
 }
 
-void BM_contiguous_split_strings(benchmark::State& state) {
+void BM_contiguous_split_strings(benchmark::State& state)
+{
   int64_t total_desired_bytes = state.range(0);
   cudf::size_type num_cols    = state.range(1);
   cudf::size_type num_splits  = state.range(2);
@@ -134,7 +142,8 @@ void BM_contiguous_split_strings(benchmark::State& state) {
 }
 
 #define CSBM_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
-  BENCHMARK_DEFINE_F(ContiguousSplit, name)(::benchmark::State & state) {    \
+  BENCHMARK_DEFINE_F(ContiguousSplit, name)(::benchmark::State & state)      \
+  {                                                                          \
     BM_contiguous_split(state);                                              \
   }                                                                          \
   BENCHMARK_REGISTER_F(ContiguousSplit, name)                                \
@@ -158,7 +167,8 @@ CSBM_BENCHMARK_DEFINE(1Gb10ColsNoValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 
 CSBM_BENCHMARK_DEFINE(1Gb10ColsValidity, (int64_t)1 * 1024 * 1024 * 1024, 10, 256, 1);
 
 #define CSBM_STRINGS_BENCHMARK_DEFINE(name, size, num_columns, num_splits, validity) \
-  BENCHMARK_DEFINE_F(ContiguousSplitStrings, name)(::benchmark::State & state) {     \
+  BENCHMARK_DEFINE_F(ContiguousSplitStrings, name)(::benchmark::State & state)       \
+  {                                                                                  \
     BM_contiguous_split_strings(state);                                              \
   }                                                                                  \
   BENCHMARK_REGISTER_F(ContiguousSplitStrings, name)                                 \

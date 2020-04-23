@@ -33,7 +33,8 @@
 using aggregation = cudf::experimental::aggregation;
 
 template <typename T>
-std::vector<T> convert_values(std::vector<int> const &int_values) {
+std::vector<T> convert_values(std::vector<int> const &int_values)
+{
   std::vector<T> v(int_values.size());
   std::transform(
     int_values.begin(), int_values.end(), v.begin(), [](int x) { return static_cast<T>(x); });
@@ -42,7 +43,8 @@ std::vector<T> convert_values(std::vector<int> const &int_values) {
 
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> const &values,
-                                                                std::vector<bool> const &bools) {
+                                                                std::vector<bool> const &bools)
+{
   if (values.size() > bools.size()) { throw std::logic_error("input vector size mismatch."); }
   return cudf::test::fixed_width_column_wrapper<T>(values.begin(), values.end(), bools.begin());
 }
@@ -50,7 +52,8 @@ cudf::test::fixed_width_column_wrapper<T> construct_null_column(std::vector<T> c
 template <typename T>
 std::vector<T> replace_nulls(std::vector<T> const &values,
                              std::vector<bool> const &bools,
-                             T identity) {
+                             T identity)
+{
   std::vector<T> v(values.size());
   std::transform(values.begin(), values.end(), bools.begin(), v.begin(), [identity](T x, bool b) {
     return (b) ? x : identity;
@@ -76,7 +79,8 @@ struct ReductionTest : public cudf::test::BaseFixture {
                       T_out expected_value,
                       bool succeeded_condition,
                       std::unique_ptr<aggregation> const &agg,
-                      cudf::data_type output_dtype = cudf::data_type{}) {
+                      cudf::data_type output_dtype = cudf::data_type{})
+  {
     if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
     auto statement = [&]() {
@@ -96,13 +100,15 @@ struct ReductionTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct MinMaxReductionTest : public ReductionTest<T> {};
+struct MinMaxReductionTest : public ReductionTest<T> {
+};
 
 using MinMaxTypes = cudf::test::AllTypes;
 TYPED_TEST_CASE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
-TYPED_TEST(MinMaxReductionTest, MinMax) {
+TYPED_TEST(MinMaxReductionTest, MinMax)
+{
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
@@ -141,7 +147,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax) {
 
 TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
 
-TYPED_TEST(ReductionTest, Product) {
+TYPED_TEST(ReductionTest, Product)
+{
   using T = TypeParam;
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
@@ -173,7 +180,8 @@ TYPED_TEST(ReductionTest, Product) {
                        cudf::experimental::make_product_aggregation());
 }
 
-TYPED_TEST(ReductionTest, Sum) {
+TYPED_TEST(ReductionTest, Sum)
+{
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
@@ -198,7 +206,8 @@ TYPED_TEST(ReductionTest, Sum) {
                        cudf::experimental::make_sum_aggregation());
 }
 
-TYPED_TEST(ReductionTest, SumOfSquare) {
+TYPED_TEST(ReductionTest, SumOfSquare)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1, 1});
@@ -237,7 +246,8 @@ struct ReductionAnyAllTest : public ReductionTest<bool> {
   ~ReductionAnyAllTest() {}
 };
 
-TEST_F(ReductionAnyAllTest, AnyAllTrueTrue) {
+TEST_F(ReductionAnyAllTest, AnyAllTrueTrue)
+{
   using T = bool;
   std::vector<int> int_values({true, true, true, true});
   std::vector<bool> host_bools({1, 1, 0, 1});
@@ -263,7 +273,8 @@ TEST_F(ReductionAnyAllTest, AnyAllTrueTrue) {
     col_nulls, expected, result_error, cudf::experimental::make_all_aggregation());
 }
 
-TEST_F(ReductionAnyAllTest, AnyAllFalseFalse) {
+TEST_F(ReductionAnyAllTest, AnyAllFalseFalse)
+{
   std::vector<int> int_values({false, false, false, false});
   std::vector<bool> host_bools({1, 1, 0, 1});
   std::vector<bool> v = convert_values<bool>(int_values);
@@ -299,7 +310,8 @@ struct MultiStepReductionTest : public ReductionTest<T> {
 using MultiStepReductionTypes = cudf::test::NumericTypes;
 TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
 
-TYPED_TEST(MultiStepReductionTest, Mean) {
+TYPED_TEST(MultiStepReductionTest, Mean)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
@@ -333,7 +345,8 @@ TYPED_TEST(MultiStepReductionTest, Mean) {
                        cudf::data_type(cudf::FLOAT64));
 }
 
-TYPED_TEST(MultiStepReductionTest, var_std) {
+TYPED_TEST(MultiStepReductionTest, var_std)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
@@ -387,7 +400,8 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
   void reduction_error_check(cudf::test::fixed_width_column_wrapper<T> &col,
                              bool succeeded_condition,
                              std::unique_ptr<aggregation> const &agg,
-                             cudf::data_type output_dtype) {
+                             cudf::data_type output_dtype)
+  {
     const cudf::column_view underlying_column = col;
     auto statement = [&]() { cudf::experimental::reduce(underlying_column, agg, output_dtype); };
 
@@ -401,7 +415,8 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
 
 TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
-TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling) {
+TYPED_TEST(ReductionMultiStepErrorCheck, ErrorHandling)
+{
   using T = TypeParam;
   std::vector<int> int_values({-3, 2});
   std::vector<bool> host_bools({1, 0});
@@ -452,7 +467,8 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
                       bool succeeded_condition,
                       std::unique_ptr<aggregation> const &agg,
                       cudf::data_type out_dtype,
-                      bool expected_overflow = false) {
+                      bool expected_overflow = false)
+  {
     std::vector<T_in> input_values = convert_values<T_in>(int_values);
     cudf::test::fixed_width_column_wrapper<T_in> const col(input_values.begin(),
                                                            input_values.end());
@@ -475,7 +491,8 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
 };
 
 // test case for different output precision
-TEST_F(ReductionDtypeTest, different_precision) {
+TEST_F(ReductionDtypeTest, different_precision)
+{
   constexpr bool expected_overflow = true;
   std::vector<int> int_values({6, -14, 13, 109, -13, -20, 0, 98, 122, 123});
   int expected_value = std::accumulate(int_values.begin(), int_values.end(), 0);
@@ -577,10 +594,12 @@ TEST_F(ReductionDtypeTest, different_precision) {
     int_values, static_cast<int64_t>(expected_value), false, sum_agg, cudf::data_type(cudf::INT64));
 }
 
-struct ReductionErrorTest : public cudf::test::BaseFixture {};
+struct ReductionErrorTest : public cudf::test::BaseFixture {
+};
 
 // test case for empty input cases
-TEST_F(ReductionErrorTest, empty_column) {
+TEST_F(ReductionErrorTest, empty_column)
+{
   using T        = int32_t;
   auto statement = [](const cudf::column_view col) {
     std::unique_ptr<cudf::scalar> result = cudf::experimental::reduce(
@@ -618,7 +637,8 @@ struct ReductionParamTest : public ReductionTest<double>,
 
 INSTANTIATE_TEST_CASE_P(ddofParam, ReductionParamTest, ::testing::Range(1, 5));
 
-TEST_P(ReductionParamTest, std_var) {
+TEST_P(ReductionParamTest, std_var)
+{
   int ddof = GetParam();
   std::vector<double> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
@@ -673,7 +693,8 @@ struct StringReductionTest : public cudf::test::BaseFixture,
                       std::string expected_value,
                       bool succeeded_condition,
                       std::unique_ptr<aggregation> const &agg,
-                      cudf::data_type output_dtype = cudf::data_type{}) {
+                      cudf::data_type output_dtype = cudf::data_type{})
+  {
     if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
     auto statement = [&]() {
@@ -708,7 +729,8 @@ std::vector<std::string> string_list[] = {
   {"one", "two", "\xF7\xBF\xBF\xBF", "four", "five", "six", "seven", "eight", "nine"},
 };
 INSTANTIATE_TEST_CASE_P(string_cases, StringReductionTest, testing::ValuesIn(string_list));
-TEST_P(StringReductionTest, MinMax) {
+TEST_P(StringReductionTest, MinMax)
+{
   // data and valid arrays
   std::vector<std::string> host_strings(GetParam());
   std::vector<bool> host_bools({1, 0, 1, 1, 1, 1, 0, 0, 1});
@@ -745,7 +767,8 @@ TEST_P(StringReductionTest, MinMax) {
     col_nulls, expected_max_null_result, succeed, cudf::experimental::make_max_aggregation());
 }
 
-TEST_F(StringReductionTest, AllNull) {
+TEST_F(StringReductionTest, AllNull)
+{
   // data and all null arrays
   std::vector<std::string> host_strings(
     {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});

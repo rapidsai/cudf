@@ -28,9 +28,11 @@
 
 #include <vector>
 
-struct StringsCombineTest : public cudf::test::BaseFixture {};
+struct StringsCombineTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsCombineTest, Concatenate) {
+TEST_F(StringsCombineTest, Concatenate)
+{
   std::vector<const char*> h_strings1{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings1(
     h_strings1.begin(),
@@ -93,7 +95,8 @@ TEST_F(StringsCombineTest, Concatenate) {
   }
 }
 
-TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns) {
+TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
@@ -103,7 +106,8 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns) {
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsCombineTest, Join) {
+TEST_F(StringsCombineTest, Join)
+{
   std::vector<const char*> h_strings{"eee", "bb", nullptr, "zzzz", "", "aaa", "ééé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -132,14 +136,16 @@ TEST_F(StringsCombineTest, Join) {
   }
 }
 
-TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn) {
+TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::join_strings(strings_view);
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsCombineTest, JoinAllNullStringsColumn) {
+TEST_F(StringsCombineTest, JoinAllNullStringsColumn)
+{
   cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
 
   auto results = cudf::strings::join_strings(cudf::strings_column_view(strings));

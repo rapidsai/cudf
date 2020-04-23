@@ -16,11 +16,14 @@
 #include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.h"
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace parquet
+{
+namespace gpu
+{
 // Spark doesn't support RLE encoding for BOOLEANs
 #define ENABLE_BOOL_RLE 0
 
@@ -64,7 +67,8 @@ struct page_enc_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len) {
+inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+{
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
   } else {
@@ -72,11 +76,13 @@ inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len) {
   }
 }
 
-inline __device__ uint32_t uint32_init_hash(uint32_t v) {
+inline __device__ uint32_t uint32_init_hash(uint32_t v)
+{
   return (v + (v >> 11) + (v >> 22)) & ((1 << INIT_HASH_BITS) - 1);
 }
 
-inline __device__ uint32_t uint64_init_hash(uint64_t v) {
+inline __device__ uint32_t uint64_init_hash(uint64_t v)
+{
   return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
@@ -95,7 +101,8 @@ __global__ void __launch_bounds__(512) gpuInitPageFragments(PageFragment *frag,
                                                             int32_t num_fragments,
                                                             int32_t num_columns,
                                                             uint32_t fragment_size,
-                                                            uint32_t max_num_rows) {
+                                                            uint32_t max_num_rows)
+{
   __shared__ __align__(16) frag_init_state_s state_g;
 
   frag_init_state_s *const s = &state_g;
@@ -350,7 +357,8 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
                                                             const EncColumnDesc *col_desc,
                                                             int32_t num_fragments,
                                                             int32_t num_columns,
-                                                            uint32_t fragment_size) {
+                                                            uint32_t fragment_size)
+{
   __shared__ __align__(8) statistics_group group_g[4];
 
   uint32_t t                = threadIdx.x & 0x1f;
@@ -376,7 +384,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
                                                     statistics_merge_group *page_grstats,
                                                     statistics_merge_group *chunk_grstats,
                                                     int32_t num_rowgroups,
-                                                    int32_t num_columns) {
+                                                    int32_t num_columns)
+{
   __shared__ __align__(8) EncColumnDesc col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) PageFragment frag_g;
@@ -583,7 +592,8 @@ static __device__ __constant__ uint32_t kRleRunMask[16] = {
 /**
  * @brief Variable-length encode an integer
  **/
-inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v) {
+inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
+{
   while (v > 0x7f) {
     *p++ = (v | 0x80);
     v >>= 7;
@@ -596,7 +606,8 @@ inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v) {
  * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
  **/
 inline __device__ void PackLiterals(
-  uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t) {
+  uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
+{
   if (t <= (count | 0x1f)) {
     if (w < 8) {
       uint32_t mask;
@@ -640,7 +651,8 @@ inline __device__ void PackLiterals(
  * @param[in] t thread id (0..127)
  */
 static __device__ void RleEncode(
-  page_enc_state_s *s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t) {
+  page_enc_state_s *s, uint32_t numvals, uint32_t nbits, uint32_t flush, uint32_t t)
+{
   uint32_t rle_pos = s->rle_pos;
   uint32_t rle_run = s->rle_run;
 
@@ -780,7 +792,8 @@ static __device__ void RleEncode(
 static __device__ void PlainBoolEncode(page_enc_state_s *s,
                                        uint32_t numvals,
                                        uint32_t flush,
-                                       uint32_t t) {
+                                       uint32_t t)
+{
   uint32_t rle_pos = s->rle_pos;
   uint8_t *dst     = s->rle_out;
 
@@ -810,7 +823,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
                                                          gpu_inflate_input_s *comp_in,
                                                          gpu_inflate_status_s *comp_out,
-                                                         uint32_t start_page) {
+                                                         uint32_t start_page)
+{
   __shared__ __align__(8) page_enc_state_s state_g;
 
   page_enc_state_s *const s = &state_g;
@@ -1048,7 +1062,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
 __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chunks,
                                                             const EncPage *pages,
                                                             const gpu_inflate_status_s *comp_out,
-                                                            uint32_t start_page) {
+                                                            uint32_t start_page)
+{
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(4) unsigned int error_count;
 
@@ -1097,7 +1112,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
 /**
  * Minimal thrift compact protocol support
  **/
-inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v) {
+inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
+{
   while (v > 0x7f) {
     *p++ = v | 0x80;
     v >>= 7;
@@ -1106,7 +1122,8 @@ inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v) {
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v) {
+inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v)
+{
   while (v > 0x7f) {
     *p++ = v | 0x80;
     v >>= 7;
@@ -1115,17 +1132,20 @@ inline __device__ uint8_t *cpw_put_uint64(uint8_t *p, uint64_t v) {
   return p;
 }
 
-inline __device__ uint8_t *cpw_put_int32(uint8_t *p, int32_t v) {
+inline __device__ uint8_t *cpw_put_int32(uint8_t *p, int32_t v)
+{
   int32_t s = (v < 0);
   return cpw_put_uint32(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_int64(uint8_t *p, int64_t v) {
+inline __device__ uint8_t *cpw_put_int64(uint8_t *p, int64_t v)
+{
   int64_t s = (v < 0);
   return cpw_put_uint64(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t) {
+inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t)
+{
   if (f > cur && f <= cur + 15) {
     *p++ = ((f - cur) << 4) | t;
     return p;
@@ -1177,7 +1197,8 @@ inline __device__ uint8_t *cpw_put_fldh(uint8_t *p, int f, int cur, int t) {
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
                                      const EncColumnDesc *col,
-                                     float *fp_scratch) {
+                                     float *fp_scratch)
+{
   uint8_t *end, dtype, dtype_len;
   dtype = col->stats_dtype;
   switch (dtype) {
@@ -1231,7 +1252,8 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
                                                             const gpu_inflate_status_s *comp_out,
                                                             const statistics_chunk *page_stats,
                                                             const statistics_chunk *chunk_stats,
-                                                            uint32_t start_page) {
+                                                            uint32_t start_page)
+{
   __shared__ __align__(8) EncColumnDesc col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -1320,8 +1342,8 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
 }
 
 // blockDim(1024, 1, 1)
-__global__ void __launch_bounds__(1024)
-  gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages) {
+__global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
+{
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
 
@@ -1389,7 +1411,8 @@ cudaError_t InitPageFragments(PageFragment *frag,
                               int32_t num_columns,
                               uint32_t fragment_size,
                               uint32_t num_rows,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<<<dim_grid, 512, 0, stream>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
@@ -1415,7 +1438,8 @@ cudaError_t InitFragmentStatistics(statistics_group *groups,
                                    int32_t num_fragments,
                                    int32_t num_columns,
                                    uint32_t fragment_size,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream>>>(
     groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
@@ -1443,7 +1467,8 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks,
                              int32_t num_columns,
                              statistics_merge_group *page_grstats,
                              statistics_merge_group *chunk_grstats,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+{
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream>>>(
     chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
@@ -1469,7 +1494,8 @@ cudaError_t EncodePages(EncPage *pages,
                         uint32_t start_page,
                         gpu_inflate_input_s *comp_in,
                         gpu_inflate_status_s *comp_out,
-                        cudaStream_t stream) {
+                        cudaStream_t stream)
+{
   gpuEncodePages<<<num_pages, 128, 0, stream>>>(pages, chunks, comp_in, comp_out, start_page);
   return cudaSuccess;
 }
@@ -1491,7 +1517,8 @@ cudaError_t DecideCompression(EncColumnChunk *chunks,
                               uint32_t num_chunks,
                               uint32_t start_page,
                               const gpu_inflate_status_s *comp_out,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   gpuDecideCompression<<<num_chunks, 128, 0, stream>>>(chunks, pages, comp_out, start_page);
   return cudaSuccess;
 }
@@ -1517,7 +1544,8 @@ cudaError_t EncodePageHeaders(EncPage *pages,
                               const gpu_inflate_status_s *comp_out,
                               const statistics_chunk *page_stats,
                               const statistics_chunk *chunk_stats,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   gpuEncodePageHeaders<<<num_pages, 128, 0, stream>>>(
     pages, chunks, comp_out, page_stats, chunk_stats, start_page);
   return cudaSuccess;
@@ -1536,7 +1564,8 @@ cudaError_t EncodePageHeaders(EncPage *pages,
 cudaError_t GatherPages(EncColumnChunk *chunks,
                         const EncPage *pages,
                         uint32_t num_chunks,
-                        cudaStream_t stream) {
+                        cudaStream_t stream)
+{
   gpuGatherPages<<<num_chunks, 1024, 0, stream>>>(chunks, pages);
   return cudaSuccess;
 }

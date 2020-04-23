@@ -26,13 +26,16 @@
 void call_split(gdf_column const* input_column,
                 cudf::size_type const* indices,
                 cudf::size_type num_indices,
-                std::vector<gdf_column*>& output) {
+                std::vector<gdf_column*>& output)
+{
   output = cudf::split(*input_column, indices, num_indices);
 }
 
-struct SplitInputTest : GdfTest {};
+struct SplitInputTest : GdfTest {
+};
 
-TEST_F(SplitInputTest, IndexesNull) {
+TEST_F(SplitInputTest, IndexesNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -45,7 +48,8 @@ TEST_F(SplitInputTest, IndexesNull) {
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SplitInputTest, InputColumnSizeNull) {
+TEST_F(SplitInputTest, InputColumnSizeNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -66,7 +70,8 @@ TEST_F(SplitInputTest, InputColumnSizeNull) {
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SplitInputTest, InputColumnDataNull) {
+TEST_F(SplitInputTest, InputColumnDataNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -87,7 +92,8 @@ TEST_F(SplitInputTest, InputColumnDataNull) {
                               output));
 }
 
-TEST_F(SplitInputTest, InputColumnBitmaskNull) {
+TEST_F(SplitInputTest, InputColumnBitmaskNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -109,7 +115,8 @@ TEST_F(SplitInputTest, InputColumnBitmaskNull) {
 }
 
 template <typename ColumnType>
-struct SplitTest : GdfTest {};
+struct SplitTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(SplitTest, test_types);
@@ -123,7 +130,8 @@ TYPED_TEST_CASE(SplitTest, test_types);
  * when the indices are the same.
  * when is less than 16 or greater than 64.
  */
-TYPED_TEST(SplitTest, MultipleSplits) {
+TYPED_TEST(SplitTest, MultipleSplits)
+{
   // Create input column
   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
@@ -175,7 +183,8 @@ TYPED_TEST(SplitTest, MultipleSplits) {
  * The indices array contains only one value and that value goes from
  * 0 to the size of the input column.
  */
-TYPED_TEST(SplitTest, RangeIndexPosition) {
+TYPED_TEST(SplitTest, RangeIndexPosition)
+{
   // Test parameters
   constexpr cudf::size_type init_index{0};
   constexpr cudf::size_type final_index{INPUT_SIZE};
@@ -228,7 +237,8 @@ TYPED_TEST(SplitTest, RangeIndexPosition) {
   }
 }
 
-TEST_F(SplitInputTest, NVCategoryMultipleSlices) {
+TEST_F(SplitInputTest, NVCategoryMultipleSlices)
+{
   // Create host strings
   bool print                    = false;
   const int length              = 7;

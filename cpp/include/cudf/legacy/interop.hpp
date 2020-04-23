@@ -28,9 +28,10 @@
  * may not yet be updated to use the new constructs.
  *---------------------------------------------------------------------------**/
 
-namespace cudf {
-namespace legacy {
-
+namespace cudf
+{
+namespace legacy
+{
 /**---------------------------------------------------------------------------*
  * @brief Converts a `gdf_dtype` to the corresponding `data_type`, if possible.
  *

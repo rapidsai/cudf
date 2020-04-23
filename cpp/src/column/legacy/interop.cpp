@@ -18,10 +18,12 @@
 #include <cudf/legacy/interop.hpp>
 #include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace legacy {
-
-data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
+namespace cudf
+{
+namespace legacy
+{
+data_type gdf_dtype_to_data_type(gdf_dtype dtype)
+{
   switch (dtype) {
     case GDF_INT8: return data_type{INT8};
     case GDF_INT16: return data_type{INT16};
@@ -37,7 +39,8 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
   }
 }
 
-gdf_dtype data_type_to_gdf_dtype(data_type type) {
+gdf_dtype data_type_to_gdf_dtype(data_type type)
+{
   switch (type.id()) {
     case INT8: return GDF_INT8;
     case INT16: return GDF_INT16;
@@ -55,7 +58,8 @@ gdf_dtype data_type_to_gdf_dtype(data_type type) {
   }
 }
 
-column_view gdf_column_to_view(gdf_column const& col) {
+column_view gdf_column_to_view(gdf_column const& col)
+{
   return column_view{gdf_dtype_to_data_type(col.dtype),
                      col.size,
                      col.data,
@@ -63,7 +67,8 @@ column_view gdf_column_to_view(gdf_column const& col) {
                      col.null_count};
 }
 
-mutable_column_view gdf_column_to_mutable_view(gdf_column* col) {
+mutable_column_view gdf_column_to_mutable_view(gdf_column* col)
+{
   CUDF_EXPECTS(nullptr != col, "Invalid column.");
   return mutable_column_view(gdf_dtype_to_data_type(col->dtype),
                              col->size,
@@ -72,7 +77,8 @@ mutable_column_view gdf_column_to_mutable_view(gdf_column* col) {
                              col->null_count);
 }
 
-gdf_column view_to_gdf_column(mutable_column_view view) {
+gdf_column view_to_gdf_column(mutable_column_view view)
+{
   CUDF_EXPECTS(view.offset() == 0, "Unsupported view offset.");
   return gdf_column{view.head(),
                     reinterpret_cast<cudf::valid_type*>(view.null_mask()),

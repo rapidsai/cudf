@@ -37,8 +37,8 @@
 #include <numeric>
 #include <tuple>
 
-namespace {
-
+namespace
+{
 /**
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
@@ -57,7 +57,9 @@ struct permuted_row_equality_comparator {
    *`t`. Must be the same size as `t.num_rows()`
    */
   permuted_row_equality_comparator(cudf::table_device_view const& t, cudf::size_type const* map)
-    : _comparator(t, t, true), _map{map} {}
+    : _comparator(t, t, true), _map{map}
+  {
+  }
 
   /**
    * @brief Returns true if the two rows at the specified indices in the permuted
@@ -71,20 +73,26 @@ struct permuted_row_equality_comparator {
    * @returns if the two specified rows in the permuted order are equivalent
    */
   CUDA_DEVICE_CALLABLE
-  bool operator()(cudf::size_type lhs, cudf::size_type rhs) {
+  bool operator()(cudf::size_type lhs, cudf::size_type rhs)
+  {
     return _comparator(_map[lhs], _map[rhs]);
   }
 };
 
 }  // namespace
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-namespace sort {
-
-size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
+namespace sort
+{
+size_type sort_groupby_helper::num_keys(cudaStream_t stream)
+{
   if (_num_keys > -1) return _num_keys;
 
   if (_include_null_keys == include_nulls::NO and has_nulls(_keys)) {
@@ -99,7 +107,8 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream) {
   return _num_keys;
 }
 
-column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
+column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
+{
   auto sliced_key_sorted_order = [stream, this]() {
     return cudf::experimental::detail::slice(
       this->_key_sorted_order->view(), 0, this->num_keys(stream));
@@ -151,7 +160,8 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream) {
   return sliced_key_sorted_order();
 }
 
-sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(cudaStream_t stream) {
+sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(cudaStream_t stream)
+{
   if (_group_offsets) return *_group_offsets;
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
@@ -184,7 +194,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(cuda
   return *_group_offsets;
 }
 
-sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(cudaStream_t stream) {
+sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(cudaStream_t stream)
+{
   if (_group_labels) return *_group_labels;
 
   // Get group labels for future use in segmented sorting
@@ -207,7 +218,8 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(cudaS
   return group_labels;
 }
 
-column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream) {
+column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream)
+{
   if (_unsorted_keys_labels) return _unsorted_keys_labels->view();
 
   column_ptr temp_labels = make_numeric_column(
@@ -231,7 +243,8 @@ column_view sort_groupby_helper::unsorted_keys_labels(cudaStream_t stream) {
   return _unsorted_keys_labels->view();
 }
 
-column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream) {
+column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream)
+{
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
   auto row_bitmask = bitmask_and(_keys, rmm::mr::get_default_resource(), stream);
@@ -253,7 +266,8 @@ column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream) {
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
-  column_view const& values, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  column_view const& values, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
   column_ptr values_sort_order =
     cudf::experimental::detail::sorted_order(table_view({unsorted_keys_labels(), values}),
                                              {},
@@ -272,7 +286,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 }
 
 sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
-  column_view const& values, rmm::mr::device_memory_resource* mr, cudaStream_t stream) {
+  column_view const& values, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
   auto gather_map = key_sort_order();
 
   auto grouped_values_table = cudf::experimental::detail::gather(
@@ -282,7 +297,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 }
 
 std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::mr::device_memory_resource* mr,
-                                                        cudaStream_t stream) {
+                                                        cudaStream_t stream)
+{
   auto idx_data = key_sort_order().data<size_type>();
 
   auto gather_map_it = thrust::make_transform_iterator(
@@ -293,7 +309,8 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::mr::device_memory_r
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::mr::device_memory_resource* mr,
-                                                        cudaStream_t stream) {
+                                                        cudaStream_t stream)
+{
   return cudf::experimental::detail::gather(
     _keys, key_sort_order(), false, false, false, mr, stream);
 }

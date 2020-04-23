@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext {
-
+namespace nvtext
+{
 /**
  * @brief Returns a new strings column by normalizing the whitespace in each
  * string in the input column.

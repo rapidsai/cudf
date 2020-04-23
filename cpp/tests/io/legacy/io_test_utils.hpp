@@ -46,7 +46,8 @@ void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs)
  * @brief Generates a vector of uniform random values of type T
  **/
 template <typename T>
-inline auto random_values(size_t size) {
+inline auto random_values(size_t size)
+{
   std::vector<T> values(size);
 
   using T1 = cudf::detail::unwrapped_type_t<T>;
@@ -70,17 +71,20 @@ inline auto random_values(size_t size) {
  * from device to host for test comparisons and debugging/development.
  *---------------------------------------------------------------------------**/
 template <typename T>
-class gdf_host_column {
+class gdf_host_column
+{
  public:
   gdf_host_column() = delete;
-  explicit gdf_host_column(const gdf_column *col) {
+  explicit gdf_host_column(const gdf_column *col)
+  {
     m_hostdata = std::vector<T>(col->size);
     CUDA_TRY(
       cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost));
   }
 
   auto hostdata() const -> const auto & { return m_hostdata; }
-  void print() const {
+  void print() const
+  {
     for (size_t i = 0; i < m_hostdata.size(); ++i) {
       std::cout.precision(17);
       std::cout << "[" << i << "]: value=" << m_hostdata[i] << "\n";

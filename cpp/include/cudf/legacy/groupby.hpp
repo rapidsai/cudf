@@ -26,19 +26,20 @@
 
 // Not possible to forward declare rmm::device_vector because it's a type alias
 // to a type with a default template arg. Therefore, this is the best we can do
-namespace thrust {
+namespace thrust
+{
 template <typename T, typename A>
 class device_vector;
 }
 template <typename T>
 class rmm_allocator;
 
-namespace cudf {
-
+namespace cudf
+{
 class table;
 
-namespace groupby {
-
+namespace groupby
+{
 /**---------------------------------------------------------------------------*
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
@@ -81,8 +82,8 @@ struct Options {
  *---------------------------------------------------------------------------**/
 enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
-namespace hash {
-
+namespace hash
+{
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
  *---------------------------------------------------------------------------**/
@@ -117,9 +118,10 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
 }  // namespace hash
 
-namespace sort {
-
-struct operation_args {};
+namespace sort
+{
+struct operation_args {
+};
 
 struct std_args : operation_args {
   int ddof;
@@ -132,7 +134,9 @@ struct quantile_args : operation_args {
   cudf::interpolation interpolation;
 
   quantile_args(const std::vector<double>& _quantiles, cudf::interpolation _interpolation)
-    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation} {}
+    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {
+  }
 };
 
 struct operation {
@@ -156,7 +160,9 @@ struct Options : groupby::Options {
           bool _input_sorted             = false)
     : groupby::Options(_ignore_null_keys),
       input_sorted(_input_sorted),
-      null_sort_behavior(_null_sort_behavior) {}
+      null_sort_behavior(_null_sort_behavior)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*

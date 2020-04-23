@@ -29,7 +29,8 @@ constexpr cudf::size_type INPUT_SIZE{107};
 constexpr cudf::size_type BITSET_SIZE{128};
 
 template <typename ColumnType>
-cudf::test::column_wrapper<ColumnType> create_random_column(cudf::size_type size) {
+cudf::test::column_wrapper<ColumnType> create_random_column(cudf::size_type size)
+{
   return cudf::test::column_wrapper<ColumnType>(
     size,
     [](cudf::size_type row) { return static_cast<ColumnType>(rand()); },
@@ -40,7 +41,8 @@ template <cudf::size_type SIZE>
 std::vector<cudf::valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
                                                std::vector<cudf::valid_type> const& input_valid,
                                                cudf::size_type index_start,
-                                               cudf::size_type index_final) {
+                                               cudf::size_type index_final)
+{
   // delta of the indexes
   cudf::size_type bits_length = index_final - index_start;
   if (bits_length == 0) { return std::vector<cudf::valid_type>(); }
@@ -92,7 +94,8 @@ std::vector<cudf::valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
 template <typename ColumnType>
 auto slice_columns(std::vector<ColumnType>& input_col_data,
                    std::vector<cudf::valid_type>& input_col_bitmask,
-                   std::vector<cudf::size_type>& indexes) {
+                   std::vector<cudf::size_type>& indexes)
+{
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
   std::vector<cudf::size_type> output_cols_null_count;
@@ -121,7 +124,8 @@ auto slice_columns(std::vector<ColumnType>& input_col_data,
 template <typename ColumnType>
 auto split_columns(std::vector<ColumnType>& input_col_data,
                    std::vector<cudf::valid_type>& input_col_bitmask,
-                   std::vector<cudf::size_type>& indexes) {
+                   std::vector<cudf::size_type>& indexes)
+{
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
   std::vector<cudf::size_type> output_cols_null_count;

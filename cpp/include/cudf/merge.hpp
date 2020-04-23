@@ -20,9 +20,10 @@
 #include <cudf/types.hpp>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**
  * @brief Merge a set of sorted tables.
  *

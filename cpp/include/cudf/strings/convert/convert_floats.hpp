@@ -18,9 +18,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf {
-namespace strings {
-
+namespace cudf
+{
+namespace strings
+{
 /**
  * @brief Returns a new numeric column by parsing float values from each string
  * in the provided strings column.

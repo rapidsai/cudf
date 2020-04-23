@@ -26,10 +26,12 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-
+namespace cudf
+{
+namespace io
+{
+namespace parquet
+{
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -39,7 +41,8 @@ namespace parquet {
 /**
  * @brief Function that translates cuDF time unit to Parquet clock frequency
  **/
-constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
+constexpr int32_t to_clockrate(gdf_time_unit time_unit)
+{
   switch (time_unit) {
     case TIME_UNIT_s: return 1;
     case TIME_UNIT_ms: return 1000;
@@ -56,7 +59,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(parquet::Type phys
                                                               parquet::ConvertedType logical,
                                                               bool strings_to_categorical,
                                                               gdf_time_unit ts_unit,
-                                                              int32_t decimal_scale) {
+                                                              int32_t decimal_scale)
+{
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -108,7 +112,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(parquet::Type phys
  * @brief Helper that returns the required the number of bits to store a value
  **/
 template <typename T = uint8_t>
-T required_bits(uint32_t max_level) {
+T required_bits(uint32_t max_level)
+{
   return static_cast<T>(parquet::CompactProtocolReader::NumRequiredBits(max_level));
 }
 
@@ -117,7 +122,8 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(datasource *source) {
+  explicit ParquetMetadata(datasource *source)
+  {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len  = sizeof(parquet::file_ender_s);
 
@@ -143,13 +149,15 @@ struct ParquetMetadata : public parquet::FileMetaData {
   inline int get_num_row_groups() const { return row_groups.size(); }
   inline int get_num_columns() const { return row_groups[0].columns.size(); }
 
-  std::string get_column_name(const std::vector<std::string> &path_in_schema) {
+  std::string get_column_name(const std::vector<std::string> &path_in_schema)
+  {
     std::string s = (path_in_schema.size() > 0) ? path_in_schema[0] : "";
     for (size_t i = 1; i < path_in_schema.size(); i++) { s += "." + path_in_schema[i]; }
     return s;
   }
 
-  std::vector<std::string> get_column_names() {
+  std::vector<std::string> get_column_names()
+  {
     std::vector<std::string> all_names;
     if (row_groups.size() != 0) {
       for (const auto &chunk : row_groups[0].columns) {
@@ -168,7 +176,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
    *
    * @return std::string Name of the index column
    **/
-  std::string get_pandas_index_name() {
+  std::string get_pandas_index_name()
+  {
     auto it = std::find_if(key_value_metadata.begin(),
                            key_value_metadata.end(),
                            [](const auto &item) { return item.key == "pandas"; });
@@ -193,7 +202,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
    *
    * @return List of row group indexes and its starting row
    **/
-  auto select_row_groups(int row_group, int &row_start, int &row_count) {
+  auto select_row_groups(int row_group, int &row_start, int &row_count)
+  {
     std::vector<std::pair<int, int>> selection;
 
     if (row_group != -1) {
@@ -230,7 +240,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
    **/
   auto select_columns(std::vector<std::string> use_names,
                       bool include_index,
-                      const std::string &pandas_index) {
+                      const std::string &pandas_index)
+  {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto names = get_column_names();
@@ -257,7 +268,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
     return selection;
   }
 
-  void print_metadata() const {
+  void print_metadata() const
+  {
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" version = %d\n", version);
     LOG_PRINTF(" created_by = \"%s\"\n", created_by.c_str());
@@ -280,7 +292,8 @@ struct ParquetMetadata : public parquet::FileMetaData {
   }
 };
 
-size_t reader::Impl::count_page_headers(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
+size_t reader::Impl::count_page_headers(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks)
+{
   size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(
@@ -318,7 +331,8 @@ size_t reader::Impl::count_page_headers(hostdevice_vector<parquet::gpu::ColumnCh
 }
 
 void reader::Impl::decode_page_headers(hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-                                       hostdevice_vector<parquet::gpu::PageInfo> &pages) {
+                                       hostdevice_vector<parquet::gpu::PageInfo> &pages)
+{
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info     = pages.device_ptr(page_count);
@@ -355,7 +369,8 @@ void reader::Impl::decode_page_headers(hostdevice_vector<parquet::gpu::ColumnChu
 
 rmm::device_buffer reader::Impl::decompress_page_data(
   hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
-  hostdevice_vector<parquet::gpu::PageInfo> &pages) {
+  hostdevice_vector<parquet::gpu::PageInfo> &pages)
+{
   auto for_each_codec_page = [&](parquet::Compression codec, const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
       const auto page_stride = chunks[c].max_num_pages;
@@ -470,7 +485,8 @@ void reader::Impl::decode_page_data(hostdevice_vector<parquet::gpu::ColumnChunkD
                                     hostdevice_vector<parquet::gpu::PageInfo> &pages,
                                     const std::vector<gdf_column *> &chunk_map,
                                     size_t min_row,
-                                    size_t total_rows) {
+                                    size_t total_rows)
+{
   auto is_dict_chunk = [](const parquet::gpu::ColumnChunkDesc &chunk) {
     return (chunk.data_type & 0x7) == parquet::BYTE_ARRAY && chunk.num_dict_pages > 0;
   };
@@ -523,7 +539,8 @@ void reader::Impl::decode_page_data(hostdevice_vector<parquet::gpu::ColumnChunkD
 }
 
 reader::Impl::Impl(std::unique_ptr<datasource> source, reader_options const &options)
-  : source_(std::move(source)) {
+  : source_(std::move(source))
+{
   // Open and parse the source Parquet dataset metadata
   md_ = std::make_unique<ParquetMetadata>(source_.get());
 
@@ -541,7 +558,8 @@ reader::Impl::Impl(std::unique_ptr<datasource> source, reader_options const &opt
   strings_to_categorical_ = options.strings_to_categorical;
 }
 
-table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
+table reader::Impl::read(int skip_rows, int num_rows, int row_group)
+{
   // Select only row groups required
   const auto selected_row_groups = md_->select_row_groups(row_group, skip_rows, num_rows);
   const auto num_columns         = selected_cols_.size();
@@ -728,19 +746,26 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(filepath), options))
+{
+}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options))
+{
+}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(file), options))
+{
+}
 
 std::string reader::get_index_column() { return impl_->get_index_column(); }
 
 table reader::read_all() { return impl_->read(0, -1, -1); }
 
-table reader::read_rows(size_t skip_rows, size_t num_rows) {
+table reader::read_rows(size_t skip_rows, size_t num_rows)
+{
   return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
 }
 

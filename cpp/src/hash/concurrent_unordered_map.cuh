@@ -34,7 +34,8 @@
 #include <limits>
 #include <type_traits>
 
-namespace {
+namespace
+{
 template <std::size_t N>
 struct packed {
   using type = void;
@@ -68,7 +69,8 @@ using packed_t = typename packed<sizeof(pair_type)>::type;
 template <typename pair_type,
           typename key_type   = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
-constexpr bool is_packable() {
+constexpr bool is_packable()
+{
   return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
          not std::is_void<packed_t<pair_type>>::value;
 }
@@ -111,7 +113,8 @@ template <typename Key,
           typename Hasher    = default_hash<Key>,
           typename Equality  = equal_to<Key>,
           typename Allocator = default_allocator<thrust::pair<Key, Element>>>
-class concurrent_unordered_map {
+class concurrent_unordered_map
+{
  public:
   using size_type      = size_t;
   using hasher         = Hasher;
@@ -158,7 +161,8 @@ class concurrent_unordered_map {
                      const Hasher& hash_function      = hasher(),
                      const Equality& equal            = key_equal(),
                      const allocator_type& allocator  = allocator_type(),
-                     cudaStream_t stream              = 0) {
+                     cudaStream_t stream              = 0)
+  {
     CUDF_FUNC_RANGE();
     using Self = concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
@@ -179,7 +183,8 @@ class concurrent_unordered_map {
    *
    * @returns iterator to the first element in the map.
    **/
-  __device__ iterator begin() {
+  __device__ iterator begin()
+  {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity, m_hashtbl_values);
   }
 
@@ -193,7 +198,8 @@ class concurrent_unordered_map {
    *
    * @returns constant iterator to the first element in the map.
    **/
-  __device__ const_iterator begin() const {
+  __device__ const_iterator begin() const
+  {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_capacity, m_hashtbl_values);
   }
 
@@ -207,7 +213,8 @@ class concurrent_unordered_map {
    *
    * @returns iterator to the one past the last element in the map.
    **/
-  __device__ iterator end() {
+  __device__ iterator end()
+  {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity, m_hashtbl_values + m_capacity);
   }
 
@@ -220,7 +227,8 @@ class concurrent_unordered_map {
    *
    * @returns constant iterator to the one past the last element in the map.
    **/
-  __device__ const_iterator end() const {
+  __device__ const_iterator end() const
+  {
     return const_iterator(
       m_hashtbl_values, m_hashtbl_values + m_capacity, m_hashtbl_values + m_capacity);
   }
@@ -253,7 +261,8 @@ class concurrent_unordered_map {
    *---------------------------------------------------------------------------**/
   template <typename pair_type = value_type>
   __device__ std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
-    value_type* insert_location, value_type const& insert_pair) {
+    value_type* insert_location, value_type const& insert_pair)
+  {
     pair_packer<pair_type> const unused{thrust::make_pair(m_unused_key, m_unused_element)};
     pair_packer<pair_type> const new_pair{insert_pair};
     pair_packer<pair_type> const old{
@@ -276,7 +285,8 @@ class concurrent_unordered_map {
    *---------------------------------------------------------------------------**/
   template <typename pair_type = value_type>
   __device__ std::enable_if_t<not is_packable<pair_type>(), insert_result> attempt_insert(
-    value_type* const __restrict__ insert_location, value_type const& insert_pair) {
+    value_type* const __restrict__ insert_location, value_type const& insert_pair)
+  {
     key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key, insert_pair.first)};
 
     // Hash bucket empty
@@ -310,7 +320,8 @@ class concurrent_unordered_map {
    *newly inserted pair, or the existing pair that prevented the insert.
    *Boolean indicates insert success.
    *---------------------------------------------------------------------------**/
-  __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair) {
+  __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair)
+  {
     const size_type key_hash{m_hf(insert_pair.first)};
     size_type index{key_hash % m_capacity};
 
@@ -339,7 +350,8 @@ class concurrent_unordered_map {
    * @param k The key to search for
    * @return An iterator to the key if it exists, else map.end()
    *---------------------------------------------------------------------------**/
-  __device__ const_iterator find(key_type const& k) const {
+  __device__ const_iterator find(key_type const& k) const
+  {
     size_type const key_hash = m_hf(k);
     size_type index          = key_hash % m_capacity;
 
@@ -383,7 +395,8 @@ class concurrent_unordered_map {
   template <typename find_hasher, typename find_key_equal>
   __device__ const_iterator find(key_type const& k,
                                  find_hasher f_hash,
-                                 find_key_equal f_equal) const {
+                                 find_key_equal f_equal) const
+  {
     size_type const key_hash = f_hash(k);
     size_type index          = key_hash % m_capacity;
 
@@ -403,7 +416,8 @@ class concurrent_unordered_map {
     }
   }
 
-  gdf_error assign_async(const concurrent_unordered_map& other, cudaStream_t stream = 0) {
+  gdf_error assign_async(const concurrent_unordered_map& other, cudaStream_t stream = 0)
+  {
     if (other.m_capacity <= m_capacity) {
       m_capacity = other.m_capacity;
     } else {
@@ -421,20 +435,23 @@ class concurrent_unordered_map {
     return GDF_SUCCESS;
   }
 
-  void clear_async(cudaStream_t stream = 0) {
+  void clear_async(cudaStream_t stream = 0)
+  {
     constexpr int block_size = 128;
     init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream>>>(
       m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
   }
 
-  void print() {
+  void print()
+  {
     for (size_type i = 0; i < m_capacity; ++i) {
       std::cout << i << ": " << m_hashtbl_values[i].first << "," << m_hashtbl_values[i].second
                 << std::endl;
     }
   }
 
-  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0) {
+  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0)
+  {
     cudaPointerAttributes hashtbl_values_ptr_attributes;
     cudaError_t status = cudaPointerGetAttributes(&hashtbl_values_ptr_attributes, m_hashtbl_values);
 
@@ -455,7 +472,8 @@ class concurrent_unordered_map {
    *
    * @param stream CUDA stream to use for device operations.
    *---------------------------------------------------------------------------**/
-  void destroy(cudaStream_t stream = 0) {
+  void destroy(cudaStream_t stream = 0)
+  {
     m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
     delete this;
   }
@@ -501,7 +519,8 @@ class concurrent_unordered_map {
       m_allocator(allocator),
       m_capacity(capacity),
       m_unused_element(unused_element),
-      m_unused_key(unused_key) {
+      m_unused_key(unused_key)
+  {
     m_hashtbl_values         = m_allocator.allocate(m_capacity, stream);
     constexpr int block_size = 128;
     {

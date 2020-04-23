@@ -43,11 +43,14 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
-class RoundRobinTest : public cudf::test::BaseFixture {};
+class RoundRobinTest : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(RoundRobinTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
+TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
+{
   strings_column_wrapper rrColWrap1(
     {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
@@ -189,7 +192,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3) {
   }
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
+TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
@@ -321,7 +325,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3) {
   }
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
+TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
@@ -456,7 +461,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15) {
   }
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11) {
+TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
@@ -514,7 +520,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11) {
   }
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
+TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
+{
   // test the case when nrows `mod` npartitions = 0
   //
   // input:
@@ -640,7 +647,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows) {
   }
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition) {
+TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
@@ -694,7 +702,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition) {
   EXPECT_EQ(expected_partition_offsets, result.second);
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions) {
+TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 
@@ -719,7 +728,8 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions) {
                cudf::logic_error);
 }
 
-TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition) {
+TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition)
+{
   strings_column_wrapper rrColWrap1({"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
                                     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
 

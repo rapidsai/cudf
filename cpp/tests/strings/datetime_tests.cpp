@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct StringsDatetimeTest : public cudf::test::BaseFixture {};
+struct StringsDatetimeTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsDatetimeTest, ToTimestamp) {
+TEST_F(StringsDatetimeTest, ToTimestamp)
+{
   std::vector<const char*> h_strings{"1974-02-28T01:23:45Z",
                                      "2019-07-17T21:34:37Z",
                                      nullptr,
@@ -51,7 +53,8 @@ TEST_F(StringsDatetimeTest, ToTimestamp) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, ToTimestampAmPm) {
+TEST_F(StringsDatetimeTest, ToTimestampAmPm)
+{
   cudf::test::strings_column_wrapper strings{"1974-02-28 01:23:45 PM",
                                              "2019-07-17 02:34:56 AM",
                                              "2019-03-20 12:34:56 PM",
@@ -64,7 +67,8 @@ TEST_F(StringsDatetimeTest, ToTimestampAmPm) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, ToTimestampMicrosecond) {
+TEST_F(StringsDatetimeTest, ToTimestampMicrosecond)
+{
   cudf::test::strings_column_wrapper strings{"1974-02-28 01:23:45.987000",
                                              "2019-07-17 02:34:56.001234",
                                              "2019-03-20 12:34:56.100100",
@@ -82,7 +86,8 @@ TEST_F(StringsDatetimeTest, ToTimestampMicrosecond) {
   cudf::test::expect_columns_equal(*results, expected_ns);
 }
 
-TEST_F(StringsDatetimeTest, ToTimestampMillisecond) {
+TEST_F(StringsDatetimeTest, ToTimestampMillisecond)
+{
   cudf::test::strings_column_wrapper strings{"2018-07-04 12:00:00.123", "2020-04-06 13:09:00.555"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::to_timestamps(
@@ -97,7 +102,8 @@ TEST_F(StringsDatetimeTest, ToTimestampMillisecond) {
   cudf::test::expect_columns_equal(*results, expected_ns);
 }
 
-TEST_F(StringsDatetimeTest, ToTimestampTimezone) {
+TEST_F(StringsDatetimeTest, ToTimestampTimezone)
+{
   cudf::test::strings_column_wrapper strings{"1974-02-28 01:23:45+0100",
                                              "2019-07-17 02:34:56-0300",
                                              "2019-03-20 12:34:56+1030",
@@ -110,7 +116,8 @@ TEST_F(StringsDatetimeTest, ToTimestampTimezone) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, FromTimestamp) {
+TEST_F(StringsDatetimeTest, FromTimestamp)
+{
   std::vector<cudf::timestamp_s> h_timestamps{131246625, 1563399277, 0, 1553085296, 1582934400};
   std::vector<const char*> h_expected{"1974-02-28T01:23:45Z",
                                       "2019-07-17T21:34:37Z",
@@ -132,7 +139,8 @@ TEST_F(StringsDatetimeTest, FromTimestamp) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, FromTimestampAmPm) {
+TEST_F(StringsDatetimeTest, FromTimestampAmPm)
+{
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s> timestamps{
     1530705600, 1582934461, 1451430122, 1318302183};
   auto results = cudf::strings::from_timestamps(timestamps, "%Y-%m-%d %I:%M:%S %p");
@@ -143,7 +151,8 @@ TEST_F(StringsDatetimeTest, FromTimestampAmPm) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, FromTimestampMillisecond) {
+TEST_F(StringsDatetimeTest, FromTimestampMillisecond)
+{
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms> timestamps_ms{
     1530705600123, 1582934461007, 1451430122421, 1318302183999};
   auto results = cudf::strings::from_timestamps(timestamps_ms, "%Y-%m-%d %H:%M:%S.%3f");
@@ -177,7 +186,8 @@ TEST_F(StringsDatetimeTest, FromTimestampMillisecond) {
   cudf::test::expect_columns_equal(*results, expected_ns_6f);
 }
 
-TEST_F(StringsDatetimeTest, FromTimestampTimezone) {
+TEST_F(StringsDatetimeTest, FromTimestampTimezone)
+{
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s> timestamps{
     1530705600, 1582934461, 1451430122, 1318302183};
   auto results = cudf::strings::from_timestamps(timestamps, "%m/%d/%y %H%M%S%z");
@@ -186,7 +196,8 @@ TEST_F(StringsDatetimeTest, FromTimestampTimezone) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, FromTimestampDayOfYear) {
+TEST_F(StringsDatetimeTest, FromTimestampDayOfYear)
+{
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s> timestamps{
     118800L,       // 1970-01-02 09:00:00
     1293901860L,   // 2011-01-01 17:11:00
@@ -221,7 +232,8 @@ TEST_F(StringsDatetimeTest, FromTimestampDayOfYear) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn) {
+TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_column(
     cudf::data_type{cudf::TIMESTAMP_SECONDS}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_timestamps(zero_size_column);
@@ -234,7 +246,8 @@ TEST_F(StringsDatetimeTest, ZeroSizeStringsColumn) {
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(StringsDatetimeTest, Errors) {
+TEST_F(StringsDatetimeTest, Errors)
+{
   cudf::test::strings_column_wrapper strings{"this column intentionally left blank"};
   cudf::strings_column_view view(strings);
   EXPECT_THROW(cudf::strings::to_timestamps(view, cudf::data_type{cudf::INT64}, "%Y"),

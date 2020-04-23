@@ -16,10 +16,10 @@
 
 #include <copying/legacy/copy_range.cuh>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 struct scalar_factory {
   gdf_scalar value;
 
@@ -34,7 +34,8 @@ struct scalar_factory {
   };
 
   template <typename T>
-  scalar<T> make() {
+  scalar<T> make()
+  {
     T val{};  // Safe type pun, compiler should optimize away the memcpy
     memcpy(&val, &value.data, sizeof(T));
     return scalar<T>{val, value.is_valid};
@@ -43,7 +44,8 @@ struct scalar_factory {
 
 };  // namespace detail
 
-void fill(gdf_column* column, gdf_scalar const& value, cudf::size_type begin, cudf::size_type end) {
+void fill(gdf_column* column, gdf_scalar const& value, cudf::size_type begin, cudf::size_type end)
+{
   if (end != begin) {  // otherwise no-op
     validate(column);
     // TODO: once gdf_scalar supports string scalar values we can add support

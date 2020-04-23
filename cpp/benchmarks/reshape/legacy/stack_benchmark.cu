@@ -25,14 +25,16 @@
 #include <random>
 
 template <class T>
-class Reshape : public cudf::benchmark {
+class Reshape : public cudf::benchmark
+{
  public:
   using TypeParam = T;
 };
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -41,7 +43,8 @@ T random_int(T min, T max) {
 }
 
 template <class T>
-void BM_stack(benchmark::State& state) {
+void BM_stack(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<T>;
 
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
@@ -74,7 +77,8 @@ void BM_stack(benchmark::State& state) {
   }
 }
 
-static void CustomArguments(benchmark::internal::Benchmark* b) {
+static void CustomArguments(benchmark::internal::Benchmark* b)
+{
   for (int num_cols = 2; num_cols <= 10; num_cols *= 2)
     for (int col_size = 1000; col_size <= 1000000; col_size *= 10) b->Args({num_cols, col_size});
 }
@@ -108,9 +112,12 @@ BENCHMARK_REGISTER_F(Reshape, StrStack)
 
 // #define COMPARE_CATEGORY_MERGE
 
-class String : public ::benchmark::Fixture {};
+class String : public ::benchmark::Fixture
+{
+};
 
-void BM_mar(benchmark::State& state) {
+void BM_mar(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<cudf::nvstring_category>;
 
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
@@ -158,7 +165,8 @@ BENCHMARK_REGISTER_F(String, MAR)
   ->Apply(CustomArguments);
 #endif
 
-void BM_cfc(benchmark::State& state) {
+void BM_cfc(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<cudf::nvstring_category>;
 
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};

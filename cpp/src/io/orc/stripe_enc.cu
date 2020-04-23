@@ -21,11 +21,14 @@
 // Workaround replaces zero-length patch lists by a dummy zero patch
 #define ZERO_PLL_WAR 1
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
+namespace gpu
+{
 #define SCRATCH_BFRSZ (512 * 4)
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
@@ -91,11 +94,13 @@ struct orcenc_state_s {
   } lengths;
 };
 
-static inline __device__ uint32_t zigzag32(int32_t v) {
+static inline __device__ uint32_t zigzag32(int32_t v)
+{
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
-static inline __device__ uint64_t zigzag64(int64_t v) {
+static inline __device__ uint64_t zigzag64(int64_t v)
+{
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
 }
@@ -117,7 +122,8 @@ static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clz
  **/
 template <StreamIndexType cid, uint32_t inmask>
 static __device__ void StoreBytes(
-  orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t count, int t) {
+  orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t count, int t)
+{
   uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
   while (count > 0) {
     uint32_t n = min(count, 512);
@@ -147,12 +153,9 @@ static __device__ void StoreBytes(
  *
  **/
 template <StreamIndexType cid, uint32_t inmask>
-static __device__ uint32_t ByteRLE(orcenc_state_s *s,
-                                   const uint8_t *inbuf,
-                                   uint32_t inpos,
-                                   uint32_t numvals,
-                                   uint32_t flush,
-                                   int t) {
+static __device__ uint32_t ByteRLE(
+  orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+{
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
 
@@ -266,7 +269,8 @@ static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
 /**
  * @brief Encode a varint value, return the number of bytes written
  **/
-static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v) {
+static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
+{
   uint32_t bytecnt = 0;
   for (;;) {
     uint32_t c = (uint32_t)(v & 0x7f);
@@ -281,23 +285,27 @@ static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v) {
   return bytecnt;
 }
 
-static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax) {
+static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)
+{
   vmin = INT64_MIN;
   vmax = INT64_MAX;
 }
 // static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0);
 // vmax = UINT64_MAX; }
-static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax) {
+static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)
+{
   vmin = INT32_MIN;
   vmax = INT32_MAX;
 }
-static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax) {
+static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax)
+{
   vmin = UINT32_C(0);
   vmax = UINT32_MAX;
 }
 
 template <class T>
-static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w) {
+static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
+{
   for (uint32_t i = 0, b = w * 8; i < w; ++i) {
     b -= 8;
     dst[i] = static_cast<uint8_t>(v >> b);
@@ -306,7 +314,8 @@ static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
 
 // Combine and store bits for symbol widths less than 8
 static inline __device__ void StoreBitsBigEndian(
-  uint8_t *dst, uint32_t v, uint32_t w, int num_vals, int t) {
+  uint8_t *dst, uint32_t v, uint32_t w, int num_vals, int t)
+{
   if (t <= (num_vals | 0x1f)) {
     uint32_t mask;
     if (w <= 1) {
@@ -345,7 +354,8 @@ static inline __device__ void StoreBitsBigEndian(
  **/
 template <StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
 static __device__ uint32_t IntegerRLE(
-  orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t) {
+  orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+{
   uint8_t *dst     = s->chunk.streams[cid] + s->strm_pos[cid];
   uint32_t out_cnt = 0;
 
@@ -587,7 +597,8 @@ static __device__ uint32_t IntegerRLE(
 static __device__ void StoreStringData(uint8_t *dst,
                                        strdata_enc_state_s *strenc,
                                        uint32_t len,
-                                       int t) {
+                                       int t)
+{
   // Start with summing up all the lengths
   uint32_t pos = len;
   uint32_t wt  = t & 0x1f;
@@ -625,7 +636,8 @@ static __device__ void StoreStringData(uint8_t *dst,
  *
  **/
 template <class T>
-inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, unsigned int t) {
+inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, unsigned int t)
+{
   for (uint32_t n = 1; n < numvals; n <<= 1) {
     __syncthreads();
     if ((t & n) && (t < numvals)) vals[t] += vals[(t & ~n) | (n - 1)];
@@ -648,7 +660,8 @@ static const __device__ __constant__ int32_t kTimeScale[10] = {
  **/
 // blockDim {512,1,1}
 extern "C" __global__ void __launch_bounds__(512)
-  gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups) {
+  gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups)
+{
   __shared__ __align__(16) orcenc_state_s state_g;
 
   orcenc_state_s *const s = &state_g;
@@ -919,7 +932,8 @@ extern "C" __global__ void __launch_bounds__(512)
  **/
 // blockDim {512,1,1}
 extern "C" __global__ void __launch_bounds__(512)
-  gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns) {
+  gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns)
+{
   __shared__ __align__(16) orcenc_state_s state_g;
 
   orcenc_state_s *const s = &state_g;
@@ -998,7 +1012,8 @@ extern "C" __global__ void __launch_bounds__(512)
  **/
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-  gpuCompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_columns) {
+  gpuCompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_columns)
+{
   __shared__ __align__(16) StripeStream ss;
   __shared__ __align__(16) EncChunk ck0;
   __shared__ uint8_t *volatile ck_curptr_g;
@@ -1064,7 +1079,8 @@ extern "C" __global__ void __launch_bounds__(256)
                            gpu_inflate_input_s *comp_in,
                            gpu_inflate_status_s *comp_out,
                            uint8_t *compressed_bfr,
-                           uint32_t comp_blk_size) {
+                           uint32_t comp_blk_size)
+{
   __shared__ __align__(16) StripeStream ss;
   __shared__ uint8_t *volatile uncomp_base_g;
 
@@ -1114,7 +1130,8 @@ extern "C" __global__ void __launch_bounds__(1024)
                              gpu_inflate_input_s *comp_in,
                              gpu_inflate_status_s *comp_out,
                              uint8_t *compressed_bfr,
-                             uint32_t comp_blk_size) {
+                             uint32_t comp_blk_size)
+{
   __shared__ __align__(16) StripeStream ss;
   __shared__ const uint8_t *volatile comp_src_g;
   __shared__ uint32_t volatile comp_len_g;
@@ -1190,7 +1207,8 @@ extern "C" __global__ void __launch_bounds__(1024)
 cudaError_t EncodeOrcColumnData(EncChunk *chunks,
                                 uint32_t num_columns,
                                 uint32_t num_rowgroups,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
@@ -1214,7 +1232,8 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
                                      uint32_t num_string_columns,
                                      uint32_t num_columns,
                                      uint32_t num_stripes,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
@@ -1236,7 +1255,8 @@ cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
                                   EncChunk *chunks,
                                   uint32_t num_stripe_streams,
                                   uint32_t num_columns,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream>>>(strm_desc, chunks, num_columns);
@@ -1268,7 +1288,8 @@ cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
                                    uint32_t num_compressed_blocks,
                                    CompressionKind compression,
                                    uint32_t comp_blk_size,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(num_stripe_streams, 1);
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream>>>(

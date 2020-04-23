@@ -33,12 +33,14 @@
 using bit_mask::bit_mask_t;
 
 template <typename T>
-struct bitmask_test : GdfTest {};
+struct bitmask_test : GdfTest {
+};
 
 using test_types = ::testing::Types<float, double>;
 TYPED_TEST_CASE(bitmask_test, test_types);
 
-TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid) {
+TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid)
+{
   constexpr cudf::size_type source_size{2000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
@@ -76,7 +78,8 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid) {
   RMM_TRY(RMM_FREE(result.first, 0));
 }
 
-TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null) {
+TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null)
+{
   constexpr cudf::size_type source_size{2000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
@@ -112,7 +115,8 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null) {
   RMM_TRY(RMM_FREE(result.first, 0));
 }
 
-TYPED_TEST(bitmask_test, nans_to_nulls_source_empty) {
+TYPED_TEST(bitmask_test, nans_to_nulls_source_empty)
+{
   gdf_column source{};
 
   std::pair<bit_mask_t*, cudf::size_type> result;
@@ -123,7 +127,8 @@ TYPED_TEST(bitmask_test, nans_to_nulls_source_empty) {
   EXPECT_EQ(result.first, nullptr);
 }
 
-TEST_F(GdfTest, nans_to_nulls_wrong_type) {
+TEST_F(GdfTest, nans_to_nulls_wrong_type)
+{
   using TypeParam = int;
 
   constexpr cudf::size_type source_size{2000};

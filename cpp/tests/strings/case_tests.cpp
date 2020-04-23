@@ -26,9 +26,11 @@
 
 #include <vector>
 
-struct StringsCaseTest : public cudf::test::BaseFixture {};
+struct StringsCaseTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsCaseTest, ToLower) {
+TEST_F(StringsCaseTest, ToLower)
+{
   std::vector<const char*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
   std::vector<const char*> h_expected{
@@ -49,7 +51,8 @@ TEST_F(StringsCaseTest, ToLower) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, ToUpper) {
+TEST_F(StringsCaseTest, ToUpper)
+{
   std::vector<const char*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
   std::vector<const char*> h_expected{
@@ -70,7 +73,8 @@ TEST_F(StringsCaseTest, ToUpper) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, Swapcase) {
+TEST_F(StringsCaseTest, Swapcase)
+{
   std::vector<const char*> h_strings{
     "Éxamples aBc", "123 456", nullptr, "ARE THE", "tést strings", ""};
   std::vector<const char*> h_expected{
@@ -91,7 +95,8 @@ TEST_F(StringsCaseTest, Swapcase) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, EmptyStringsColumn) {
+TEST_F(StringsCaseTest, EmptyStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::to_lower(strings_view);
@@ -99,7 +104,8 @@ TEST_F(StringsCaseTest, EmptyStringsColumn) {
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsCaseTest, Capitalize) {
+TEST_F(StringsCaseTest, Capitalize)
+{
   std::vector<const char*> h_strings{
     "SȺȺnich xyZ", "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", ""};
   std::vector<const char*> h_expected{
@@ -120,7 +126,8 @@ TEST_F(StringsCaseTest, Capitalize) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, Title) {
+TEST_F(StringsCaseTest, Title)
+{
   std::vector<const char*> h_strings{
     "SȺȺnich", "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", ""};
   std::vector<const char*> h_expected{
@@ -141,7 +148,8 @@ TEST_F(StringsCaseTest, Title) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, MultiCharUpper) {
+TEST_F(StringsCaseTest, MultiCharUpper)
+{
   cudf::test::strings_column_wrapper strings{"\u1f52", "\u1f83", "\u1e98", "\ufb05", "\u0149"};
   cudf::test::strings_column_wrapper expected{
     "\u03a5\u0313\u0300", "\u1f0b\u0399", "\u0057\u030a", "\u0053\u0054", "\u02bc\u004e"};
@@ -152,7 +160,8 @@ TEST_F(StringsCaseTest, MultiCharUpper) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsCaseTest, MultiCharLower) {
+TEST_F(StringsCaseTest, MultiCharLower)
+{
   // there's only one of these
   cudf::test::strings_column_wrapper strings{"\u0130"};
   cudf::test::strings_column_wrapper expected{"\u0069\u0307"};

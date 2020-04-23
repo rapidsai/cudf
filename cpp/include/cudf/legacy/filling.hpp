@@ -19,8 +19,8 @@
 
 #include <cudf/cudf.h>
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Fills a range of elements in a column with a scalar value.
  *

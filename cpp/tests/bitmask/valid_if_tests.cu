@@ -22,7 +22,8 @@
 
 #include <gmock/gmock.h>
 
-struct ValidIfTest : public cudf::test::BaseFixture {};
+struct ValidIfTest : public cudf::test::BaseFixture {
+};
 
 struct odds_valid {
   __host__ __device__ bool operator()(cudf::size_type i) { return i % 2; }
@@ -34,7 +35,8 @@ struct all_null {
   __host__ __device__ bool operator()(cudf::size_type i) { return false; }
 };
 
-TEST_F(ValidIfTest, EmptyRange) {
+TEST_F(ValidIfTest, EmptyRange)
+{
   auto actual = cudf::experimental::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0), odds_valid{});
   auto buffer = actual.first;
@@ -43,14 +45,16 @@ TEST_F(ValidIfTest, EmptyRange) {
   EXPECT_EQ(0, actual.second);
 }
 
-TEST_F(ValidIfTest, InvalidRange) {
+TEST_F(ValidIfTest, InvalidRange)
+{
   EXPECT_THROW(
     cudf::experimental::detail::valid_if(
       thrust::make_counting_iterator(1), thrust::make_counting_iterator(0), odds_valid{}),
     cudf::logic_error);
 }
 
-TEST_F(ValidIfTest, OddsValid) {
+TEST_F(ValidIfTest, OddsValid)
+{
   auto iter     = cudf::test::make_counting_transform_iterator(0, odds_valid{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::experimental::detail::valid_if(
@@ -59,7 +63,8 @@ TEST_F(ValidIfTest, OddsValid) {
   EXPECT_EQ(5000, actual.second);
 }
 
-TEST_F(ValidIfTest, AllValid) {
+TEST_F(ValidIfTest, AllValid)
+{
   auto iter     = cudf::test::make_counting_transform_iterator(0, all_valid{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::experimental::detail::valid_if(
@@ -68,7 +73,8 @@ TEST_F(ValidIfTest, AllValid) {
   EXPECT_EQ(0, actual.second);
 }
 
-TEST_F(ValidIfTest, AllNull) {
+TEST_F(ValidIfTest, AllNull)
+{
   auto iter     = cudf::test::make_counting_transform_iterator(0, all_null{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::experimental::detail::valid_if(

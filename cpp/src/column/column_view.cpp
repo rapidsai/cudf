@@ -23,9 +23,10 @@
 #include <exception>
 #include <vector>
 
-namespace cudf {
-
-namespace detail {
+namespace cudf
+{
+namespace detail
+{
 column_view_base::column_view_base(data_type type,
                                    size_type size,
                                    void const* data,
@@ -37,7 +38,8 @@ column_view_base::column_view_base(data_type type,
     _data{data},
     _null_mask{null_mask},
     _null_count{null_count},
-    _offset{offset} {
+    _offset{offset}
+{
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
 
   if (type.id() == EMPTY) {
@@ -58,14 +60,16 @@ column_view_base::column_view_base(data_type type,
 }
 
 // If null count is known, returns it. Else, compute and return it
-size_type column_view_base::null_count() const {
+size_type column_view_base::null_count() const
+{
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(null_mask(), offset(), offset() + size());
   }
   return _null_count;
 }
 
-size_type column_view_base::null_count(size_type begin, size_type end) const {
+size_type column_view_base::null_count(size_type begin, size_type end) const
+{
   CUDF_EXPECTS((begin >= 0) && (end <= size()) && (begin <= end), "Range is out of bounds.");
   return (null_count() == 0)
            ? 0
@@ -81,7 +85,8 @@ column_view::column_view(data_type type,
                          size_type null_count,
                          size_type offset,
                          std::vector<column_view> const& children)
-  : detail::column_view_base{type, size, data, null_mask, null_count, offset}, _children{children} {
+  : detail::column_view_base{type, size, data, null_mask, null_count, offset}, _children{children}
+{
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
@@ -96,27 +101,31 @@ mutable_column_view::mutable_column_view(data_type type,
                                          size_type offset,
                                          std::vector<mutable_column_view> const& children)
   : detail::column_view_base{type, size, data, null_mask, null_count, offset},
-    mutable_children{children} {
+    mutable_children{children}
+{
   if (type.id() == EMPTY) {
     CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
   }
 }
 
 // Update the null count
-void mutable_column_view::set_null_count(size_type new_null_count) {
+void mutable_column_view::set_null_count(size_type new_null_count)
+{
   if (new_null_count > 0) { CUDF_EXPECTS(nullable(), "Invalid null count."); }
   _null_count = new_null_count;
 }
 
 // Conversion from mutable to immutable
-mutable_column_view::operator column_view() const {
+mutable_column_view::operator column_view() const
+{
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
   std::copy(std::cbegin(mutable_children), std::cend(mutable_children), std::begin(child_views));
   return column_view{_type, _size, _data, _null_mask, _null_count, _offset, std::move(child_views)};
 }
 
-size_type count_descendants(column_view parent) {
+size_type count_descendants(column_view parent)
+{
   size_type count{parent.num_children()};
   for (size_type i = 0; i < parent.num_children(); ++i) {
     count += count_descendants(parent.child(i));

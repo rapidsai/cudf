@@ -25,9 +25,11 @@
 
 TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-struct avro_test : GdfTest {};
+struct avro_test : GdfTest {
+};
 
-TEST_F(avro_test, DISABLED_Basic) {
+TEST_F(avro_test, DISABLED_Basic)
+{
   std::string data = "\n";
 
   cudf::avro_read_arg args(cudf::source_info(data.c_str(), data.size()));

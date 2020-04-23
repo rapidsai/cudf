@@ -43,7 +43,8 @@ void initialize_valids(std::vector<host_valid_pointer>& valids,
 
 // Prints a vector and valids
 template <typename T>
-void print_vector_and_valid(std::vector<T>& v, const cudf::valid_type* valid) {
+void print_vector_and_valid(std::vector<T>& v, const cudf::valid_type* valid)
+{
   auto functor = [&valid, &v](int index) -> std::string {
     std::string ret =
       (sizeof(v[index]) == 1) ? std::to_string((int)v[index]) : std::to_string(v[index]);
@@ -59,7 +60,8 @@ void print_vector_and_valid(std::vector<T>& v, const cudf::valid_type* valid) {
 
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuples_and_valids(
-  std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid) {
+  std::tuple<std::vector<Tp>...>& t, std::vector<host_valid_pointer>& valid)
+{
   // bottom of compile-time recursion
   // purposely empty...
 }
@@ -68,7 +70,8 @@ inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuples_and_
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
   I<sizeof...(Tp), void>::type print_tuples_and_valids(std::tuple<std::vector<Tp>...>& t,
-                                                       std::vector<host_valid_pointer>& valid) {
+                                                       std::vector<host_valid_pointer>& valid)
+{
   // print the current vector:
   print_vector_and_valid(std::get<I>(t), valid[I].get());
 
@@ -85,7 +88,8 @@ inline typename std::enable_if<I == (sizeof...(Tp)), bool>::type rows_equal_usin
   std::vector<host_valid_pointer>& left_valid,
   std::vector<host_valid_pointer>& right_valid,
   const size_t left_index,
-  const size_t right_index) {
+  const size_t right_index)
+{
   // bottom of recursion
   // If we reach this point, we know the ve
   return true;
@@ -98,7 +102,8 @@ template <std::size_t I = 0, typename... Tp>
                                                        std::vector<host_valid_pointer>& left_valid,
                                                        std::vector<host_valid_pointer>& right_valid,
                                                        const size_t left_index,
-                                                       const size_t right_index) {
+                                                       const size_t right_index)
+{
   auto l_valid = left_valid[I].get();
   auto r_valid = right_valid[I].get();
   if (gdf_is_valid(l_valid, left_index) && gdf_is_valid(r_valid, right_index) &&

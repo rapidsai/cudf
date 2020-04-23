@@ -20,9 +20,10 @@
 
 #include <memory>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**
  * @brief  Applies a fixed-size rolling window function to the values in a column.
  *

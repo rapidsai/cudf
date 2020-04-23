@@ -27,10 +27,13 @@ using bit_mask_t = bit_mask::bit_mask_t;
 /* ---------------------------------------------------------------------------- *
  * @brief  Class for managing bit containers on the device
  * ---------------------------------------------------------------------------- */
-class BitMask {
+class BitMask
+{
  public:
   __host__ __device__ BitMask(bit_mask_t *valid, int bitlength)
-    : valid_(valid), bitlength_(bitlength) {}
+    : valid_(valid), bitlength_(bitlength)
+  {
+  }
 
   /**
    * @brief Check to see if a record is Valid (aka not null)
@@ -40,7 +43,8 @@ class BitMask {
    * @return  true if record is valid, false if record is null
    */
   template <typename T>
-  __device__ bool is_valid(T record_idx) const {
+  __device__ bool is_valid(T record_idx) const
+  {
     return bit_mask::is_valid(valid_, record_idx);
   }
 
@@ -50,7 +54,8 @@ class BitMask {
    * @param[in] record_idx    the record index
    */
   template <typename T>
-  __device__ void set_bit_unsafe(T record_idx) {
+  __device__ void set_bit_unsafe(T record_idx)
+  {
     bit_mask::set_bit_unsafe(valid_, record_idx);
   }
 
@@ -60,7 +65,8 @@ class BitMask {
    * @param[in] record_idx    the record index
    */
   template <typename T>
-  __device__ void clear_bit_unsafe(T record_idx) {
+  __device__ void clear_bit_unsafe(T record_idx)
+  {
     bit_mask::clear_bit_unsafe(valid_, record_idx);
   }
 
@@ -70,7 +76,8 @@ class BitMask {
    * @param[in] record_idx    the record index
    */
   template <typename T>
-  __device__ void set_bit(T record_idx) {
+  __device__ void set_bit(T record_idx)
+  {
     bit_mask::set_bit_safe(valid_, record_idx);
   }
 
@@ -80,7 +87,8 @@ class BitMask {
    * @param[in] record_idx    the record index
    */
   template <typename T>
-  __device__ void clear_bit(T record_idx) {
+  __device__ void clear_bit(T record_idx)
+  {
     bit_mask::clear_bit_safe(valid_, record_idx);
   }
 
@@ -98,7 +106,8 @@ class BitMask {
    *
    * @return reference to the specified element
    */
-  __device__ bit_mask_t &get_element_device(cudf::size_type element_idx) {
+  __device__ bit_mask_t &get_element_device(cudf::size_type element_idx)
+  {
     return valid_[element_idx];
   }
 
@@ -110,7 +119,8 @@ class BitMask {
    *
    *  @return GDF_SUCCESS on success, the CUDA error on failure
    */
-  __host__ gdf_error get_element_host(cudf::size_type element_idx, bit_mask_t &element) const {
+  __host__ gdf_error get_element_host(cudf::size_type element_idx, bit_mask_t &element) const
+  {
     return bit_mask::get_element(&element, valid_ + element_idx);
   }
 
@@ -121,7 +131,8 @@ class BitMask {
    *
    * @return the specified element
    */
-  __host__ gdf_error set_element_host(cudf::size_type element_idx, const bit_mask_t &element) {
+  __host__ gdf_error set_element_host(cudf::size_type element_idx, const bit_mask_t &element)
+  {
     return bit_mask::put_element(element, valid_ + element_idx);
   }
 

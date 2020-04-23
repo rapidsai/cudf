@@ -19,10 +19,12 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
 /**
  * @brief Source table identifier to copy data from.
  */
@@ -71,10 +73,13 @@ struct tagged_element_relational_comparator {
   __host__ __device__ tagged_element_relational_comparator(column_device_view lhs,
                                                            column_device_view rhs,
                                                            null_order null_precedence)
-    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence} {}
+    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
+  {
+  }
 
   __device__ weak_ordering compare(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept {
+    noexcept
+  {
     side l_side = thrust::get<0>(lhs_tagged_index);
     side r_side = thrust::get<0>(rhs_tagged_index);
 
@@ -106,13 +111,15 @@ struct row_lexicographic_tagged_comparator {
                                       table_device_view rhs,
                                       order const* column_order         = nullptr,
                                       null_order const* null_precedence = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence} {
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+  {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   __device__ bool operator()(index_type lhs_tagged_index, index_type rhs_tagged_index) const
-    noexcept {
+    noexcept
+  {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 

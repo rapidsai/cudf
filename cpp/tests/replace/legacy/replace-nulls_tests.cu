@@ -26,7 +26,8 @@
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 template <typename T>
-struct ReplaceNullsTest : GdfTest {};
+struct ReplaceNullsTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
@@ -35,7 +36,8 @@ TYPED_TEST_CASE(ReplaceNullsTest, test_types);
 template <typename T>
 void ReplaceNullsColumn(cudf::test::column_wrapper<T> input,
                         cudf::test::column_wrapper<T> replacement_values,
-                        cudf::test::column_wrapper<T> expected) {
+                        cudf::test::column_wrapper<T> expected)
+{
   gdf_column result;
   EXPECT_NO_THROW(result = cudf::replace_nulls(input, replacement_values));
   EXPECT_TRUE(expected == result);
@@ -44,13 +46,15 @@ void ReplaceNullsColumn(cudf::test::column_wrapper<T> input,
 template <typename T>
 void ReplaceNullsScalar(cudf::test::column_wrapper<T> input,
                         cudf::test::scalar_wrapper<T> replacement_value,
-                        cudf::test::column_wrapper<T> expected) {
+                        cudf::test::column_wrapper<T> expected)
+{
   gdf_column result;
   EXPECT_NO_THROW(result = cudf::replace_nulls(input, replacement_value));
   EXPECT_TRUE(expected == result);
 }
 
-TYPED_TEST(ReplaceNullsTest, ReplaceColumn) {
+TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
+{
   constexpr cudf::size_type column_size{10};
 
   ReplaceNullsColumn<TypeParam>(
@@ -64,7 +68,8 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn) {
       column_size, [](cudf::size_type row) { return (row < column_size / 2) ? 1 : row; }, false});
 }
 
-TYPED_TEST(ReplaceNullsTest, ReplaceScalar) {
+TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
+{
   constexpr cudf::size_type column_size{10};
 
   ReplaceNullsScalar<TypeParam>(

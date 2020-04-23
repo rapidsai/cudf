@@ -50,9 +50,11 @@ using result_type = typename std::pair<int, int>;
 
 // Define stream operator for a std::pair for conveinience of printing results.
 // Needs to be in the std namespace to work with std::copy
-namespace std {
+namespace std
+{
 template <typename first_t, typename second_t>
-std::ostream& operator<<(std::ostream& os, std::pair<first_t, second_t> const& p) {
+std::ostream& operator<<(std::ostream& os, std::pair<first_t, second_t> const& p)
+{
   os << p.first << ", " << p.second;
   std::cout << "\n";
   return os;
@@ -93,7 +95,8 @@ struct JoinTest : public GdfTest {
   std::vector<gdf_column*> gdf_raw_left_columns;
   std::vector<gdf_column*> gdf_raw_right_columns;
 
-  JoinTest() {
+  JoinTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
@@ -115,7 +118,8 @@ struct JoinTest : public GdfTest {
   template <typename col_type>
   gdf_col_pointer create_gdf_column(std::vector<col_type> const& host_vector,
                                     cudf::valid_type* host_valid,
-                                    const cudf::size_type n_count) {
+                                    const cudf::size_type n_count)
+  {
     // Deduce the type and set the gdf_dtype accordingly
     gdf_dtype gdf_col_type;
     if (std::is_same<col_type, int8_t>::value)
@@ -189,7 +193,8 @@ struct JoinTest : public GdfTest {
     std::vector<gdf_col_pointer>& gdf_columns,
     std::tuple<std::vector<Tp>...>& t,
     std::vector<host_valid_pointer>& valids,
-    const cudf::size_type n_count) {
+    const cudf::size_type n_count)
+  {
     // bottom of compile-time recursion
     // purposely empty...
   }
@@ -198,7 +203,8 @@ struct JoinTest : public GdfTest {
                                        std::vector<gdf_col_pointer>& gdf_columns,
                                        std::tuple<std::vector<Tp>...>& t,
                                        std::vector<host_valid_pointer>& valids,
-                                       const cudf::size_type n_count) {
+                                       const cudf::size_type n_count)
+  {
     // Creates a gdf_column for the current vector and pushes it onto
     // the vector of gdf_columns
     if (valids.size() != 0) {
@@ -214,7 +220,8 @@ struct JoinTest : public GdfTest {
   // Converts a tuple of host vectors into a vector of gdf_columns
   std::vector<gdf_col_pointer> initialize_gdf_columns(multi_column_t host_columns,
                                                       std::vector<host_valid_pointer>& valids,
-                                                      const cudf::size_type n_count) {
+                                                      const cudf::size_type n_count)
+  {
     std::vector<gdf_col_pointer> gdf_columns;
     convert_tuple_to_gdf_columns(gdf_columns, host_columns, valids, n_count);
     return gdf_columns;
@@ -237,7 +244,8 @@ struct JoinTest : public GdfTest {
                     size_t right_column_length,
                     size_t right_column_range,
                     bool print                    = false,
-                    const cudf::size_type n_count = 0) {
+                    const cudf::size_type n_count = 0)
+  {
     initialize_tuple(
       left_columns, left_column_length, left_column_range, static_cast<size_t>(ctxt.flag_sorted));
     initialize_tuple(right_columns,
@@ -278,7 +286,8 @@ struct JoinTest : public GdfTest {
    * @param right_column_length The length of the right column
    * -------------------------------------------------------------------------*/
   void create_dummy_input(cudf::size_type const left_column_length,
-                          cudf::size_type const right_column_length) {
+                          cudf::size_type const right_column_length)
+  {
     using col_type = typename std::tuple_element<0, multi_column_t>::type::value_type;
 
     // Only allocate a single element
@@ -311,7 +320,8 @@ struct JoinTest : public GdfTest {
    * right_index where left_columns[left_index] == right_columns[right_index]
    */
   /* ----------------------------------------------------------------------------*/
-  std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true) {
+  std::vector<result_type> compute_reference_solution(bool print = false, bool sort = true)
+  {
     // Use the type of the first vector as the key_type
     using key_type   = typename std::tuple_element<0, multi_column_t>::type::value_type;
     using value_type = size_t;
@@ -413,7 +423,8 @@ struct JoinTest : public GdfTest {
   /* ----------------------------------------------------------------------------*/
   std::vector<result_type> compute_gdf_result(bool print                = false,
                                               bool sort                 = true,
-                                              gdf_error expected_result = GDF_SUCCESS) {
+                                              gdf_error expected_result = GDF_SUCCESS)
+  {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
     gdf_column left_result{};
@@ -622,7 +633,8 @@ TYPED_TEST_CASE(JoinTest, Implementations);
 
 // This test is used for debugging purposes and is disabled by default.
 // The input sizes are small and has a large amount of debug printing enabled.
-TYPED_TEST(JoinTest, DISABLED_DebugTest) {
+TYPED_TEST(JoinTest, DISABLED_DebugTest)
+{
   this->create_input(5, 2, 5, 2, true);
 
   std::vector<result_type> reference_result = this->compute_reference_solution(true);
@@ -638,7 +650,8 @@ TYPED_TEST(JoinTest, DISABLED_DebugTest) {
   }
 }
 
-TYPED_TEST(JoinTest, EqualValues) {
+TYPED_TEST(JoinTest, EqualValues)
+{
   this->create_input(100, 1, 1000, 1);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -654,7 +667,8 @@ TYPED_TEST(JoinTest, EqualValues) {
   }
 }
 
-TYPED_TEST(JoinTest, MaxRandomValues) {
+TYPED_TEST(JoinTest, MaxRandomValues)
+{
   this->create_input(10000, RAND_MAX, 10000, RAND_MAX);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -670,7 +684,8 @@ TYPED_TEST(JoinTest, MaxRandomValues) {
   }
 }
 
-TYPED_TEST(JoinTest, LeftColumnsBigger) {
+TYPED_TEST(JoinTest, LeftColumnsBigger)
+{
   this->create_input(10000, 100, 100, 100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -686,7 +701,8 @@ TYPED_TEST(JoinTest, LeftColumnsBigger) {
   }
 }
 
-TYPED_TEST(JoinTest, RightColumnsBigger) {
+TYPED_TEST(JoinTest, RightColumnsBigger)
+{
   this->create_input(100, 100, 10000, 100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -702,7 +718,8 @@ TYPED_TEST(JoinTest, RightColumnsBigger) {
   }
 }
 
-TYPED_TEST(JoinTest, EmptyLeftFrame) {
+TYPED_TEST(JoinTest, EmptyLeftFrame)
+{
   this->create_input(0, 100, 1000, 100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -718,7 +735,8 @@ TYPED_TEST(JoinTest, EmptyLeftFrame) {
   }
 }
 
-TYPED_TEST(JoinTest, EmptyRightFrame) {
+TYPED_TEST(JoinTest, EmptyRightFrame)
+{
   this->create_input(1000, 100, 0, 100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -734,7 +752,8 @@ TYPED_TEST(JoinTest, EmptyRightFrame) {
   }
 }
 
-TYPED_TEST(JoinTest, BothFramesEmpty) {
+TYPED_TEST(JoinTest, BothFramesEmpty)
+{
   this->create_input(0, 100, 0, 100);
 
   std::vector<result_type> reference_result = this->compute_reference_solution();
@@ -754,7 +773,8 @@ TYPED_TEST(JoinTest, BothFramesEmpty) {
 
 // Create a new derived class from JoinTest so we can do a new Typed Test set of tests
 template <class test_parameters>
-struct JoinValidTest : public JoinTest<test_parameters> {};
+struct JoinValidTest : public JoinTest<test_parameters> {
+};
 
 using ValidTestImplementation =
   testing::Types<TestParameters<join_op::INNER, SORT, VTuple<int32_t>>,
@@ -763,7 +783,8 @@ using ValidTestImplementation =
 
 TYPED_TEST_CASE(JoinValidTest, ValidTestImplementation);
 
-TYPED_TEST(JoinValidTest, ReportValidMaskError) {
+TYPED_TEST(JoinValidTest, ReportValidMaskError)
+{
   this->create_input(1000, 100, 100, 100, false, 1);
 
   CUDF_EXPECT_THROW_MESSAGE(this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED),
@@ -774,7 +795,8 @@ TYPED_TEST(JoinValidTest, ReportValidMaskError) {
 
 // Create a new derived class from JoinTest so we can do a new Typed Test set of tests
 template <class test_parameters>
-struct MaxJoinTest : public JoinTest<test_parameters> {};
+struct MaxJoinTest : public JoinTest<test_parameters> {
+};
 
 // Only test for single column inputs for Inner and Left joins because these tests take a long time
 using MaxImplementations = testing::Types<TestParameters<join_op::INNER, HASH, VTuple<int32_t>>,
@@ -782,7 +804,8 @@ using MaxImplementations = testing::Types<TestParameters<join_op::INNER, HASH, V
 
 TYPED_TEST_CASE(MaxJoinTest, MaxImplementations);
 
-TYPED_TEST(MaxJoinTest, InputTooLarge) {
+TYPED_TEST(MaxJoinTest, InputTooLarge)
+{
   const cudf::size_type left_table_size = 100;
   const cudf::size_type right_table_size =
     static_cast<cudf::size_type>(std::numeric_limits<int>::max());
@@ -801,20 +824,23 @@ TYPED_TEST(MaxJoinTest, InputTooLarge) {
 
 // These tests will only fail on a non-release build where `assert`s are enabled
 #ifndef NDEBUG
-TEST(HashTableSizeDeathTest, ZeroOccupancyTest) {
+TEST(HashTableSizeDeathTest, ZeroOccupancyTest)
+{
   int const num_insertions{100};
   uint32_t occupancy{0};
   EXPECT_DEATH(compute_hash_table_size(num_insertions, occupancy), "");
 }
 
-TEST(HashTableSizeDeathTest, TooLargeOccupancyTest) {
+TEST(HashTableSizeDeathTest, TooLargeOccupancyTest)
+{
   int const num_insertions{100};
   uint32_t occupancy{101};
   EXPECT_DEATH(compute_hash_table_size(num_insertions, occupancy), "");
 }
 #endif
 
-TEST(HashTableSizeTest, OverflowTest) {
+TEST(HashTableSizeTest, OverflowTest)
+{
   int const num_insertions{std::numeric_limits<int>::max()};
   uint32_t occupancy{50};
   size_t hash_table_size = compute_hash_table_size(num_insertions, occupancy);

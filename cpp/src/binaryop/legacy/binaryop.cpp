@@ -40,9 +40,10 @@
 #include <types.h.jit>
 #include <types.hpp.jit>
 
-namespace cudf {
-namespace binops {
-
+namespace cudf
+{
+namespace binops
+{
 /**---------------------------------------------------------------------------*
  * @brief Computes bitwise AND of two input valid masks
  *
@@ -62,7 +63,8 @@ void binary_valid_mask_and(cudf::size_type& out_null_count,
                            cudf::valid_type* valid_out,
                            const cudf::valid_type* valid_left,
                            const cudf::valid_type* valid_right,
-                           cudf::size_type num_values) {
+                           cudf::size_type num_values)
+{
   if (num_values == 0) {
     out_null_count = 0;
     return;
@@ -115,7 +117,8 @@ void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
                                cudf::valid_type* valid_out,
                                cudf::valid_type* valid_col,
                                bool valid_scalar,
-                               cudf::size_type num_values) {
+                               cudf::size_type num_values)
+{
   if (num_values == 0) {
     out_null_count = 0;
     return;
@@ -146,15 +149,16 @@ void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
   out_null_count = num_values - non_nulls;
 }
 
-namespace jit {
-
+namespace jit
+{
 const std::string hash = "prog_binop";
 
 const std::vector<std::string> compiler_flags{"-std=c++14"};
 const std::vector<std::string> headers_name{
   "operation.h", "traits.h", cudf_types_h, cudf_types_hpp};
 
-std::istream* headers_code(std::string filename, std::iostream& stream) {
+std::istream* headers_code(std::string filename, std::iostream& stream)
+{
   if (filename == "operation.h") {
     stream << code::operation;
     return &stream;
@@ -166,7 +170,8 @@ std::istream* headers_code(std::string filename, std::iostream& stream) {
   return nullptr;
 }
 
-void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope)
+{
   cudf::jit::launcher(hash, code::kernel, headers_name, compiler_flags, headers_code)
     .set_kernel_inst("kernel_v_s",                         // name of the kernel we are launching
                      {cudf::jit::getTypeName(out->dtype),  // list of template arguments
@@ -176,7 +181,8 @@ void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_bin
     .launch(out->size, out->data, rhs->data, lhs->data);
 }
 
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope)
+{
   cudf::jit::launcher(hash, code::kernel, headers_name, compiler_flags, headers_code)
     .set_kernel_inst("kernel_v_s",                         // name of the kernel we are launching
                      {cudf::jit::getTypeName(out->dtype),  // list of template arguments
@@ -186,7 +192,8 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_bin
     .launch(out->size, out->data, lhs->data, rhs->data);
 }
 
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope)
+{
   cudf::jit::launcher(hash, code::kernel, headers_name, compiler_flags, headers_code)
     .set_kernel_inst("kernel_v_v",                         // name of the kernel we are launching
                      {cudf::jit::getTypeName(out->dtype),  // list of template arguments
@@ -200,7 +207,8 @@ void binary_operation(gdf_column* out,
                       const gdf_column* lhs,
                       const gdf_column* rhs,
                       const std::string& ptx,
-                      const std::string& output_type) {
+                      const std::string& output_type)
+{
   std::string ptx_hash = hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type));
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
@@ -217,7 +225,8 @@ void binary_operation(gdf_column* out,
 }  // namespace jit
 }  // namespace binops
 
-void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope)
+{
   // Check for null pointers in input
   CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), "Input pointers are null");
 
@@ -240,7 +249,8 @@ void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_bin
   binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope)
+{
   // Check for null pointers in input
   CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), "Input pointers are null");
 
@@ -263,7 +273,8 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_bin
   binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope)
+{
   // Check for null pointers in input
   CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr), "Input pointers are null");
 
@@ -335,7 +346,8 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_bin
 gdf_column binary_operation(const gdf_column& lhs,
                             const gdf_column& rhs,
                             const std::string& ptx,
-                            gdf_dtype output_type) {
+                            gdf_dtype output_type)
+{
   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
 
   gdf_column output{};

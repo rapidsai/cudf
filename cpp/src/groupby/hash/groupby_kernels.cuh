@@ -21,12 +21,16 @@
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-namespace hash {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
+namespace hash
+{
 /**
  * @brief Compute single-pass aggregations and store results into a sparse
  * `output_values` table, and populate `map` with indices of unique keys
@@ -98,9 +102,12 @@ struct compute_single_pass_aggs {
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
-      row_bitmask(row_bitmask) {}
+      row_bitmask(row_bitmask)
+  {
+  }
 
-  __device__ void operator()(size_type i) {
+  __device__ void operator()(size_type i)
+  {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
       auto result = map.insert(thrust::make_pair(i, i));
 

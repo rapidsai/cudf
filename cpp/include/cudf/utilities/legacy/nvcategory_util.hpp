@@ -6,7 +6,8 @@
 
 // Forward declarations
 class NVCategory;
-namespace cudf {
+namespace cudf
+{
 struct table;
 }
 

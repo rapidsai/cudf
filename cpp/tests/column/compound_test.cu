@@ -27,12 +27,14 @@
 #include <thrust/sequence.h>
 #include <vector>
 
-struct CompoundColumnTest : public cudf::test::BaseFixture {};
+struct CompoundColumnTest : public cudf::test::BaseFixture {
+};
 
 template <typename ColumnDeviceView>
 struct checker_for_level1 {
   ColumnDeviceView d_column;
-  bool __device__ operator()(int32_t idx) {
+  bool __device__ operator()(int32_t idx)
+  {
     int32_t val1 = d_column.child(0).template element<int32_t>(idx);
     int32_t val2 = d_column.child(1).template element<int32_t>(idx);
     int32_t val3 = d_column.child(2).template element<int32_t>(idx);
@@ -43,7 +45,8 @@ struct checker_for_level1 {
 template <typename ColumnDeviceView>
 struct checker_for_level2 {
   ColumnDeviceView d_column;
-  bool __device__ operator()(int32_t idx) {
+  bool __device__ operator()(int32_t idx)
+  {
     bool bcheck = true;
     for (int i = 0; i < 2 && bcheck; ++i) {
       auto child   = d_column.child(i);
@@ -56,7 +59,8 @@ struct checker_for_level2 {
   }
 };
 
-TEST_F(CompoundColumnTest, ChildrenLevel1) {
+TEST_F(CompoundColumnTest, ChildrenLevel1)
+{
   thrust::device_vector<int32_t> data(1000);
   thrust::sequence(thrust::device, data.begin(), data.end(), 1);
 
@@ -99,7 +103,8 @@ TEST_F(CompoundColumnTest, ChildrenLevel1) {
   }
 }
 
-TEST_F(CompoundColumnTest, ChildrenLevel2) {
+TEST_F(CompoundColumnTest, ChildrenLevel2)
+{
   thrust::device_vector<int32_t> data(1000);
   thrust::sequence(thrust::device, data.begin(), data.end(), 1);
 

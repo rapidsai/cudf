@@ -32,11 +32,14 @@
 #include <cub/cub.cuh>
 #include <rmm/device_scalar.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace detail {
-
-namespace {  // anonymous
+namespace cudf
+{
+namespace experimental
+{
+namespace detail
+{
+namespace
+{  // anonymous
 
 template <size_type block_size,
           typename T,
@@ -49,7 +52,8 @@ __launch_bounds__(block_size) __global__
                            RightIter rhs,
                            Filter filter,
                            mutable_column_device_view out,
-                           size_type *__restrict__ const valid_count) {
+                           size_type *__restrict__ const valid_count)
+{
   const size_type tid            = threadIdx.x + blockIdx.x * block_size;
   const int warp_id              = tid / warp_size;
   const size_type warps_per_grid = gridDim.x * block_size / warp_size;
@@ -124,7 +128,8 @@ std::unique_ptr<column> copy_if_else(data_type type,
                                      RightIter rhs,
                                      FilterFn filter,
                                      rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;

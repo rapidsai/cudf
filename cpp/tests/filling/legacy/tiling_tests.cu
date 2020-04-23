@@ -27,13 +27,15 @@ template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename T>
-struct TileTest : GdfTest {};
+struct TileTest : GdfTest {
+};
 
 using test_types = ::testing::
   Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(TileTest, test_types);
 
-TYPED_TEST(TileTest, Tile) {
+TYPED_TEST(TileTest, Tile)
+{
   using T = TypeParam;
 
   cudf::size_type repeat_count = 4;
@@ -62,7 +64,8 @@ TYPED_TEST(TileTest, Tile) {
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str() << "Expected:" << expected.to_str();
 }
 
-TYPED_TEST(TileTest, ZeroSizeInput) {
+TYPED_TEST(TileTest, ZeroSizeInput)
+{
   using T = TypeParam;
 
   auto values = column_wrapper<T>{};

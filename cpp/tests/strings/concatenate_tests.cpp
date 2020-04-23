@@ -25,9 +25,11 @@
 
 #include <vector>
 
-struct StringsConcatenateTest : public cudf::test::BaseFixture {};
+struct StringsConcatenateTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConcatenateTest, Concatenate) {
+TEST_F(StringsConcatenateTest, Concatenate)
+{
   std::vector<const char*> h_strings{"aaa",
                                      "bb",
                                      "",
@@ -64,7 +66,8 @@ TEST_F(StringsConcatenateTest, Concatenate) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns) {
+TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);
@@ -74,7 +77,8 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns) {
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal) {
+TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   std::vector<cudf::column_view> strings_columns;
   strings_columns.push_back(zero_size_strings_column);

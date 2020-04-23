@@ -27,9 +27,11 @@
 
 #include <vector>
 
-struct StringsTranslateTest : public cudf::test::BaseFixture {};
+struct StringsTranslateTest : public cudf::test::BaseFixture {
+};
 
-std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const char* to) {
+std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const char* to)
+{
   cudf::char_utf8 in  = 0;
   cudf::char_utf8 out = 0;
   cudf::strings::detail::to_char_utf8(from, in);
@@ -37,7 +39,8 @@ std::pair<cudf::char_utf8, cudf::char_utf8> make_entry(const char* from, const c
   return std::make_pair(in, out);
 }
 
-TEST_F(StringsTranslateTest, Translate) {
+TEST_F(StringsTranslateTest, Translate)
+{
   std::vector<const char*> h_strings{"eee ddd", "bb cc", nullptr, "", "aa", "débd"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -57,7 +60,8 @@ TEST_F(StringsTranslateTest, Translate) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsTranslateTest, ZeroSizeStringsColumn) {
+TEST_F(StringsTranslateTest, ZeroSizeStringsColumn)
+{
   cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> translate_table;

@@ -26,9 +26,11 @@
 
 #include <vector>
 
-struct TextNormalizeTest : public cudf::test::BaseFixture {};
+struct TextNormalizeTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(TextNormalizeTest, Normalize) {
+TEST_F(TextNormalizeTest, Normalize)
+{
   std::vector<const char*> h_strings{"the\t fox  jumped over the      dog",
                                      "the dog\f chased  the cat\r",
                                      " the cat  chaséd  the mouse\n",
@@ -61,7 +63,8 @@ TEST_F(TextNormalizeTest, Normalize) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(TextNormalizeTest, NormalizeEmptyTest) {
+TEST_F(TextNormalizeTest, NormalizeEmptyTest)
+{
   auto strings = cudf::make_empty_column(cudf::data_type{cudf::STRING});
   cudf::strings_column_view strings_view(strings->view());
   auto const results = nvtext::normalize_spaces(strings_view);

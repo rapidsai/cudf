@@ -31,13 +31,15 @@ template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename T>
-struct IsSortedAlphaNum : GdfTest {};
+struct IsSortedAlphaNum : GdfTest {
+};
 
 using test_types = ::testing::Types<cudf::nvstring_category>;
 
 TYPED_TEST_CASE(IsSortedAlphaNum, test_types);
 
-TYPED_TEST(IsSortedAlphaNum, AlphaNumericalTrue) {
+TYPED_TEST(IsSortedAlphaNum, AlphaNumericalTrue)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -64,7 +66,8 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalTrue) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSortedAlphaNum, AlphaNumericalFalse) {
+TYPED_TEST(IsSortedAlphaNum, AlphaNumericalFalse)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -92,13 +95,15 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalFalse) {
 }
 
 template <typename T>
-struct IsSorted : GdfTest {};
+struct IsSorted : GdfTest {
+};
 
 using test_types_num = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(IsSorted, test_types_num);
 
-TYPED_TEST(IsSorted, NumericalTrue) {
+TYPED_TEST(IsSorted, NumericalTrue)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -122,7 +127,8 @@ TYPED_TEST(IsSorted, NumericalTrue) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, NumericalFalse) {
+TYPED_TEST(IsSorted, NumericalFalse)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -146,7 +152,8 @@ TYPED_TEST(IsSorted, NumericalFalse) {
   EXPECT_EQ(found, false);
 }
 
-TYPED_TEST(IsSorted, NumericalRowAscending) {
+TYPED_TEST(IsSorted, NumericalRowAscending)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -166,7 +173,8 @@ TYPED_TEST(IsSorted, NumericalRowAscending) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, NumericalRowDecendingFails) {
+TYPED_TEST(IsSorted, NumericalRowDecendingFails)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -186,7 +194,8 @@ TYPED_TEST(IsSorted, NumericalRowDecendingFails) {
   EXPECT_EQ(found, false);
 }
 
-TYPED_TEST(IsSorted, NumericalNullSmallest) {
+TYPED_TEST(IsSorted, NumericalNullSmallest)
+{
   using T                 = TypeParam;
   bool found              = false;
   bool nulls_are_smallest = true;
@@ -208,7 +217,8 @@ TYPED_TEST(IsSorted, NumericalNullSmallest) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, NumericalNullBiggest) {
+TYPED_TEST(IsSorted, NumericalNullBiggest)
+{
   using T                 = TypeParam;
   bool found              = false;
   bool nulls_are_smallest = false;
@@ -230,7 +240,8 @@ TYPED_TEST(IsSorted, NumericalNullBiggest) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, EmptyInput) {
+TYPED_TEST(IsSorted, EmptyInput)
+{
   using T                 = TypeParam;
   bool found              = false;
   bool nulls_are_smallest = false;
@@ -243,7 +254,8 @@ TYPED_TEST(IsSorted, EmptyInput) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, ZeroRowswithColumns) {
+TYPED_TEST(IsSorted, ZeroRowswithColumns)
+{
   using T                 = TypeParam;
   bool found              = false;
   bool nulls_are_smallest = false;
@@ -265,7 +277,8 @@ TYPED_TEST(IsSorted, ZeroRowswithColumns) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, EmptyColumnOrderingInfoTrue) {
+TYPED_TEST(IsSorted, EmptyColumnOrderingInfoTrue)
+{
   using T    = TypeParam;
   bool found = false;
 
@@ -285,7 +298,8 @@ TYPED_TEST(IsSorted, EmptyColumnOrderingInfoTrue) {
   EXPECT_EQ(found, true);
 }
 
-TYPED_TEST(IsSorted, EmptyColumnOrderingInfoFalse) {
+TYPED_TEST(IsSorted, EmptyColumnOrderingInfoFalse)
+{
   using T    = TypeParam;
   bool found = false;
 

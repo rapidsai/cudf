@@ -35,7 +35,8 @@ template <typename T>
 void initialize_vector(std::vector<T>& v,
                        const size_t column_length,
                        const size_t column_range,
-                       bool sorted = false) {
+                       bool sorted = false)
+{
   v.resize(column_length);
   std::generate(
     v.begin(), v.end(), [column_range]() { return static_cast<T>(std::rand() % column_range); });
@@ -44,9 +45,8 @@ void initialize_vector(std::vector<T>& v,
 
 // Initialize a vector with an initializer lambda
 template <typename T, typename initializer_t>
-void initialize_vector(std::vector<T>& v,
-                       const size_t column_length,
-                       initializer_t the_initializer) {
+void initialize_vector(std::vector<T>& v, const size_t column_length, initializer_t the_initializer)
+{
   v.resize(column_length);
 
   for (size_t i = 0; i < column_length; ++i) { v[i] = the_initializer(i); }
@@ -57,7 +57,8 @@ template <typename initializer_t, std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type initialize_tuple(
   std::tuple<std::vector<Tp>...>& t,
   std::vector<size_t> column_lengths,
-  initializer_t the_initializer) {
+  initializer_t the_initializer)
+{
   // bottom of compile-time recursion
   // purposely empty...
 }
@@ -65,7 +66,8 @@ template <typename initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
   I<sizeof...(Tp), void>::type initialize_tuple(std::tuple<std::vector<Tp>...>& t,
                                                 std::vector<size_t> column_lengths,
-                                                initializer_t the_initializer) {
+                                                initializer_t the_initializer)
+{
   // Initialize the current vector
   initialize_vector(std::get<I>(t), column_lengths[I], the_initializer);
 
@@ -76,7 +78,8 @@ template <typename initializer_t, std::size_t I = 0, typename... Tp>
 // Overload for default initialization of vector which initializes each
 // element with its index value
 template <typename... Tp>
-void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> column_lengths) {
+void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> column_lengths)
+{
   auto the_initializer = [](size_t i) { return i; };
 
   initialize_tuple(t, column_lengths, the_initializer);
@@ -85,10 +88,8 @@ void initialize_tuple(std::tuple<std::vector<Tp>...>& t, std::vector<size_t> col
 // compile time recursion to initialize a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type initialize_tuple(
-  std::tuple<std::vector<Tp>...>& t,
-  size_t column_length,
-  size_t column_range,
-  bool sorted = false) {
+  std::tuple<std::vector<Tp>...>& t, size_t column_length, size_t column_range, bool sorted = false)
+{
   // bottom of compile-time recursion
   // purposely empty...
 }
@@ -97,7 +98,8 @@ template <std::size_t I = 0, typename... Tp>
   I<sizeof...(Tp), void>::type initialize_tuple(std::tuple<std::vector<Tp>...>& t,
                                                 size_t column_length,
                                                 size_t column_range,
-                                                bool sorted = false) {
+                                                bool sorted = false)
+{
   // Initialize the current vector
   initialize_vector(std::get<I>(t), column_length, column_range, sorted);
 
@@ -107,13 +109,15 @@ template <std::size_t I = 0, typename... Tp>
 
 // Prints a vector
 template <typename T>
-void print_vector(std::vector<T>& v) {
+void print_vector(std::vector<T>& v)
+{
   std::copy(v.begin(), v.end(), std::ostream_iterator<T>(std::cout, ", "));
 }
 
 template <std::size_t I = 0, typename... Tp>
 inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuple(
-  std::tuple<std::vector<Tp>...>& t) {
+  std::tuple<std::vector<Tp>...>& t)
+{
   // bottom of compile-time recursion
   // purposely empty...
 }
@@ -121,7 +125,8 @@ inline typename std::enable_if<I == sizeof...(Tp), void>::type print_tuple(
 // compile time recursion to print a tuple of vectors
 template <std::size_t I = 0, typename... Tp>
   inline typename std::enable_if <
-  I<sizeof...(Tp), void>::type print_tuple(std::tuple<std::vector<Tp>...>& t) {
+  I<sizeof...(Tp), void>::type print_tuple(std::tuple<std::vector<Tp>...>& t)
+{
   // print the current vector:
   print_vector(std::get<I>(t));
   std::cout << std::endl;
@@ -137,7 +142,8 @@ inline typename std::enable_if<I == (sizeof...(Tp)), bool>::type rows_equal(
   const std::tuple<std::vector<Tp>...>& left,
   const std::tuple<std::vector<Tp>...>& right,
   const size_t left_index,
-  const size_t right_index) {
+  const size_t right_index)
+{
   // bottom of recursion
   // If we reach this point, we know the ve
   return true;
@@ -147,7 +153,8 @@ template <std::size_t I = 0, typename... Tp>
   I<sizeof...(Tp), bool>::type rows_equal(const std::tuple<std::vector<Tp>...>& left,
                                           const std::tuple<std::vector<Tp>...>& right,
                                           const size_t left_index,
-                                          const size_t right_index) {
+                                          const size_t right_index)
+{
   if (std::get<I>(left)[left_index] == std::get<I>(right)[right_index]) {
     return rows_equal<I + 1, Tp...>(left, right, left_index, right_index);
   } else

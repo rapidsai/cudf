@@ -30,10 +30,12 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace nvtext {
-namespace detail {
-namespace {
-
+namespace nvtext
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief This records the byte positions of each token within each string.
  *
@@ -53,7 +55,8 @@ struct string_tokens_positions_fn {
   int32_t const* d_token_offsets;            // offsets into the d_token_positions for each string
   position_pair* d_token_positions;          // token positions in each string
 
-  __device__ void operator()(cudf::size_type idx) {
+  __device__ void operator()(cudf::size_type idx)
+  {
     if (d_strings.is_null(idx)) return;
     cudf::string_view d_str = d_strings.element<cudf::string_view>(idx);
     // create tokenizer for this string
@@ -89,7 +92,8 @@ struct ngram_builder_fn {
   int32_t const* d_ngram_offsets{};          // offsets for sizes of each string's ngrams
   int32_t* d_ngram_sizes{};                  // write ngram sizes to here
 
-  __device__ cudf::size_type operator()(cudf::size_type idx) {
+  __device__ cudf::size_type operator()(cudf::size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     cudf::string_view d_str     = d_strings.element<cudf::string_view>(idx);
     auto token_positions        = d_token_positions + d_token_offsets[idx];
@@ -130,7 +134,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   cudf::string_scalar const& delimiter = cudf::string_scalar(""),
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource(),
-  cudaStream_t stream                  = 0) {
+  cudaStream_t stream                  = 0)
+{
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
@@ -254,7 +259,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& delimiter,
                                               cudf::string_scalar const& separator,
-                                              rmm::mr::device_memory_resource* mr) {
+                                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::ngrams_tokenize(strings, ngrams, delimiter, separator, mr);
 }

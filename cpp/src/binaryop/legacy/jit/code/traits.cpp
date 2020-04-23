@@ -17,11 +17,14 @@
  * limitations under the License.
  */
 
-namespace cudf {
-namespace binops {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace binops
+{
+namespace jit
+{
+namespace code
+{
 const char* traits =
   R"***(
 #pragma once

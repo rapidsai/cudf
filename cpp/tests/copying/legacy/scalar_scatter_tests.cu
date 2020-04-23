@@ -26,12 +26,14 @@
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 template <typename T>
-struct ScalarScatterTest : GdfTest {};
+struct ScalarScatterTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(ScalarScatterTest, test_types);
 
-TYPED_TEST(ScalarScatterTest, DestMissingValid) {
+TYPED_TEST(ScalarScatterTest, DestMissingValid)
+{
   constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3, "Size of source data must be a multiple of 3.");
@@ -74,7 +76,8 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
+TYPED_TEST(ScalarScatterTest, ScatterMultiColValid)
+{
   constexpr cudf::size_type target_size{1920};
   constexpr cudf::size_type n_cols = 3;
 
@@ -125,7 +128,8 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScalarScatterTest, DISABLED_ScatterValid) {
+TYPED_TEST(ScalarScatterTest, DISABLED_ScatterValid)
+{
   constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3, "Size of source data must be a multiple of 3.");
@@ -167,7 +171,8 @@ TYPED_TEST(ScalarScatterTest, DISABLED_ScatterValid) {
   destination_table.destroy();
 }
 
-TYPED_TEST(ScalarScatterTest, DISABLED_ScatterNull) {
+TYPED_TEST(ScalarScatterTest, DISABLED_ScatterNull)
+{
   constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3, "Size of source data must be a multiple of 3.");

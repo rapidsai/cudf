@@ -24,9 +24,10 @@
 #include <cudf/utilities/error.hpp>
 #include <utilities/legacy/column_utils.hpp>
 
-namespace cudf {
-
-table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
+namespace cudf
+{
+table::table(std::vector<gdf_column*> const& cols) : _columns{cols}
+{
   std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {
     CUDF_EXPECTS(nullptr != col, "Null input column");
     CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
@@ -36,7 +37,9 @@ table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
 table::table(std::initializer_list<gdf_column*> list) : table{std::vector<gdf_column*>(list)} {}
 
 table::table(gdf_column* cols[], cudf::size_type num_cols)
-  : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
+  : table{std::vector<gdf_column*>(cols, cols + num_cols)}
+{
+}
 
 table::table(cudf::size_type num_rows,
              std::vector<gdf_dtype> const& dtypes,
@@ -44,7 +47,8 @@ table::table(cudf::size_type num_rows,
              bool allocate_bitmasks,
              bool all_valid,
              cudaStream_t stream)
-  : _columns(dtypes.size()) {
+  : _columns(dtypes.size())
+{
   std::transform(
     _columns.begin(),
     _columns.end(),
@@ -92,14 +96,16 @@ table::table(cudf::size_type num_rows,
                  });
 }
 
-void table::destroy(void) {
+void table::destroy(void)
+{
   for (auto& col : _columns) {
     gdf_column_free(col);
     delete col;
   }
 }
 
-table table::select(std::vector<cudf::size_type> const& column_indices) const {
+table table::select(std::vector<cudf::size_type> const& column_indices) const
+{
   CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
 
   std::vector<gdf_column*> desired_columns;
@@ -107,7 +113,8 @@ table table::select(std::vector<cudf::size_type> const& column_indices) const {
   return table{desired_columns};
 }
 
-std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
+std::vector<gdf_dtype> column_dtypes(cudf::table const& table)
+{
   std::vector<gdf_dtype> dtypes(table.num_columns());
 
   std::transform(
@@ -115,7 +122,8 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
   return dtypes;
 }
 
-std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table) {
+std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table)
+{
   std::vector<gdf_dtype_extra_info> dtype_infos(table.num_columns());
 
   std::transform(table.begin(), table.end(), dtype_infos.begin(), [](gdf_column const* col) {
@@ -124,13 +132,15 @@ std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table) {
   return dtype_infos;
 }
 
-bool has_nulls(cudf::table const& table) {
+bool has_nulls(cudf::table const& table)
+{
   return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
     return (nullptr != col->valid) and (col->null_count > 0);
   });
 }
 
-table concat(cudf::table const& table1, cudf::table const& table2) {
+table concat(cudf::table const& table1, cudf::table const& table2)
+{
   CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
 
   std::vector<gdf_column*> columns(table1.num_columns() + table2.num_columns());

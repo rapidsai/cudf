@@ -50,7 +50,8 @@ struct JoinBounds {
 /* ----------------------------------------------------------------------------*/
 template <typename T, typename index_type, typename size_type>
 JoinBounds<index_type> compute_join_bounds(
-  T const* const l, size_type l_count, T const* const r, size_type r_count, cudaStream_t stream) {
+  T const* const l, size_type l_count, T const* const r, size_type r_count, cudaStream_t stream)
+{
   JoinBounds<index_type> bounds;
   bounds.lower.resize(l_count);
   bounds.upper.resize(l_count);
@@ -83,14 +84,16 @@ JoinBounds<index_type> compute_join_bounds(
 /* ----------------------------------------------------------------------------*/
 template <typename index_type, JoinType join_type>
 struct Diff {
-  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
+  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t)
+  {
     return (thrust::get<0>(t) - thrust::get<1>(t)) + (thrust::get<0>(t) == thrust::get<1>(t));
   }
 };
 
 template <typename index_type>
 struct Diff<index_type, JoinType::INNER_JOIN> {
-  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t) {
+  __device__ index_type operator()(thrust::tuple<const index_type, const index_type> t)
+  {
     return thrust::get<0>(t) - thrust::get<1>(t);
   }
 };
@@ -112,7 +115,8 @@ struct JoinConditionalAdd {
   __host__ __device__ JoinConditionalAdd(const index_type NoneValue) : none(NoneValue) {}
 
   __device__ index_type operator()(index_type r_ptr,
-                                   thrust::tuple<const index_type, const index_type> lower_upper) {
+                                   thrust::tuple<const index_type, const index_type> lower_upper)
+  {
     if (thrust::get<0>(lower_upper) == thrust::get<1>(lower_upper)) {
       return none;
     } else {
@@ -134,7 +138,8 @@ struct JoinConditionalAdd {
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename index_type>
 rmm::device_vector<index_type> scan_join_bounds(const JoinBounds<index_type>& bounds,
-                                                cudaStream_t stream) {
+                                                cudaStream_t stream)
+{
   rmm::device_vector<index_type> scanned_sizes(bounds.lower.size() + 1, 0);
   thrust::transform_inclusive_scan(
     rmm::exec_policy(stream)->on(stream),
@@ -165,7 +170,8 @@ void create_load_balanced_tuple(const rmm::device_vector<index_type>& scanned_si
                                 index_type* const seg,
                                 index_type* const rank,
                                 const index_type segment_length,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                       scanned_sizes.begin(),
                       scanned_sizes.end(),
@@ -206,7 +212,8 @@ gdf_error compute_joined_indices(const JoinBounds<index_type>& bounds,
                                  gdf_column* const rightcol,
                                  rmm::device_vector<index_type>& scanned_sizes,
                                  std::pair<gdf_column, gdf_column>& join_result,
-                                 cudaStream_t stream) {
+                                 cudaStream_t stream)
+{
   index_type join_size = scanned_sizes[scanned_sizes.size() - 1];
   scanned_sizes.resize(scanned_sizes.size() - 1);
 
@@ -272,7 +279,8 @@ gdf_error sort_join_typed(gdf_column* const output_l,
                           gdf_column* const output_r,
                           gdf_column* const leftcol,
                           gdf_column* const rightcol,
-                          bool flip_results = false) {
+                          bool flip_results = false)
+{
   cudaStream_t stream = 0;
   JoinBounds<index_type> bounds =
     compute_join_bounds<column_type, index_type>(static_cast<column_type*>(leftcol->data),
@@ -320,7 +328,8 @@ struct compute_sort_join {
                        gdf_column* const output_r,
                        gdf_column* const lcol,
                        gdf_column* const rcol,
-                       bool flip = false) {
+                       bool flip = false)
+  {
     using T = typename std::decay<decltype(cudf::detail::unwrap(column_type{}))>::type;
     return sort_join_typed<join_type, T, index_type>(output_l, output_r, lcol, rcol, flip);
   }

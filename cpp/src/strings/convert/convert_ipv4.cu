@@ -27,11 +27,14 @@
 #include <thrust/transform.h>
 #include <cmath>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief Converts IPv4 strings into integers.
  *
@@ -43,7 +46,8 @@ namespace {
 struct ipv4_to_integers_fn {
   column_device_view const d_strings;
 
-  __device__ int64_t operator()(size_type idx) {
+  __device__ int64_t operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
     int32_t ipvals[4]  = {0};  // IPV4 format: xxx.xxx.xxx.xxx
@@ -71,7 +75,8 @@ struct ipv4_to_integers_fn {
 std::unique_ptr<column> ipv4_to_integers(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{INT64}, 0);
 
@@ -99,14 +104,16 @@ std::unique_ptr<column> ipv4_to_integers(
 
 // external API
 std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
-                                         rmm::mr::device_memory_resource* mr) {
+                                         rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::ipv4_to_integers(strings, mr);
 }
 
-namespace detail {
-namespace {
-
+namespace detail
+{
+namespace
+{
 /**
  * @brief Converts integers into IPv4 addresses.
  *
@@ -119,7 +126,8 @@ struct integers_to_ipv4_fn {
   int32_t const* d_offsets;
   char* d_chars;
 
-  __device__ int convert(int value, char* digits) {
+  __device__ int convert(int value, char* digits)
+  {
     int digits_idx = 0;
     while ((value > 0) && (digits_idx < 3)) {
       digits[digits_idx++] = '0' + (value % 10);
@@ -128,7 +136,8 @@ struct integers_to_ipv4_fn {
     return digits_idx;
   }
 
-  __device__ void operator()(size_type idx) {
+  __device__ void operator()(size_type idx)
+  {
     if (d_column.is_null(idx)) return;
     int64_t ip_number = d_column.element<int64_t>(idx);
     char* out_ptr     = d_chars + d_offsets[idx];
@@ -154,7 +163,8 @@ struct integers_to_ipv4_fn {
 std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = integers.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -206,7 +216,8 @@ std::unique_ptr<column> integers_to_ipv4(
 // external API
 
 std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
-                                         rmm::mr::device_memory_resource* mr) {
+                                         rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::integers_to_ipv4(integers, mr);
 }

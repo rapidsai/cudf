@@ -17,9 +17,10 @@
 #pragma once
 #include <stdint.h>
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 #if (__CUDACC_VER_MAJOR__ >= 9)
 #define SHFL0(v) __shfl_sync(~0, v, 0)
 #define SHFL(v, t) __shfl_sync(~0, v, t)
@@ -42,38 +43,45 @@ namespace io {
 
 // Warp reduction helpers
 template <typename T>
-inline __device__ T WarpReduceSum2(T acc) {
+inline __device__ T WarpReduceSum2(T acc)
+{
   return acc + SHFL_XOR(acc, 1);
 }
 template <typename T>
-inline __device__ T WarpReduceSum4(T acc) {
+inline __device__ T WarpReduceSum4(T acc)
+{
   acc = WarpReduceSum2(acc);
   return acc + SHFL_XOR(acc, 2);
 }
 template <typename T>
-inline __device__ T WarpReduceSum8(T acc) {
+inline __device__ T WarpReduceSum8(T acc)
+{
   acc = WarpReduceSum4(acc);
   return acc + SHFL_XOR(acc, 4);
 }
 template <typename T>
-inline __device__ T WarpReduceSum16(T acc) {
+inline __device__ T WarpReduceSum16(T acc)
+{
   acc = WarpReduceSum8(acc);
   return acc + SHFL_XOR(acc, 8);
 }
 template <typename T>
-inline __device__ T WarpReduceSum32(T acc) {
+inline __device__ T WarpReduceSum32(T acc)
+{
   acc = WarpReduceSum16(acc);
   return acc + SHFL_XOR(acc, 16);
 }
 
 template <typename T>
-inline __device__ T WarpReducePos2(T pos, uint32_t t) {
+inline __device__ T WarpReducePos2(T pos, uint32_t t)
+{
   T tmp = SHFL(pos, t & 0x1e);
   pos += (t & 1) ? tmp : 0;
   return pos;
 }
 template <typename T>
-inline __device__ T WarpReducePos4(T pos, uint32_t t) {
+inline __device__ T WarpReducePos4(T pos, uint32_t t)
+{
   T tmp;
   pos = WarpReducePos2(pos, t);
   tmp = SHFL(pos, (t & 0x1c) | 1);
@@ -81,7 +89,8 @@ inline __device__ T WarpReducePos4(T pos, uint32_t t) {
   return pos;
 }
 template <typename T>
-inline __device__ T WarpReducePos8(T pos, uint32_t t) {
+inline __device__ T WarpReducePos8(T pos, uint32_t t)
+{
   T tmp;
   pos = WarpReducePos4(pos, t);
   tmp = SHFL(pos, (t & 0x18) | 3);
@@ -89,7 +98,8 @@ inline __device__ T WarpReducePos8(T pos, uint32_t t) {
   return pos;
 }
 template <typename T>
-inline __device__ T WarpReducePos16(T pos, uint32_t t) {
+inline __device__ T WarpReducePos16(T pos, uint32_t t)
+{
   T tmp;
   pos = WarpReducePos8(pos, t);
   tmp = SHFL(pos, (t & 0x10) | 7);
@@ -97,7 +107,8 @@ inline __device__ T WarpReducePos16(T pos, uint32_t t) {
   return pos;
 }
 template <typename T>
-inline __device__ T WarpReducePos32(T pos, uint32_t t) {
+inline __device__ T WarpReducePos32(T pos, uint32_t t)
+{
   T tmp;
   pos = WarpReducePos16(pos, t);
   tmp = SHFL(pos, 0xf);
@@ -105,7 +116,8 @@ inline __device__ T WarpReducePos32(T pos, uint32_t t) {
   return pos;
 }
 
-inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi) {
+inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi)
+{
   double sign;
   if (hi < 0) {
     sign = -1.0;
@@ -117,14 +129,16 @@ inline __device__ double Int128ToDouble_rn(uint64_t lo, int64_t hi) {
   return sign * __fma_rn(__ll2double_rn(hi), 4294967296.0 * 4294967296.0, __ull2double_rn(lo));
 }
 
-inline __device__ uint32_t unaligned_load32(const uint8_t *p) {
+inline __device__ uint32_t unaligned_load32(const uint8_t *p)
+{
   uint32_t ofs        = 3 & reinterpret_cast<uintptr_t>(p);
   const uint32_t *p32 = reinterpret_cast<const uint32_t *>(p - ofs);
   uint32_t v          = p32[0];
   return (ofs) ? __funnelshift_r(v, p32[1], ofs * 8) : v;
 }
 
-inline __device__ uint64_t unaligned_load64(const uint8_t *p) {
+inline __device__ uint64_t unaligned_load64(const uint8_t *p)
+{
   uint32_t ofs        = 3 & reinterpret_cast<uintptr_t>(p);
   const uint32_t *p32 = reinterpret_cast<const uint32_t *>(p - ofs);
   uint32_t v0         = p32[0];
@@ -137,7 +151,8 @@ inline __device__ uint64_t unaligned_load64(const uint8_t *p) {
 }
 
 template <unsigned int nthreads, bool sync_before_store>
-inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, uint32_t t) {
+inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, uint32_t t)
+{
   uint8_t *dst       = reinterpret_cast<uint8_t *>(dstv);
   const uint8_t *src = reinterpret_cast<const uint8_t *>(srcv);
   uint32_t dst_align_bytes, src_align_bytes, src_align_bits;
@@ -181,7 +196,8 @@ inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, 
  * @brief Compares two strings
  */
 template <class T, const T lesser, const T greater, const T equal>
-inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen) {
+inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen)
+{
   uint32_t len = min(alen, blen);
   uint32_t i   = 0;
   if (len >= 4) {
@@ -213,24 +229,21 @@ inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs,
   return (alen == blen) ? equal : (alen < blen) ? lesser : greater;
 }
 
-inline __device__ bool nvstr_is_lesser(const char *as,
-                                       uint32_t alen,
-                                       const char *bs,
-                                       uint32_t blen) {
+inline __device__ bool nvstr_is_lesser(const char *as, uint32_t alen, const char *bs, uint32_t blen)
+{
   return nvstr_compare<bool, true, false, false>(as, alen, bs, blen);
 }
 
 inline __device__ bool nvstr_is_greater(const char *as,
                                         uint32_t alen,
                                         const char *bs,
-                                        uint32_t blen) {
+                                        uint32_t blen)
+{
   return nvstr_compare<bool, false, true, false>(as, alen, bs, blen);
 }
 
-inline __device__ bool nvstr_is_equal(const char *as,
-                                      uint32_t alen,
-                                      const char *bs,
-                                      uint32_t blen) {
+inline __device__ bool nvstr_is_equal(const char *as, uint32_t alen, const char *bs, uint32_t blen)
+{
   return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
 

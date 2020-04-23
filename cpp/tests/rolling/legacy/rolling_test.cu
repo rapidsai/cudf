@@ -32,19 +32,22 @@
 #include <vector>
 
 template <typename T>
-class RollingTest : public GdfTest {
+class RollingTest : public GdfTest
+{
  protected:
   // integral types
   template <typename U                                                            = T,
             typename std::enable_if_t<std::is_integral<U>::value, std::nullptr_t> = nullptr>
-  const T random_value(std::mt19937 &rng) {
+  const T random_value(std::mt19937 &rng)
+  {
     return rng() % std::numeric_limits<T>::max() + 1;
   }
 
   // non-integral types (e.g. floating point)
   template <typename U                                                             = T,
             typename std::enable_if_t<!std::is_integral<U>::value, std::nullptr_t> = nullptr>
-  const T random_value(std::mt19937 &rng) {
+  const T random_value(std::mt19937 &rng)
+  {
     return rng() / 10000.0;
   }
 
@@ -56,7 +59,8 @@ class RollingTest : public GdfTest {
                     const std::vector<cudf::size_type> &window,
                     const std::vector<cudf::size_type> &min_periods,
                     const std::vector<cudf::size_type> &forward_window,
-                    gdf_agg_op agg) {
+                    gdf_agg_op agg)
+  {
     // it's not possible to check sizes in the rolling window API since we pass raw pointers for
     // window/periods so we check here that the tests are setup correctly
     CUDF_EXPECTS(window.size() == 0 || window.size() == (size_t)input.size(),
@@ -123,7 +127,8 @@ class RollingTest : public GdfTest {
                     const std::vector<cudf::size_type> &window,
                     const std::vector<cudf::size_type> &min_periods,
                     const std::vector<cudf::size_type> &forward_window,
-                    gdf_agg_op agg) {
+                    gdf_agg_op agg)
+  {
     CUDF_EXPECTS(data.size() == mask.size(), "Validity array size != input column size");
     cudf::test::column_wrapper<T> input{(cudf::size_type)data.size(),
                                         [&](cudf::size_type row) { return data[row]; },
@@ -133,7 +138,8 @@ class RollingTest : public GdfTest {
 
   // helper function to test all aggregators
   template <class... TArgs>
-  void run_test_col_agg(TArgs... FArgs) {
+  void run_test_col_agg(TArgs... FArgs)
+  {
     // test all supported aggregators
     run_test_col(FArgs..., GDF_SUM);
     run_test_col(FArgs..., GDF_MIN);
@@ -156,7 +162,8 @@ class RollingTest : public GdfTest {
                                cudf::size_type forward_window,
                                const std::vector<cudf::size_type> &window_col,
                                const std::vector<cudf::size_type> &min_periods_col,
-                               const std::vector<cudf::size_type> &forward_window_col) {
+                               const std::vector<cudf::size_type> &forward_window_col)
+  {
     // compute the reference solution on the cpu
     cudf::size_type nrows = in_col.size();
     ref_data.resize(nrows);
@@ -199,7 +206,8 @@ class RollingTest : public GdfTest {
                                cudf::size_type forward_window,
                                const std::vector<cudf::size_type> &window_col,
                                const std::vector<cudf::size_type> &min_periods_col,
-                               const std::vector<cudf::size_type> &forward_window_col) {
+                               const std::vector<cudf::size_type> &forward_window_col)
+  {
     CUDF_FAIL("Unsupported combination of type and aggregation");
   }
 
@@ -209,7 +217,8 @@ class RollingTest : public GdfTest {
                                cudf::size_type forward_window,
                                const std::vector<cudf::size_type> &window_col,
                                const std::vector<cudf::size_type> &min_periods_col,
-                               const std::vector<cudf::size_type> &forward_window_col) {
+                               const std::vector<cudf::size_type> &forward_window_col)
+  {
     // unroll aggregation types
     switch (agg) {
       case GDF_SUM:
@@ -236,7 +245,8 @@ class RollingTest : public GdfTest {
     }
   }
 
-  void compare_gdf_result() {
+  void compare_gdf_result()
+  {
     // convert to column_wrapper to compare
 
     // copy output data to host
@@ -293,7 +303,8 @@ using ArithmeticTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, doub
 
 TYPED_TEST_CASE(RollingTest, ArithmeticTypes);
 
-TYPED_TEST(RollingTest, EmptyInput) {
+TYPED_TEST(RollingTest, EmptyInput)
+{
   cudf::test::column_wrapper<TypeParam> input(0);
 
   this->run_test_col(input,
@@ -307,7 +318,8 @@ TYPED_TEST(RollingTest, EmptyInput) {
 }
 
 // simple example from Pandas docs
-TYPED_TEST(RollingTest, SimpleStatic) {
+TYPED_TEST(RollingTest, SimpleStatic)
+{
   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool> col_mask      = {1, 1, 1, 0, 1};
@@ -324,7 +336,8 @@ TYPED_TEST(RollingTest, SimpleStatic) {
 }
 
 // simple example from Pandas docs:
-TYPED_TEST(RollingTest, SimpleDynamic) {
+TYPED_TEST(RollingTest, SimpleDynamic)
+{
   // https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.rolling.html
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool> col_mask      = {1, 1, 1, 0, 1};
@@ -341,7 +354,8 @@ TYPED_TEST(RollingTest, SimpleDynamic) {
 }
 
 // this is a special test to check the volatile count variable issue (see rolling.cu for detail)
-TYPED_TEST(RollingTest, VolatileCount) {
+TYPED_TEST(RollingTest, VolatileCount)
+{
   const std::vector<TypeParam> col_data = {8, 70, 45, 20, 59, 80};
   const std::vector<bool> col_mask      = {1, 1, 0, 0, 1, 0};
 
@@ -357,7 +371,8 @@ TYPED_TEST(RollingTest, VolatileCount) {
 }
 
 // all rows are invalid
-TYPED_TEST(RollingTest, AllInvalid) {
+TYPED_TEST(RollingTest, AllInvalid)
+{
   cudf::size_type num_rows = 1000;
   cudf::size_type window   = 100;
   cudf::size_type periods  = window;
@@ -377,7 +392,8 @@ TYPED_TEST(RollingTest, AllInvalid) {
 }
 
 // window = forward_window = 0
-TYPED_TEST(RollingTest, ZeroWindow) {
+TYPED_TEST(RollingTest, ZeroWindow)
+{
   cudf::size_type num_rows = 1000;
   cudf::size_type window   = 0;
   cudf::size_type periods  = num_rows;
@@ -398,7 +414,8 @@ TYPED_TEST(RollingTest, ZeroWindow) {
 }
 
 // min_periods = 0
-TYPED_TEST(RollingTest, ZeroPeriods) {
+TYPED_TEST(RollingTest, ZeroPeriods)
+{
   cudf::size_type num_rows = 1000;
   cudf::size_type window   = num_rows;
   cudf::size_type periods  = 0;
@@ -421,7 +438,8 @@ TYPED_TEST(RollingTest, ZeroPeriods) {
 // window in one direction is not large enough to collect enough samples,
 //   but if using both directions we should get == min_periods,
 // also tests out of boundary accesses
-TYPED_TEST(RollingTest, BackwardForwardWindow) {
+TYPED_TEST(RollingTest, BackwardForwardWindow)
+{
   cudf::size_type num_rows = 1000;
   cudf::size_type window   = num_rows;
   cudf::size_type periods  = num_rows;
@@ -442,7 +460,8 @@ TYPED_TEST(RollingTest, BackwardForwardWindow) {
 }
 
 // random input data, static parameters, no nulls
-TYPED_TEST(RollingTest, RandomStaticAllValid) {
+TYPED_TEST(RollingTest, RandomStaticAllValid)
+{
   cudf::size_type num_rows    = 10000;
   cudf::size_type window      = 50;
   cudf::size_type min_periods = 50;
@@ -462,7 +481,8 @@ TYPED_TEST(RollingTest, RandomStaticAllValid) {
 }
 
 // random input data, static parameters, with nulls
-TYPED_TEST(RollingTest, RandomStaticWithInvalid) {
+TYPED_TEST(RollingTest, RandomStaticWithInvalid)
+{
   cudf::size_type num_rows    = 10000;
   cudf::size_type window      = 50;
   cudf::size_type min_periods = 25;
@@ -484,7 +504,8 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid) {
 }
 
 // random input data, dynamic parameters, no nulls
-TYPED_TEST(RollingTest, RandomDynamicAllValid) {
+TYPED_TEST(RollingTest, RandomDynamicAllValid)
+{
   cudf::size_type num_rows        = 50000;
   cudf::size_type max_window_size = 50;
 
@@ -508,7 +529,8 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid) {
 }
 
 // random input data, dynamic parameters, with nulls
-TYPED_TEST(RollingTest, RandomDynamicWithInvalid) {
+TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
+{
   cudf::size_type num_rows        = 50000;
   cudf::size_type max_window_size = 50;
 
@@ -534,7 +556,8 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid) {
 }
 
 // mix of static and dynamic parameters
-TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods) {
+TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
+{
   cudf::size_type num_rows        = 50000;
   cudf::size_type max_window_size = 50;
   cudf::size_type min_periods     = 25;
@@ -562,7 +585,8 @@ TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods) {
 // ------------- expected failures --------------------
 
 // negative sizes
-TYPED_TEST(RollingTest, NegativeSizes) {
+TYPED_TEST(RollingTest, NegativeSizes)
+{
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool> col_mask      = {1, 1, 1, 0, 1};
 
@@ -596,7 +620,8 @@ TYPED_TEST(RollingTest, NegativeSizes) {
 }
 
 // validity size mismatch
-TYPED_TEST(RollingTest, ValidSizeMismatch) {
+TYPED_TEST(RollingTest, ValidSizeMismatch)
+{
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool> col_mask      = {1, 1, 1, 0};
 
@@ -613,7 +638,8 @@ TYPED_TEST(RollingTest, ValidSizeMismatch) {
 }
 
 // window array size mismatch
-TYPED_TEST(RollingTest, WindowArraySizeMismatch) {
+TYPED_TEST(RollingTest, WindowArraySizeMismatch)
+{
   const std::vector<TypeParam> col_data = {0, 1, 2, 0, 4};
   const std::vector<bool> col_mask      = {1, 1, 1, 0, 1};
 
@@ -672,7 +698,8 @@ using RollingTestNonArithmetic = RollingTest<T>;
 TYPED_TEST_CASE(RollingTestNonArithmetic, NonArithmeticTypes);
 
 // incorrect type/aggregation combo: sum or avg for non-arithmetic types
-TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic) {
+TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic)
+{
   constexpr cudf::size_type size{1000};
   cudf::test::column_wrapper<TypeParam> input{
     size,
@@ -699,7 +726,8 @@ TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic) {
 }
 
 // min/max/count should work for non-arithmetic types
-TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic) {
+TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
+{
   constexpr cudf::size_type size{1000};
   cudf::test::column_wrapper<TypeParam> input{
     size,
@@ -731,8 +759,11 @@ TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic) {
                      GDF_COUNT);
 }
 
-class RollingTestNumba : public GdfTest {};
-TEST_F(RollingTestNumba, NumbaGeneric) {
+class RollingTestNumba : public GdfTest
+{
+};
+TEST_F(RollingTestNumba, NumbaGeneric)
+{
   const char ptx[] =
     R"***(
 //

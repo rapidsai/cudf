@@ -28,14 +28,16 @@
 #include <utilities/legacy/column_utils.hpp>
 #include <utilities/legacy/error_utils.hpp>
 
-namespace {
+namespace
+{
 /** ---------------------------------------------------------------------------*
  * @brief Convert a DLPack DLDataType struct to a gdf_dtype enum value
  *
  * @param[in] type The DLDataType struct
  * @return A valid gdf_dtype if the data type is supported, or GDF_invalid if not.
  * ---------------------------------------------------------------------------**/
-gdf_dtype DLDataType_to_gdf_dtype(DLDataType type) {
+gdf_dtype DLDataType_to_gdf_dtype(DLDataType type)
+{
   if (type.lanes > 1) return GDF_invalid;  // vector types not currently supported
 
   switch (type.bits) {
@@ -61,7 +63,8 @@ gdf_dtype DLDataType_to_gdf_dtype(DLDataType type) {
  * ---------------------------------------------------------------------------**/
 struct gdf_dtype_to_DLDataType {
   template <typename T>
-  DLDataType operator()() {
+  DLDataType operator()()
+  {
     DLDataType type;
     if (std::is_integral<T>::value) {
       if (std::is_signed<T>::value)
@@ -80,7 +83,8 @@ struct gdf_dtype_to_DLDataType {
   }
 };
 
-static inline size_t tensor_size(const DLTensor &t) {
+static inline size_t tensor_size(const DLTensor &t)
+{
   size_t size = 1;
   for (int i = 0; i < t.ndim; ++i) size *= t.shape[i];
   size *= (t.dtype.bits * t.dtype.lanes + 7) / 8;
@@ -92,7 +96,8 @@ static inline size_t tensor_size(const DLTensor &t) {
 // Currently 1D and 2D column-major (Fortran order) tensors are supported
 gdf_error gdf_from_dlpack(gdf_column **columns,
                           cudf::size_type *num_columns,
-                          DLManagedTensor const *tensor) {
+                          DLManagedTensor const *tensor)
+{
   // We can copy from host or device pointers
   GDF_REQUIRE(kDLGPU == tensor->dl_tensor.ctx.device_type ||
                 kDLCPU == tensor->dl_tensor.ctx.device_type ||
@@ -177,7 +182,8 @@ gdf_error gdf_from_dlpack(gdf_column **columns,
 // Supports 1D and 2D tensors (single or multiple columns)
 gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
                         gdf_column const *const *columns,
-                        cudf::size_type num_columns) {
+                        cudf::size_type num_columns)
+{
   GDF_REQUIRE(tensor != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(columns && num_columns > 0, GDF_DATASET_EMPTY);
 

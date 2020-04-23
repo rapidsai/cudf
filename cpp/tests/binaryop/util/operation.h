@@ -24,10 +24,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
-namespace cudf {
-namespace library {
-namespace operation {
-
+namespace cudf
+{
+namespace library
+{
+namespace operation
+{
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Add {
   // Disallow sum of timestamps with any other type (including itself)
@@ -36,7 +38,8 @@ struct Add {
                                       !cudf::is_timestamp_t<TypeLhs>::value &&
                                       !cudf::is_timestamp_t<TypeRhs>::value,
                                     void>::type* = nullptr>
-  OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
+  OutT operator()(TypeLhs lhs, TypeRhs rhs) const
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (static_cast<TypeCommon>(lhs) + static_cast<TypeCommon>(rhs));
   }
@@ -50,14 +53,16 @@ struct Sub {
                                       !cudf::is_timestamp_t<TypeLhs>::value &&
                                       !cudf::is_timestamp_t<TypeRhs>::value,
                                     void>::type* = nullptr>
-  OutT operator()(TypeLhs lhs, TypeRhs rhs) const {
+  OutT operator()(TypeLhs lhs, TypeRhs rhs) const
+  {
     return (static_cast<OutT>(lhs) - static_cast<OutT>(rhs));
   }
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Mul {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs * (TypeCommon)rhs);
   }
@@ -65,7 +70,8 @@ struct Mul {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Div {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
     return (TypeOut)((TypeCommon)lhs / (TypeCommon)rhs);
   }
@@ -169,14 +175,16 @@ struct ShiftRight {
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct ShiftRightUnsigned {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     return TypeOut(static_cast<std::make_unsigned_t<TypeLhs>>(lhs) >> rhs);
   }
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct LogBase {
-  TypeOut operator()(TypeLhs lhs, TypeRhs rhs) {
+  TypeOut operator()(TypeLhs lhs, TypeRhs rhs)
+  {
     return TypeOut(std::log(static_cast<double>(lhs)) / std::log(static_cast<double>(rhs)));
   }
 };

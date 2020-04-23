@@ -26,10 +26,12 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf {
-namespace dictionary {
-namespace detail {
-
+namespace cudf
+{
+namespace dictionary
+{
+namespace detail
+{
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
@@ -46,7 +48,8 @@ std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
@@ -110,7 +113,8 @@ std::unique_ptr<column> add_keys(
 
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::add_keys(dictionary_column, keys, mr);
 }
 

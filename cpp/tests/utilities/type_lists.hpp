@@ -32,13 +32,16 @@
  * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
-namespace cudf {
-namespace test {
-namespace detail {
-
+namespace cudf
+{
+namespace test
+{
+namespace detail
+{
 template <typename TYPES, std::size_t... Indices>
 constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
-  std::index_sequence<Indices...>) {
+  std::index_sequence<Indices...>)
+{
   return {{cudf::experimental::type_to_id<GetType<TYPES, Indices>>()...}};
 }
 
@@ -56,7 +59,8 @@ constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
  * @return `std::array` of `type_id`s corresponding to each type in `TYPES`
  *---------------------------------------------------------------------------**/
 template <typename TYPES>
-constexpr auto types_to_ids() {
+constexpr auto types_to_ids()
+{
   constexpr auto N = GetSize<TYPES>;
   return types_to_ids_impl<TYPES>(std::make_index_sequence<N>());
 }
@@ -64,7 +68,8 @@ constexpr auto types_to_ids() {
 }  // namespace detail
 
 template <typename TypeParam, typename T>
-auto make_type_param_vector(std::initializer_list<T> const& init_list) {
+auto make_type_param_vector(std::initializer_list<T> const& init_list)
+{
   std::vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
     return static_cast<T>(e);

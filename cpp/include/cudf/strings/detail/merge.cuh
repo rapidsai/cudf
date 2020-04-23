@@ -24,10 +24,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
 /**
  * @brief Merges two strings columns.
  *
@@ -48,7 +50,8 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                               row_order_iterator begin,
                               row_order_iterator end,
                               rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   using experimental::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
   if (strings_count == 0) return make_empty_strings_column(mr, stream);

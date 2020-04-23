@@ -42,11 +42,14 @@ using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
 
 template <typename T>
-class MergeStringTest : public cudf::test::BaseFixture {};
+class MergeStringTest : public cudf::test::BaseFixture
+{
+};
 
 TYPED_TEST_CASE(MergeStringTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(MergeStringTest, Merge1StringKeyColumns) {
+TYPED_TEST(MergeStringTest, Merge1StringKeyColumns)
+{
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"});
   cudf::size_type inputRows1 = static_cast<cudf::column_view const&>(leftColWrap1).size();
 
@@ -116,7 +119,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyColumns) {
 // rename test <TestName> as DISABLED_<TestName> to disable:
 // Example: TYPED_TEST(MergeStringTest, DISABLED_Merge2StringKeyColumns)
 //
-TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
+TYPED_TEST(MergeStringTest, Merge2StringKeyColumns)
+{
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"});
   strings_column_wrapper leftColWrap3({"zy", "yx", "xw", "wv", "vu", "ut", "ts", "sr"});
 
@@ -220,7 +224,8 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyColumns) {
   cudf::test::expect_columns_equal(expected_column_view3, output_column_view3);
 }
 
-TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns) {
+TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns)
+{
   // data: "ab", "bc", "cd", "de" | valid: 1 1 1 0
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"},
                                       {1, 1, 1, 1, 1, 1, 1, 0});
@@ -294,7 +299,8 @@ TYPED_TEST(MergeStringTest, Merge1StringKeyNullColumns) {
   cudf::test::expect_columns_equal(expected_column_view2, output_column_view2);
 }
 
-TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns) {
+TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
+{
   strings_column_wrapper leftColWrap1({"ab", "bc", "cd", "de", "ef", "fg", "gh", "hi"},
                                       {1, 1, 1, 1, 1, 1, 1, 0});
   strings_column_wrapper leftColWrap3({"zy", "yx", "xw", "wv", "vu", "ut", "ts", "sr"},

@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct StringsConvertTest : public cudf::test::BaseFixture {};
+struct StringsConvertTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsConvertTest, ToBooleans) {
+TEST_F(StringsConvertTest, ToBooleans)
+{
   std::vector<const char*> h_strings{"false", nullptr, "", "true", "True", "False"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -43,7 +45,8 @@ TEST_F(StringsConvertTest, ToBooleans) {
   cudf::test::expect_columns_equal(*results, expected);
 }
 
-TEST_F(StringsConvertTest, FromBooleans) {
+TEST_F(StringsConvertTest, FromBooleans)
+{
   std::vector<const char*> h_strings{"true", nullptr, "false", "true", "true", "false"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -60,19 +63,22 @@ TEST_F(StringsConvertTest, FromBooleans) {
   cudf::test::expect_columns_equal(*results, strings);
 }
 
-TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean) {
+TEST_F(StringsConvertTest, ZeroSizeStringsColumnBoolean)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::BOOL8}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::from_booleans(zero_size_column);
   cudf::test::expect_strings_empty(results->view());
 }
 
-TEST_F(StringsConvertTest, ZeroSizeBooleansColumn) {
+TEST_F(StringsConvertTest, ZeroSizeBooleansColumn)
+{
   cudf::column_view zero_size_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
   auto results = cudf::strings::to_booleans(zero_size_column);
   EXPECT_EQ(0, results->size());
 }
 
-TEST_F(StringsConvertTest, BooleanError) {
+TEST_F(StringsConvertTest, BooleanError)
+{
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
   EXPECT_THROW(cudf::strings::from_booleans(column->view()), cudf::logic_error);
 }

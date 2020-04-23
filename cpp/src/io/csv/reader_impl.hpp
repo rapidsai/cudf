@@ -36,19 +36,24 @@
 #include <utility>
 #include <vector>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-namespace detail {
-namespace csv {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
+namespace detail
+{
+namespace csv
+{
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
 /**
  * @brief Implementation for CSV reader
  */
-class reader::impl {
+class reader::impl
+{
  public:
   /**
    * @brief Constructor from a dataset source with reader options.

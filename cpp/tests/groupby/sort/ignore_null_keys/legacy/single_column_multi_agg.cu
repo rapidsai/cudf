@@ -59,7 +59,8 @@ using TestingTypes = ::testing::Types<KV<int8_t, int8_t>,
 
 TYPED_TEST_CASE(SingleColumnMultiAgg, TestingTypes);
 
-TYPED_TEST(SingleColumnMultiAgg, RepeatedAgg) {
+TYPED_TEST(SingleColumnMultiAgg, RepeatedAgg)
+{
   constexpr int size{10};
   using Key         = typename SingleColumnMultiAgg<TypeParam>::KeyType;
   using Value       = typename SingleColumnMultiAgg<TypeParam>::ValueType;
@@ -80,7 +81,8 @@ TYPED_TEST(SingleColumnMultiAgg, RepeatedAgg) {
     cudf::table{expected_val_col.get(), expected_val_col.get()});
 }
 
-TYPED_TEST(SingleColumnMultiAgg, SimpleAndCompound) {
+TYPED_TEST(SingleColumnMultiAgg, SimpleAndCompound)
+{
   constexpr int size{10};
   using Key            = typename SingleColumnMultiAgg<TypeParam>::KeyType;
   using Value          = typename SingleColumnMultiAgg<TypeParam>::ValueType;

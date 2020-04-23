@@ -18,9 +18,10 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace cudf {
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief Returns a new table transposed from the input table
  *

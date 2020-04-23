@@ -18,12 +18,16 @@
  * limitations under the License.
  */
 
-namespace cudf {
-namespace experimental {
-namespace binops {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace binops
+{
+namespace jit
+{
+namespace code
+{
 // clang-format off
 const char* kernel =
   R"***(

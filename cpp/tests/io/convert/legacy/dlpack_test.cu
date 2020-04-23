@@ -28,13 +28,16 @@ struct DLPackTypedTest : public GdfTest {
   using TestParam = TestParameters;
 };
 
-struct DLPackTest : public GdfTest {};
+struct DLPackTest : public GdfTest {
+};
 
 using Types = testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(DLPackTypedTest, Types);
 
-namespace {
-static inline size_t tensor_size(const DLTensor &t) {
+namespace
+{
+static inline size_t tensor_size(const DLTensor &t)
+{
   size_t size = 1;
   for (int i = 0; i < t.ndim; ++i) size *= t.shape[i];
   size *= (t.dtype.bits * t.dtype.lanes + 7) / 8;
@@ -42,7 +45,8 @@ static inline size_t tensor_size(const DLTensor &t) {
 }
 
 template <typename T>
-DLDataType get_DLDataType() {
+DLDataType get_DLDataType()
+{
   DLDataType type;
   if (std::is_integral<T>::value) {
     if (std::is_signed<T>::value)
@@ -59,7 +63,8 @@ DLDataType get_DLDataType() {
   return type;
 }
 
-void deleter(DLManagedTensor *arg) {
+void deleter(DLManagedTensor *arg)
+{
   if (arg->dl_tensor.ctx.device_type == kDLGPU)
     RMM_FREE(arg->dl_tensor.data, 0);
   else if (arg->dl_tensor.ctx.device_type == kDLCPUPinned) {
@@ -73,7 +78,8 @@ void deleter(DLManagedTensor *arg) {
 }
 
 template <typename T>
-__global__ void foo(T *in, int size) {
+__global__ void foo(T *in, int size)
+{
   for (int i = blockDim.x * blockIdx.x + threadIdx.x; i < size; i += gridDim.x * blockDim.x)
     in[i] = i;
 }
@@ -81,7 +87,8 @@ __global__ void foo(T *in, int size) {
 template <typename T>
 DLManagedTensor *create_DLTensor(cudf::size_type ncols,
                                  cudf::size_type nrows,
-                                 DLDeviceType device_type = kDLGPU) {
+                                 DLDeviceType device_type = kDLGPU)
+{
   DLManagedTensor *mng_tensor = new DLManagedTensor;
   DLTensor &tensor            = mng_tensor->dl_tensor;
   tensor.data                 = 0;
@@ -125,7 +132,8 @@ DLManagedTensor *create_DLTensor(cudf::size_type ncols,
 }
 }  // namespace
 
-TEST_F(DLPackTest, InvalidDeviceType) {
+TEST_F(DLPackTest, InvalidDeviceType)
+{
   using T = int32_t;
 
   constexpr int64_t length = 100;
@@ -147,7 +155,8 @@ TEST_F(DLPackTest, InvalidDeviceType) {
   deleter(mng_tensor);
 }
 
-TEST_F(DLPackTest, InvalidDevice) {
+TEST_F(DLPackTest, InvalidDevice)
+{
   using T                  = int32_t;
   constexpr int64_t length = 100;
 
@@ -170,7 +179,8 @@ TEST_F(DLPackTest, InvalidDevice) {
   deleter(mng_tensor);
 }
 
-TEST_F(DLPackTest, UnsupportedDimensions) {
+TEST_F(DLPackTest, UnsupportedDimensions)
+{
   using T                  = int32_t;
   constexpr int64_t length = 100;
 
@@ -200,7 +210,8 @@ TEST_F(DLPackTest, UnsupportedDimensions) {
   deleter(mng_tensor);
 }
 
-TEST_F(DLPackTest, UnsupportedDataType) {
+TEST_F(DLPackTest, UnsupportedDataType)
+{
   using T                  = uint32_t;  // unsigned types not supported yet
   constexpr int64_t length = 100;
 
@@ -217,7 +228,8 @@ TEST_F(DLPackTest, UnsupportedDataType) {
   deleter(mng_tensor);
 }
 
-TEST_F(DLPackTest, ToDLPack_EmptyDataset) {
+TEST_F(DLPackTest, ToDLPack_EmptyDataset)
+{
   ASSERT_EQ(gdf_to_dlpack(nullptr, nullptr, 1), GDF_DATASET_EMPTY);
   DLManagedTensor *tensor = new DLManagedTensor;
   ASSERT_EQ(gdf_to_dlpack(tensor, nullptr, 1), GDF_DATASET_EMPTY);
@@ -237,7 +249,8 @@ TEST_F(DLPackTest, ToDLPack_EmptyDataset) {
   delete[] columns;
 }
 
-TEST_F(DLPackTest, ToDLPack_ColumnMismatch) {
+TEST_F(DLPackTest, ToDLPack_ColumnMismatch)
+{
   gdf_column **columns = new gdf_column *[2];
   columns[0]           = new gdf_column{};
   columns[1]           = new gdf_column{};
@@ -257,7 +270,8 @@ TEST_F(DLPackTest, ToDLPack_ColumnMismatch) {
   delete[] columns;
 }
 
-TEST_F(DLPackTest, ToDLPack_NonNumerical) {
+TEST_F(DLPackTest, ToDLPack_NonNumerical)
+{
   gdf_column **columns = new gdf_column *[1];
   columns[0]           = new gdf_column{};
   columns[0]->size     = 1;
@@ -285,7 +299,8 @@ TEST_F(DLPackTest, ToDLPack_NonNumerical) {
   delete[] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, FromDLPack_SingleColumn) {
+TYPED_TEST(DLPackTypedTest, FromDLPack_SingleColumn)
+{
   using T                  = typename TestFixture::TestParam;
   constexpr int64_t length = 100;
 
@@ -311,7 +326,8 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_SingleColumn) {
   delete[] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn) {
+TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn)
+{
   using T                  = typename TestFixture::TestParam;
   constexpr int64_t length = 100;
   constexpr int64_t width  = 3;
@@ -340,7 +356,8 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn) {
   delete[] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn) {
+TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn)
+{
   using T = typename TestFixture::TestParam;
 
   constexpr int64_t length = 100;
@@ -366,7 +383,8 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn) {
   delete[] columns;
 }
 
-TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn) {
+TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
+{
   using T = typename TestFixture::TestParam;
 
   constexpr int64_t length = 100;

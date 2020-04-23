@@ -18,11 +18,14 @@
 
 #include <string>
 
-namespace cudf {
-namespace experimental {
-namespace binops {
-namespace jit {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace binops
+{
+namespace jit
+{
 /**
  * @brief Orientation of lhs and rhs in operator
  */
@@ -38,7 +41,8 @@ enum class OperatorType {
  * @param type @see OperatorType
  * @return std::string The name of the operator as string
  */
-std::string inline get_operator_name(binary_operator op, OperatorType type) {
+std::string inline get_operator_name(binary_operator op, OperatorType type)
+{
   std::string operator_name;
   switch (op) {
     case binary_operator::ADD: operator_name = "Add"; break;

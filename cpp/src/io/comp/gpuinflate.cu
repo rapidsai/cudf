@@ -46,9 +46,10 @@ Mark Adler    madler@alumni.caltech.edu
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
 
-namespace cudf {
-namespace io {
-
+namespace cudf
+{
+namespace io
+{
 #define NUMTHREADS 128  // Threads per block
 
 #define MAXBITS 15                        // maximum bits in a code
@@ -152,22 +153,26 @@ struct inflate_state_s {
 
 inline __device__ unsigned int bfe(unsigned int source,
                                    unsigned int bit_start,
-                                   unsigned int num_bits) {
+                                   unsigned int num_bits)
+{
   unsigned int bits;
   asm("bfe.u32 %0, %1, %2, %3;" : "=r"(bits) : "r"(source), "r"(bit_start), "r"(num_bits));
   return bits;
 };
 
-inline __device__ uint32_t showbits(inflate_state_s *s, uint32_t n) {
+inline __device__ uint32_t showbits(inflate_state_s *s, uint32_t n)
+{
   uint32_t next32 = __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
   return (next32 & ((1 << n) - 1));
 }
 
-inline __device__ uint32_t nextbits32(inflate_state_s *s) {
+inline __device__ uint32_t nextbits32(inflate_state_s *s)
+{
   return __funnelshift_rc(s->bitbuf.x, s->bitbuf.y, s->bitpos);
 }
 
-inline __device__ void skipbits(inflate_state_s *s, uint32_t n) {
+inline __device__ void skipbits(inflate_state_s *s, uint32_t n)
+{
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
     uint8_t *cur = s->cur + 8;
@@ -181,7 +186,8 @@ inline __device__ void skipbits(inflate_state_s *s, uint32_t n) {
 
 // TODO: If we require 4-byte alignment of input bitstream & length (padded), reading bits would
 // become quite a bit faster
-__device__ uint32_t getbits(inflate_state_s *s, uint32_t n) {
+__device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
+{
   uint32_t v = showbits(s, n);
   skipbits(s, n);
   return v;
@@ -211,7 +217,8 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n) {
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
  **/
-__device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols) {
+__device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
+{
   unsigned int len;    // current number of bits in code
   unsigned int code;   // len bits being decoded
   unsigned int first;  // first code of length len
@@ -267,7 +274,8 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  *   the code bits definition.
  **/
 __device__ int construct(
-  inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n) {
+  inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
+{
   int symbol;  // current symbol when stepping through length[]
   int len;     // current length when stepping through counts[]
   int left;    // number of possible codes left of current length
@@ -305,7 +313,8 @@ static const __device__ __constant__ uint8_t g_code_order[19 + 1] = {
   16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15, 0xff};
 
 /// Dynamic block (custom huffman tables)
-__device__ int init_dynamic(inflate_state_s *s) {
+__device__ int init_dynamic(inflate_state_s *s)
+{
   int nlen, ndist, ncode; /* number of lengths in descriptor */
   int index;              /* index of lengths[] */
   int err;                /* construct() return value */
@@ -390,7 +399,8 @@ __device__ int init_dynamic(inflate_state_s *s) {
  *   length, this can be implemented as an incomplete code.  Then the invalid
  *   codes are detected while decoding.
  **/
-__device__ int init_fixed(inflate_state_s *s) {
+__device__ int init_fixed(inflate_state_s *s)
+{
   int16_t *lengths = s->u.scratch.lengths;
   int symbol;
 
@@ -482,7 +492,8 @@ static const __device__ __constant__ uint16_t g_dext[30] = {  // Extra bits for 
   0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
 
 /// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
-__device__ void decode_symbols(inflate_state_s *s) {
+__device__ void decode_symbols(inflate_state_s *s)
+{
   uint32_t bitpos = s->bitpos;
   uint2 bitbuf    = s->bitbuf;
   uint8_t *cur    = s->cur;
@@ -659,7 +670,8 @@ __device__ void decode_symbols(inflate_state_s *s) {
  * @brief Build lookup tables for faster decode
  * LUT format is symbols*16+length
  **/
-__device__ void init_length_lut(inflate_state_s *s, int t) {
+__device__ void init_length_lut(inflate_state_s *s, int t)
+{
   int32_t *lut = s->u.lut.lenlut;
 
   for (uint32_t bits = t; bits < (1 << LOG2LENLUT); bits += NUMTHREADS) {
@@ -706,7 +718,8 @@ __device__ void init_length_lut(inflate_state_s *s, int t) {
  * @brief Build lookup tables for faster decode of distance symbol
  * LUT format is symbols*16+length
  **/
-__device__ void init_distance_lut(inflate_state_s *s, int t) {
+__device__ void init_distance_lut(inflate_state_s *s, int t)
+{
   int32_t *lut = s->u.lut.distlut;
 
   for (uint32_t bits = t; bits < (1 << LOG2DISTLUT); bits += NUMTHREADS) {
@@ -747,7 +760,8 @@ __device__ void init_distance_lut(inflate_state_s *s, int t) {
 }
 
 /// @brief WARP1: process symbols and output uncompressed stream
-__device__ void process_symbols(inflate_state_s *s, int t) {
+__device__ void process_symbols(inflate_state_s *s, int t)
+{
   uint8_t *out           = s->out;
   const uint8_t *outend  = s->outend;
   const uint8_t *outbase = s->outbase;
@@ -822,7 +836,8 @@ __device__ void process_symbols(inflate_state_s *s, int t) {
  * - A stored block can have zero length.  This is sometimes used to byte-align
  *   subsets of the compressed data for random access or partial recovery.
  **/
-__device__ int init_stored(inflate_state_s *s) {
+__device__ int init_stored(inflate_state_s *s)
+{
   uint32_t len, nlen;  // length of stored block
 
   // Byte align
@@ -846,7 +861,8 @@ __device__ int init_stored(inflate_state_s *s) {
 }
 
 /// Copy bytes from stored block to destination
-__device__ void copy_stored(inflate_state_s *s, int t) {
+__device__ void copy_stored(inflate_state_s *s, int t)
+{
   int len         = s->stored_blk_len;
   uint8_t *cur    = s->cur + (s->bitpos >> 3);
   uint8_t *out    = s->out;
@@ -915,14 +931,16 @@ __device__ void copy_stored(inflate_state_s *s, int t) {
 }
 
 #if ENABLE_PREFETCH
-__device__ void init_prefetcher(inflate_state_s *s, int t) {
+__device__ void init_prefetcher(inflate_state_s *s, int t)
+{
   if (t == 0) {
     s->pref.cur_p = s->cur;
     s->pref.run   = 1;
   }
 }
 
-__device__ void prefetch_warp(volatile inflate_state_s *s, int t) {
+__device__ void prefetch_warp(volatile inflate_state_s *s, int t)
+{
   const uint8_t *cur_p = s->pref.cur_p;
   const uint8_t *end   = s->end;
   while (SHFL0((t == 0) ? s->pref.run : 0)) {
@@ -960,7 +978,8 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t) {
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
  **/
-__device__ int parse_gzip_header(const uint8_t *src, size_t src_size) {
+__device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
+{
   int hdr_len = -1;
 
   if (src_size >= 18) {
@@ -1009,7 +1028,8 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size) {
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  **/
 __global__ void __launch_bounds__(NUMTHREADS)
-  inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr) {
+  inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
+{
   __shared__ __align__(16) inflate_state_s state_g;
 
   int t                  = threadIdx.x;
@@ -1119,7 +1139,8 @@ __global__ void __launch_bounds__(NUMTHREADS)
  *
  * @param inputs Source and destination information per block
  **/
-__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s *inputs) {
+__global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
+{
   __shared__ const uint8_t *volatile src_g;
   __shared__ uint8_t *volatile dst_g;
   __shared__ uint32_t volatile copy_len_g;
@@ -1172,14 +1193,16 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
                                 gpu_inflate_status_s *outputs,
                                 int count,
                                 int parse_hdr,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   if (count > 0) { inflate_kernel<<<count, NUMTHREADS, 0, stream>>>(inputs, outputs, parse_hdr); }
   return cudaSuccess;
 }
 
 cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
                                                   int count,
-                                                  cudaStream_t stream) {
+                                                  cudaStream_t stream)
+{
   if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream>>>(inputs); }
   return cudaSuccess;
 }

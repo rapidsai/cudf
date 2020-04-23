@@ -49,7 +49,8 @@ template <typename T, typename Elements>
 std::unique_ptr<cudf::experimental::table> create_fixed_table(cudf::size_type num_columns,
                                                               cudf::size_type num_rows,
                                                               bool include_validity,
-                                                              Elements elements) {
+                                                              Elements elements)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
@@ -76,7 +77,8 @@ std::unique_ptr<cudf::experimental::table> create_fixed_table(cudf::size_type nu
 template <typename T>
 std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns,
                                                                      cudf::size_type num_rows,
-                                                                     bool include_validity) {
+                                                                     bool include_validity)
+{
   auto rand_elements = cudf::test::make_counting_transform_iterator(0, [](T i) { return rand(); });
   return create_fixed_table<T>(num_columns, num_rows, include_validity, rand_elements);
 }
@@ -86,17 +88,20 @@ std::unique_ptr<cudf::experimental::table> create_compressible_fixed_table(
   cudf::size_type num_columns,
   cudf::size_type num_rows,
   cudf::size_type period,
-  bool include_validity) {
+  bool include_validity)
+{
   auto compressible_elements =
     cudf::test::make_counting_transform_iterator(0, [period](T i) { return i / period; });
   return create_fixed_table<T>(num_columns, num_rows, include_validity, compressible_elements);
 }
 
 // Base test fixture for tests
-struct ParquetWriterTest : public cudf::test::BaseFixture {};
+struct ParquetWriterTest : public cudf::test::BaseFixture {
+};
 
 // Base test fixture for "stress" tests
-struct ParquetWriterStressTest : public cudf::test::BaseFixture {};
+struct ParquetWriterStressTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -116,7 +121,8 @@ using SupportedTimestampTypes = cudf::test::TimestampTypes;
 TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
-struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {};
+struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
+};
 
 // Typed test fixture for numeric type tests
 template <typename T>
@@ -127,11 +133,12 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, cudf::test::NumericTypes);
 
-namespace {
-
+namespace
+{
 // Generates a vector of uniform random values of type T
 template <typename T>
-inline auto random_values(size_t size) {
+inline auto random_values(size_t size)
+{
   std::vector<T> values(size);
 
   using T1 = T;
@@ -151,7 +158,8 @@ inline auto random_values(size_t size) {
 }
 
 // Helper function to compare two tables
-void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rhs) {
+void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rhs)
+{
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
   auto expected = lhs.begin();
   auto result   = rhs.begin();
@@ -160,7 +168,8 @@ void expect_tables_equal(cudf::table_view const& lhs, cudf::table_view const& rh
 
 }  // namespace
 
-TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn) {
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -183,7 +192,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
+{
   auto sequence =
     cudf::test::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
@@ -206,7 +216,8 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
+TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
+{
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
@@ -230,7 +241,8 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls)
+{
   auto sequence = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return TypeParam((std::rand() / 10000) * 1000); });
   auto validity =
@@ -255,7 +267,8 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsWithNulls) {
   expect_tables_equal(expected->view(), result.tbl->view());
 }
 
-TEST_F(ParquetWriterTest, MultiColumn) {
+TEST_F(ParquetWriterTest, MultiColumn)
+{
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -304,7 +317,8 @@ TEST_F(ParquetWriterTest, MultiColumn) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(ParquetWriterTest, MultiColumnWithNulls) {
+TEST_F(ParquetWriterTest, MultiColumnWithNulls)
+{
   constexpr auto num_rows = 100;
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -361,7 +375,8 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(ParquetWriterTest, Strings) {
+TEST_F(ParquetWriterTest, Strings)
+{
   std::vector<const char*> strings{
     "Monday", "Monday", "Friday", "Monday", "Friday", "Friday", "Friday", "Funday"};
   const auto num_rows = strings.size();
@@ -398,7 +413,8 @@ TEST_F(ParquetWriterTest, Strings) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(ParquetWriterTest, MultiIndex) {
+TEST_F(ParquetWriterTest, MultiIndex)
+{
   constexpr auto num_rows = 100;
 
   auto col1_data = random_values<int8_t>(num_rows);
@@ -446,7 +462,8 @@ TEST_F(ParquetWriterTest, MultiIndex) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(ParquetWriterTest, HostBuffer) {
+TEST_F(ParquetWriterTest, HostBuffer)
+{
   constexpr auto num_rows = 100 << 10;
   const auto seq_col      = random_values<int>(num_rows);
   const auto validity =
@@ -472,7 +489,8 @@ TEST_F(ParquetWriterTest, HostBuffer) {
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
-TEST_F(ParquetWriterTest, NonNullable) {
+TEST_F(ParquetWriterTest, NonNullable)
+{
   srand(31337);
   auto expected = create_random_fixed_table<int>(9, 9, false);
 
@@ -487,22 +505,26 @@ TEST_F(ParquetWriterTest, NonNullable) {
 }
 
 // custom data sink that supports device writes. uses plain file io.
-class custom_test_data_sink : public cudf::io::data_sink {
+class custom_test_data_sink : public cudf::io::data_sink
+{
  public:
-  explicit custom_test_data_sink(std::string const& filepath) {
+  explicit custom_test_data_sink(std::string const& filepath)
+  {
     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
   virtual ~custom_test_data_sink() { flush(); }
 
-  void host_write(void const* data, size_t size) override {
+  void host_write(void const* data, size_t size) override
+  {
     outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
   bool supports_device_write() const override { return true; }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream)
+  {
     char* ptr = nullptr;
     CUDA_TRY(cudaMallocHost(&ptr, size));
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
@@ -519,7 +541,8 @@ class custom_test_data_sink : public cudf::io::data_sink {
   std::ofstream outfile_;
 };
 
-TEST_F(ParquetWriterTest, CustomDataSink) {
+TEST_F(ParquetWriterTest, CustomDataSink)
+{
   auto filepath = temp_env->get_temp_filepath("CustomDataSink.parquet");
   custom_test_data_sink custom_sink(filepath);
 
@@ -552,7 +575,8 @@ TEST_F(ParquetWriterTest, CustomDataSink) {
   expect_tables_equal(buf_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterTest, DeviceWriteLargeishFile) {
+TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
+{
   auto filepath = temp_env->get_temp_filepath("DeviceWriteLargeishFile.parquet");
   custom_test_data_sink custom_sink(filepath);
 
@@ -571,7 +595,8 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetChunkedWriterTest, SingleTable) {
+TEST_F(ParquetChunkedWriterTest, SingleTable)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
@@ -587,7 +612,8 @@ TEST_F(ParquetChunkedWriterTest, SingleTable) {
   expect_tables_equal(*result.tbl, *table1);
 }
 
-TEST_F(ParquetChunkedWriterTest, SimpleTable) {
+TEST_F(ParquetChunkedWriterTest, SimpleTable)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
@@ -607,7 +633,8 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(ParquetChunkedWriterTest, LargeTables) {
+TEST_F(ParquetChunkedWriterTest, LargeTables)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
@@ -627,7 +654,8 @@ TEST_F(ParquetChunkedWriterTest, LargeTables) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(ParquetChunkedWriterTest, ManyTables) {
+TEST_F(ParquetChunkedWriterTest, ManyTables)
+{
   srand(31337);
   std::vector<std::unique_ptr<table>> tables;
   std::vector<table_view> table_views;
@@ -654,7 +682,8 @@ TEST_F(ParquetChunkedWriterTest, ManyTables) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TEST_F(ParquetChunkedWriterTest, Strings) {
+TEST_F(ParquetChunkedWriterTest, Strings)
+{
   std::vector<std::unique_ptr<cudf::column>> cols;
 
   bool mask1[] = {1, 1, 0, 1, 1, 1, 1};
@@ -684,7 +713,8 @@ TEST_F(ParquetChunkedWriterTest, Strings) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TEST_F(ParquetChunkedWriterTest, MismatchedTypes) {
+TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
   auto table2 = create_random_fixed_table<float>(4, 4, true);
@@ -697,7 +727,8 @@ TEST_F(ParquetChunkedWriterTest, MismatchedTypes) {
   cudf_io::write_parquet_chunked_end(state);
 }
 
-TEST_F(ParquetChunkedWriterTest, MismatchedStructure) {
+TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(4, 4, true);
   auto table2 = create_random_fixed_table<float>(3, 4, true);
@@ -710,7 +741,8 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure) {
   cudf_io::write_parquet_chunked_end(state);
 }
 
-TEST_F(ParquetChunkedWriterTest, ReadRowGroups) {
+TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
@@ -731,7 +763,8 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups) {
   expect_tables_equal(*result.tbl, *full_table);
 }
 
-TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError) {
+TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
+{
   srand(31337);
   auto table1 = create_random_fixed_table<int>(5, 5, true);
 
@@ -748,7 +781,8 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError) {
   EXPECT_THROW(cudf_io::read_parquet(read_args), cudf::logic_error);
 }
 
-TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize) {
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
+{
   // write out two 31 row tables and make sure they get
   // read back with all their validity bits in the right place
 
@@ -795,7 +829,8 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize) {
   expect_tables_equal(*result.tbl, *expected);
 }
 
-TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2) {
+TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
+{
   // write out two 33 row tables and make sure they get
   // read back with all their validity bits in the right place
 
@@ -844,21 +879,25 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2) {
 
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
-class custom_test_memmap_sink : public cudf::io::data_sink {
+class custom_test_memmap_sink : public cudf::io::data_sink
+{
  public:
-  explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf) {
+  explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
+  {
     mm_writer = cudf::io::data_sink::create(mm_writer_buf);
   }
 
   virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
 
-  void host_write(void const* data, size_t size) override {
+  void host_write(void const* data, size_t size) override
+  {
     mm_writer->host_write(reinterpret_cast<char const*>(data), size);
   }
 
   bool supports_device_write() const override { return supports_device_writes; }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) {
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream)
+  {
     char* ptr = nullptr;
     CUDA_TRY(cudaMallocHost(&ptr, size));
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
@@ -875,7 +914,8 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
   std::unique_ptr<data_sink> mm_writer;
 };
 
-TEST_F(ParquetWriterStressTest, LargeTableWeakCompression) {
+TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
@@ -895,7 +935,8 @@ TEST_F(ParquetWriterStressTest, LargeTableWeakCompression) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterStressTest, LargeTableGoodCompression) {
+TEST_F(ParquetWriterStressTest, LargeTableGoodCompression)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
@@ -915,7 +956,8 @@ TEST_F(ParquetWriterStressTest, LargeTableGoodCompression) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterStressTest, LargeTableWithValids) {
+TEST_F(ParquetWriterStressTest, LargeTableWithValids)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<false> custom_sink(&mm_buf);
@@ -935,7 +977,8 @@ TEST_F(ParquetWriterStressTest, LargeTableWithValids) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression) {
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);
@@ -955,7 +998,8 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWeakCompression) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression) {
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);
@@ -975,7 +1019,8 @@ TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableGoodCompression) {
   expect_tables_equal(custom_tbl.tbl->view(), expected->view());
 }
 
-TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids) {
+TEST_F(ParquetWriterStressTest, DeviceWriteLargeTableWithValids)
+{
   std::vector<char> mm_buf;
   mm_buf.reserve(4 * 1024 * 1024 * 16);
   custom_test_memmap_sink<true> custom_sink(&mm_buf);

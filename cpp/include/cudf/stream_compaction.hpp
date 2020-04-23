@@ -18,9 +18,10 @@
 
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**
  * @brief Filters a table to remove null elements.
  *

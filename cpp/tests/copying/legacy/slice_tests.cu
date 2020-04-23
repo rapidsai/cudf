@@ -26,13 +26,16 @@
 void call_slice(gdf_column const* input_column,
                 cudf::size_type const* indices,
                 cudf::size_type num_indices,
-                std::vector<gdf_column*>& output) {
+                std::vector<gdf_column*>& output)
+{
   output = cudf::slice(*input_column, indices, num_indices);
 }
 
-struct SliceInputTest : GdfTest {};
+struct SliceInputTest : GdfTest {
+};
 
-TEST_F(SliceInputTest, IndexesNull) {
+TEST_F(SliceInputTest, IndexesNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -45,7 +48,8 @@ TEST_F(SliceInputTest, IndexesNull) {
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SliceInputTest, InputColumnSizeNull) {
+TEST_F(SliceInputTest, InputColumnSizeNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -66,7 +70,8 @@ TEST_F(SliceInputTest, InputColumnSizeNull) {
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SliceInputTest, InputColumnDataNull) {
+TEST_F(SliceInputTest, InputColumnDataNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -87,7 +92,8 @@ TEST_F(SliceInputTest, InputColumnDataNull) {
                               output));
 }
 
-TEST_F(SliceInputTest, InputColumnBitmaskNull) {
+TEST_F(SliceInputTest, InputColumnBitmaskNull)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -108,7 +114,8 @@ TEST_F(SliceInputTest, InputColumnBitmaskNull) {
                              output));
 }
 
-TEST_F(SliceInputTest, IndexesSizeNotEven) {
+TEST_F(SliceInputTest, IndexesSizeNotEven)
+{
   const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
@@ -131,7 +138,8 @@ TEST_F(SliceInputTest, IndexesSizeNotEven) {
 }
 
 template <typename ColumnType>
-struct SliceTest : GdfTest {};
+struct SliceTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(SliceTest, test_types);
@@ -144,7 +152,8 @@ TYPED_TEST_CASE(SliceTest, test_types);
  * when the indices are the same.
  * when is less than 16, less than 64 or greater than 64.
  */
-TYPED_TEST(SliceTest, MultipleSlices) {
+TYPED_TEST(SliceTest, MultipleSlices)
+{
   // Create input column
   auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
@@ -196,7 +205,8 @@ TYPED_TEST(SliceTest, MultipleSlices) {
  * indices array contains only two values with a fixed length between them.
  * The interval iterates over all the values in the input column.
  */
-TYPED_TEST(SliceTest, RangeIndexPosition) {
+TYPED_TEST(SliceTest, RangeIndexPosition)
+{
   // Test parameters
   constexpr cudf::size_type INIT_INDEX{0};
   constexpr cudf::size_type SLICE_RANGE{37};
@@ -249,7 +259,8 @@ TYPED_TEST(SliceTest, RangeIndexPosition) {
   }
 }
 
-TEST_F(SliceInputTest, NVCategoryMultipleSlices) {
+TEST_F(SliceInputTest, NVCategoryMultipleSlices)
+{
   // Create host strings
   bool print                    = false;
   const int length              = 7;

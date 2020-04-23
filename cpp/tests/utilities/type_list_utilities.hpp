@@ -69,9 +69,10 @@
  *
  *---------------------------------------------------------------------------**/
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 // Utilities for creating parameters for typed tests on GoogleTest
 //
 // Types is used to define type list, it's just an alias to ::testing::Types:
@@ -137,7 +138,8 @@ template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
 // Concat -----------------------------------------
-namespace detail {
+namespace detail
+{
 template <class A, class B>
 struct Concat2;
 
@@ -216,7 +218,8 @@ template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
 // CrossProduct -----------------------------------------
-namespace detail {
+namespace detail
+{
 // prepend T in TUPLE
 template <class T, class TUPLE>
 struct Prepend1;
@@ -237,7 +240,8 @@ struct Prepend<T, Types<TUPLES...>> {
 
 // skip empty tuples
 template <class T, class... TUPLES>
-struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
+struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {
+};
 }  // namespace detail
 
 template <class... ARGS>
@@ -261,7 +265,8 @@ struct CrossProductImpl<Types<AARGS...>, TAIL...> {
 
 // to make it easy for the user when there's only one element to be joined
 template <class T, class... TAIL>
-struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {};
+struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a new type list from the cross product (cartesian product) of
@@ -282,22 +287,28 @@ template <class... ARGS>
 using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 
 // AllSame -----------------------------------------
-namespace detail {
+namespace detail
+{
 template <class... ITEMS>
-struct AllSame : std::false_type {};
+struct AllSame : std::false_type {
+};
 
 // degenerate case
 template <class A>
-struct AllSame<A> : std::true_type {};
+struct AllSame<A> : std::true_type {
+};
 
 template <class A>
-struct AllSame<A, A> : std::true_type {};
+struct AllSame<A, A> : std::true_type {
+};
 
 template <class HEAD, class... TAIL>
-struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {};
+struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {
+};
 
 template <class... ITEMS>
-struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {};
+struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
+};
 
 }  // namespace detail
 
@@ -329,15 +340,18 @@ struct ExistsImpl;
 
 // end case, no more types to check
 template <class NEEDLE>
-struct ExistsImpl<NEEDLE, Types<>> : std::false_type {};
+struct ExistsImpl<NEEDLE, Types<>> : std::false_type {
+};
 
 // next one matches
 template <class NEEDLE, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {};
+struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {
+};
 
 // next one doesn't match
 template <class NEEDLE, class HEAD, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {};
+struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {
+};
 /**---------------------------------------------------------------------------*
  * @brief Indicates if a type exists within a type list.
  *
@@ -454,7 +468,8 @@ using Transform = typename TransformImpl<XFORM, TYPES>::type;
 
 // Repeat --------------------------------
 
-namespace detail {
+namespace detail
+{
 template <class T, int N, class RES>
 struct Repeat;
 
@@ -517,7 +532,8 @@ using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 // Remove -------------------------------------------
 // remove items from tuple given by their indices
 
-namespace detail {
+namespace detail
+{
 template <class TUPLE, int CUR, int... IDXs>
 struct Remove;
 
@@ -561,7 +577,8 @@ using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
 
 // Unique --------------------------------
 
-namespace detail {
+namespace detail
+{
 template <class... ITEMS>
 struct Unique;
 

@@ -22,10 +22,10 @@
 #include <cudf/types.h>
 #include <vector>
 
-namespace cudf {
-
-namespace detail {
-
+namespace cudf
+{
+namespace detail
+{
 /**
  * @brief Slices a column (including null values) into a set of columns
  * according to a set of indices.

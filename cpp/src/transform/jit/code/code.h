@@ -17,12 +17,16 @@
 #ifndef GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
 #define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
 
-namespace cudf {
-namespace experimental {
-namespace transformation {
-namespace jit {
-namespace code {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace transformation
+{
+namespace jit
+{
+namespace code
+{
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;

@@ -23,9 +23,11 @@
 
 #include <vector>
 
-struct StringsContainsTests : public cudf::test::BaseFixture {};
+struct StringsContainsTests : public cudf::test::BaseFixture {
+};
 
-TEST_F(StringsContainsTests, ContainsTest) {
+TEST_F(StringsContainsTests, ContainsTest)
+{
   std::vector<const char*> h_strings{"5",
                                      "hej",
                                      "\t \n",
@@ -142,7 +144,8 @@ TEST_F(StringsContainsTests, ContainsTest) {
   }
 }
 
-TEST_F(StringsContainsTests, MatchesTest) {
+TEST_F(StringsContainsTests, MatchesTest)
+{
   std::vector<const char*> h_strings{
     "The quick brown @fox jumps", "ovér the", "lazy @dog", "1234", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
@@ -189,7 +192,8 @@ TEST_F(StringsContainsTests, MatchesTest) {
   }
 }
 
-TEST_F(StringsContainsTests, MatchesIPV4Test) {
+TEST_F(StringsContainsTests, MatchesIPV4Test)
+{
   cudf::test::strings_column_wrapper strings({"5.79.97.178",
                                               "1.2.3.4",
                                               "5",
@@ -232,7 +236,8 @@ TEST_F(StringsContainsTests, MatchesIPV4Test) {
   }
 }
 
-TEST_F(StringsContainsTests, CountTest) {
+TEST_F(StringsContainsTests, CountTest)
+{
   std::vector<const char*> h_strings{
     "The quick brown @fox jumps ovér the", "lazy @dog", "1:2:3:4", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
@@ -270,7 +275,8 @@ TEST_F(StringsContainsTests, CountTest) {
   }
 }
 
-TEST_F(StringsContainsTests, MediumRegex) {
+TEST_F(StringsContainsTests, MediumRegex)
+{
   // This results in 95 regex instructions and falls in the 'medium' range.
   std::string medium_regex =
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
@@ -318,7 +324,8 @@ TEST_F(StringsContainsTests, MediumRegex) {
   }
 }
 
-TEST_F(StringsContainsTests, LargeRegex) {
+TEST_F(StringsContainsTests, LargeRegex)
+{
   // This results in 115 regex instructions and falls in the 'large' range.
   std::string large_regex =
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "

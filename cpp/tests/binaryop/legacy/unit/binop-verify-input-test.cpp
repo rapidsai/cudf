@@ -25,9 +25,11 @@
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 #include <vector>
 
-struct BinopVerifyInputTest : public GdfTest {};
+struct BinopVerifyInputTest : public GdfTest {
+};
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(0);
 
   auto vector_lhs = cudf::test::column_wrapper<int64_t>(
@@ -40,7 +42,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorZeroSize) {
     "Column sizes don't match");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -53,7 +56,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorZeroSize) {
     "Column sizes don't match");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull)
+{
   gdf_column* vector_out = nullptr;
 
   auto vector_lhs = cudf::test::column_wrapper<int64_t>(
@@ -66,7 +70,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -79,7 +84,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -93,7 +99,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   vector_out.get()->dtype = (gdf_dtype)100;
@@ -108,7 +115,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType) {
     "Invalid/Unsupported datatype");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -123,7 +131,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandVectorType) {
     "Invalid/Unsupported datatype");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType) {
+TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -138,7 +147,8 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOperandScalarType) {
     "Invalid/Unsupported datatype");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(0);
 
   auto vector_lhs = cudf::test::column_wrapper<int64_t>(
@@ -152,7 +162,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorZeroSize) {
     "Column sizes don't match");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -166,7 +177,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorZeroSize) {
     "Column sizes don't match");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -180,7 +192,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize) {
     "Column sizes don't match");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull)
+{
   gdf_column* vector_out = nullptr;
 
   auto vector_lhs = cudf::test::column_wrapper<int64_t>(
@@ -194,7 +207,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -208,7 +222,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -222,7 +237,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorNull) {
     "Input pointers are null");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   vector_out.get()->dtype = (gdf_dtype)100;
@@ -238,7 +254,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorOutputVectorType) {
     "Invalid/Unsupported datatype");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
@@ -254,7 +271,8 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorFirstOperandVectorType) {
     "Invalid/Unsupported datatype");
 }
 
-TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorType) {
+TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorType)
+{
   auto vector_out = cudf::test::column_wrapper<int64_t>(
     10, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 

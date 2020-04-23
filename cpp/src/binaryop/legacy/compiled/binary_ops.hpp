@@ -20,10 +20,12 @@
 #include <cudf/legacy/binaryop.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf {
-namespace binops {
-namespace compiled {
-
+namespace cudf
+{
+namespace binops
+{
+namespace compiled
+{
 gdf_error binary_operation(gdf_column* out,
                            gdf_column* lhs,
                            gdf_column* rhs,

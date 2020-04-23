@@ -23,11 +23,13 @@
 #include <algorithm>
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 template <typename V>
-struct groupby_nth_element_test : public cudf::test::BaseFixture {};
+struct groupby_nth_element_test : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(groupby_nth_element_test, cudf::test::AllTypes);
 

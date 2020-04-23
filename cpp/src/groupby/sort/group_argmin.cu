@@ -19,17 +19,21 @@
 
 #include <thrust/transform.h>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
 std::unique_ptr<column> group_argmin(column_view const& values,
                                      size_type num_groups,
                                      rmm::device_vector<size_type> const& group_labels,
                                      column_view const& key_sort_order,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+{
   auto indices = type_dispatcher(values.type(),
                                  reduce_functor<aggregation::ARGMIN>{},
                                  values,

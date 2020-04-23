@@ -29,22 +29,26 @@
 #include <gmock/gmock.h>
 
 template <typename T>
-struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};
+struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypes);
 
 template <typename ScalarDeviceViewType>
-__global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1) {
+__global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
+{
   s1.set_value(s.value());
   s1.set_valid(true);
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool* result) {
+__global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool* result)
+{
   *result = (s.value() == s1.value());
 }
 
-TYPED_TEST(TypedScalarDeviceViewTest, Value) {
+TYPED_TEST(TypedScalarDeviceViewTest, Value)
+{
   TypeParam value{7};
   cudf::experimental::scalar_type_t<TypeParam> s(value);
   cudf::experimental::scalar_type_t<TypeParam> s1;
@@ -66,11 +70,13 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value) {
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_null(ScalarDeviceViewType s, bool* result) {
+__global__ void test_null(ScalarDeviceViewType s, bool* result)
+{
   *result = s.is_valid();
 }
 
-TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
+TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
+{
   TypeParam value = 5;
   cudf::experimental::scalar_type_t<TypeParam> s(value, false);
   auto scalar_device_view = cudf::get_scalar_device_view(s);
@@ -83,11 +89,13 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull) {
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_setnull(ScalarDeviceViewType s) {
+__global__ void test_setnull(ScalarDeviceViewType s)
+{
   s.set_valid(false);
 }
 
-TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
+TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
+{
   cudf::experimental::scalar_type_t<TypeParam> s;
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   s.set_valid(true);
@@ -99,16 +107,19 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull) {
   EXPECT_FALSE(s.is_valid());
 }
 
-struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
+struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {
+};
 
 __global__ void test_string_value(cudf::string_scalar_device_view s,
                                   const char* value,
                                   cudf::size_type size,
-                                  bool* result) {
+                                  bool* result)
+{
   *result = (s.value() == cudf::string_view(value, size));
 }
 
-TEST_F(StringScalarDeviceViewTest, Value) {
+TEST_F(StringScalarDeviceViewTest, Value)
+{
   std::string value("test string");
   cudf::string_scalar s(value);
 

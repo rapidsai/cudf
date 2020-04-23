@@ -19,10 +19,12 @@
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/types.hpp>
 
-namespace cudf {
-namespace experimental {
-namespace io {
-
+namespace cudf
+{
+namespace experimental
+{
+namespace io
+{
 /**
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
@@ -44,7 +46,8 @@ struct ParseOptions {
   bool multi_delimiter;
 };
 
-namespace gpu {
+namespace gpu
+{
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
@@ -62,7 +65,8 @@ namespace gpu {
 __device__ __inline__ long seek_field_end(const char* data,
                                           ParseOptions const& opts,
                                           long pos,
-                                          long stop) {
+                                          long stop)
+{
   bool quotation = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
@@ -99,7 +103,8 @@ __device__ __inline__ long seek_field_end(const char* data,
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
+{
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -119,7 +124,8 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
+{
   if (c >= '0' && c <= '9') return c - '0';
 
   *valid_flag = false;
@@ -139,7 +145,8 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  */
 template <typename T>
 __inline__ __device__ T
-parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10) {
+parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10)
+{
   T value               = 0;
   bool all_digits_valid = true;
 

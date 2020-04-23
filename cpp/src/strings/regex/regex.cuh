@@ -20,13 +20,14 @@
 #include <functional>
 #include <memory>
 
-namespace cudf {
-
+namespace cudf
+{
 class string_view;
 
-namespace strings {
-namespace detail {
-
+namespace strings
+{
+namespace detail
+{
 struct reljunk;
 struct reinst;
 class reprog;
@@ -36,7 +37,8 @@ class reprog;
  *
  * This class holds the unique data for any regex CCLASS instruction.
  */
-class reclass_device {
+class reclass_device
+{
  public:
   int32_t builtins{};
   int32_t count{};
@@ -51,7 +53,8 @@ class reclass_device {
  * Once create, this find/extract methods are used to evaluating the regex instructions
  * against a single string.
  */
-class reprog_device {
+class reprog_device
+{
  public:
   reprog_device()                     = delete;
   ~reprog_device()                    = default;

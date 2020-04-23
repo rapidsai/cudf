@@ -28,9 +28,10 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
-namespace cudf {
-namespace experimental {
-
+namespace cudf
+{
+namespace experimental
+{
 /**---------------------------------------------------------------------------*
  * @brief Result type of the `element_relational_comparator` function object.
  *
@@ -46,7 +47,8 @@ enum class weak_ordering {
   GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
-namespace detail {
+namespace detail
+{
 /**---------------------------------------------------------------------------*
  * @brief Compare the elements ordering with respect to `lhs`.
  *
@@ -56,7 +58,8 @@ namespace detail {
  * the `lhs` and `rhs` columns.
  *---------------------------------------------------------------------------**/
 template <typename Element>
-__device__ weak_ordering compare_elements(Element lhs, Element rhs) {
+__device__ weak_ordering compare_elements(Element lhs, Element rhs)
+{
   if (lhs < rhs) {
     return weak_ordering::LESS;
   } else if (rhs < lhs) {
@@ -78,7 +81,8 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs) {
  * the `lhs` and `rhs` columns.
  *---------------------------------------------------------------------------**/
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+{
   if (isnan(lhs) and isnan(rhs)) {
     return weak_ordering::EQUIVALENT;
   } else if (isnan(rhs)) {
@@ -100,7 +104,8 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
  * the `lhs` and `rhs` columns.
  *---------------------------------------------------------------------------**/
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+{
   return detail::compare_elements(lhs, rhs);
 }
 
@@ -113,7 +118,8 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
  * @return bool `true` if `lhs` == `rhs` else `false`.
  *---------------------------------------------------------------------------**/
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element lhs, Element rhs) {
+__device__ bool equality_compare(Element lhs, Element rhs)
+{
   if (isnan(lhs) and isnan(rhs)) { return true; }
   return lhs == rhs;
 }
@@ -127,7 +133,8 @@ __device__ bool equality_compare(Element lhs, Element rhs) {
  * @return bool `true` if `lhs` == `rhs` else `false`.
  *---------------------------------------------------------------------------**/
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element const lhs, Element const rhs) {
+__device__ bool equality_compare(Element const lhs, Element const rhs)
+{
   return lhs == rhs;
 }
 
@@ -137,7 +144,8 @@ __device__ bool equality_compare(Element const lhs, Element const rhs) {
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class element_equality_comparator {
+class element_equality_comparator
+{
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct type-dispatched function object for comparing equality
@@ -153,7 +161,9 @@ class element_equality_comparator {
   __host__ __device__ element_equality_comparator(column_device_view lhs,
                                                   column_device_view rhs,
                                                   bool nulls_are_equal = true)
-    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {}
+    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Compares the specified elements for equality.
@@ -163,7 +173,8 @@ class element_equality_comparator {
    *---------------------------------------------------------------------------**/
   template <typename Element>
   __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
-    noexcept {
+    noexcept
+  {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -185,14 +196,17 @@ class element_equality_comparator {
 };
 
 template <bool has_nulls = true>
-class row_equality_comparator {
+class row_equality_comparator
+{
  public:
   row_equality_comparator(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {
+    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept {
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::experimental::type_dispatcher(
         l.type(),
@@ -216,7 +230,8 @@ class row_equality_comparator {
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class element_relational_comparator {
+class element_relational_comparator
+{
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct type-dispatched function object for performing a
@@ -232,7 +247,9 @@ class element_relational_comparator {
   __host__ __device__ element_relational_comparator(column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence)
-    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence} {}
+    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Performs a relational comparison between the specified elements
@@ -247,7 +264,8 @@ class element_relational_comparator {
   template <typename Element,
             std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) const noexcept {
+                                      size_type rhs_element_index) const noexcept
+  {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -269,7 +287,8 @@ class element_relational_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index) {
+  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
+  {
     release_assert(false && "Attempted to compare elements of uncomparable types.");
   }
 
@@ -295,7 +314,8 @@ class element_relational_comparator {
  * @tparam has_nulls Indicates the potential for null values in either row.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-class row_lexicographic_comparator {
+class row_lexicographic_comparator
+{
  public:
   /**---------------------------------------------------------------------------*
    * @brief Construct a function object for performing a lexicographic
@@ -317,7 +337,8 @@ class row_lexicographic_comparator {
                                table_device_view rhs,
                                order const* column_order         = nullptr,
                                null_order const* null_precedence = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence} {
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+  {
     // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
@@ -331,7 +352,8 @@ class row_lexicographic_comparator {
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table
    *---------------------------------------------------------------------------**/
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept {
+  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
+  {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
@@ -366,10 +388,12 @@ class row_lexicographic_comparator {
  * @tparam has_nulls Indicates the potential for null values in the column.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class element_hasher {
+class element_hasher
+{
  public:
   template <typename T>
-  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index) {
+  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  {
     if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
 
     return hash_function<T>{}(col.element<T>(row_index));
@@ -383,12 +407,14 @@ class element_hasher {
  * @tparam has_nulls Indicates the potential for null values in the table.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class row_hasher {
+class row_hasher
+{
  public:
   row_hasher() = delete;
   row_hasher(table_device_view t) : _table{t} {}
 
-  __device__ auto operator()(size_type row_index) const {
+  __device__ auto operator()(size_type row_index) const
+  {
     auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
@@ -422,13 +448,17 @@ class row_hasher {
  * @tparam has_nulls Indicates the potential for null values in the table.
  *---------------------------------------------------------------------------**/
 template <template <typename> class hash_function, bool has_nulls = true>
-class row_hasher_initial_values {
+class row_hasher_initial_values
+{
  public:
   row_hasher_initial_values() = delete;
   row_hasher_initial_values(table_device_view t, hash_value_type* initial_hash)
-    : _table{t}, _initial_hash(initial_hash) {}
+    : _table{t}, _initial_hash(initial_hash)
+  {
+  }
 
-  __device__ auto operator()(size_type row_index) const {
+  __device__ auto operator()(size_type row_index) const
+  {
     auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };

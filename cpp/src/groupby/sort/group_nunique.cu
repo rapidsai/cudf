@@ -23,12 +23,16 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
-namespace cudf {
-namespace experimental {
-namespace groupby {
-namespace detail {
-
-namespace {
+namespace cudf
+{
+namespace experimental
+{
+namespace groupby
+{
+namespace detail
+{
+namespace
+{
 struct nunique_functor {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,
@@ -37,7 +41,8 @@ struct nunique_functor {
                                      rmm::device_vector<size_type> const& group_offsets,
                                      include_nulls _include_nulls,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
 
@@ -95,7 +100,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       rmm::device_vector<size_type> const& group_offsets,
                                       include_nulls _include_nulls,
                                       rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");

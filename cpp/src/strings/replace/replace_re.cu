@@ -27,11 +27,14 @@
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
-namespace {
-
+namespace cudf
+{
+namespace strings
+{
+namespace detail
+{
+namespace
+{
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern
  * and inserting the new string within the matched range of characters.
@@ -56,7 +59,8 @@ struct replace_regex_fn {
   const int32_t* d_offsets{};  // these are null when
   char* d_chars{};             // only computing size
 
-  __device__ size_type operator()(size_type idx) {
+  __device__ size_type operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     u_char data1[stack_size];
     u_char data2[stack_size];
@@ -104,7 +108,8 @@ std::unique_ptr<column> replace_re(
   string_scalar const& repl           = string_scalar(""),
   size_type maxrepl                   = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
 
@@ -165,7 +170,8 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    std::string const& pattern,
                                    string_scalar const& repl,
                                    size_type maxrepl,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::replace_re(strings, pattern, repl, maxrepl, mr);
 }

@@ -34,9 +34,11 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::experimental::table;
 
-struct JoinTest : public cudf::test::BaseFixture {};
+struct JoinTest : public cudf::test::BaseFixture {
+};
 
-TEST_F(JoinTest, InvalidCommonColumnIndices) {
+TEST_F(JoinTest, InvalidCommonColumnIndices)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   column_wrapper<int32_t> col0_1{{0, 1, 2, 4, 1}};
 
@@ -56,7 +58,8 @@ TEST_F(JoinTest, InvalidCommonColumnIndices) {
                cudf::logic_error);
 }
 
-TEST_F(JoinTest, FullJoinNoCommon) {
+TEST_F(JoinTest, FullJoinNoCommon)
+{
   column_wrapper<int32_t> col0_0{{0, 1}};
   column_wrapper<int32_t> col1_0{{0, 2}};
   CVector cols0, cols1;
@@ -82,7 +85,8 @@ TEST_F(JoinTest, FullJoinNoCommon) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon) {
+TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -127,7 +131,8 @@ TEST_F(JoinTest, LeftJoinNoNullsWithNoCommon) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, FullJoinNoNulls) {
+TEST_F(JoinTest, FullJoinNoNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -167,7 +172,8 @@ TEST_F(JoinTest, FullJoinNoNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, FullJoinWithNulls) {
+TEST_F(JoinTest, FullJoinWithNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -207,7 +213,8 @@ TEST_F(JoinTest, FullJoinWithNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, LeftJoinNoNulls) {
+TEST_F(JoinTest, LeftJoinNoNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 3}};
   strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -247,7 +254,8 @@ TEST_F(JoinTest, LeftJoinNoNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, LeftJoinWithNulls) {
+TEST_F(JoinTest, LeftJoinWithNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -287,7 +295,8 @@ TEST_F(JoinTest, LeftJoinWithNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinNoNulls) {
+TEST_F(JoinTest, InnerJoinNoNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -327,7 +336,8 @@ TEST_F(JoinTest, InnerJoinNoNulls) {
   cudf::test::expect_tables_equal(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinWithNulls) {
+TEST_F(JoinTest, InnerJoinWithNulls)
+{
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
@@ -368,7 +378,8 @@ TEST_F(JoinTest, InnerJoinWithNulls) {
 }
 
 // Empty Left Table
-TEST_F(JoinTest, EmptyLeftTableInnerJoin) {
+TEST_F(JoinTest, EmptyLeftTableInnerJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -388,7 +399,8 @@ TEST_F(JoinTest, EmptyLeftTableInnerJoin) {
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
-TEST_F(JoinTest, EmptyLeftTableLeftJoin) {
+TEST_F(JoinTest, EmptyLeftTableLeftJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -408,7 +420,8 @@ TEST_F(JoinTest, EmptyLeftTableLeftJoin) {
   cudf::test::expect_tables_equal(empty0, *result);
 }
 
-TEST_F(JoinTest, EmptyLeftTableFullJoin) {
+TEST_F(JoinTest, EmptyLeftTableFullJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -429,7 +442,8 @@ TEST_F(JoinTest, EmptyLeftTableFullJoin) {
 }
 
 // Empty Right Table
-TEST_F(JoinTest, EmptyRightTableInnerJoin) {
+TEST_F(JoinTest, EmptyRightTableInnerJoin)
+{
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
@@ -449,7 +463,8 @@ TEST_F(JoinTest, EmptyRightTableInnerJoin) {
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
-TEST_F(JoinTest, EmptyRightTableLeftJoin) {
+TEST_F(JoinTest, EmptyRightTableLeftJoin)
+{
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}, {1, 1, 1, 1, 1}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
@@ -469,7 +484,8 @@ TEST_F(JoinTest, EmptyRightTableLeftJoin) {
   cudf::test::expect_tables_equal(t0, *result);
 }
 
-TEST_F(JoinTest, EmptyRightTableFullJoin) {
+TEST_F(JoinTest, EmptyRightTableFullJoin)
+{
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
   column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
 
@@ -490,7 +506,8 @@ TEST_F(JoinTest, EmptyRightTableFullJoin) {
 }
 
 // Both tables empty
-TEST_F(JoinTest, BothEmptyInnerJoin) {
+TEST_F(JoinTest, BothEmptyInnerJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -510,7 +527,8 @@ TEST_F(JoinTest, BothEmptyInnerJoin) {
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
-TEST_F(JoinTest, BothEmptyLeftJoin) {
+TEST_F(JoinTest, BothEmptyLeftJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -530,7 +548,8 @@ TEST_F(JoinTest, BothEmptyLeftJoin) {
   cudf::test::expect_tables_equal(empty1, *result);
 }
 
-TEST_F(JoinTest, BothEmptyFullJoin) {
+TEST_F(JoinTest, BothEmptyFullJoin)
+{
   column_wrapper<int32_t> col0_0;
   column_wrapper<int32_t> col0_1;
 
@@ -552,7 +571,8 @@ TEST_F(JoinTest, BothEmptyFullJoin) {
 
 // EqualValues X Inner,Left,Full
 
-TEST_F(JoinTest, EqualValuesInnerJoin) {
+TEST_F(JoinTest, EqualValuesInnerJoin)
+{
   column_wrapper<int32_t> col0_0{{0, 0}};
   strcol_wrapper col0_1({"s0", "s0"});
 
@@ -580,7 +600,8 @@ TEST_F(JoinTest, EqualValuesInnerJoin) {
   cudf::test::expect_tables_equal(gold, *result);
 }
 
-TEST_F(JoinTest, EqualValuesLeftJoin) {
+TEST_F(JoinTest, EqualValuesLeftJoin)
+{
   column_wrapper<int32_t> col0_0{{0, 0}};
   strcol_wrapper col0_1({"s0", "s0"});
 
@@ -608,7 +629,8 @@ TEST_F(JoinTest, EqualValuesLeftJoin) {
   cudf::test::expect_tables_equal(gold, *result);
 }
 
-TEST_F(JoinTest, EqualValuesFullJoin) {
+TEST_F(JoinTest, EqualValuesFullJoin)
+{
   column_wrapper<int32_t> col0_0{{0, 0}};
   strcol_wrapper col0_1({"s0", "s0"});
 
@@ -636,7 +658,8 @@ TEST_F(JoinTest, EqualValuesFullJoin) {
   cudf::test::expect_tables_equal(gold, *result);
 }
 
-TEST_F(JoinTest, InnerJoinCornerCase) {
+TEST_F(JoinTest, InnerJoinCornerCase)
+{
   column_wrapper<int64_t> col0_0{{4, 1, 3, 2, 2, 2, 2}};
   column_wrapper<int64_t> col1_0{{2}};
 

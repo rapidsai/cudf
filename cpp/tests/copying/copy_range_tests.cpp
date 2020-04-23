@@ -30,7 +30,8 @@ auto all_valid  = [](cudf::size_type row) { return true; };
 auto even_valid = [](cudf::size_type row) { return (row % 2 == 0); };
 
 template <typename T>
-class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
+class CopyRangeTypedTestFixture : public cudf::test::BaseFixture
+{
  public:
   static constexpr cudf::size_type column_size{1000};
 
@@ -39,7 +40,8 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
             cudf::mutable_column_view& target,
             cudf::size_type source_begin,
             cudf::size_type source_end,
-            cudf::size_type target_begin) {
+            cudf::size_type target_begin)
+  {
     static_assert(cudf::is_fixed_width<T>(), "this code assumes fixed-width types.");
 
     // test the out-of-place version first
@@ -59,7 +61,8 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls) {
+TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
+{
   using T = TypeParam;
 
   cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
@@ -96,7 +99,8 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls) {
   this->test(source, expected, target_view, source_begin, source_end, target_begin);
 }
 
-TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls) {
+TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
+{
   using T = TypeParam;
 
   cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
@@ -124,7 +128,8 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls) {
   this->test(source, expected, target_view, source_begin, source_end, target_begin);
 }
 
-TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset) {
+TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
+{
   using T = TypeParam;
 
   cudf::size_type size{CopyRangeTypedTestFixture<T>::column_size};
@@ -181,9 +186,12 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset) {
   this->test(source_slice, expected_slice, target_slice, source_begin, source_end, target_begin);
 }
 
-class CopyRangeStringTestFixture : public cudf::test::BaseFixture {};
+class CopyRangeStringTestFixture : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(CopyRangeStringTestFixture, CopyWithNullsString) {
+TEST_F(CopyRangeStringTestFixture, CopyWithNullsString)
+{
   cudf::size_type size{100};
   cudf::size_type source_begin{9};
   cudf::size_type source_end{50};
@@ -222,7 +230,8 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsString) {
   cudf::test::expect_columns_equal(*p_ret, expected);
 }
 
-TEST_F(CopyRangeStringTestFixture, CopyNoNullsString) {
+TEST_F(CopyRangeStringTestFixture, CopyNoNullsString)
+{
   cudf::size_type size{100};
   cudf::size_type source_begin{9};
   cudf::size_type source_end{50};
@@ -250,7 +259,8 @@ TEST_F(CopyRangeStringTestFixture, CopyNoNullsString) {
   cudf::test::expect_columns_equal(*p_ret, expected);
 }
 
-TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString) {
+TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString)
+{
   cudf::size_type size{200};
   cudf::size_type source_offset{27};
   cudf::size_type source_begin{9};
@@ -306,9 +316,12 @@ TEST_F(CopyRangeStringTestFixture, CopyWithNullsNonzeroOffsetString) {
   cudf::test::expect_columns_equal(*p_ret, expected_slice);
 }
 
-class CopyRangeErrorTestFixture : public cudf::test::BaseFixture {};
+class CopyRangeErrorTestFixture : public cudf::test::BaseFixture
+{
+};
 
-TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall) {
+TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
+{
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
@@ -334,7 +347,8 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall) {
     cudf::logic_error);
 }
 
-TEST_F(CopyRangeErrorTestFixture, InvalidRange) {
+TEST_F(CopyRangeErrorTestFixture, InvalidRange)
+{
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
@@ -405,7 +419,8 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange) {
                     cudf::experimental::copy_range(source_view, target, 0, source_view.size(), 0));
 }
 
-TEST_F(CopyRangeErrorTestFixture, DTypeMismatch) {
+TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
+{
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(

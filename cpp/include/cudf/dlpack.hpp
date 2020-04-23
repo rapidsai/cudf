@@ -20,8 +20,8 @@
 
 struct DLManagedTensor;
 
-namespace cudf {
-
+namespace cudf
+{
 /**
  * @brief Convert a DLPack DLTensor into a cudf table
  *

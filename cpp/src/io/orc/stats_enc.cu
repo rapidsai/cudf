@@ -17,11 +17,14 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
-namespace cudf {
-namespace io {
-namespace orc {
-namespace gpu {
-
+namespace cudf
+{
+namespace io
+{
+namespace orc
+{
+namespace gpu
+{
 /**
  * @brief Initializes statistics groups
  *
@@ -41,7 +44,8 @@ __global__ void __launch_bounds__(init_threads_per_block)
                              const stats_column_desc *cols,
                              uint32_t num_columns,
                              uint32_t num_rowgroups,
-                             uint32_t row_index_stride) {
+                             uint32_t row_index_stride)
+{
   __shared__ __align__(4) volatile statistics_group group_g[init_groups_per_block];
   uint32_t col_id                  = blockIdx.y;
   uint32_t chunk_id                = (blockIdx.x * init_groups_per_block) + threadIdx.y;
@@ -85,7 +89,8 @@ constexpr unsigned int pb_fldlen_common  = 2 * pb_fld_hdrlen + pb_fldlen_int64;
 __global__ void __launch_bounds__(buffersize_threads_per_block, 1)
   gpu_init_statistics_buffersize(statistics_merge_group *groups,
                                  const statistics_chunk *chunks,
-                                 uint32_t statistics_count) {
+                                 uint32_t statistics_count)
+{
   __shared__ volatile uint32_t scratch_red[buffersize_reduction_dim];
   __shared__ volatile uint32_t stats_size;
   uint32_t tx = threadIdx.x;
@@ -157,7 +162,8 @@ struct stats_state_s {
  *
  */
 // Protobuf varint encoding for unsigned int
-__device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v) {
+__device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v)
+{
   while (v > 0x7f) {
     *p++ = ((uint32_t)v | 0x80);
     v >>= 7;
@@ -167,19 +173,22 @@ __device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v) {
 }
 
 // Protobuf field encoding for unsigned int
-__device__ inline uint8_t *pb_put_uint(uint8_t *p, uint32_t id, uint64_t v) {
+__device__ inline uint8_t *pb_put_uint(uint8_t *p, uint32_t id, uint64_t v)
+{
   p[0] = id * 8 + PB_TYPE_VARINT;  // NOTE: Assumes id < 16
   return pb_encode_uint(p + 1, v);
 }
 
 // Protobuf field encoding for signed int
-__device__ inline uint8_t *pb_put_int(uint8_t *p, uint32_t id, int64_t v) {
+__device__ inline uint8_t *pb_put_int(uint8_t *p, uint32_t id, int64_t v)
+{
   int64_t s = (v < 0);
   return pb_put_uint(p, id, (v ^ -s) * 2 + s);
 }
 
 // Protobuf field encoding for 'packed' unsigned int (single value)
-__device__ inline uint8_t *pb_put_packed_uint(uint8_t *p, uint32_t id, uint64_t v) {
+__device__ inline uint8_t *pb_put_packed_uint(uint8_t *p, uint32_t id, uint64_t v)
+{
   uint8_t *p2 = pb_encode_uint(p + 2, v);
   p[0]        = id * 8 + PB_TYPE_FIXEDLEN;
   p[1]        = static_cast<uint8_t>(p2 - (p + 2));
@@ -187,7 +196,8 @@ __device__ inline uint8_t *pb_put_packed_uint(uint8_t *p, uint32_t id, uint64_t 
 }
 
 // Protobuf field encoding for binary/string
-__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *bytes, uint32_t len) {
+__device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *bytes, uint32_t len)
+{
   p[0] = id * 8 + PB_TYPE_FIXEDLEN;
   p    = pb_encode_uint(p + 1, len);
   memcpy(p, bytes, len);
@@ -195,7 +205,8 @@ __device__ inline uint8_t *pb_put_binary(uint8_t *p, uint32_t id, const void *by
 }
 
 // Protobuf field encoding for 64-bit raw encoding (double)
-__device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *raw64) {
+__device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *raw64)
+{
   p[0] = id * 8 + PB_TYPE_FIXED64;
   memcpy(p + 1, raw64, 8);
   return p + 9;
@@ -235,7 +246,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   gpu_encode_statistics(uint8_t *blob_bfr,
                         statistics_merge_group *groups,
                         const statistics_chunk *chunks,
-                        uint32_t statistics_count) {
+                        uint32_t statistics_count)
+{
   __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
   uint32_t t             = threadIdx.x;
   uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
@@ -400,7 +412,8 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
                                        uint32_t num_columns,
                                        uint32_t num_rowgroups,
                                        uint32_t row_index_stride,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   dim3 dim_grid((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
   gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream>>>(
@@ -422,7 +435,8 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
 cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups,
                                            const statistics_chunk *chunks,
                                            uint32_t statistics_count,
-                                           cudaStream_t stream) {
+                                           cudaStream_t stream)
+{
   dim3 dim_block(buffersize_reduction_dim, buffersize_reduction_dim);
   gpu_init_statistics_buffersize<<<1, dim_block, 0, stream>>>(groups, chunks, statistics_count);
   return cudaSuccess;
@@ -442,7 +456,8 @@ cudaError_t orc_encode_statistics(uint8_t *blob_bfr,
                                   statistics_merge_group *groups,
                                   const statistics_chunk *chunks,
                                   uint32_t statistics_count,
-                                  cudaStream_t stream) {
+                                  cudaStream_t stream)
+{
   unsigned int num_blocks =
     (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);

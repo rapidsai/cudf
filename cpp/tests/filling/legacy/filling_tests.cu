@@ -26,7 +26,8 @@ template <typename T>
 using scalar_wrapper = cudf::test::scalar_wrapper<T>;
 
 template <typename T>
-struct FillingTest : GdfTest {};
+struct FillingTest : GdfTest {
+};
 
 using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(FillingTest, test_types);
@@ -40,7 +41,8 @@ void FillTest(cudf::size_type begin,
               cudf::size_type end,
               T value,
               bool value_is_valid                = true,
-              BitInitializerType source_validity = all_valid) {
+              BitInitializerType source_validity = all_valid)
+{
   column_wrapper<T> source(
     column_size,
     [](cudf::size_type row) { return static_cast<T>(row); },
@@ -69,7 +71,8 @@ void FillTest(cudf::size_type begin,
   }
 }
 
-TYPED_TEST(FillingTest, SetSingle) {
+TYPED_TEST(FillingTest, SetSingle)
+{
   cudf::size_type index = 9;
   TypeParam val         = TypeParam{1};
 
@@ -79,7 +82,8 @@ TYPED_TEST(FillingTest, SetSingle) {
   FillTest(index, index + 1, val, false);
 }
 
-TYPED_TEST(FillingTest, SetAll) {
+TYPED_TEST(FillingTest, SetAll)
+{
   TypeParam val = TypeParam{1};
 
   // First set it as valid
@@ -88,7 +92,8 @@ TYPED_TEST(FillingTest, SetAll) {
   FillTest(0, column_size, val, false);
 }
 
-TYPED_TEST(FillingTest, SetRange) {
+TYPED_TEST(FillingTest, SetRange)
+{
   cudf::size_type begin = 99;
   cudf::size_type end   = 299;
   TypeParam val         = TypeParam{1};
@@ -99,7 +104,8 @@ TYPED_TEST(FillingTest, SetRange) {
   FillTest(begin, end, val, false);
 }
 
-TYPED_TEST(FillingTest, SetRangeNullCount) {
+TYPED_TEST(FillingTest, SetRangeNullCount)
+{
   cudf::size_type begin = 10;
   cudf::size_type end   = 50;
   TypeParam val         = TypeParam{1};
@@ -124,9 +130,11 @@ TYPED_TEST(FillingTest, SetRangeNullCount) {
   FillTest(0, column_size, val, true, some_valid);
 }
 
-struct FillingErrorTest : GdfTest {};
+struct FillingErrorTest : GdfTest {
+};
 
-TEST_F(FillingErrorTest, InvalidColumn) {
+TEST_F(FillingErrorTest, InvalidColumn)
+{
   scalar_wrapper<int32_t> val(5, true);
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(nullptr, *val.get(), 0, 10), "Null gdf_column pointer");
 
@@ -144,7 +152,8 @@ TEST_F(FillingErrorTest, InvalidColumn) {
                             "Null column data with non-zero size");
 }
 
-TEST_F(FillingErrorTest, InvalidRange) {
+TEST_F(FillingErrorTest, InvalidRange)
+{
   scalar_wrapper<int32_t> val(5, true);
   column_wrapper<int32_t> dest(
     100,
@@ -157,7 +166,8 @@ TEST_F(FillingErrorTest, InvalidRange) {
                             "Range is empty or reversed");
 }
 
-TEST_F(FillingErrorTest, DTypeMismatch) {
+TEST_F(FillingErrorTest, DTypeMismatch)
+{
   scalar_wrapper<int32_t> val(5, true);
   column_wrapper<float> dest(
     100,
@@ -166,7 +176,8 @@ TEST_F(FillingErrorTest, DTypeMismatch) {
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10), "Data type mismatch");
 }
 
-TEST_F(FillingErrorTest, StringCategoryNotSupported) {
+TEST_F(FillingErrorTest, StringCategoryNotSupported)
+{
   scalar_wrapper<int32_t> val(5, true);
   std::vector<const char*> strings{"foo"};
   column_wrapper<cudf::nvstring_category> dest(1, strings.data());

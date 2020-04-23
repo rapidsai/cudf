@@ -36,7 +36,8 @@
  * cached kernel, the way to test its validity is to run it on test data.
  *
  *---------------------------------------------------------------------------**/
-TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
+TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
+{
   int num_tests = 20;
   int *input, *output;
   int expect = 64;

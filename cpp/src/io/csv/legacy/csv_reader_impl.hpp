@@ -32,14 +32,17 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 
-namespace cudf {
-namespace io {
-namespace csv {
-
+namespace cudf
+{
+namespace io
+{
+namespace csv
+{
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns
  *---------------------------------------------------------------------------**/
-class reader::Impl {
+class reader::Impl
+{
  private:
   const reader_options args_;
 

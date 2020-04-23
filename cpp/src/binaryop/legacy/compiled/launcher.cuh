@@ -22,10 +22,12 @@
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <utilities/legacy/error_utils.hpp>
 
-namespace cudf {
-namespace binops {
-namespace compiled {
-
+namespace cudf
+{
+namespace binops
+{
+namespace compiled
+{
 template <typename T, typename Tout, typename F>
 __global__ void gpu_binary_op(const T *lhs_data,
                               const cudf::valid_type *lhs_valid,
@@ -33,7 +35,8 @@ __global__ void gpu_binary_op(const T *lhs_data,
                               const cudf::valid_type *rhs_valid,
                               cudf::size_type size,
                               Tout *results,
-                              F functor) {
+                              F functor)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -47,7 +50,8 @@ __global__ void gpu_binary_op(const T *lhs_data,
 
 template <typename T, typename Tout, typename F>
 struct BinaryOp {
-  static gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output) {
+  static gdf_error launch(gdf_column *lhs, gdf_column *rhs, gdf_column *output)
+  {
     // Return successully right away for empty inputs
     if ((0 == lhs->size) || (0 == rhs->size)) { return GDF_SUCCESS; }
 

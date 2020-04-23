@@ -16,16 +16,19 @@
 
 #include "jit-cache-test.hpp"
 
-namespace cudf {
-namespace test {
-
-TEST_F(JitCacheTest, CacheExceptionTest) {
+namespace cudf
+{
+namespace test
+{
+TEST_F(JitCacheTest, CacheExceptionTest)
+{
   EXPECT_NO_THROW(auto program = getProgram("MemoryCacheTestProg"));
   EXPECT_ANY_THROW(auto program1 = getProgram("MemoryCacheTestProg1"));
 }
 
 // Test the in memory caching ability
-TEST_F(JitCacheTest, MemoryCacheKernelTest) {
+TEST_F(JitCacheTest, MemoryCacheKernelTest)
+{
   // Check the kernel caching
 
   // Single value column
@@ -51,7 +54,8 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest) {
                                 << "  Actual col: " << column.to_str();
 }
 
-TEST_F(JitCacheTest, MemoryCacheProgramTest) {
+TEST_F(JitCacheTest, MemoryCacheProgramTest)
+{
   // Check program source caching
 
   // Single value column
@@ -74,7 +78,8 @@ TEST_F(JitCacheTest, MemoryCacheProgramTest) {
 
 // Test the file caching ability
 #if defined(JITIFY_USE_CACHE)
-TEST_F(JitCacheTest, FileCacheProgramTest) {
+TEST_F(JitCacheTest, FileCacheProgramTest)
+{
   // Brand new cache object that has nothing in in-memory cache
   cudf::jit::cudfJitCache cache;
 
@@ -92,7 +97,8 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
                             << "  Actual col: " << column.to_str();
 }
 
-TEST_F(JitCacheTest, FileCacheKernelTest) {
+TEST_F(JitCacheTest, FileCacheKernelTest)
+{
   // Brand new cache object that has nothing in in-memory cache
   cudf::jit::cudfJitCache cache;
 

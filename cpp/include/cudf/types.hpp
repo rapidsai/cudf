@@ -38,22 +38,25 @@
  *---------------------------------------------------------------------------**/
 using cudaStream_t = struct CUstream_st*;
 
-namespace bit_mask {
+namespace bit_mask
+{
 using bit_mask_t = uint32_t;
 }
 
 // Forward declarations
-namespace rmm {
+namespace rmm
+{
 class device_buffer;
-namespace mr {
+namespace mr
+{
 class device_memory_resource;
 device_memory_resource* get_default_resource();
 }  // namespace mr
 
 }  // namespace rmm
 
-namespace cudf {
-
+namespace cudf
+{
 // Forward declaration
 struct table;
 class column;
@@ -74,7 +77,8 @@ class string_scalar_device_view;
 template <typename T>
 class timestamp_scalar_device_view;
 
-namespace experimental {
+namespace experimental
+{
 class table;
 }
 class table_view;
@@ -137,8 +141,8 @@ enum class mask_state : int32_t {
   ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
 };
 
-namespace experimental {
-
+namespace experimental
+{
 /**
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
@@ -183,7 +187,8 @@ enum type_id {
  * Simple types can be be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
  *---------------------------------------------------------------------------**/
-class data_type {
+class data_type
+{
  public:
   data_type()                 = default;
   ~data_type()                = default;

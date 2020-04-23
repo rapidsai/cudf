@@ -28,9 +28,10 @@
 #include <ftw.h>
 #include <random>
 
-namespace cudf {
-namespace test {
-
+namespace cudf
+{
+namespace test
+{
 /**
  * @brief Base test fixture class from which all libcudf tests should inherit.
  *
@@ -39,7 +40,8 @@ namespace test {
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
  */
-class BaseFixture : public ::testing::Test {
+class BaseFixture : public ::testing::Test
+{
   rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
 
  public:
@@ -51,7 +53,8 @@ class BaseFixture : public ::testing::Test {
 };
 
 template <typename T, typename Enable = void>
-struct uniform_distribution_impl {};
+struct uniform_distribution_impl {
+};
 template <typename T>
 struct uniform_distribution_impl<
   T,
@@ -94,7 +97,8 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * @tparam T The type of values that will be generated.
  */
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
-class UniformRandomGenerator {
+class UniformRandomGenerator
+{
  public:
   using uniform_distribution = uniform_distribution_t<T>;
 
@@ -128,22 +132,26 @@ class UniformRandomGenerator {
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
  */
-class TempDirTestEnvironment : public ::testing::Environment {
+class TempDirTestEnvironment : public ::testing::Environment
+{
  public:
   std::string tmpdir;
 
-  void SetUp() {
+  void SetUp()
+  {
     char tmp_format[] = "/tmp/gtest.XXXXXX";
     tmpdir            = mkdtemp(tmp_format);
     tmpdir += "/";
   }
 
-  void TearDown() {
+  void TearDown()
+  {
     // TODO: should use std::filesystem instead, once C++17 support added
     nftw(tmpdir.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb) {
+  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
+  {
     return remove(pathname);
   }
 
@@ -178,7 +186,8 @@ class TempDirTestEnvironment : public ::testing::Environment {
  * @return Memory resource instance
  */
 inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
-  std::string const &allocation_mode) {
+  std::string const &allocation_mode)
+{
   if (allocation_mode == "cuda") return std::make_unique<rmm::mr::cuda_memory_resource>();
   if (allocation_mode == "pool") return std::make_unique<rmm::mr::cnmem_memory_resource>();
   if (allocation_mode == "managed") return std::make_unique<rmm::mr::managed_memory_resource>();
@@ -196,14 +205,17 @@ inline std::unique_ptr<rmm::mr::device_memory_resource> create_memory_resource(
  *
  * @return Parsing results in the form of unordered map
  */
-inline auto parse_cudf_test_opts(int argc, char **argv) {
+inline auto parse_cudf_test_opts(int argc, char **argv)
+{
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
     options.allow_unrecognised_options().add_options()(
       "rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"));
 
     return options.parse(argc, argv);
-  } catch (const cxxopts::OptionException &e) { CUDF_FAIL("Error parsing command line options"); }
+  } catch (const cxxopts::OptionException &e) {
+    CUDF_FAIL("Error parsing command line options");
+  }
 }
 
 /**
@@ -218,7 +230,8 @@ inline auto parse_cudf_test_opts(int argc, char **argv) {
  *
  */
 #define CUDF_TEST_PROGRAM_MAIN()                                        \
-  int main(int argc, char **argv) {                                     \
+  int main(int argc, char **argv)                                       \
+  {                                                                     \
     ::testing::InitGoogleTest(&argc, argv);                             \
     auto const cmd_opts = parse_cudf_test_opts(argc, argv);             \
     auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
