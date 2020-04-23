@@ -84,6 +84,11 @@ std::vector<contiguous_split_result> contiguous_split(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/**
+ * @copydoc cudf::experimental::pack
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ **/
 packed_table pack(cudf::table_view const& input,
                   cudaStream_t stream                 = 0,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

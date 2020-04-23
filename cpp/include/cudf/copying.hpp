@@ -450,6 +450,12 @@ std::vector<contiguous_split_result> contiguous_split(
   std::vector<size_type> const& splits,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Table data in a serialized format
+ * 
+ * Contains data from a table in two contiguous buffers: one on host, which contains table metadata
+ * and one on device which contains the table data.
+ */
 struct packed_table {
   packed_table() = default;
   packed_table(std::unique_ptr<std::vector<uint8_t>> table_metadata,
@@ -459,9 +465,36 @@ struct packed_table {
   std::unique_ptr<rmm::device_buffer> table_data;
 };
 
+/**
+ * @brief Deep-copy a `table_view` into a serialized contiguous memory format
+ * 
+ * The metadata from the `table_view` is copied into a host vector of bytes and the data from the
+ * `table_view` is copied into a `device_buffer`. Pass the output of this function into
+ * `cudf::experimental::unpack` to deserialize.
+ * 
+ * @param input View of the table to pack
+ * @param[in] mr Optional, The resource to use for all returned device allocations
+ * @return packed_table A struct containing the serialized metadata and data in contiguous host
+ *         and device memory respectively
+ */
 packed_table pack(cudf::table_view const& input,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/**
+ * @brief Deserialize the result of `cudf::experimental::pack`
+ * 
+ * Converts the result of a serialized table into a `table_view` that points to the data stored in
+ * the contiguous device buffer `output.all_data`. The data for the table `output.all_data` is moved
+ * from the input `packed_table`'s member `table_data`. 
+ * 
+ * It is the caller's responsibility to ensure that the `table_view` in the output does not outlive 
+ * the device_buffer `all_data` in the output.
+ * 
+ * No new device memory is allocated in this function.
+ * 
+ * @param input The packed table to unpack
+ * @return contiguous_split_result The unpacked `table_view` and corresponding device data buffer
+ */
 contiguous_split_result unpack(std::unique_ptr<packed_table> input);
 
 /**
