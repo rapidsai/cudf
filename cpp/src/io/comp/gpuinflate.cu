@@ -1113,7 +1113,7 @@ __global__ void __launch_bounds__(NUMTHREADS)
     }
     outputs[z].bytes_written = state->out - state->outbase;
     outputs[z].status        = state->err;
-    outputs[z].reserved      = (int)(state->end - state->cur); // Here mainly for debug purposes
+    outputs[z].reserved      = (int)(state->end - state->cur);  // Here mainly for debug purposes
   }
 }
 

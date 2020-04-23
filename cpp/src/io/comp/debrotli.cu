@@ -1918,7 +1918,7 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
   if (!t) {
     outputs[z].bytes_written = s->out - s->outbase;
     outputs[z].status        = s->error;
-    outputs[z].reserved      = s->fb_size; // Return ext heap used by last block (statistics)
+    outputs[z].reserved      = s->fb_size;  // Return ext heap used by last block (statistics)
   }
 }
 
