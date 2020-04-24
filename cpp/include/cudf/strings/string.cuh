@@ -15,16 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/string_view.cuh>
 #include <thrust/logical.h>
+#include <cudf/strings/string_view.cuh>
 
-namespace cudf
-{
-namespace strings
-{
-namespace string
-{
-
+namespace cudf {
+namespace strings {
+namespace string {
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.
@@ -38,15 +34,13 @@ namespace string
  * @param d_str String to check.
  * @return true if string has valid integer characters
  */
-__device__ bool is_integer( string_view const& d_str )
+__device__ bool is_integer(string_view const& d_str)
 {
-    if( d_str.empty() )
-        return false;
-    auto begin = d_str.begin();
-    if( *begin=='+' || *begin=='-' )
-        ++begin;
-    return thrust::all_of( thrust::seq, begin, d_str.end(),
-        [] __device__ (auto chr) { return chr >='0' && chr <= '9'; });
+  if (d_str.empty()) return false;
+  auto begin = d_str.begin();
+  if (*begin == '+' || *begin == '-') ++begin;
+  return thrust::all_of(
+    thrust::seq, begin, d_str.end(), [] __device__(auto chr) { return chr >= '0' && chr <= '9'; });
 }
 
 /**
@@ -68,50 +62,40 @@ __device__ bool is_integer( string_view const& d_str )
  * @param d_str String to check.
  * @return true if string has valid float characters
  */
-__device__ bool is_float( string_view const& d_str )
+__device__ bool is_float(string_view const& d_str)
 {
-    if( d_str.empty() )
-        return false;
-    // strings allowed by the converter
-    if( d_str.compare("NaN",3)==0 )
-        return true;
-    if( d_str.compare("Inf",3)==0 )
-        return true;
-    if( d_str.compare("-Inf",4)==0 )
-        return true;
-    bool decimal_found = false;
-    bool exponent_found = false;
-    size_type bytes = d_str.size_bytes();
-    const char* data = d_str.data();
-    // sign character allowed at the beginning of the string
-    size_type chidx = ( *data=='-' || *data=='+' ) ? 1:0;
-    // check for float chars [0-9] and a single decimal '.'
-    // and scientific notation [eE][+-][0-9]
-    for( ; chidx < bytes; ++chidx )
-    {
-        auto chr = data[chidx];
-        if( chr >= '0' && chr <= '9' )
-            continue;
-        if( !decimal_found && chr == '.' )
-        {
-            decimal_found = true; // no more decimals
-            continue;
-        }
-        if( !exponent_found && (chr == 'e' || chr == 'E') )
-        {
-            if( chidx+1 < bytes )
-                chr = data[chidx+1];
-            if( chr == '-' || chr == '+' )
-                ++chidx;
-            decimal_found = true; // no decimal allowed in exponent
-            exponent_found = true; // no more exponents
-            continue;
-        }
-        return false;
+  if (d_str.empty()) return false;
+  // strings allowed by the converter
+  if (d_str.compare("NaN", 3) == 0) return true;
+  if (d_str.compare("Inf", 3) == 0) return true;
+  if (d_str.compare("-Inf", 4) == 0) return true;
+  bool decimal_found  = false;
+  bool exponent_found = false;
+  size_type bytes     = d_str.size_bytes();
+  const char* data    = d_str.data();
+  // sign character allowed at the beginning of the string
+  size_type chidx = (*data == '-' || *data == '+') ? 1 : 0;
+  // check for float chars [0-9] and a single decimal '.'
+  // and scientific notation [eE][+-][0-9]
+  for (; chidx < bytes; ++chidx) {
+    auto chr = data[chidx];
+    if (chr >= '0' && chr <= '9') continue;
+    if (!decimal_found && chr == '.') {
+      decimal_found = true;  // no more decimals
+      continue;
     }
-    return true;
+    if (!exponent_found && (chr == 'e' || chr == 'E')) {
+      if (chidx + 1 < bytes) chr = data[chidx + 1];
+      if (chr == '-' || chr == '+') ++chidx;
+      decimal_found  = true;  // no decimal allowed in exponent
+      exponent_found = true;  // no more exponents
+      continue;
+    }
+    return false;
+  }
+  return true;
 }
 
-} // namespace string
-} // namespace strings
-} // namespace cudf
+}  // namespace string
+}  // namespace strings
+}  // namespace cudf

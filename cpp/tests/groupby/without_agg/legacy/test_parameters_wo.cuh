@@ -1,37 +1,31 @@
 #pragma once
-#include <tuple>
 #include <algorithm>
+#include <map>
 #include <random>
+#include <tuple>
 #include <type_traits>
 #include <vector>
-#include <map>
 
 #include <cudf/types.h>
 
 namespace without_agg {
-
 template <typename... T>
 using VTuple = std::tuple<std::vector<T>...>;
 
-
-enum struct GroupByOutType
-{
-  PANDAS,//0
-  SQL//1
+enum struct GroupByOutType {
+  PANDAS,  // 0
+  SQL      // 1
 };
 
-
-template<GroupByOutType,
-         typename>
-struct
-TestParameters {};
-
-
+template <GroupByOutType, typename>
+struct TestParameters {
+};
 
 // helper function to tuple_each a tuple of any size
 template <class Tuple, typename Func, std::size_t N>
 struct TupleEach {
-  static void tuple_each(Tuple &t, Func &f) {
+  static void tuple_each(Tuple &t, Func &f)
+  {
     TupleEach<Tuple, Func, N - 1>::tuple_each(t, f);
     f(std::get<N - 1>(t));
   }
@@ -43,7 +37,8 @@ struct TupleEach<Tuple, Func, 1> {
 };
 
 template <typename Tuple, typename Func>
-void tuple_each(Tuple &t, Func &&f) {
+void tuple_each(Tuple &t, Func &&f)
+{
   TupleEach<Tuple, Func, std::tuple_size<Tuple>::value>::tuple_each(t, f);
 }
 // end helper function
@@ -52,16 +47,13 @@ void tuple_each(Tuple &t, Func &&f) {
 // number/types of columns for use with Google Test type-parameterized
 // tests. Here agg_operation refers to the type of aggregation eg. min,
 // max etc. and group_method refers to the underlying group algorithm
-//that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
-//tuple of datatypes that specify the column types to be tested.
-//AggOutput specifies the output type of the aggregated column.
-template<GroupByOutType group_output_method, typename... K>
-struct
-TestParameters<group_output_method,
-    VTuple<K...>>
-{
+// that performs it eg. GDF_HASH or GDF_SORT. VTuple<K...> expects a
+// tuple of datatypes that specify the column types to be tested.
+// AggOutput specifies the output type of the aggregated column.
+template <GroupByOutType group_output_method, typename... K>
+struct TestParameters<group_output_method, VTuple<K...>> {
   // // The method to use for the groupby
-  const static GroupByOutType group_output_type {group_output_method};
+  const static GroupByOutType group_output_type{group_output_method};
 
   using multi_column_t = std::tuple<std::vector<K>...>;
   using vector_tuple_t = std::vector<std::tuple<K...>>;
@@ -75,37 +67,36 @@ TestParameters<group_output_method,
   using ref_map_type = std::multimap<std::tuple<K...>, output_type>;
 };
 
-typedef ::testing::Types<
-    TestParameters< GroupByOutType::SQL, VTuple<int16_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<int64_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<float> >,
-    TestParameters< GroupByOutType::SQL, VTuple<double> >,
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t > >,
-    TestParameters< GroupByOutType::SQL, VTuple<int16_t, float > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<float> >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<double> >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int64_t > >,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t, float > >
-    
-  > Implementations;
+typedef ::testing::Types<TestParameters<GroupByOutType::SQL, VTuple<int16_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int32_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int64_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<float>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<double>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int32_t, int64_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int16_t, float>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int16_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int32_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int64_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<float>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<double>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int32_t, int64_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int16_t, float>>
 
-typedef ::testing::Types<
-    TestParameters< GroupByOutType::SQL, VTuple<int16_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<int64_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<double >>,    
-    TestParameters< GroupByOutType::SQL, VTuple<int32_t, int64_t >>,
-    TestParameters< GroupByOutType::SQL, VTuple<int64_t, float >>,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int16_t >>,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t >>,
-    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t >>,
-    TestParameters< GroupByOutType::PANDAS, VTuple<double >>,    
-    TestParameters< GroupByOutType::PANDAS, VTuple<int32_t, int64_t >>,    
-    TestParameters< GroupByOutType::PANDAS, VTuple<int64_t, float >>
-  > ValidTestImplementations;
+                         >
+  Implementations;
 
-} //namespace: without_agg
+typedef ::testing::Types<TestParameters<GroupByOutType::SQL, VTuple<int16_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int32_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int64_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<double>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int32_t, int64_t>>,
+                         TestParameters<GroupByOutType::SQL, VTuple<int64_t, float>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int16_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int32_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int64_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<double>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int32_t, int64_t>>,
+                         TestParameters<GroupByOutType::PANDAS, VTuple<int64_t, float>>>
+  ValidTestImplementations;
+
+}  // namespace without_agg

@@ -20,27 +20,28 @@
 
 #include <cudf/null_mask.hpp>
 
-class SetNullmask: public cudf::benchmark {
+class SetNullmask : public cudf::benchmark {
 };
 
-void BM_setnullmask(benchmark::State& state){
+void BM_setnullmask(benchmark::State& state)
+{
   const cudf::size_type size{(cudf::size_type)state.range(0)};
-  rmm::device_buffer mask=cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
-  auto begin=0, middle=size/2, end=size;
+  rmm::device_buffer mask = cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
+  auto begin = 0, middle = size / 2, end = size;
 
-  for(auto _ : state) {
-    cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
-    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
-                        begin, end, true, 0);
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, true, 0);
   }
 
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations())*size/8);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);
 }
 
-#define NBM_BENCHMARK_DEFINE(name)                                     \
-BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State& state) {     \
-  BM_setnullmask(state);                                               \
-}                                                                      \
-BENCHMARK_REGISTER_F(SetNullmask, name)->RangeMultiplier(1<<10)->Range(1<<10,1<<30)->UseManualTime();
+#define NBM_BENCHMARK_DEFINE(name)                                                             \
+  BENCHMARK_DEFINE_F(SetNullmask, name)(::benchmark::State & state) { BM_setnullmask(state); } \
+  BENCHMARK_REGISTER_F(SetNullmask, name)                                                      \
+    ->RangeMultiplier(1 << 10)                                                                 \
+    ->Range(1 << 10, 1 << 30)                                                                  \
+    ->UseManualTime();
 
 NBM_BENCHMARK_DEFINE(SetNullMaskKernel);

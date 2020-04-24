@@ -997,6 +997,76 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testTrimStringsWhiteSpace() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.strip();
+         ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "123")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+         ColumnVector trimmed = cv.strip(Scalar.fromString("1"));
+         ColumnVector expected = ColumnVector.fromStrings("23", "23 ", null, "23", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testLeftTrimStringsWhiteSpace() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.lstrip();
+         ColumnVector expected = ColumnVector.fromStrings("123", "123 ", null, "123 ", "123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testLeftTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", " 123 ", null, "1231", "\t\t123\n\n");
+         ColumnVector trimmed = cv.lstrip(Scalar.fromString(" 1"));
+         ColumnVector expected = ColumnVector.fromStrings("23", "23 ", null, "231", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testRightTrimStringsWhiteSpace() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.rstrip();
+         ColumnVector expected = ColumnVector.fromStrings(" 123", "123", null, " 123", "\t\t123")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testRightTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.rstrip(Scalar.fromString(" 1"));
+         ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testTrimStringsThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector trimmed = cv.strip(Scalar.fromString(null))) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector trimmed = cv.strip(Scalar.fromInt(1))) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector result = cv.strip(null)) {}
+    });
+  }
+
+  @Test
   void testAppendStrings() {
     try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
       b.append("123456789");

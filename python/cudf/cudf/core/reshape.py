@@ -9,6 +9,7 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
+from pandas.core.indexes.base import InvalidIndexError
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -57,6 +58,12 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     -------
     A new object of like type with rows from each object in ``objs``.
     """
+    
+    ''' Check if *objs* index contains any duplicates '''
+    for o in objs:
+        if not len(o.index) == len(set(o.index)):
+            raise ValueError("cannot reindex from a duplicate axis")
+    
     if sort not in (None, False):
         raise NotImplementedError("sort parameter is not yet supported")
 
@@ -105,8 +112,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
                 df.index = o.index
-            for col in o.columns:
-                df[col] = o[col]._column
+            for col in o._data.names:
+                if col in df._data:
+                    raise NotImplementedError(
+                        "A Column with duplicate name found: {0}, cuDF\
+                        doesn't support having multiple columns with\
+                        same names yet.".format(
+                            col
+                        )
+                    )
+                df[col] = o._data[col]
 
         result_columns = objs[0].columns
         for o in objs[1:]:
@@ -393,8 +408,7 @@ def get_dummies(
     if len(columns) == 0:
         return df.select_dtypes(exclude=encode_fallback_dtypes)
     else:
-        df_list = []
-
+        result_df = df.drop(labels=columns)
         for name in columns:
             if hasattr(df[name]._column, "categories"):
                 unique = df[name]._column.categories
@@ -408,9 +422,10 @@ def get_dummies(
                 prefix_sep=prefix_sep_map.get(name, prefix_sep),
                 dtype=dtype,
             )
-            df_list.append(col_enc_df)
+            for col in col_enc_df.columns.difference(df._data.names):
+                result_df[col] = col_enc_df._data[col]
 
-        return concat(df_list, axis=1).drop(labels=columns)
+        return result_df
 
 
 def merge_sorted(

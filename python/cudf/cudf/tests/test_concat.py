@@ -268,22 +268,39 @@ def test_pandas_concat_compatibility_axis1():
     assert_eq(got, expect)
 
 
-@pytest.mark.xfail(raises=InvalidIndexError)
-@pytest.mark.parametrize("duplicate", [True, False])
-def test_pandas_concat_compatibility_axis1_overlap(duplicate):
+@pytest.mark.parametrize("index2", [[0, 1, 2], [0, 1, 1], [2, 1, 0]])
+@pytest.mark.parametrize("names", [False, (0,1)])
+def test_pandas_concat_compatibility_axis1_overlap(index2, names):
     data = [1, 2, 3]
     s1 = gd.Series(data, index=[0, 1, 2])
-    if duplicate:
-        s2 = s1.copy()
-    else:
-        s2 = gd.Series(data, index=[0, 1, 1])
+    s2 = gd.Series(data, index=index2)
+    if names:
+        s1.name = names[0]
+        s2.name = names[1]
+    if index2 == [0, 1, 1]:
+        pytest.xfail(reason="cannot reindex duplicate axis")
+    if not names:
+        pytest.xfail(reason="cuDF doesn't support having multiple columns with same names yet.")
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
-    expect = pd.concat([ps1, ps2], axis=1)
     got = gd.concat([s1, s2], axis=1)
+    expect = pd.concat([ps1, ps2], axis=1)
+    
     
     print(got)
     print(expect)
     
     assert_eq(got, expect)
     
+def test_concat_duplicate_columns():
+    cdf = gd.DataFrame(
+        {
+            "id4": 4 * list(range(6)),
+            "id5": 4 * list(reversed(range(6))),
+            "v3": 6 * list(range(4)),
+        }
+    )
+    cdf_std = cdf.groupby(["id4", "id5"])[["v3"]].std()
+    cdf_med = cdf.groupby(["id4", "id5"])[["v3"]].quantile(q=0.5)
+    with pytest.raises(NotImplementedError):
+        gd.concat([cdf_med, cdf_std], axis=1)

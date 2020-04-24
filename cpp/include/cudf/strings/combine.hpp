@@ -15,16 +15,13 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Row-wise concatenates the given list of strings columns and
  * returns a single strings column result.
@@ -59,10 +56,11 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> concatenate( table_view const& strings_columns,
-                                     string_scalar const& separator = string_scalar(""),
-                                     string_scalar const& narep = string_scalar("",false),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> concatenate(
+  table_view const& strings_columns,
+  string_scalar const& separator      = string_scalar(""),
+  string_scalar const& narep          = string_scalar("", false),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
@@ -87,10 +85,11 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
  */
-std::unique_ptr<column> join_strings( strings_column_view const& strings,
-                                      string_scalar const& separator = string_scalar(""),
-                                      string_scalar const& narep = string_scalar("",false),
-                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> join_strings(
+  strings_column_view const& strings,
+  string_scalar const& separator      = string_scalar(""),
+  string_scalar const& narep          = string_scalar("", false),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

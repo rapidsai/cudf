@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#include <type_traits>
 #include <algorithm>
+#include <type_traits>
 
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
@@ -28,9 +28,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Sorts an array of gdf_column.
- * 
+ *
  * @param[in] cols Array of gdf_columns
  * @param[in] asc_desc Device array of sort order types for each column
  * (0 is ascending order and 1 is descending). If NULL is provided defaults
@@ -40,7 +40,7 @@
  * smaller than non-nulls or viceversa
  * @param[out] output_indices Pre-allocated gdf_column to be filled
  * with sorted indices
- * 
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -48,38 +48,35 @@ gdf_error gdf_order_by(gdf_column const* const* cols,
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,
-                       gdf_context * context)                       
+                       gdf_context* context)
 {
   GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
-  /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
+  /* NOTE: providing support for indexes to be multiple different types explodes compilation time,
+   * such that it become infeasible */
   GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
-    
+
   bool nulls_are_smallest = false;
   if (context->flag_null_sort_behavior == GDF_NULL_AS_SMALLEST) {
-  /* When sorting NULLS will be treated as the smallest number */
+    /* When sorting NULLS will be treated as the smallest number */
     nulls_are_smallest = true;
-  } 
-  
-  cudaStream_t stream = 0;
-  cudf::size_type* d_indx = static_cast<cudf::size_type*>(output_indices->data);
-  cudf::size_type nrows = cols[0]->size;
-
-  thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
-  auto table = device_table::create(num_inputs, cols, stream);
-  bool nullable = table.get()->has_nulls();
- 
-  if (nullable){
-    auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  ineq_op);				        
-  } else {
-    auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  ineq_op);				        
   }
-  
+
+  cudaStream_t stream     = 0;
+  cudf::size_type* d_indx = static_cast<cudf::size_type*>(output_indices->data);
+  cudf::size_type nrows   = cols[0]->size;
+
+  thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx + nrows, 0);
+  auto table    = device_table::create(num_inputs, cols, stream);
+  bool nullable = table.get()->has_nulls();
+
+  if (nullable) {
+    auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc);
+    thrust::sort(rmm::exec_policy(stream)->on(stream), d_indx, d_indx + nrows, ineq_op);
+  } else {
+    auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc);
+    thrust::sort(rmm::exec_policy(stream)->on(stream), d_indx, d_indx + nrows, ineq_op);
+  }
+
   return GDF_SUCCESS;
 }
