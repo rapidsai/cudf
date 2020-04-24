@@ -34,9 +34,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         order ordering
         null_order null_ordering
 
-    ctypedef enum include_nulls "cudf::include_nulls":
-        NO "cudf::include_nulls::NO"
-        YES "cudf::include_nulls::YES"
+    ctypedef enum null_policy "cudf::null_policy":
+        EXCLUDE "cudf::null_policy::EXCLUDE"
+        INCLUDE "cudf::null_policy::INCLUDE"
 
     cdef enum type_id:
         EMPTY = 0

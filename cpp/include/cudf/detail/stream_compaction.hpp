@@ -128,20 +128,20 @@ std::unique_ptr<experimental::table> drop_duplicates(
  *
  * Given an input column_view, number of unique elements in this column_view is returned
  *
- * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
+ * If `null_handling` is null_policy::EXCLUDE and `nan_as_null` are true, both `NaN` and `null`
  * values are ignored.
- * If `ignor_nulls` is true and `nan_as_null` is false, only `null` is
+ * If `null_handling` is null_policy::EXCLUDE and `nan_as_null` is false, only `null` is
  * ignored, `NaN` is considered in unique count.
  *
  * @param[in] input The column_view whose unique elements will be counted.
- * @param[in] _include_nulls flag to include or ignore `null` while counting
+ * @param[in] null_handling flag to include or ignore `null` while counting
  * @param[in] nan_as_null flag to consider `NaN==null` if true.
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
  * @return number of unique elements
  */
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const _include_nulls,
+                             null_policy const null_handling,
                              bool const nan_as_null,
                              cudaStream_t stream = 0);
 

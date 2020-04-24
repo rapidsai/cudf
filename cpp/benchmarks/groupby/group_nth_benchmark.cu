@@ -59,7 +59,7 @@ void BM_pre_sorted_nth(benchmark::State& state)
   // No need to sort values using sort_order because they were generated randomly
 
   cudf::experimental::groupby::groupby gb_obj(
-    *sorted_keys, cudf::include_nulls::NO, cudf::sorted::YES);
+    *sorted_keys, cudf::null_policy::EXCLUDE, cudf::sorted::YES);
 
   std::vector<cudf::experimental::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::experimental::groupby::aggregation_request());

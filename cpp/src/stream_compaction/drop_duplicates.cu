@@ -284,7 +284,7 @@ struct has_nans {
 };
 
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const _include_nulls,
+                             null_policy const null_handling,
                              bool const nan_as_null,
                              cudaStream_t stream)
 {
@@ -307,7 +307,7 @@ cudf::size_type unique_count(column_view const& input,
   // if nan is considered null and there are already null values
   if (nan_as_null and has_nan and input.has_nulls()) --count;
 
-  if (_include_nulls == include_nulls::NO and input.has_nulls())
+  if (null_handling == null_policy::EXCLUDE and input.has_nulls())
     return --count;
   else
     return count;
@@ -326,12 +326,12 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
 }
 
 cudf::size_type unique_count(column_view const& input,
-                             include_nulls const _include_nulls,
+                             null_policy const null_handling,
                              bool const nan_as_null,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, _include_nulls, nan_as_null);
+  return detail::unique_count(input, null_handling, nan_as_null);
 }
 
 }  // namespace experimental

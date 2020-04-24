@@ -102,7 +102,7 @@ enum class order : bool {
 /**
  * @brief Enum to specify whether to include nulls or exclude nulls
  */
-enum class include_nulls : bool { NO, YES };
+enum class null_policy : bool { EXCLUDE, INCLUDE };
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.

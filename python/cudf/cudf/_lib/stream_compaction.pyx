@@ -10,7 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type, include_nulls
+from cudf._lib.cpp.types cimport size_type, null_policy
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -203,10 +203,10 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     Count of number of unique rows in `source_column`
     """
 
-    cdef include_nulls cpp_include_nulls = (
-        include_nulls.NO
+    cdef null_policy cpp_null_handling = (
+        null_policy.EXCLUDE
         if ignore_nulls
-        else include_nulls.YES
+        else null_policy.INCLUDE
     )
     cdef bool cpp_nan_as_null = nan_as_null
 
@@ -214,7 +214,7 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     with nogil:
         count = cpp_unique_count(
             source_column_view,
-            cpp_include_nulls,
+            cpp_null_handling,
             cpp_nan_as_null
         )
 

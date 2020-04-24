@@ -88,7 +88,7 @@ struct reduce_dispatch_functor {
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
-          detail::unique_count(col, nunique_agg->_include_nulls, false, stream), stream, mr);
+          detail::unique_count(col, nunique_agg->null_handling, false, stream), stream, mr);
       } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }

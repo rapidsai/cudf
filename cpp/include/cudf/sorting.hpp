@@ -151,7 +151,7 @@ std::unique_ptr<table> sort_by_key(
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values).
  * @param column_order The desired sort order for ranking
- * @param _include_nulls  flag to include nulls during ranking. If nulls are not
+ * @param null_handling  flag to include nulls during ranking. If nulls are not
  * included, corresponding rank will be null.
  * @param null_precedence The desired order of null compared to other elements
  * for column
@@ -165,7 +165,7 @@ std::unique_ptr<table> sort_by_key(
 std::unique_ptr<column> rank(column_view const& input,
                              rank_method method,
                              order column_order,
-                             include_nulls _include_nulls,
+                             null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

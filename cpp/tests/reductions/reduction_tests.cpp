@@ -875,11 +875,11 @@ TYPED_TEST(ReductionTest, UniqueCount)
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
-                       cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
+                       cudf::experimental::make_nunique_aggregation(cudf::null_policy::INCLUDE));
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
-                       cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
+                       cudf::experimental::make_nunique_aggregation(cudf::null_policy::EXCLUDE));
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -889,11 +889,11 @@ TYPED_TEST(ReductionTest, UniqueCount)
   this->reduction_test(col_nulls,
                        expected_null_value0,
                        this->ret_non_arithmetic,
-                       cudf::experimental::make_nunique_aggregation(cudf::include_nulls::YES));
+                       cudf::experimental::make_nunique_aggregation(cudf::null_policy::INCLUDE));
   this->reduction_test(col_nulls,
                        expected_null_value1,
                        this->ret_non_arithmetic,
-                       cudf::experimental::make_nunique_aggregation(cudf::include_nulls::NO));
+                       cudf::experimental::make_nunique_aggregation(cudf::null_policy::EXCLUDE));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
