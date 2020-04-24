@@ -23,7 +23,6 @@
 namespace cudf {
 namespace groupby {
 namespace hash {
-
 template <bool nullable = true>
 struct row_hasher {
   using result_type = hash_value_type;  // TODO Remove when aggregating
@@ -31,7 +30,8 @@ struct row_hasher {
   device_table table;
   row_hasher(device_table const& t) : table{t} {}
 
-  __device__ auto operator()(cudf::size_type row_index) const {
+  __device__ auto operator()(cudf::size_type row_index) const
+  {
     return hash_row<nullable>(table, row_index);
   }
 };
@@ -92,7 +92,8 @@ __global__ void build_aggregation_map(Map map,
                                       device_table input_values,
                                       device_table output_values,
                                       operators* ops,
-                                      bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+                                      bit_mask::bit_mask_t const* const __restrict__ row_bitmask)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
@@ -140,7 +141,8 @@ __global__ void extract_groupby_result(Map map,
                                        device_table output_keys,
                                        device_table const sparse_output_values,
                                        device_table dense_output_values,
-                                       cudf::size_type* output_write_index) {
+                                       cudf::size_type* output_write_index)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   using pair_type = typename Map::value_type;

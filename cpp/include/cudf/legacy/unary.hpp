@@ -19,7 +19,6 @@
 #include "cudf/cudf.h"
 
 namespace cudf {
-
 /**
  * @brief Types of unary operations that can be performed on data.
  */
@@ -42,7 +41,7 @@ enum unary_op {
 
 /**
  * @brief  Performs unary op on all values in column
- * 
+ *
  * @param gdf_column Input column
  * @param unary_op operation to perform
  *
@@ -52,7 +51,7 @@ gdf_column unary_operation(gdf_column const& input, unary_op op);
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output
- * 
+ *
  * @note In case of conversion from GDF_DATE32/GDF_DATE64/GDF_TIMESTAMP to
  *  GDF_TIMESTAMP, the time unit for output should be set in out_info.time_unit
  *

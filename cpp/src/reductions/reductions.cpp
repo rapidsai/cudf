@@ -29,7 +29,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 struct reduce_dispatch_functor {
   column_view const col;
   data_type output_dtype;
@@ -40,10 +39,13 @@ struct reduce_dispatch_functor {
                           data_type output_dtype,
                           rmm::mr::device_memory_resource *mr,
                           cudaStream_t stream)
-    : col(col), output_dtype(output_dtype), mr(mr), stream(stream) {}
+    : col(col), output_dtype(output_dtype), mr(mr), stream(stream)
+  {
+  }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const &agg) {
+  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const &agg)
+  {
     switch (k) {
       case aggregation::SUM: return reduction::sum(col, output_dtype, mr, stream); break;
       case aggregation::PRODUCT: return reduction::product(col, output_dtype, mr, stream); break;
@@ -98,7 +100,8 @@ std::unique_ptr<scalar> reduce(
   std::unique_ptr<aggregation> const &agg,
   data_type output_dtype,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype);
   result->set_valid(false, stream);
 
@@ -114,7 +117,8 @@ std::unique_ptr<scalar> reduce(
 std::unique_ptr<scalar> reduce(column_view const &col,
                                std::unique_ptr<aggregation> const &agg,
                                data_type output_dtype,
-                               rmm::mr::device_memory_resource *mr) {
+                               rmm::mr::device_memory_resource *mr)
+{
   CUDF_FUNC_RANGE();
   return detail::reduce(col, agg, output_dtype, mr);
 }

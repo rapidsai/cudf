@@ -23,7 +23,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Filters a table to remove null elements.
  *
@@ -57,7 +56,8 @@ namespace detail {
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,
@@ -140,7 +140,6 @@ std::unique_ptr<experimental::table> drop_duplicates(
  *
  * @return number of unique elements
  */
-
 cudf::size_type unique_count(column_view const& input,
                              include_nulls const _include_nulls,
                              bool const nan_as_null,

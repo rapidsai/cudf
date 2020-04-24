@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Filters a table to remove null elements.
  *
@@ -53,7 +52,8 @@ namespace experimental {
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,
@@ -81,7 +81,8 @@ std::unique_ptr<experimental::table> drop_nulls(
  * @param[in] input The input `table_view` to filter.
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns of @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns
+ * of @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,

@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -54,7 +54,8 @@ __device__ T convertDataElement(gdf_column *gdf, int idx, gdf_dtype dtype);
 
 __device__ int whichBitmapCSR(int record) { return (record / 8); }
 __device__ int whichBitCSR(int bit) { return (bit % 8); }
-__device__ int checkBitCSR(cudf::valid_type data, int bit) {
+__device__ int checkBitCSR(cudf::valid_type data, int bit)
+{
   cudf::valid_type bitMask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
   return (data & bitMask[bit]);
 }
@@ -71,8 +72,8 @@ __device__ int checkBitCSR(cudf::valid_type data, int bit) {
 /**
  * @brief convert a GDF into a CSR
  *
- * Take a matrix in GDF format and convert it into a CSR.  The column major matrix needs to have every column defined.
- * Passing in a COO datset will be treated as a two column matrix
+ * Take a matrix in GDF format and convert it into a CSR.  The column major matrix needs to have
+ * every column defined. Passing in a COO datset will be treated as a two column matrix
  *
  * @param[in] gdfData the ordered list of columns
  * @param[in] numCol the number of columns in the gdfData array
@@ -81,18 +82,19 @@ __device__ int checkBitCSR(cudf::valid_type data, int bit) {
  *
  * @return gdf_error code
  */
-gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
+gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn)
+{
   int64_t numNull         = 0;
   int64_t nnz             = 0;
   cudf::size_type numRows = gdfData[0]->size;
   gdf_dtype dType = gdf_dtype::GDF_invalid;  // the data type to make the CSR element array (A)
 
   /**
-	 * Currently the gdf_dtype enum is arranged based on data size, as long as it stays that way the enum values can be
-	 * exploited by just picking the largest enum value
-	 *
-	 * While looping, also get the number of null values (this will work one day)
-	 */
+   * Currently the gdf_dtype enum is arranged based on data size, as long as it stays that way the
+   * enum values can be exploited by just picking the largest enum value
+   *
+   * While looping, also get the number of null values (this will work one day)
+   */
   for (int x = 0; x < numCol; x++) {
     if (gdfData[x]->dtype > dType) dType = gdfData[x]->dtype;
 
@@ -102,12 +104,13 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
   if (dType == gdf_dtype::GDF_invalid || dType == gdf_dtype::GDF_STRING)
     return gdf_error::GDF_UNSUPPORTED_DTYPE;
 
-  // the number of valid elements is simple the max number of possible elements (rows * columns) minus the number of nulls
-  // the current problem is that algorithms are not setting null_count;
+  // the number of valid elements is simple the max number of possible elements (rows * columns)
+  // minus the number of nulls the current problem is that algorithms are not setting null_count;
   // cudf::size_type is 32bits (int) but the total size could be larger than an int, so use a long
   nnz = (numRows * numCol) - numNull;
 
-  // Allocate space for the offset - this will eventually be IA - dtype is long since the sum of all column elements could be larger than int32
+  // Allocate space for the offset - this will eventually be IA - dtype is long since the sum of all
+  // column elements could be larger than int32
   cudf::size_type *offsets;
   RMM_TRY(
     RMM_ALLOC((void **)&offsets, (numRows + 2) * sizeof(int64_t), 0));  // TODO: non-default stream?
@@ -176,7 +179,8 @@ gdf_error gdf_to_csr(gdf_column **gdfData, int numCol, csr_gdf *csrReturn) {
 }
 
 template <typename T>
-gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type *offsets) {
+gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type *offsets)
+{
   cudf::size_type numCols = csrReturn->cols;
   cudf::size_type numRows = csrReturn->rows;
 
@@ -225,7 +229,8 @@ __global__ void cudaCreateCSR(void *data,
                               T *A,
                               int64_t *JA,
                               cudf::size_type *offsets,
-                              cudf::size_type numRows) {
+                              cudf::size_type numRows)
+{
   int tid =
     threadIdx.x + (blockDim.x * blockIdx.x);  // get the tread ID which is also the row number
 
@@ -250,13 +255,15 @@ __global__ void cudaCreateCSR(void *data,
  * Compute the number of valid entries per rows - a row spans multiple gdf_colums -
  * There is one thread running per row, so just compute the sum for this row.
  *
- * the number of elements a valid array is actually ceil(numRows / 8) since it is a bitmap.  the total number of bits checked is equal to numRows
+ * the number of elements a valid array is actually ceil(numRows / 8) since it is a bitmap.  the
+ * total number of bits checked is equal to numRows
  *
  */
 __global__ void determineValidRecCount(cudf::valid_type *valid,
                                        cudf::size_type numRows,
                                        cudf::size_type numCol,
-                                       cudf::size_type *offset) {
+                                       cudf::size_type *offset)
+{
   int tid =
     threadIdx.x + (blockDim.x * blockIdx.x);  // get the tread ID which is also the row number
 
@@ -274,7 +281,8 @@ __global__ void determineValidRecCount(cudf::valid_type *valid,
  * Convert the data element into a common format
  */
 template <typename T>
-__device__ T convertDataElement(void *data, int tid, gdf_dtype dtype) {
+__device__ T convertDataElement(void *data, int tid, gdf_dtype dtype)
+{
   T answer;
 
   switch (dtype) {

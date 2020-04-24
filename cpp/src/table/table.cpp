@@ -21,16 +21,17 @@
 
 namespace cudf {
 namespace experimental {
-
 // Copy the columns from another table
-table::table(table const& other) : _num_rows{other.num_rows()} {
+table::table(table const& other) : _num_rows{other.num_rows()}
+{
   CUDF_FUNC_RANGE();
   _columns.reserve(other._columns.size());
   for (auto const& c : other._columns) { _columns.emplace_back(std::make_unique<column>(*c)); }
 }
 
 // Move the contents of a vector `unique_ptr<column>`
-table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::move(columns)} {
+table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::move(columns)}
+{
   if (num_columns() > 0) {
     for (auto const& c : _columns) {
       CUDF_EXPECTS(c, "Unexpected null column");
@@ -46,14 +47,16 @@ table::table(std::vector<std::unique_ptr<column>>&& columns) : _columns{std::mov
 
 // Copy the contents of a `table_view`
 table::table(table_view view, cudaStream_t stream, rmm::mr::device_memory_resource* mr)
-  : _num_rows{view.num_rows()} {
+  : _num_rows{view.num_rows()}
+{
   CUDF_FUNC_RANGE();
   _columns.reserve(view.num_columns());
   for (auto const& c : view) { _columns.emplace_back(std::make_unique<column>(c, stream, mr)); }
 }
 
 // Create immutable view
-table_view table::view() const {
+table_view table::view() const
+{
   std::vector<column_view> views;
   views.reserve(_columns.size());
   for (auto const& c : _columns) { views.push_back(c->view()); }
@@ -61,7 +64,8 @@ table_view table::view() const {
 }
 
 // Create mutable view
-mutable_table_view table::mutable_view() {
+mutable_table_view table::mutable_view()
+{
   std::vector<mutable_column_view> views;
   views.reserve(_columns.size());
   for (auto const& c : _columns) { views.push_back(c->mutable_view()); }
@@ -69,13 +73,15 @@ mutable_table_view table::mutable_view() {
 }
 
 // Release ownership of columns
-std::vector<std::unique_ptr<column>> table::release() {
+std::vector<std::unique_ptr<column>> table::release()
+{
   _num_rows = 0;
   return std::move(_columns);
 }
 
 // Returns a table_view with set of specified columns
-table_view table::select(std::vector<cudf::size_type> const& column_indices) const {
+table_view table::select(std::vector<cudf::size_type> const& column_indices) const
+{
   std::vector<column_view> columns;
   for (auto index : column_indices) { columns.push_back(_columns.at(index)->view()); }
   return table_view(columns);

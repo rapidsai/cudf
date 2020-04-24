@@ -24,14 +24,14 @@
 
 namespace cudf {
 namespace test {
-
-
 template <typename V>
-struct groupby_count_test : public cudf::test::BaseFixture {};
+struct groupby_count_test : public cudf::test::BaseFixture {
+};
 
 // TODO (dm): Either make it all types or don't make it typed test
 TYPED_TEST_CASE(groupby_count_test, cudf::test::NumericTypes);
 
+// clang-format off
 TYPED_TEST(groupby_count_test, basic)
 {
     using K = int32_t;
@@ -167,7 +167,7 @@ TEST_F(groupby_count_string_test, basic)
     auto agg1 = cudf::experimental::make_count_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
+// clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

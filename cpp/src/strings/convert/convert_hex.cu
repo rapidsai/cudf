@@ -33,7 +33,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 /**
  * @brief Converts hex strings into an integers.
  *
@@ -44,14 +43,15 @@ struct hex_to_integer_fn {
   column_device_view const strings_column;
 
   /**
-     * @brief Converts a single hex string into an integer.
-     *
-     * Non-hexadecimal characters are ignored.
-     * This means it can handle "0x01A23" and "1a23".
-     *
-     * Overflow of the int64 type is not detected.
-     */
-  __device__ int64_t string_to_integer(string_view const& d_str) {
+   * @brief Converts a single hex string into an integer.
+   *
+   * Non-hexadecimal characters are ignored.
+   * This means it can handle "0x01A23" and "1a23".
+   *
+   * Overflow of the int64 type is not detected.
+   */
+  __device__ int64_t string_to_integer(string_view const& d_str)
+  {
     int64_t result = 0, base = 1;
     const char* str = d_str.data();
     size_type index = d_str.size_bytes();
@@ -71,7 +71,8 @@ struct hex_to_integer_fn {
     return result;
   }
 
-  __device__ IntegerType operator()(size_type idx) {
+  __device__ IntegerType operator()(size_type idx)
+  {
     if (strings_column.is_null(idx)) return static_cast<IntegerType>(0);
     // the cast to IntegerType will create predictable results
     // for integers that are larger than the IntegerType can hold
@@ -88,7 +89,8 @@ struct dispatch_hex_to_integers_fn {
   template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
-                  cudaStream_t stream) const {
+                  cudaStream_t stream) const
+  {
     auto d_results = output_column.data<IntegerType>();
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       thrust::make_counting_iterator<size_type>(0),
@@ -98,7 +100,8 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integral types throw an exception
   template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const {
+  void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const
+  {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
 };
@@ -106,7 +109,8 @@ struct dispatch_hex_to_integers_fn {
 template <>
 void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
                                                    mutable_column_view&,
-                                                   cudaStream_t) const {
+                                                   cudaStream_t) const
+{
   CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
 }
 
@@ -117,7 +121,8 @@ std::unique_ptr<column> hex_to_integers(
   strings_column_view const& strings,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(output_type);
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -142,7 +147,8 @@ std::unique_ptr<column> hex_to_integers(
 // external API
 std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         data_type output_type,
-                                        rmm::mr::device_memory_resource* mr) {
+                                        rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::hex_to_integers(strings, output_type, mr);
 }

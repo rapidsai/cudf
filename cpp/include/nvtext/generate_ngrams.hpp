@@ -20,7 +20,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace nvtext {
-
 /**
  * @brief Returns a single column of strings by generating ngrams from
  * a strings column.
@@ -31,7 +30,7 @@ namespace nvtext {
  * ["a", "bb", "ccc"] would generate bigrams as ["a_bb", "bb_ccc"]
  * and trigrams as ["a_bb_ccc"]
  * ```
- * 
+ *
  * The size of the output column will be the total number of ngrams generated from
  * the input strings column.
  *

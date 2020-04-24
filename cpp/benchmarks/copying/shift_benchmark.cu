@@ -14,7 +14,8 @@
 
 template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
-  cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  cudaStream_t stream = 0, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   auto s = new ScalarType(0, false, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
@@ -23,7 +24,8 @@ template <typename T, typename ScalarType = cudf::experimental::scalar_type_t<T>
 std::unique_ptr<cudf::scalar> make_scalar(
   T value,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   auto s = new ScalarType(value, true, stream, mr);
   return std::unique_ptr<cudf::scalar>(s);
 }
@@ -40,14 +42,16 @@ struct validity_func {
   cudf::size_type size;
   cudf::size_type offset;
 
-  __device__ bool operator()(int idx) {
+  __device__ bool operator()(int idx)
+  {
     auto source_idx = idx - offset;
     return source_idx < 0 || source_idx >= size;
   }
 };
 
 template <bool use_validity, int shift_factor>
-static void BM_shift(benchmark::State& state) {
+static void BM_shift(benchmark::State& state)
+{
   cudf::size_type size   = state.range(0);
   cudf::size_type offset = size * (static_cast<double>(shift_factor) / 100.0);
   auto idx_begin         = thrust::make_counting_iterator<cudf::size_type>(0);
@@ -68,10 +72,12 @@ static void BM_shift(benchmark::State& state) {
   }
 }
 
-class Shift : public cudf::benchmark {};
+class Shift : public cudf::benchmark {
+};
 
 #define SHIFT_BM_BENCHMARK_DEFINE(name, use_validity, shift_factor) \
-  BENCHMARK_DEFINE_F(Shift, name)(::benchmark::State & state) {     \
+  BENCHMARK_DEFINE_F(Shift, name)(::benchmark::State & state)       \
+  {                                                                 \
     BM_shift<use_validity, shift_factor>(state);                    \
   }                                                                 \
   BENCHMARK_REGISTER_F(Shift, name)                                 \

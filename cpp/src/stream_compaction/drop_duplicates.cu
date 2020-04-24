@@ -38,7 +38,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /*
  * unique_copy copies elements from the range [first, last) to a range beginning
  * with output, except that in a consecutive group of duplicate elements only
@@ -52,7 +51,8 @@ OutputIterator unique_copy(Exec&& exec,
                            InputIterator last,
                            OutputIterator output,
                            BinaryPredicate comp,
-                           const duplicate_keep_option keep) {
+                           const duplicate_keep_option keep)
+{
   size_type last_index = thrust::distance(first, last) - 1;
   if (keep == duplicate_keep_option::KEEP_NONE) {
     return thrust::copy_if(exec,
@@ -85,8 +85,9 @@ OutputIterator unique_copy(Exec&& exec,
  * @brief Create a column_view of index values which represent the row values
  * without duplicates as per @p `keep`
  *
- * Given a `keys` table_view, each row index is copied to output `unique_indices`, if the corresponding
- * row of `keys` table_view is unique, where the definition of unique depends on the value of @p keep:
+ * Given a `keys` table_view, each row index is copied to output `unique_indices`, if the
+ * corresponding row of `keys` table_view is unique, where the definition of unique depends on the
+ * value of @p keep:
  * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
  * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
  * - KEEP_NONE: only unique rows are kept
@@ -99,13 +100,15 @@ OutputIterator unique_copy(Exec&& exec,
  * @param[in] mr Optional, The resource to use for all allocations
  * @param[in] stream Optional CUDA stream on which to execute kernels
  *
- * @return column_view column_view of unique row index as per specified `keep`, this is actually slice of `unique_indices`.
+ * @return column_view column_view of unique row index as per specified `keep`, this is actually
+ * slice of `unique_indices`.
  */
 column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        cudf::mutable_column_view& unique_indices,
                                        duplicate_keep_option const keep,
                                        bool const nulls_are_equal = true,
-                                       cudaStream_t stream        = 0) {
+                                       cudaStream_t stream        = 0)
+{
   // sort only indices
   auto sorted_indices = sorted_order(
     keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_default_resource(), stream);
@@ -146,7 +149,8 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 
 cudf::size_type unique_count(table_view const& keys,
                              bool const nulls_are_equal = true,
-                             cudaStream_t stream        = 0) {
+                             cudaStream_t stream        = 0)
+{
   // sort only indices
   auto sorted_indices = sorted_order(
     keys, std::vector<order>{}, std::vector<null_order>{}, rmm::mr::get_default_resource(), stream);
@@ -181,7 +185,8 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
                                                      duplicate_keep_option const keep,
                                                      bool const nulls_are_equal,
                                                      rmm::mr::device_memory_resource* mr,
-                                                     cudaStream_t stream) {
+                                                     cudaStream_t stream)
+{
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return experimental::empty_like(input);
   }
@@ -278,7 +283,8 @@ struct has_nans {
 cudf::size_type unique_count(column_view const& input,
                              include_nulls const _include_nulls,
                              bool const nan_as_null,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+{
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 
   cudf::size_type nrows = input.size();
@@ -310,7 +316,8 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
                                                      std::vector<size_type> const& keys,
                                                      duplicate_keep_option const keep,
                                                      bool const nulls_are_equal,
-                                                     rmm::mr::device_memory_resource* mr) {
+                                                     rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::drop_duplicates(input, keys, keep, nulls_are_equal, mr);
 }
@@ -318,7 +325,8 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
 cudf::size_type unique_count(column_view const& input,
                              include_nulls const _include_nulls,
                              bool const nan_as_null,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::unique_count(input, _include_nulls, nan_as_null);
 }

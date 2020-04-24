@@ -21,7 +21,6 @@ namespace cudf {
 namespace binops {
 namespace jit {
 namespace code {
-
 const char* operation =
   R"***(
 #pragma once

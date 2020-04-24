@@ -16,16 +16,15 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace test {
-
 /**
  * @brief Verifies the property equality of two columns.
  *
@@ -39,12 +38,13 @@ void expect_column_properties_equal(cudf::column_view const& lhs, cudf::column_v
  *
  * If the columns don't have nulls, then the nullability equality is relaxed.
  * i.e. the two columns are considered equivalent even if one has a null mask
- * and the other doesn't. 
- * 
+ * and the other doesn't.
+ *
  * @param lhs The first column
  * @param rhs The second column
  */
-void expect_column_properties_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs);
+void expect_column_properties_equivalent(cudf::column_view const& lhs,
+                                         cudf::column_view const& rhs);
 
 /**
  * @brief Verifies the element-wise equality of two columns.
@@ -55,20 +55,22 @@ void expect_column_properties_equivalent(cudf::column_view const& lhs, cudf::col
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equal(cudf::column_view const& lhs, cudf::column_view const& rhs,
+void expect_columns_equal(cudf::column_view const& lhs,
+                          cudf::column_view const& rhs,
                           bool print_all_differences = false);
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
- * 
- * Uses machine epsilon to compare floating point types. 
+ *
+ * Uses machine epsilon to compare floating point types.
  * Treats null elements as equivalent.
  *
  * @param lhs                   The first column
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
  *---------------------------------------------------------------------------**/
-void expect_columns_equivalent(cudf::column_view const& lhs, cudf::column_view const& rhs,
+void expect_columns_equivalent(cudf::column_view const& lhs,
+                               cudf::column_view const& rhs,
                                bool print_all_differences = false);
 
 /**
@@ -78,8 +80,7 @@ void expect_columns_equivalent(cudf::column_view const& lhs, cudf::column_view c
  * @param rhs The second buffer
  * @param size_bytes The number of bytes to check for equality
  */
-void expect_equal_buffers(void const* lhs, void const* rhs,
-                          std::size_t size_bytes);
+void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes);
 
 /**---------------------------------------------------------------------------*
  * @brief Displays a column view as a string
@@ -103,7 +104,9 @@ std::vector<std::string> to_strings(cudf::column_view const& col);
  * @param col       The column view
  * @param delimiter The delimiter to put between strings
  *---------------------------------------------------------------------------**/
-void print(cudf::column_view const& col, std:: ostream &os = std::cout, std::string const& delimiter=",");
+void print(cudf::column_view const& col,
+           std::ostream& os             = std::cout,
+           std::string const& delimiter = ",");
 
 /**---------------------------------------------------------------------------*
  * @brief Copy the null bitmask from a column view to a host vector
@@ -137,10 +140,11 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T>
-std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c) {
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
+{
   thrust::host_vector<T> host_data(c.size());
   CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDeviceToHost));
-  return { host_data, bitmask_to_host(c) };
+  return {host_data, bitmask_to_host(c)};
 }
 
 /**
@@ -154,7 +158,8 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c) {
+inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
+{
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
   thrust::host_vector<char> h_chars(strings_data.first);
   thrust::host_vector<size_type> h_offsets(strings_data.second);
@@ -164,14 +169,13 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   host_data.reserve(c.size());
 
   // When C++17, replace this loop with std::adjacent_difference()
-  for( size_type idx=0; idx < c.size(); ++idx )
-  {
-      auto offset = h_offsets[idx];
-      auto length = h_offsets[idx+1] - offset;
-      host_data.push_back(std::string( h_chars.data()+offset, length));
+  for (size_type idx = 0; idx < c.size(); ++idx) {
+    auto offset = h_offsets[idx];
+    auto length = h_offsets[idx + 1] - offset;
+    host_data.push_back(std::string(h_chars.data() + offset, length));
   }
 
-  return { host_data, bitmask_to_host(c) };
+  return {host_data, bitmask_to_host(c)};
 }
 
 }  // namespace test

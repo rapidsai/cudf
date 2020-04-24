@@ -46,9 +46,7 @@
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 namespace {  // anonymous
 /**
  * @brief Only count operation is executed and count is updated
@@ -67,7 +65,8 @@ process_rolling_window(column_device_view input,
                        size_type end_index,
                        size_type current_index,
                        size_type min_periods,
-                       InputType identity) {
+                       InputType identity)
+{
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
   volatile cudf::size_type count = 0;
@@ -101,7 +100,8 @@ std::enable_if_t<(op == aggregation::ARGMIN or op == aggregation::ARGMAX) and
                                     size_type end_index,
                                     size_type current_index,
                                     size_type min_periods,
-                                    InputType identity) {
+                                    InputType identity)
+{
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
   volatile cudf::size_type count = 0;
@@ -145,7 +145,8 @@ std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                                     size_type end_index,
                                     size_type current_index,
                                     size_type min_periods,
-                                    InputType identity) {
+                                    InputType identity)
+{
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
   volatile cudf::size_type count = 0;
@@ -205,7 +206,8 @@ __launch_bounds__(block_size) __global__
                    PrecedingWindowIterator preceding_window_begin,
                    FollowingWindowIterator following_window_begin,
                    size_type min_periods,
-                   InputType identity) {
+                   InputType identity)
+{
   size_type i      = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
@@ -266,7 +268,8 @@ struct rolling_window_launcher {
                             size_type min_periods,
                             std::unique_ptr<aggregation> const& agg,
                             T identity,
-                            cudaStream_t stream) {
+                            cudaStream_t stream)
+  {
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
 
     constexpr cudf::size_type block_size = 256;
@@ -324,7 +327,8 @@ struct rolling_window_launcher {
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream) {
+         cudaStream_t stream)
+  {
     if (input.is_empty()) return empty_like(input);
 
     auto output = make_fixed_width_column(
@@ -363,7 +367,8 @@ struct rolling_window_launcher {
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream) {
+         cudaStream_t stream)
+  {
     if (input.is_empty()) return empty_like(input);
 
     auto output = make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<size_type>()},
@@ -463,7 +468,8 @@ struct rolling_window_launcher {
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream) {
+         cudaStream_t stream)
+  {
     CUDF_FAIL("Aggregation operator and/or input type combination is invalid");
   }
 
@@ -477,7 +483,8 @@ struct rolling_window_launcher {
     size_type min_periods,
     std::unique_ptr<aggregation> const& agg,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
     return launch<InputType,
                   typename corresponding_operator<op>::type,
                   op,
@@ -497,7 +504,8 @@ struct rolling_window_launcher {
     size_type min_periods,
     std::unique_ptr<aggregation> const& agg,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
     return launch<InputType, cudf::DeviceSum, op, PrecedingWindowIterator, FollowingWindowIterator>(
       input, preceding_window_begin, following_window_begin, min_periods, agg, mr, stream);
   }
@@ -511,7 +519,8 @@ struct dispatch_rolling {
                                      size_type min_periods,
                                      std::unique_ptr<aggregation> const& agg,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     return aggregation_dispatcher(agg->kind,
                                   rolling_window_launcher<T>{},
                                   input,
@@ -534,7 +543,8 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                            size_type min_periods,
                                            std::unique_ptr<aggregation> const& agg,
                                            rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream = 0) {
+                                           cudaStream_t stream = 0)
+{
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
@@ -616,16 +626,16 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 }
 
 /**
-* @copydoc cudf::experimental::rolling_window(
-*                                  column_view const& input,
-*                                  PrecedingWindowIterator preceding_window_begin,
-*                                  FollowingWindowIterator following_window_begin,
-*                                  size_type min_periods,
-*                                  std::unique_ptr<aggregation> const& agg,
-*                                  rmm::mr::device_memory_resource* mr)
-*
-* @param stream The stream to use for CUDA operations
-*/
+ * @copydoc cudf::experimental::rolling_window(
+ *                                  column_view const& input,
+ *                                  PrecedingWindowIterator preceding_window_begin,
+ *                                  FollowingWindowIterator following_window_begin,
+ *                                  size_type min_periods,
+ *                                  std::unique_ptr<aggregation> const& agg,
+ *                                  rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream The stream to use for CUDA operations
+ */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        PrecedingWindowIterator preceding_window_begin,
@@ -633,7 +643,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0) {
+                                       cudaStream_t stream = 0)
+{
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
@@ -658,7 +669,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type following_window,
                                        size_type min_periods,
                                        std::unique_ptr<aggregation> const& agg,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   if (input.size() == 0) return empty_like(input);
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
@@ -681,7 +693,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& following_window,
                                        size_type min_periods,
                                        std::unique_ptr<aggregation> const& agg,
-                                       rmm::mr::device_memory_resource* mr) {
+                                       rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   if (preceding_window.size() == 0 || following_window.size() == 0 || input.size() == 0)
     return empty_like(input);
@@ -718,7 +731,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type following_window,
                                                size_type min_periods,
                                                std::unique_ptr<aggregation> const& aggr,
-                                               rmm::mr::device_memory_resource* mr) {
+                                               rmm::mr::device_memory_resource* mr)
+{
   if (input.size() == 0) return empty_like(input);
 
   CUDF_EXPECTS(group_keys.num_columns() > 0,
@@ -745,7 +759,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   // Thus, for an input of 1000 rows,
   //   0. [] indicates a single group, spanning the entire column.
   //   1  [10] is invalid.
-  //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no groups.)
+  //   2. [0, 1000] indicates a single group, spanning the entire column (thus, equivalent to no
+  //   groups.)
   //   3. [0, 500, 1000] indicates two equal-sized groups: [0,500), and [500,1000).
 
   assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&
@@ -783,14 +798,16 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 }
 
 namespace {
-bool is_supported_range_frame_unit(cudf::data_type const& data_type) {
+bool is_supported_range_frame_unit(cudf::data_type const& data_type)
+{
   auto id = data_type.id();
   return id == cudf::TIMESTAMP_DAYS || id == cudf::TIMESTAMP_SECONDS ||
          id == cudf::TIMESTAMP_MILLISECONDS || id == cudf::TIMESTAMP_MICROSECONDS ||
          id == cudf::TIMESTAMP_NANOSECONDS;
 }
 
-size_t multiplication_factor(cudf::data_type const& data_type) {
+size_t multiplication_factor(cudf::data_type const& data_type)
+{
   // Assume timestamps.
   switch (data_type.id()) {
     case cudf::TIMESTAMP_DAYS: return 1L;
@@ -810,12 +827,13 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   column_view const& timestamp_column,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type
-    preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes days for now.
+  size_type preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes days
+                                       // for now.
   size_type following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   TimestampImpl_t mult_factor{
     static_cast<TimestampImpl_t>(multiplication_factor(timestamp_column.type()))};
 
@@ -871,7 +889,8 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           size_type following_window_in_days,
                                                           size_type min_periods,
                                                           std::unique_ptr<aggregation> const& aggr,
-                                                          rmm::mr::device_memory_resource* mr) {
+                                                          rmm::mr::device_memory_resource* mr)
+{
   if (input.size() == 0) return empty_like(input);
 
   CUDF_EXPECTS((group_keys.num_columns() > 0), "Expected at least one grouping key.");

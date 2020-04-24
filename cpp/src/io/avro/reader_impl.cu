@@ -35,17 +35,16 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
-
 // Import functionality that's independent of legacy code
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
 namespace {
-
 /**
  * @brief Function that translates Avro data kind to cuDF type enum
  **/
-type_id to_type_id(const avro::schema_entry *col) {
+type_id to_type_id(const avro::schema_entry *col)
+{
   switch (col->kind) {
     case avro::type_boolean: return type_id::BOOL8;
     case avro::type_int: return type_id::INT32;
@@ -75,7 +74,8 @@ class metadata : public file_metadata {
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    **/
-  void init_and_select_rows(int &row_start, int &row_count) {
+  void init_and_select_rows(int &row_start, int &row_count)
+  {
     const auto buffer = source->get_buffer(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
     CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
@@ -90,7 +90,8 @@ class metadata : public file_metadata {
    *
    * @return List of column names
    **/
-  auto select_columns(std::vector<std::string> use_names) {
+  auto select_columns(std::vector<std::string> use_names)
+  {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto num_avro_columns = static_cast<int>(columns.size());
@@ -135,7 +136,8 @@ class metadata : public file_metadata {
 };
 
 rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_block_data,
-                                                 cudaStream_t stream) {
+                                                 cudaStream_t stream)
+{
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(_metadata->block_list.size());
   hostdevice_vector<gpu_inflate_status_s> inflate_out(_metadata->block_list.size());
@@ -243,7 +245,8 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
                                std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(_metadata->schema.size());
   uint32_t min_row_data_size = 0;
@@ -348,12 +351,14 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
 reader::impl::impl(std::unique_ptr<datasource> source,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr), _columns(options.columns) {
+  : _source(std::move(source)), _mr(mr), _columns(options.columns)
+{
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream) {
+table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t stream)
+{
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata_out;
 
@@ -463,20 +468,26 @@ table_with_metadata reader::impl::read(int skip_rows, int num_rows, cudaStream_t
 reader::reader(std::string filepath,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(filepath), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(const char *buffer,
                size_t length,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(buffer, length), options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(file), options, mr))
+{
+}
 
 // Destructor within this translation unit
 reader::~reader() = default;
@@ -485,9 +496,8 @@ reader::~reader() = default;
 table_with_metadata reader::read_all(cudaStream_t stream) { return _impl->read(0, -1, stream); }
 
 // Forward to implementation
-table_with_metadata reader::read_rows(size_type skip_rows,
-                                      size_type num_rows,
-                                      cudaStream_t stream) {
+table_with_metadata reader::read_rows(size_type skip_rows, size_type num_rows, cudaStream_t stream)
+{
   return _impl->read(skip_rows, (num_rows != 0) ? num_rows : -1, stream);
 }
 

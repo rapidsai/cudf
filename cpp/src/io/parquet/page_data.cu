@@ -21,7 +21,8 @@
 #define NTHREADS (1 << LOG2_NTHREADS)
 #define NZ_BFRSZ (NTHREADS * 2)
 
-inline __device__ uint32_t rotl32(uint32_t x, uint32_t r) {
+inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
+{
   return __funnelshift_l(x, x, r);  // (x << r) | (x >> (32 - r));
 };
 
@@ -29,7 +30,6 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
-
 struct page_state_s {
   const uint8_t *lvl_start[2];  // [def,rep]
   const uint8_t *data_start;
@@ -65,21 +65,22 @@ struct page_state_s {
 };
 
 /**---------------------------------------------------------------------------*
-* @brief Computes a 32-bit hash when given a byte stream and range.
-*
-* MurmurHash3_32 implementation from
-* https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
-*
-* MurmurHash3 was written by Austin Appleby, and is placed in the public
-* domain. The author hereby disclaims copyright to this source code.
-*
-* @param[in] key The input data to hash
-* @param[in] len The length of the input data
-* @param[in] seed An initialization value
-*
-* @return The hash value
-*---------------------------------------------------------------------------**/
-__device__ uint32_t device_str2hash32(const char *key, size_t len, uint32_t seed = 33) {
+ * @brief Computes a 32-bit hash when given a byte stream and range.
+ *
+ * MurmurHash3_32 implementation from
+ * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
+ *
+ * MurmurHash3 was written by Austin Appleby, and is placed in the public
+ * domain. The author hereby disclaims copyright to this source code.
+ *
+ * @param[in] key The input data to hash
+ * @param[in] len The length of the input data
+ * @param[in] seed An initialization value
+ *
+ * @return The hash value
+ *---------------------------------------------------------------------------**/
+__device__ uint32_t device_str2hash32(const char *key, size_t len, uint32_t seed = 33)
+{
   const uint8_t *p  = reinterpret_cast<const uint8_t *>(key);
   uint32_t h1       = seed, k1;
   const uint32_t c1 = 0xcc9e2d51;
@@ -127,7 +128,8 @@ __device__ uint32_t device_str2hash32(const char *key, size_t len, uint32_t seed
  *
  * @return The 32-bit value read
  **/
-inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end) {
+inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end)
+{
   uint32_t v = *cur++;
   if (v >= 0x80 && cur < end) {
     v = (v & 0x7f) | ((*cur++) << 7);
@@ -156,7 +158,8 @@ inline __device__ uint32_t get_vlq32(const uint8_t *&cur, const uint8_t *end) {
  * @param[in] idx The index into the output section
  **/
 __device__ uint32_t InitLevelSection(
-  page_state_s *s, const uint8_t *cur, const uint8_t *end, int encoding, int level_bits, int idx) {
+  page_state_s *s, const uint8_t *cur, const uint8_t *end, int encoding, int level_bits, int idx)
+{
   int32_t len;
   if (level_bits == 0) {
     len                       = 0;
@@ -204,7 +207,8 @@ __device__ uint32_t InitLevelSection(
  * @param[in] t target_count Target count of non-NULL values on output
  * @param[in] t Warp0 thread ID (0..31)
  **/
-__device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t) {
+__device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
+{
   const uint8_t *cur_def    = s->lvl_start[0];
   const uint8_t *end        = s->data_start;
   uint32_t *valid_map       = s->valid_map;
@@ -303,7 +307,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t) {
           if (out_valid_mask == ~0)  // Safe to output all 32 bits are within the current page
           {
             *valid_map = out_valid;
-          } else  // Special case for the first valid row, which may not start on a 32-bit boundary (only setting some of the bits)
+          } else  // Special case for the first valid row, which may not start on a 32-bit boundary
+                  // (only setting some of the bits)
           {
             atomicAnd(valid_map, ~out_valid_mask);
             atomicOr(valid_map, out_valid);
@@ -347,12 +352,14 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t) {
  * @brief Performs RLE decoding of dictionary indexes
  *
  * @param[in,out] s Page state input/output
- * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to 31)
+ * @param[in] target_pos Target index position in dict_idx buffer (may exceed this value by up to
+ *31)
  * @param[in] t Warp1 thread ID (0..31)
  *
  * @return The new output position
  **/
-__device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_pos, int t) {
+__device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_pos, int t)
+{
   const uint8_t *end = s->data_end;
   int dict_bits      = s->dict_bits;
   int pos            = s->dict_pos;
@@ -437,7 +444,8 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_p
  *
  * @return The new output position
  **/
-__device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, int t) {
+__device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, int t)
+{
   const uint8_t *end = s->data_end;
   int pos            = s->dict_pos;
 
@@ -499,7 +507,8 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, in
  *
  * @return The new output position
  **/
-__device__ void gpuInitStringDescriptors(volatile page_state_s *s, int target_pos, int t) {
+__device__ void gpuInitStringDescriptors(volatile page_state_s *s, int target_pos, int t)
+{
   int pos = s->dict_pos;
   // This step is purely serial
   if (!t) {
@@ -533,7 +542,8 @@ __device__ void gpuInitStringDescriptors(volatile page_state_s *s, int target_po
  * @param[in] src_pos Source position
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  **/
-inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, void *dstv) {
+inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, void *dstv)
+{
   const char *ptr = NULL;
   size_t len      = 0;
 
@@ -572,7 +582,8 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  **/
-inline __device__ void gpuOutputBoolean(volatile page_state_s *s, int src_pos, uint8_t *dst) {
+inline __device__ void gpuOutputBoolean(volatile page_state_s *s, int src_pos, uint8_t *dst)
+{
   *dst = s->dict_idx[src_pos & (NZ_BFRSZ - 1)];
 }
 
@@ -587,7 +598,8 @@ inline __device__ void gpuOutputBoolean(volatile page_state_s *s, int src_pos, u
 inline __device__ void gpuStoreOutput(uint32_t *dst,
                                       const uint8_t *src8,
                                       uint32_t dict_pos,
-                                      uint32_t dict_size) {
+                                      uint32_t dict_size)
+{
   uint32_t bytebuf;
   unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
   src8 -= ofs;  // align to 32-bit boundary
@@ -615,7 +627,8 @@ inline __device__ void gpuStoreOutput(uint32_t *dst,
 inline __device__ void gpuStoreOutput(uint2 *dst,
                                       const uint8_t *src8,
                                       uint32_t dict_pos,
-                                      uint32_t dict_size) {
+                                      uint32_t dict_size)
+{
   uint2 v;
   unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
   src8 -= ofs;  // align to 32-bit boundary
@@ -641,9 +654,8 @@ inline __device__ void gpuStoreOutput(uint2 *dst,
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  **/
-inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s,
-                                               int src_pos,
-                                               int64_t *dst) {
+inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src_pos, int64_t *dst)
+{
   const uint8_t *src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
   int64_t ts;
@@ -697,9 +709,8 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s,
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  **/
-inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s,
-                                               int src_pos,
-                                               int64_t *dst) {
+inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src_pos, int64_t *dst)
+{
   const uint8_t *src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
   int64_t ts;
@@ -766,7 +777,8 @@ static const __device__ __constant__ double kPow10[40] = {
 inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
                                         int src_pos,
                                         double *dst,
-                                        int dtype) {
+                                        int dtype)
+{
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
   int64_t i128_hi, i128_lo;
@@ -784,8 +796,8 @@ inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
   }
   dtype_len_in = s->dtype_len_in;
   dict_pos *= dtype_len_in;
-  // FIXME: Not very efficient (currently reading 1 byte at a time) -> need a variable-length unaligned
-  // load utility function (both little-endian and big-endian versions)
+  // FIXME: Not very efficient (currently reading 1 byte at a time) -> need a variable-length
+  // unaligned load utility function (both little-endian and big-endian versions)
   if (dtype == INT32) {
     int32_t lo32 = 0;
     for (unsigned int i = 0; i < dtype_len_in; i++) {
@@ -840,7 +852,8 @@ inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
  * @param[in] dst Pointer to row output data
  **/
 template <typename T>
-inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *dst) {
+inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *dst)
+{
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
@@ -868,7 +881,8 @@ inline __device__ void gpuOutputFast(volatile page_state_s *s, int src_pos, T *d
 static __device__ void gpuOutputGeneric(volatile page_state_s *s,
                                         int src_pos,
                                         uint8_t *dst8,
-                                        int len) {
+                                        int len)
+{
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size;
 
@@ -926,7 +940,8 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
  **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS) gpuDecodePageData(
-  PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size_t num_rows, int32_t num_chunks) {
+  PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size_t num_rows, int32_t num_chunks)
+{
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s *const s = &state_g;
@@ -1134,7 +1149,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS) gpuDecodePageData(
   }
   __syncthreads();
   if (!t) {
-    // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
+    // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of
+    // valid values
     pages[page_idx].num_rows    = s->num_rows - s->first_row;
     pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
   }
@@ -1146,7 +1162,8 @@ cudaError_t __host__ DecodePageData(PageInfo *pages,
                                     int32_t num_chunks,
                                     size_t num_rows,
                                     size_t min_row,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(num_pages, 1);  // 1 threadblock per page
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(

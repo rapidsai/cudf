@@ -63,21 +63,6 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     endif(BUILD_LEGACY_TESTS OR (NOT is_legacy_test))
 endfunction(ConfigureTest)
 
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
-
-function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
-    if(CMAKE_ENABLE_BENCHMARKS)
-        add_executable(${CMAKE_BENCH_NAME}
-                       ${CMAKE_BENCH_SRC})
-        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        target_link_libraries(${CMAKE_BENCH_NAME} cudf cudftestutil)
-        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
-                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
-        add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
-    endif(CMAKE_ENABLE_BENCHMARKS)
-endfunction(ConfigureBench)
-
-
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
