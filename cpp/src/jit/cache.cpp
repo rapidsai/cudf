@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include <jit/cache.h>
+#include <cudf/utilities/error.hpp>
+
 #include <errno.h>
 #include <fcntl.h>
-#include <jit/cache.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <boost/filesystem.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace jit {
@@ -156,8 +157,13 @@ std::string cudfJitCache::cacheFile::read()
     return std::string();
   }
 
+  // Create args for file locking
+  flock fl{};
+  fl.l_type   = F_RDLCK;  // Shared lock for reading
+  fl.l_whence = SEEK_SET;
+
   // Lock the file descriptor. we the only ones now
-  if (lockf(fd, F_LOCK, 0) == -1) {
+  if (fcntl(fd, F_SETLKW, &fl) == -1) {
     successful_read = false;
     return std::string();
   }
@@ -197,8 +203,13 @@ void cudfJitCache::cacheFile::write(std::string content)
     return;
   }
 
+  // Create args for file locking
+  flock fl{};
+  fl.l_type   = F_WRLCK;  // Exclusive lock for writing
+  fl.l_whence = SEEK_SET;
+
   // Lock the file descriptor. we the only ones now
-  if (lockf(fd, F_LOCK, 0) == -1) {
+  if (fcntl(fd, F_SETLKW, &fl) == -1) {
     successful_write = false;
     return;
   }
