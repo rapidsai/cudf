@@ -68,8 +68,13 @@ boost::filesystem::path getCacheDir()
     kernel_cache_path_env != nullptr ? kernel_cache_path_env : LIBCUDF_KERNEL_CACHE_PATH);
   if (not kernel_cache_path.empty()) {
     kernel_cache_path /= std::string{CUDF_STRINGIFY(CUDF_VERSION)};
-    // `mkdir -p` the kernel cache path if it doesn't exist
-    boost::filesystem::create_directories(kernel_cache_path);
+    try {
+      // `mkdir -p` the kernel cache path if it doesn't exist
+      boost::filesystem::create_directories(kernel_cache_path);
+    } catch (const std::exception& e) {
+      // if directory creation fails for any reason, return empty path
+      return boost::filesystem::path();
+    }
   }
   return kernel_cache_path;
 }
