@@ -1478,8 +1478,7 @@ class DataFrame(Frame):
 
             from cudf.core import MultiIndex
 
-            is_multi = type(idx) == MultiIndex
-            if is_multi:
+            if type(idx) == MultiIndex:
                 idx_match = [
                     x.any()
                     for x in [
