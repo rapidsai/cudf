@@ -135,7 +135,10 @@ struct IteratorTest : public cudf::test::BaseFixture {
       thrust::device,
       thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
       thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-      [] __device__(auto it) { return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
+      [] __device__(auto it) {
+        return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) ==
+               T_output(thrust::get<1>(it));
+      },
       true,
       thrust::logical_and<bool>());
 #ifndef NDEBUG
@@ -196,7 +199,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
   thrust::host_vector<T> replaced_array(host_array);
 
   // driven by iterator as a pointer of device array.
-  auto it_dev = dev_array.begin();
+  auto it_dev      = dev_array.begin();
   T expected_value = *std::min_element(replaced_array.begin(), replaced_array.end());
   this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
   this->iterator_test_cub(expected_value, it_dev, dev_array.size());

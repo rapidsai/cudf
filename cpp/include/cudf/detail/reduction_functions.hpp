@@ -24,12 +24,12 @@ namespace experimental {
 namespace reduction {
 /**
  * @brief Computes sum of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
- * 
+ *
  * @param col input column to compute sum
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -42,11 +42,11 @@ std::unique_ptr<scalar> sum(column_view const& col,
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes minimum of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
- * 
+ *
  * @param col input column to compute minimum.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -59,11 +59,11 @@ std::unique_ptr<scalar> min(column_view const& col,
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes maximum of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
- * 
+ *
  * @param col input column to compute maximum.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -76,12 +76,12 @@ std::unique_ptr<scalar> max(column_view const& col,
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes any of elements in input column is true when typecasted to bool
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not convertible to bool
  * @throw cudf::logic_error if `output_dtype` is not bool
- * 
+ *
  * @param col input column to compute any_of.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -94,12 +94,12 @@ std::unique_ptr<scalar> any(column_view const& col,
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes all of elements in input column is true when typecasted to bool
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not convertible to bool
  * @throw cudf::logic_error if `output_dtype` is not bool
- * 
+ *
  * @param col input column to compute all_of.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -112,12 +112,12 @@ std::unique_ptr<scalar> all(column_view const& col,
                             cudaStream_t stream                 = 0);
 /**
  * @brief Computes product of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
- * 
+ *
  * @param col input column to compute product.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -132,12 +132,12 @@ std::unique_ptr<scalar> product(
 
 /**
  * @brief Computes sum of squares of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
- * 
+ *
  * @param col input column to compute sum of squares.
  * @param output_dtype data type of return type and typecast elements of input column
  * @param mr The resource used to allocate the device memory for the returned scalar
@@ -152,12 +152,12 @@ std::unique_ptr<scalar> sum_of_squares(
 
 /**
  * @brief Computes mean of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
- * 
+ *
  * @param col input column to compute mean.
  * @param output_dtype data type of return type and typecast elements of input column.
  * @param mr The resource used to allocate the device memory for the returned scalar.
@@ -171,12 +171,12 @@ std::unique_ptr<scalar> mean(column_view const& col,
 
 /**
  * @brief Computes variance of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
- * 
+ *
  * @param col input column to compute variance.
  * @param output_dtype data type of return type and typecast elements of input column.
  * @param mr The resource used to allocate the device memory for the returned scalar.
@@ -192,12 +192,12 @@ std::unique_ptr<scalar> variance(
 
 /**
  * @brief Computes standard deviation of elements in input column
- * 
+ *
  * If all elements in input column are null, output scalar is null.
- * 
+ *
  * @throw cudf::logic_error if input column type is not arithmetic type
  * @throw cudf::logic_error if `output_dtype` is not floating point type
- * 
+ *
  * @param col input column to compute standard deviation.
  * @param output_dtype data type of return type and typecast elements of input column.
  * @param mr The resource used to allocate the device memory for the returned scalar.
