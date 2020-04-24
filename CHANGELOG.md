@@ -195,6 +195,7 @@
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
+- PR #5018 Miscellaneous Jit cache path improvements
 
 
 # cuDF 0.13.0 (31 Mar 2020)
