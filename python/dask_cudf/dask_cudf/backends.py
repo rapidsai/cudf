@@ -7,7 +7,7 @@ from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype
+from cudf.utils.dtypes import is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -54,7 +54,7 @@ def _nonempty_index(idx):
 
 
 def _get_non_empty_data(s):
-    if is_categorical_dtype(s.dtype):
+    if isinstance(s._column, cudf.core.column.CategoricalColumn):
         categories = (
             s._column.categories if len(s._column.categories) else ["a"]
         )
@@ -65,10 +65,13 @@ def _get_non_empty_data(s):
         )
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
-    elif pd.api.types.is_numeric_dtype(s.dtype):
-        data = cp.arange(start=0, stop=2, dtype=s.dtype)
     else:
-        data = np.arange(start=0, stop=2, dtype=s.dtype)
+        if pd.api.types.is_numeric_dtype(s.dtype):
+            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+        else:
+            data = column.as_column(
+                cp.arange(start=0, stop=2, dtype="int64")
+            ).astype(s.dtype)
     return data
 
 
