@@ -30,7 +30,7 @@ boost::filesystem::path get_user_home_cache_dir()
 {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
-    return boost::filesystem::path(home_dir) / ".cudf" / std::string{CUDF_STRINGIFY(CUDF_VERSION)};
+    return boost::filesystem::path(home_dir) / ".cudf";
   } else {
     return boost::filesystem::path();
   }
@@ -67,6 +67,7 @@ boost::filesystem::path getCacheDir()
   auto kernel_cache_path     = boost::filesystem::path(
     kernel_cache_path_env != nullptr ? kernel_cache_path_env : LIBCUDF_KERNEL_CACHE_PATH);
   if (not kernel_cache_path.empty()) {
+    kernel_cache_path /= std::string{CUDF_STRINGIFY(CUDF_VERSION)};
     // `mkdir -p` the kernel cache path if it doesn't exist
     boost::filesystem::create_directories(kernel_cache_path);
   }
