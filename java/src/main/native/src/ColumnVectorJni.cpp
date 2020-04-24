@@ -885,14 +885,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env, jclass, jlong column_view) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env, jclass, jlong column_view,
+                                                                  jint strip_type, jlong to_strip) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, to_strip, "to_strip scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
     cudf::strings_column_view scv(*cv);
+    cudf::strings::strip_type s_striptype = static_cast<cudf::strings::strip_type>(strip_type);
+    cudf::string_scalar* ss_tostrip = reinterpret_cast<cudf::string_scalar*>(to_strip);
 
-    std::unique_ptr<cudf::column> result = cudf::strings::strip(scv);
+    std::unique_ptr<cudf::column> result = cudf::strings::strip(scv, s_striptype, *ss_tostrip);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

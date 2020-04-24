@@ -1840,7 +1840,73 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector strip() {
     assert type == DType.STRING : "column type must be a String";
-    return new ColumnVector(stringStrip(getNativeView()));
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the beginning and end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the beginning of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the beginning of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
   /**
@@ -2159,7 +2225,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Native method to strip whitespace from the start and end of a string.
    * @param columnView native handle of the cudf::column_view being operated on.
    */
-  private static native long stringStrip(long columnView) throws CudfException;
+  private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
