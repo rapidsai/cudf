@@ -78,8 +78,10 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_type skip_rows, size_type num_rows,
-                           size_type stripe, size_type max_stripe_count,
+  table_with_metadata read(size_type skip_rows,
+                           size_type num_rows,
+                           size_type stripe,
+                           size_type max_stripe_count,
                            const size_type *stripe_indices,
                            cudaStream_t stream);
 
@@ -98,13 +100,14 @@ class reader::impl {
    *
    * @return Device buffer to decompressed page data
    */
-  rmm::device_buffer decompress_stripe_data(
-      hostdevice_vector<gpu::ColumnDesc> &chunks,
-      const std::vector<rmm::device_buffer> &stripe_data,
-      const OrcDecompressor *decompressor,
-      std::vector<orc_stream_info> &stream_info, size_t num_stripes,
-      rmm::device_vector<gpu::RowGroup> &row_groups, size_t row_index_stride,
-      cudaStream_t stream);
+  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
+                                            const std::vector<rmm::device_buffer> &stripe_data,
+                                            const OrcDecompressor *decompressor,
+                                            std::vector<orc_stream_info> &stream_info,
+                                            size_t num_stripes,
+                                            rmm::device_vector<gpu::RowGroup> &row_groups,
+                                            size_t row_index_stride,
+                                            cudaStream_t stream);
 
   /**
    * @brief Converts the stripe column data and outputs to columns
@@ -120,7 +123,9 @@ class reader::impl {
    * @param stream Stream to use for memory allocation and kernels
    */
   void decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
-                          size_t num_dicts, size_t skip_rows, size_t num_rows,
+                          size_t num_dicts,
+                          size_t skip_rows,
+                          size_t num_rows,
                           const std::vector<int64_t> &timezone_table,
                           const rmm::device_vector<gpu::RowGroup> &row_groups,
                           size_t row_index_stride,
@@ -133,10 +138,10 @@ class reader::impl {
   std::unique_ptr<metadata> _metadata;
 
   std::vector<int> _selected_columns;
-  bool _use_index = true;
-  bool _use_np_dtypes = true;
+  bool _use_index            = true;
+  bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
-  bool _decimals_as_float = true;
+  bool _decimals_as_float    = true;
   int _decimals_as_int_scale = -1;
   data_type _timestamp_type{type_id::EMPTY};
 };

@@ -41,7 +41,8 @@ class datasource {
    * @param[in] size Bytes from the offset; use zero for entire file
    **/
   static std::unique_ptr<datasource> create(const std::string filepath,
-                                            size_t offset = 0, size_t size = 0);
+                                            size_t offset = 0,
+                                            size_t size   = 0);
 
   /**
    * @brief Create a source from a memory buffer
@@ -55,8 +56,7 @@ class datasource {
    *
    * @param[in] filepath Path to the file to use
    **/
-  static std::unique_ptr<datasource> create(
-      std::shared_ptr<arrow::io::RandomAccessFile> file);
+  static std::unique_ptr<datasource> create(std::shared_ptr<arrow::io::RandomAccessFile> file);
 
   /**
    * @brief Base class destructor
@@ -71,8 +71,7 @@ class datasource {
    *
    * @return std::shared_ptr<arrow::Buffer> The data buffer
    **/
-  virtual const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
-                                                          size_t size) = 0;
+  virtual const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset, size_t size) = 0;
 
   /**
    * @brief Returns the size of the data in the source

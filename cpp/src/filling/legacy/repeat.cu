@@ -14,46 +14,45 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/error.hpp>
-#include <utilities/legacy/column_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/legacy/copying.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <utilities/legacy/column_utils.hpp>
 
 #include <cudf/cudf.h>
 #include <cudf/types.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
-#include <thrust/binary_search.h>
-
 
 namespace cudf {
 
 namespace detail {
 
-cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t stream = 0) {
+cudf::table repeat(const cudf::table& in, const gdf_column& count, cudaStream_t stream = 0) {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
-    "Count column should be of index type");
+               "Count column should be of index type");
   CUDF_EXPECTS(in.num_rows() == count.size, "in and count must have equal size");
   CUDF_EXPECTS(not has_nulls(count), "count cannot contain nulls");
 
-  if (in.num_rows() == 0) {
-    return cudf::empty_like(in);
-  }
-  
+  if (in.num_rows() == 0) { return cudf::empty_like(in); }
+
   rmm::device_vector<cudf::size_type> offset(count.size);
-  auto count_data = static_cast <cudf::size_type*> (count.data);
-  
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), count_data, count_data + count.size, offset.begin());
+  auto count_data = static_cast<cudf::size_type*>(count.data);
+
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream)->on(stream), count_data, count_data + count.size, offset.begin());
 
   cudf::size_type output_size = offset.back();
 
   rmm::device_vector<cudf::size_type> indices(output_size);
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                      offset.begin(), offset.end(),
+                      offset.begin(),
+                      offset.end(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
@@ -65,26 +64,23 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
   return output;
 }
 
-cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t stream = 0) {
+cudf::table repeat(const cudf::table& in, const gdf_scalar& count, cudaStream_t stream = 0) {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<cudf::size_type>(),
-    "Count value should be of index type");
+               "Count value should be of index type");
   CUDF_EXPECTS(count.is_valid, "count cannot be null");
 
-  if (in.num_rows() == 0) {
-    return cudf::empty_like(in);
-  }
-  
+  if (in.num_rows() == 0) { return cudf::empty_like(in); }
+
   cudf::size_type stride = count.data.si32;
 
   cudf::size_type output_size = stride * in.num_rows();
-  auto offset = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    [stride] __device__ (auto i) { return (i+1) * stride; }
-  );
+  auto offset                 = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), [stride] __device__(auto i) { return (i + 1) * stride; });
 
   rmm::device_vector<cudf::size_type> indices(output_size);
   thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                      offset, offset + in.num_rows(),
+                      offset,
+                      offset + in.num_rows(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
@@ -96,15 +92,14 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t 
   return output;
 }
 
-} // namespace detail
+}  // namespace detail
 
-
-cudf::table repeat(const cudf::table &in, const gdf_column& count) {
+cudf::table repeat(const cudf::table& in, const gdf_column& count) {
   return detail::repeat(in, count);
 }
 
-cudf::table repeat(const cudf::table &in, const gdf_scalar& count) {
+cudf::table repeat(const cudf::table& in, const gdf_scalar& count) {
   return detail::repeat(in, count);
 }
 
-} // namespace cudf
+}  // namespace cudf

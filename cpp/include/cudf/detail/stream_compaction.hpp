@@ -16,9 +16,10 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -59,13 +60,12 @@ namespace detail {
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
  */
-std::unique_ptr<experimental::table>
-    drop_nulls(table_view const& input,
-               std::vector<size_type> const& keys,
-               cudf::size_type keep_threshold,
-               rmm::mr::device_memory_resource *mr =
-                   rmm::mr::get_default_resource(),
-               cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
@@ -89,12 +89,11 @@ std::unique_ptr<experimental::table>
  * @return unique_ptr<table> Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-std::unique_ptr<experimental::table>
-    apply_boolean_mask(table_view const& input,
-                       column_view const& boolean_mask,
-                       rmm::mr::device_memory_resource *mr =
-                           rmm::mr::get_default_resource(),
-                       cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> apply_boolean_mask(
+  table_view const& input,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Create a new table without duplicate rows
@@ -117,14 +116,13 @@ std::unique_ptr<experimental::table>
  *
  * @return unique_ptr<table> Table with unique rows as per specified `keep`.
  */
-std::unique_ptr<experimental::table>
-    drop_duplicates(table_view const& input,
-                    std::vector<size_type> const& keys,
-                    duplicate_keep_option const& keep,
-                    bool const& nulls_are_equal=true,
-                    rmm::mr::device_memory_resource *mr =
-                        rmm::mr::get_default_resource(),
-                    cudaStream_t stream = 0);
+std::unique_ptr<experimental::table> drop_duplicates(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option const& keep,
+  bool const& nulls_are_equal         = true,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Count the unique elements in the column_view
@@ -157,15 +155,13 @@ cudf::size_type unique_count(column_view const& input,
  * @tparam T The type of `column_device_view`
  *---------------------------------------------------------------------------**/
 template <typename T>
-struct check_for_nan
-{
+struct check_for_nan {
   /**---------------------------------------------------------------------------*
    * @brief Construct a strcuture
    *
    * @param[in] input The `column_device_view`
    *---------------------------------------------------------------------------**/
-  check_for_nan(cudf::column_device_view input) :_input{input}{}
-
+  check_for_nan(cudf::column_device_view input) : _input{input} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Operator to be called to check for `NAN` at `index` in `_input`
@@ -174,13 +170,11 @@ struct check_for_nan
    *
    * @returns bool true if value at `index` is `NAN` and not null, else false
    *---------------------------------------------------------------------------**/
-  __device__
-  bool operator()(size_type index)
-  {
+  __device__ bool operator()(size_type index) {
     return std::isnan(_input.data<T>()[index]) and _input.is_valid(index);
   }
 
-protected:
+ protected:
   cudf::column_device_view _input;
 };
 
@@ -188,8 +182,7 @@ protected:
  * @brief A structure to be used along with type_dispatcher to check if a
  * `column_view` has `NAN`.
  *---------------------------------------------------------------------------**/
-struct has_nans{
-
+struct has_nans {
   /**---------------------------------------------------------------------------*
    * @brief Checks if `input` has `NAN`
    *
@@ -200,16 +193,15 @@ struct has_nans{
    *
    * @returns bool true if `input` has `NAN` else false
    *---------------------------------------------------------------------------**/
-  template <typename T,
-         std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream){
-      auto input_device_view = cudf::column_device_view::create(input, stream);
-      auto device_view = *input_device_view;
-      auto count = thrust::count_if(rmm::exec_policy(stream)->on(stream),
-                                    thrust::counting_iterator<cudf::size_type>(0),
-                                    thrust::counting_iterator<cudf::size_type>(input.size()),
-                                    check_for_nan<T>(device_view));
-      return count > 0;
+  template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream) {
+    auto input_device_view = cudf::column_device_view::create(input, stream);
+    auto device_view       = *input_device_view;
+    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                                  thrust::counting_iterator<cudf::size_type>(0),
+                                  thrust::counting_iterator<cudf::size_type>(input.size()),
+                                  check_for_nan<T>(device_view));
+    return count > 0;
   }
 
   /**---------------------------------------------------------------------------*
@@ -224,13 +216,12 @@ struct has_nans{
    *
    * @returns bool Always false as non-floating point columns can't have `NAN`
    *---------------------------------------------------------------------------**/
-  template <typename T,
-          std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream){
-      return false;
+  template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
+  bool operator()(column_view const& input, cudaStream_t stream) {
+    return false;
   }
 };
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf
