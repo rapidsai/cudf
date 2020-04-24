@@ -58,11 +58,6 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     A new object of like type with rows from each object in ``objs``.
     """
 
-    """ Check if *objs* index contains any duplicates """
-    for o in objs:
-        if not len(o.index) == len(set(o.index)):
-            raise ValueError("cannot reindex from a duplicate axis")
-
     if sort not in (None, False):
         raise NotImplementedError("sort parameter is not yet supported")
 
@@ -94,6 +89,11 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
+        """ Check if *objs* index contains any duplicates """
+        for o in objs:
+            if not len(o.index) == len(set(o.index)):
+                raise ValueError("cannot reindex from a duplicate axis")
+
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
