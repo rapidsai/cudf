@@ -71,12 +71,13 @@ class ColumnBase(Column):
         return (
             build_column,
             (
-                self.base_data,
+                self.data,
                 self.dtype,
-                self.base_mask,
+                self.mask,
                 self.size,
-                self.offset,
-                self.base_children,
+                0,
+                self.null_count,
+                self.children,
             ),
         )
 

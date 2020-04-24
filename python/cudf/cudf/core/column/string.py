@@ -1933,20 +1933,6 @@ class StringColumn(column.ColumnBase):
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
 
-    def __reduce__(self):
-        return (
-            column.build_column,
-            (
-                None,
-                "str",
-                self.mask,
-                self.size,
-                0,
-                self._null_count,
-                self.children,
-            ),
-        )
-
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
 

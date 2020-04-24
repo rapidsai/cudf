@@ -469,20 +469,6 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.ordered,
         )
 
-    def __reduce__(self):
-        return (
-            column.build_column,
-            (
-                None,
-                self.dtype,
-                self.mask,
-                self.size,
-                0,
-                self.null_count,
-                (self.children[0],),
-            ),
-        )
-
     def _encode(self, value):
         return self.categories.find_first_value(value)
 
