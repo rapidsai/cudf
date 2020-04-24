@@ -38,6 +38,20 @@ public final class Aggregate {
             index);
   }
 
+  static Aggregate first(int index, boolean includeNulls) {
+    return new Aggregate(includeNulls ?
+            AggregateOp.FIRST_INCLUDE_NULLS :
+            AggregateOp.FIRST_EXCLUDE_NULLS,
+            index);
+  }
+
+  static Aggregate last(int index, boolean includeNulls) {
+    return new Aggregate(includeNulls ?
+            AggregateOp.LAST_INCLUDE_NULLS :
+            AggregateOp.LAST_EXCLUDE_NULLS,
+            index);
+  }
+
   static Aggregate max(int index) {
     return new Aggregate(AggregateOp.MAX, index);
   }
