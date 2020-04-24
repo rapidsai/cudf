@@ -1476,9 +1476,7 @@ class DataFrame(Frame):
         if idx is not None:
             idx = idx if isinstance(idx, Index) else as_index(idx)
 
-            from cudf.core import MultiIndex
-
-            if type(idx) == MultiIndex:
+            if isinstance(idx, cudf.core.MultiIndex):
                 idx_match = [
                     x.any()
                     for x in [
