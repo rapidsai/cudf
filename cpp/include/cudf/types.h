@@ -5,8 +5,8 @@
 // TODO: Update to use fixed width types when CFFI goes away
 typedef int32_t gdf_size_type;  ///< Limits the maximum size of a gdf_column to 2^31-1
 typedef uint8_t gdf_valid_type;
-typedef int8_t gdf_bool8; /*< Storage type for Boolean values. 
-                                        char is used to guarantee 8-bit storage. 
+typedef int8_t gdf_bool8; /*< Storage type for Boolean values.
+                                        char is used to guarantee 8-bit storage.
                                         zero == false, nonzero == true. */
 typedef int64_t gdf_date64;
 typedef int32_t gdf_date32;
@@ -28,11 +28,13 @@ typedef enum {
   GDF_BOOL8,      ///< Boolean stored in 8 bits per Boolean. zero==false, nonzero==true.
   GDF_DATE32,     ///< int32_t days since the UNIX epoch
   GDF_DATE64,     ///< int64_t milliseconds since the UNIX epoch
-  GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit millisecond)
+  GDF_TIMESTAMP,  ///< Exact timestamp encoded with int64 since UNIX epoch (Default unit
+                  ///< millisecond)
   GDF_CATEGORY,
   GDF_STRING,
-  GDF_STRING_CATEGORY,  ///< Stores indices of an NVCategory in data and in extra col info a reference to the nv_category
-  N_GDF_TYPES,  ///< additional types should go BEFORE N_GDF_TYPES
+  GDF_STRING_CATEGORY,  ///< Stores indices of an NVCategory in data and in extra col info a
+                        ///< reference to the nv_category
+  N_GDF_TYPES,          ///< additional types should go BEFORE N_GDF_TYPES
 } gdf_dtype;
 
 /**
@@ -42,21 +44,25 @@ typedef enum {
  */
 typedef enum {
   GDF_SUCCESS = 0,
-  GDF_CUDA_ERROR,            ///< Error occured in a CUDA call
-  GDF_UNSUPPORTED_DTYPE,     ///< The datatype of the gdf_column is unsupported
-  GDF_COLUMN_SIZE_MISMATCH,  ///< Two columns that should be the same size aren't the same size
-  GDF_COLUMN_SIZE_TOO_BIG,   ///< Size of column is larger than the max supported size
-  GDF_DATASET_EMPTY,         ///< Input dataset is either null or has size 0 when it shouldn't
-  GDF_VALIDITY_MISSING,      ///< gdf_column's validity bitmask is null
-  GDF_VALIDITY_UNSUPPORTED,  ///< The requested gdf operation does not support validity bitmask handling, and one of the input columns has the valid bits enabled
-  GDF_INVALID_API_CALL,      ///< The arguments passed into the function were invalid
-  GDF_JOIN_DTYPE_MISMATCH,  ///< Datatype mismatch between corresponding columns in  left/right tables in the Join function
+  GDF_CUDA_ERROR,             ///< Error occured in a CUDA call
+  GDF_UNSUPPORTED_DTYPE,      ///< The datatype of the gdf_column is unsupported
+  GDF_COLUMN_SIZE_MISMATCH,   ///< Two columns that should be the same size aren't the same size
+  GDF_COLUMN_SIZE_TOO_BIG,    ///< Size of column is larger than the max supported size
+  GDF_DATASET_EMPTY,          ///< Input dataset is either null or has size 0 when it shouldn't
+  GDF_VALIDITY_MISSING,       ///< gdf_column's validity bitmask is null
+  GDF_VALIDITY_UNSUPPORTED,   ///< The requested gdf operation does not support validity bitmask
+                              ///< handling, and one of the input columns has the valid bits enabled
+  GDF_INVALID_API_CALL,       ///< The arguments passed into the function were invalid
+  GDF_JOIN_DTYPE_MISMATCH,    ///< Datatype mismatch between corresponding columns in  left/right
+                              ///< tables in the Join function
   GDF_JOIN_TOO_MANY_COLUMNS,  ///< Too many columns were passed in for the requested join operation
   GDF_DTYPE_MISMATCH,         ///< Type mismatch between columns that should be the same type
-  GDF_UNSUPPORTED_METHOD,  ///< The method requested to perform an operation was invalid or unsupported (e.g., hash vs. sort)
+  GDF_UNSUPPORTED_METHOD,     ///< The method requested to perform an operation was invalid or
+                              ///< unsupported (e.g., hash vs. sort)
   GDF_INVALID_AGGREGATOR,     ///< Invalid aggregator was specified for a groupby
   GDF_INVALID_HASH_FUNCTION,  ///< Invalid hash function was selected
-  GDF_PARTITION_DTYPE_MISMATCH,  ///< Datatype mismatch between columns of input/output in the hash partition function
+  GDF_PARTITION_DTYPE_MISMATCH,   ///< Datatype mismatch between columns of input/output in the hash
+                                  ///< partition function
   GDF_HASH_TABLE_INSERT_FAILURE,  ///< Failed to insert to hash table, likely because its full
   GDF_UNSUPPORTED_JOIN_TYPE,      ///< The type of join requested is unsupported
   GDF_C_ERROR,                    ///< C error not related to CUDA
@@ -66,7 +72,8 @@ typedef enum {
   GDF_NULL_NVTX_NAME,        ///< The requested name for an NVTX range cannot be nullptr
   GDF_TIMESTAMP_RESOLUTION_MISMATCH,  ///< Resolution mismatch between two columns of GDF_TIMESTAMP
   GDF_NOTIMPLEMENTED_ERROR,           ///< A feature is not implemented
-  GDF_TABLES_SIZE_MISMATCH,  ///< Two tables that should have the same number of columns have different numbers of columns
+  GDF_TABLES_SIZE_MISMATCH,  ///< Two tables that should have the same number of columns have
+                             ///< different numbers of columns
   N_GDF_ERRORS
 } gdf_error;
 
@@ -93,7 +100,8 @@ typedef enum {
  * @brief Extra information about column type.
  */
 typedef struct {
-  //here we can also hold info for decimal datatype or any other datatype that requires additional information
+  // here we can also hold info for decimal datatype or any other datatype that requires additional
+  // information
   gdf_time_unit time_unit;  ///< Time Unit resolution
   void *category;           ///< Categories related to the GDF_STRING_CATEGORY datatype
 } gdf_dtype_extra_info;
@@ -130,30 +138,31 @@ typedef struct {
  * This struct contains pointers to GPU memory and metadata to describe data layout.
  */
 typedef struct gdf_column_ {
-  void *data;  ///< Type Erased pointer to the column data
-  gdf_valid_type *
-    valid;  ///< Pointer to the columns validity bit mask where the 'i'th bit indicates if the 'i'th row is NULL
+  void *data;             ///< Type Erased pointer to the column data
+  gdf_valid_type *valid;  ///< Pointer to the columns validity bit mask where the 'i'th bit
+                          ///< indicates if the 'i'th row is NULL
   gdf_size_type size;  ///< Number of data elements in the columns data buffer. Limited to 2^31 - 1.
   gdf_dtype dtype;     ///< The datatype of the column's data
-  gdf_size_type null_count;  ///< The number of NULL values in the column's data
-  gdf_dtype_extra_info
-    dtype_info;  ///< gdf_dtype_extra_info which stores extra information about the column's gdf_dtype
-  char *col_name;  ///< Host side null terminated string with name of the column
+  gdf_size_type null_count;         ///< The number of NULL values in the column's data
+  gdf_dtype_extra_info dtype_info;  ///< gdf_dtype_extra_info which stores extra information about
+                                    ///< the column's gdf_dtype
+  char *col_name;                   ///< Host side null terminated string with name of the column
 } gdf_column;
 
-/** 
+/**
  * @brief  These enums indicate which method is to be used for an operation.
  * For example, it is used to select between the hash-based vs. sort-based implementations
  * of the Join operation.
  */
 typedef enum {
-  GDF_SORT =
-    0,  ///< Window Variance Indicates that the sort-based implementation of the function will be used
-  GDF_HASH,  ///< Window Variance Indicates that the hash-based implementation of the function will be used
+  GDF_SORT = 0,  ///< Window Variance Indicates that the sort-based implementation of the function
+                 ///< will be used
+  GDF_HASH,  ///< Window Variance Indicates that the hash-based implementation of the function will
+             ///< be used
   N_GDF_METHODS,  ///< Window Variance additional methods should go BEFORE N_GDF_METHODS
 } gdf_method;
 
-/** 
+/**
  * @brief These enums indicate the supported aggregation operations that can be
  * performed on a set of aggregation columns as part of a GroupBy operation
  */
@@ -164,12 +173,14 @@ typedef enum {
   GDF_AVG,             ///< Computes arithmetic mean of all values in the aggregation column
   GDF_COUNT,           ///< Computes histogram of the occurance of each key in the GroupBy Columns
   GDF_COUNT_DISTINCT,  ///< Counts the number of distinct keys in the GroupBy columns
-  GDF_NUMBA_GENERIC_AGG_OPS,  ///< Perform a generic aggregation operation detailed in a PTX code generated by `numba`
-  GDF_CUDA_GENERIC_AGG_OPS,  ///< Perform a generic aggregation operation detailed in a CUDA code
-  N_GDF_AGG_OPS,  ///< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE
+  GDF_NUMBA_GENERIC_AGG_OPS,  ///< Perform a generic aggregation operation detailed in a PTX code
+                              ///< generated by `numba`
+  GDF_CUDA_GENERIC_AGG_OPS,   ///< Perform a generic aggregation operation detailed in a CUDA code
+  N_GDF_AGG_OPS,  ///< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE
+                  ///< ADDED ABOVE THIS LINE
 } gdf_agg_op;
 
-/** 
+/**
  * @brief  Colors for use with NVTX ranges.
  *
  * These enumerations are the available pre-defined colors for use with
@@ -196,8 +207,8 @@ typedef enum {
   GDF_NULL_AS_SMALLEST      ///< NULLS are treated as the smallest number in comparisons
 } gdf_null_sort_behavior;
 
-/** 
- * @brief  This struct holds various information about how an operation should be 
+/**
+ * @brief  This struct holds various information about how an operation should be
  * performed as well as additional information about the input data.
  */
 typedef struct gdf_context_ {
@@ -208,8 +219,9 @@ typedef struct gdf_context_ {
     flag_sort_result;  ///< When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
   int flag_sort_inplace;  ///< 0 = No sort in place allowed, 1 = else
   bool flag_groupby_include_nulls;
-  /**< false = Nulls are ignored in group by keys (Pandas style), 
-                                true = Nulls are treated as values in group by keys where NULL == NULL (SQL style)*/
+  /**< false = Nulls are ignored in group by keys (Pandas style),
+                                true = Nulls are treated as values in group by keys where NULL ==
+     NULL (SQL style)*/
   gdf_null_sort_behavior flag_null_sort_behavior;
   ///< Indicates how nulls are treated in group_by/order_by operations
 } gdf_context;

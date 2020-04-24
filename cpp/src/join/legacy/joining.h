@@ -29,24 +29,25 @@
 
 /* --------------------------------------------------------------------------*/
 /**
-  * @brief  Computes the hash-based join between two sets of device_tables.
-  *
-  * @param left_table The left table to be joined
-  * @param right_table The right table to be joined
-  * @param flip_indices Flag that indicates whether the left and right tables have been
-  * flipped, meaning the output indices should also be flipped.
-  * @tparam join_type The type of join to be performed
-  * @tparam output_index_type The datatype used for the output indices
-  *
-  * @returns
-  */
+ * @brief  Computes the hash-based join between two sets of device_tables.
+ *
+ * @param left_table The left table to be joined
+ * @param right_table The right table to be joined
+ * @param flip_indices Flag that indicates whether the left and right tables have been
+ * flipped, meaning the output indices should also be flipped.
+ * @tparam join_type The type of join to be performed
+ * @tparam output_index_type The datatype used for the output indices
+ *
+ * @returns
+ */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename output_index_type>
 gdf_error join_hash(cudf::table const &left_table,
                     cudf::table const &right_table,
                     gdf_column *const output_l,
                     gdf_column *const output_r,
-                    bool flip_indices = false) {
+                    bool flip_indices = false)
+{
   // Hash table is built on the right table.
   // For inner joins, doesn't matter which table is build/probe, so we want
   // to build the hash table on the smaller table.
@@ -61,26 +62,27 @@ gdf_error join_hash(cudf::table const &left_table,
 
 /* --------------------------------------------------------------------------*/
 /**
-  * @Synopsis  Computes the sort-based join between two columns.
-  *
-  * @Param leftcol The left column to be joined
-  * @Param rightcol The right column to be joined
-  * @Param output_l The left index output of join
-  * @Param output_r The right index output of join
-  * @Param flip_indices Flag that indicates whether the left and right tables have been
-  * flipped, meaning the output indices should also be flipped.
-  * @tparam join_type The type of join to be performed
-  * @tparam output_index_type The datatype used for the output indices
-  *
-  * @Returns
-  */
+ * @Synopsis  Computes the sort-based join between two columns.
+ *
+ * @Param leftcol The left column to be joined
+ * @Param rightcol The right column to be joined
+ * @Param output_l The left index output of join
+ * @Param output_r The right index output of join
+ * @Param flip_indices Flag that indicates whether the left and right tables have been
+ * flipped, meaning the output indices should also be flipped.
+ * @tparam join_type The type of join to be performed
+ * @tparam output_index_type The datatype used for the output indices
+ *
+ * @Returns
+ */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename output_index_type>
 gdf_error sort_join(gdf_column *leftcol,
                     gdf_column *rightcol,
                     gdf_column *const output_l,
                     gdf_column *const output_r,
-                    bool flip_indices = false) {
+                    bool flip_indices = false)
+{
   if ((leftcol->null_count != 0) || (rightcol->null_count != 0)) {
     return GDF_VALIDITY_UNSUPPORTED;
   }

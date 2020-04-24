@@ -23,14 +23,13 @@
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 std::unique_ptr<column> stable_sorted_order(table_view input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
                                             rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream)
+{
   return sorted_order<true>(input, column_order, null_precedence, mr, stream);
 }
 
@@ -39,7 +38,8 @@ std::unique_ptr<column> stable_sorted_order(table_view input,
 std::unique_ptr<column> stable_sorted_order(table_view input,
                                             std::vector<order> const& column_order,
                                             std::vector<null_order> const& null_precedence,
-                                            rmm::mr::device_memory_resource* mr) {
+                                            rmm::mr::device_memory_resource* mr)
+{
   return detail::stable_sorted_order(input, column_order, null_precedence, mr);
 }
 

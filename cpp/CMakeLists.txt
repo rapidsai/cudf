@@ -312,6 +312,8 @@ if(BUILD_BENCHMARKS)
 
 endif(BUILD_BENCHMARKS)
 
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
@@ -889,6 +891,9 @@ add_custom_target(test_cudf
 add_custom_target(test_nvstrings
                   COMMAND ctest -R "NVSTRINGS"
                   DEPENDS build_tests_nvstrings)
+
+add_custom_target(build_benchmarks_cudf
+                  DEPENDS ${BENCHMARK_LIST})
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

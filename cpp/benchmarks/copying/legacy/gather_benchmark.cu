@@ -33,10 +33,12 @@
 #include "../../fixture/benchmark_fixture.hpp"
 #include "../../synchronization/synchronization.hpp"
 
-class Gather : public cudf::benchmark {};
+class Gather : public cudf::benchmark {
+};
 
 template <class TypeParam, bool coalesce>
-void BM_gather(benchmark::State& state) {
+void BM_gather(benchmark::State& state)
+{
   const cudf::size_type source_size{(cudf::size_type)state.range(0)};
   const cudf::size_type destination_size{(cudf::size_type)state.range(0)};
 
@@ -80,13 +82,14 @@ void BM_gather(benchmark::State& state) {
                           sizeof(TypeParam));
 }
 
-#define GBM_BENCHMARK_DEFINE(name, type, coalesce)               \
-  BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State & state) { \
-    BM_gather<type, coalesce>(state);                            \
-  }                                                              \
-  BENCHMARK_REGISTER_F(Gather, name)                             \
-    ->RangeMultiplier(2)                                         \
-    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                       \
+#define GBM_BENCHMARK_DEFINE(name, type, coalesce)             \
+  BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State & state) \
+  {                                                            \
+    BM_gather<type, coalesce>(state);                          \
+  }                                                            \
+  BENCHMARK_REGISTER_F(Gather, name)                           \
+    ->RangeMultiplier(2)                                       \
+    ->Ranges({{1 << 10, 1 << 26}, {1, 8}})                     \
     ->UseManualTime();
 
 GBM_BENCHMARK_DEFINE(double_coalesce_x, double, true);

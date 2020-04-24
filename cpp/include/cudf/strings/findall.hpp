@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a table of strings columns for each matching occurrence of the
  * regex pattern within each string.

@@ -26,7 +26,8 @@
 #include <algorithm>
 #include <cassert>
 
-gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const& context) {
+gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
+{
   cudf::size_type ncols = input_table.num_columns();
   cudf::size_type nrows = input_table.num_rows();
 
@@ -80,7 +81,8 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   cudf::table const& input_table,
   cudf::size_type num_key_cols,
   cudf::size_type const* key_col_indices,
-  gdf_context* context) {
+  gdf_context* context)
+{
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
   gdf_column unique_indices{};

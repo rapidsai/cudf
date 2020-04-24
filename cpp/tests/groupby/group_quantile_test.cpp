@@ -24,15 +24,15 @@
 
 namespace cudf {
 namespace test {
-
-
 template <typename V>
-struct groupby_quantile_test : public cudf::test::BaseFixture {};
+struct groupby_quantile_test : public cudf::test::BaseFixture {
+};
 
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_quantile_test, supported_types);
 
+// clang-format off
 TYPED_TEST(groupby_quantile_test, basic)
 {
     using K = int32_t;
@@ -189,7 +189,7 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
     test_single_agg(keys, vals, expect_keys, expect_vals5, std::move(agg5));
 
 }
+// clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

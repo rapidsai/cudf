@@ -25,9 +25,9 @@
 
 namespace cudf {
 namespace unary {
-
 template <typename T, typename Tout, typename F>
-__global__ void gpu_op_kernel(const T* data, cudf::size_type size, Tout* results, F functor) {
+__global__ void gpu_op_kernel(const T* data, cudf::size_type size, Tout* results, F functor)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -40,7 +40,8 @@ __global__ void gpu_op_kernel(const T* data, cudf::size_type size, Tout* results
 
 template <typename T, typename Tout, typename F>
 struct Launcher {
-  static gdf_error launch(gdf_column const* input, gdf_column* output) {
+  static gdf_error launch(gdf_column const* input, gdf_column* output)
+  {
     // Return immediately for empty inputs
     if ((0 == input->size)) { return GDF_SUCCESS; }
 
@@ -70,7 +71,8 @@ struct Launcher {
   }
 };
 
-inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output) {
+inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output)
+{
   // Check for null data pointer
   validate(input);
 

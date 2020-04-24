@@ -51,7 +51,6 @@ typedef enum {
 } gdf_binary_operator;
 
 namespace cudf {
-
 /**
  * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
  *

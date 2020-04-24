@@ -28,7 +28,6 @@
 namespace cudf {
 namespace io {
 namespace parquet {
-
 #define PARQUET_MAGIC (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1' << 24))
 
 /**
@@ -48,7 +47,7 @@ struct file_ender_s {
 
 /**
  * @brief Struct for describing an element/field in the Parquet format schema
- * 
+ *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
  * as a schema tree.
  **/
@@ -132,7 +131,7 @@ struct KeyValue {
 
 /**
  * @brief Thrift-derived struct describing file-level metadata
- * 
+ *
  * The additional information stored in the key_value_metadata can be used
  * during reading to reconstruct the output data to the exact original dataset
  * prior to conversion to Parquet.
@@ -185,7 +184,8 @@ struct PageHeader {
 /**
  * @brief Count the number of leading zeros in an unsigned integer
  **/
-static inline int CountLeadingZeros32(uint32_t value) {
+static inline int CountLeadingZeros32(uint32_t value)
+{
 #if defined(__clang__) || defined(__GNUC__)
   if (value == 0) return 32;
   return static_cast<int>(__builtin_clz(value));
@@ -221,17 +221,20 @@ class CompactProtocolReader {
 
  public:
   explicit CompactProtocolReader(const uint8_t *base = nullptr, size_t len = 0) { init(base, len); }
-  void init(const uint8_t *base, size_t len) {
+  void init(const uint8_t *base, size_t len)
+  {
     m_base = m_cur = base;
     m_end          = base + len;
   }
   ptrdiff_t bytecount() const noexcept { return m_cur - m_base; }
   unsigned int getb() noexcept { return (m_cur < m_end) ? *m_cur++ : 0; }
-  void skip_bytes(size_t bytecnt) noexcept {
+  void skip_bytes(size_t bytecnt) noexcept
+  {
     bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
     m_cur += bytecnt;
   }
-  uint32_t get_u32() noexcept {
+  uint32_t get_u32() noexcept
+  {
     uint32_t v = 0;
     for (uint32_t l = 0;; l += 7) {
       uint32_t c = getb();
@@ -240,7 +243,8 @@ class CompactProtocolReader {
     }
     return v;
   }
-  uint64_t get_u64() noexcept {
+  uint64_t get_u64() noexcept
+  {
     uint64_t v = 0;
     for (uint64_t l = 0;; l += 7) {
       uint64_t c = getb();
@@ -250,15 +254,18 @@ class CompactProtocolReader {
     return v;
   }
   int32_t get_i16() noexcept { return get_i32(); }
-  int32_t get_i32() noexcept {
+  int32_t get_i32() noexcept
+  {
     uint32_t u = get_u32();
     return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
   }
-  int64_t get_i64() noexcept {
+  int64_t get_i64() noexcept
+  {
     uint64_t u = get_u64();
     return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
   }
-  int32_t get_listh(uint8_t *el_type) noexcept {
+  int32_t get_listh(uint8_t *el_type) noexcept
+  {
     uint32_t c = getb();
     int32_t sz = c >> 4;
     *el_type   = c & 0xf;
@@ -282,7 +289,8 @@ class CompactProtocolReader {
 #undef DECL_PARQUET_STRUCT
 
  public:
-  static int NumRequiredBits(uint32_t max_level) noexcept {
+  static int NumRequiredBits(uint32_t max_level) noexcept
+  {
     return 32 - CountLeadingZeros32(max_level);
   }
   bool InitSchema(FileMetaData *md);
@@ -311,10 +319,12 @@ class CompactProtocolWriter {
   CompactProtocolWriter() { m_buf = nullptr; }
   CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
   void putb(uint8_t v) { m_buf->push_back(v); }
-  void putb(const uint8_t *raw, uint32_t len) {
+  void putb(const uint8_t *raw, uint32_t len)
+  {
     for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]);
   }
-  uint32_t put_uint(uint64_t v) {
+  uint32_t put_uint(uint64_t v)
+  {
     int l = 1;
     while (v > 0x7f) {
       putb(static_cast<uint8_t>(v | 0x80));
@@ -324,11 +334,13 @@ class CompactProtocolWriter {
     putb(static_cast<uint8_t>(v));
     return l;
   }
-  uint32_t put_int(int64_t v) {
+  uint32_t put_int(int64_t v)
+  {
     int64_t s = (v < 0);
     return put_uint(((v ^ -s) << 1) + s);
   }
-  void put_fldh(int f, int cur, int t) {
+  void put_fldh(int f, int cur, int t)
+  {
     if (f > cur && f <= cur + 15)
       putb(((f - cur) << 4) | t);
     else {
