@@ -1481,8 +1481,11 @@ class DataFrame(Frame):
             is_multi = type(idx) == MultiIndex
             if is_multi:
                 idx_match = [
-                    [x for x in df.index._source_data.dtypes] for i in idx
-                ] == [[x for x in idx._source_data.dtypes] for i in idx]
+                    x.any()
+                    for x in [
+                        df.index._source_data.dtypes == idx._source_data.dtypes
+                    ]
+                ][0]
             else:
                 idx_match = [df.index.dtype == idx.dtype]
 
