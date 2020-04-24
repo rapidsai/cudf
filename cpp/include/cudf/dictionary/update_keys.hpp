@@ -18,11 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-namespace cudf
-{
-namespace dictionary
-{
-
+namespace cudf {
+namespace dictionary {
 /**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
@@ -49,9 +46,10 @@ namespace dictionary
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_column,
-                                  column_view const& new_keys,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> add_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& new_keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a new dictionary column by removing the specified keys
@@ -78,9 +76,10 @@ std::unique_ptr<column> add_keys( dictionary_column_view const& dictionary_colum
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_column,
-                                     column_view const& keys_to_remove,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> remove_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& keys_to_remove,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a new dictionary column by removing any keys
@@ -98,8 +97,9 @@ std::unique_ptr<column> remove_keys( dictionary_column_view const& dictionary_co
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictionary_column,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> remove_unused_keys(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a new dictionary column by applying only the specified keys
@@ -118,7 +118,7 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * d2 = set_keys(existing_dict, ["b","c","d"])
  * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], nulls=[1, 0, 1, 1, 1]}
  * ```
- * 
+ *
  * @throw cudf_logic_error if the keys type does not match the keys type in
  *        the dictionary_column.
  * @throw cudf_logic_error if the keys contain nulls.
@@ -128,9 +128,10 @@ std::unique_ptr<column> remove_unused_keys( dictionary_column_view const& dictio
  * @param mr Resource for allocating memory for the output.
  * @return New dictionary column.
  */
-std::unique_ptr<column> set_keys( dictionary_column_view const& dictionary_column,
-                                  column_view const& keys,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> set_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace dictionary
-} // namespace cudf
+}  // namespace dictionary
+}  // namespace cudf

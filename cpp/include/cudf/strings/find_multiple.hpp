@@ -15,14 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a column with character position values where each
  * of the target strings are found in each string.
@@ -45,9 +42,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> find_multiple( strings_column_view const& strings,
-                                       strings_column_view const& targets,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> find_multiple(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

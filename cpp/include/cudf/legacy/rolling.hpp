@@ -39,23 +39,23 @@ namespace cudf {
  * return before the operation is completed on the GPU (unless built in debug).
  *
  * @param[in] input_col The input column
- * @param[in] window The static rolling window size. If window_col = NULL, 
- *                output_col[i] accumulates values from input_col[i-window+1] to 
+ * @param[in] window The static rolling window size. If window_col = NULL,
+ *                output_col[i] accumulates values from input_col[i-window+1] to
  *                input_col[i] inclusive
  * @param[in] min_periods Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask for
  *                element i. If min_periods_col != NULL, then minimum number of
  *                observations for element i is obtained from min_periods_col[i]
- * @param[in] forward_window The static window size in the forward direction. If 
+ * @param[in] forward_window The static window size in the forward direction. If
  *                forward_window_col = NULL, output_col[i] accumulates values from
  *                input_col[i] to input_col[i+forward_window] inclusive
  * @param[in] agg_type The rolling window aggregtion type (sum, max, min, etc.)
  * @param[in] window_col The window size values, window_col[i] specifies window
- *                size for element i. If window_col = NULL, then window is used as 
+ *                size for element i. If window_col = NULL, then window is used as
  *                the static window size for all elements
  * @param[in] min_periods_col The minimum number of observation values,
- *                min_periods_col[i] specifies minimum number of observations for 
- *                element i. If min_periods_col = NULL, then min_periods is used as 
+ *                min_periods_col[i] specifies minimum number of observations for
+ *                element i. If min_periods_col = NULL, then min_periods is used as
  *                the static value for all elements
  * @param[in] forward_window_col The forward window size values,
  *                forward_window_col[i] specifies forward window size for element i.
@@ -65,16 +65,16 @@ namespace cudf {
  * @returns   gdf_column The output column
  *
  * --------------------------------------------------------------------------*/
-gdf_column* rolling_window(const gdf_column &input_col,
+gdf_column* rolling_window(const gdf_column& input_col,
                            cudf::size_type window,
                            cudf::size_type min_periods,
                            cudf::size_type forward_window,
                            gdf_agg_op agg_type,
-                           const cudf::size_type *window_col,
-                           const cudf::size_type *min_periods_col,
-                           const cudf::size_type *forward_window_col);
+                           const cudf::size_type* window_col,
+                           const cudf::size_type* min_periods_col,
+                           const cudf::size_type* forward_window_col);
 
- /* --------------------------------------------------------------------------*
+/* --------------------------------------------------------------------------*
  * @brief  Applies a user defined rolling window function to the values in a column.
  *
  * This function aggregates values in a window around each element i of the input
@@ -91,40 +91,40 @@ gdf_column* rolling_window(const gdf_column &input_col,
  *   to indicate which elements are valid.
  * - support for dynamic rolling windows, i.e. window size or number of
  *   observations can be specified for each element using an additional array.
- * 
+ *
  * This function is asynchronous with respect to the CPU, i.e. the call will
  * return before the operation is completed on the GPU (unless built in debug).
- * 
+ *
  * Currently the handling of the null values is only partially implemented: it acts
  * as if every element of the input column is valid, i.e. the validnesses of the
  * individual elements in the input column are not checked when the number of (valid)
  * observations are counted and the aggregator is applied.
  *
  * @param[in] input The input column
- * @param[in] window The static rolling window size. If window_col = NULL, 
- *                output_col[i] accumulates values from input_col[i-window+1] to 
+ * @param[in] window The static rolling window size. If window_col = NULL,
+ *                output_col[i] accumulates values from input_col[i-window+1] to
  *                input_col[i] inclusive
  * @param[in] min_periods Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask for
  *                element i. If min_periods_col != NULL, then minimum number of
  *                observations for element i is obtained from min_periods_col[i]
- * @param[in] forward_window The static window size in the forward direction. If 
+ * @param[in] forward_window The static window size in the forward direction. If
  *                forward_window_col = NULL, output_col[i] accumulates values from
  *                input_col[i] to input_col[i+forward_window] inclusive
  * @param[in] user_defined_aggregator A CUDA string or a PTX string compiled from
  *                `numba` that contains the implementation of the user defined
  *                aggregator
- * @param[in] agg_type The user defined rolling window aggregtion type: 
+ * @param[in] agg_type The user defined rolling window aggregtion type:
  *                GDF_NUMBA_GENERIC_AGG_OPS (PTX string compiled from `numba`) or
  *                GDF_CUDA_GENERIC_AGG_OPS (CUDA string)
  * @param[in] output_type Output type of the user defined aggregator
  *                (only used for GDF_NUMBA_GENERIC_AGG_OPS)
  * @param[in] window_col The window size values, window_col[i] specifies window
- *                size for element i. If window_col = NULL, then window is used as 
+ *                size for element i. If window_col = NULL, then window is used as
  *                the static window size for all elements
  * @param[in] min_periods_col The minimum number of observation values,
- *                min_periods_col[i] specifies minimum number of observations for 
- *                element i. If min_periods_col = NULL, then min_periods is used as 
+ *                min_periods_col[i] specifies minimum number of observations for
+ *                element i. If min_periods_col = NULL, then min_periods is used as
  *                the static value for all elements
  * @param[in] forward_window_col The forward window size values,
  *                forward_window_col[i] specifies forward window size for element i.

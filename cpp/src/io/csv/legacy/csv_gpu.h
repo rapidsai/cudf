@@ -11,7 +11,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
  *
@@ -26,7 +25,8 @@ namespace gpu {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
+cudaError_t DetectCsvDataTypes(const char *data,
+                               const uint64_t *row_starts,
                                cudf::size_type num_rows,
                                cudf::size_type num_columns,
                                const ParseOptions &options,
@@ -51,12 +51,17 @@ cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeCsvColumnData(
-    const char *data, const uint64_t *row_starts, cudf::size_type num_rows,
-    cudf::size_type num_columns, const ParseOptions &options,
-    const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    cudf::valid_type **valids, cudf::size_type *num_valid,
-    cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DecodeCsvColumnData(const char *data,
+                                const uint64_t *row_starts,
+                                cudf::size_type num_rows,
+                                cudf::size_type num_columns,
+                                const ParseOptions &options,
+                                const column_parse::flags *flags,
+                                gdf_dtype *dtypes,
+                                void **columns,
+                                cudf::valid_type **valids,
+                                cudf::size_type *num_valid,
+                                cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace gpu
 }  // namespace csv

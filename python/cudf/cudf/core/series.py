@@ -1544,7 +1544,15 @@ class Series(Frame):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace=None, value=None, inplace=False):
+    def replace(
+        self,
+        to_replace=None,
+        value=None,
+        inplace=False,
+        limit=None,
+        regex=False,
+        method=None,
+    ):
         """
         Replace values given in *to_replace* with *replacement*.
 
@@ -1570,7 +1578,22 @@ class Series(Frame):
         -------
         result : Series
             Series after replacement. The mask and index are preserved.
+
+        Notes
+        -----
+        Parameters that are currently not supported are: `limit`, `regex`,
+        `method`
         """
+        if limit is not None:
+            raise NotImplementedError("limit parameter is not implemented yet")
+
+        if regex:
+            raise NotImplementedError("regex parameter is not implemented yet")
+
+        if method not in ("pad", None):
+            raise NotImplementedError(
+                "method parameter is not implemented yet"
+            )
 
         result = super().replace(to_replace=to_replace, replacement=value)
 
@@ -1782,20 +1805,6 @@ class Series(Frame):
         else:
             res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
-
-    # Find / Search
-
-    def find_first_value(self, value):
-        """
-        Returns offset of first value that matches
-        """
-        return self._column.find_first_value(value)
-
-    def find_last_value(self, value):
-        """
-        Returns offset of last value that matches
-        """
-        return self._column.find_last_value(value)
 
     #
     # Stats
@@ -3172,7 +3181,7 @@ class Series(Frame):
         """{docstring}"""
         import cudf.io.json as json
 
-        json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
+        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
     @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):

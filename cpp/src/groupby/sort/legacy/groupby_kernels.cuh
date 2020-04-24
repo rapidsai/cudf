@@ -17,19 +17,17 @@
 #define GROUPBY_KERNELS_CUH
 
 #include <cudf/legacy/groupby.hpp>
-#include "groupby/common/legacy/type_info.hpp"
 #include "groupby/common/legacy/kernel_utils.hpp"
+#include "groupby/common/legacy/type_info.hpp"
 #include "utilities/legacy/device_atomics.cuh"
 
 namespace cudf {
 namespace groupby {
 namespace sort {
-
-
 /**---------------------------------------------------------------------------*
- @brief  Compute the aggregation(s) of corresponding rows in the `values` input 
+ @brief  Compute the aggregation(s) of corresponding rows in the `values` input
  * table using the key sorted order and the group labels.
- * 
+ *
  * The aggregations(s) is computed  by  performing elementwise aggregation
  * operations between a target (the corresponding output value row for group_id)
  * and source   (the corresponding input value row using the current keys sorted
@@ -41,8 +39,8 @@ namespace sort {
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam values_have_nulls Indicates if rows in `input_values` contain null
  * values
- * @param input_values The table whose rows will be aggregated in the 
- * output values table 
+ * @param input_values The table whose rows will be aggregated in the
+ * output values table
  * @param output_values Table that stores the results of aggregating rows of
  * `input_values`.
  * @param key_sorted_order The sorted order of the `keys` in sort-based groupby
@@ -56,25 +54,25 @@ namespace sort {
  * `true` and skip_null_keys option is true.
  *---------------------------------------------------------------------------**/
 template <bool skip_rows_with_nulls, bool values_have_nulls>
-__global__ void aggregate_all_rows(
-    device_table input_values,
-    device_table output_values,
-    cudf::size_type const* key_sorted_order, 
-    cudf::size_type const* group_labels, 
-    bool skip_null_keys,
-    operators* ops,
-    bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
-
+__global__ void aggregate_all_rows(device_table input_values,
+                                   device_table output_values,
+                                   cudf::size_type const* key_sorted_order,
+                                   cudf::size_type const* group_labels,
+                                   bool skip_null_keys,
+                                   operators* ops,
+                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_values.num_rows()) {
-    if (skip_null_keys and skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
+    if (skip_null_keys and skip_rows_with_nulls and
+        not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
       i += blockDim.x * gridDim.x;
       continue;
     }
     auto group_index = group_labels[i];
-    aggregate_row<values_have_nulls>(output_values, group_index,
-                                      input_values, key_sorted_order[i], ops);
+    aggregate_row<values_have_nulls>(
+      output_values, group_index, input_values, key_sorted_order[i], ops);
     i += blockDim.x * gridDim.x;
   }
 }

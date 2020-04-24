@@ -23,17 +23,17 @@
  * @brief Types of binary operations that can be performed on data.
  */
 typedef enum {
-  GDF_ADD,        ///< operator +
-  GDF_SUB,        ///< operator -
-  GDF_MUL,        ///< operator *
-  GDF_DIV,        ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,   ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,  ///< operator / after promoting to float and then flooring the
-                  ///< result
-  GDF_MOD,        ///< operator %
-  GDF_PYMOD,  ///< operator % but following python's sign rules for negatives
-  GDF_POW,    ///< lhs ^ rhs
-  GDF_EQUAL,  ///< operator ==
+  GDF_ADD,             ///< operator +
+  GDF_SUB,             ///< operator -
+  GDF_MUL,             ///< operator *
+  GDF_DIV,             ///< operator / using common type of lhs and rhs
+  GDF_TRUE_DIV,        ///< operator / after promoting type to floating point
+  GDF_FLOOR_DIV,       ///< operator / after promoting to float and then flooring the
+                       ///< result
+  GDF_MOD,             ///< operator %
+  GDF_PYMOD,           ///< operator % but following python's sign rules for negatives
+  GDF_POW,             ///< lhs ^ rhs
+  GDF_EQUAL,           ///< operator ==
   GDF_NOT_EQUAL,       ///< operator !=
   GDF_LESS,            ///< operator <
   GDF_GREATER,         ///< operator >
@@ -51,7 +51,6 @@ typedef enum {
 } gdf_binary_operator;
 
 namespace cudf {
-
 /**
  * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
  *
@@ -66,8 +65,7 @@ namespace cudf {
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs,
-                      gdf_binary_operator ope);
+void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope);
 
 /**
  * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
@@ -83,8 +81,7 @@ void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs,
  * @param rhs (gdf_scalar) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs,
-                      gdf_binary_operator ope);
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope);
 
 /**
  * @brief Performs a binary operation between two gdf_columns.
@@ -99,8 +96,7 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs,
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
-                      gdf_binary_operator ope);
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope);
 
 /**
  * @brief Performs a binary operation between two gdf_columns using a
@@ -124,8 +120,10 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
  * `lhs` and `rhs`
  * @param output_type The desired output type
  */
-gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
-                            const std::string& ptx, gdf_dtype output_type);
+gdf_column binary_operation(const gdf_column& lhs,
+                            const gdf_column& rhs,
+                            const std::string& ptx,
+                            gdf_dtype output_type);
 
 }  // namespace cudf
 

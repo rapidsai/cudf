@@ -15,15 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a column of character position values where the target
  * string is first found in each string of the provided column.
@@ -46,10 +43,11 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> find( strings_column_view const& strings,
-                              string_scalar const& target,
-                              size_type start=0, size_type stop=-1,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> find(strings_column_view const& strings,
+                             string_scalar const& target,
+                             size_type start                     = 0,
+                             size_type stop                      = -1,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -73,10 +71,12 @@ std::unique_ptr<column> find( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> rfind( strings_column_view const& strings,
-                               string_scalar const& target,
-                               size_type start=0, size_type stop=-1,
-                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> rfind(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found within that string in the provided column.
@@ -91,9 +91,10 @@ std::unique_ptr<column> rfind( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New BOOL8 column.
  */
-std::unique_ptr<column> contains( strings_column_view const& strings,
-                                  string_scalar const& target,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> contains(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -110,9 +111,10 @@ std::unique_ptr<column> contains( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New BOOL8 column.
  */
-std::unique_ptr<column> starts_with( strings_column_view const& strings,
-                                     string_scalar const& target,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> starts_with(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -129,9 +131,10 @@ std::unique_ptr<column> starts_with( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New BOOL8 column.
  */
-std::unique_ptr<column> ends_with( strings_column_view const& strings,
-                                   string_scalar const& target,
-                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> ends_with(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

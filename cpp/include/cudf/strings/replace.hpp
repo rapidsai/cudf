@@ -15,15 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Replaces target string within each string with the specified
  * replacement string.
@@ -56,11 +53,12 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace( strings_column_view const& strings,
-                                 string_scalar const& target,
-                                 string_scalar const& repl,
-                                 int32_t maxrepl = -1,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  string_scalar const& repl,
+  int32_t maxrepl                     = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief This function replaces each string in the column with the provided
@@ -94,10 +92,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_slice( strings_column_view const& strings,
-                                       string_scalar const& repl = string_scalar(""),
-                                       size_type start = 0, size_type stop = -1,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_slice(
+  strings_column_view const& strings,
+  string_scalar const& repl           = string_scalar(""),
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replaces substrings matching a list of targets with the corresponding
@@ -136,10 +136,11 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace( strings_column_view const& strings,
-                                 strings_column_view const& targets,
-                                 strings_column_view const& repls,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  strings_column_view const& repls,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replaces any null string entries with the given string.
@@ -157,10 +158,10 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
-                                       string_scalar const& repl = string_scalar(""),
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_nulls(
+  strings_column_view const& strings,
+  string_scalar const& repl           = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

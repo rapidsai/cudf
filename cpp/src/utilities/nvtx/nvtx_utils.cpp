@@ -22,7 +22,6 @@
 
 namespace cudf {
 namespace nvtx {
-
 void range_push(const char* name, color color)
 {
   range_push_hex(name, static_cast<uint32_t>(color));
@@ -34,11 +33,11 @@ void range_push_hex(const char* name, uint32_t color)
   CUDF_EXPECTS(name != nullptr, "Null name string.");
 
   nvtxEventAttributes_t eventAttrib{};
-  eventAttrib.version = NVTX_VERSION;
-  eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
-  eventAttrib.colorType = NVTX_COLOR_ARGB;
-  eventAttrib.color = color;
-  eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  eventAttrib.version       = NVTX_VERSION;
+  eventAttrib.size          = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  eventAttrib.colorType     = NVTX_COLOR_ARGB;
+  eventAttrib.color         = color;
+  eventAttrib.messageType   = NVTX_MESSAGE_TYPE_ASCII;
   eventAttrib.message.ascii = name;
   nvtxRangePushEx(&eventAttrib);
 #endif

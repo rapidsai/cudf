@@ -16,34 +16,37 @@
 #include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
 
-#include <tests/utilities/column_wrapper.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
 #include <algorithm>
 #include <numeric>
 
 using cudf::test::fixed_width_column_wrapper;
 
-class Hashing : public cudf::benchmark {};
+class Hashing : public cudf::benchmark {
+};
 
 template <class T>
-void BM_hash_partition(benchmark::State& state) {
-  auto const num_rows = state.range(0);
-  auto const num_cols = state.range(1);
+void BM_hash_partition(benchmark::State& state)
+{
+  auto const num_rows       = state.range(0);
+  auto const num_cols       = state.range(1);
   auto const num_partitions = state.range(2);
 
   // Create owning columns
   std::vector<fixed_width_column_wrapper<T>> columns(num_cols);
   std::generate(columns.begin(), columns.end(), [num_rows]() {
-      auto iter = thrust::make_counting_iterator(0);
-      return fixed_width_column_wrapper<T>(iter, iter + num_rows);
-    });
+    auto iter = thrust::make_counting_iterator(0);
+    return fixed_width_column_wrapper<T>(iter, iter + num_rows);
+  });
 
   // Create table view into columns
   std::vector<cudf::column_view> views(columns.size());
-  std::transform(columns.begin(), columns.end(), views.begin(),
-    [](auto const& col) { return static_cast<cudf::column_view>(col); });
+  std::transform(columns.begin(), columns.end(), views.begin(), [](auto const& col) {
+    return static_cast<cudf::column_view>(col);
+  });
   auto input = cudf::table_view(views);
 
   auto columns_to_hash = std::vector<cudf::size_type>(num_cols);
@@ -56,16 +59,13 @@ void BM_hash_partition(benchmark::State& state) {
 }
 
 BENCHMARK_DEFINE_F(Hashing, hash_partition)
-(::benchmark::State& state) {
-  BM_hash_partition<double>(state);
-}
+(::benchmark::State& state) { BM_hash_partition<double>(state); }
 
-static void CustomRanges(benchmark::internal::Benchmark* b) {
+static void CustomRanges(benchmark::internal::Benchmark* b)
+{
   for (int columns = 1; columns <= 256; columns *= 16) {
     for (int partitions = 64; partitions <= 1024; partitions *= 2) {
-      for (int rows = 1<<17; rows <= 1<<21; rows *= 2) {
-        b->Args({rows, columns, partitions});
-      }
+      for (int rows = 1 << 17; rows <= 1 << 21; rows *= 2) { b->Args({rows, columns, partitions}); }
     }
   }
 }

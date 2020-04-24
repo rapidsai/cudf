@@ -19,24 +19,23 @@
 
 #include "datetime.cuh"
 
+#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/trie.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cuda_runtime.h>
 
-using namespace::cudf::experimental::io;
+using namespace ::cudf::experimental::io;
 
 namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
@@ -44,9 +43,7 @@ namespace gpu {
  *
  * @return True if the input is whitespace, False otherwise
  */
-__device__ __inline__ bool is_whitespace(char c) {
-  return c == '\t' || c == ' ';
-}
+__device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' '; }
 
 /**
  * @brief Scans a character stream within a range, and adjusts the start and end
@@ -59,21 +56,15 @@ __device__ __inline__ bool is_whitespace(char c) {
  *
  * @return Adjusted or unchanged start_idx and end_idx
  */
-__device__ __inline__ void trim_field_start_end(const char *data, long *start,
+__device__ __inline__ void trim_field_start_end(const char *data,
+                                                long *start,
                                                 long *end,
-                                                char quotechar = '\0') {
-  while ((*start < *end) && is_whitespace(data[*start])) {
-    (*start)++;
-  }
-  if ((*start < *end) && data[*start] == quotechar) {
-    (*start)++;
-  }
-  while ((*start <= *end) && is_whitespace(data[*end])) {
-    (*end)--;
-  }
-  if ((*start <= *end) && data[*end] == quotechar) {
-    (*end)--;
-  }
+                                                char quotechar = '\0')
+{
+  while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
+  if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
+  while ((*start <= *end) && is_whitespace(data[*end])) { (*end)--; }
+  if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
 }
 
 /**
@@ -85,7 +76,8 @@ __device__ __inline__ void trim_field_start_end(const char *data, long *start,
  *
  * @return `true` if it is digit-like, `false` otherwise
  */
-__device__ __inline__ bool is_digit(char c, bool is_hex = false) {
+__device__ __inline__ bool is_digit(char c, bool is_hex = false)
+{
   if (c >= '0' && c <= '9') return true;
 
   if (is_hex) {
@@ -117,17 +109,13 @@ __device__ __inline__ bool is_digit(char c, bool is_hex = false) {
  *
  * @return `true` if it is date-like, `false` otherwise
  */
-__device__ __inline__ bool is_datetime(long len, long decimal_count,
-                                       long colon_count, long dash_count,
-                                       long slash_count) {
+__device__ __inline__ bool is_datetime(
+  long len, long decimal_count, long colon_count, long dash_count, long slash_count)
+{
   // Must not exceed count of longest month (September) plus `T` time indicator
-  if (len > 10) {
-    return false;
-  }
+  if (len > 10) { return false; }
   // Must not exceed more than one decimals or more than two time separators
-  if (decimal_count > 1 || colon_count > 2) {
-    return false;
-  }
+  if (decimal_count > 1 || colon_count > 2) { return false; }
   // Must have one or two '-' or '/' but not both as date separators
   if ((dash_count > 0 && dash_count < 3 && slash_count == 0) ||
       (dash_count == 0 && slash_count > 0 && slash_count < 3)) {
@@ -150,9 +138,9 @@ __device__ __inline__ bool is_datetime(long len, long decimal_count,
  *
  * @return `true` if it is floating point-like, `false` otherwise
  */
-__device__ __inline__ bool is_floatingpoint(long len, long digit_count,
-                                            long decimal_count, long dash_count,
-                                            long exponent_count) {
+__device__ __inline__ bool is_floatingpoint(
+  long len, long digit_count, long decimal_count, long dash_count, long exponent_count)
+{
   // Can't have more than one exponent and one decimal point
   if (decimal_count > 1) return false;
   if (exponent_count > 1) return false;
@@ -164,9 +152,7 @@ __device__ __inline__ bool is_floatingpoint(long len, long digit_count,
   if (dash_count > 1 + exponent_count) return false;
 
   // If anything other than these characters is present, it's not a float
-  if (digit_count + decimal_count + dash_count + exponent_count != len) {
-    return false;
-  }
+  if (digit_count + decimal_count + dash_count + exponent_count != len) { return false; }
 
   // Needs at least 1 digit, 2 if exponent is present
   if (digit_count < 1 + exponent_count) return false;
@@ -188,59 +174,54 @@ __device__ __inline__ bool is_floatingpoint(long len, long digit_count,
  * @param recStart The start the CSV data of interest
  * @param d_columnData The count for each column data type
  */
-__global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
-                                  size_t num_records, int num_columns,
+__global__ void dataTypeDetection(const char *raw_csv,
+                                  const ParseOptions opts,
+                                  size_t num_records,
+                                  int num_columns,
                                   column_parse::flags *flags,
                                   const uint64_t *recStart,
-                                  column_parse::stats *d_columnData) {
+                                  column_parse::stats *d_columnData)
+{
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= num_records) {
-    return;
-  }
+  if (rec_id >= num_records) { return; }
 
   long start = recStart[rec_id];
-  long stop = recStart[rec_id + 1];
+  long stop  = recStart[rec_id + 1];
 
-  long pos = start;
-  int col = 0;
+  long pos       = start;
+  int col        = 0;
   int actual_col = 0;
 
   // Going through all the columns of a given record
   while (col < num_columns) {
-    if (start > stop) {
-      break;
-    }
+    if (start > stop) { break; }
 
     pos = cudf::experimental::io::gpu::seek_field_end(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
     if (flags[col] & column_parse::enabled) {
-      long tempPos = pos - 1;
+      long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len <= 0 ||
-          serializedTrieContains(opts.naValuesTrie, raw_csv + start,
-                                 field_len)) {
+      if (field_len <= 0 || serializedTrieContains(opts.naValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countNULL, 1);
-      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start,
-                                        field_len) ||
-                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start,
-                                        field_len)) {
+      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
+                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
       } else {
-        long countNumber = 0;
-        long countDecimal = 0;
-        long countSlash = 0;
-        long countDash = 0;
-        long countPlus = 0;
-        long countColon = 0;
-        long countString = 0;
+        long countNumber   = 0;
+        long countDecimal  = 0;
+        long countSlash    = 0;
+        long countDash     = 0;
+        long countPlus     = 0;
+        long countColon    = 0;
+        long countString   = 0;
         long countExponent = 0;
 
         // Modify start & end to ignore whitespace and quotechars
@@ -255,28 +236,16 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
           }
           // Looking for unique characters that will help identify column types.
           switch (raw_csv[startPos]) {
-            case '.':
-              countDecimal++;
-              break;
-            case '-':
-              countDash++;
-              break;
-            case '+':
-              countPlus++;
-              break;
-            case '/':
-              countSlash++;
-              break;
-            case ':':
-              countColon++;
-              break;
+            case '.': countDecimal++; break;
+            case '-': countDash++; break;
+            case '+': countPlus++; break;
+            case '/': countSlash++; break;
+            case ':': countColon++; break;
             case 'e':
             case 'E':
               if (startPos > start && startPos < tempPos) countExponent++;
               break;
-            default:
-              countString++;
-              break;
+            default: countString++; break;
           }
         }
 
@@ -292,16 +261,15 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
           atomicAdd(&d_columnData[actual_col].countNULL, 1);
         } else if (flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
-          if (is_datetime(countString, countDecimal, countColon, countDash,
-                          countSlash)) {
+          if (is_datetime(countString, countDecimal, countColon, countDash, countSlash)) {
             atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
           } else {
             atomicAdd(&d_columnData[actual_col].countString, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
           atomicAdd(&d_columnData[actual_col].countInt64, 1);
-        } else if (is_floatingpoint(field_len, countNumber, countDecimal,
-                                    countDash + countPlus, countExponent)) {
+        } else if (is_floatingpoint(
+                     field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {
           atomicAdd(&d_columnData[actual_col].countFloat, 1);
         } else {
           atomicAdd(&d_columnData[actual_col].countString, 1);
@@ -316,49 +284,64 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
 }
 
 template <typename T, int base>
-__inline__ __device__ T decode_value(const char *data, long start, long end,
-                                     ParseOptions const &opts) {
+__inline__ __device__ T
+decode_value(const char *data, long start, long end, ParseOptions const &opts)
+{
   return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
 }
 
 template <typename T>
-__inline__ __device__ T decode_value(const char *data, long start, long end,
-                                     ParseOptions const &opts) {
+__inline__ __device__ T
+decode_value(const char *data, long start, long end, ParseOptions const &opts)
+{
   return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts);
 }
 
 template <>
 __inline__ __device__ cudf::timestamp_D decode_value(const char *data,
-                                                     long start, long end,
-                                                     ParseOptions const &opts) {
+                                                     long start,
+                                                     long end,
+                                                     ParseOptions const &opts)
+{
   return parseDateFormat(data, start, end, opts.dayfirst);
 }
 
 template <>
 __inline__ __device__ cudf::timestamp_s decode_value(const char *data,
-                                                     long start, long end,
-                                                     ParseOptions const &opts) {
+                                                     long start,
+                                                     long end,
+                                                     ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli / 1000;
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(
-    const char *data, long start, long end, ParseOptions const &opts) {
+__inline__ __device__ cudf::timestamp_ms decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli;
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_us decode_value(
-    const char *data, long start, long end, ParseOptions const &opts) {
+__inline__ __device__ cudf::timestamp_us decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000;
 }
 
 template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(
-    const char *data, long start, long end, ParseOptions const &opts) {
+__inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
   auto milli = parseDateTimeFormat(data, start, end, opts.dayfirst);
   return milli * 1000000;
 }
@@ -366,14 +349,18 @@ __inline__ __device__ cudf::timestamp_ns decode_value(
 // The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
-                                                     long start, long end,
-                                                     ParseOptions const &opts) {
+                                                     long start,
+                                                     long end,
+                                                     ParseOptions const &opts)
+{
   return cudf::string_view{};
 }
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
-                                                     long start, long end,
-                                                     ParseOptions const &opts) {
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts)
+{
   return cudf::dictionary32{};
 }
 
@@ -389,12 +376,16 @@ struct decode_op {
    * @return bool Whether the parsed value is valid.
    */
   template <typename T,
-            typename std::enable_if_t<
-                std::is_integral<T>::value and
-                !std::is_same<T, bool>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(
-      const char *data, void *out_buffer, size_t row, long start, long end,
-      ParseOptions const &opts, column_parse::flags flags) {
+            typename std::enable_if_t<std::is_integral<T>::value and !std::is_same<T, bool>::value>
+              * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(const char *data,
+                                                      void *out_buffer,
+                                                      size_t row,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts,
+                                                      column_parse::flags flags)
+  {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
     // Check for user-specified true/false values first, where the output is
@@ -402,8 +393,7 @@ struct decode_op {
     const size_t field_len = end - start + 1;
     if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, data + start,
-                                      field_len)) {
+    } else if (serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
       value = 0;
     } else {
       if (flags & column_parse::as_hexadecimal) {
@@ -418,11 +408,15 @@ struct decode_op {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, typename std::enable_if_t<std::is_same<
-                            T, bool>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(
-      const char *data, void *out_buffer, size_t row, long start, long end,
-      ParseOptions const &opts, column_parse::flags flags) {
+  template <typename T, typename std::enable_if_t<std::is_same<T, bool>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(const char *data,
+                                                      void *out_buffer,
+                                                      size_t row,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts,
+                                                      column_parse::flags flags)
+  {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
     // Check for user-specified true/false values first, where the output is
@@ -430,8 +424,7 @@ struct decode_op {
     const size_t field_len = end - start + 1;
     if (serializedTrieContains(opts.trueValuesTrie, data + start, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, data + start,
-                                      field_len)) {
+    } else if (serializedTrieContains(opts.falseValuesTrie, data + start, field_len)) {
       value = 0;
     } else {
       value = decode_value<T>(data, start, end, opts);
@@ -440,14 +433,18 @@ struct decode_op {
   }
 
   /**
-   * @brief Dispatch for floating points, which are set to NaN if the input 
+   * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-   template <typename T,
-             typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(
-      const char *data, void *out_buffer, size_t row, long start, long end,
-      ParseOptions const &opts, column_parse::flags flags) {
+  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(const char *data,
+                                                      void *out_buffer,
+                                                      size_t row,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts,
+                                                      column_parse::flags flags)
+  {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
     value = decode_value<T>(data, start, end, opts);
@@ -458,11 +455,16 @@ struct decode_op {
    * @brief Dispatch for all other types.
    */
   template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value and 
-            !std::is_floating_point<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ bool operator()(
-      const char *data, void *out_buffer, size_t row, long start, long end,
-      ParseOptions const &opts, column_parse::flags flags) {
+            typename std::enable_if_t<!std::is_integral<T>::value and
+                                      !std::is_floating_point<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(const char *data,
+                                                      void *out_buffer,
+                                                      size_t row,
+                                                      long start,
+                                                      long end,
+                                                      ParseOptions const &opts,
+                                                      column_parse::flags flags)
+  {
     auto &value{static_cast<T *>(out_buffer)[row]};
 
     value = decode_value<T>(data, start, end, opts);
@@ -486,27 +488,30 @@ struct decode_op {
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
  *---------------------------------------------------------------------------**/
-__global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
-                                size_t num_records, size_t num_columns,
+__global__ void convertCsvToGdf(const char *raw_csv,
+                                const ParseOptions opts,
+                                size_t num_records,
+                                size_t num_columns,
                                 const column_parse::flags *flags,
                                 const uint64_t *recStart,
-                                cudf::data_type *dtype, void **data,
-                                cudf::bitmask_type **valid) {
+                                cudf::data_type *dtype,
+                                void **data,
+                                cudf::bitmask_type **valid)
+{
   // thread IDs range per block, so also need the block id
   long rec_id =
-      threadIdx.x +
-      (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
-                                  // an elements within the num_entries array
+    threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
+                                              // an elements within the num_entries array
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
   if (rec_id >= num_records) return;
 
   long start = recStart[rec_id];
-  long stop = recStart[rec_id + 1];
+  long stop  = recStart[rec_id + 1];
 
-  long pos = start;
-  int col = 0;
+  long pos       = start;
+  int col        = 0;
   int actual_col = 0;
 
   while (col < num_columns) {
@@ -516,8 +521,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serializedTrieContains(opts.naValuesTrie,
-                                                raw_csv + start, pos - start);
+      const bool is_na = serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
@@ -531,28 +535,31 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
         if (dtype[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
-            if ((raw_csv[start] == opts.quotechar) &&
-                (raw_csv[end - 1] == opts.quotechar)) {
+            if ((raw_csv[start] == opts.quotechar) && (raw_csv[end - 1] == opts.quotechar)) {
               start++;
               end--;
             }
           }
-          auto str_list =
-              static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+          auto str_list          = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          if (cudf::experimental::type_dispatcher(dtype[actual_col], decode_op{},
-                                              raw_csv, data[actual_col], rec_id,
-                                              start, tempPos, opts, flags[col])){
+          if (cudf::experimental::type_dispatcher(dtype[actual_col],
+                                                  decode_op{},
+                                                  raw_csv,
+                                                  data[actual_col],
+                                                  rec_id,
+                                                  start,
+                                                  tempPos,
+                                                  opts,
+                                                  flags[col])) {
             // set the valid bitmap - all bits were set to 0 to start
             set_bit(valid[actual_col], rec_id);
           }
         }
       } else if (dtype[actual_col].id() == cudf::type_id::STRING) {
-        auto str_list =
-            static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
-        str_list[rec_id].first = nullptr;
+        auto str_list           = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+        str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
       actual_col++;
@@ -563,37 +570,46 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
   }
 }
 
-cudaError_t __host__ DetectColumnTypes(
-    const char *data, const uint64_t *row_starts, size_t num_rows,
-    size_t num_columns, const ParseOptions &options, column_parse::flags *flags,
-    column_parse::stats *stats, cudaStream_t stream) {
+cudaError_t __host__ DetectColumnTypes(const char *data,
+                                       const uint64_t *row_starts,
+                                       size_t num_rows,
+                                       size_t num_columns,
+                                       const ParseOptions &options,
+                                       column_parse::flags *flags,
+                                       column_parse::stats *stats,
+                                       cudaStream_t stream)
+{
   // Calculate actual block count to use based on records count
-  int blockSize = 0;    // suggested thread count to use
+  int blockSize   = 0;  // suggested thread count to use
   int minGridSize = 0;  // minimum block count required
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
-                                     dataTypeDetection));
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection));
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
   dataTypeDetection<<<gridSize, blockSize, 0, stream>>>(
-      data, options, num_rows, num_columns, flags, row_starts, stats);
+    data, options, num_rows, num_columns, flags, row_starts, stats);
 
   return cudaSuccess;
 }
 
-cudaError_t __host__ DecodeRowColumnData(
-    const char *data, const uint64_t *row_starts, size_t num_rows,
-    size_t num_columns, const ParseOptions &options,
-    const column_parse::flags *flags, cudf::data_type *dtypes, void **columns,
-    cudf::bitmask_type **valids, cudaStream_t stream) {
+cudaError_t __host__ DecodeRowColumnData(const char *data,
+                                         const uint64_t *row_starts,
+                                         size_t num_rows,
+                                         size_t num_columns,
+                                         const ParseOptions &options,
+                                         const column_parse::flags *flags,
+                                         cudf::data_type *dtypes,
+                                         void **columns,
+                                         cudf::bitmask_type **valids,
+                                         cudaStream_t stream)
+{
   // Calculate actual block count to use based on records count
-  int blockSize = 0;    // suggested thread count to use
+  int blockSize   = 0;  // suggested thread count to use
   int minGridSize = 0;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
   convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(
-      data, options, num_rows, num_columns, flags, row_starts, dtypes, columns,
-      valids);
+    data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
 
   return cudaSuccess;
 }
