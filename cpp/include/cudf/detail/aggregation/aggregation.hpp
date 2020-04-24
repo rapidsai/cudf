@@ -30,6 +30,8 @@ namespace detail {
 
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
+ * 
+ * Derived aggregations are required to implement operator==() and hash_impl().
  *
  * https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern
  */
@@ -40,7 +42,7 @@ class derived_aggregation : public aggregation {
 
   bool is_equal(aggregation const& other) const override {
     if (this->aggregation::is_equal(other)) {
-      // Derived aggregations are required to implement operator==()
+      // Dispatch to operator== using static polymorphism
       return static_cast<Derived const&>(*this) == static_cast<Derived const&>(other);
     } else {
       return false;
@@ -48,11 +50,12 @@ class derived_aggregation : public aggregation {
   }
 
   size_t do_hash() const override {
-    // Derived aggregations are required to implement hash_impl()
+    // Dispatch to hash_impl() using static polymorphism
     return this->aggregation::do_hash() ^ static_cast<Derived const&>(*this).hash_impl();
   }
 
   std::unique_ptr<aggregation> clone() const override {
+    // Dispatch to copy constructor using static polymorphism
     return std::make_unique<Derived>(static_cast<Derived const&>(*this));
   }
 };
@@ -60,7 +63,7 @@ class derived_aggregation : public aggregation {
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-struct quantile_aggregation : derived_aggregation<quantile_aggregation> {
+struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   quantile_aggregation(std::vector<double> const& q, experimental::interpolation i)
     : derived_aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
   std::vector<double> _quantiles;              ///< Desired quantile(s)
@@ -85,7 +88,7 @@ struct quantile_aggregation : derived_aggregation<quantile_aggregation> {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-struct std_var_aggregation : derived_aggregation<std_var_aggregation> {
+struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
   std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof} {}
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -100,7 +103,7 @@ struct std_var_aggregation : derived_aggregation<std_var_aggregation> {
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-struct nunique_aggregation : derived_aggregation<nunique_aggregation> {
+struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
   nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
     : derived_aggregation{k}, _include_nulls{_include_nulls} {}
   include_nulls _include_nulls;  ///< include or exclude nulls
@@ -118,7 +121,7 @@ struct nunique_aggregation : derived_aggregation<nunique_aggregation> {
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-struct nth_element_aggregation : derived_aggregation<nth_element_aggregation> {
+struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
   nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
     : derived_aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
   size_type n;                   ///< nth index to return
@@ -140,7 +143,7 @@ struct nth_element_aggregation : derived_aggregation<nth_element_aggregation> {
  * @brief Derived class for specifying a custom aggregation
  * specified in udf
  */
-struct udf_aggregation : derived_aggregation<udf_aggregation> {
+struct udf_aggregation final : derived_aggregation<udf_aggregation> {
   udf_aggregation(aggregation::Kind type,
                   std::string const& user_defined_aggregator,
                   data_type output_type)
