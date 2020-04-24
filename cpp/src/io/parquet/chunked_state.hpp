@@ -29,9 +29,9 @@ namespace io {
 namespace detail {
 namespace parquet {
 /**
-    * @brief Chunked writer state struct. Contains various pieces of information
-    *        needed that span the begin() / write() / end() call process.
-    */
+ * @brief Chunked writer state struct. Contains various pieces of information
+ *        needed that span the begin() / write() / end() call process.
+ */
 struct pq_chunked_state {
   /// The writer to be used
   std::unique_ptr<writer> wp;

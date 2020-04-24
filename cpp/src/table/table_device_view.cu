@@ -27,16 +27,17 @@
 
 namespace cudf {
 namespace detail {
-
 template <typename ColumnDeviceView, typename HostTableView>
-void table_device_view_base<ColumnDeviceView, HostTableView>::destroy() {
+void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
+{
   delete this;
 }
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
   HostTableView source_view, cudaStream_t stream)
-  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}, _stream{stream} {
+  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}, _stream{stream}
+{
   // The table's columns must be converted to ColumnDeviceView
   // objects and copied into device memory for the table_device_view's
   // _columns member.

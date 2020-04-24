@@ -20,7 +20,8 @@
 
 gdf_scalar cudf::reduction::all(gdf_column const& col,
                                 gdf_dtype const output_dtype,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::min>;
   return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
 }

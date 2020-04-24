@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace experimental {
-
 class table {
  public:
   table()        = default;

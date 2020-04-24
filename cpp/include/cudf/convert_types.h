@@ -8,8 +8,8 @@
 // Compressed Saprse Row - see https://en.wikipedia.org/wiki/Sparse_matrix
 //
 typedef struct csr_gdf_ {
-  void*
-    A;  // on-device:	single array (length nnz) that holds all the valid data fields (based on valid bitmap)
+  void* A;  // on-device:	single array (length nnz) that holds all the valid data fields (based on
+            // valid bitmap)
   cudf::size_type* IA;   // on-device:	compressed row indexes (size rows + 1)
   int64_t* JA;           // on-device:	column index (size of nnz)
   gdf_dtype dtype;       // on-host:		the data type

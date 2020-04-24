@@ -29,7 +29,8 @@ const gdf_color BINARY_OP_COLOR = GDF_YELLOW;
 const gdf_color PARTITION_COLOR = GDF_PURPLE;
 const gdf_color READ_CSV_COLOR  = GDF_PURPLE;
 
-inline void PUSH_RANGE(std::string const& name, const gdf_color color) {
+inline void PUSH_RANGE(std::string const& name, const gdf_color color)
+{
 #ifdef USE_NVTX
   assert(color < GDF_NUM_COLORS);
   nvtxEventAttributes_t eventAttrib = {0};
@@ -43,7 +44,8 @@ inline void PUSH_RANGE(std::string const& name, const gdf_color color) {
 #endif
 }
 
-inline void PUSH_RANGE(std::string const& name, const uint32_t color) {
+inline void PUSH_RANGE(std::string const& name, const uint32_t color)
+{
 #ifdef USE_NVTX
   nvtxEventAttributes_t eventAttrib = {0};
   eventAttrib.version               = NVTX_VERSION;
@@ -56,7 +58,8 @@ inline void PUSH_RANGE(std::string const& name, const uint32_t color) {
 #endif
 }
 
-inline void POP_RANGE(void) {
+inline void POP_RANGE(void)
+{
 #ifdef USE_NVTX
   nvtxRangePop();
 #endif

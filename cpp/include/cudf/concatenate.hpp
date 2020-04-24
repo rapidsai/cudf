@@ -22,7 +22,6 @@
 #include <vector>
 
 namespace cudf {
-
 /**---------------------------------------------------------------------------*
  * @brief Concatenates `views[i]`'s bitmask from the bits
  * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
@@ -57,7 +56,6 @@ std::unique_ptr<column> concatenate(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 namespace experimental {
-
 /**---------------------------------------------------------------------------*
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
  * single table_view

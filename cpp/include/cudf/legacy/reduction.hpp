@@ -27,11 +27,11 @@ typedef enum {
   GDF_SCAN_SUM = 0,  ///< Computes the prefix scan of sum operation of all values for the column
   GDF_SCAN_MIN,      ///< Computes the prefix scan of maximum operation of all values for the column
   GDF_SCAN_MAX,      ///< Computes the prefix scan of maximum operation of all values for the column
-  GDF_SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values for the column
+  GDF_SCAN_PRODUCT,  ///< Computes the prefix scan of multiplicative product operation of all values
+                     ///< for the column
 } gdf_scan_op;
 
 namespace cudf {
-
 namespace reduction {
 /**
  * @brief These enums indicate the supported reduction operations that can be
@@ -70,7 +70,8 @@ enum operators {
  *     For `mean`, `var` and `std` ops, a floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
- * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is `N - ddof`, where `N` is the population size.`
+ * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is
+ * `N - ddof`, where `N` is the population size.`
  *
  * @returns  gdf_scalar the result value
  * If the reduction fails, the member is_valid of the output gdf_scalar
@@ -96,23 +97,23 @@ void scan(const gdf_column* input, gdf_column* output, gdf_scan_op op, bool incl
 
 /**
  * @brief Computes a group wise standard deviation
- * 
- * Computes groupby @p keys and computes the standard deviation of each group 
+ *
+ * Computes groupby @p keys and computes the standard deviation of each group
  * of each column in @p values.  Nulls are always ignored in @p values.
- * 
+ *
  * @code
  * Let
  * keys   = {[ a, c, b, c, a],}
  * values = {[v1,v2,v3,v4,v5],}
  * out_keys, out_vals = group_std(keys, values)
- * 
+ *
  * out_keys = {[ a,           b,       c          ],}
  * out_vals = {[ std(v1, v5), std(v3), std(v2, v4)],}
  * @endcode
- * 
+ *
  * @param keys Keys to group by
  * @param values Values to find standard deviation for
- * @param ddof Delta Degrees of Freedom: the divisor used in calculation is 
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculation is
  *             `N - ddof`, where `N` is the population size.`
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group standard deviation
@@ -123,23 +124,23 @@ std::pair<cudf::table, cudf::table> group_std(cudf::table const& keys,
 
 /**
  * @brief Computes a group wise variance
- * 
- * Computes groupby @p keys and computes the variance of each group 
+ *
+ * Computes groupby @p keys and computes the variance of each group
  * of each column in @p values.  Nulls are always ignored in @p values.
- * 
+ *
  * @code
  * Let
  * keys   = {[ a, c, b, c, a],}
  * values = {[v1,v2,v3,v4,v5],}
  * out_keys, out_vals = group_std(keys, values)
- * 
+ *
  * out_keys = {[ a,           b,       c          ],}
  * out_vals = {[ var(v1, v5), var(v3), var(v2, v4)],}
  * @endcode
- * 
+ *
  * @param keys Keys to group by
  * @param values Values to find variance for
- * @param ddof Delta Degrees of Freedom: the divisor used in calculation is 
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculation is
  *             `N - ddof`, where `N` is the population size.`
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p keys. Second table contains per-group variance

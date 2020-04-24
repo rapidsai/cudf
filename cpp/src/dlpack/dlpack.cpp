@@ -23,21 +23,22 @@
 #include <algorithm>
 
 namespace cudf {
-
 namespace {
-
 struct get_column_data_impl {
   template <typename T>
-  void const* operator()(column_view const& col) {
+  void const* operator()(column_view const& col)
+  {
     return col.data<T>();
   }
 };
 
-void const* get_column_data(column_view const& col) {
+void const* get_column_data(column_view const& col)
+{
   return experimental::type_dispatcher(col.type(), get_column_data_impl{}, col);
 }
 
-data_type DLDataType_to_data_type(DLDataType type) {
+data_type DLDataType_to_data_type(DLDataType type)
+{
   CUDF_EXPECTS(type.lanes == 1, "Unsupported DLPack vector type");
 
   if (type.code == kDLInt) {
@@ -66,7 +67,8 @@ data_type DLDataType_to_data_type(DLDataType type) {
 
 struct data_type_to_DLDataType_impl {
   template <typename T, std::enable_if_t<is_numeric<T>()>* = nullptr>
-  DLDataType operator()() {
+  DLDataType operator()()
+  {
     uint8_t const bits{sizeof(T) * 8};
     uint16_t const lanes{1};
     if (std::is_floating_point<T>::value) {
@@ -79,12 +81,14 @@ struct data_type_to_DLDataType_impl {
   }
 
   template <typename T, std::enable_if_t<not is_numeric<T>()>* = nullptr>
-  DLDataType operator()() {
+  DLDataType operator()()
+  {
     CUDF_FAIL("Conversion of non-numeric types to DLPack is unsupported");
   }
 };
 
-DLDataType data_type_to_DLDataType(data_type type) {
+DLDataType data_type_to_DLDataType(data_type type)
+{
   return experimental::type_dispatcher(type, data_type_to_DLDataType_impl{});
 }
 
@@ -94,7 +98,8 @@ struct dltensor_context {
   int64_t strides[2];
   rmm::device_buffer buffer;
 
-  static void deleter(DLManagedTensor* arg) {
+  static void deleter(DLManagedTensor* arg)
+  {
     auto context = static_cast<dltensor_context*>(arg->manager_ctx);
     delete context;
     delete arg;
@@ -104,10 +109,10 @@ struct dltensor_context {
 }  // namespace
 
 namespace detail {
-
 std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_tensor,
                                                  rmm::mr::device_memory_resource* mr,
-                                                 cudaStream_t stream) {
+                                                 cudaStream_t stream)
+{
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
 
@@ -173,7 +178,8 @@ std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_
 
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::mr::device_memory_resource* mr,
-                           cudaStream_t stream) {
+                           cudaStream_t stream)
+{
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
   if (num_rows == 0) { return nullptr; }
@@ -245,11 +251,13 @@ DLManagedTensor* to_dlpack(table_view const& input,
 }  // namespace detail
 
 std::unique_ptr<experimental::table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                                 rmm::mr::device_memory_resource* mr) {
+                                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::from_dlpack(managed_tensor, mr);
 }
 
-DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr) {
+DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
+{
   return detail::to_dlpack(input, mr);
 }
 

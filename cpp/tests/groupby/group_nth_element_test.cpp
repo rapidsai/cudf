@@ -30,7 +30,9 @@ struct groupby_nth_element_test : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(groupby_nth_element_test, cudf::test::AllTypes);
 
-TYPED_TEST(groupby_nth_element_test, basic) {
+// clang-format off
+TYPED_TEST(groupby_nth_element_test, basic)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -56,7 +58,8 @@ TYPED_TEST(groupby_nth_element_test, basic) {
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, empty_cols) {
+TYPED_TEST(groupby_nth_element_test, empty_cols)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -71,7 +74,8 @@ TYPED_TEST(groupby_nth_element_test, empty_cols) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds) {
+TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -86,7 +90,8 @@ TYPED_TEST(groupby_nth_element_test, basic_out_of_bounds) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, negative) {
+TYPED_TEST(groupby_nth_element_test, negative)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -112,7 +117,8 @@ TYPED_TEST(groupby_nth_element_test, negative) {
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds) {
+TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -127,7 +133,8 @@ TYPED_TEST(groupby_nth_element_test, negative_out_of_bounds) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, zero_valid_keys) {
+TYPED_TEST(groupby_nth_element_test, zero_valid_keys)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -142,7 +149,8 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_keys) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, zero_valid_values) {
+TYPED_TEST(groupby_nth_element_test, zero_valid_values)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -157,7 +165,8 @@ TYPED_TEST(groupby_nth_element_test, zero_valid_values) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, null_keys_and_values) {
+TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -176,7 +185,8 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds) {
+TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -195,7 +205,8 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds) {
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, exclude_nulls) {
+TYPED_TEST(groupby_nth_element_test, exclude_nulls)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -236,7 +247,8 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls) {
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index) {
+TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
+{
   using K = int32_t;
   using V = TypeParam;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -280,7 +292,8 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index) {
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, basic_string) {
+TYPED_TEST(groupby_nth_element_test, basic_string)
+{
   using K = int32_t;
   using V = std::string;
   using R = experimental::detail::target_type_t<V, experimental::aggregation::NTH_ELEMENT>;
@@ -328,6 +341,7 @@ TYPED_TEST(groupby_nth_element_test, basic_string) {
   strings_column_wrapper expect_vals7{{"", "1", ""}, {0, 1, 0}};
   test_single_agg(keys, vals, expect_keys, expect_vals7, std::move(agg));
 }
+// clang-format on
 
 }  // namespace test
 }  // namespace cudf
