@@ -279,11 +279,6 @@ def test_pandas_concat_compatibility_axis1_overlap(index2, names):
         s2.name = names[1]
     if index2 == [0, 1, 1]:
         pytest.xfail(reason="cannot reindex duplicate axis")
-    if not names:
-        pytest.xfail(
-            reason="cuDF doesn't support having multiple \
-                columns with same names yet."
-        )
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)

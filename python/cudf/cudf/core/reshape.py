@@ -97,8 +97,6 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         df = DataFrame()
 
-        objs = align_objs(objs)
-
         sr_name = 0
         for idx, o in enumerate(objs):
             if isinstance(o, Series):
@@ -107,6 +105,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
                     name = sr_name
                     sr_name += 1
                 objs[idx] = o.to_frame(name=name)
+
+        objs = align_objs(objs)
 
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
