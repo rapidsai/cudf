@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace io {
-
 // Not supporting streams longer than this (not what snappy is intended for)
 #define SNAPPY_MAX_STREAM_SIZE 0x7fffffff
 
@@ -73,7 +72,8 @@ struct unsnap_state_s {
  * @param s decompression state
  * @param t warp lane id
  **/
-__device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t) {
+__device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
+{
   const uint8_t *base  = s->base;
   uint32_t end         = (uint32_t)(s->end - base);
   uint32_t align_bytes = (uint32_t)(0x20 - (0x1f & reinterpret_cast<uintptr_t>(base)));
@@ -197,7 +197,8 @@ static const uint8_t __device__ __constant__ k_len3lut[1 << 10] = {
  *
  * Implemented by doing 8 consecutive lookups, building the result 4-bit at a time
  **/
-inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2) {
+inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2)
+{
   uint32_t m, v, m4, n;
   v  = v0;
   m4 = k_len3lut[v & 0x3ff];
@@ -240,7 +241,8 @@ inline __device__ uint32_t get_len3_mask(uint32_t v0, uint32_t v1, uint32_t v2) 
  * minus 2, given two input masks each containing bit0 or bit1 of the corresponding
  * code length minus 2 for up to 32 bytes
  **/
-inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1) {
+inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1)
+{
   uint32_t m;
   m = (v1 & 1) * 2 + (v0 & 1);
   v0 >>= (m + 2);
@@ -263,7 +265,8 @@ inline __device__ uint32_t get_len5_mask(uint32_t v0, uint32_t v1) {
  * @param s decompression state
  * @param t warp lane id
  **/
-__device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t) {
+__device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
+{
   uint32_t cur        = 0;
   uint32_t end        = static_cast<uint32_t>(s->end - s->base);
   uint32_t bytes_left = s->uncompressed_size;
@@ -471,9 +474,11 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t) {
  * @param s decompression state
  * @param t thread id within participating group (lane id)
  *
- * NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that would result in out-of-bounds accesses)
+ * NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that
+ *would result in out-of-bounds accesses)
  **/
-__device__ void snappy_process_symbols(unsnap_state_s *s, int t) {
+__device__ void snappy_process_symbols(unsnap_state_s *s, int t)
+{
   const uint8_t *literal_base = s->base;
   uint8_t *out                = reinterpret_cast<uint8_t *>(s->in.dstDevice);
   int batch                   = 0;
@@ -596,7 +601,8 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t) {
  * @param[out] outputs Decompression status per block
  **/
 extern "C" __global__ void __launch_bounds__(128)
-  unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs) {
+  unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs)
+{
   __shared__ __align__(16) unsnap_state_s state_g;
 
   int t             = threadIdx.x;
@@ -684,7 +690,8 @@ extern "C" __global__ void __launch_bounds__(128)
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs,
                                 gpu_inflate_status_s *outputs,
                                 int count,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   uint32_t count32 = (count > 0) ? count : 0;
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count

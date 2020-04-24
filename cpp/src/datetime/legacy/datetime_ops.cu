@@ -27,8 +27,9 @@
 #include <utilities/legacy/cudf_utils.h>
 #include <cudf/utilities/error.hpp>
 
-/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07  http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018
- The piece of code borrowed and modified is:
+/*  Portions of the code below is borrowed from a paper by Howard Hinnant dated 2013-09-07
+http://howardhinnant.github.io/date_algorithms.html  as seen on July 2nd, 2018 The piece of code
+borrowed and modified is:
 
  **************************************************************************************
 // Returns year/month/day triple in civil calendar
@@ -59,7 +60,8 @@ civil_from_days(Int z) noexcept
 
 struct gdf_extract_year_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_day;
-  __host__ __device__ gdf_extract_year_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_year_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s)  // second
       units_per_day = 86400;
     else if (unit == TIME_UNIT_ms)  // millisecond
@@ -93,7 +95,8 @@ struct gdf_extract_year_from_unixtime_op : public thrust::unary_function<int64_t
 
 struct gdf_extract_month_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_day;
-  __host__ __device__ gdf_extract_month_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_month_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s)  // second
       units_per_day = 86400;
     else if (unit == TIME_UNIT_ms)  // millisecond
@@ -122,7 +125,8 @@ struct gdf_extract_month_from_unixtime_op : public thrust::unary_function<int64_
 
 struct gdf_extract_day_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_day;
-  __host__ __device__ gdf_extract_day_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_day_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s)  // second
       units_per_day = 86400;
     else if (unit == TIME_UNIT_ms)  // millisecond
@@ -151,7 +155,8 @@ struct gdf_extract_day_from_unixtime_op : public thrust::unary_function<int64_t,
 
 struct gdf_extract_weekday_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_day;
-  __host__ __device__ gdf_extract_weekday_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_weekday_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s)  // second
       units_per_day = 86400;
     else if (unit == TIME_UNIT_ms)  // millisecond
@@ -202,7 +207,8 @@ struct gdf_extract_weekday_from_unixtime_op : public thrust::unary_function<int6
 struct gdf_extract_hour_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_day;
   int64_t units_per_hour;
-  __host__ __device__ gdf_extract_hour_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_hour_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s) {  // second
       units_per_day  = 86400;
       units_per_hour = 3600;
@@ -232,7 +238,8 @@ struct gdf_extract_hour_from_unixtime_op : public thrust::unary_function<int64_t
 struct gdf_extract_minute_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_hour;
   int64_t units_per_minute;
-  __host__ __device__ gdf_extract_minute_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_minute_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s) {  // second
       units_per_hour   = 3600;
       units_per_minute = 60;
@@ -262,7 +269,8 @@ struct gdf_extract_minute_from_unixtime_op : public thrust::unary_function<int64
 struct gdf_extract_second_from_unixtime_op : public thrust::unary_function<int64_t, int16_t> {
   int64_t units_per_minute;
   int64_t units_per_second;
-  __host__ __device__ gdf_extract_second_from_unixtime_op(gdf_time_unit unit) {
+  __host__ __device__ gdf_extract_second_from_unixtime_op(gdf_time_unit unit)
+  {
     if (unit == TIME_UNIT_s) {  // second
       units_per_minute = 60;
       units_per_second = 1;
@@ -368,7 +376,8 @@ struct gdf_extract_weekday_from_date32_op : public thrust::unary_function<int32_
   }
 };
 
-gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
@@ -423,7 +432,8 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
@@ -479,7 +489,8 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
@@ -534,7 +545,8 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
 
@@ -588,7 +600,8 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
   GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
@@ -636,7 +649,8 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
   GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);
@@ -682,7 +696,8 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) {
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
+gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output)
+{
   GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
   GDF_REQUIRE(input->dtype != GDF_DATE32, GDF_UNSUPPORTED_DTYPE);

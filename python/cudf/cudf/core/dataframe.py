@@ -25,12 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
-from cudf.core.column import (
-    CategoricalColumn,
-    StringColumn,
-    as_column,
-    column_empty,
-)
+from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
@@ -4716,68 +4711,6 @@ class DataFrame(Frame):
         import cudf.io.orc as orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
-
-    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
-    def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, **kwargs
-    ):
-        """Scatter to a list of dataframes.
-
-        Uses map_index to determine the destination
-        of each row of the original DataFrame.
-
-        Parameters
-        ----------
-        map_index : Series, str or list-like
-            Scatter assignment for each row
-        map_size : int
-            Length of output list. Must be >= uniques in map_index
-        keep_index : bool
-            Conserve original index values for each row
-
-        Returns
-        -------
-        A list of cudf.DataFrame objects.
-        """
-
-        # map_index might be a column name or array,
-        # make it a Column
-        if isinstance(map_index, str):
-            map_index = self._data[map_index]
-        elif isinstance(map_index, Series):
-            map_index = map_index._column
-        else:
-            map_index = as_column(map_index)
-
-        # Convert float to integer
-        if map_index.dtype == np.float:
-            map_index = map_index.astype(np.int32)
-
-        # Convert string or categorical to integer
-        if isinstance(map_index, StringColumn):
-            map_index = map_index.as_categorical_column(np.int32).as_numerical
-            warnings.warn(
-                "Using StringColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-        elif isinstance(map_index, CategoricalColumn):
-            map_index = map_index.as_numerical
-            warnings.warn(
-                "Using CategoricalColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-
-        if kwargs.get("debug", False) == 1 and map_size is not None:
-            unique_count = map_index.unique_count()
-            if map_size < unique_count:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (unique_count, map_size)
-                )
-
-        tables = self._partition(map_index, map_size, keep_index)
-
-        return tables
 
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index

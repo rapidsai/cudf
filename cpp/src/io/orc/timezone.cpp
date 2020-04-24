@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace io {
-
 // NOTE: Assumes little-endian platform
 #ifdef _MSC_VER
 #define bswap_32(v) _byteswap_ulong(v)
@@ -35,8 +34,8 @@ namespace io {
 
 #pragma pack(push, 1)
 /**
-  * @brief 32-bit TZif header
-  **/
+ * @brief 32-bit TZif header
+ **/
 struct tzif_hdr_s {
   uint32_t magic;          // "TZif"
   uint8_t version;         // 0:version1, '2':version2, '3':version3
@@ -46,8 +45,8 @@ struct tzif_hdr_s {
   uint32_t leapcnt;        // number of leap second records contained in the body
   uint32_t timecnt;        // number of transition times contained in the body
   uint32_t typecnt;  // number of local time type Records contained in the body - MUST NOT be zero
-  uint32_t
-    charcnt;  // total number of octets used by the set of time zone designations contained in the body
+  uint32_t charcnt;  // total number of octets used by the set of time zone designations contained
+                     // in the body
 };
 
 struct localtime_type_record_s {
@@ -73,7 +72,8 @@ struct dst_transition_s {
  *
  * @return position after parsing the name
  **/
-static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end) {
+static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end)
+{
   if (cur < end) {
     int c = *cur;
     if (c == '<') {
@@ -100,7 +100,8 @@ static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end) {
  *
  * @return position after parsing the number
  **/
-static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval) {
+static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval)
+{
   int64_t v = 0;
   while (cur < end) {
     uint32_t c = *cur - '0';
@@ -121,7 +122,8 @@ static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end,
  *
  * @return position after parsing the UTC offset
  **/
-static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff) {
+static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff)
+{
   int64_t v = 0;
   if (cur < end) {
     int64_t scale = 60 * 60;
@@ -152,7 +154,8 @@ static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end,
  **/
 static const uint8_t *posix_parse_transition(const uint8_t *cur,
                                              const uint8_t *end,
-                                             dst_transition_s *ptrans) {
+                                             dst_transition_s *ptrans)
+{
   int type  = 0;
   int month = 0;
   int week  = 0;
@@ -197,7 +200,8 @@ static const uint8_t *posix_parse_transition(const uint8_t *cur,
  *
  * @return 1 if leap year, zero otherwise
  **/
-static int IsLeapYear(uint32_t year) {
+static int IsLeapYear(uint32_t year)
+{
   return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 }
 
@@ -209,7 +213,8 @@ static int IsLeapYear(uint32_t year) {
  *
  * @return number of days in the month
  **/
-static int DaysInMonth(int month, int is_leap) {
+static int DaysInMonth(int month, int is_leap)
+{
   return (month == 2) ? 28 + is_leap : (30 + ((0x55aa >> month) & 1));
 }
 
@@ -221,7 +226,8 @@ static int DaysInMonth(int month, int is_leap) {
  *
  * @return transition time in seconds from the beginning of the year
  **/
-static int64_t GetTransitionTime(const dst_transition_s *trans, int year) {
+static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
+{
   int64_t t = trans->time;
   int day   = trans->day;
 
@@ -259,7 +265,8 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year) {
  *
  * @return gmt offset
  **/
-static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts) {
+static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
+{
   uint32_t num_entries = (uint32_t)(table.size() >> 1);
   uint32_t dst_cycle   = 0;
   int64_t first_transition, last_transition;
@@ -304,12 +311,14 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts) {
 /**
  * @brief Creates a transition table to convert ORC timestanps to UTC
  *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800 transitions repeat forever with 400 year cycle)
+ * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
+ *transitions repeat forever with 400 year cycle)
  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
  *
  * @return true if successful, false if failed to find/parse the timezone information
  **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name) {
+bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name)
+{
   using std::ios_base;
   std::string tz_filename("/usr/share/zoneinfo/");
   std::ifstream fin;
@@ -406,7 +415,8 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
       fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
     }
     fin.close();
-    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules (2 transitions/year)
+    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
+    // (2 transitions/year)
     table.resize((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
     earliest_std_idx = 0;
     for (size_t t = 0; t < tzh.timecnt; t++) {
@@ -471,7 +481,7 @@ bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string
     // Add gmt offset
     table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
   } else {
-    //printf("Failed to open \"%s\"\n", tz_filename.c_str());
+    // printf("Failed to open \"%s\"\n", tz_filename.c_str());
     return false;
   }
   return true;

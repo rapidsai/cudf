@@ -29,7 +29,8 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -39,7 +40,8 @@ T random_int(T min, T max) {
 
 // -----------------------------------------------------------------------------
 template <typename InputIterator, typename OutputIterator, typename T>
-inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_items, T init) {
+inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_items, T init)
+{
   size_t temp_storage_bytes = 0;
 
   cub::DeviceReduce::Reduce(
@@ -57,7 +59,8 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result) {
+void raw_stream_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
+{
   // std::cout << "raw stream cub: " << "\t";
 
   T init{0};
@@ -68,7 +71,8 @@ void raw_stream_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
 };
 
 template <typename T, bool has_null>
-void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result) {
+void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
+{
   // std::cout << "iterator cub " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
   T init{0};
@@ -85,7 +89,8 @@ void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result) {
 
 // -----------------------------------------------------------------------------
 template <typename T>
-void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result) {
+void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result)
+{
   // std::cout << "raw stream thust: " << "\t\t";
 
   T init{0};
@@ -95,7 +100,8 @@ void raw_stream_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &resu
 }
 
 template <typename T, bool has_null>
-void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result) {
+void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result)
+{
   // std::cout << "iterator thust " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
   T init{0};
@@ -112,10 +118,12 @@ void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result
 }
 
 // -----------------------------------------------------------------------------
-class Iterator : public cudf::benchmark {};
+class Iterator : public cudf::benchmark {
+};
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
-void BM_iterator(benchmark::State &state) {
+void BM_iterator(benchmark::State &state)
+{
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
@@ -147,14 +155,16 @@ void BM_iterator(benchmark::State &state) {
 
 // operator+ defined for pair iterator reduction
 template <typename T>
-__device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs) {
+__device__ thrust::pair<T, bool> operator+(thrust::pair<T, bool> lhs, thrust::pair<T, bool> rhs)
+{
   return thrust::pair<T, bool>{lhs.first * lhs.second + rhs.first * rhs.second,
                                lhs.second + rhs.second};
 }
 // -----------------------------------------------------------------------------
 template <typename T, bool has_null>
 void pair_iterator_bench_cub(cudf::column_view &col,
-                             rmm::device_vector<thrust::pair<T, bool>> &result) {
+                             rmm::device_vector<thrust::pair<T, bool>> &result)
+{
   thrust::pair<T, bool> init{0, false};
   auto d_col    = cudf::column_device_view::create(col);
   int num_items = col.size();
@@ -164,7 +174,8 @@ void pair_iterator_bench_cub(cudf::column_view &col,
 
 template <typename T, bool has_null>
 void pair_iterator_bench_thrust(cudf::column_view &col,
-                                rmm::device_vector<thrust::pair<T, bool>> &result) {
+                                rmm::device_vector<thrust::pair<T, bool>> &result)
+{
   thrust::pair<T, bool> init{0, false};
   auto d_col = cudf::column_device_view::create(col);
   auto d_in  = d_col->pair_begin<T, has_null>();
@@ -173,7 +184,8 @@ void pair_iterator_bench_thrust(cudf::column_view &col,
 }
 
 template <class TypeParam, bool cub_or_thrust>
-void BM_pair_iterator(benchmark::State &state) {
+void BM_pair_iterator(benchmark::State &state)
+{
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
@@ -202,7 +214,8 @@ void BM_pair_iterator(benchmark::State &state) {
 }
 
 #define ITER_BM_BENCHMARK_DEFINE(name, type, cub_or_thrust, raw_or_iterator) \
-  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state) {           \
+  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state)             \
+  {                                                                          \
     BM_iterator<type, cub_or_thrust, raw_or_iterator>(state);                \
   }                                                                          \
   BENCHMARK_REGISTER_F(Iterator, name)                                       \
@@ -216,14 +229,15 @@ ITER_BM_BENCHMARK_DEFINE(double_cub_iter, double, true, false);
 ITER_BM_BENCHMARK_DEFINE(double_thrust_raw, double, false, true);
 ITER_BM_BENCHMARK_DEFINE(double_thrust_iter, double, false, false);
 
-#define PAIRITER_BM_BENCHMARK_DEFINE(name, type, cub_or_thrust)    \
-  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state) { \
-    BM_pair_iterator<type, cub_or_thrust>(state);                  \
-  }                                                                \
-  BENCHMARK_REGISTER_F(Iterator, name)                             \
-    ->RangeMultiplier(10)                                          \
-    ->Range(1000, 10000000)                                        \
-    ->UseManualTime()                                              \
+#define PAIRITER_BM_BENCHMARK_DEFINE(name, type, cub_or_thrust)  \
+  BENCHMARK_DEFINE_F(Iterator, name)(::benchmark::State & state) \
+  {                                                              \
+    BM_pair_iterator<type, cub_or_thrust>(state);                \
+  }                                                              \
+  BENCHMARK_REGISTER_F(Iterator, name)                           \
+    ->RangeMultiplier(10)                                        \
+    ->Range(1000, 10000000)                                      \
+    ->UseManualTime()                                            \
     ->Unit(benchmark::kMillisecond);
 
 PAIRITER_BM_BENCHMARK_DEFINE(double_cub_pair, double, true);

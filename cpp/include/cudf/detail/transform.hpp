@@ -21,15 +21,14 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.
  *
  * Computes:
  * `out[i] = F(in[i])`
- * 
- * The output null mask is the same is the input null mask so if input[i] is 
+ *
+ * The output null mask is the same is the input null mask so if input[i] is
  * null then output[i] is also null
  *
  * @param input         An immutable view of the input column to transform

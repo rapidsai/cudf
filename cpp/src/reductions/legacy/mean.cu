@@ -20,7 +20,8 @@
 
 gdf_scalar cudf::reduction::mean(gdf_column const& col,
                                  gdf_dtype const output_dtype,
-                                 cudaStream_t stream) {
+                                 cudaStream_t stream)
+{
   using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
   return cudf::type_dispatcher(
     col.dtype, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream);

@@ -1804,7 +1804,9 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self, mask=None, size=None, offset=0, null_count=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -1833,7 +1835,13 @@ class StringColumn(column.ColumnBase):
             size = size - offset
 
         super().__init__(
-            None, size, dtype, mask=mask, offset=offset, children=children
+            None,
+            size,
+            dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
@@ -1924,13 +1932,6 @@ class StringColumn(column.ColumnBase):
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
-
-    def __reduce__(self):
-        mask = None
-        if self.null_count > 0:
-            mask = self.mask
-
-        return column.build_column, (None, "str", mask, None, 0, self.children)
 
     def str(self, parent=None):
         return StringMethods(self, parent=parent)

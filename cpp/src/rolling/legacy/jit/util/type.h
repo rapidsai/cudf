@@ -26,7 +26,6 @@
 namespace cudf {
 namespace rolling {
 namespace jit {
-
 std::string get_operator_name(gdf_agg_op ope);
 
 std::string get_function_name(gdf_agg_op ope);

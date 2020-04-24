@@ -219,7 +219,7 @@
  *
  * `nvtx3::mark` allows annotating an instantaneous event in an application's
  * timeline. For example, indicating when a mutex is locked or unlocked.
- * 
+ *
  * \code{.cpp}
  * std::mutex global_lock;
  * void lock_mutex(){
@@ -516,7 +516,6 @@
 
 namespace nvtx3 {
 namespace detail {
-
 /**
  * @brief Verifies if a type `T` contains a member `T::name` of type `const
  * char*` or `const wchar_t*`.
@@ -526,7 +525,8 @@ namespace detail {
  * `const wchar_t*`.
  */
 template <typename T>
-constexpr auto has_name_member() noexcept -> decltype(T::name, bool()) {
+constexpr auto has_name_member() noexcept -> decltype(T::name, bool())
+{
   return (std::is_same<char const*, typename std::decay<decltype(T::name)>::type>::value or
           std::is_same<wchar_t const*, typename std::decay<decltype(T::name)>::type>::value);
 }
@@ -638,7 +638,8 @@ class domain {
    * @return Reference to the `domain` corresponding to the type `DomainName`.
    */
   template <typename DomainName>
-  static domain const& get() {
+  static domain const& get()
+  {
     static_assert(detail::has_name_member<DomainName>(),
                   "Type used to identify a domain must contain a name member of"
                   "type const char* or const wchar_t*");
@@ -665,7 +666,8 @@ class domain {
    * applications will be grouped together.
    *
    */
-  struct global {};
+  struct global {
+  };
 
  private:
   /**
@@ -742,7 +744,8 @@ class domain {
  *
  */
 template <>
-inline domain const& domain::get<domain::global>() {
+inline domain const& domain::get<domain::global>()
+{
   static domain const d{};
   return d;
 }
@@ -767,7 +770,9 @@ struct rgb {
    * @param blue_ Value of the blue channel
    */
   constexpr rgb(component_type red_, component_type green_, component_type blue_) noexcept
-    : red{red_}, green{green_}, blue{blue_} {}
+    : red{red_}, green{green_}, blue{blue_}
+  {
+  }
 
   component_type const red{};    ///< Red channel value
   component_type const green{};  ///< Green channel value
@@ -796,7 +801,9 @@ struct argb final : rgb {
                  component_type red_,
                  component_type green_,
                  component_type blue_) noexcept
-    : rgb{red_, green_, blue_}, alpha{alpha_} {}
+    : rgb{red_, green_, blue_}, alpha{alpha_}
+  {
+  }
 
   component_type const alpha{};  ///< Alpha channel value
 };
@@ -841,7 +848,9 @@ class color {
    * @param argb The alpha, red, green, blue components of the desired `color`
    */
   constexpr color(argb argb) noexcept
-    : color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green, argb.blue)} {}
+    : color{from_bytes_msb_to_lsb(argb.alpha, argb.red, argb.green, argb.blue)}
+  {
+  }
 
   /**
    * @brief Construct a `color` using the red, green, blue components in
@@ -852,7 +861,9 @@ class color {
    * @param rgb The red, green, blue components of the desired `color`
    */
   constexpr color(rgb rgb) noexcept
-    : color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)} {}
+    : color{from_bytes_msb_to_lsb(0xFF, rgb.red, rgb.green, rgb.blue)}
+  {
+  }
 
   /**
    * @brief Returns the `color`s argb hex code
@@ -882,7 +893,8 @@ class color {
   constexpr static value_type from_bytes_msb_to_lsb(uint8_t byte3,
                                                     uint8_t byte2,
                                                     uint8_t byte1,
-                                                    uint8_t byte0) noexcept {
+                                                    uint8_t byte0) noexcept
+  {
     return uint32_t{byte3} << 24 | uint32_t{byte2} << 16 | uint32_t{byte1} << 8 | uint32_t{byte0};
   }
 
@@ -1031,7 +1043,8 @@ class named_category final : public category {
    * `char const*` or `wchar_t const*` and `C::id`.
    */
   template <typename C>
-  static named_category<D> const& get() noexcept {
+  static named_category<D> const& get() noexcept
+  {
     static_assert(detail::has_name_member<C>(),
                   "Type used to name a category must contain a name member.");
     static named_category<D> const category{C::id, C::name};
@@ -1047,7 +1060,8 @@ class named_category final : public category {
    * @param[in] id The category id to name
    * @param[in] name The name to associated with `id`
    */
-  named_category(id_type id, char const* name) noexcept : category{id} {
+  named_category(id_type id, char const* name) noexcept : category{id}
+  {
     nvtxDomainNameCategoryA(domain::get<D>(), get_id(), name);
   };
 
@@ -1061,7 +1075,8 @@ class named_category final : public category {
    * @param[in] id The category id to name
    * @param[in] name The name to associated with `id`
    */
-  named_category(id_type id, wchar_t const* name) noexcept : category{id} {
+  named_category(id_type id, wchar_t const* name) noexcept : category{id}
+  {
     nvtxDomainNameCategoryW(domain::get<D>(), get_id(), name);
   };
 };
@@ -1149,7 +1164,8 @@ class registered_message {
    * @return Reference to a `registered_message` associated with the type `M`.
    */
   template <typename M>
-  static registered_message<D> const& get() noexcept {
+  static registered_message<D> const& get() noexcept
+  {
     static registered_message<D> const registered_message{M::message};
     return registered_message;
   }
@@ -1166,7 +1182,9 @@ class registered_message {
    * @param msg The contents of the message
    */
   explicit registered_message(char const* msg) noexcept
-    : handle_{nvtxDomainRegisterStringA(domain::get<D>(), msg)} {}
+    : handle_{nvtxDomainRegisterStringA(domain::get<D>(), msg)}
+  {
+  }
 
   /**
    * @brief Constructs a `registered_message` from the specified `msg` string.
@@ -1193,7 +1211,9 @@ class registered_message {
    * @param msg The contents of the message
    */
   explicit registered_message(wchar_t const* msg) noexcept
-    : handle_{nvtxDomainRegisterStringW(domain::get<D>(), msg)} {}
+    : handle_{nvtxDomainRegisterStringW(domain::get<D>(), msg)}
+  {
+  }
 
   /**
    * @brief Constructs a `registered_message` from the specified `msg` string.
@@ -1272,7 +1292,8 @@ class message {
    *
    * @param msg The contents of the message
    */
-  NVTX3_RELAXED_CONSTEXPR message(char const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_ASCII} {
+  NVTX3_RELAXED_CONSTEXPR message(char const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_ASCII}
+  {
     value_.ascii = msg;
   }
 
@@ -1298,7 +1319,8 @@ class message {
    *
    * @param msg The contents of the message
    */
-  NVTX3_RELAXED_CONSTEXPR message(wchar_t const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_UNICODE} {
+  NVTX3_RELAXED_CONSTEXPR message(wchar_t const* msg) noexcept : type_{NVTX_MESSAGE_TYPE_UNICODE}
+  {
     value_.unicode = msg;
   }
 
@@ -1328,7 +1350,8 @@ class message {
    * @param msg The message that has already been registered with NVTX.
    */
   template <typename D>
-  message(registered_message<D> const& msg) noexcept : type_{NVTX_MESSAGE_TYPE_REGISTERED} {
+  message(registered_message<D> const& msg) noexcept : type_{NVTX_MESSAGE_TYPE_REGISTERED}
+  {
     value_.registered = msg.get_handle();
   }
 
@@ -1376,7 +1399,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(int64_t value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_INT64}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_INT64}, value_{}
+  {
     value_.llValue = value;
   }
 
@@ -1386,7 +1410,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(int32_t value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_INT32}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_INT32}, value_{}
+  {
     value_.iValue = value;
   }
 
@@ -1396,7 +1421,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(uint64_t value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT64}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT64}, value_{}
+  {
     value_.ullValue = value;
   }
 
@@ -1406,7 +1432,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(uint32_t value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT32}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_UNSIGNED_INT32}, value_{}
+  {
     value_.uiValue = value;
   }
 
@@ -1417,7 +1444,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(float value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_FLOAT}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_FLOAT}, value_{}
+  {
     value_.fValue = value;
   }
 
@@ -1428,7 +1456,8 @@ class payload {
    * @param value Value to use as contents of the payload
    */
   NVTX3_RELAXED_CONSTEXPR explicit payload(double value) noexcept
-    : type_{NVTX_PAYLOAD_TYPE_DOUBLE}, value_{} {
+    : type_{NVTX_PAYLOAD_TYPE_DOUBLE}, value_{}
+  {
     value_.dValue = value;
   }
 
@@ -1529,7 +1558,9 @@ class event_attributes {
         {},                             // payload value (union)
         NVTX_MESSAGE_UNKNOWN,           // message type
         {}                              // message value (union)
-      } {}
+      }
+  {
+  }
 
   /**
    * @brief Variadic constructor where the first argument is a `category`.
@@ -1540,7 +1571,8 @@ class event_attributes {
    */
   template <typename... Args>
   NVTX3_RELAXED_CONSTEXPR explicit event_attributes(category const& c, Args const&... args) noexcept
-    : event_attributes(args...) {
+    : event_attributes(args...)
+  {
     attributes_.category = c.get_id();
   }
 
@@ -1553,7 +1585,8 @@ class event_attributes {
    */
   template <typename... Args>
   NVTX3_RELAXED_CONSTEXPR explicit event_attributes(color const& c, Args const&... args) noexcept
-    : event_attributes(args...) {
+    : event_attributes(args...)
+  {
     attributes_.color     = c.get_value();
     attributes_.colorType = c.get_type();
   }
@@ -1567,7 +1600,8 @@ class event_attributes {
    */
   template <typename... Args>
   NVTX3_RELAXED_CONSTEXPR explicit event_attributes(payload const& p, Args const&... args) noexcept
-    : event_attributes(args...) {
+    : event_attributes(args...)
+  {
     attributes_.payload     = p.get_value();
     attributes_.payloadType = p.get_type();
   }
@@ -1581,7 +1615,8 @@ class event_attributes {
    */
   template <typename... Args>
   explicit event_attributes(message const& m, Args const&... args) noexcept
-    : event_attributes(args...) {
+    : event_attributes(args...)
+  {
     attributes_.message     = m.get_value();
     attributes_.messageType = m.get_type();
   }
@@ -1667,7 +1702,8 @@ class domain_thread_range {
    * @param[in] attr `event_attributes` that describes the desired attributes
    * of the range.
    */
-  explicit domain_thread_range(event_attributes const& attr) noexcept {
+  explicit domain_thread_range(event_attributes const& attr) noexcept
+  {
     nvtxDomainRangePushEx(domain::get<D>(), attr.get());
   }
 
@@ -1703,7 +1739,9 @@ class domain_thread_range {
             typename = typename std::enable_if<
               not std::is_same<event_attributes, typename std::decay<First>>::value>>
   explicit domain_thread_range(First const& first, Args const&... args) noexcept
-    : domain_thread_range{event_attributes{first, args...}} {}
+    : domain_thread_range{event_attributes{first, args...}}
+  {
+  }
 
   /**
    * @brief Default constructor creates a `domain_thread_range` with no
@@ -1757,7 +1795,9 @@ class domain_process_range {
    * @param attr
    */
   explicit domain_process_range(event_attributes const& attr) noexcept
-    : range_id_{nvtxDomainRangeStartEx(domain::get<D>(), attr.get())} {}
+    : range_id_{nvtxDomainRangeStartEx(domain::get<D>(), attr.get())}
+  {
+  }
 
   /**
    * @brief Construct a new domain process range object
@@ -1770,7 +1810,9 @@ class domain_process_range {
             typename = typename std::enable_if<
               not std::is_same<event_attributes, typename std::decay<First>>::value>>
   explicit domain_process_range(First const& first, Args const&... args) noexcept
-    : domain_process_range{event_attributes{first, args...}} {}
+    : domain_process_range{event_attributes{first, args...}}
+  {
+  }
 
   /**
    * @brief Construct a new domain process range object
@@ -1782,18 +1824,21 @@ class domain_process_range {
    * @brief Destroy the `domain_process_range` ending the range.
    *
    */
-  ~domain_process_range() noexcept {
+  ~domain_process_range() noexcept
+  {
     if (not moved_from_) { nvtxRangeEnd(range_id_); }
   }
 
   domain_process_range(domain_process_range const&) = delete;
   domain_process_range& operator=(domain_process_range const&) = delete;
 
-  domain_process_range(domain_process_range&& other) noexcept : range_id_{other.range_id_} {
+  domain_process_range(domain_process_range&& other) noexcept : range_id_{other.range_id_}
+  {
     other.moved_from_ = true;
   }
 
-  domain_process_range& operator=(domain_process_range&& other) noexcept {
+  domain_process_range& operator=(domain_process_range&& other) noexcept
+  {
     range_id_         = other.range_id_;
     other.moved_from_ = true;
   }
@@ -1835,7 +1880,8 @@ using process_range = domain_process_range<>;
  * of the mark.
  */
 template <typename D = nvtx3::domain::global>
-inline void mark(event_attributes const& attr) noexcept {
+inline void mark(event_attributes const& attr) noexcept
+{
   nvtxDomainMarkEx(domain::get<D>(), attr.get());
 }
 

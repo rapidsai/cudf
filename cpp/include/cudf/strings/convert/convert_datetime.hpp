@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a new timestamp column converting a strings column into
  * timestamps using the provided format pattern.
