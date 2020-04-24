@@ -12,6 +12,7 @@
 - PR #4906 Add Java bindings for interleave_columns
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 
 ## Improvements
 
@@ -118,6 +119,7 @@
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #5002 Fix Column.__reduce__ to accept `null_count`
 
 ## Bug Fixes
 
@@ -192,6 +194,8 @@
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
 - PR #5009 Fix pickling for string and categorical columns
+- PR #4984 Fix groupby nth aggregation negative n and exclude nulls
+- PR #4977 Fix compilation of cuDF benchmarks with build.sh
 
 
 # cuDF 0.13.0 (31 Mar 2020)
