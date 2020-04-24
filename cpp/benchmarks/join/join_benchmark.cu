@@ -26,10 +26,12 @@
 #include "generate_input_tables.cuh"
 
 template <typename key_type, typename payload_type>
-class Join : public cudf::benchmark {};
+class Join : public cudf::benchmark {
+};
 
 template <typename key_type, typename payload_type>
-static void BM_join(benchmark::State &state) {
+static void BM_join(benchmark::State &state)
+{
   const cudf::size_type build_table_size{(cudf::size_type)state.range(0)};
   const cudf::size_type probe_table_size{(cudf::size_type)state.range(1)};
   const cudf::size_type rand_max_val{build_table_size * 2};

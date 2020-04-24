@@ -24,7 +24,6 @@
 
 namespace cudf {
 namespace detail {
-
 /**
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.

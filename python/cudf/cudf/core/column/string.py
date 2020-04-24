@@ -1804,7 +1804,9 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self, mask=None, size=None, offset=0, null_count=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -1833,7 +1835,13 @@ class StringColumn(column.ColumnBase):
             size = size - offset
 
         super().__init__(
-            None, size, dtype, mask=mask, offset=offset, children=children
+            None,
+            size,
+            dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
 
         # TODO: Remove these once NVStrings is fully deprecated / removed

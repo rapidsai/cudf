@@ -20,13 +20,13 @@
 #include <utilities/legacy/device_operators.cuh>
 
 namespace cudf {
-
 // helper functions - used in the rolling window implementation and tests
 namespace detail {
 // return true if ColumnType is arithmetic type or
 // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
 template <typename ColumnType, class AggOp>
-static constexpr bool is_supported() {
+static constexpr bool is_supported()
+{
   return std::is_arithmetic<ColumnType>::value || std::is_same<AggOp, DeviceMin>::value ||
          std::is_same<AggOp, DeviceMax>::value || std::is_same<AggOp, DeviceCount>::value;
 }
@@ -34,9 +34,8 @@ static constexpr bool is_supported() {
 // store functor
 template <typename ColumnType, bool average>
 struct store_output_functor {
-  CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out,
-                                            ColumnType &val,
-                                            cudf::size_type count) {
+  CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, cudf::size_type count)
+  {
     out = val;
   }
 };
@@ -44,9 +43,8 @@ struct store_output_functor {
 // partial specialization for AVG
 template <typename ColumnType>
 struct store_output_functor<ColumnType, true> {
-  CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out,
-                                            ColumnType &val,
-                                            cudf::size_type count) {
+  CUDA_HOST_DEVICE_CALLABLE void operator()(ColumnType &out, ColumnType &val, cudf::size_type count)
+  {
     out = val / count;
   }
 };

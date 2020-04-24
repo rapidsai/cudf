@@ -40,7 +40,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
-
 using namespace cudf::io::orc;
 using namespace cudf::io;
 

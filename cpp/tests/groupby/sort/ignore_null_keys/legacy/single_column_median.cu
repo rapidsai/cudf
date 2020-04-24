@@ -17,23 +17,22 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/groupby.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/compare_column_wrappers.cuh>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "../../legacy/single_column_groupby_test.cuh"
 #include "../../../common/legacy/type_info.hpp"
+#include "../../legacy/single_column_groupby_test.cuh"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::operators op{
-    cudf::groupby::operators::MEDIAN};
+static constexpr cudf::groupby::operators op{cudf::groupby::operators::MEDIAN};
 
 template <typename KV>
 struct SingleColumnMedian : public GdfTest {
-  using KeyType = typename KV::Key;
+  using KeyType   = typename KV::Key;
   using ValueType = typename KV::Value;
 };
 
@@ -42,81 +41,119 @@ using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename K, typename V>
 struct KV {
-  using Key = K;
+  using Key   = K;
   using Value = V;
 };
 
-using TestingTypes =
-    ::testing::Types< KV<int32_t, int32_t> >;
+using TestingTypes = ::testing::Types<KV<int32_t, int32_t>>;
 
 // TODO: tests for cudf::bool8
 
 TYPED_TEST_CASE(SingleColumnMedian, TestingTypes);
- 
-TYPED_TEST(SingleColumnMedian, TestMedium0) {
-  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
-  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
+
+TYPED_TEST(SingleColumnMedian, TestMedium0)
+{
+  using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using R = ResultValue;
+  using T           = Key;
+  using R           = ResultValue;
 
-  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
-  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
-      column_wrapper<Value>(8, [](auto index) { return Value(index); }),
-      column_wrapper<Key>{T(1), T(2)},
-      column_wrapper<ResultValue>{R(1), R(5)});
- 
-}  
-
-TYPED_TEST(SingleColumnMedian, TestMedium1) {
-  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
-  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
-
-  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
-  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>({T(3), T(2), T(1), T(1), T(2), T(3), T(3), T(2), T(1)}),
-      column_wrapper<Value>({V(1), V(2), V(3), V(4), V(4), V(3), V(2), V(1), V(0)}),
-      column_wrapper<Key>({T(1), T(2), T(3)}),
-      column_wrapper<ResultValue>{R(3), R(2), R(2)});
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(
+    std::move(operation_with_args),
+    column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+    column_wrapper<Value>(8, [](auto index) { return Value(index); }),
+    column_wrapper<Key>{T(1), T(2)},
+    column_wrapper<ResultValue>{R(1), R(5)});
 }
- 
 
-TYPED_TEST(SingleColumnMedian, TestMedium2) {
-  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
-  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnMedian, TestMedium1)
+{
+  using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using V = Value;
-  using R = ResultValue;
+  using T           = Key;
+  using V           = Value;
+  using R           = ResultValue;
 
-  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
-  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>({T(1),T(2),T(3),T(3),T(2),T(1),T(0),T(3),T(0),T(1),T(0),T(2),T(3),T(0),T(3),T(3),T(2),T(1),T(0)}),
-      column_wrapper<Value>({V(0),V(1),V(2),V(3),V(4),V(5),V(6),V(7),V(8),V(9),V(8),V(7),V(6),V(5),V(4),V(3),V(2),V(1),V(0)}),
-      column_wrapper<Key>({T(0), T(1), T(2), T(3)}),
-      column_wrapper<ResultValue>{R(6), R(3), R(3), R(3.5)});
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(
+    std::move(operation_with_args),
+    column_wrapper<Key>({T(3), T(2), T(1), T(1), T(2), T(3), T(3), T(2), T(1)}),
+    column_wrapper<Value>({V(1), V(2), V(3), V(4), V(4), V(3), V(2), V(1), V(0)}),
+    column_wrapper<Key>({T(1), T(2), T(3)}),
+    column_wrapper<ResultValue>{R(3), R(2), R(2)});
 }
- 
 
-TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys) {
-  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
-  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnMedian, TestMedium2)
+{
+  using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using R = ResultValue;
+  using T           = Key;
+  using V           = Value;
+  using R           = ResultValue;
 
-  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
-      column_wrapper<Key>({T(1), T(1), T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
-                          [](auto index) { return not(index % 2); }),
-      column_wrapper<Value>(10, [](auto index) { return Value(index); },
-                            [](auto index) { return not(index % 2); }),
-      column_wrapper<Key>({T(1), T(2)},
-                          [](auto index) { return true; }),
-      column_wrapper<ResultValue>({R(2), R(7)}));
+                                             column_wrapper<Key>({T(1),
+                                                                  T(2),
+                                                                  T(3),
+                                                                  T(3),
+                                                                  T(2),
+                                                                  T(1),
+                                                                  T(0),
+                                                                  T(3),
+                                                                  T(0),
+                                                                  T(1),
+                                                                  T(0),
+                                                                  T(2),
+                                                                  T(3),
+                                                                  T(0),
+                                                                  T(3),
+                                                                  T(3),
+                                                                  T(2),
+                                                                  T(1),
+                                                                  T(0)}),
+                                             column_wrapper<Value>({V(0),
+                                                                    V(1),
+                                                                    V(2),
+                                                                    V(3),
+                                                                    V(4),
+                                                                    V(5),
+                                                                    V(6),
+                                                                    V(7),
+                                                                    V(8),
+                                                                    V(9),
+                                                                    V(8),
+                                                                    V(7),
+                                                                    V(6),
+                                                                    V(5),
+                                                                    V(4),
+                                                                    V(3),
+                                                                    V(2),
+                                                                    V(1),
+                                                                    V(0)}),
+                                             column_wrapper<Key>({T(0), T(1), T(2), T(3)}),
+                                             column_wrapper<ResultValue>{R(6), R(3), R(3), R(3.5)});
+}
+
+TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys)
+{
+  using Key         = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value       = typename SingleColumnMedian<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T           = Key;
+  using R           = ResultValue;
+
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(
+    std::move(operation_with_args),
+    column_wrapper<Key>({T(1), T(1), T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+                        [](auto index) { return not(index % 2); }),
+    column_wrapper<Value>(
+      10, [](auto index) { return Value(index); }, [](auto index) { return not(index % 2); }),
+    column_wrapper<Key>({T(1), T(2)}, [](auto index) { return true; }),
+    column_wrapper<ResultValue>({R(2), R(7)}));
 }

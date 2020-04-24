@@ -40,7 +40,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace parquet {
-
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 

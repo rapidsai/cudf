@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace cudf {
-
 class column {
  public:
   column()        = default;
@@ -97,7 +96,9 @@ class column {
       _data{std::forward<B1>(data)},
       _null_mask{std::forward<B2>(null_mask)},
       _null_count{null_count},
-      _children{std::move(children)} {}
+      _children{std::move(children)}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying the contents of a

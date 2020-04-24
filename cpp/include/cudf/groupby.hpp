@@ -27,10 +27,8 @@ namespace cudf {
 namespace experimental {
 //! `groupby` APIs
 namespace groupby {
-
 namespace detail {
 namespace sort {
-
 class sort_groupby_helper;
 
 }  // namespace sort
@@ -89,7 +87,7 @@ class groupby {
    * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
-   * @param include_nulls_keys Indicates whether rows in `keys` that contain 
+   * @param include_nulls_keys Indicates whether rows in `keys` that contain
    * NULL values should be included
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
    * @param column_order If `keys_are_sorted == YES`, indicates whether each
@@ -200,12 +198,13 @@ class groupby {
   std::vector<null_order> _null_precedence{};           ///< If keys are sorted,
                                                         ///< indicates null order
                                                         ///< of each column
-  std::unique_ptr<detail::sort::sort_groupby_helper> _helper;  ///< Helper object
-    ///< used by sort based implementation
+  std::unique_ptr<detail::sort::sort_groupby_helper>
+    _helper;  ///< Helper object
+              ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object
-   * 
+   *
    * The object is constructed on first invocation and subsequent invocations
    * of this function return the memoized object.
    */

@@ -33,7 +33,6 @@ namespace cudf {
 namespace experimental {
 namespace io {
 namespace detail {
-
 /**
  * @brief Creates a `device_buffer` for holding `column` data.
  *
@@ -49,7 +48,8 @@ inline rmm::device_buffer create_data(
   data_type type,
   size_type size,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
@@ -69,7 +69,8 @@ struct column_buffer {
                 size_type size,
                 bool is_nullable                    = true,
                 cudaStream_t stream                 = 0,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  {
     if (type.id() == type_id::STRING) {
       _strings.resize(size);
     } else {
@@ -83,7 +84,8 @@ struct column_buffer {
   auto data_size() { return std::max(_data.size(), _strings.size() * sizeof(str_pair)); }
 
   template <typename T = uint32_t>
-  auto null_mask() {
+  auto null_mask()
+  {
     return static_cast<T*>(_null_mask.data());
   }
   auto null_mask_size() { return _null_mask.size(); };
@@ -97,7 +99,6 @@ struct column_buffer {
 };
 
 namespace {
-
 /**
  * @brief Creates a column from an existing set of device memory buffers.
  *
@@ -116,7 +117,8 @@ std::unique_ptr<column> make_column(
   size_type size,
   column_buffer& buffer,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   if (type.id() == type_id::STRING) {
     return make_strings_column(buffer._strings, stream, mr);
   } else {

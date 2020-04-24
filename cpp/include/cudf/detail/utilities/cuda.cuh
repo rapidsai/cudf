@@ -59,7 +59,8 @@ class grid_1d {
           cudf::size_type elements_per_thread = 1)
     : num_threads_per_block(num_threads_per_block_),
       num_blocks(util::div_rounding_up_safe(overall_num_elements,
-                                            elements_per_thread * num_threads_per_block)) {
+                                            elements_per_thread * num_threads_per_block))
+  {
     CUDF_EXPECTS(num_threads_per_block > 0, "num_threads_per_block must be > 0");
     CUDF_EXPECTS(num_blocks > 0, "num_blocks must be > 0");
   }
@@ -83,7 +84,8 @@ class grid_1d {
  * `threadIdx.x == 0`. The returned value on all other threads is undefined.
  */
 template <int32_t block_size, int32_t leader_lane = 0, typename T>
-__device__ T single_lane_block_sum_reduce(T lane_value) {
+__device__ T single_lane_block_sum_reduce(T lane_value)
+{
   static_assert(block_size <= 1024, "Invalid block size.");
   static_assert(std::is_arithmetic<T>::value, "Invalid non-arithmetic type.");
   constexpr auto warps_per_block{block_size / warp_size};
@@ -119,7 +121,8 @@ template <typename Kernel>
 cudf::size_type elements_per_thread(Kernel kernel,
                                     cudf::size_type total_size,
                                     cudf::size_type block_size,
-                                    cudf::size_type max_per_thread = 32) {
+                                    cudf::size_type max_per_thread = 32)
+{
   // calculate theoretical occupancy
   int max_blocks = 0;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
@@ -135,17 +138,18 @@ cudf::size_type elements_per_thread(Kernel kernel,
 /**
  * @brief Finds the smallest value not less than `number_to_round` and modulo `modulus` is
  * zero. Expects modulus to be a power of 2.
- * 
+ *
  * @note Does not throw or otherwise verify the user has passed in a modulus that is a
  * power of 2.
- *  
+ *
  * @param[in] number_to_round The value to be rounded up
  * @param[in] modulus The modulus to be rounded up to.  Must be a power of 2.
- * 
+ *
  * @return cudf::size_type Elements per thread that can be processed for given specification.
  */
 template <typename T>
-__device__ inline T round_up_pow2(T number_to_round, T modulus) {
+__device__ inline T round_up_pow2(T number_to_round, T modulus)
+{
   return (number_to_round + (modulus - 1)) & -modulus;
 }
 

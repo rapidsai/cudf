@@ -20,7 +20,9 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -36,7 +38,12 @@ class NumericalColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
 
     def __contains__(self, item):

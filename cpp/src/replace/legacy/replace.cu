@@ -36,14 +36,15 @@
 
 using bit_mask::bit_mask_t;
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 static constexpr int warp_size  = 32;
 static constexpr int BLOCK_SIZE = 256;
 
 // returns the block_sum using the given shared array of warp sums.
 template <typename T>
-__device__ T sum_warps(T* warp_smem) {
+__device__ T sum_warps(T* warp_smem)
+{
   T block_sum = 0;
 
   if (threadIdx.x < warp_size) {
@@ -61,7 +62,8 @@ __device__ auto get_new_value(cudf::size_type idx,
                               const T* __restrict__ values_to_replace_begin,
                               const T* __restrict__ values_to_replace_end,
                               const T* __restrict__ d_replacement_values,
-                              bit_mask_t const* __restrict__ replacement_valid) {
+                              bit_mask_t const* __restrict__ replacement_valid)
+{
   auto found_ptr =
     thrust::find(thrust::seq, values_to_replace_begin, values_to_replace_end, input_data[idx]);
   T new_value{0};
@@ -79,30 +81,31 @@ __device__ auto get_new_value(cudf::size_type idx,
 
 /* --------------------------------------------------------------------------*/
 /**
-   * @brief Kernel that replaces elements from `output_data` given the following
-   *        rule: replace all `values_to_replace[i]` in [values_to_replace_begin`,
-   *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
-   *
-   * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
-   * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false` otherwise
-   * The input_has_nulls and replacement_has_nulls template parameters allows us to specialize
-   * this kernel for the different scenario for performance without writing different kernel.
-   *
-   * @param[in] input_data Device array with the data to be modified
-   * @param[in] input_valid Valid mask associated with input_data
-   * @param[out] output_data Device array to store the data from input_data
-   * @param[out] output_valid Valid mask associated with output_data
-   * @param[out] output_valid_count #valid in output column
-   * @param[in] nrows # rows in `output_data`
-   * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
-   * of old values to be replaced
-   * @param[in] values_to_replace_end  Device pointer to the end of the sequence
-   * of old values to be replaced
-   * @param[in] d_replacement_values Device array with the new values
-   * @param[in] replacement_valid Valid mask associated with d_replacement_values
-   *
-   * @returns
-   */
+ * @brief Kernel that replaces elements from `output_data` given the following
+ *        rule: replace all `values_to_replace[i]` in [values_to_replace_begin`,
+ *        `values_to_replace_end`) present in `output_data` with `d_replacement_values[i]`.
+ *
+ * @tparam input_has_nulls `true` if output column has valid mask, `false` otherwise
+ * @tparam replacement_has_nulls `true` if replacement_values column has valid mask, `false`
+ * otherwise The input_has_nulls and replacement_has_nulls template parameters allows us to
+ * specialize this kernel for the different scenario for performance without writing different
+ * kernel.
+ *
+ * @param[in] input_data Device array with the data to be modified
+ * @param[in] input_valid Valid mask associated with input_data
+ * @param[out] output_data Device array to store the data from input_data
+ * @param[out] output_valid Valid mask associated with output_data
+ * @param[out] output_valid_count #valid in output column
+ * @param[in] nrows # rows in `output_data`
+ * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
+ * of old values to be replaced
+ * @param[in] values_to_replace_end  Device pointer to the end of the sequence
+ * of old values to be replaced
+ * @param[in] d_replacement_values Device array with the new values
+ * @param[in] replacement_valid Valid mask associated with d_replacement_values
+ *
+ * @returns
+ */
 /* ----------------------------------------------------------------------------*/
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
 __global__ void replace_kernel(const T* __restrict__ input_data,
@@ -114,7 +117,8 @@ __global__ void replace_kernel(const T* __restrict__ input_data,
                                const T* __restrict__ values_to_replace_begin,
                                const T* __restrict__ values_to_replace_end,
                                const T* __restrict__ d_replacement_values,
-                               bit_mask_t const* __restrict__ replacement_valid) {
+                               bit_mask_t const* __restrict__ replacement_valid)
+{
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
   uint32_t active_mask = 0xffffffff;
@@ -185,9 +189,9 @@ __global__ void replace_kernel(const T* __restrict__ input_data,
 
 /* --------------------------------------------------------------------------*/
 /**
-   * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
-   *        `replace_kernel` with the appropriate data types.
-   */
+ * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
+ *        `replace_kernel` with the appropriate data types.
+ */
 /* ----------------------------------------------------------------------------*/
 struct replace_kernel_forwarder {
   template <typename col_type>
@@ -195,7 +199,8 @@ struct replace_kernel_forwarder {
                   const gdf_column& values_to_replace,
                   const gdf_column& replacement_values,
                   gdf_column& output,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     const bool input_has_nulls       = cudf::has_nulls(input_col);
     const bool replacement_has_nulls = cudf::has_nulls(replacement_values);
 
@@ -250,15 +255,15 @@ struct replace_kernel_forwarder {
     }
   }
 };
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
-
 gdf_column find_and_replace_all(const gdf_column& input_col,
                                 const gdf_column& values_to_replace,
                                 const gdf_column& replacement_values,
-                                cudaStream_t stream = 0) {
+                                cudaStream_t stream = 0)
+{
   if (0 == input_col.size) { return cudf::empty_like(input_col); }
 
   if (0 == values_to_replace.size || 0 == replacement_values.size) {
@@ -317,13 +322,14 @@ gdf_column find_and_replace_all(const gdf_column& input_col,
 /* ----------------------------------------------------------------------------*/
 gdf_column find_and_replace_all(const gdf_column& input_col,
                                 const gdf_column& values_to_replace,
-                                const gdf_column& replacement_values) {
+                                const gdf_column& replacement_values)
+{
   return detail::find_and_replace_all(input_col, values_to_replace, replacement_values);
 }
 
 }  // namespace cudf
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 using bit_mask::bit_mask_t;
 
@@ -332,7 +338,8 @@ __global__ void replace_nulls_with_scalar(cudf::size_type size,
                                           const Type* __restrict__ in_data,
                                           const bit_mask_t* __restrict__ in_valid,
                                           const Type* __restrict__ replacement,
-                                          Type* __restrict__ out_data) {
+                                          Type* __restrict__ out_data)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -351,7 +358,8 @@ __global__ void replace_nulls_with_column(cudf::size_type size,
                                           const Type* __restrict__ in_data,
                                           const bit_mask_t* __restrict__ in_valid,
                                           const Type* __restrict__ replacement,
-                                          Type* __restrict__ out_data) {
+                                          Type* __restrict__ out_data)
+{
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;
   int blksz  = blockDim.x;
@@ -378,7 +386,8 @@ struct replace_nulls_column_kernel_forwarder {
                   cudf::valid_type* d_in_valid,
                   const void* d_replacement,
                   void* d_out_data,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     replace_nulls_with_column<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
@@ -403,7 +412,8 @@ struct replace_nulls_scalar_kernel_forwarder {
                   cudf::valid_type* d_in_valid,
                   const void* replacement,
                   void* d_out_data,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     cudf::util::cuda::grid_config_1d grid{nrows, BLOCK_SIZE};
 
     auto t_replacement      = static_cast<const col_type*>(replacement);
@@ -422,14 +432,14 @@ struct replace_nulls_scalar_kernel_forwarder {
   }
 };
 
-}  //end anonymous namespace
+}  // end anonymous namespace
 
 namespace cudf {
 namespace detail {
-
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_column& replacement,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   if (input.size == 0) { return cudf::empty_like(input); }
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
@@ -457,7 +467,8 @@ gdf_column replace_nulls(const gdf_column& input,
 
 gdf_column replace_nulls(const gdf_column& input,
                          const gdf_scalar& replacement,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   if (input.size == 0) { return cudf::empty_like(input); }
 
   CUDF_EXPECTS(nullptr != input.data, "Null input data");
@@ -481,11 +492,13 @@ gdf_column replace_nulls(const gdf_column& input,
 
 }  // namespace detail
 
-gdf_column replace_nulls(const gdf_column& input, const gdf_column& replacement) {
+gdf_column replace_nulls(const gdf_column& input, const gdf_column& replacement)
+{
   return detail::replace_nulls(input, replacement, 0);
 }
 
-gdf_column replace_nulls(const gdf_column& input, const gdf_scalar& replacement) {
+gdf_column replace_nulls(const gdf_column& input, const gdf_scalar& replacement)
+{
   return detail::replace_nulls(input, replacement, 0);
 }
 

@@ -27,14 +27,13 @@ namespace cudf {
 namespace experimental {
 namespace binops {
 namespace compiled {
-
 namespace {
-
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop {
   binary_operator op;
   apply_binop(binary_operator op) : op(op) {}
-  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x, Rhs const& y) const
+  {
     switch (op) {
       case binary_operator::EQUAL: return this->equal(x, y);
       case binary_operator::NOT_EQUAL: return this->not_equal(x, y);
@@ -45,22 +44,28 @@ struct apply_binop {
       default: return Out{};
     }
   }
-  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x == y);
   }
-  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out not_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x != y);
   }
-  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out less(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x < y);
   }
-  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out greater(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x > y);
   }
-  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out less_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x <= y);
   }
-  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const {
+  CUDA_DEVICE_CALLABLE Out greater_equal(Lhs const& x, Rhs const& y) const
+  {
     return static_cast<Out>(x >= y);
   }
 };
@@ -70,8 +75,11 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
   cudf::experimental::scalar_device_type_t<Rhs> scalar;
   apply_binop_scalar_lhs_rhs(binary_operator op,
                              cudf::experimental::scalar_device_type_t<Rhs> scalar)
-    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
-  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x) const {
+    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar)
+  {
+  }
+  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x) const
+  {
     return apply_binop<Lhs, Rhs, Out>::operator()(x, scalar.value());
   }
 };
@@ -81,8 +89,11 @@ struct apply_binop_scalar_rhs_lhs : apply_binop<Lhs, Rhs, Out> {
   cudf::experimental::scalar_device_type_t<Rhs> scalar;
   apply_binop_scalar_rhs_lhs(binary_operator op,
                              cudf::experimental::scalar_device_type_t<Rhs> scalar)
-    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar) {}
-  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x) const {
+    : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar)
+  {
+  }
+  CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x) const
+  {
     return apply_binop<Lhs, Rhs, Out>::operator()(scalar.value(), x);
   }
 };
@@ -95,7 +106,8 @@ struct binary_op {
                                      data_type out_type,
                                      bool const reversed,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     auto out      = make_fixed_width_column(out_type,
                                        lhs.size(),
@@ -152,7 +164,8 @@ struct binary_op {
                                      binary_operator op,
                                      data_type out_type,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
     auto out =
       make_fixed_width_column(out_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
@@ -226,7 +239,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
@@ -240,7 +254,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");
@@ -254,7 +269,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::STRING, "Invalid/Unsupported rhs datatype");

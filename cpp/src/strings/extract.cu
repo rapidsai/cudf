@@ -29,11 +29,9 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 using string_index_pair = thrust::pair<const char*, size_type>;
 
 namespace {
-
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
@@ -47,7 +45,8 @@ struct extract_fn {
   column_device_view d_strings;
   size_type column_index;
 
-  __device__ string_index_pair operator()(size_type idx) {
+  __device__ string_index_pair operator()(size_type idx)
+  {
     u_char data1[stack_size], data2[stack_size];
     prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
@@ -70,7 +69,8 @@ std::unique_ptr<experimental::table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
@@ -121,7 +121,8 @@ std::unique_ptr<experimental::table> extract(
 
 std::unique_ptr<experimental::table> extract(strings_column_view const& strings,
                                              std::string const& pattern,
-                                             rmm::mr::device_memory_resource* mr) {
+                                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::extract(strings, pattern, mr);
 }
