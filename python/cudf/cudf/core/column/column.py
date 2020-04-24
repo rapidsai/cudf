@@ -1501,6 +1501,25 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
 
+    elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
+        if is_categorical_dtype(arbitrary.dtype):
+            arb_dtype = arbitrary.dtype
+        else:
+            arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
+            if arb_dtype != arbitrary.dtype.numpy_dtype:
+                arbitrary = arbitrary.astype(arb_dtype)
+        if arb_dtype.kind in ("O", "U"):
+            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+        else:
+            data = as_column(
+                pa.array(
+                    arbitrary,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                ),
+                nan_as_null=nan_as_null,
+            )
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
