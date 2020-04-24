@@ -678,7 +678,7 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);
 }
 
-TEST_F(CsvReaderTest, ZeroSkipRows)
+TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
 {
   std::string buffer = "1,2,3";
 
