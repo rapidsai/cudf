@@ -2451,36 +2451,6 @@ class DataFrame(Frame):
         lhs.reset_index(drop=True, inplace=True)
         rhs.reset_index(drop=True, inplace=True)
 
-        cat_join = []
-        for name in idx_col_names:
-            if is_categorical_dtype(lhs[name]):
-
-                lcats = lhs[name].cat.categories
-                rcats = rhs[name].cat.categories
-
-                def _set_categories(col, cats):
-                    return col.cat._set_categories(
-                        cats, is_unique=True
-                    ).fillna(-1)
-
-                if how == "left":
-                    cats = lcats
-                    rhs[name] = _set_categories(rhs[name], cats)
-                elif how == "right":
-                    cats = rcats
-                    lhs[name] = _set_categories(lhs[name], cats)
-                elif how in ["inner", "outer"]:
-                    cats = column.as_column(lcats).append(rcats)
-                    cats = Series(cats).drop_duplicates()._column
-
-                    lhs[name] = _set_categories(lhs[name], cats)
-                    lhs[name] = lhs[name]._column.as_numerical
-
-                    rhs[name] = _set_categories(rhs[name], cats)
-                    rhs[name] = rhs[name]._column.as_numerical
-
-                cat_join.append((name, cats))
-
         if lsuffix == "":
             lsuffix = "l"
         if rsuffix == "":
@@ -2493,21 +2463,6 @@ class DataFrame(Frame):
             suffixes=(lsuffix, rsuffix),
             method=method,
         )
-
-        for name, cats in cat_join:
-
-            if is_categorical_dtype(df[name]):
-                codes = df[name]._column.codes
-            else:
-                codes = df[name]._column
-            df[name] = column.build_categorical_column(
-                categories=cats,
-                codes=as_column(codes.base_data, dtype=codes.dtype),
-                mask=codes.base_mask,
-                size=codes.size,
-                ordered=False,
-                offset=codes.offset,
-            )
 
         if sort and len(df):
             df = df.sort_values(idx_col_names)
