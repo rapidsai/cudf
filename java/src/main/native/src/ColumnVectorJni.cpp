@@ -1305,7 +1305,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env
     // create a column by deep copying the copy_view
     std::unique_ptr<cudf::column> copy(new cudf::column(*copy_view));
     // set the null mask with nans set to null
-    copy->set_null_mask(std::move(*pair.first), pair.second);
+    copy->set_null_mask(std::move(*(pair.first.release())), pair.second);
     return reinterpret_cast<jlong>(copy.release());
   }
   CATCH_STD(env, 0)
