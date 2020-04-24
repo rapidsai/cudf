@@ -1221,6 +1221,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     JNIEnv *env, jclass clazz, jlong j_input_table, 
     jintArray j_keys,
     jintArray j_timestamp_column_indices,
+    jbooleanArray j_is_timestamp_ascending,
     jintArray j_aggregate_column_indices, 
     jintArray j_agg_types, 
     jintArray j_min_periods,
@@ -1228,11 +1229,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     jintArray j_following,
     jboolean ignore_null_keys) {
 
-  JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
-  JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
+  JNI_NULL_CHECK(env, j_input_table,              "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_keys,                     "input keys are null", NULL);
   JNI_NULL_CHECK(env, j_timestamp_column_indices, "input timestamp_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, j_is_timestamp_ascending,   "input timestamp_ascending is null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, j_agg_types, "agg_types are null", NULL);
+  JNI_NULL_CHECK(env, j_agg_types,                "agg_types are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1243,6 +1245,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     cudf::table_view *input_table {reinterpret_cast<cudf::table_view *>(j_input_table)};
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
+    cudf::jni::native_jbooleanArray timestamp_ascending{env, j_is_timestamp_ascending};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jintArray ops{env, j_agg_types};
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
@@ -1271,6 +1274,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
         cudf::experimental::grouped_time_range_rolling_window(
           groupby_keys,
           input_table->column(timestamps[i]),
+          timestamp_ascending[i]? cudf::order::ASCENDING : cudf::order::DESCENDING,
           input_table->column(agg_column_index),
           preceding[i],
           following[i],

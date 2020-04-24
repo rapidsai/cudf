@@ -1992,6 +1992,45 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testTimeRangeWindowingCountDescendingTimestamps() {
+    try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1, 1) // GBY Key
+                                                 .column(             0, 0, 0, 0,  1, 1, 1, 1,  2, 2, 2, 2, 2) // GBY Key
+                                                 .timestampDayColumn( 7, 6, 6, 5,  5, 4, 4, 3,  3, 3, 2, 1, 1) // Timestamp Key
+                                                 .column(             7, 5, 1, 9,  7, 9, 8, 2,  8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window_0 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(2, 1)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        WindowOptions window_1 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(3, 0)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverTimeRanges(
+                    WindowAggregate.count(3, window_0),
+                    WindowAggregate.sum  (3, window_1));
+             ColumnVector expect_0 = ColumnVector.fromBoxedInts(3,  4,  4,  4,  3, 4, 4, 4,  3, 3, 5, 5, 5);
+             ColumnVector expect_1 = ColumnVector.fromBoxedLongs(7L, 13L, 13L, 22L,  7L, 24L, 24L, 26L,  8L, 8L, 14L, 28L, 28L)) {
+          assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expect_1, windowAggResults.getColumn(1));
+        }
+      }
+    }
+  }
+
+  @Test
   void testInvalidWindowTypeExceptions() {
       try (Table table = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                 .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
