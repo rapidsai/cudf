@@ -1,4 +1,7 @@
+import cupy as cp
 import numpy as np
+import pandas as pd
+import pyarrow as pa
 
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
@@ -55,13 +58,15 @@ def _get_non_empty_data(s):
         categories = (
             s._column.categories if len(s._column.categories) else ["a"]
         )
-        codes = [0, 0]
+        codes = cp.zeros(2, dtype="int32")
         ordered = s._column.ordered
         data = column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
     elif is_string_dtype(s.dtype):
-        data = ["cat", "dog"]
+        data = pa.array(["cat", "dog"])
+    elif pd.api.types.is_numeric_dtype(s.dtype):
+        data = cp.arange(start=0, stop=2, dtype=s.dtype)
     else:
         data = np.arange(start=0, stop=2, dtype=s.dtype)
     return data
