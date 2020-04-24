@@ -2414,6 +2414,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long makeEmptyCudfColumn(int type);
 
+  /**
+   * Used for string strip function.
+   * Indicates characters to be stripped from the beginning, end, or both of each string.
+   */
+  private enum StripType {
+    LEFT(0),   // strip characters from the beginning of the string
+    RIGHT(1),  // strip characters from the end of the string
+    BOTH(2);   // strip characters from the beginning and end of the string
+    final int nativeId;
+
+    StripType(int nativeId) { this.nativeId = nativeId; }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
