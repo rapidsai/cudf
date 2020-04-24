@@ -3177,7 +3177,7 @@ class DataFrame(Frame):
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):
-                        df[colk] = column.as_column(
+                        df[col_name] = column.as_column(
                             vals[idx], nan_as_null=nan_as_null
                         )
 
