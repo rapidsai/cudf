@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include "csv_gpu.h"
 #include <io/utilities/legacy/parsing_utils.cuh>
+#include "csv_gpu.h"
 
 namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -36,59 +35,54 @@ namespace gpu {
  * @param[in] recStart The start the CSV data of interest
  * @param[out] d_columnData The count for each column data type
  **/
-__global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
-                                  cudf::size_type num_records, int num_columns,
+__global__ void dataTypeDetection(const char *raw_csv,
+                                  const ParseOptions opts,
+                                  cudf::size_type num_records,
+                                  int num_columns,
                                   column_parse::flags *flags,
                                   const uint64_t *recStart,
-                                  column_parse::stats *d_columnData) {
+                                  column_parse::stats *d_columnData)
+{
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
-  if (rec_id >= num_records) {
-    return;
-  }
+  if (rec_id >= num_records) { return; }
 
   long start = recStart[rec_id];
-  long stop = recStart[rec_id + 1];
+  long stop  = recStart[rec_id + 1];
 
-  long pos = start;
-  int col = 0;
+  long pos       = start;
+  int col        = 0;
   int actual_col = 0;
 
   // Going through all the columns of a given record
   while (col < num_columns) {
-    if (start > stop) {
-      break;
-    }
+    if (start > stop) { break; }
 
     pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
     // Checking if this is a column that the user wants --- user can filter
     // columns
     if (flags[col] & column_parse::enabled) {
-      long tempPos = pos - 1;
+      long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len <= 0 ||
-          serializedTrieContains(opts.naValuesTrie, raw_csv + start,
-                                 field_len)) {
+      if (field_len <= 0 || serializedTrieContains(opts.naValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countNULL, 1);
-      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start,
-                                        field_len) ||
-                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start,
-                                        field_len)) {
+      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
+                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
       } else {
-        long countNumber = 0;
-        long countDecimal = 0;
-        long countSlash = 0;
-        long countDash = 0;
-        long countPlus = 0;
-        long countColon = 0;
-        long countString = 0;
+        long countNumber   = 0;
+        long countDecimal  = 0;
+        long countSlash    = 0;
+        long countDash     = 0;
+        long countPlus     = 0;
+        long countColon    = 0;
+        long countString   = 0;
         long countExponent = 0;
 
         // Modify start & end to ignore whitespace and quotechars
@@ -103,28 +97,16 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
           }
           // Looking for unique characters that will help identify column types.
           switch (raw_csv[startPos]) {
-            case '.':
-              countDecimal++;
-              break;
-            case '-':
-              countDash++;
-              break;
-            case '+':
-              countPlus++;
-              break;
-            case '/':
-              countSlash++;
-              break;
-            case ':':
-              countColon++;
-              break;
+            case '.': countDecimal++; break;
+            case '-': countDash++; break;
+            case '+': countPlus++; break;
+            case '/': countSlash++; break;
+            case ':': countColon++; break;
             case 'e':
             case 'E':
               if (startPos > start && startPos < tempPos) countExponent++;
               break;
-            default:
-              countString++;
-              break;
+            default: countString++; break;
           }
         }
 
@@ -140,8 +122,7 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
           atomicAdd(&d_columnData[actual_col].countNULL, 1);
         } else if (flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
-          if (isLikeDateTime(countString, countDecimal, countColon, countDash,
-                             countSlash)) {
+          if (isLikeDateTime(countString, countDecimal, countColon, countDash, countSlash)) {
             atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
           } else {
             atomicAdd(&d_columnData[actual_col].countString, 1);
@@ -149,8 +130,7 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
         } else if (countNumber == int_req_number_cnt) {
           // Checking to see if we the integer value requires 8,16,32,64 bits.
           // This will allow us to allocate the exact amount of memory.
-          const auto value =
-              convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
+          const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
           if (value >= (1L << 31)) {
             atomicAdd(&d_columnData[actual_col].countInt64, 1);
           } else if (value >= (1L << 15)) {
@@ -160,8 +140,8 @@ __global__ void dataTypeDetection(const char *raw_csv, const ParseOptions opts,
           } else {
             atomicAdd(&d_columnData[actual_col].countInt8, 1);
           }
-        } else if (isLikeFloat(field_len, countNumber, countDecimal,
-                               countDash + countPlus, countExponent)) {
+        } else if (isLikeFloat(
+                     field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {
           atomicAdd(&d_columnData[actual_col].countFloat, 1);
         } else {
           atomicAdd(&d_columnData[actual_col].countString, 1);
@@ -187,21 +167,23 @@ struct ConvertFunctor {
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
    *---------------------------------------------------------------------------**/
-  template <typename T,
-            typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(
-      const char *csvData, void *gdfColumnData, long rowIndex, long start,
-      long end, const ParseOptions &opts, column_parse::flags flags) {
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ void operator()(const char *csvData,
+                                                      void *gdfColumnData,
+                                                      long rowIndex,
+                                                      long start,
+                                                      long end,
+                                                      const ParseOptions &opts,
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
 
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     const size_t field_len = end - start + 1;
-    if (serializedTrieContains(opts.trueValuesTrie, csvData + start,
-                               field_len)) {
+    if (serializedTrieContains(opts.trueValuesTrie, csvData + start, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start,
-                                      field_len)) {
+    } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, field_len)) {
       value = 0;
     } else {
       if (flags & column_parse::as_hexadecimal) {
@@ -216,11 +198,15 @@ struct ConvertFunctor {
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
    *---------------------------------------------------------------------------**/
-  template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
-  __host__ __device__ __forceinline__ void operator()(
-      const char *csvData, void *gdfColumnData, long rowIndex, long start,
-      long end, const ParseOptions &opts, column_parse::flags flags) {
+  template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
+  __host__ __device__ __forceinline__ void operator()(const char *csvData,
+                                                      void *gdfColumnData,
+                                                      long rowIndex,
+                                                      long start,
+                                                      long end,
+                                                      const ParseOptions &opts,
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
     value = convertStrToValue<T>(csvData, start, end, opts);
   }
@@ -242,27 +228,31 @@ struct ConvertFunctor {
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
  *---------------------------------------------------------------------------**/
-__global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
-                                cudf::size_type num_records, int num_columns,
+__global__ void convertCsvToGdf(const char *raw_csv,
+                                const ParseOptions opts,
+                                cudf::size_type num_records,
+                                int num_columns,
                                 const column_parse::flags *flags,
-                                const uint64_t *recStart, gdf_dtype *dtype,
-                                void **data, cudf::valid_type **valid,
-                                cudf::size_type *num_valid) {
+                                const uint64_t *recStart,
+                                gdf_dtype *dtype,
+                                void **data,
+                                cudf::valid_type **valid,
+                                cudf::size_type *num_valid)
+{
   // thread IDs range per block, so also need the block id
   long rec_id =
-      threadIdx.x +
-      (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
-                                  // an elements within the num_entries array
+    threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
+                                              // an elements within the num_entries array
 
   // we can have more threads than data, make sure we are not past the end of
   // the data
   if (rec_id >= num_records) return;
 
   long start = recStart[rec_id];
-  long stop = recStart[rec_id + 1];
+  long stop  = recStart[rec_id + 1];
 
-  long pos = start;
-  int col = 0;
+  long pos       = start;
+  int col        = 0;
   int actual_col = 0;
 
   while (col < num_columns) {
@@ -272,8 +262,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
 
     if (flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serializedTrieContains(opts.naValuesTrie,
-                                                raw_csv + start, pos - start);
+      const bool is_na = serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
@@ -288,19 +277,23 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
         if (dtype[actual_col] == gdf_dtype::GDF_STRING) {
           long end = pos;
           if (opts.keepquotes == false) {
-            if ((raw_csv[start] == opts.quotechar) &&
-                (raw_csv[end - 1] == opts.quotechar)) {
+            if ((raw_csv[start] == opts.quotechar) && (raw_csv[end - 1] == opts.quotechar)) {
               start++;
               end--;
             }
           }
-          auto str_list =
-              static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+          auto str_list          = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
           str_list[rec_id].first = raw_csv + start;
           str_list[rec_id].second = end - start;
         } else {
-          cudf::type_dispatcher(dtype[actual_col], ConvertFunctor{}, raw_csv,
-                                data[actual_col], rec_id, start, tempPos, opts,
+          cudf::type_dispatcher(dtype[actual_col],
+                                ConvertFunctor{},
+                                raw_csv,
+                                data[actual_col],
+                                rec_id,
+                                start,
+                                tempPos,
+                                opts,
                                 flags[col]);
         }
 
@@ -308,9 +301,8 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
         setBitmapBit(valid[actual_col], rec_id);
         atomicAdd(&num_valid[actual_col], 1);
       } else if (dtype[actual_col] == gdf_dtype::GDF_STRING) {
-        auto str_list =
-            static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
-        str_list[rec_id].first = nullptr;
+        auto str_list           = static_cast<std::pair<const char *, size_t> *>(data[actual_col]);
+        str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
       }
       actual_col++;
@@ -321,41 +313,49 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
   }
 }
 
-cudaError_t __host__
-DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
-                   cudf::size_type num_rows, cudf::size_type num_columns,
-                   const ParseOptions &options, column_parse::flags *flags,
-                   column_parse::stats *stats, cudaStream_t stream) {
+cudaError_t __host__ DetectCsvDataTypes(const char *data,
+                                        const uint64_t *row_starts,
+                                        cudf::size_type num_rows,
+                                        cudf::size_type num_columns,
+                                        const ParseOptions &options,
+                                        column_parse::flags *flags,
+                                        column_parse::stats *stats,
+                                        cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
-                                              dataTypeDetection));
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection));
 
   // Calculate actual block count to use based on records count
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
-  dataTypeDetection <<< gridSize, blockSize, 0, stream >>> (
-      data, options, num_rows, num_columns, flags, row_starts, stats);
+  dataTypeDetection<<<gridSize, blockSize, 0, stream>>>(
+    data, options, num_rows, num_columns, flags, row_starts, stats);
 
   return cudaSuccess;
 }
 
-cudaError_t __host__ DecodeCsvColumnData(
-    const char *data, const uint64_t *row_starts, cudf::size_type num_rows,
-    cudf::size_type num_columns, const ParseOptions &options,
-    const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    cudf::valid_type **valids, cudf::size_type *num_valid, cudaStream_t stream) {
+cudaError_t __host__ DecodeCsvColumnData(const char *data,
+                                         const uint64_t *row_starts,
+                                         cudf::size_type num_rows,
+                                         cudf::size_type num_columns,
+                                         const ParseOptions &options,
+                                         const column_parse::flags *flags,
+                                         gdf_dtype *dtypes,
+                                         void **columns,
+                                         cudf::valid_type **valids,
+                                         cudf::size_type *num_valid,
+                                         cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
-                                              convertCsvToGdf));
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));
 
   // Calculate actual block count to use based on records count
   const int gridSize = (num_rows + blockSize - 1) / blockSize;
 
-  convertCsvToGdf <<< gridSize, blockSize, 0, stream >>> (
-      data, options, num_rows, num_columns, flags, row_starts, dtypes, columns,
-      valids, num_valid);
+  convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(
+    data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids, num_valid);
 
   return cudaSuccess;
 }

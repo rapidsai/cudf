@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Filters a table to remove null elements.
  *
@@ -53,14 +52,14 @@ namespace experimental {
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * keep_threshold non-null fields in @p keys.
  */
-std::unique_ptr<experimental::table>
-    drop_nulls(table_view const& input,
-               std::vector<size_type> const& keys,
-               cudf::size_type keep_threshold,
-               rmm::mr::device_memory_resource *mr =
-                   rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  cudf::size_type keep_threshold,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Filters a table to remove null elements.
@@ -82,13 +81,13 @@ std::unique_ptr<experimental::table>
  * @param[in] input The input `table_view` to filter.
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns of @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns
+ * of @p keys.
  */
-std::unique_ptr<experimental::table>
-    drop_nulls(table_view const &input,
-               std::vector<size_type> const& keys,
-               rmm::mr::device_memory_resource *mr =
-                   rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> drop_nulls(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
@@ -111,19 +110,18 @@ std::unique_ptr<experimental::table>
  * @return unique_ptr<table> Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-std::unique_ptr<experimental::table>
-    apply_boolean_mask(table_view const& input,
-                       column_view const& boolean_mask,
-                       rmm::mr::device_memory_resource *mr =
-                           rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> apply_boolean_mask(
+  table_view const& input,
+  column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
  */
 enum class duplicate_keep_option {
-  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
-  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
-  KEEP_NONE         ///< Keeps only unique rows are kept
+  KEEP_FIRST = 0,  ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,       ///< Keeps last  duplicate row and unique rows
+  KEEP_NONE        ///< Keeps only unique rows are kept
 };
 
 /**
@@ -146,13 +144,12 @@ enum class duplicate_keep_option {
  *
  * @return unique_ptr<table> Table with unique rows as per specified `keep`.
  */
-std::unique_ptr<experimental::table>
-    drop_duplicates(table_view const& input,
-                    std::vector<size_type> const& keys,
-                    duplicate_keep_option const& keep,
-                    bool const& nulls_are_equal = true,
-                    rmm::mr::device_memory_resource *mr =
-                        rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> drop_duplicates(
+  table_view const& input,
+  std::vector<size_type> const& keys,
+  duplicate_keep_option const& keep,
+  bool const& nulls_are_equal         = true,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Count the unique elements in the column_view
@@ -174,8 +171,7 @@ std::unique_ptr<experimental::table>
 cudf::size_type unique_count(column_view const& input,
                              bool const& ignore_nulls,
                              bool const& nan_as_null,
-                             rmm::mr::device_memory_resource *mr =
-                                 rmm::mr::get_default_resource());
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace experimental
-} // namespace cudf
+}  // namespace experimental
+}  // namespace cudf

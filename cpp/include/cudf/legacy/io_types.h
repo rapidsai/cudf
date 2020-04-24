@@ -28,24 +28,22 @@ typedef enum {
   ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
 } gdf_input_type;
 
-
 /**---------------------------------------------------------------------------*
  * @brief These are the arguments to the CSV writer function.
  *---------------------------------------------------------------------------**/
-typedef struct
-{
-    const gdf_column* const* columns; // columns to output
-    int num_cols;                     // number of columns
+typedef struct {
+  const gdf_column* const* columns;  // columns to output
+  int num_cols;                      // number of columns
 
-    const char* filepath;         // full path to file to create
-    const char* line_terminator;  // character to use for separating lines (default "\n")
-    char delimiter;               // character to use between each column entry (default ',')
+  const char* filepath;         // full path to file to create
+  const char* line_terminator;  // character to use for separating lines (default "\n")
+  char delimiter;               // character to use between each column entry (default ',')
 
-    const char* true_value;       // string to use for values !=0 in GDF_INT8 types (default 'true')
-    const char* false_value;      // string to use for values ==0 in GDF_INT8 types (default 'false')
-    const char* na_rep;           // string to use for null entries
-    bool include_header;          // Indicates whether to write headers to csv
+  const char* true_value;   // string to use for values !=0 in GDF_INT8 types (default 'true')
+  const char* false_value;  // string to use for values ==0 in GDF_INT8 types (default 'false')
+  const char* na_rep;       // string to use for null entries
+  bool include_header;      // Indicates whether to write headers to csv
 
-    int rows_per_chunk;           // maximum number of rows to process for each file write
+  int rows_per_chunk;  // maximum number of rows to process for each file write
 
 } csv_write_arg;

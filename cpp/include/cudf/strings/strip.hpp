@@ -15,20 +15,16 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
-enum class strip_type
-{
-    LEFT,   //<< strip characters from the beginning of the string
-    RIGHT,  //<< strip characters from the end of the string
-    BOTH    //<< strip characters from the beginning and end of the string
+namespace cudf {
+namespace strings {
+enum class strip_type {
+  LEFT,   //<< strip characters from the beginning of the string
+  RIGHT,  //<< strip characters from the end of the string
+  BOTH    //<< strip characters from the beginning and end of the string
 };
 
 /**
@@ -53,18 +49,18 @@ enum class strip_type
  * @throw cudf::logic_error if `to_strip` is invalid.
  *
  * @param strings Strings column for this operation.
- * @param stype Indicates characters are to be stripped from the beginning, end, or both of each string.
- *        Default is both.
+ * @param stype Indicates characters are to be stripped from the beginning, end, or both of each
+ * string. Default is both.
  * @param to_strip UTF-8 encoded characters to strip from each string.
  *        Default is empty string which indicates strip whitespace characters.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> strip( strings_column_view const& strings,
-                               strip_type stype = strip_type::BOTH,
-                               string_scalar const& to_strip = string_scalar(""),
-                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> strip(
+  strings_column_view const& strings,
+  strip_type stype                    = strip_type::BOTH,
+  string_scalar const& to_strip       = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf
