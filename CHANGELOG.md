@@ -193,7 +193,7 @@
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
-- PR #5005 Fix inconsistent default values of skiprows and skipfooter in CSV reader
+- PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 
 
 # cuDF 0.13.0 (31 Mar 2020)
