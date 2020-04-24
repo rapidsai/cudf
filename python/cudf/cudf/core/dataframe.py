@@ -3161,23 +3161,23 @@ class DataFrame(Frame):
 
         df = cls()
         # Set columns
-        for colk in dataframe.columns:
-            vals = dataframe[colk].values
+        for col_name, col_value in dataframe.iteritems():
+            vals = dataframe[colk].array
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(vals.shape) == 1:
-                df[colk] = column.as_column(vals, nan_as_null=nan_as_null)
+                df[col_name] = column.as_column(vals, nan_as_null=nan_as_null)
             else:
                 vals = vals.T
                 if vals.shape[0] == 1:
-                    df[colk] = column.as_column(
+                    df[col_name] = column.as_column(
                         vals.flatten(), nan_as_null=nan_as_null
                     )
                 else:
                     if isinstance(colk, tuple):
                         colk = str(colk)
                     for idx in range(len(vals.shape)):
-                        df[colk] = column.as_column(
+                        df[col_name] = column.as_column(
                             vals[idx], nan_as_null=nan_as_null
                         )
 
