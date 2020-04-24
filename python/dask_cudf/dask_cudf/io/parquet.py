@@ -16,16 +16,17 @@ class CudfEngine(ArrowEngine):
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        dtypes = {}
+
+        new_meta = cudf.DataFrame(index=meta.index)
         for col in meta.columns:
             if meta[col].dtype == "O":
-                dtypes[col] = "int32" if strings_to_cats else "object"
+                new_meta[col] = as_column(
+                    meta[col], dtype="int32" if strings_to_cats else "object"
+                )
+            else:
+                new_meta[col] = as_column(meta[col])
 
-        meta = cudf.DataFrame.from_pandas(meta)
-        for col, dtype in dtypes.items():
-            meta[col] = meta._data[col].astype(dtype)
-
-        return (meta, stats, parts)
+        return (new_meta, stats, parts)
 
     @staticmethod
     def read_partition(
@@ -64,7 +65,7 @@ class CudfEngine(ArrowEngine):
                     **kwargs.get("read", {}),
                 )
 
-        if index and index[0] in df.columns:
+        if index and (index[0] in df.columns):
             df = df.set_index(index[0])
 
         if len(partition_keys) > 0:
@@ -74,14 +75,13 @@ class CudfEngine(ArrowEngine):
                 categories = [
                     val.as_py() for val in partitions.levels[i].dictionary
                 ]
-                sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
+
+                col = as_column(index2).as_frame().repeat(len(df))._data[None]
                 df[name] = build_categorical_column(
                     categories=categories,
-                    codes=as_column(
-                        sr._column.base_data, dtype=sr._column.dtype
-                    ),
-                    size=sr._column.size,
-                    offset=sr._column.offset,
+                    codes=as_column(col.base_data, dtype=col.dtype),
+                    size=col.size,
+                    offset=col.offset,
                     ordered=False,
                 )
 
