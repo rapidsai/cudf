@@ -92,12 +92,12 @@ class Consumer(object):
                 cached=cached,
             )
         except RuntimeError:
-            raise ValueError(
+            raise RuntimeError(
                 "Unable to connect to Kafka broker"
             )
 
         if len(offsets) != 2:
-            raise ValueError(
+            raise RuntimeError(
                 "Multiple watermark offsets encountered. "
                 + "Only 2 were expected and "
                 + str(len(offsets)) + " encountered"
