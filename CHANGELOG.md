@@ -195,6 +195,7 @@
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #5009 Fix pickling for string and categorical columns
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 - PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
