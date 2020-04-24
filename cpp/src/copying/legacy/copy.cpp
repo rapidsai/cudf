@@ -26,11 +26,11 @@
 #include <algorithm>
 
 namespace cudf {
-
 /*
  * Initializes and returns gdf_column of the same type as the input.
  */
-gdf_column empty_like(gdf_column const& input) {
+gdf_column empty_like(gdf_column const& input)
+{
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
   gdf_column output{};
 
@@ -44,7 +44,8 @@ gdf_column empty_like(gdf_column const& input) {
   return output;
 }
 
-inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
+inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists)
+{
   return (mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists);
 }
 
@@ -54,7 +55,8 @@ inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_ex
  */
 gdf_column allocate_like(gdf_column const& input,
                          mask_allocation_policy mask_alloc,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
 
   gdf_column output = empty_like(input);
@@ -73,7 +75,8 @@ gdf_column allocate_like(gdf_column const& input,
 gdf_column allocate_like(gdf_column const& input,
                          cudf::size_type size,
                          mask_allocation_policy mask_alloc,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
 
   gdf_column output = empty_like(input);
@@ -93,7 +96,8 @@ gdf_column allocate_like(gdf_column const& input,
 /*
  * Creates a new column that is a copy of input
  */
-gdf_column copy(gdf_column const& input, cudaStream_t stream) {
+gdf_column copy(gdf_column const& input, cudaStream_t stream)
+{
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
 
   gdf_column output = allocate_like(input, RETAIN, stream);
@@ -120,7 +124,8 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream) {
   return output;
 }
 
-table empty_like(table const& t) {
+table empty_like(table const& t)
+{
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(),
                  columns.end(),
@@ -135,7 +140,8 @@ table empty_like(table const& t) {
   return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
-table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStream_t stream) {
+table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStream_t stream)
+{
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(),
                  columns.end(),
@@ -153,7 +159,8 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStrea
 table allocate_like(table const& t,
                     cudf::size_type size,
                     mask_allocation_policy mask_alloc,
-                    cudaStream_t stream) {
+                    cudaStream_t stream)
+{
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(),
                  columns.end(),
@@ -168,7 +175,8 @@ table allocate_like(table const& t,
   return table{columns.data(), static_cast<cudf::size_type>(columns.size())};
 }
 
-table copy(table const& t, cudaStream_t stream) {
+table copy(table const& t, cudaStream_t stream)
+{
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(),
                  columns.end(),

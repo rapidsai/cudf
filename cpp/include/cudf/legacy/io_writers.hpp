@@ -27,7 +27,6 @@
 namespace cudf {
 namespace io {
 namespace orc {
-
 /**---------------------------------------------------------------------------*
  * @brief Supported compression algorithms for the ORC writer
  *---------------------------------------------------------------------------**/

@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <strings/regex/regcomp.h>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -26,7 +26,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 /**
  * @brief Converts UTF-8 string into fixed-width 32-bit character vector.
  *
@@ -38,7 +37,8 @@ namespace {
  * @param pattern Regular expression encoded with UTF-8.
  * @return Fixed-width 32-bit character vector.
  */
-std::vector<char32_t> string_to_char32_vector(std::string const& pattern) {
+std::vector<char32_t> string_to_char32_vector(std::string const& pattern)
+{
   size_type size  = static_cast<size_type>(pattern.size());
   size_type count = characters_in_string(pattern.c_str(), size);
   std::vector<char32_t> result(count + 1);
@@ -66,14 +66,17 @@ reprog_device::reprog_device(reprog& prog)
     _classes_count{prog.classes_count()},
     _relists_mem{nullptr},
     _stack_mem1{nullptr},
-    _stack_mem2{nullptr} {}
+    _stack_mem2{nullptr}
+{
+}
 
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   std::string const& pattern,
   const uint8_t* codepoint_flags,
   size_type strings_count,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
   // compile pattern into host object
   reprog h_prog = reprog::create_from(pattern32.data());

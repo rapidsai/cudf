@@ -32,9 +32,7 @@
 #include <thrust/execution_policy.h>
 
 namespace cudf {
-
 namespace detail {
-
 static constexpr int64_t METRIC_FACTOR      = 1000;
 static constexpr int64_t METRIC_FACTOR_SQ   = METRIC_FACTOR * METRIC_FACTOR;
 static constexpr int64_t METRIC_FACTOR_CUBE = METRIC_FACTOR_SQ * METRIC_FACTOR;
@@ -51,7 +49,8 @@ struct DeviceCast {
 
 template <typename TypeFrom, typename TypeTo, int64_t units_factor>
 struct UpCasting {
-  __device__ TypeTo apply(TypeFrom data) {
+  __device__ TypeTo apply(TypeFrom data)
+  {
     auto udata = cudf::detail::unwrap(data);
     return static_cast<TypeTo>(udata * units_factor);
   }
@@ -59,17 +58,19 @@ struct UpCasting {
 
 template <typename TypeFrom, typename TypeTo, int64_t units_factor>
 struct DownCasting {
-  __device__ TypeTo apply(TypeFrom data) {
+  __device__ TypeTo apply(TypeFrom data)
+  {
     auto udata = cudf::detail::unwrap(data);
     return static_cast<TypeTo>((udata - (units_factor - 1) * (udata < 0)) /
-                               units_factor);  //ceiling only when data is negative
+                               units_factor);  // ceiling only when data is negative
   }
 };
 
 template <typename TypeFrom>
 struct CastTo_Dispatcher {
   template <typename TypeTo>
-  void operator()(gdf_column const* input, gdf_column* output) {
+  void operator()(gdf_column const* input, gdf_column* output)
+  {
     cudf::unary::Launcher<TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo>>::launch(input, output);
   }
 };
@@ -81,7 +82,8 @@ struct CastDateTo_Dispatcher {
   typename std::enable_if_t<std::is_same<TypeTo, cudf::date32>::value ||
                               std::is_same<TypeTo, cudf::date64>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     if (input->dtype == GDF_DATE64 && output->dtype == GDF_DATE32)
       cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, MILLISECONDS_IN_DAY>>::
         launch(input, output);
@@ -95,7 +97,8 @@ struct CastDateTo_Dispatcher {
   // Cast to cudf::timestamp
   template <typename TypeTo>
   typename std::enable_if_t<std::is_same<TypeTo, cudf::timestamp>::value, void> operator()(
-    gdf_column const* input, gdf_column* output) {
+    gdf_column const* input, gdf_column* output)
+  {
     if (input->dtype == GDF_DATE32 &&
         (output->dtype == GDF_TIMESTAMP && output->dtype_info.time_unit == TIME_UNIT_s))
       cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, SECONDS_IN_DAY>>::launch(
@@ -138,7 +141,8 @@ struct CastDateTo_Dispatcher {
                               std::is_same<TypeTo, cudf::category>::value ||
                               std::is_same<TypeTo, cudf::nvstring_category>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     cudf::unary::Launcher<TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo>>::launch(input, output);
   }
 };
@@ -151,7 +155,8 @@ struct CastTimestampTo_Dispatcher {
   typename std::enable_if_t<std::is_same<TypeTo, cudf::date32>::value ||
                               std::is_same<TypeTo, cudf::date64>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     if ((input->dtype == GDF_TIMESTAMP && input->dtype_info.time_unit == TIME_UNIT_s) &&
         output->dtype == GDF_DATE32)
       cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, SECONDS_IN_DAY>>::
@@ -190,7 +195,8 @@ struct CastTimestampTo_Dispatcher {
   // cast to another cudf::timestamp
   template <typename TypeTo>
   typename std::enable_if_t<std::is_same<TypeTo, cudf::timestamp>::value, void> operator()(
-    gdf_column const* input, gdf_column* output) {
+    gdf_column const* input, gdf_column* output)
+  {
     if (input->dtype_info.time_unit == output->dtype_info.time_unit)
       cudf::unary::Launcher<TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo>>::launch(input, output);
     else if (input->dtype_info.time_unit == TIME_UNIT_s &&
@@ -252,7 +258,8 @@ struct CastTimestampTo_Dispatcher {
                               std::is_same<TypeTo, cudf::category>::value ||
                               std::is_same<TypeTo, cudf::nvstring_category>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     cudf::unary::Launcher<TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo>>::launch(input, output);
   }
 };
@@ -263,14 +270,16 @@ struct CastFrom_Dispatcher {
   typename std::enable_if_t<std::is_same<TypeFrom, cudf::date32>::value ||
                               std::is_same<TypeFrom, cudf::date64>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     cudf::type_dispatcher(output->dtype, CastDateTo_Dispatcher<TypeFrom>{}, input, output);
   }
 
   // Cast from cudf::timestamp
   template <typename TypeFrom>
   typename std::enable_if_t<std::is_same<TypeFrom, cudf::timestamp>::value, void> operator()(
-    gdf_column const* input, gdf_column* output) {
+    gdf_column const* input, gdf_column* output)
+  {
     cudf::type_dispatcher(output->dtype, CastTimestampTo_Dispatcher{}, input, output);
   }
 
@@ -281,14 +290,16 @@ struct CastFrom_Dispatcher {
                               std::is_same<TypeFrom, cudf::category>::value ||
                               std::is_same<TypeFrom, cudf::nvstring_category>::value,
                             void>
-  operator()(gdf_column const* input, gdf_column* output) {
+  operator()(gdf_column const* input, gdf_column* output)
+  {
     cudf::type_dispatcher(output->dtype, CastTo_Dispatcher<TypeFrom>{}, input, output);
   }
 };
 
 }  // namespace detail
 
-gdf_column cast(gdf_column const& input, gdf_dtype out_type, gdf_dtype_extra_info out_info) {
+gdf_column cast(gdf_column const& input, gdf_dtype out_type, gdf_dtype_extra_info out_info)
+{
   bool has_mask = (input.valid != nullptr);
   auto output   = cudf::allocate_column(out_type, input.size, has_mask, out_info);
 

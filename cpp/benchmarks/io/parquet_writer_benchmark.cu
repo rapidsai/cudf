@@ -32,13 +32,16 @@
 
 namespace cudf_io = cudf::experimental::io;
 
-class ParquetWrite : public cudf::benchmark {};
-class ParquetWriteChunked : public cudf::benchmark {};
+class ParquetWrite : public cudf::benchmark {
+};
+class ParquetWriteChunked : public cudf::benchmark {
+};
 
 template <typename T>
 std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_type num_columns,
                                                                      cudf::size_type num_rows,
-                                                                     bool include_validity) {
+                                                                     bool include_validity)
+{
   auto valids = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
   std::vector<cudf::test::fixed_width_column_wrapper<T>> src_cols(num_columns);
@@ -65,7 +68,8 @@ std::unique_ptr<cudf::experimental::table> create_random_fixed_table(cudf::size_
   return std::make_unique<cudf::experimental::table>(std::move(columns));
 }
 
-void PQ_write(benchmark::State& state) {
+void PQ_write(benchmark::State& state)
+{
   int64_t total_desired_bytes = state.range(0);
   cudf::size_type num_cols    = state.range(1);
 
@@ -85,7 +89,8 @@ void PQ_write(benchmark::State& state) {
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));
 }
 
-void PQ_write_chunked(benchmark::State& state) {
+void PQ_write_chunked(benchmark::State& state)
+{
   int64_t total_desired_bytes = state.range(0);
   cudf::size_type num_cols    = state.range(1);
   cudf::size_type num_tables  = state.range(2);
@@ -126,14 +131,15 @@ void PQ_write_chunked(benchmark::State& state) {
 PWBM_BENCHMARK_DEFINE(3Gb8Cols, (int64_t)3 * 1024 * 1024 * 1024, 8);
 PWBM_BENCHMARK_DEFINE(3Gb1024Cols, (int64_t)3 * 1024 * 1024 * 1024, 1024);
 
-#define PWCBM_BENCHMARK_DEFINE(name, size, num_columns, num_chunks)           \
-  BENCHMARK_DEFINE_F(ParquetWriteChunked, name)(::benchmark::State & state) { \
-    PQ_write_chunked(state);                                                  \
-  }                                                                           \
-  BENCHMARK_REGISTER_F(ParquetWriteChunked, name)                             \
-    ->Args({size, num_columns, num_chunks})                                   \
-    ->Unit(benchmark::kMillisecond)                                           \
-    ->UseManualTime()                                                         \
+#define PWCBM_BENCHMARK_DEFINE(name, size, num_columns, num_chunks)         \
+  BENCHMARK_DEFINE_F(ParquetWriteChunked, name)(::benchmark::State & state) \
+  {                                                                         \
+    PQ_write_chunked(state);                                                \
+  }                                                                         \
+  BENCHMARK_REGISTER_F(ParquetWriteChunked, name)                           \
+    ->Args({size, num_columns, num_chunks})                                 \
+    ->Unit(benchmark::kMillisecond)                                         \
+    ->UseManualTime()                                                       \
     ->Iterations(4)
 
 PWCBM_BENCHMARK_DEFINE(3Gb8Cols64Chunks, (int64_t)3 * 1024 * 1024 * 1024, 8, 64);

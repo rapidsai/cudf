@@ -40,10 +40,8 @@
 
 namespace cudf {
 namespace groupby {
-
 namespace hash {
 namespace {
-
 template <bool keys_have_nulls, bool values_have_nulls>
 auto build_aggregation_map(table const& input_keys,
                            table const& input_values,
@@ -51,7 +49,8 @@ auto build_aggregation_map(table const& input_keys,
                            device_table const& d_input_values,
                            std::vector<operators> const& ops,
                            Options options,
-                           cudaStream_t stream) {
+                           cudaStream_t stream)
+{
   cudf::size_type constexpr unused_key{std::numeric_limits<cudf::size_type>::max()};
   cudf::size_type constexpr unused_value{std::numeric_limits<cudf::size_type>::max()};
   CUDF_EXPECTS(input_keys.num_rows() < unused_key, "Groupby input size too large.");
@@ -123,7 +122,8 @@ auto extract_results(table const& input_keys,
                      device_table const& d_input_keys,
                      table const& sparse_output_values,
                      Map const& map,
-                     cudaStream_t stream) {
+                     cudaStream_t stream)
+{
   cudf::table output_keys{
     cudf::allocate_like(input_keys, keys_have_nulls ? RETAIN : NEVER, stream)};
   cudf::table output_values{
@@ -207,7 +207,8 @@ auto compute_hash_groupby(cudf::table const& keys,
                           cudf::table const& values,
                           std::vector<operators> const& ops,
                           Options options,
-                          cudaStream_t stream) {
+                          cudaStream_t stream)
+{
   CUDF_EXPECTS(values.num_columns() == static_cast<cudf::size_type>(ops.size()),
                "Size mismatch between number of value columns and number of "
                "aggregations.");
@@ -277,7 +278,8 @@ auto compute_hash_groupby(cudf::table const& keys,
  * @param values The groupby value columns
  * @return Instantiated callable of compute_hash_groupby
  *---------------------------------------------------------------------------**/
-auto groupby_null_specialization(table const& keys, table const& values) {
+auto groupby_null_specialization(table const& keys, table const& values)
+{
   if (cudf::has_nulls(keys)) {
     if (cudf::has_nulls(values)) {
       return compute_hash_groupby<true, true>;
@@ -299,7 +301,8 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
                                             Options options,
-                                            cudaStream_t stream = 0) {
+                                            cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
 
@@ -327,7 +330,8 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
-                                            Options options) {
+                                            Options options)
+{
   return detail::groupby(keys, values, ops, options);
 }
 }  // namespace hash

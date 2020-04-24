@@ -24,7 +24,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-
 /*
  * @brief Interface to parse Avro data to cuDF columns.
  *

@@ -29,7 +29,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is
  * `true` over the elements in `[begin, begin + size)`.
@@ -45,7 +44,8 @@ namespace detail {
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
 __global__ void valid_if_kernel(
-  bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count) {
+  bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count)
+{
   constexpr size_type leader_lane{0};
   auto const lane_id{threadIdx.x % warp_size};
   size_type i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -90,7 +90,8 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator end,
   Predicate p,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()) {
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+{
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
   size_type size = thrust::distance(begin, end);
@@ -123,7 +124,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  * Example Arguments:
  * begin1:        zero-based counting iterator,
  * begin2:        zero-based counting iterator,
- * p:             [](size_type col, size_type row){ return col == row; } 
+ * p:             [](size_type col, size_type row){ return col == row; }
  * masks:         [[b00...], [b00...], [b00...]]
  * mask_count:    3
  * mask_num_bits: 2
@@ -156,7 +157,8 @@ __global__ void valid_if_n_kernel(InputIterator1 begin1,
                                   bitmask_type* masks[],
                                   size_type mask_count,
                                   size_type mask_num_bits,
-                                  size_type* valid_counts) {
+                                  size_type* valid_counts)
+{
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];
     if (mask == nullptr) { continue; }

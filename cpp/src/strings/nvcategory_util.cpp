@@ -13,7 +13,8 @@
 #include <utility>
 
 namespace {
-NVCategory* combine_column_categories(const gdf_column* const input_columns[], int num_columns) {
+NVCategory* combine_column_categories(const gdf_column* const input_columns[], int num_columns)
+{
   std::vector<NVCategory*> cats;
   std::transform(
     input_columns, input_columns + num_columns, std::back_inserter(cats), [&](const gdf_column* c) {
@@ -23,14 +24,16 @@ NVCategory* combine_column_categories(const gdf_column* const input_columns[], i
   return NVCategory::create_from_categories(cats);
 }
 
-gdf_error free_nvcategory(gdf_column* column) {
+gdf_error free_nvcategory(gdf_column* column)
+{
   NVCategory::destroy(static_cast<NVCategory*>(column->dtype_info.category));
   column->dtype_info.category = nullptr;
   return GDF_SUCCESS;
 }
 }  // namespace
 
-gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table) {
+gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table)
+{
   GDF_REQUIRE(source_table.num_columns() == destination_table.num_columns(),
               GDF_TABLES_SIZE_MISMATCH);
   for (int i = 0; i < source_table.num_columns(); i++) {
@@ -45,7 +48,8 @@ gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destinat
   return GDF_SUCCESS;
 }
 
-gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
+gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category)
+{
   GDF_REQUIRE(nv_category != nullptr, GDF_INVALID_API_CALL);
   GDF_REQUIRE(column->dtype == GDF_STRING_CATEGORY, GDF_UNSUPPORTED_DTYPE);
 
@@ -54,8 +58,8 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
     return GDF_SUCCESS;
   }
 
-  //column may have null values here, we will do the following
-  //check if the category we are gathering from has null if it does not
+  // column may have null values here, we will do the following
+  // check if the category we are gathering from has null if it does not
   bool destroy_category = false;
   if (column->null_count > 0) {
     nv_category_index_type null_index = nv_category->get_value(nullptr);
@@ -99,7 +103,7 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
   CHECK_CUDA(0);
   new_category->get_values(static_cast<nv_category_index_type*>(column->data), DEVICE_ALLOCATED);
   CHECK_CUDA(0);
-  //Python handles freeing the original column->dtype_info.category so we don't need to
+  // Python handles freeing the original column->dtype_info.category so we don't need to
   column->dtype_info.category = new_category;
 
   return GDF_SUCCESS;
@@ -107,7 +111,8 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category) {
 
 gdf_error validate_categories(const gdf_column* const input_columns[],
                               int num_columns,
-                              cudf::size_type& total_count) {
+                              cudf::size_type& total_count)
+{
   total_count = 0;
   for (int i = 0; i < num_columns; ++i) {
     const gdf_column* current_column = input_columns[i];
@@ -122,14 +127,15 @@ gdf_error validate_categories(const gdf_column* const input_columns[],
 
 gdf_error concat_categories(const gdf_column* const input_columns[],
                             gdf_column* output_column,
-                            int num_columns) {
+                            int num_columns)
+{
   cudf::size_type total_count;
   gdf_error err = validate_categories(input_columns, num_columns, total_count);
   GDF_REQUIRE(err == GDF_SUCCESS, err);
   GDF_REQUIRE(total_count <= output_column->size, GDF_COLUMN_SIZE_MISMATCH);
   GDF_REQUIRE(output_column->dtype == GDF_STRING_CATEGORY, GDF_UNSUPPORTED_DTYPE);
-  //TODO: we have no way to jsut copy a category this will fail if someone calls concat
-  //on a single input
+  // TODO: we have no way to jsut copy a category this will fail if someone calls concat
+  // on a single input
   GDF_REQUIRE(num_columns >= 1, GDF_DATASET_EMPTY);
 
   NVCategory* combined_category = combine_column_categories(input_columns, num_columns);
@@ -141,7 +147,8 @@ gdf_error concat_categories(const gdf_column* const input_columns[],
 
 gdf_error sync_column_categories(const gdf_column* const input_columns[],
                                  gdf_column* output_columns[],
-                                 int num_columns) {
+                                 int num_columns)
+{
   GDF_REQUIRE(num_columns > 0, GDF_DATASET_EMPTY);
   cudf::size_type total_count;
 
@@ -167,8 +174,9 @@ gdf_error sync_column_categories(const gdf_column* const input_columns[],
                         size_to_copy,
                         cudaMemcpyDeviceToDevice));
 
-    //TODO: becuase of how gather works we are making a copy to preserve dictionaries as the same
-    //this has an overhead of having to store more than is necessary. remove when gather preserving dictionary is available for nvcategory
+    // TODO: becuase of how gather works we are making a copy to preserve dictionaries as the same
+    // this has an overhead of having to store more than is necessary. remove when gather preserving
+    // dictionary is available for nvcategory
     output_columns[column_index]->dtype_info.category = combined_category->copy();
 
     current_column_start_position += column_size;

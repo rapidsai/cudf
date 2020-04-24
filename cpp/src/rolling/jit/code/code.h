@@ -25,7 +25,6 @@ namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
-
 extern const char* kernel_headers;
 extern const char* kernel;
 extern const char* operation_h;
