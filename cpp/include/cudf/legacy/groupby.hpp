@@ -34,11 +34,9 @@ template <typename T>
 class rmm_allocator;
 
 namespace cudf {
-
 class table;
 
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
@@ -82,7 +80,6 @@ struct Options {
 enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
 namespace hash {
-
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the hash-based groupby
  *---------------------------------------------------------------------------**/
@@ -118,8 +115,8 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }  // namespace hash
 
 namespace sort {
-
-struct operation_args {};
+struct operation_args {
+};
 
 struct std_args : operation_args {
   int ddof;
@@ -132,7 +129,9 @@ struct quantile_args : operation_args {
   cudf::interpolation interpolation;
 
   quantile_args(const std::vector<double>& _quantiles, cudf::interpolation _interpolation)
-    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation} {}
+    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {
+  }
 };
 
 struct operation {
@@ -156,7 +155,9 @@ struct Options : groupby::Options {
           bool _input_sorted             = false)
     : groupby::Options(_ignore_null_keys),
       input_sorted(_input_sorted),
-      null_sort_behavior(_null_sort_behavior) {}
+      null_sort_behavior(_null_sort_behavior)
+  {
+  }
 };
 
 /**---------------------------------------------------------------------------*
@@ -196,7 +197,8 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
  * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
  * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
- * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
 gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 
@@ -219,7 +221,8 @@ gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const&
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key
  * columns.
- *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
 std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   cudf::table const& input_table,

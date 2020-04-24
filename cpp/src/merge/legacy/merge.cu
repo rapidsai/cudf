@@ -24,17 +24,15 @@
 #include "utilities/legacy/cuda_utils.hpp"
 
 namespace {
-
 /**
  * @brief Source table identifier to copy data from.
  */
 enum class side : bool { LEFT, RIGHT };
 
 using bit_mask::bit_mask_t;
-using index_type = thrust::tuple<
-  side,
-  cudf::
-    size_type>;  // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
+using index_type = thrust::tuple<side,
+                                 cudf::size_type>;  // `thrust::get<0>` indicates left/right side,
+                                                    // `thrust::get<1>` indicates the row index
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -63,7 +61,8 @@ __global__ void materialize_merged_bitmask_kernel(
   bit_mask_t const* const __restrict__ source_right_mask,
   bit_mask_t* const destination_mask,
   cudf::size_type const num_destination_rows,
-  index_type const* const __restrict__ merged_indices) {
+  index_type const* const __restrict__ merged_indices)
+{
   cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
@@ -99,7 +98,8 @@ void materialize_bitmask(gdf_column const* left_col,
                          gdf_column const* right_col,
                          gdf_column* out_col,
                          index_type const* merged_indices,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   constexpr cudf::size_type BLOCK_SIZE{256};
   cudf::util::cuda::grid_config_1d grid_config{out_col->size, BLOCK_SIZE};
 
@@ -135,7 +135,8 @@ rmm::device_vector<index_type> generate_merged_indices(device_table const& left_
                                                        device_table const& right_table,
                                                        rmm::device_vector<int8_t> const& asc_desc,
                                                        bool nulls_are_smallest,
-                                                       cudaStream_t stream) {
+                                                       cudaStream_t stream)
+{
   const cudf::size_type left_size  = left_table.num_rows();
   const cudf::size_type right_size = right_table.num_rows();
   const cudf::size_type total_size = left_size + right_size;
@@ -195,13 +196,13 @@ rmm::device_vector<index_type> generate_merged_indices(device_table const& left_
 
 namespace cudf {
 namespace detail {
-
 table merge(table const& left_table,
             table const& right_table,
             std::vector<cudf::size_type> const& key_cols,
             std::vector<order_by_type> const& asc_desc,
             bool nulls_are_smallest,
-            cudaStream_t stream = 0) {
+            cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(left_table.num_columns() == right_table.num_columns(),
                "Mismatched number of columns");
   if (left_table.num_columns() == 0) { return cudf::empty_like(left_table); }
@@ -363,7 +364,8 @@ table merge(table const& left_table,
             table const& right_table,
             std::vector<cudf::size_type> const& key_cols,
             std::vector<order_by_type> const& asc_desc,
-            bool nulls_are_smallest) {
+            bool nulls_are_smallest)
+{
   return detail::merge(left_table, right_table, key_cols, asc_desc, nulls_are_smallest);
 }
 

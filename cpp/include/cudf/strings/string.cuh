@@ -21,7 +21,6 @@
 namespace cudf {
 namespace strings {
 namespace string {
-
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.
@@ -35,7 +34,8 @@ namespace string {
  * @param d_str String to check.
  * @return true if string has valid integer characters
  */
-__device__ bool is_integer(string_view const& d_str) {
+__device__ bool is_integer(string_view const& d_str)
+{
   if (d_str.empty()) return false;
   auto begin = d_str.begin();
   if (*begin == '+' || *begin == '-') ++begin;
@@ -62,7 +62,8 @@ __device__ bool is_integer(string_view const& d_str) {
  * @param d_str String to check.
  * @return true if string has valid float characters
  */
-__device__ bool is_float(string_view const& d_str) {
+__device__ bool is_float(string_view const& d_str)
+{
   if (d_str.empty()) return false;
   // strings allowed by the converter
   if (d_str.compare("NaN", 3) == 0) return true;

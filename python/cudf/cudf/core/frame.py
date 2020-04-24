@@ -330,7 +330,9 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop and (stride is None or stride == 1):
+        if (start > stop and (stride is None or stride == 1)) or (
+            len(self._data) == 0 and keep_index is False
+        ):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
@@ -1146,7 +1148,17 @@ class Frame(libcudf.table.Table):
                     (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
-                self._index._copy_categories(other._index)
+                self._index._copy_categories(other._index, include_index=False)
+                # When other._index is a CategoricalIndex, there is
+                # possibility that corresposing self._index be GenericIndex
+                # with codes. So to update even the class signature, we
+                # have to call as_index.
+                if isinstance(
+                    other._index, cudf.core.index.CategoricalIndex
+                ) and not isinstance(
+                    self._index, cudf.core.index.CategoricalIndex
+                ):
+                    self._index = cudf.core.index.as_index(self._index)
         return self
 
     def _unaryop(self, op):

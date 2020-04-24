@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a new BOOL8 column by parsing boolean values from the strings
  * in the provided strings column.

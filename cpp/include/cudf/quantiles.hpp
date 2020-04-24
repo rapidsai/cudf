@@ -22,7 +22,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Computes quantiles with interpolation.
 

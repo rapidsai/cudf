@@ -30,7 +30,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 /**
  * @brief Utility to return integer column indicating the postion of
  * target string within each string in a strings column.
@@ -55,7 +54,8 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
                                 size_type stop,
                                 FindFunction& pfn,
                                 rmm::mr::device_memory_resource* mr,
-                                cudaStream_t stream) {
+                                cudaStream_t stream)
+{
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
   if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
@@ -96,7 +96,8 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              size_type start                     = 0,
                              size_type stop                      = -1,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                             cudaStream_t stream                 = 0) {
+                             cudaStream_t stream                 = 0)
+{
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
     size_type length = d_string.length();
@@ -114,7 +115,8 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               size_type start                     = 0,
                               size_type stop                      = -1,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0) {
+                              cudaStream_t stream                 = 0)
+{
   auto pfn = [] __device__(
                string_view d_string, string_view d_target, size_type start, size_type stop) {
     size_type length = d_string.length();
@@ -135,7 +137,8 @@ std::unique_ptr<column> find(strings_column_view const& strings,
                              string_scalar const& target,
                              size_type start,
                              size_type stop,
-                             rmm::mr::device_memory_resource* mr) {
+                             rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::find(strings, target, start, stop, mr);
 }
@@ -144,14 +147,14 @@ std::unique_ptr<column> rfind(strings_column_view const& strings,
                               string_scalar const& target,
                               size_type start,
                               size_type stop,
-                              rmm::mr::device_memory_resource* mr) {
+                              rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::rfind(strings, target, start, stop, mr);
 }
 
 namespace detail {
 namespace {
-
 /**
  * @brief Utility to return a bool column indicating the presence of
  * a given target string in a strings column.
@@ -172,7 +175,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     string_scalar const& target,
                                     BoolFunction pfn,
                                     rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream) {
+                                    cudaStream_t stream)
+{
   auto strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
 
@@ -218,7 +222,8 @@ std::unique_ptr<column> contains(
   strings_column_view const& strings,
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return d_string.find(d_target) >= 0;
   };
@@ -229,7 +234,8 @@ std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     return d_string.find(d_target) == 0;
   };
@@ -240,7 +246,8 @@ std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto pfn = [] __device__(string_view d_string, string_view d_target) {
     auto str_length = d_string.length();
     auto tgt_length = d_target.length();
@@ -257,21 +264,24 @@ std::unique_ptr<column> ends_with(
 
 std::unique_ptr<column> contains(strings_column_view const& strings,
                                  string_scalar const& target,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::contains(strings, target, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
                                     string_scalar const& target,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::starts_with(strings, target, mr);
 }
 
 std::unique_ptr<column> ends_with(strings_column_view const& strings,
                                   string_scalar const& target,
-                                  rmm::mr::device_memory_resource* mr) {
+                                  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::ends_with(strings, target, mr);
 }

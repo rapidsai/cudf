@@ -24,7 +24,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
@@ -40,7 +39,7 @@ namespace detail {
  *
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
  * is the number of rows in the `target` table.
- * 
+ *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *
@@ -81,7 +80,7 @@ std::unique_ptr<table> scatter(
  *
  * The number of elements in source must match the number of columns in target
  * and their corresponding datatypes must be the same.
- * 
+ *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
  *

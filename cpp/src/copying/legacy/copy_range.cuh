@@ -25,7 +25,6 @@
 #include <cub/cub.cuh>
 
 namespace {
-
 using bit_mask::bit_mask_t;
 static constexpr cudf::size_type warp_size{32};
 
@@ -35,7 +34,8 @@ __global__ void copy_range_kernel(T *__restrict__ const data,
                                   cudf::size_type *__restrict__ const null_count,
                                   cudf::size_type begin,
                                   cudf::size_type end,
-                                  InputFunctor input) {
+                                  InputFunctor input)
+{
   const cudf::size_type tid  = threadIdx.x + blockIdx.x * blockDim.x;
   constexpr size_t mask_size = warp_size;
 
@@ -115,7 +115,8 @@ struct copy_range_dispatch {
   void operator()(gdf_column *column,
                   cudf::size_type begin,
                   cudf::size_type end,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(),
                   "copy_range_kernel assumes bitmask element size in bits == warp size");
 
@@ -160,19 +161,17 @@ struct copy_range_dispatch {
 };  // namespace
 
 namespace cudf {
-
 namespace detail {
-
 /**
  * @brief Copies a range of values from a functor to a column
- * 
+ *
  * Copies N values from @p input to the range [@p begin, @p end)
  * of @p out_column. @p out_column is modified in place.
- * 
+ *
  * InputFunctor must have these accessors:
  * __device__ T data(cudf::size_type index);
  * __device__ bool valid(cudf::size_type index);
- * 
+ *
  * @tparam InputFunctor the type of the input function object
  * @p out_column the column to copy into
  * @p input An instance of InputFunctor that provides data and valid mask
@@ -183,7 +182,8 @@ template <typename InputFunctor>
 void copy_range(gdf_column *out_column,
                 InputFunctor input,
                 cudf::size_type begin,
-                cudf::size_type end) {
+                cudf::size_type end)
+{
   validate(out_column);
   CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed");
   CUDF_EXPECTS((begin >= 0) and (end <= out_column->size), "Range is out of bounds");

@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.Aggregate.max;
+import static ai.rapids.cudf.Aggregate.first;
+import static ai.rapids.cudf.Aggregate.last;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -2216,6 +2218,66 @@ public class TableTest extends CudfTestBase {
           }
         }
       }
+    }
+  }
+
+  @Test
+  void testGroupByFirstExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(13, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, 15)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByFirstIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(null, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, null)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, true))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
