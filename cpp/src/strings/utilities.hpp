@@ -15,14 +15,9 @@
  */
 #pragma once
 
-
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
+namespace cudf {
+namespace strings {
+namespace detail {
 // Type for the character flags table.
 using character_flags_table_type = uint8_t;
 
@@ -53,7 +48,6 @@ using character_cases_table_type = uint16_t;
  */
 const character_cases_table_type* get_character_cases_table();
 
-
 /**
  * @brief Returns pointer to device memory that contains the special
  * case mapping table. On first call, this will copy the table into
@@ -66,6 +60,6 @@ const character_cases_table_type* get_character_cases_table();
  */
 const struct special_case_mapping* get_special_case_mapping_table();
 
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

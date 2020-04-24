@@ -1429,9 +1429,7 @@ public class JCudfSerialization {
     try {
       SerializedTableHeader combined = calcConcatedHeader(providers);
 
-      try (DevicePrediction prediction = new DevicePrediction(combined.dataLen, "readAndConcat");
-           HostPrediction hostPrediction = new HostPrediction(combined.dataLen, "readAndConcat");
-           HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
+      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
            DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
@@ -1475,27 +1473,25 @@ public class JCudfSerialization {
 
   public static TableAndRowCountPair readTableFrom(SerializedTableHeader header,
                                                    HostMemoryBuffer hostBuffer) {
-    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom")) {
-      ContiguousTable contigTable = null;
-      DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
-      try {
-        if (hostBuffer.length > 0) {
-          try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
-            devBuffer.copyFromHostBuffer(hostBuffer);
-          }
-        }
-        if (header.getNumColumns() > 0) {
-          Table table = sliceUpColumnVectors(header, devBuffer, hostBuffer);
-          contigTable = new ContiguousTable(table, devBuffer);
-        }
-      } finally {
-        if (contigTable == null) {
-          devBuffer.close();
+    ContiguousTable contigTable = null;
+    DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
+    try {
+      if (hostBuffer.length > 0) {
+        try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
+          devBuffer.copyFromHostBuffer(hostBuffer);
         }
       }
-
-      return new TableAndRowCountPair(header.numRows, contigTable);
+      if (header.getNumColumns() > 0) {
+        Table table = sliceUpColumnVectors(header, devBuffer, hostBuffer);
+        contigTable = new ContiguousTable(table, devBuffer);
+      }
+    } finally {
+      if (contigTable == null) {
+        devBuffer.close();
+      }
     }
+
+    return new TableAndRowCountPair(header.numRows, contigTable);
   }
 
   /**
@@ -1519,8 +1515,7 @@ public class JCudfSerialization {
       return new TableAndRowCountPair(0, null);
     }
 
-    try (HostPrediction prediction = new HostPrediction(header.dataLen, "readTableFrom");
-        HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
+    try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(header.dataLen)) {
       if (header.dataLen > 0) {
         readTableIntoBuffer(din, header, hostBuffer);
       }

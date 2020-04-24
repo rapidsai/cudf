@@ -15,14 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
@@ -33,34 +30,32 @@ namespace strings
  * does not match to any explicitly named enumerator.
  */
 enum string_character_types : uint32_t {
-    DECIMAL  = 1 << 0,                            // binary 00000001
-    NUMERIC  = 1 << 1,                            // binary 00000010
-    DIGIT    = 1 << 2,                            // binary 00000100
-    ALPHA    = 1 << 3,                            // binary 00001000
-    SPACE    = 1 << 4,                            // binary 00010000
-    UPPER    = 1 << 5,                            // binary 00100000
-    LOWER    = 1 << 6,                            // binary 01000000
-    ALPHANUM = DECIMAL | NUMERIC | DIGIT | ALPHA, // binary 00001111
-    CASE_TYPES = UPPER | LOWER,
-    ALL_TYPES = ALPHANUM | CASE_TYPES | SPACE
+  DECIMAL    = 1 << 0,                             // binary 00000001
+  NUMERIC    = 1 << 1,                             // binary 00000010
+  DIGIT      = 1 << 2,                             // binary 00000100
+  ALPHA      = 1 << 3,                             // binary 00001000
+  SPACE      = 1 << 4,                             // binary 00010000
+  UPPER      = 1 << 5,                             // binary 00100000
+  LOWER      = 1 << 6,                             // binary 01000000
+  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  // binary 00001111
+  CASE_TYPES = UPPER | LOWER,
+  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE
 };
 
 // OR operators for combining types
 string_character_types operator|(string_character_types lhs, string_character_types rhs)
 {
-    return static_cast<string_character_types>(
-        static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-        static_cast<std::underlying_type_t<string_character_types>>(rhs)
-    );
+  return static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
 }
 
 string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
 {
-    lhs = static_cast<string_character_types>(
-        static_cast<std::underlying_type_t<string_character_types>>(lhs) |
-        static_cast<std::underlying_type_t<string_character_types>>(rhs)
-    );
-    return lhs;
+  lhs = static_cast<string_character_types>(
+    static_cast<std::underlying_type_t<string_character_types>>(lhs) |
+    static_cast<std::underlying_type_t<string_character_types>>(rhs));
+  return lhs;
 }
 
 /**
@@ -95,10 +90,11 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<column> all_characters_of_type( strings_column_view const& strings,
-                                                string_character_types types,
-                                                string_character_types verify_types = string_character_types::ALL_TYPES,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> all_characters_of_type(
+  strings_column_view const& strings,
+  string_character_types types,
+  string_character_types verify_types = string_character_types::ALL_TYPES,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -121,8 +117,9 @@ std::unique_ptr<column> all_characters_of_type( strings_column_view const& strin
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<column> is_integer( strings_column_view const& strings,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> is_integer(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns `true` if all strings contain
@@ -137,8 +134,8 @@ std::unique_ptr<column> is_integer( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_integer( strings_column_view const& strings,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_integer(strings_column_view const& strings,
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -161,8 +158,9 @@ bool all_integer( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<column> is_float( strings_column_view const& strings,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> is_float(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns `true` if all strings contain
@@ -177,8 +175,8 @@ std::unique_ptr<column> is_float( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return true if all string are valid
  */
-bool all_float( strings_column_view const& strings,
-                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+bool all_float(strings_column_view const& strings,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

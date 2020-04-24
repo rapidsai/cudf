@@ -997,6 +997,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.strip();
+         ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "123")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
   void testAppendStrings() {
     try (HostColumnVector cv = HostColumnVector.build(10, 0, (b) -> {
       b.append("123456789");

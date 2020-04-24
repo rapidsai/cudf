@@ -39,7 +39,16 @@ from cudf.utils.utils import buffers_from_pyarrow, mask_dtype
 
 
 class ColumnBase(Column):
-    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
+    def __init__(
+        self,
+        data,
+        size,
+        dtype,
+        mask=None,
+        offset=0,
+        null_count=None,
+        children=(),
+    ):
         """
         Parameters
         ----------
@@ -67,6 +76,7 @@ class ColumnBase(Column):
                 self.base_mask,
                 self.size,
                 self.offset,
+                self.null_count,
                 self.base_children,
             ),
         )
@@ -616,22 +626,23 @@ class ColumnBase(Column):
         """
         Returns offset of first value that matches
         """
-        # FIXME: Inefficient find in CPU code
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
+        # FIXME: Inefficient, may be need a libcudf api
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
+        indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
-        return indices[-1, 0]
+        return indices[0]
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
         """
-        arr = self.to_array()
-        indices = np.argwhere(arr == value)
+        # FIXME: Inefficient, may be need a libcudf api
+        index = cudf.core.index.RangeIndex(0, stop=len(self))
+        indices = index.take(self == value)
         if not len(indices):
             raise ValueError("value not found")
-        return indices[-1, 0]
+        return indices[-1]
 
     def append(self, other):
         from cudf.core.column import as_column
@@ -1028,7 +1039,9 @@ def column_empty(row_count, dtype="object", masked=False):
     return build_column(data, dtype, mask=mask, children=children)
 
 
-def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
+def build_column(
+    data, dtype, mask=None, size=None, offset=0, null_count=None, children=()
+):
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -1045,11 +1058,6 @@ def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
     offset : int, optional
     children : tuple, optional
     """
-    from cudf.core.column.numerical import NumericalColumn
-    from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.categorical import CategoricalColumn
-    from cudf.core.column.string import StringColumn
-
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if is_categorical_dtype(dtype):
@@ -1059,25 +1067,50 @@ def build_column(data, dtype, mask=None, size=None, offset=0, children=()):
             )
         if not isinstance(children[0], ColumnBase):
             raise TypeError("children must be a tuple of Columns")
-        return CategoricalColumn(
-            dtype=dtype, mask=mask, size=size, offset=offset, children=children
+        return cudf.core.column.CategoricalColumn(
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
     elif dtype.type is np.datetime64:
-        return DatetimeColumn(
-            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+        return cudf.core.column.DatetimeColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
     elif dtype.type in (np.object_, np.str_):
-        return StringColumn(
-            mask=mask, size=size, offset=offset, children=children
+        return cudf.core.column.StringColumn(
+            mask=mask,
+            size=size,
+            offset=offset,
+            children=children,
+            null_count=null_count,
         )
     else:
-        return NumericalColumn(
-            data=data, dtype=dtype, mask=mask, size=size, offset=offset
+        return cudf.core.column.NumericalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
         )
 
 
 def build_categorical_column(
-    categories, codes, mask=None, size=None, offset=0, ordered=None
+    categories,
+    codes,
+    mask=None,
+    size=None,
+    offset=0,
+    null_count=None,
+    ordered=None,
 ):
     """
     Build a CategoricalColumn
@@ -1107,6 +1140,7 @@ def build_categorical_column(
         mask=mask,
         size=size,
         offset=offset,
+        null_count=null_count,
         children=(as_column(codes),),
     )
 
@@ -1146,22 +1180,17 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     * pyarrow array
     * pandas.Categorical objects
     """
-
-    from cudf.core.column import numerical, categorical, datetime, string
-    from cudf.core.series import Series
-    from cudf.core.index import Index
-
     if isinstance(arbitrary, ColumnBase):
         if dtype is not None:
             return arbitrary.astype(dtype)
         else:
             return arbitrary
 
-    elif isinstance(arbitrary, Series):
+    elif isinstance(arbitrary, cudf.Series):
         data = arbitrary._column
         if dtype is not None:
             data = data.astype(dtype)
-    elif isinstance(arbitrary, Index):
+    elif isinstance(arbitrary, cudf.Index):
         data = arbitrary._values
         if dtype is not None:
             data = data.astype(dtype)
@@ -1236,7 +1265,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 build_column(data=sbuf, dtype="int8"),
             )
 
-            data = string.StringColumn(
+            data = cudf.core.column.string.StringColumn(
                 mask=nbuf, children=children, size=pa_size, offset=pa_offset
             )
 
@@ -1273,7 +1302,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             dtype = CategoricalDtype(
                 categories=categories, ordered=arbitrary.type.ordered
             )
-            data = categorical.CategoricalColumn(
+            data = cudf.core.column.categorical.CategoricalColumn(
                 dtype=dtype,
                 mask=codes.base_mask,
                 children=(codes,),
@@ -1286,7 +1315,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 arbitrary, dtype=dtype
             )
 
-            data = datetime.DatetimeColumn(
+            data = cudf.core.column.datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
                 dtype=dtype,
@@ -1298,7 +1327,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary, dtype="M8[ms]"
             )
-            data = datetime.DatetimeColumn(
+            data = cudf.core.column.datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
                 dtype=np.dtype("M8[ms]"),
@@ -1326,7 +1355,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary, dtype=dtype
             )
-            data = numerical.NumericalColumn(
+            data = cudf.core.column.NumericalColumn(
                 data=padata,
                 mask=pamask,
                 dtype=dtype,
@@ -1342,7 +1371,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(
                 arbitrary
             )
-            data = numerical.NumericalColumn(
+            data = cudf.core.column.NumericalColumn(
                 data=padata,
                 dtype=np.dtype(arbitrary.type.to_pandas_dtype()),
                 mask=pamask,
@@ -1451,7 +1480,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data = utils.time_col_replace_nulls(data)
                 mask = data.mask
 
-            data = datetime.DatetimeColumn(
+            data = cudf.core.column.datetime.DatetimeColumn(
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):

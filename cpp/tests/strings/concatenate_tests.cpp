@@ -15,60 +15,96 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/column_utilities.hpp>
 #include <tests/strings/utilities.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.hpp>
+#include <tests/utilities/column_wrapper.hpp>
 
 #include <vector>
 
-
-struct StringsConcatenateTest : public cudf::test::BaseFixture {};
+struct StringsConcatenateTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(StringsConcatenateTest, Concatenate)
 {
-    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
-    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+6 );
-    cudf::test::strings_column_wrapper strings2( h_strings.data()+6, h_strings.data()+10 );
-    cudf::test::strings_column_wrapper strings3( h_strings.data()+10, h_strings.data()+h_strings.size() );
-    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  std::vector<const char*> h_strings{"aaa",
+                                     "bb",
+                                     "",
+                                     "cccc",
+                                     "d",
+                                     "ééé",
+                                     "ff",
+                                     "gggg",
+                                     "",
+                                     "h",
+                                     "iiii",
+                                     "jjj",
+                                     "k",
+                                     "lllllll",
+                                     "mmmmm",
+                                     "n",
+                                     "oo",
+                                     "ppp"};
+  cudf::test::strings_column_wrapper strings1(h_strings.data(), h_strings.data() + 6);
+  cudf::test::strings_column_wrapper strings2(h_strings.data() + 6, h_strings.data() + 10);
+  cudf::test::strings_column_wrapper strings3(h_strings.data() + 10,
+                                              h_strings.data() + h_strings.size());
+  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
 
-    std::vector<cudf::column_view> strings_columns;
-    strings_columns.push_back(strings1);
-    strings_columns.push_back(zero_size_strings_column);
-    strings_columns.push_back(strings2);
-    strings_columns.push_back(strings3);
+  std::vector<cudf::column_view> strings_columns;
+  strings_columns.push_back(strings1);
+  strings_columns.push_back(zero_size_strings_column);
+  strings_columns.push_back(strings2);
+  strings_columns.push_back(strings3);
 
-    auto results = cudf::strings::detail::concatenate(strings_columns);
+  auto results = cudf::strings::detail::concatenate(strings_columns);
 
-    cudf::test::strings_column_wrapper expected( h_strings.begin(), h_strings.end() );
-    cudf::test::expect_columns_equal(*results,expected);
+  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
+  cudf::test::expect_columns_equal(*results, expected);
 }
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
 {
-    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    std::vector<cudf::column_view> strings_columns;
-    strings_columns.push_back(zero_size_strings_column);
-    strings_columns.push_back(zero_size_strings_column);
-    strings_columns.push_back(zero_size_strings_column);
-    auto results = cudf::strings::detail::concatenate(strings_columns);
-    cudf::test::expect_strings_empty(results->view());
+  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  std::vector<cudf::column_view> strings_columns;
+  strings_columns.push_back(zero_size_strings_column);
+  strings_columns.push_back(zero_size_strings_column);
+  strings_columns.push_back(zero_size_strings_column);
+  auto results = cudf::strings::detail::concatenate(strings_columns);
+  cudf::test::expect_strings_empty(results->view());
 }
 
 TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
 {
-    cudf::column_view zero_size_strings_column( cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
-    std::vector<cudf::column_view> strings_columns;
-    strings_columns.push_back(zero_size_strings_column);
+  cudf::column_view zero_size_strings_column(cudf::data_type{cudf::STRING}, 0, nullptr, nullptr, 0);
+  std::vector<cudf::column_view> strings_columns;
+  strings_columns.push_back(zero_size_strings_column);
 
-    std::vector<const char*> h_strings{ "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj", "k", "lllllll", "mmmmm", "n", "oo", "ppp" };
-    cudf::test::strings_column_wrapper strings1( h_strings.data(), h_strings.data()+h_strings.size() );
-    strings_columns.push_back(strings1);
+  std::vector<const char*> h_strings{"aaa",
+                                     "bb",
+                                     "",
+                                     "cccc",
+                                     "d",
+                                     "ééé",
+                                     "ff",
+                                     "gggg",
+                                     "",
+                                     "h",
+                                     "iiii",
+                                     "jjj",
+                                     "k",
+                                     "lllllll",
+                                     "mmmmm",
+                                     "n",
+                                     "oo",
+                                     "ppp"};
+  cudf::test::strings_column_wrapper strings1(h_strings.data(),
+                                              h_strings.data() + h_strings.size());
+  strings_columns.push_back(strings1);
 
-    auto results = cudf::strings::detail::concatenate(strings_columns);
-    cudf::test::expect_columns_equal(*results,strings1);
+  auto results = cudf::strings::detail::concatenate(strings_columns);
+  cudf::test::expect_columns_equal(*results, strings1);
 }
