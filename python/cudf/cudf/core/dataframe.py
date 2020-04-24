@@ -1475,7 +1475,18 @@ class DataFrame(Frame):
 
         if idx is not None:
             idx = idx if isinstance(idx, Index) else as_index(idx)
-            if df.index.dtype != idx.dtype:
+
+            from cudf.core import MultiIndex
+
+            is_multi = type(idx) == MultiIndex
+            if is_multi:
+                idx_match = [
+                    [x for x in df.index._source_data.dtypes] for i in idx
+                ] == [[x for x in idx._source_data.dtypes] for i in idx]
+            else:
+                idx_match = [df.index.dtype == idx.dtype]
+
+            if not idx_match:
                 cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
