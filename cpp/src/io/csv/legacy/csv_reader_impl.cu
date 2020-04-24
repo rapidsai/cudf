@@ -458,7 +458,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
+  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
 
   // Exclude the rows outside of requested range
   if (range_size != 0) {
@@ -495,7 +495,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
     it_end -= skip_end_rows;
   }
 
