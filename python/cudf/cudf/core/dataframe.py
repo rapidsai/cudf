@@ -3162,20 +3162,21 @@ class DataFrame(Frame):
         df = cls()
         # Set columns
         for col_name, col_value in dataframe.iteritems():
-            vals = dataframe[colk].array
             # necessary because multi-index can return multiple
             # columns for a single key
-            if len(vals.shape) == 1:
-                df[col_name] = column.as_column(vals, nan_as_null=nan_as_null)
+            if len(col_value.shape) == 1:
+                df[col_name] = column.as_column(
+                    col_value.array, nan_as_null=nan_as_null
+                )
             else:
-                vals = vals.T
+                vals = col_value.values.T
                 if vals.shape[0] == 1:
                     df[col_name] = column.as_column(
                         vals.flatten(), nan_as_null=nan_as_null
                     )
                 else:
-                    if isinstance(colk, tuple):
-                        colk = str(colk)
+                    if isinstance(col_name, tuple):
+                        col_name = str(col_name)
                     for idx in range(len(vals.shape)):
                         df[col_name] = column.as_column(
                             vals[idx], nan_as_null=nan_as_null
