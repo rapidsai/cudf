@@ -643,3 +643,16 @@ def shift(Column input, int offset, object fill_value=None):
         )
 
     return Column.from_unique_ptr(move(c_output))
+
+
+def get_element(Column input_column, int index):
+    cdef column_view col_view = input_column.view()
+    cdef size_type c_index = index
+
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(col_view, c_index)
+        )
+
+    return Scalar.from_unique_ptr(move(c_output)) 

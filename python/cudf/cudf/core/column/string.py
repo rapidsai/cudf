@@ -1903,20 +1903,20 @@ class StringColumn(column.ColumnBase):
                 # Now run a subtraction binary op to shift all of the offsets
                 # by the respective number of characters relative to the
                 # parent offset
-                chars_offset = offsets_column[0]
+                chars_offset = libcudf.copying.get_element(offsets_column, 0)
                 offsets_column = offsets_column.binary_operator(
-                    "sub", offsets_column.dtype.type(chars_offset)
+                    "sub", chars_offset
                 )
 
                 # Shift the chars offset by the new first element of the
                 # offsets column
-                chars_size = offsets_column[self.size]
+                chars_size = libcudf.copying.get_element(offsets_column, self.size)
                 chars_column = column.build_column(
                     data=chars_column.base_data,
                     dtype=chars_column.dtype,
                     mask=chars_column.base_mask,
-                    size=chars_size,
-                    offset=chars_offset,
+                    size=chars_size.value,
+                    offset=chars_offset.value,
                 )
 
                 self._children = (offsets_column, chars_column)

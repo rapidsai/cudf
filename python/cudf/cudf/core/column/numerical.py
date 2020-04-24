@@ -6,6 +6,7 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
+from cudf._lib.scalar import Scalar
 from cudf._lib.nvtx import annotate
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
@@ -69,7 +70,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (

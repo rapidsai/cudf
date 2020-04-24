@@ -175,10 +175,13 @@ def binaryop(lhs, rhs, op, dtype):
     cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
     cdef data_type c_dtype = data_type(tid)
 
-    if np.isscalar(lhs) or lhs is None:
+    if isinstance(lhs, Scalar) or np.isscalar(lhs) or lhs is None:
 
         is_string_col = is_string_dtype(rhs.dtype)
-        s_lhs = Scalar(lhs, dtype=rhs.dtype if lhs is None else None)
+        if not isinstance(lhs, Scalar):
+            s_lhs = Scalar(lhs, dtype=rhs.dtype if lhs is None else None)
+        else:
+            s_lhs = lhs
         result = binaryop_s_v(
             s_lhs,
             rhs,
@@ -186,9 +189,12 @@ def binaryop(lhs, rhs, op, dtype):
             c_dtype
         )
 
-    elif np.isscalar(rhs) or rhs is None:
+    elif isinstance(rhs, Scalar) or np.isscalar(rhs) or rhs is None:
         is_string_col = is_string_dtype(lhs.dtype)
-        s_rhs = Scalar(rhs, dtype=lhs.dtype if rhs is None else None)
+        if not isinstance(rhs, Scalar):
+            s_rhs = Scalar(rhs, dtype=lhs.dtype if rhs is None else None)
+        else:
+            s_rhs = rhs
         result = binaryop_v_s(
             lhs,
             s_rhs,
