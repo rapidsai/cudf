@@ -76,6 +76,7 @@ class ColumnBase(Column):
                 self.base_mask,
                 self.size,
                 self.offset,
+                self.null_count,
                 self.base_children,
             ),
         )
