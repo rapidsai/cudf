@@ -6,7 +6,7 @@ import pytest
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
-from pandas.core.indexes.base import InvalidIndexError
+
 
 def make_frames(index=None, nulls="none"):
     df = pd.DataFrame(
@@ -264,12 +264,12 @@ def test_pandas_concat_compatibility_axis1():
 
     expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
-    
+
     assert_eq(got, expect)
 
 
 @pytest.mark.parametrize("index2", [[0, 1, 2], [0, 1, 1], [2, 1, 0]])
-@pytest.mark.parametrize("names", [False, (0,1)])
+@pytest.mark.parametrize("names", [False, (0, 1)])
 def test_pandas_concat_compatibility_axis1_overlap(index2, names):
     data = [1, 2, 3]
     s1 = gd.Series(data, index=[0, 1, 2])
@@ -280,18 +280,21 @@ def test_pandas_concat_compatibility_axis1_overlap(index2, names):
     if index2 == [0, 1, 1]:
         pytest.xfail(reason="cannot reindex duplicate axis")
     if not names:
-        pytest.xfail(reason="cuDF doesn't support having multiple columns with same names yet.")
+        pytest.xfail(
+            reason="cuDF doesn't support having multiple \
+                columns with same names yet."
+        )
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)
     expect = pd.concat([ps1, ps2], axis=1)
-    
-    
+
     print(got)
     print(expect)
-    
+
     assert_eq(got, expect)
-    
+
+
 def test_concat_duplicate_columns():
     cdf = gd.DataFrame(
         {

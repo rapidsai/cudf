@@ -9,7 +9,6 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import as_index
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
-from pandas.core.indexes.base import InvalidIndexError
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -58,12 +57,12 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     -------
     A new object of like type with rows from each object in ``objs``.
     """
-    
-    ''' Check if *objs* index contains any duplicates '''
+
+    """ Check if *objs* index contains any duplicates """
     for o in objs:
         if not len(o.index) == len(set(o.index)):
             raise ValueError("cannot reindex from a duplicate axis")
-    
+
     if sort not in (None, False):
         raise NotImplementedError("sort parameter is not yet supported")
 
