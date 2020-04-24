@@ -120,8 +120,11 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     )
 
 
-def drop_duplicates(Table source_table, keys=None,
-                    keep='first', nulls_are_equal=True, ignore_index=False):
+def drop_duplicates(Table source_table,
+                    object keys=None,
+                    object keep='first',
+                    bool nulls_are_equal=True,
+                    bool ignore_index=False):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
