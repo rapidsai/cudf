@@ -456,13 +456,13 @@ std::vector<contiguous_split_result> contiguous_split(
  * Contains data from a table in two contiguous buffers: one on host, which contains table metadata
  * and one on device which contains the table data.
  */
-struct packed_table {
-  packed_table() = default;
-  packed_table(std::unique_ptr<std::vector<uint8_t>> table_metadata,
-               std::unique_ptr<rmm::device_buffer> table_data)
-    : table_metadata(std::move(table_metadata)), table_data(std::move(table_data)){};
-  std::unique_ptr<std::vector<uint8_t>> table_metadata;
-  std::unique_ptr<rmm::device_buffer> table_data;
+struct packed_columns {
+  packed_columns() = default;
+  packed_columns(std::unique_ptr<std::vector<uint8_t>> metadata,
+                 std::unique_ptr<rmm::device_buffer> data)
+    : metadata(std::move(metadata)), data(std::move(data)){};
+  std::unique_ptr<std::vector<uint8_t>> metadata;
+  std::unique_ptr<rmm::device_buffer> data;
 };
 
 /**
@@ -474,11 +474,16 @@ struct packed_table {
  * 
  * @param input View of the table to pack
  * @param[in] mr Optional, The resource to use for all returned device allocations
- * @return packed_table A struct containing the serialized metadata and data in contiguous host
+ * @return packed_columns A struct containing the serialized metadata and data in contiguous host
  *         and device memory respectively
  */
-packed_table pack(cudf::table_view const& input,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+packed_columns pack(std::vector<column_view> const& input,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+struct unpack_result {
+  std::vector<column_view> columns;
+  std::unique_ptr<rmm::device_buffer> all_data;
+};
 
 /**
  * @brief Deserialize the result of `cudf::experimental::pack`
@@ -495,7 +500,7 @@ packed_table pack(cudf::table_view const& input,
  * @param input The packed table to unpack
  * @return contiguous_split_result The unpacked `table_view` and corresponding device data buffer
  */
-contiguous_split_result unpack(std::unique_ptr<packed_table> input);
+unpack_result unpack(std::unique_ptr<packed_columns> input);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or 
