@@ -32,14 +32,14 @@
 #include <vector>
 
 namespace cudf {
-
 // Copy constructor
 column::column(column const &other)
   : _type{other._type},
     _size{other._size},
     _data{other._data},
     _null_mask{other._null_mask},
-    _null_count{other._null_count} {
+    _null_count{other._null_count}
+{
   _children.reserve(other.num_children());
   for (auto const &c : other._children) { _children.emplace_back(std::make_unique<column>(*c)); }
 }
@@ -50,7 +50,8 @@ column::column(column const &other, cudaStream_t stream, rmm::mr::device_memory_
     _size{other._size},
     _data{other._data, stream, mr},
     _null_mask{other._null_mask, stream, mr},
-    _null_count{other._null_count} {
+    _null_count{other._null_count}
+{
   _children.reserve(other.num_children());
   for (auto const &c : other._children) {
     _children.emplace_back(std::make_unique<column>(*c, stream, mr));
@@ -64,14 +65,16 @@ column::column(column &&other) noexcept
     _data{std::move(other._data)},
     _null_mask{std::move(other._null_mask)},
     _null_count{other._null_count},
-    _children{std::move(other._children)} {
+    _children{std::move(other._children)}
+{
   other._size       = 0;
   other._null_count = 0;
   other._type       = data_type{EMPTY};
 }
 
 // Release contents
-column::contents column::release() noexcept {
+column::contents column::release() noexcept
+{
   _size       = 0;
   _null_count = 0;
   _type       = data_type{EMPTY};
@@ -81,7 +84,8 @@ column::contents column::release() noexcept {
 }
 
 // Create immutable view
-column_view column::view() const {
+column_view column::view() const
+{
   // Create views of children
   std::vector<column_view> child_views;
   child_views.reserve(_children.size());
@@ -97,7 +101,8 @@ column_view column::view() const {
 }
 
 // Create mutable view
-mutable_column_view column::mutable_view() {
+mutable_column_view column::mutable_view()
+{
   // create views of children
   std::vector<mutable_column_view> child_views;
   child_views.reserve(_children.size());
@@ -126,7 +131,8 @@ mutable_column_view column::mutable_view() {
 }
 
 // If the null count is known, return it. Else, compute and return it
-size_type column::null_count() const {
+size_type column::null_count() const
+{
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count =
@@ -135,7 +141,8 @@ size_type column::null_count() const {
   return _null_count;
 }
 
-void column::set_null_mask(rmm::device_buffer &&new_null_mask, size_type new_null_count) {
+void column::set_null_mask(rmm::device_buffer &&new_null_mask, size_type new_null_count)
+{
   if (new_null_count > 0) {
     CUDF_EXPECTS(new_null_mask.size() >= cudf::bitmask_allocation_size_bytes(this->size()),
                  "Column with null values must be nullable and the null mask \
@@ -145,7 +152,8 @@ void column::set_null_mask(rmm::device_buffer &&new_null_mask, size_type new_nul
   _null_count = new_null_count;
 }
 
-void column::set_null_mask(rmm::device_buffer const &new_null_mask, size_type new_null_count) {
+void column::set_null_mask(rmm::device_buffer const &new_null_mask, size_type new_null_count)
+{
   if (new_null_count > 0) {
     CUDF_EXPECTS(new_null_mask.size() >= cudf::bitmask_allocation_size_bytes(this->size()),
                  "Column with null values must be nullable and the null mask \
@@ -155,12 +163,12 @@ void column::set_null_mask(rmm::device_buffer const &new_null_mask, size_type ne
   _null_count = new_null_count;
 }
 
-void column::set_null_count(size_type new_null_count) {
+void column::set_null_count(size_type new_null_count)
+{
   if (new_null_count > 0) { CUDF_EXPECTS(nullable(), "Invalid null count."); }
   _null_count = new_null_count;
 }
 namespace {
-
 struct create_column_from_view {
   cudf::column_view view;
   cudaStream_t stream;
@@ -168,14 +176,16 @@ struct create_column_from_view {
 
   template <typename ColumnType,
             std::enable_if_t<std::is_same<ColumnType, cudf::string_view>::value> * = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()()
+  {
     cudf::strings_column_view sview(view);
     return cudf::strings::detail::slice(sview, 0, view.size(), 1, stream, mr);
   }
 
   template <typename ColumnType,
             std::enable_if_t<std::is_same<ColumnType, cudf::dictionary32>::value> * = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()()
+  {
     std::vector<std::unique_ptr<column>> children;
     for (size_type i = 0; i < view.num_children(); ++i)
       children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
@@ -188,7 +198,8 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()> * = nullptr>
-  std::unique_ptr<column> operator()() {
+  std::unique_ptr<column> operator()()
+  {
     std::vector<std::unique_ptr<column>> children;
     for (size_type i = 0; i < view.num_children(); ++i) {
       children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
@@ -208,8 +219,9 @@ struct create_column_from_view {
   }
 
   template <typename ColumnType,
-           std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()() { 
+            std::enable_if_t<std::is_same<ColumnType, cudf::list_view>::value> * = nullptr>
+  std::unique_ptr<column> operator()()
+  {
     CUDF_FAIL("list_view not supported yet");
     return nullptr;
   }
@@ -219,8 +231,10 @@ struct create_column_from_view {
 // Copy from a view
 column::column(column_view view, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
-    // an lvalue reference, which would otherwise dispatch to the copy constructor
+     // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(
-      *experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))} {}
+      *experimental::type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}
+{
+}
 
 }  // namespace cudf

@@ -27,11 +27,8 @@
 #include <numeric>
 
 namespace cudf {
-
 namespace experimental {
-
 namespace detail {
-
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
@@ -60,7 +57,8 @@ inline bool is_trivial_join(table_view const& left,
                             table_view const& right,
                             std::vector<size_type> const& left_on,
                             std::vector<size_type> const& right_on,
-                            join_kind join_type) {
+                            join_kind join_type)
+{
   // If there is nothing to join, then send empty table with all columns
   if (left_on.empty() || right_on.empty()) { return true; }
 
@@ -79,8 +77,8 @@ inline bool is_trivial_join(table_view const& left,
   return false;
 }
 
-}  //namespace detail
+}  // namespace detail
 
-}  //namespace experimental
+}  // namespace experimental
 
-}  //namespace cudf
+}  // namespace cudf

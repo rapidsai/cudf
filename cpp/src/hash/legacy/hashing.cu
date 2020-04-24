@@ -31,7 +31,6 @@ constexpr int BLOCK_SIZE      = 256;
 constexpr int ROWS_PER_THREAD = 1;
 
 namespace {
-
 /**
  * @brief  This function determines if a number is a power of 2.
  *
@@ -40,7 +39,8 @@ namespace {
  * @returns True if the number is a power of 2.
  */
 template <typename T>
-bool is_power_two(T number) {
+bool is_power_two(T number)
+{
   return (0 == (number & (number - 1)));
 }
 
@@ -50,9 +50,12 @@ bool is_power_two(T number) {
 template <template <typename> class hash_function>
 struct row_hasher_initial_values {
   row_hasher_initial_values(device_table const &table_to_hash, hash_value_type *initial_hash_values)
-    : the_table{table_to_hash}, initial_hash_values(initial_hash_values) {}
+    : the_table{table_to_hash}, initial_hash_values(initial_hash_values)
+  {
+  }
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(cudf::size_type row_index) const
+  {
     return hash_row<true, hash_function>(the_table, row_index, initial_hash_values);
   }
 
@@ -61,13 +64,14 @@ struct row_hasher_initial_values {
 };
 
 /**
- * @brief  Computes hash value of a row 
+ * @brief  Computes hash value of a row
  */
 template <template <typename> class hash_function>
 struct row_hasher {
   row_hasher(device_table const &table_to_hash) : the_table{table_to_hash} {}
 
-  __device__ hash_value_type operator()(cudf::size_type row_index) const {
+  __device__ hash_value_type operator()(cudf::size_type row_index) const
+  {
     return hash_row<true, hash_function>(the_table, row_index);
   }
 
@@ -76,17 +80,17 @@ struct row_hasher {
 }  // namespace
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Computes the hash value of each row in the input set of columns.
- * 
+ *
  * @param[in] num_cols The number of columns in the input set
  * @param[in] input The list of columns whose rows will be hashed
  * @param[in] hash The hash function to use
- * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
- * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
- * then each element will be hashed as-is.
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value
+ * for each column that will be combined with the hash of every element in the column. If this
+ * argument is `nullptr`, then each element will be hashed as-is.
  * @param[out] output The hash value of each row of the input
- * 
+ *
  * @return    GDF_SUCCESS if the operation was successful, otherwise an
  *            appropriate error code.
  */
@@ -95,7 +99,8 @@ gdf_error gdf_hash(int num_cols,
                    gdf_column **input,
                    gdf_hash_func hash,
                    hash_value_type *initial_hash_values,
-                   gdf_column *output) {
+                   gdf_column *output)
+{
   // Ensure inputs aren't null
   if ((0 == num_cols) || (nullptr == input) || (nullptr == output)) { return GDF_DATASET_EMPTY; }
 
@@ -165,7 +170,7 @@ gdf_error gdf_hash(int num_cols,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses the FAST modulo operation implemented in int_fastdiv from here:
  * https://github.com/milakov/int_fastdiv
@@ -175,7 +180,8 @@ template <typename hash_value_t, typename output_type>
 struct fast_modulo_partitioner {
   fast_modulo_partitioner(int num_partitions) : fast_divisor{num_partitions} {}
 
-  __host__ __device__ output_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ output_type operator()(hash_value_t hash_value) const
+  {
     // Using int_fastdiv casts 'hash_value' to an int, which can
     // result in negative modulos, requiring taking the absolute value
     // Because of the casting it can also return results that are not
@@ -189,7 +195,7 @@ struct fast_modulo_partitioner {
 };
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses the modulo operation.
  */
@@ -198,7 +204,8 @@ template <typename hash_value_t>
 struct modulo_partitioner {
   modulo_partitioner(cudf::size_type num_partitions) : divisor{num_partitions} {}
 
-  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const
+  {
     return hash_value % divisor;
   }
 
@@ -206,22 +213,24 @@ struct modulo_partitioner {
 };
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Functor to map a hash value to a particular 'bin' or partition number
  * that uses bitshifts. Only works when num_partitions is a power of 2.
  *
- * For n % d, if d is a power of two, then it can be computed more efficiently via 
+ * For n % d, if d is a power of two, then it can be computed more efficiently via
  * a single bitwise AND as:
  * n & (d - 1)
  */
 /* ----------------------------------------------------------------------------*/
 template <typename hash_value_t>
 struct bitwise_partitioner {
-  bitwise_partitioner(cudf::size_type num_partitions) : divisor{(num_partitions - 1)} {
+  bitwise_partitioner(cudf::size_type num_partitions) : divisor{(num_partitions - 1)}
+  {
     assert(is_power_two(num_partitions));
   }
 
-  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const {
+  __host__ __device__ cudf::size_type operator()(hash_value_t hash_value) const
+  {
     return hash_value & (divisor);
   }
 
@@ -229,19 +238,19 @@ struct bitwise_partitioner {
 };
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Computes which partition each row of a device_table will belong to based
-   on hashing each row, and applying a partition function to the hash value. 
+   on hashing each row, and applying a partition function to the hash value.
    Records the size of each partition for each thread block as well as the global
    size of each partition across all thread blocks.
- * 
+ *
  * @param[in] the_table The table whose rows will be partitioned
  * @param[in] num_rows The number of rows in the table
  * @param[in] num_partitions The number of partitions to divide the rows into
  * @param[in] the_partitioner The functor that maps a rows hash value to a partition number
  * @param[out] row_partition_numbers Array that holds which partition each row belongs to
  * @param[out] block_partition_sizes Array that holds the size of each partition for each block,
- * i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
+ * i.e., { {block0 partition0 size, block1 partition0 size, ...},
          {block0 partition1 size, block1 partition1 size, ...},
          ...
          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
@@ -255,7 +264,8 @@ __global__ void compute_row_partition_numbers(device_table the_table,
                                               const partitioner_type the_partitioner,
                                               cudf::size_type *row_partition_numbers,
                                               cudf::size_type *block_partition_sizes,
-                                              cudf::size_type *global_partition_sizes) {
+                                              cudf::size_type *global_partition_sizes)
+{
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ cudf::size_type shared_partition_sizes[];
 
@@ -303,25 +313,28 @@ __global__ void compute_row_partition_numbers(device_table the_table,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Given an array of partition numbers, computes the final output location
-   for each element in the output such that all rows with the same partition are 
+   for each element in the output such that all rows with the same partition are
    contiguous in memory.
- * 
+ *
  * @param row_partition_numbers The array that records the partition number for each row
  * @param num_rows The number of rows
  * @param num_partitions THe number of partitions
- * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
- * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
+ * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread
+ block,
+ * i.e., { {block0 partition0 offset, block1 partition0 offset, ...},
          {block0 partition1 offset, block1 partition1 offset, ...},
          ...
-         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset, ...} }
+         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset,
+ ...} }
  */
 /* ----------------------------------------------------------------------------*/
 __global__ void compute_row_output_locations(cudf::size_type *row_partition_numbers,
                                              const cudf::size_type num_rows,
                                              const cudf::size_type num_partitions,
-                                             cudf::size_type *block_partition_offsets) {
+                                             cudf::size_type *block_partition_offsets)
+{
   // Shared array that holds the offset of this blocks partitions in
   // global memory
   extern __shared__ cudf::size_type shared_partition_offsets[];
@@ -357,19 +370,19 @@ __global__ void compute_row_output_locations(cudf::size_type *row_partition_numb
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Partitions an input device_table into a specified number of partitions.
- * A hash value is computed for each row in a sub-set of the columns of the 
+ * A hash value is computed for each row in a sub-set of the columns of the
  * input table. Each hash value is placed in a bin from [0, number of partitions).
  * A copy of the input table is created where the rows are rearranged such that
  * rows with hash values in the same bin are contiguous.
- * 
+ *
  * @param[in] input_table The table to partition
- * @param[in] table_to_hash Sub-table of the input table with only the columns 
+ * @param[in] table_to_hash Sub-table of the input table with only the columns
  * that will be hashed
  * @param[in] num_partitions The number of partitions that table will be rearranged into
- * @param[out] partition_offsets Preallocated array the size of the number of 
- * partitions. Where partition_offsets[i] indicates the starting position 
+ * @param[out] partition_offsets Preallocated array the size of the number of
+ * partitions. Where partition_offsets[i] indicates the starting position
  * of partition 'i'
  * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
  * of the input columns into the desired number of partitions
@@ -381,7 +394,8 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                                cudf::table const &table_to_hash,
                                const cudf::size_type num_partitions,
                                cudf::size_type *partition_offsets,
-                               cudf::table &partitioned_output) {
+                               cudf::table &partitioned_output)
+{
   const cudf::size_type num_rows = table_to_hash.num_rows();
 
   constexpr cudf::size_type rows_per_block = BLOCK_SIZE * ROWS_PER_THREAD;
@@ -397,7 +411,8 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   //  i.e., { {block0 partition0 size, block1 partition0 size, ...},
   //          {block0 partition1 size, block1 partition1 size, ...},
   //          ...
-  //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size, ...} }
+  //          {block0 partition(num_partitions-1) size, block1 partition(num_partitions -1) size,
+  //          ...} }
   cudf::size_type *block_partition_sizes{nullptr};
   RMM_TRY(RMM_ALLOC(
     (void **)&block_partition_sizes, (grid_size * num_partitions) * sizeof(cudf::size_type), 0));
@@ -515,8 +530,8 @@ gdf_error hash_partition_table(cudf::table const &input_table,
  * @param[in] num_partitions The number of partitions to rearrange the input rows into
  * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
  * of the input columns into the desired number of partitions
- * @param[out] partition_offsets Preallocated array the size of the number of 
- * partitions. Where partition_offsets[i] indicates the starting position 
+ * @param[out] partition_offsets Preallocated array the size of the number of
+ * partitions. Where partition_offsets[i] indicates the starting position
  * of partition 'i'
  * @param[in] hash The hash function to use
  *
@@ -530,7 +545,8 @@ gdf_error gdf_hash_partition(int num_input_cols,
                              int num_partitions,
                              gdf_column *partitioned_output[],
                              int partition_offsets[],
-                             gdf_hash_func hash) {
+                             gdf_hash_func hash)
+{
   // Ensure all the inputs are non-zero and not null
   if ((0 == num_input_cols) || (0 == num_cols_to_hash) || (0 == num_partitions) ||
       (nullptr == input) || (nullptr == partitioned_output) || (nullptr == columns_to_hash) ||

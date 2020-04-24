@@ -24,15 +24,15 @@
 
 namespace cudf {
 namespace detail {
-
 /**
  * @brief Internal API to calculate groupwise standard deviation
- * 
+ *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_labels Vector of size(@p values) indicating the group that each value belongs to
  * @param group_sizes Number of valid elements per group
  * @param result Pre-allocated column to put output of this operation into
- * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N` is the group size
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N`
+ * is the group size
  * @param stream Stream to perform computation in
  */
 void group_std(gdf_column const& values,
@@ -44,12 +44,13 @@ void group_std(gdf_column const& values,
 
 /**
  * @brief Internal API to calculate groupwise variance
- * 
+ *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_labels Vector of size(@p values) indicating the group that each value belongs to
  * @param group_sizes Number of valid elements per group
  * @param result Pre-allocated column to put output of this operation into
- * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N` is the group size
+ * @param ddof Delta Degrees of Freedom: the divisor used in calculations is `N - ddof`, where `N`
+ * is the group size
  * @param stream Stream to perform computation in
  */
 void group_var(gdf_column const& values,

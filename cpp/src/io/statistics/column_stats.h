@@ -18,7 +18,6 @@
 
 namespace cudf {
 namespace io {
-
 enum statistics_dtype {
   dtype_none,
   dtype_bool,

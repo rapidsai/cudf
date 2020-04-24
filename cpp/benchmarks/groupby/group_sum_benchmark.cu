@@ -26,11 +26,13 @@
 #include <memory>
 #include <random>
 
-class Groupby : public cudf::benchmark {};
+class Groupby : public cudf::benchmark {
+};
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max
 template <typename T>
-T random_int(T min, T max) {
+T random_int(T min, T max)
+{
   static unsigned seed = 13377331;
   static std::mt19937 engine{seed};
   static std::uniform_int_distribution<T> uniform{min, max};
@@ -38,7 +40,8 @@ T random_int(T min, T max) {
   return uniform(engine);
 }
 
-void BM_basic_sum(benchmark::State& state) {
+void BM_basic_sum(benchmark::State& state)
+{
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
   // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
@@ -72,7 +75,8 @@ BENCHMARK_REGISTER_F(Groupby, Basic)
   ->Arg(10000)
   ->Arg(10000000);
 
-void BM_pre_sorted_sum(benchmark::State& state) {
+void BM_pre_sorted_sum(benchmark::State& state)
+{
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};

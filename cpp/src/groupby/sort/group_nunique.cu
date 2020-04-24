@@ -27,17 +27,18 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 namespace {
 struct nunique_functor {
   template <typename T>
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     rmm::device_vector<size_type> const& group_labels,
-                                     size_type const num_groups,
-                                     rmm::device_vector<size_type> const& group_offsets,
-                                     include_nulls _include_nulls,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+  typename std::enable_if_t<cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
+  operator()(column_view const& values,
+             rmm::device_vector<size_type> const& group_labels,
+             size_type const num_groups,
+             rmm::device_vector<size_type> const& group_offsets,
+             include_nulls _include_nulls,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
+  {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
 
@@ -55,8 +56,8 @@ struct nunique_functor {
          group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
           bool is_input_countable = (_include_nulls == include_nulls::YES || v.is_valid_nocheck(i));
           bool is_unique          = is_input_countable &&
-                           (group_offsets[group_labels[i]] == i ||  //first element or
-                            (not equal.operator()<T>(i, i - 1)));   //new unique value in sorted
+                           (group_offsets[group_labels[i]] == i ||  // first element or
+                            (not equal.operator()<T>(i, i - 1)));   // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
 
@@ -74,8 +75,8 @@ struct nunique_functor {
          equal,
          group_offsets = group_offsets.data().get(),
          group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
-          bool is_unique = group_offsets[group_labels[i]] == i ||  //first element or
-                           (not equal.operator()<T>(i, i - 1));    //new unique value in sorted
+          bool is_unique = group_offsets[group_labels[i]] == i ||  // first element or
+                           (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
       thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
@@ -87,6 +88,20 @@ struct nunique_functor {
     }
     return result;
   }
+
+  template <typename T>
+  typename std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
+  operator()(column_view const& values,
+             rmm::device_vector<size_type> const& group_labels,
+             size_type const num_groups,
+             rmm::device_vector<size_type> const& group_offsets,
+             include_nulls _include_nulls,
+             rmm::mr::device_memory_resource* mr,
+             cudaStream_t stream)
+  {
+    CUDF_FAIL("list_view group_nunique not supported yet");
+    return nullptr;
+  }
 };
 }  // namespace
 std::unique_ptr<column> group_nunique(column_view const& values,
@@ -95,7 +110,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       rmm::device_vector<size_type> const& group_offsets,
                                       include_nulls _include_nulls,
                                       rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");

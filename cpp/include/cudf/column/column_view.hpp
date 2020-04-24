@@ -55,7 +55,8 @@ class column_view_base {
    * @return T const* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
-  T const* head() const noexcept {
+  T const* head() const noexcept
+  {
     return static_cast<T const*>(_data);
   }
 
@@ -71,7 +72,8 @@ class column_view_base {
    * @return T const* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* data() const noexcept {
+  T const* data() const noexcept
+  {
     return head<T>() + _offset;
   }
 
@@ -83,7 +85,8 @@ class column_view_base {
    * @return T const* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* begin() const noexcept {
+  T const* begin() const noexcept
+  {
     return data<T>();
   }
 
@@ -95,7 +98,8 @@ class column_view_base {
    * @return T const* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T const* end() const noexcept {
+  T const* end() const noexcept
+  {
     return begin<T>() + size();
   }
 
@@ -415,7 +419,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
   template <typename T = void>
-  T* head() const noexcept {
+  T* head() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
@@ -431,7 +436,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Typed pointer to underlying data, including the offset
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* data() const noexcept {
+  T* data() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
@@ -443,7 +449,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Pointer to the first element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* begin() const noexcept {
+  T* begin() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
@@ -455,7 +462,8 @@ class mutable_column_view : public detail::column_view_base {
    * @return T* Pointer to one past the last element after casting
    *---------------------------------------------------------------------------**/
   template <typename T>
-  T* end() const noexcept {
+  T* end() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
@@ -466,7 +474,8 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
    *---------------------------------------------------------------------------**/
-  bitmask_type* null_mask() const noexcept {
+  bitmask_type* null_mask() const noexcept
+  {
     return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
 
@@ -485,7 +494,8 @@ class mutable_column_view : public detail::column_view_base {
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
    *---------------------------------------------------------------------------**/
-  mutable_column_view child(size_type child_index) const noexcept {
+  mutable_column_view child(size_type child_index) const noexcept
+  {
     return mutable_children[child_index];
   }
 

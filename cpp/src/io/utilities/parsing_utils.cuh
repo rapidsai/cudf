@@ -22,7 +22,6 @@
 namespace cudf {
 namespace experimental {
 namespace io {
-
 /**
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
@@ -62,7 +61,8 @@ namespace gpu {
 __device__ __inline__ long seek_field_end(const char* data,
                                           ParseOptions const& opts,
                                           long pos,
-                                          long stop) {
+                                          long stop)
+{
   bool quotation = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
@@ -99,7 +99,8 @@ __device__ __inline__ long seek_field_end(const char* data,
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
+{
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -119,7 +120,8 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
+__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
+{
   if (c >= '0' && c <= '9') return c - '0';
 
   *valid_flag = false;
@@ -139,7 +141,8 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag) {
  */
 template <typename T>
 __inline__ __device__ T
-parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10) {
+parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10)
+{
   T value               = 0;
   bool all_digits_valid = true;
 
@@ -200,12 +203,12 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts, 
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
- *  
+ *
  * @param[in] d_data Input character array in device memory
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return cudf::size_type total number of occurrences
  **/
 template <class T>
@@ -218,16 +221,16 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @brief Searches the input character array for each of characters in a set.
  * Sums up the number of occurrences. If the 'positions' parameter is not void*,
  * positions of all occurrences are stored in the output device array.
- * 
- * Does not load the entire file into the GPU memory at any time, so it can 
+ *
+ * Does not load the entire file into the GPU memory at any time, so it can
  * be used to parse large files. Output array needs to be preallocated.
- * 
+ *
  * @param[in] h_data Pointer to the input character array
  * @param[in] h_size Number of bytes in the input array
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
- * 
+ *
  * @return cudf::size_type total number of occurrences
  **/
 template <class T>
@@ -252,7 +255,7 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  * @brief Searches the input character array for each of characters in a set
  * and sums up the number of occurrences.
  *
- * Does not load the entire buffer into the GPU memory at any time, so it can 
+ * Does not load the entire buffer into the GPU memory at any time, so it can
  * be used with buffers of any size.
  *
  * @param[in] h_data Pointer to the data in host memory
