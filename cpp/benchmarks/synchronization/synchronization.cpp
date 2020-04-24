@@ -21,7 +21,8 @@
 cuda_event_timer::cuda_event_timer(benchmark::State& state,
                                    bool flush_l2_cache,
                                    cudaStream_t stream)
-  : p_state(&state), stream(stream) {
+  : p_state(&state), stream(stream)
+{
   // flush all of L2$
   if (flush_l2_cache) {
     int current_device = 0;
@@ -42,7 +43,8 @@ cuda_event_timer::cuda_event_timer(benchmark::State& state,
   CUDA_TRY(cudaEventRecord(start, stream));
 }
 
-cuda_event_timer::~cuda_event_timer() {
+cuda_event_timer::~cuda_event_timer()
+{
   CUDA_TRY(cudaEventRecord(stop, stream));
   CUDA_TRY(cudaEventSynchronize(stop));
 

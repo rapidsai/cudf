@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -87,7 +87,6 @@ For more information on these sources, see the manual.
 
 namespace cudf {
 namespace io {
-
 #ifdef _MSC_VER
 #define bswap_32(v) _byteswap_ulong(v)
 #define bswap_64(v) _byteswap_uint64(v)
@@ -164,17 +163,20 @@ typedef struct {
 } unbz_state_s;
 
 // return next 32 bits
-static inline uint32_t next32bits(const unbz_state_s *s) {
+static inline uint32_t next32bits(const unbz_state_s *s)
+{
   return (uint32_t)((s->bitbuf << s->bitpos) >> 32);
 }
 
 // return next n bits
-static inline uint32_t showbits(const unbz_state_s *s, uint32_t n) {
+static inline uint32_t showbits(const unbz_state_s *s, uint32_t n)
+{
   return (uint32_t)((s->bitbuf << s->bitpos) >> (64 - n));
 }
 
 // update bit position, refill bit buffer if necessary
-static void skipbits(unbz_state_s *s, uint32_t n) {
+static void skipbits(unbz_state_s *s, uint32_t n)
+{
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 4;
@@ -186,14 +188,16 @@ static void skipbits(unbz_state_s *s, uint32_t n) {
   s->bitpos = bitpos;
 }
 
-static inline uint32_t getbits(unbz_state_s *s, uint32_t n) {
+static inline uint32_t getbits(unbz_state_s *s, uint32_t n)
+{
   uint32_t bits = showbits(s, n);
   skipbits(s, n);
   return bits;
 }
 
 /*---------------------------------------------------*/
-int32_t bz2_decompress_block(unbz_state_s *s) {
+int32_t bz2_decompress_block(unbz_state_s *s)
+{
   int nInUse;
 
   int32_t i;
@@ -372,7 +376,9 @@ int32_t bz2_decompress_block(unbz_state_s *s) {
       if (nblock + es > nblockMAX) return BZ_DATA_ERROR;
       uc = s->seqToUnseq[s->mtfa[s->mtfbase[0]]];
       s->unzftab[uc] += es;
-      do { s->tt[nblock++] = uc; } while (--es);
+      do {
+        s->tt[nblock++] = uc;
+      } while (--es);
     }
 
     if (nextSym == EOB) break;
@@ -453,7 +459,8 @@ int32_t bz2_decompress_block(unbz_state_s *s) {
 
   s->save_nblock = nblock;
 
-  // Verify the end-of-block signature: should be followed by another block or an end-of-stream signature
+  // Verify the end-of-block signature: should be followed by another block or an end-of-stream
+  // signature
   {
     const uint8_t *save_cur = s->cur;
     uint64_t save_bitbuf    = s->bitbuf;
@@ -475,7 +482,8 @@ int32_t bz2_decompress_block(unbz_state_s *s) {
   }
 }
 
-static void bzUnRLE(unbz_state_s *s) {
+static void bzUnRLE(unbz_state_s *s)
+{
   uint8_t *out    = s->out;
   uint8_t *outend = s->outend;
 
@@ -518,7 +526,8 @@ static void bzUnRLE(unbz_state_s *s) {
 }
 
 int32_t cpu_bz2_uncompress(
-  const uint8_t *source, size_t sourceLen, uint8_t *dest, size_t *destLen, uint64_t *block_start) {
+  const uint8_t *source, size_t sourceLen, uint8_t *dest, size_t *destLen, uint64_t *block_start)
+{
   unbz_state_s s;
   uint32_t v;
   int ret;

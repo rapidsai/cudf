@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a column of character position values where the target
  * string is first found in each string of the provided column.

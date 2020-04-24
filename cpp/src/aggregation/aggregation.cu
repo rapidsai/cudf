@@ -19,10 +19,10 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (size_type i = 0; i < table.num_columns(); ++i) {

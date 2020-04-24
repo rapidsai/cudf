@@ -28,9 +28,7 @@
 using bit_mask::bit_mask_t;
 
 namespace cudf {
-
 namespace detail {
-
 constexpr int warp_size = 32;
 
 constexpr int block_size = 256;
@@ -42,7 +40,8 @@ constexpr int block_size = 256;
  * @return[out] result of each block is returned in thread 0.
  */
 template <class bit_container, int lane = 0>
-__device__ __inline__ cudf::size_type single_lane_popc_block_reduce(bit_container bit_mask) {
+__device__ __inline__ cudf::size_type single_lane_popc_block_reduce(bit_container bit_mask)
+{
   static __shared__ cudf::size_type warp_count[warp_size];
 
   int lane_id = (threadIdx.x % warp_size);
@@ -75,7 +74,8 @@ __global__ void valid_if_kernel(const bit_container* source_mask,
                                 bit_container* destination_mask,
                                 predicate p,
                                 size_type num_bits,
-                                size_type* p_valid_count) {
+                                size_type* p_valid_count)
+{
   static_assert(warp_size == util::size_in_bits<bit_container>(),
                 "warp size is different from bit_container size.");
 
@@ -114,20 +114,21 @@ __global__ void valid_if_kernel(const bit_container* source_mask,
 }  // namespace detail
 
 /**
-  * @brief Generate a bitmask where every bit is marked with valid 
-  * if and only if predicate(bit) and source_mask(bit) are both true.
-  * 
-  * @param source_mask The source mask
-  * @param p The predicate that has an operator() member function
-  * @param num_bits Number of bits
-  * @param stream An optional cudaStream_t object
-  * @return The generated bitmask as well as its null_count
-  */
+ * @brief Generate a bitmask where every bit is marked with valid
+ * if and only if predicate(bit) and source_mask(bit) are both true.
+ *
+ * @param source_mask The source mask
+ * @param p The predicate that has an operator() member function
+ * @param num_bits Number of bits
+ * @param stream An optional cudaStream_t object
+ * @return The generated bitmask as well as its null_count
+ */
 template <typename bit_container, typename predicate, typename size_type>
 std::pair<bit_container*, size_type> valid_if(const bit_container* source_mask,
                                               const predicate& p,
                                               size_type num_bits,
-                                              cudaStream_t stream = 0) {
+                                              cudaStream_t stream = 0)
+{
   bit_container* destination_mask = nullptr;
   CUDF_EXPECTS(GDF_SUCCESS == bit_mask::create_bit_mask(&destination_mask, num_bits),
                "Failed to allocate bit_mask buffer.");

@@ -22,7 +22,6 @@
 namespace cudf {
 namespace experimental {
 namespace reduction {
-
 std::unique_ptr<scalar> sum(column_view const& col,
                             data_type const output_dtype,
                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),

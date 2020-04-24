@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Replaces target string within each string with the specified
  * replacement string.
