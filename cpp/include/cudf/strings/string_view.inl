@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/types.hpp>
 
 #include <cstdlib>
 
