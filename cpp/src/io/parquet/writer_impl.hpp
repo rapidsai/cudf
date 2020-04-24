@@ -24,8 +24,8 @@
 #include "parquet.h"
 #include "parquet_gpu.h"
 
-#include <io/utilities/hostdevice_vector.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/writers.hpp>
@@ -55,8 +55,8 @@ using namespace cudf::io;
  **/
 class writer::impl {
   // Parquet datasets are divided into fixed-size, independent rowgroups
-  static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024; // 128MB
-  static constexpr uint32_t DEFAULT_ROWGROUP_MAXROWS = 1000000; // Or at most 1M rows
+  static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024;  // 128MB
+  static constexpr uint32_t DEFAULT_ROWGROUP_MAXROWS = 1000000;            // Or at most 1M rows
 
   // rowgroups are divided into pages
   static constexpr uint32_t DEFAULT_TARGET_PAGE_SIZE = 512 * 1024;
@@ -69,7 +69,8 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Resource to use for device memory allocation
    **/
-  explicit impl(std::unique_ptr<data_sink> sink, writer_options const& options,
+  explicit impl(std::unique_ptr<data_sink> sink,
+                writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -83,10 +84,11 @@ class writer::impl {
    * @return unique_ptr to FileMetadata thrift message if requested
    **/
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                 const table_metadata *metadata,
-                 bool return_filemetadata, const std::string& metadata_out_file_path,
-                 cudaStream_t stream);
-  
+                                              const table_metadata* metadata,
+                                              bool return_filemetadata,
+                                              const std::string& metadata_out_file_path,
+                                              cudaStream_t stream);
+
   /**
    * @brief Begins the chunked/streamed write process.
    *
@@ -110,8 +112,10 @@ class writer::impl {
    * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
-  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(pq_chunked_state& state,
-                 bool return_filemetadata = false, const std::string& metadata_out_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
+    pq_chunked_state& state,
+    bool return_filemetadata                  = false,
+    const std::string& metadata_out_file_path = "");
 
  private:
   /**
@@ -127,8 +131,10 @@ class writer::impl {
    **/
   void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                           uint32_t num_columns, uint32_t num_fragments,
-                           uint32_t num_rows, uint32_t fragment_size,
+                           uint32_t num_columns,
+                           uint32_t num_fragments,
+                           uint32_t num_rows,
+                           uint32_t fragment_size,
                            cudaStream_t stream);
   /**
    * @brief Gather per-fragment statistics
@@ -141,11 +147,13 @@ class writer::impl {
    * @param fragment_size Number of rows per fragment
    * @param stream Stream to use for memory allocation and kernels
    **/
-  void gather_fragment_statistics(statistics_chunk *dst_stats,
-                           hostdevice_vector<gpu::PageFragment>& frag,
-                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                           uint32_t num_columns, uint32_t num_fragments,
-                           uint32_t fragment_size, cudaStream_t stream);
+  void gather_fragment_statistics(statistics_chunk* dst_stats,
+                                  hostdevice_vector<gpu::PageFragment>& frag,
+                                  hostdevice_vector<gpu::EncColumnDesc>& col_desc,
+                                  uint32_t num_columns,
+                                  uint32_t num_fragments,
+                                  uint32_t fragment_size,
+                                  cudaStream_t stream);
   /**
    * @brief Build per-chunk dictionaries and count data pages
    *
@@ -158,8 +166,10 @@ class writer::impl {
    **/
   void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                                 hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                                uint32_t num_rowgroups, uint32_t num_columns,
-                                uint32_t num_dictionaries, cudaStream_t stream);
+                                uint32_t num_rowgroups,
+                                uint32_t num_columns,
+                                uint32_t num_dictionaries,
+                                cudaStream_t stream);
   /**
    * @brief Initialize encoder pages
    *
@@ -174,11 +184,13 @@ class writer::impl {
    **/
   void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                          gpu::EncPage *pages,
-                          statistics_chunk *page_stats,
-                          statistics_chunk *frag_stats,
-                          uint32_t num_rowgroups, uint32_t num_columns,
-                          uint32_t num_pages, uint32_t num_stats_bfr,
+                          gpu::EncPage* pages,
+                          statistics_chunk* page_stats,
+                          statistics_chunk* frag_stats,
+                          uint32_t num_rowgroups,
+                          uint32_t num_columns,
+                          uint32_t num_pages,
+                          uint32_t num_stats_bfr,
                           cudaStream_t stream);
   /**
    * @brief Encode a batch pages
@@ -197,23 +209,26 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                    gpu::EncPage *pages, uint32_t num_columns,
-                    uint32_t pages_in_batch, uint32_t first_page_in_batch,
-                    uint32_t rowgroups_in_batch, uint32_t first_rowgroup,
-                    gpu_inflate_input_s *comp_in,
-                    gpu_inflate_status_s *comp_out,
-                    const statistics_chunk *page_stats,
-                    const statistics_chunk *chunk_stats,
+                    gpu::EncPage* pages,
+                    uint32_t num_columns,
+                    uint32_t pages_in_batch,
+                    uint32_t first_page_in_batch,
+                    uint32_t rowgroups_in_batch,
+                    uint32_t first_rowgroup,
+                    gpu_inflate_input_s* comp_in,
+                    gpu_inflate_status_s* comp_out,
+                    const statistics_chunk* page_stats,
+                    const statistics_chunk* chunk_stats,
                     cudaStream_t stream);
 
  private:
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
 
-  size_t max_rowgroup_size_ = DEFAULT_ROWGROUP_MAXSIZE;
-  size_t max_rowgroup_rows_ = DEFAULT_ROWGROUP_MAXROWS;
-  size_t target_page_size_ = DEFAULT_TARGET_PAGE_SIZE;
-  Compression compression_ = Compression::UNCOMPRESSED;
+  size_t max_rowgroup_size_          = DEFAULT_ROWGROUP_MAXSIZE;
+  size_t max_rowgroup_rows_          = DEFAULT_ROWGROUP_MAXROWS;
+  size_t target_page_size_           = DEFAULT_TARGET_PAGE_SIZE;
+  Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
 
   std::vector<uint8_t> buffer_;

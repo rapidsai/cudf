@@ -20,14 +20,14 @@
 #ifndef GDF_JIT_LAUNCHER_H
 #define GDF_JIT_LAUNCHER_H
 
-#include <jit/cache.h>
 #include <cudf/types.h>
-#include <jitify.hpp>
-#include <unordered_map>
-#include <string>
-#include <fstream>
-#include <memory>
+#include <jit/cache.h>
 #include <chrono>
+#include <fstream>
+#include <jitify.hpp>
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 namespace cudf {
 namespace jit {
@@ -39,7 +39,7 @@ namespace jit {
 class launcher {
  public:
   launcher() = delete;
-   
+
   /**
    * @brief C'tor of the launcher class
    * 
@@ -56,14 +56,12 @@ class launcher {
    * file names.
    * @param stream The non-owned stream to use for execution
    */
-  launcher(
-    const std::string& hash,
-    const std::string& cuda_source,
-    const std::vector<std::string>& header_names,
-    const std::vector<std::string>& compiler_flags,
-    jitify::experimental::file_callback_type file_callback,
-    cudaStream_t stream = 0
-  );       
+  launcher(const std::string& hash,
+           const std::string& cuda_source,
+           const std::vector<std::string>& header_names,
+           const std::vector<std::string>& compiler_flags,
+           jitify::experimental::file_callback_type file_callback,
+           cudaStream_t stream = 0);
   launcher(launcher&&);
   launcher(const launcher&) = delete;
   launcher& operator=(launcher&&) = delete;
@@ -80,11 +78,8 @@ class launcher {
    * @param arguments   The template arguments to be used to instantiate the kernel
    * @return launcher& ref to this launcehr object
    */
-  launcher& set_kernel_inst(
-    const std::string& kernel_name,
-    const std::vector<std::string>& arguments
-  )
-  {
+  launcher& set_kernel_inst(const std::string& kernel_name,
+                            const std::vector<std::string>& arguments) {
     kernel_inst = cache_instance.getKernelInstantiation(kernel_name, program, arguments);
     return *this;
   }
@@ -96,8 +91,8 @@ class launcher {
    * @tparam All parameters to launch the kernel
    * @return Return GDF_SUCCESS if successful
    */
-  template <typename ... Args>
-  void launch(Args ... args){
+  template <typename... Args>
+  void launch(Args... args) {
     get_kernel().configure_1d_max_occupancy(0, 0, 0, stream).launch(args...);
   }
 
@@ -110,7 +105,7 @@ class launcher {
   jitify::experimental::KernelInstantiation& get_kernel() { return *std::get<1>(kernel_inst); }
 };
 
-} // namespace jit
-} // namespace cudf
+}  // namespace jit
+}  // namespace cudf
 
 #endif

@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <cudf/unary.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/unary.hpp>
 
 namespace cudf {
 namespace experimental {
-namespace detail{
+namespace detail {
 
 /**
  * @brief Creates a column of `BOOL8` elements by applying a predicate to every element between [`begin, `end`)
@@ -39,18 +39,20 @@ namespace detail{
  */
 
 template <typename InputIterator, typename Predicate>
-std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
-                           size_type size, Predicate p,
-                           rmm::mr::device_memory_resource * mr =
-                               rmm::mr::get_default_resource(),
-                           cudaStream_t stream = 0) {
-    auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
-    auto output_mutable_view = output->mutable_view();
-    auto output_data = output_mutable_view.data<bool>();
+std::unique_ptr<column> true_if(
+  InputIterator begin,
+  InputIterator end,
+  size_type size,
+  Predicate p,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0) {
+  auto output = make_numeric_column(data_type(BOOL8), size, mask_state::UNALLOCATED, stream, mr);
+  auto output_mutable_view = output->mutable_view();
+  auto output_data         = output_mutable_view.data<bool>();
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream), begin, end, output_data, p);
+  thrust::transform(rmm::exec_policy(stream)->on(stream), begin, end, output_data, p);
 
-    return output;
+  return output;
 }
 
 /**
@@ -63,12 +65,11 @@ std::unique_ptr<column> true_if(InputIterator begin, InputIterator end,
  *
  * @returns std::unique_ptr<cudf::column> Result of the operation
  */
-std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
-                                              cudf::experimental::unary_op op,
-                                              rmm::mr::device_memory_resource* mr =
-                                              rmm::mr::get_default_resource(),
-                                              cudaStream_t stream = 0);
-
+std::unique_ptr<cudf::column> unary_operation(
+  cudf::column_view const& input,
+  cudf::experimental::unary_op op,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
@@ -84,10 +85,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
  */
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
-                             rmm::mr::device_memory_resource* mr =
-                                rmm::mr::get_default_resource(),
-                             cudaStream_t stream = 0);
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                             cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

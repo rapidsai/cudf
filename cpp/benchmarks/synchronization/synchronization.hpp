@@ -65,9 +65,7 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 class cuda_event_timer {
- 
-public:
-
+ public:
   /**---------------------------------------------------------------------------*
    * @brief This c'tor clears the L2$ by cudaMemset'ing a buffer of L2$ size
    * and starts the timer.
@@ -78,20 +76,18 @@ public:
    *                            every iteration.
    * @param[in] stream_ The CUDA stream we are measuring time on.
    *---------------------------------------------------------------------------**/
-  cuda_event_timer(benchmark::State& state,
-                   bool flush_l2_cache,
-                   cudaStream_t stream_ = 0);
- 
-  // The user will HAVE to provide a benchmark::State object to set 
+  cuda_event_timer(benchmark::State& state, bool flush_l2_cache, cudaStream_t stream_ = 0);
+
+  // The user will HAVE to provide a benchmark::State object to set
   // the timer so we disable the default c'tor.
-  cuda_event_timer() = delete;  
-  
-  // The d'tor stops the timer and performs a synchroniazation. 
+  cuda_event_timer() = delete;
+
+  // The d'tor stops the timer and performs a synchroniazation.
   // Time of the benchmark::State object provided to the c'tor
   // will be set to the value given by `cudaEventElapsedTime`.
   ~cuda_event_timer();
 
-private:
+ private:
   cudaEvent_t start;
   cudaEvent_t stop;
   cudaStream_t stream;

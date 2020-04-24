@@ -18,29 +18,27 @@
 
 #include "cudf/cudf.h"
 
-namespace cudf
-{
+namespace cudf {
 
 /**
  * @brief Types of unary operations that can be performed on data.
  */
-enum unary_op{
-  SIN,          ///< Trigonometric sine
-  COS,          ///< Trigonometric cosine
-  TAN,          ///< Trigonometric tangent
-  ARCSIN,       ///< Trigonometric sine inverse
-  ARCCOS,       ///< Trigonometric cosine inverse
-  ARCTAN,       ///< Trigonometric tangent inverse
-  EXP,          ///< Exponential (base e, Euler number)
-  LOG,          ///< Natural Logarithm (base e)
-  SQRT,         ///< Square-root (x^0.5)
-  CEIL,         ///< Smallest integer value not less than arg
-  FLOOR,        ///< largest integer value not greater than arg
-  ABS,          ///< Absolute value
-  BIT_INVERT,   ///< Bitwise Not (~)
-  NOT,          ///< Logical Not (!)
+enum unary_op {
+  SIN,         ///< Trigonometric sine
+  COS,         ///< Trigonometric cosine
+  TAN,         ///< Trigonometric tangent
+  ARCSIN,      ///< Trigonometric sine inverse
+  ARCCOS,      ///< Trigonometric cosine inverse
+  ARCTAN,      ///< Trigonometric tangent inverse
+  EXP,         ///< Exponential (base e, Euler number)
+  LOG,         ///< Natural Logarithm (base e)
+  SQRT,        ///< Square-root (x^0.5)
+  CEIL,        ///< Smallest integer value not less than arg
+  FLOOR,       ///< largest integer value not greater than arg
+  ABS,         ///< Absolute value
+  BIT_INVERT,  ///< Bitwise Not (~)
+  NOT,         ///< Logical Not (!)
 };
-
 
 /**
  * @brief  Performs unary op on all values in column
@@ -51,7 +49,6 @@ enum unary_op{
  * @returns gdf_column Result of the operation
  */
 gdf_column unary_operation(gdf_column const& input, unary_op op);
-
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output
@@ -66,9 +63,9 @@ gdf_column unary_operation(gdf_column const& input, unary_op op);
  *
  * @returns gdf_column Result of the cast operation
  */
-gdf_column cast(gdf_column const& input, gdf_dtype out_type,
+gdf_column cast(gdf_column const& input,
+                gdf_dtype out_type,
                 gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
-
 
 /**
  * @brief Checks the `input` column for `null` values, and creates a `bool`
@@ -92,4 +89,4 @@ gdf_column is_null(gdf_column const& input);
  */
 gdf_column is_not_null(gdf_column const& input);
 
-} // namespace cudf
+}  // namespace cudf

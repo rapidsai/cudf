@@ -25,12 +25,12 @@ namespace rolling {
 namespace jit {
 namespace code {
 
-    extern const char* kernel;
-    extern const char* operation_h;
+extern const char* kernel;
+extern const char* operation_h;
 
-}
-}
-}
-}
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf
 
 #endif
