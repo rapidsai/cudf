@@ -156,10 +156,10 @@ struct read_csv_args {
   std::vector<int> use_cols_indexes;
   /// Rows to read; -1 is all
   size_type nrows = -1;
-  /// Rows to skip from the start
-  size_type skiprows = 0;
-  /// Rows to skip from the end
-  size_type skipfooter = 0;
+  /// Rows to skip from the start; -1 is none
+  size_type skiprows = -1;
+  /// Rows to skip from the end; -1 is none
+  size_type skipfooter = -1;
   /// Header row index
   size_type header = 0;
 

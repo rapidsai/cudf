@@ -142,7 +142,7 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
     return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
-  } else if (args.skiprows != 0 || args.skipfooter != 0 || args.nrows != -1) {
+  } else if (args.skiprows != -1 || args.skipfooter != -1 || args.nrows != -1) {
     return reader->read_rows(args.skiprows, args.skipfooter, args.nrows);
   } else {
     return reader->read_all();
