@@ -15,33 +15,33 @@
  */
 #pragma once
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 
 namespace cudf {
 
 class lists_column_view : private column_view {
-public:
-   lists_column_view( column_view lists_column );
-   lists_column_view( lists_column_view&& strings_view ) = default;
-   lists_column_view( const lists_column_view& strings_view ) = default;
-   ~lists_column_view() = default;
-   lists_column_view& operator=(lists_column_view const&) = default;
-   lists_column_view& operator=(lists_column_view&&) = default;
+ public:
+  lists_column_view(column_view lists_column);
+  lists_column_view(lists_column_view&& strings_view)      = default;
+  lists_column_view(const lists_column_view& strings_view) = default;
+  ~lists_column_view()                                     = default;
+  lists_column_view& operator=(lists_column_view const&) = default;
+  lists_column_view& operator=(lists_column_view&&) = default;
 
-   static constexpr size_type offsets_column_index{0};    
+  static constexpr size_type offsets_column_index{0};
 
-   using column_view::size;
-   using column_view::null_mask;
-   using column_view::null_count;
-   using column_view::has_nulls;
-   using column_view::offset;
-    
-   column_view parent() const;
-    
-   column_view offsets() const;
-   // child == column_view.child(1) since offsets occupies   
-   column_view child() const;
+  using column_view::has_nulls;
+  using column_view::null_count;
+  using column_view::null_mask;
+  using column_view::offset;
+  using column_view::size;
+
+  column_view parent() const;
+
+  column_view offsets() const;
+  // child == column_view.child(1) since offsets occupies
+  column_view child() const;
 };
 
-} // namespace cudf
+}  // namespace cudf

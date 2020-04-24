@@ -294,17 +294,20 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 }
 
 std::string get_nested_type_str(cudf::column_view const& view)
-{                  
-  if(view.type().id() == cudf::LIST){      
-      // OFFSET HACK.  
-      return cudf::jit::get_type_name(view.type()) + "<" + get_nested_type_str(view.child(1)) + ">";
-  } 
+{
+  if (view.type().id() == cudf::LIST) {
+    // OFFSET HACK.
+    return cudf::jit::get_type_name(view.type()) + "<" + get_nested_type_str(view.child(1)) + ">";
+  }
   return cudf::jit::get_type_name(view.type());
 }
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
     auto h_data = cudf::test::to_host<Element>(col);
 
     out.resize(col.size());
@@ -320,15 +323,17 @@ struct column_view_printer {
                      });
 
     } else {
-
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(),
-        [] (Element el) { return std::to_string(el); });
-
-    }    
-  }  
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
+        return std::to_string(el);
+      });
+    }
+  }
 
   template <typename Element, typename std::enable_if_t<is_timestamp<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
     //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
@@ -338,8 +343,12 @@ struct column_view_printer {
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);
   }
 
-  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
     //
     //  Implementation for strings, call special to_host variant
     //
@@ -350,12 +359,18 @@ struct column_view_printer {
                    thrust::make_counting_iterator(col.size()),
                    out.begin(),
                    [&h_data](auto idx) {
-                     return h_data.second.data() == nullptr || bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                     return h_data.second.data() == nullptr || bit_is_set(h_data.second.data(), idx)
+                              ? h_data.first[idx]
+                              : std::string("NULL");
                    });
   }
 
-  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
     cudf::dictionary_column_view dictionary(col);
     if (col.size() == 0) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
@@ -373,40 +388,43 @@ struct column_view_printer {
     }
   }
 
-  template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col, std::vector<std::string> & out, std::string const& indent) {
+  template <typename Element,
+            typename std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+  void operator()(cudf::column_view const& col,
+                  std::vector<std::string>& out,
+                  std::string const& indent)
+  {
     lists_column_view lcv(col);
 
-    std::string tmp = get_nested_type_str(col) + ":\n" +
-                      indent + "Length : " + std::to_string(lcv.size()) + "\n" +
-                      indent + "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
-                      (lcv.has_nulls() ? indent + "Has nulls\n" : "") + 
-                      indent + "Children :\n" +
+    std::string tmp = get_nested_type_str(col) + ":\n" + indent +
+                      "Length : " + std::to_string(lcv.size()) + "\n" + indent +
+                      "Offsets : " + to_string(lcv.offsets(), ", ") + "\n" +
+                      (lcv.has_nulls() ? indent + "Has nulls\n" : "") + indent + "Children :\n" +
                       to_string(lcv.child(), ", ", indent + "   ") + "\n";
 
     out.push_back(tmp);
   }
 };
 
-std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent) {
+std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
+{
   std::vector<std::string> reply;
-  cudf::experimental::type_dispatcher(col.type(),
-                                      column_view_printer{}, 
-                                      col,
-                                      reply,
-                                      indent);
+  cudf::experimental::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
   return reply;
 }
 
-std::string to_string(cudf::column_view const& col, std::string const& delimiter, std::string const& indent) {
-
+std::string to_string(cudf::column_view const& col,
+                      std::string const& delimiter,
+                      std::string const& indent)
+{
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col, indent);
 
   buffer << indent;
-  std::copy(h_data.begin(), h_data.end() - (!h_data.empty()), std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
-  if (!h_data.empty())
-    buffer << h_data.back();
+  std::copy(h_data.begin(),
+            h_data.end() - (!h_data.empty()),
+            std::ostream_iterator<std::string>(buffer, delimiter.c_str()));
+  if (!h_data.empty()) buffer << h_data.back();
 
   return buffer.str();
 }

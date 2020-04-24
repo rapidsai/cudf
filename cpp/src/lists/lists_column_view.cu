@@ -22,24 +22,21 @@ namespace cudf {
 
 lists_column_view::lists_column_view(column_view lists_column) : column_view(lists_column)
 {
-   CUDF_EXPECTS(type().id()== LIST, "lists_column_view only supports listss");
+  CUDF_EXPECTS(type().id() == LIST, "lists_column_view only supports listss");
 }
 
-column_view lists_column_view::parent() const
-{
-   return static_cast<column_view>(*this);
-}
+column_view lists_column_view::parent() const { return static_cast<column_view>(*this); }
 
 column_view lists_column_view::offsets() const
 {
-   CUDF_EXPECTS(num_children() > 0, "lists column has no children");
-   return column_view::child(offsets_column_index);
+  CUDF_EXPECTS(num_children() > 0, "lists column has no children");
+  return column_view::child(offsets_column_index);
 }
 
 column_view lists_column_view::child() const
 {
-    CUDF_EXPECTS(num_children() > 1, "lists column has no children");
-    return column_view::child(1);
+  CUDF_EXPECTS(num_children() > 1, "lists column has no children");
+  return column_view::child(1);
 }
 
-} // namespace cudf
+}  // namespace cudf

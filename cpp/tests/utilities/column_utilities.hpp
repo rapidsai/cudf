@@ -88,7 +88,9 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
  * @param col The column view
  * @param delimiter The delimiter to put between strings
  *---------------------------------------------------------------------------**/
-std::string to_string(cudf::column_view const& col, std::string const& delimiter, std::string const& indent = "");
+std::string to_string(cudf::column_view const& col,
+                      std::string const& delimiter,
+                      std::string const& indent = "");
 
 /**---------------------------------------------------------------------------*
  * @brief Convert column values to a host vector of strings
