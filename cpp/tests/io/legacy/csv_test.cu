@@ -879,7 +879,7 @@ TEST_F(CsvTest, Writer)
   EXPECT_STREQ(csv.c_str(), verify.c_str());
 }
 
-TEST_F(CsvTest, ZeroSkipRows)
+TEST_F(CsvTest, SkipRowsXorSkipFooter)
 {
   std::string buffer = "1,2,3";
 
