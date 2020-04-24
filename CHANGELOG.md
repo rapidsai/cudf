@@ -12,6 +12,7 @@
 - PR #4906 Add Java bindings for interleave_columns
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 
 ## Improvements
 
@@ -120,6 +121,7 @@
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
+- PR #5006 Add Java bindings for strip, lstrip and rstrip
 
 ## Bug Fixes
 
