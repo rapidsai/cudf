@@ -715,8 +715,6 @@ class ColumnBase(Column):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        from cudf import DataFrame
-
         lhs = self
         rhs = None
 
@@ -747,8 +745,8 @@ class ColumnBase(Column):
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
-        rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
+        lhs = cudf.DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
+        rhs = cudf.DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
         res = res["bool"].fillna(False)
@@ -1244,7 +1242,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             col = col.astype(dtype)
 
-        if is_categorical_dtype(col.dtype):
+        if isinstance(col, cudf.core.column.CategoricalColumn):
             return col
         elif np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):

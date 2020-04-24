@@ -91,7 +91,7 @@ class CategoricalAccessor(object):
         rename = kwargs.pop("rename", False)
         new_categories = column.as_column(new_categories)
 
-        if hasattr(new_categories, "categories"):
+        if isinstance(new_categories, CategoricalColumn):
             new_categories = new_categories.categories
 
         # when called with rename=True, the pandas behavior is
@@ -597,15 +597,19 @@ class CategoricalColumn(column.ColumnBase):
     def as_categorical_column(self, dtype, **kwargs):
         if isinstance(dtype, str) and dtype == "category":
             return self
-        if isinstance(
-            dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
+        if (
+            isinstance(
+                dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
+            )
+            and (dtype.categories is None)
+            and (dtype.ordered is None)
         ):
-            if (dtype.categories is None) and (dtype.ordered is None):
-                return self
+            return self
 
-        dtype = CategoricalDtype(
-            categories=dtype.categories, ordered=dtype.ordered
-        )
+        if isinstance(dtype, pd.CategoricalDtype):
+            dtype = CategoricalDtype(
+                categories=dtype.categories, ordered=dtype.ordered
+            )
 
         if not isinstance(self.categories, type(dtype.categories._values)):
             # If both categories are of different Column types,
@@ -689,12 +693,11 @@ class CategoricalColumn(column.ColumnBase):
 
 
 def _create_empty_categorical_column(categorical_column, dtype):
-    from cudf.utils import utils
 
     return column.build_categorical_column(
         categories=dtype.categories,
         codes=column.as_column(
-            utils.scalar_broadcast_to(
+            cudf.utils.utils.scalar_broadcast_to(
                 categorical_column.default_na_value(),
                 categorical_column.size,
                 np.dtype(categorical_column.cat().codes),
