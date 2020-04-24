@@ -21,17 +21,16 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *
  * The output contains the result of op(lhs, rhs[i]) for all 0 <= i < rhs.size()
  * The scalar is the left operand and the column elements are the right operand.
  * This distinction is significant in case of non-commutative binary operations
- * 
+ *
  * Regardless of the operator, the validity of the output value is the logical
  * AND of the validity of the two operands
- * 
+ *
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
@@ -49,14 +48,14 @@ std::unique_ptr<column> binary_operation(
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
- * 
+ *
  * The output contains the result of op(lhs[i], rhs) for all 0 <= i < lhs.size()
  * The column elements are the left operand and the scalar is the right operand.
  * This distinction is significant in case of non-commutative binary operations
- * 
+ *
  * Regardless of the operator, the validity of the output value is the logical
  * AND of the validity of the two operands
- * 
+ *
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
  * @param output_type The desired data type of the output column
@@ -76,12 +75,12 @@ std::unique_ptr<column> binary_operation(
  * @brief Performs a binary operation between two columns.
  *
  * @note The sizes of @p lhs and @p rhs should be the same
- * 
+ *
  * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
  * Regardless of the operator, the validity of the output value is the logical
  * AND of the validity of the two operands
- * 
+ *
  * @param lhs         The left operand column
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
@@ -102,7 +101,7 @@ std::unique_ptr<column> binary_operation(
  * user-defined PTX function.
  *
  * @note The sizes of @p lhs and @p rhs should be the same
- * 
+ *
  * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
  * Regardless of the operator, the validity of the output value is the logical

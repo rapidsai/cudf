@@ -82,7 +82,6 @@ public class HostMemoryBuffer extends MemoryBuffer {
       if (address != 0) {
         try {
           UnsafeMemoryAccessor.free(address);
-          MemoryListener.hostDeallocation(length, id);
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and
@@ -207,9 +206,6 @@ public class HostMemoryBuffer extends MemoryBuffer {
 
   HostMemoryBuffer(long address, long length, MemoryBufferCleaner cleaner) {
     super(address, length, cleaner);
-    if (length > 0) {
-      MemoryListener.hostAllocation(length, id);
-    }
   }
 
   private HostMemoryBuffer(long address, long lengthInBytes, HostMemoryBuffer parent) {

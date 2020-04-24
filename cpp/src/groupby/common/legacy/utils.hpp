@@ -38,7 +38,6 @@
 
 namespace cudf {
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
@@ -52,7 +51,8 @@ namespace groupby {
  * @param values The table of columns
  * @param ops The aggregation operators
  *---------------------------------------------------------------------------**/
-static void verify_operators(table const& values, std::vector<operators> const& ops) {
+static void verify_operators(table const& values, std::vector<operators> const& ops)
+{
   CUDF_EXPECTS(static_cast<cudf::size_type>(ops.size()) == values.num_columns(),
                "Size mismatch between ops and value columns");
   for (cudf::size_type i = 0; i < values.num_columns(); ++i) {
@@ -77,7 +77,8 @@ static void verify_operators(table const& values, std::vector<operators> const& 
  * @return Target gdf_dtypes to use for the target aggregation columns
  *---------------------------------------------------------------------------**/
 inline std::vector<gdf_dtype> target_dtypes(std::vector<gdf_dtype> const& source_dtypes,
-                                            std::vector<operators> const& ops) {
+                                            std::vector<operators> const& ops)
+{
   std::vector<gdf_dtype> output_dtypes(source_dtypes.size());
 
   std::transform(source_dtypes.begin(),
@@ -100,7 +101,8 @@ inline std::vector<gdf_dtype> target_dtypes(std::vector<gdf_dtype> const& source
  *---------------------------------------------------------------------------**/
 struct identity_initializer {
   template <typename T>
-  T get_identity(operators op) {
+  T get_identity(operators op)
+  {
     switch (op) {
       case SUM: return corresponding_functor_t<SUM>::identity<T>();
       case MIN: return corresponding_functor_t<MIN>::identity<T>();
@@ -111,7 +113,8 @@ struct identity_initializer {
   }
 
   template <typename T>
-  void operator()(gdf_column const& col, operators op, cudaStream_t stream = 0) {
+  void operator()(gdf_column const& col, operators op, cudaStream_t stream = 0)
+  {
     T* typed_data = static_cast<T*>(col.data);
     thrust::fill(
       rmm::exec_policy(stream)->on(stream), typed_data, typed_data + col.size, get_identity<T>(op));
@@ -140,7 +143,8 @@ struct identity_initializer {
  *---------------------------------------------------------------------------**/
 static void initialize_with_identity(cudf::table const& table,
                                      std::vector<operators> const& ops,
-                                     cudaStream_t stream = 0) {
+                                     cudaStream_t stream = 0)
+{
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
@@ -166,7 +170,8 @@ static void initialize_with_identity(cudf::table const& table,
 static void update_nvcategories(table const& input_keys,
                                 table& output_keys,
                                 table const& input_values,
-                                table& output_values) {
+                                table& output_values)
+{
   gdf_error update_err = nvcategory_gather_table(input_keys, output_keys);
   CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for keys");
 

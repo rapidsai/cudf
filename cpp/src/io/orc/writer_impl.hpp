@@ -43,7 +43,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace orc {
-
 // Forward internal classes
 class orc_column_view;
 
@@ -90,7 +89,8 @@ class writer::impl {
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked_begin(orc_chunked_state& state);
 
@@ -98,14 +98,16 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked(table_view const& table, orc_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end() boundaries.
+   * @param[in] orc_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * boundaries.
    */
   void write_chunked_end(orc_chunked_state& state);
 
@@ -307,7 +309,8 @@ class writer::impl {
    * @param num_rows Number of rows
    **/
   template <typename T = size_t>
-  constexpr inline auto div_by_rowgroups(T num_rows) const {
+  constexpr inline auto div_by_rowgroups(T num_rows) const
+  {
     return cudf::util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
   }
 
@@ -318,7 +321,8 @@ class writer::impl {
    * @param modulus Number to use for division
    **/
   template <typename T = size_t>
-  constexpr inline auto div_rowgroups_by(T modulus) const {
+  constexpr inline auto div_rowgroups_by(T modulus) const
+  {
     return cudf::util::div_rounding_up_unsafe<T, T>(row_index_stride_, modulus);
   }
 

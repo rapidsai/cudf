@@ -30,13 +30,13 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 /**
  * @brief This functor handles both contains_re and match_re to minimize the number
  * of regex calls to find() to be inlined greatly reducing compile time.
  *
  * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex pattern.
+ * So the size of the stack is in proportion to the number of instructions in the given regex
+ * pattern.
  *
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
@@ -49,7 +49,8 @@ struct contains_fn {
   column_device_view d_strings;
   bool bmatch{false};  // do not make this a template parameter to keep compile times down
 
-  __device__ bool operator()(size_type idx) {
+  __device__ bool operator()(size_type idx)
+  {
     if (d_strings.is_null(idx)) return 0;
     u_char data1[stack_size], data2[stack_size];
     prog.set_stack_mem(data1, data2);
@@ -67,7 +68,8 @@ std::unique_ptr<column> contains_util(
   std::string const& pattern,
   bool beginning_only                 = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -117,7 +119,8 @@ std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   return contains_util(strings, pattern, false, mr, stream);
 }
 
@@ -125,7 +128,8 @@ std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   return contains_util(strings, pattern, true, mr, stream);
 }
 
@@ -135,22 +139,22 @@ std::unique_ptr<column> matches_re(
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     std::string const& pattern,
-                                    rmm::mr::device_memory_resource* mr) {
+                                    rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::contains_re(strings, pattern, mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    std::string const& pattern,
-                                   rmm::mr::device_memory_resource* mr) {
+                                   rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::matches_re(strings, pattern, mr);
 }
 
 namespace detail {
-
 namespace {
-
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
  *
@@ -160,7 +164,8 @@ struct count_fn {
   reprog_device prog;
   column_device_view d_strings;
 
-  __device__ int32_t operator()(unsigned int idx) {
+  __device__ int32_t operator()(unsigned int idx)
+  {
     u_char data1[stack_size], data2[stack_size];
     prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return 0;
@@ -184,7 +189,8 @@ std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -234,7 +240,8 @@ std::unique_ptr<column> count_re(
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  std::string const& pattern,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::count_re(strings, pattern, mr);
 }

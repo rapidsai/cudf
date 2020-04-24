@@ -28,9 +28,9 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief Sorts an array of gdf_column.
- * 
+ *
  * @param[in] cols Array of gdf_columns
  * @param[in] asc_desc Device array of sort order types for each column
  * (0 is ascending order and 1 is descending). If NULL is provided defaults
@@ -40,7 +40,7 @@
  * smaller than non-nulls or viceversa
  * @param[out] output_indices Pre-allocated gdf_column to be filled
  * with sorted indices
- * 
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
@@ -48,10 +48,12 @@ gdf_error gdf_order_by(gdf_column const* const* cols,
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,
-                       gdf_context* context) {
+                       gdf_context* context)
+{
   GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
   GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
-  /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
+  /* NOTE: providing support for indexes to be multiple different types explodes compilation time,
+   * such that it become infeasible */
   GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
 
   bool nulls_are_smallest = false;

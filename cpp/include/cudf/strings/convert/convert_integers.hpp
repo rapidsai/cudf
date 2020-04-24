@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a new integer numeric column parsing integer values from the
  * provided strings column.

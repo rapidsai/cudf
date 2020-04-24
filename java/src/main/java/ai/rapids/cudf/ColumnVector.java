@@ -58,8 +58,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     this.refCount = 0;
     incRefCountInternal(true);
-
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -91,8 +89,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     this.refCount = 0;
     incRefCountInternal(true);
-
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -112,7 +108,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.nullCount = Optional.empty();
     this.refCount = 0;
     incRefCountInternal(true);
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
@@ -171,23 +166,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
   // METADATA ACCESS
   /////////////////////////////////////////////////////////////////////////////
-
-  static long predictSizeFor(long baseSize, long rows, boolean includeValidity) {
-    long total = baseSize * rows;
-    if (includeValidity) {
-      total += BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-    }
-    return total;
-  }
-
-  long predictSizeFor(DType type) {
-    return predictSizeFor(type.sizeInBytes, rows, hasValidityVector());
-  }
-
-  private long predictSizeForRowMult(long baseSize, double rowMult) {
-    long rowGuess = (long)(rows * rowMult);
-    return predictSizeFor(baseSize, rowGuess, hasValidityVector());
-  }
 
   /**
    * Increment the reference count for this column.  You need to call close on this
@@ -280,9 +258,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Copy the data to the host.
    */
   public HostColumnVector copyToHost() {
-    try (HostPrediction prediction =
-             new HostPrediction(getDeviceMemorySize(), "ensureOnHost");
-         NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+    try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
@@ -375,9 +351,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector getLengths() {
     assert DType.STRING == type : "length only available for String type";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "getLengths")) {
-      return new ColumnVector(lengths(getNativeView()));
-    }
+    return new ColumnVector(lengths(getNativeView()));
   }
 
   /**
@@ -387,9 +361,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector getByteCount() {
     assert type == DType.STRING : "type has to be a String";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "byteCount")) {
-      return new ColumnVector(byteCount(getNativeView()));
-    }
+    return new ColumnVector(byteCount(getNativeView()));
   }
 
   /**
@@ -399,9 +371,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isNotNull() {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "isNotNull")) {
-      return new ColumnVector(isNotNullNative(getNativeView()));
-    }
+    return new ColumnVector(isNotNullNative(getNativeView()));
   }
 
   /**
@@ -411,9 +381,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isNull() {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNull")) {
-      return new ColumnVector(isNullNative(getNativeView()));
-    }
+    return new ColumnVector(isNullNative(getNativeView()));
   }
 
   /**
@@ -422,9 +390,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isNan() {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNan")) {
-      return new ColumnVector(isNanNative(getNativeView()));
-    }
+    return new ColumnVector(isNanNative(getNativeView()));
   }
 
   /**
@@ -433,9 +399,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isNotNan() {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8),"isNotNan")) {
-      return new ColumnVector(isNotNanNative(getNativeView()));
-    }
+    return new ColumnVector(isNotNanNative(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -464,9 +428,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - A new vector containing the old values replaced with new values
    */
   public ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "findAndReplace")) {
-      return new ColumnVector(findAndReplaceAll(oldValues.getNativeView(), newValues.getNativeView(), this.getNativeView()));
-    }
+    return new ColumnVector(findAndReplaceAll(oldValues.getNativeView(), newValues.getNativeView(), this.getNativeView()));
   }
 
   /**
@@ -477,9 +439,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - ColumnVector with nulls replaced by scalar
    */
   public ColumnVector replaceNulls(Scalar scalar) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "replaceNulls")) {
-      return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
-    }
+    return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
   }
 
   /**
@@ -593,14 +553,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public ColumnVector[] slice(int... indices) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "slice")) {
-      long[] nativeHandles = slice(this.getNativeView(), indices);
-      ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-      for (int i = 0; i < nativeHandles.length; i++) {
-        columnVectors[i] = new ColumnVector(nativeHandles[i]);
-      }
-      return columnVectors;
+    long[] nativeHandles = slice(this.getNativeView(), indices);
+    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+    for (int i = 0; i < nativeHandles.length; i++) {
+      columnVectors[i] = new ColumnVector(nativeHandles[i]);
     }
+    return columnVectors;
   }
 
   /**
@@ -666,14 +624,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
   public ColumnVector[] split(int... indices) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "split")) {
-      long[] nativeHandles = split(this.getNativeView(), indices);
-      ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-      for (int i = 0; i < nativeHandles.length; i++) {
-        columnVectors[i] = new ColumnVector(nativeHandles[i]);
-      }
-      return columnVectors;
+    long[] nativeHandles = split(this.getNativeView(), indices);
+    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+    for (int i = 0; i < nativeHandles.length; i++) {
+      columnVectors[i] = new ColumnVector(nativeHandles[i]);
     }
+    return columnVectors;
   }
 
   /**
@@ -684,11 +640,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - new ColumnVector
    */
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
-    long amount = predictSizeFor(scalar.getType().sizeInBytes, rows, !scalar.isValid());
-    try (DevicePrediction ignored = new DevicePrediction(amount, "fromScalar")) {
-      long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
-      return new ColumnVector(columnHandle);
-    }
+    long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
+    return new ColumnVector(columnHandle);
   }
 
   /**
@@ -703,10 +656,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (!initialValue.isValid() || !step.isValid()) {
       throw new IllegalArgumentException("nulls are not supported in sequence");
     }
-    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
-    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
-      return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
-    }
+    return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
   }
 
   /**
@@ -720,10 +670,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (!initialValue.isValid()) {
       throw new IllegalArgumentException("nulls are not supported in sequence");
     }
-    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
-    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
-      return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
-    }
+    return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
   }
 
   /**
@@ -734,17 +681,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (columns.length < 2) {
       throw new IllegalArgumentException("Concatenate requires 2 or more columns");
     }
-    long total = 0;
-    for (ColumnVector cv: columns) {
-      total += cv.getDeviceMemorySize();
+    long[] columnHandles = new long[columns.length];
+    for (int i = 0; i < columns.length; ++i) {
+      columnHandles[i] = columns[i].getNativeView();
     }
-    try (DevicePrediction prediction = new DevicePrediction(total, "concatenate")) {
-      long[] columnHandles = new long[columns.length];
-      for (int i = 0; i < columns.length; ++i) {
-        columnHandles[i] = columns[i].getNativeView();
-      }
-      return new ColumnVector(concatenate(columnHandles));
-    }
+    return new ColumnVector(concatenate(columnHandles));
   }
 
   /**
@@ -753,7 +694,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *  2. All elements equivalent to 0.0 (including +0.0 and -0.0) are replaced with +0.0.
    *  3. All elements that are not equivalent to NaN or 0.0 remain unchanged.
    * 
-   * {@link https://docs.oracle.com/javase/8/docs/api/java/lang/Double.html#longBitsToDouble-long-}
+   * The documentation for {@link Double#longBitsToDouble(long)}
    * describes how equivalent values of NaN/-NaN might have different bitwise representations.
    * 
    * This method may be used to compare different bitwise values of 0.0 or NaN as logically
@@ -763,10 +704,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector with all elements equivalent to NaN/0.0 replaced with a normalized equivalent.
    */
   public ColumnVector normalizeNANsAndZeros() {
-    try (DevicePrediction prediction =
-                 new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeros")) {
-      return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
-    }
+    return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -782,9 +720,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector year() {
     assert type.isTimestamp();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "year")) {
-      return new ColumnVector(year(getNativeView()));
-    }
+    return new ColumnVector(year(getNativeView()));
   }
 
   /**
@@ -796,9 +732,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector month() {
     assert type.isTimestamp();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "month")) {
-      return new ColumnVector(month(getNativeView()));
-    }
+    return new ColumnVector(month(getNativeView()));
   }
 
   /**
@@ -810,9 +744,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector day() {
     assert type.isTimestamp();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "day")) {
-      return new ColumnVector(day(getNativeView()));
-    }
+    return new ColumnVector(day(getNativeView()));
   }
 
   /**
@@ -824,9 +756,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector hour() {
     assert type.hasTimeResolution();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "hour")) {
-      return new ColumnVector(hour(getNativeView()));
-    }
+    return new ColumnVector(hour(getNativeView()));
   }
 
   /**
@@ -838,9 +768,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector minute() {
     assert type.hasTimeResolution();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "minute")) {
-      return new ColumnVector(minute(getNativeView()));
-    }
+    return new ColumnVector(minute(getNativeView()));
   }
 
   /**
@@ -852,9 +780,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector second() {
     assert type.hasTimeResolution();
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT16), "second")) {
-      return new ColumnVector(second(getNativeView()));
-    }
+    return new ColumnVector(second(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -879,9 +805,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return the result
    */
   public ColumnVector unaryOp(UnaryOp op) {
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "unaryOp")) {
-      return new ColumnVector(unaryOperation(getNativeView(), op.nativeId));
-    }
+    return new ColumnVector(unaryOperation(getNativeView(), op.nativeId));
   }
 
   /**
@@ -1058,18 +982,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(outType), "binaryOp")) {
-      if (rhs instanceof ColumnVector) {
-        ColumnVector cvRhs = (ColumnVector) rhs;
-        assert rows == cvRhs.getRowCount();
-        return new ColumnVector(binaryOp(this, cvRhs, op, outType));
-      } else if (rhs instanceof Scalar) {
-        Scalar sRhs = (Scalar) rhs;
-        return new ColumnVector(binaryOp(this, sRhs, op, outType));
-      } else {
-        throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op" +
-            " with ColumnVector");
-      }
+    if (rhs instanceof ColumnVector) {
+      ColumnVector cvRhs = (ColumnVector) rhs;
+      assert rows == cvRhs.getRowCount();
+      return new ColumnVector(binaryOp(this, cvRhs, op, outType));
+    } else if (rhs instanceof Scalar) {
+      Scalar sRhs = (Scalar) rhs;
+      return new ColumnVector(binaryOp(this, sRhs, op, outType));
+    } else {
+      throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op" +
+          " with ColumnVector");
     }
   }
 
@@ -1423,9 +1345,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       // Optimization
       return incRefCount();
     }
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(type), "cast")) {
-      return new ColumnVector(castTo(getNativeView(), type.nativeId));
-    }
+    return new ColumnVector(castTo(getNativeView(), type.nativeId));
   }
 
   /**
@@ -1625,12 +1545,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                   "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
     assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
-
-    // Prediction could be better, but probably okay for now
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeForRowMult(format.length(), 2), "asTimestamp")) {
-      return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
-          timestampType.nativeId, format));
-    }
+    return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
+        timestampType.nativeId, format));
   }
 
   /**
@@ -1707,9 +1623,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector upper() {
     assert type == DType.STRING : "A column of type string is required for .upper() operation";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "upper")) {
-      return new ColumnVector(upperStrings(getNativeView()));
-    }
+    return new ColumnVector(upperStrings(getNativeView()));
   }
 
   /**
@@ -1717,9 +1631,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector lower() {
     assert type == DType.STRING : "A column of type string is required for .lower() operation";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "lower")) {
-      return new ColumnVector(lowerStrings(getNativeView()));
-    }
+    return new ColumnVector(lowerStrings(getNativeView()));
   }
 
   /**
@@ -1755,19 +1667,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
     long[] column_views = new long[columns.length];
-    long deviceMemorySizeEstimate = 0;
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getType() == DType.STRING : "All columns must be of type string for .cat() operation";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
       column_views[i] = columns[i].getNativeView();
-      deviceMemorySizeEstimate += columns[i].getDeviceMemorySize();
     }
 
-    try (DevicePrediction prediction = new DevicePrediction(deviceMemorySizeEstimate, "stringConcatenate")) {
-      return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
-    }
+    return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
   }
 
   /**
@@ -1808,10 +1716,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert start >= 0 : "start index must be a positive value";
     assert end >= start || end == -1 : "end index must be -1 or >= the start index";
 
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringLocate")) {
-      return new ColumnVector(substringLocate(getNativeView(), substring.getScalarHandle(),
-          start, end));
-    }
+    return new ColumnVector(substringLocate(getNativeView(), substring.getScalarHandle(),
+        start, end));
   }
 
   /**
@@ -1828,9 +1734,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
     assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
-      return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
-    }
+    return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
   }
 
   /**
@@ -1866,9 +1770,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector substring(int start, int end) {
     assert type == DType.STRING : "column type must be a String";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
-      return new ColumnVector(substring(getNativeView(), start, end));
-    }
+    return new ColumnVector(substring(getNativeView(), start, end));
   }
 
   /**
@@ -1883,9 +1785,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert (rows == start.getRowCount() && rows == end.getRowCount()) : "Number of rows must be equal";
     assert (start.getType() == DType.INT32 && end.getType() == DType.INT32) : "start and end " +
             "vectors must be of integer type";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "subString")) {
-      return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
-    }
+    return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
   /**
@@ -1908,10 +1808,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert target.getType() == DType.STRING : "target string must be a string scalar";
     assert target.getJavaString().isEmpty() == false : "target scalar may not be empty";
 
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringReplace")) {
-      return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
-              replace.getScalarHandle()));
-    }
+    return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
+        replace.getScalarHandle()));
   }
 
   /**
@@ -1926,9 +1824,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
     assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
     assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "startsWith")) {
-      return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
-    }
+    return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
   }
 
   /**
@@ -1943,9 +1839,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
     assert pattern.isValid() == true : "pattern string scalar may not contain a null value";
     assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
-      return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
-    }
+    return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
   }
 
   /**
@@ -1954,9 +1848,73 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector strip() {
     assert type == DType.STRING : "column type must be a String";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "strip")) {
-      return new ColumnVector(stringStrip(getNativeView()));
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId,
+          emptyString.getScalarHandle()));
     }
+  }
+
+  /**
+   * Removes the specified characters from the beginning and end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the beginning of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the beginning of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector lstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
+  }
+
+  /**
+   * Removes whitespace from the end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId,
+          emptyString.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes the specified characters from the end of each string.
+   * @param toStrip UTF-8 encoded characters to strip from each string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector rstrip(Scalar toStrip) {
+    assert type == DType.STRING : "column type must be a String";
+    assert toStrip != null : "toStrip  Scalar may not be null";
+    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.isValid() == true : "toStrip string scalar may not contain a null value";
+    return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
   /**
@@ -1972,9 +1930,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
     assert compString.isValid() : "compString string scalar may not contain a null value";
     assert !compString.getJavaString().isEmpty() : "compString string scalar may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "stringContains")) {
-      return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
-    }
+    return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
   /**
@@ -2076,9 +2032,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "matchesRe")) {
-      return new ColumnVector(matchesRe(getNativeView(), pattern));
-    }
+    return new ColumnVector(matchesRe(getNativeView(), pattern));
   }
 
   /**
@@ -2101,9 +2055,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
-    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "containsRe")) {
-      return new ColumnVector(containsRe(getNativeView(), pattern));
-    }
+    return new ColumnVector(containsRe(getNativeView(), pattern));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2281,7 +2233,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Native method to strip whitespace from the start and end of a string.
    * @param columnView native handle of the cudf::column_view being operated on.
    */
-  private static native long stringStrip(long columnView) throws CudfException;
+  private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
@@ -2472,6 +2424,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long makeEmptyCudfColumn(int type);
 
+  /**
+   * Used for string strip function.
+   * Indicates characters to be stripped from the beginning, end, or both of each string.
+   */
+  private enum StripType {
+    LEFT(0),   // strip characters from the beginning of the string
+    RIGHT(1),  // strip characters from the end of the string
+    BOTH(2);   // strip characters from the beginning and end of the string
+    final int nativeId;
+
+    StripType(int nativeId) { this.nativeId = nativeId; }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -2617,7 +2582,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
-      long size = getDeviceMemorySize();
       boolean neededCleanup = false;
       long address = 0;
 
@@ -2677,7 +2641,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           log.error("A DEVICE COLUMN VECTOR WAS LEAKED (ID: " + id + " " + Long.toHexString(address)+ ")");
           logRefCountDebug("Leaked vector");
         }
-        MemoryListener.deviceDeallocation(size, id);
       }
       return neededCleanup;
     }

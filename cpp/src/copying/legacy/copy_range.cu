@@ -18,9 +18,7 @@
 #include "copy_range.cuh"
 
 namespace cudf {
-
 namespace detail {
-
 struct column_range_factory {
   gdf_column column;
   cudf::size_type begin;
@@ -33,13 +31,15 @@ struct column_range_factory {
 
     __device__ T data(cudf::size_type index) { return column_data[begin + index]; }
 
-    __device__ bool valid(cudf::size_type index) {
+    __device__ bool valid(cudf::size_type index)
+    {
       return bit_mask::is_valid(bitmask, begin + index);
     }
   };
 
   template <typename T>
-  column_range<T> make() {
+  column_range<T> make()
+  {
     return column_range<T>{
       static_cast<T *>(column.data), reinterpret_cast<bit_mask_t *>(column.valid), begin};
   }
@@ -51,7 +51,8 @@ void copy_range(gdf_column *out_column,
                 gdf_column const &in_column,
                 cudf::size_type out_begin,
                 cudf::size_type out_end,
-                cudf::size_type in_begin) {
+                cudf::size_type in_begin)
+{
   cudf::size_type num_elements = out_end - out_begin;
   if (num_elements != 0) {  // otherwise no-op
     validate(in_column);

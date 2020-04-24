@@ -26,37 +26,40 @@
 #include <iostream>
 
 namespace cudf {
-
 //
-strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column) {
+strings_column_view::strings_column_view(column_view strings_column) : column_view(strings_column)
+{
   CUDF_EXPECTS(type().id() == STRING, "strings_column_view only supports strings");
 }
 
 column_view strings_column_view::parent() const { return static_cast<column_view>(*this); }
 
-column_view strings_column_view::offsets() const {
+column_view strings_column_view::offsets() const
+{
   CUDF_EXPECTS(num_children() > 0, "strings column has no children");
   return child(offsets_column_index);
 }
 
-column_view strings_column_view::chars() const {
+column_view strings_column_view::chars() const
+{
   CUDF_EXPECTS(num_children() > 0, "strings column has no children");
   return child(chars_column_index);
 }
 
-size_type strings_column_view::chars_size() const noexcept {
+size_type strings_column_view::chars_size() const noexcept
+{
   if (size() == 0) return 0;
   return chars().size();
 }
 
 namespace strings {
-
 // print strings to stdout
 void print(strings_column_view const& strings,
            size_type first,
            size_type last,
            size_type max_width,
-           const char* delimiter) {
+           const char* delimiter)
+{
   size_type count = strings.size();
   if (last < 0 || last > count) last = count;
   if (first < 0) first = 0;
@@ -127,7 +130,8 @@ void print(strings_column_view const& strings,
 
 //
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offsets(
-  strings_column_view const& strings, cudaStream_t stream, rmm::mr::device_memory_resource* mr) {
+  strings_column_view const& strings, cudaStream_t stream, rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   size_type count          = strings.size();
   const int32_t* d_offsets = strings.offsets().data<int32_t>();

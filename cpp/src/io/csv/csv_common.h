@@ -21,7 +21,6 @@ class SerialTrieNode;
 namespace cudf {
 namespace io {
 namespace csv {
-
 /**
  * @brief Per-column parsing flags used for dtype detection and data conversion
  */

@@ -330,7 +330,9 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop and (stride is None or stride == 1):
+        if (start > stop and (stride is None or stride == 1)) or (
+            len(self._data) == 0 and keep_index is False
+        ):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
@@ -703,6 +705,68 @@ class Frame(libcudf.table.Table):
                 result.append(self._empty_like(keep_index))
 
         return result
+
+    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+
+        # map_index might be a column name or array,
+        # make it a Column
+        if isinstance(map_index, str):
+            map_index = self._data[map_index]
+        elif isinstance(map_index, cudf.Series):
+            map_index = map_index._column
+        else:
+            map_index = as_column(map_index)
+
+        # Convert float to integer
+        if map_index.dtype == np.float:
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index, cudf.core.column.StringColumn):
+            map_index = map_index.as_categorical_column(np.int32).as_numerical
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
+            map_index = map_index.as_numerical
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        if kwargs.get("debug", False) == 1 and map_size is not None:
+            unique_count = map_index.unique_count()
+            if map_size < unique_count:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (unique_count, map_size)
+                )
+
+        tables = self._partition(map_index, map_size, keep_index)
+
+        return tables
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
@@ -1084,7 +1148,17 @@ class Frame(libcudf.table.Table):
                     (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
-                self._index._copy_categories(other._index)
+                self._index._copy_categories(other._index, include_index=False)
+                # When other._index is a CategoricalIndex, there is
+                # possibility that corresposing self._index be GenericIndex
+                # with codes. So to update even the class signature, we
+                # have to call as_index.
+                if isinstance(
+                    other._index, cudf.core.index.CategoricalIndex
+                ) and not isinstance(
+                    self._index, cudf.core.index.CategoricalIndex
+                ):
+                    self._index = cudf.core.index.as_index(self._index)
         return self
 
     def _unaryop(self, op):
