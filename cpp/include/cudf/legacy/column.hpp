@@ -63,7 +63,7 @@ cudf::size_type gdf_column_sizeof();
 gdf_error gdf_column_view(
   gdf_column *column, void *data, cudf::valid_type *valid, cudf::size_type size, gdf_dtype dtype);
 
-/** 
+/**
  * @brief Create a GDF column given data and validity bitmask pointers, size, and
  *        datatype, and count of null (non-valid) elements
  *
@@ -75,7 +75,7 @@ gdf_error gdf_column_view(
  * @param[in] null_count The number of non-valid elements in the validity bitmask.
  * @param[in] extra_info see gdf_dtype_extra_info. Extra data for column description.
  * @param[in] name (optional) column name
- * 
+ *
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
 gdf_error gdf_column_view_augmented(gdf_column *column,
@@ -100,10 +100,9 @@ gdf_error gdf_column_free(gdf_column *column);
 
 namespace cudf {
 namespace detail {
-
 /**
  * @brief Allocate the data fields of column
- * 
+ *
  * @param column The column for which the data fields need to be allocated
  * @param allocate_mask Optional Whether or not to allocate bitmask
  * @param stream Optional stream in which to perform allocation
@@ -114,7 +113,7 @@ void allocate_column_fields(gdf_column &column, bool allocate_mask = true, cudaS
 
 /**
  * @brief Allocates a new column of the specified size and type.
- * 
+ *
  * @param dtype Datatype of the column
  * @param size Size of the column
  * @param allocate_mask Optional Whether or not to allocate bitmask

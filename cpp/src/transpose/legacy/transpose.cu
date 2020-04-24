@@ -11,14 +11,13 @@
 #include <memory>
 
 namespace {
-
 constexpr int WARP_SIZE     = 32;
 constexpr int MAX_GRID_SIZE = (1 << 16) - 1;
 
 /**
  * @brief Transposes the values from ncols x nrows input columns to
  *  nrows x ncols output columns
- * 
+ *
  * @tparam ColumnType  Datatype of values pointed to by the pointers
  * @param in_cols[in]  Pointers to input columns' data
  * @param out_cols[out]  Pointers to pre-allocated output columns' data
@@ -29,7 +28,8 @@ template <typename ColumnType>
 __global__ void gpu_transpose(ColumnType **in_cols,
                               ColumnType **out_cols,
                               cudf::size_type ncols,
-                              cudf::size_type nrows) {
+                              cudf::size_type nrows)
+{
   cudf::size_type x = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::size_type y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -43,7 +43,7 @@ __global__ void gpu_transpose(ColumnType **in_cols,
 
 /**
  * @brief Transposes the validity mask
- * 
+ *
  * @param[in] in_cols_valid  pointers to the validity mask of the input columns
  * @param[out] out_cols_valid  pointers to the pre-allocated validity mask of
  *  the output columns
@@ -55,7 +55,8 @@ __global__ void gpu_transpose_valids(cudf::valid_type **in_cols_valid,
                                      cudf::valid_type **out_cols_valid,
                                      cudf::size_type *out_cols_null_count,
                                      cudf::size_type ncols,
-                                     cudf::size_type nrows) {
+                                     cudf::size_type nrows)
+{
   using MaskType = uint32_t;
   constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
 
@@ -103,7 +104,8 @@ struct launch_kernel {
                        cudf::size_type *out_cols_nullct_ptr,
                        cudf::size_type ncols,
                        cudf::size_type nrows,
-                       bool has_null) {
+                       bool has_null)
+  {
     dim3 dimBlock(WARP_SIZE, WARP_SIZE, 1);
     dim3 dimGrid(std::min((ncols + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
                  std::min((nrows + WARP_SIZE - 1) / WARP_SIZE, MAX_GRID_SIZE),
@@ -126,7 +128,8 @@ struct launch_kernel {
 
 }  // namespace
 
-gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols) {
+gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols)
+{
   // Make sure the inputs are not null
   GDF_REQUIRE((ncols > 0) && (nullptr != in_cols) && (nullptr != out_cols), GDF_DATASET_EMPTY)
 

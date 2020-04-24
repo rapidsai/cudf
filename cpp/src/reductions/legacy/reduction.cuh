@@ -32,7 +32,6 @@
 namespace cudf {
 namespace reduction {
 namespace detail {
-
 /** --------------------------------------------------------------------------*
  * @brief compute reduction by the operator
  *
@@ -53,7 +52,8 @@ void reduce(OutputType* dev_result,
             cudf::size_type num_items,
             OutputType init,
             Op op,
-            cudaStream_t stream) {
+            cudaStream_t stream)
+{
   void* d_temp_storage      = NULL;
   size_t temp_storage_bytes = 0;
 

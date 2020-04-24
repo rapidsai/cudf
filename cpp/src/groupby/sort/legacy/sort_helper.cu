@@ -37,7 +37,6 @@
 #include <tuple>
 
 namespace {
-
 /**
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
@@ -56,7 +55,9 @@ struct permuted_row_equality_comparator {
    *`t`. Must be the same size as `t.num_rows()`
    */
   permuted_row_equality_comparator(device_table const& t, cudf::size_type const* map)
-    : _comparator(t, t, true), _map{map} {}
+    : _comparator(t, t, true), _map{map}
+  {
+  }
 
   /**
    * @brief Returns true if the two rows at the specified indices in the permuted
@@ -70,7 +71,8 @@ struct permuted_row_equality_comparator {
    * @returns if the two specified rows in the permuted order are equivalent
    */
   CUDA_DEVICE_CALLABLE
-  bool operator()(cudf::size_type lhs, cudf::size_type rhs) {
+  bool operator()(cudf::size_type lhs, cudf::size_type rhs)
+  {
     return _comparator(_map[lhs], _map[rhs]);
   }
 };
@@ -81,8 +83,8 @@ namespace cudf {
 namespace groupby {
 namespace sort {
 namespace detail {
-
-cudf::size_type helper::num_keys() {
+cudf::size_type helper::num_keys()
+{
   if (_num_keys > -1) return _num_keys;
 
   if (not _include_nulls and has_nulls(_keys)) {
@@ -100,7 +102,8 @@ cudf::size_type helper::num_keys() {
   return _num_keys;
 }
 
-gdf_column const& helper::key_sort_order() {
+gdf_column const& helper::key_sort_order()
+{
   if (_key_sorted_order) return *_key_sorted_order;
 
   _key_sorted_order = gdf_col_pointer(
@@ -152,7 +155,8 @@ gdf_column const& helper::key_sort_order() {
   return *_key_sorted_order;
 }
 
-rmm::device_vector<cudf::size_type> const& helper::group_offsets() {
+rmm::device_vector<cudf::size_type> const& helper::group_offsets()
+{
   if (_group_offsets) return *_group_offsets;
 
   _group_offsets = std::make_unique<index_vector>(num_keys());
@@ -184,7 +188,8 @@ rmm::device_vector<cudf::size_type> const& helper::group_offsets() {
   return *_group_offsets;
 }
 
-rmm::device_vector<cudf::size_type> const& helper::group_labels() {
+rmm::device_vector<cudf::size_type> const& helper::group_labels()
+{
   if (_group_labels) return *_group_labels;
 
   // Get group labels for future use in segmented sorting
@@ -204,7 +209,8 @@ rmm::device_vector<cudf::size_type> const& helper::group_labels() {
   return group_labels;
 }
 
-gdf_column const& helper::unsorted_keys_labels() {
+gdf_column const& helper::unsorted_keys_labels()
+{
   if (_unsorted_keys_labels) return *_unsorted_keys_labels;
 
   _unsorted_keys_labels =
@@ -234,7 +240,8 @@ gdf_column const& helper::unsorted_keys_labels() {
   return *_unsorted_keys_labels;
 }
 
-rmm::device_vector<bit_mask::bit_mask_t>& helper::keys_row_bitmask() {
+rmm::device_vector<bit_mask::bit_mask_t>& helper::keys_row_bitmask()
+{
   if (_keys_row_bitmask) return *_keys_row_bitmask;
 
   _keys_row_bitmask = bitmask_vec_pointer(new bitmask_vector(row_bitmask(_keys, _stream)));
@@ -243,7 +250,8 @@ rmm::device_vector<bit_mask::bit_mask_t>& helper::keys_row_bitmask() {
 }
 
 std::pair<gdf_column, rmm::device_vector<cudf::size_type>> helper::sort_values(
-  gdf_column const& values) {
+  gdf_column const& values)
+{
   CUDF_EXPECTS(values.size == _keys.num_rows(), "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
     new gdf_column(allocate_column(
@@ -291,7 +299,8 @@ std::pair<gdf_column, rmm::device_vector<cudf::size_type>> helper::sort_values(
   return std::make_pair(std::move(sorted_values), std::move(val_group_sizes));
 }
 
-cudf::table helper::unique_keys() {
+cudf::table helper::unique_keys()
+{
   cudf::table unique_keys    = allocate_like(_keys, (cudf::size_type)num_groups(), RETAIN, _stream);
   auto idx_data              = static_cast<cudf::size_type*>(key_sort_order().data);
   auto transformed_group_ids = index_vector(num_groups());

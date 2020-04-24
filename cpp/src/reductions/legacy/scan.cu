@@ -9,11 +9,12 @@
 #include <cudf/legacy/reduction.hpp>
 #include <utilities/legacy/device_atomics.cuh>
 
-namespace {  //anonymous
+namespace {  // anonymous
 
 template <class T>
 __global__ void gpu_copy_and_replace_nulls(
-  const T *data, const cudf::valid_type *mask, cudf::size_type size, T *results, T identity) {
+  const T *data, const cudf::valid_type *mask, cudf::size_type size, T *results, T identity)
+{
   cudf::size_type id = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (id < size) {
@@ -42,7 +43,8 @@ inline void copy_and_replace_nulls(const T *data,
                                    cudf::size_type size,
                                    T *results,
                                    T identity,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   int blockSize = 0, minGridSize, gridSize;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
     &minGridSize, &blockSize, gpu_copy_and_replace_nulls<T>, 0, 0));
@@ -57,10 +59,8 @@ inline void copy_and_replace_nulls(const T *data,
 
 template <typename T, typename Op>
 struct Scan {
-  static void call(const gdf_column *input,
-                   gdf_column *output,
-                   bool inclusive,
-                   cudaStream_t stream) {
+  static void call(const gdf_column *input, gdf_column *output, bool inclusive, cudaStream_t stream)
+  {
     auto scan_function = (inclusive ? inclusive_scan : exclusive_scan);
     size_t size        = input->size;
     const T *d_input   = static_cast<const T *>(input->data);
@@ -113,7 +113,8 @@ struct Scan {
                              const T *input,
                              T *output,
                              size_t size,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+  {
     cub::DeviceScan::ExclusiveScan(temp_storage,
                                    temp_storage_bytes,
                                    input,
@@ -130,7 +131,8 @@ struct Scan {
                              const T *input,
                              T *output,
                              size_t size,
-                             cudaStream_t stream) {
+                             cudaStream_t stream)
+  {
     cub::DeviceScan::InclusiveScan(
       temp_storage, temp_storage_bytes, input, output, Op{}, size, stream);
     CHECK_CUDA(stream);
@@ -142,7 +144,8 @@ struct PrefixSumDispatcher {
  private:
   // return true if T is arithmetic type (including cudf::bool8)
   template <typename T>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     return std::is_arithmetic<T>::value || std::is_same<T, cudf::bool8>::value;
   }
 
@@ -151,7 +154,8 @@ struct PrefixSumDispatcher {
   void operator()(const gdf_column *input,
                   gdf_column *output,
                   bool inclusive,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     CUDF_EXPECTS(input->size == output->size, "input and output data size must be same");
     CUDF_EXPECTS(input->dtype == output->dtype, "input and output data types must be same");
 
@@ -167,7 +171,8 @@ struct PrefixSumDispatcher {
   void operator()(const gdf_column *input,
                   gdf_column *output,
                   bool inclusive,
-                  cudaStream_t stream = 0) {
+                  cudaStream_t stream = 0)
+  {
     CUDF_FAIL("Non-arithmetic types not supported for `gdf_scan`");
   }
 };
@@ -175,8 +180,8 @@ struct PrefixSumDispatcher {
 }  // end anonymous namespace
 
 namespace cudf {
-
-void scan(const gdf_column *input, gdf_column *output, gdf_scan_op op, bool inclusive) {
+void scan(const gdf_column *input, gdf_column *output, gdf_scan_op op, bool inclusive)
+{
   CUDF_EXPECTS(input != nullptr, "Input column is null");
   CUDF_EXPECTS(output != nullptr, "Output column is null");
 

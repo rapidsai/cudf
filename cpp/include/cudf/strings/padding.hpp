@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Pad types for the pad method specify where the pad
  * character should be placed.

@@ -42,18 +42,18 @@ constexpr int DEFAULT_CUDA_BLOCK_SIZE = 128;
 constexpr int DEFAULT_CUDA_CACHE_SIZE = 128;
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Gives an estimate of the size of the join output produced when
  * joining two tables together. If the two tables are of relatively equal size,
  * then the returned output size will be the exact output size. However, if the
  * probe table is significantly larger than the build table, then we attempt
  * to estimate the output size by using only a subset of the rows in the probe table.
- * 
+ *
  * @param build_table The right hand table
  * @param probe_table The left hand table
  * @param hash_table A hash table built on the build table that maps the index
  * of every row to the hash value of that row.
- * 
+ *
  * @returns An estimate of the size of the output of the join operation
  */
 /* ----------------------------------------------------------------------------*/
@@ -61,7 +61,8 @@ template <JoinType join_type, typename multimap_type>
 gdf_error estimate_join_output_size(device_table const &build_table,
                                     device_table const &probe_table,
                                     multimap_type hash_table,
-                                    cudf::size_type *join_output_size_estimate) {
+                                    cudf::size_type *join_output_size_estimate)
+{
   const cudf::size_type build_table_num_rows{build_table.num_rows()};
   const cudf::size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -172,27 +173,28 @@ gdf_error estimate_join_output_size(device_table const &build_table,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Performs a hash-based join between two sets of device_tables.
-*
-* @param joined_output The output of the join operation
-* @param left_table The left table to join
-* @param right_table The right table to join
-* @param flip_results Flag that indicates whether the left and right tables have been
-* switched, indicating that the output indices should also be flipped
-* @tparam join_type The type of join to be performed
-* @tparam hash_value_type The data type to be used for the Keys in the hash table
-* @tparam output_index_type The data type to be used for the output indices
-*
-* @returns  cudaSuccess upon successful completion of the join. Otherwise returns
-* the appropriate CUDA error code
-*/
+ * @brief  Performs a hash-based join between two sets of device_tables.
+ *
+ * @param joined_output The output of the join operation
+ * @param left_table The left table to join
+ * @param right_table The right table to join
+ * @param flip_results Flag that indicates whether the left and right tables have been
+ * switched, indicating that the output indices should also be flipped
+ * @tparam join_type The type of join to be performed
+ * @tparam hash_value_type The data type to be used for the Keys in the hash table
+ * @tparam output_index_type The data type to be used for the output indices
+ *
+ * @returns  cudaSuccess upon successful completion of the join. Otherwise returns
+ * the appropriate CUDA error code
+ */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename output_index_type>
 gdf_error compute_hash_join(gdf_column *const output_l,
                             gdf_column *const output_r,
                             cudf::table const &left_table,
                             cudf::table const &right_table,
-                            bool flip_results = false) {
+                            bool flip_results = false)
+{
   gdf_error gdf_error_code{GDF_SUCCESS};
 
   gdf_column_view(output_l, nullptr, nullptr, 0, N_GDF_TYPES);
@@ -218,7 +220,8 @@ gdf_error compute_hash_join(gdf_column *const output_l,
                                   std::numeric_limits<hash_value_type>::max(),
                                   std::numeric_limits<output_index_type>::max()>;
 #endif
-  //If FULL_JOIN is selected then we process as LEFT_JOIN till we need to take care of unmatched indices
+  // If FULL_JOIN is selected then we process as LEFT_JOIN till we need to take care of unmatched
+  // indices
   constexpr JoinType base_join_type =
     (join_type == JoinType::FULL_JOIN) ? JoinType::LEFT_JOIN : join_type;
 

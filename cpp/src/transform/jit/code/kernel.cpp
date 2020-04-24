@@ -19,7 +19,6 @@ namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
-
 const char* kernel =
   R"***(
     #include <cudf/types.hpp>

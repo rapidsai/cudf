@@ -23,7 +23,6 @@
 namespace cudf {
 namespace binops {
 namespace compiled {
-
 gdf_error binary_operation(gdf_column* out,
                            gdf_column* lhs,
                            gdf_column* rhs,

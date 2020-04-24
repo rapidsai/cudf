@@ -31,7 +31,6 @@
 namespace cudf {
 namespace io {
 namespace avro {
-
 // Forward declare Avro metadata parser
 class avro_metadata;
 

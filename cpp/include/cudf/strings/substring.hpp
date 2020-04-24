@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column.

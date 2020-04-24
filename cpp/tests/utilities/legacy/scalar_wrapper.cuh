@@ -18,10 +18,10 @@
 #define SCALAR_WRAPPER_H
 
 #include <cudf/cudf.h>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <rmm/rmm.h>
-#include <utilities/legacy/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <utilities/legacy/bit_util.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/logical.h>
@@ -29,7 +29,6 @@
 
 namespace cudf {
 namespace test {
-
 /**---------------------------------------------------------------------------*
  * @brief Wrapper for a gdf_scalar used for unit testing.
  *
@@ -54,7 +53,6 @@ struct scalar_wrapper {
 
   operator gdf_scalar&() { return the_scalar; };
 
-
   /**---------------------------------------------------------------------------*
    * @brief Construct a new scalar wrapper object
    *
@@ -63,11 +61,12 @@ struct scalar_wrapper {
    * @param value The value to use for the scalar
    * @param is_valid is the scalar valid
    *---------------------------------------------------------------------------**/
-  scalar_wrapper(ScalarType value, bool is_valid = true) {
-    auto dataptr = reinterpret_cast<ScalarType*>(&(the_scalar.data));
-    *dataptr = value;
+  scalar_wrapper(ScalarType value, bool is_valid = true)
+  {
+    auto dataptr        = reinterpret_cast<ScalarType*>(&(the_scalar.data));
+    *dataptr            = value;
     the_scalar.is_valid = is_valid;
-    the_scalar.dtype = gdf_dtype_of<ScalarType>();
+    the_scalar.dtype    = gdf_dtype_of<ScalarType>();
   }
 
   /**---------------------------------------------------------------------------*
@@ -90,9 +89,7 @@ struct scalar_wrapper {
    *
    * @return ScalarType
    *---------------------------------------------------------------------------**/
-  ScalarType value() const {
-    return *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
-  }
+  ScalarType value() const { return *reinterpret_cast<ScalarType const*>(&(the_scalar.data)); }
 
   /**---------------------------------------------------------------------------*
    * @brief returns the validity of the scalar
@@ -104,7 +101,8 @@ struct scalar_wrapper {
   /**---------------------------------------------------------------------------*
    * @brief Prints the value of the underlying gdf_scalar.
    *---------------------------------------------------------------------------**/
-  void print() const {
+  void print() const
+  {
     ScalarType value = *reinterpret_cast<ScalarType const*>(&(the_scalar.data));
     if (the_scalar.is_valid)
       std::cout << value << std::endl;
@@ -119,9 +117,9 @@ struct scalar_wrapper {
    * @return true The two scalars are equal
    * @return false The two scalars are not equal
    *---------------------------------------------------------------------------**/
-  bool operator==(scalar_wrapper<ScalarType> const& rhs) const {
-    return (the_scalar.dtype == rhs.the_scalar.dtype and
-            this->is_valid() == rhs.is_valid() and
+  bool operator==(scalar_wrapper<ScalarType> const& rhs) const
+  {
+    return (the_scalar.dtype == rhs.the_scalar.dtype and this->is_valid() == rhs.is_valid() and
             this->value() == rhs.value());
   }
 

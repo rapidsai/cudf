@@ -45,13 +45,15 @@ namespace experimental {
  * @tparam T The type to map to a `cudf::type_id`
  *---------------------------------------------------------------------------**/
 template <typename T>
-inline constexpr type_id type_to_id() {
+inline constexpr type_id type_to_id()
+{
   return EMPTY;
 };
 
 struct type_to_name {
   template <typename T>
-  inline std::string operator()() {
+  inline std::string operator()()
+  {
     return "void";
   }
 };
@@ -80,18 +82,20 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  * @param Id The `cudf::type_id` enum
  *---------------------------------------------------------------------------**/
 #ifndef CUDF_TYPE_MAPPING
-#define CUDF_TYPE_MAPPING(Type, Id)                     \
-  template <>                                           \
-  constexpr inline type_id type_to_id<Type>() {         \
-    return Id;                                          \
-  }                                                     \
-  template <>                                           \
-  inline std::string type_to_name::operator()<Type>() { \
-    return CUDF_STRINGIFY(Type);                        \
-  }                                                     \
-  template <>                                           \
-  struct id_to_type_impl<Id> {                          \
-    using type = Type;                                  \
+#define CUDF_TYPE_MAPPING(Type, Id)                   \
+  template <>                                         \
+  constexpr inline type_id type_to_id<Type>()         \
+  {                                                   \
+    return Id;                                        \
+  }                                                   \
+  template <>                                         \
+  inline std::string type_to_name::operator()<Type>() \
+  {                                                   \
+    return CUDF_STRINGIFY(Type);                      \
+  }                                                   \
+  template <>                                         \
+  struct id_to_type_impl<Id> {                        \
+    using type = Type;                                \
   }
 #endif
 
@@ -171,7 +175,7 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
 /**
  * @brief Maps a C++ type to the scalar type required to hold its value
- * 
+ *
  * @tparam T The concrete C++ type to map
  */
 template <typename T>
@@ -280,7 +284,8 @@ template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
                                                                    Functor f,
-                                                                   Ts&&... args) {
+                                                                   Ts&&... args)
+{
   switch (dtype.id()) {
     case BOOL8:
       return f.template operator()<typename IdTypeMap<BOOL8>::type>(std::forward<Ts>(args)...);

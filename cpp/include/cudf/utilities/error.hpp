@@ -45,11 +45,11 @@ struct cuda_error : public std::runtime_error {
 #define CUDF_STRINGIFY(x) STRINGIFY_DETAIL(x)
 
 /**---------------------------------------------------------------------------*
- * @brief Macro for checking (pre-)conditions that throws an exception when  
+ * @brief Macro for checking (pre-)conditions that throws an exception when
  * a condition is violated.
- * 
+ *
  * Example usage:
- * 
+ *
  * @code
  * CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
  * @endcode
@@ -74,7 +74,7 @@ struct cuda_error : public std::runtime_error {
  * ```
  * CUDF_FAIL("Non-arithmetic operation is not supported");
  * ```
- * 
+ *
  * @param[in] reason String literal description of the reason
  *---------------------------------------------------------------------------**/
 #define CUDF_FAIL(reason) \
@@ -82,15 +82,16 @@ struct cuda_error : public std::runtime_error {
 
 namespace cudf {
 namespace detail {
-
-inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line) {
+inline void throw_rmm_error(rmmError_t error, const char* file, unsigned int line)
+{
   // todo: throw cuda_error if the error is from cuda
   throw cudf::logic_error(std::string{"RMM error encountered at: " + std::string{file} + ":" +
                                       std::to_string(line) + ": " + std::to_string(error) + " " +
                                       rmmGetErrorString(error)});
 }
 
-inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line) {
+inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int line)
+{
   throw cudf::cuda_error(std::string{"CUDA error encountered at: " + std::string{file} + ":" +
                                      std::to_string(line) + ": " + std::to_string(error) + " " +
                                      cudaGetErrorName(error) + " " + cudaGetErrorString(error)});
