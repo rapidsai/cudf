@@ -3166,7 +3166,7 @@ class DataFrame(Frame):
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(vals.shape) == 1:
-                df[colk] = column.as_column(vals, nan_as_null=nan_as_null)
+                df[col_name] = column.as_column(vals, nan_as_null=nan_as_null)
             else:
                 vals = vals.T
                 if vals.shape[0] == 1:
