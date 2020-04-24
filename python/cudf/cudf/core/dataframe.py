@@ -3162,7 +3162,7 @@ class DataFrame(Frame):
         df = cls()
         # Set columns
         for col_name, col_value in dataframe.iteritems():
-            vals = dataframe[colk].values
+            vals = dataframe[colk].array
             # necessary because multi-index can return multiple
             # columns for a single key
             if len(vals.shape) == 1:
