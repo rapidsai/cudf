@@ -3161,7 +3161,7 @@ class DataFrame(Frame):
 
         df = cls()
         # Set columns
-        for colk in dataframe.columns:
+        for col_name, col_value in dataframe.iteritems():
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
