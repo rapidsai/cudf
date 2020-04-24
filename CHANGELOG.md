@@ -15,6 +15,7 @@
 
 ## Improvements
 
+- PR #4995 Add CMake option for per-thread default stream
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
