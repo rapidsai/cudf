@@ -1156,11 +1156,13 @@ class Series(Frame):
         """
         return super().dropna(subset=[self.name])
 
-    def drop_duplicates(self, keep="first", inplace=False):
+    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed
         """
-        result = super().drop_duplicates(subset=[self.name], keep=keep)
+        result = super().drop_duplicates(
+            subset=[self.name], keep=keep, ignore_index=ignore_index
+        )
 
         return self._mimic_inplace(result, inplace=inplace)
 

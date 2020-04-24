@@ -1053,7 +1053,13 @@ class Frame(libcudf.table.Table):
             host array, consider using .to_array()"
         )
 
-    def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
         self.
@@ -1065,6 +1071,8 @@ class Frame(libcudf.table.Table):
             duplicate
         nulls_are_equal: null elements are considered equal to other null
             elements
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
         """
         if subset is None:
             subset = self._column_names
@@ -1084,7 +1092,11 @@ class Frame(libcudf.table.Table):
 
         result = self._from_table(
             libcudf.stream_compaction.drop_duplicates(
-                self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
+                self,
+                keys=subset,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+                ignore_index=ignore_index,
             )
         )
 

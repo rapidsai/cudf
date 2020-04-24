@@ -1806,12 +1806,16 @@ class DataFrame(Frame):
             raise NameError("column {!r} does not exist".format(name))
         del self._data[name]
 
-    def drop_duplicates(self, subset=None, keep="first", inplace=False):
+    def drop_duplicates(
+        self, subset=None, keep="first", inplace=False, ignore_index=False
+    ):
         """
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        outdf = super().drop_duplicates(subset=subset, keep=keep)
+        outdf = super().drop_duplicates(
+            subset=subset, keep=keep, ignore_index=ignore_index
+        )
 
         return self._mimic_inplace(outdf, inplace=inplace)
 

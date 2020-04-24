@@ -121,7 +121,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
 
 def drop_duplicates(Table source_table, keys=None,
-                    keep='first', nulls_are_equal=True):
+                    keep='first', nulls_are_equal=True, ignore_index=False):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
@@ -149,7 +149,7 @@ def drop_duplicates(Table source_table, keys=None,
         raise ValueError('keep must be either "first", "last" or False')
 
     num_index_columns =(
-        0 if source_table._index is None
+        0 if (source_table._index is None or ignore_index)
         else source_table._index._num_columns)
     # shifting the index number by number of index columns
     cdef vector[size_type] cpp_keys = (
@@ -165,7 +165,11 @@ def drop_duplicates(Table source_table, keys=None,
 
     cdef bool cpp_nulls_are_equal = nulls_are_equal
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view
+    if ignore_index:
+        source_table_view = source_table.data_view()
+    else:
+        source_table_view = source_table.view()
 
     with nogil:
         c_result = move(
@@ -181,8 +185,8 @@ def drop_duplicates(Table source_table, keys=None,
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
-            None if source_table._index
-            is None else source_table._index_names)
+            None if (source_table._index is None or ignore_index)
+            else source_table._index_names)
     )
 
 

@@ -750,7 +750,7 @@ class ColumnBase(Column):
         lhs = DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
         rhs = DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order")
+        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
 
         return res
