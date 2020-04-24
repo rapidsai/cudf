@@ -24,11 +24,10 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in-place in a column with a
  * scalar value.
- * 
+ *
  * Fills N elements of @p destination starting at @p begin with @p value, where
  * N = (@p end - @p begin).
  *
@@ -63,7 +62,7 @@ void fill_in_place(mutable_column_view& destination,
 /**---------------------------------------------------------------------------*
  * @brief Internal API to fill a range of elements in a column out-of-place with
  a scalar value.
- * 
+ *
  * Creates a new column as-if an in-place fill was performed into @p input;
  * i.e. it is as if a copy of @p input was created first and then the elements
  * indicated by the indices [@p begin, @p end) were overwritten by @p value.

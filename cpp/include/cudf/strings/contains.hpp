@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.

@@ -109,12 +109,17 @@
 - PR #4927 Use stack for memory in `deviceGetName`
 - P# #4933 Enable nop annotate
 - PR #4929 Java methods ensure calling thread's CUDA device matches RMM device
+- PR #4956 Dropping `find_first_value` and `find_last_value`
 - PR #4962 Add missing parameters to `DataFrame.replace` & `Series.replace`
 - PR #4960 Return the result of `to_json`
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
+- PR #4994 clang-format "cpp/tests" directory
+- PR #4993 Remove Java memory prediction code
+- PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #5002 Fix Column.__reduce__ to accept `null_count`
 
 ## Bug Fixes
 
@@ -183,10 +188,12 @@
 - PR #4886 Minimize regex-find calls in multi-replace cudf::strings::replace_re function
 - PR #4887 Remove `developer.rst` and any links
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
-- Pr #4899 Fix series inplace handling
+- PR #4899 Fix series inplace handling
+- PR #4940 Fix boolean mask issue with large sized Dataframe
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #4977 Fix compilation of cuDF benchmarks with build.sh
 
 
 # cuDF 0.13.0 (31 Mar 2020)

@@ -1,23 +1,23 @@
 /*
-* Copyright (c) 2018, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2018, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 /*
-* Portions of this file are derived from Google's Brotli project at
-* https://github.com/google/brotli, original license text below.
-*/
+ * Portions of this file are derived from Google's Brotli project at
+ * https://github.com/google/brotli, original license text below.
+ */
 
 /* Copyright 2013 Google Inc. All Rights Reserved.
 
@@ -55,18 +55,17 @@ THE SOFTWARE.
 
 namespace cudf {
 namespace io {
-
 struct brotli_dictionary_s {
   /**
-    * Number of bits to encode index of dictionary word in a bucket.
-    *
-    * Specification: Appendix A. Static Dictionary Data
-    *
-    * Words in a dictionary are bucketed by length.
-    * @c 0 means that there are no words of a given length.
-    * Dictionary consists of words with length of [4..24] bytes.
-    * Values at [0..3] and [25..31] indices should not be addressed.
-    */
+   * Number of bits to encode index of dictionary word in a bucket.
+   *
+   * Specification: Appendix A. Static Dictionary Data
+   *
+   * Words in a dictionary are bucketed by length.
+   * @c 0 means that there are no words of a given length.
+   * Dictionary consists of words with length of [4..24] bytes.
+   * Values at [0..3] and [25..31] indices should not be addressed.
+   */
   uint8_t size_bits_by_length[32];
 
   /* assert(offset[i + 1] == offset[i] + (bits[i] ? (i << bits[i]) : 0)) */

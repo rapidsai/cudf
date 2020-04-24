@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Returns a list of columns by splitting each string using the
  * specified delimiter.

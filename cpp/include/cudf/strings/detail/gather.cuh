@@ -26,7 +26,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Returns a new strings column using the specified indices to select
  * elements from the `strings` column.
@@ -56,7 +55,8 @@ std::unique_ptr<cudf::column> gather(
   MapIterator begin,
   MapIterator end,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   auto output_count  = std::distance(begin, end);
   auto strings_count = strings.size();
   if (output_count == 0) return make_empty_strings_column(mr, stream);
@@ -133,7 +133,8 @@ std::unique_ptr<cudf::column> gather(
   MapIterator end,
   bool nullify_out_of_bounds,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   if (nullify_out_of_bounds) return gather<true>(strings, begin, end, mr, stream);
   return gather<false>(strings, begin, end, mr, stream);
 }

@@ -23,7 +23,6 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
-
 // clang-format off
 const char* kernel =
   R"***(

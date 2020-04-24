@@ -31,7 +31,6 @@
 #include <memory>
 
 namespace {
-
 template <cudf::size_type block_size,
           typename SourceValueIterator,
           typename SourceValidityIterator,
@@ -42,7 +41,8 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
                                   cudf::mutable_column_device_view target,
                                   cudf::size_type target_begin,
                                   cudf::size_type target_end,
-                                  cudf::size_type* __restrict__ const null_count) {
+                                  cudf::size_type* __restrict__ const null_count)
+{
   using cudf::experimental::detail::warp_size;
 
   static_assert(block_size <= 1024, "copy_range_kernel assumes block_size is not larger than 1024");
@@ -110,7 +110,6 @@ __global__ void copy_range_kernel(SourceValueIterator source_value_begin,
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Internal API to copy a range of values from source iterators to a
  * target column.
@@ -137,7 +136,8 @@ void copy_range(SourceValueIterator source_value_begin,
                 mutable_column_view& target,
                 size_type target_begin,
                 size_type target_end,
-                cudaStream_t stream = 0) {
+                cudaStream_t stream = 0)
+{
   CUDF_EXPECTS((target_begin <= target_end) && (target_begin >= 0) &&
                  (target_begin < target.size()) && (target_end <= target.size()),
                "Range is out of bounds.");

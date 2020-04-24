@@ -23,7 +23,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Create a chars column to be a child of a strings column.
  * This will return the properly sized column to be filled in by the caller.

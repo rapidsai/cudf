@@ -27,7 +27,6 @@
 
 namespace cudf {
 namespace io {
-
 /**
  * @brief Class for reading from a file or memory source
  **/

@@ -21,7 +21,6 @@
 namespace cudf {
 //! Strings column APIs.
 namespace strings {
-
 /**
  * @brief Returns an integer numeric column containing the length of each string in
  * characters.

@@ -11,7 +11,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
  *

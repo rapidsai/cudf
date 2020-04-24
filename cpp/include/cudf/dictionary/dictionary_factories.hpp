@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 
 namespace cudf {
-
 /**
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.

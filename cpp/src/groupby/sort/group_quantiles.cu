@@ -31,9 +31,7 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 namespace {
-
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -44,7 +42,8 @@ struct quantiles_functor {
     rmm::device_vector<double> const& quantile,
     interpolation interpolation,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0) {
+    cudaStream_t stream = 0)
+  {
     using ResultType = experimental::detail::target_type_t<T, aggregation::QUANTILE>;
 
     auto result = make_numeric_column(data_type(type_to_id<ResultType>()),
@@ -113,7 +112,8 @@ struct quantiles_functor {
 
   template <typename T, typename... Args>
   std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    Args&&... args) {
+    Args&&... args)
+  {
     CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }
 };
@@ -128,7 +128,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
                                         rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   return type_dispatcher(values.type(),

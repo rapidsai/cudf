@@ -40,7 +40,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
-
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
