@@ -878,3 +878,12 @@ TEST_F(CsvTest, Writer)
     "false,1111,11111,111,10,10.5,108.0,\"ten\",\"2010-10-10T10:10:10Z\"\n";
   EXPECT_STREQ(csv.c_str(), verify.c_str());
 }
+
+TEST_F(CsvTest, ZeroSkipRows)
+{
+  std::string buffer = "1,2,3";
+  cudf::csv_read_arg in_args{cudf::source_info{buffer.c_str(), buffer.size()}};
+  in_args.header   = -1;
+  in_args.skiprows = 0;
+  EXPECT_NO_THROW(cudf::read_csv(in_args));
+}
