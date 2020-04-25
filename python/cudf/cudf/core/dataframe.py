@@ -2484,7 +2484,9 @@ class DataFrame(Frame):
                     lhs[name] = _set_categories(lhs[name], cats)
                 elif how in ["inner", "outer"]:
                     cats = column.as_column(lcats).append(rcats)
-                    cats = Series(cats).drop_duplicates()._column
+                    cats = (
+                        Series(cats).drop_duplicates(ignore_index=True)._column
+                    )
 
                     lhs[name] = _set_categories(lhs[name], cats)
                     lhs[name] = lhs[name]._column.as_numerical

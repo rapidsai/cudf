@@ -97,7 +97,7 @@ class Frame(libcudf.table.Table):
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
                         .to_series()
-                        .drop_duplicates()
+                        .drop_duplicates(ignore_index=True)
                         ._column
                     )
                     # Set the column dtype to the codes' dtype. The categories

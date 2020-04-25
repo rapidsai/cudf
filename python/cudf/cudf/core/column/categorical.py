@@ -164,7 +164,9 @@ class CategoricalAccessor(object):
         # Ensure new_categories is unique first
         if not (kwargs.get("is_unique", False) or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
-            new_cats = Series(new_cats).drop_duplicates()._column
+            new_cats = (
+                Series(new_cats).drop_duplicates(ignore_index=True)._column
+            )
 
         cur_codes = self.codes
         cur_order = cupy.arange(len(cur_codes))

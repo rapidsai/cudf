@@ -230,7 +230,7 @@ class ColumnBase(Column):
             cats = (
                 cudf.concat([o.cat().categories for o in objs])
                 .to_series()
-                .drop_duplicates()
+                .drop_duplicates(ignore_index=True)
                 ._column
             )
             objs = [
@@ -735,7 +735,9 @@ class ColumnBase(Column):
             rhs_cats = rhs.cat().categories._values
             if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
                 # if the categories are the same dtype, we can combine them
-                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates(
+                    ignore_index=True
+                )
                 lhs = lhs.cat().set_categories(cats, is_unique=True)
                 rhs = rhs.cat().set_categories(cats, is_unique=True)
             else:
@@ -932,7 +934,11 @@ class ColumnBase(Column):
         """
         Get unique values in the data
         """
-        return self.as_frame().drop_duplicates(keep="first")._as_column()
+        return (
+            self.as_frame()
+            .drop_duplicates(keep="first", ignore_index=True)
+            ._as_column()
+        )
 
     def serialize(self):
         header = {}
