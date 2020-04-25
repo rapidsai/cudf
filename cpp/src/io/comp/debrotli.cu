@@ -1967,7 +1967,7 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
 /**
  * @brief Computes the size of temporary memory for Brotli decompression
  *
- * In most case, a brotli metablock will require in the order of ~10KB 
+ * In most case, a brotli metablock will require in the order of ~10KB
  * to ~40KB of scratch space for various lookup tables (mainly context maps
  * and Huffman lookup tables), as well as temporary scratch space to decode
  * the header. However, because the syntax allows for a huge number of unique
