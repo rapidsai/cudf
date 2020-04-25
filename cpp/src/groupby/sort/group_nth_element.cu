@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <thrust/iterator/discard_iterator.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -72,16 +73,36 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                   group_labels.end(),
                                   bitmask_iterator,
                                   intra_group_index.begin());
+    // group_size to recalculate n if n<0
+    rmm::device_vector<size_type> group_count = [&] {
+      if (n < 0) {
+        rmm::device_vector<size_type> group_count(num_groups);
+        thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+                              group_labels.begin(),
+                              group_labels.end(),
+                              bitmask_iterator,
+                              thrust::make_discard_iterator(),
+                              group_count.begin());
+        return group_count;
+      } else {
+        return rmm::device_vector<size_type>();
+      }
+    }();
     // gather the valid index == n
-    thrust::scatter_if(
-      rmm::exec_policy(stream)->on(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(values.size()),
-      group_labels.begin(),                          // map
-      thrust::make_counting_iterator<size_type>(0),  // stencil
-      nth_index.begin(),
-      [n, bitmask_iterator, intra_group_index = intra_group_index.begin()] __device__(
-        auto i) -> bool { return (bitmask_iterator[i] && intra_group_index[i] == n); });
+    thrust::scatter_if(rmm::exec_policy(stream)->on(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       thrust::make_counting_iterator<size_type>(values.size()),
+                       group_labels.begin(),                          // map
+                       thrust::make_counting_iterator<size_type>(0),  // stencil
+                       nth_index.begin(),
+                       [n,
+                        bitmask_iterator,
+                        group_size        = group_count.begin(),
+                        group_labels      = group_labels.begin(),
+                        intra_group_index = intra_group_index.begin()] __device__(auto i) -> bool {
+                         auto nth = ((n < 0) ? group_size[group_labels[i]] + n : n);
+                         return (bitmask_iterator[i] && intra_group_index[i] == nth);
+                       });
   }
   auto output_table = experimental::detail::gather(
     table_view{{values}}, nth_index.begin(), nth_index.end(), true, mr, stream);

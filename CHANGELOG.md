@@ -13,6 +13,7 @@
 - PR #4900 Add `get_element` to obtain scalar from a column given an index
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 
 ## Improvements
 
@@ -121,6 +122,7 @@
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
+- PR #5006 Add Java bindings for strip, lstrip and rstrip
 
 ## Bug Fixes
 
@@ -194,7 +196,11 @@
 - PR #4889 Fix multi-index merging
 - PR #4949 Fix scatter, gather benchmark constructor call
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #5009 Fix pickling for string and categorical columns
+- PR #4984 Fix groupby nth aggregation negative n and exclude nulls
+- PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
+- PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 
 
 # cuDF 0.13.0 (31 Mar 2020)
