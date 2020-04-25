@@ -14,26 +14,7 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
 
-
-def compute_result_col_names(lhs, rhs, how):
-    if how in ('left', 'inner', 'outer'):
-        # the result columns are all the left columns (including common ones)
-        # + all the right columns (excluding the common ones)
-        result_col_names = [None] * len(lhs._data.keys() | rhs._data.keys())
-        ix = 0
-        for name in lhs._data.keys():
-            result_col_names[ix] = name
-            ix += 1
-        for name in rhs._data.keys():
-            if name not in lhs._data.keys():
-                nom = name
-                result_col_names[ix] = nom
-                ix += 1
-    elif how in ('leftsemi', 'leftanti'):
-        # the result columns are just all the left columns
-        result_col_names = list(lhs._data.keys())
-    return result_col_names
-
+from cudf.core.join.join import Merge
 
 cpdef join(Table lhs,
            Table rhs,
@@ -75,7 +56,7 @@ cpdef join(Table lhs,
         rhs._num_columns + (rhs._num_indices * right_index)
     )
 
-    result_col_names = compute_result_col_names(lhs, rhs, how)
+    result_col_names = Merge.compute_result_col_names(lhs, rhs, how)
 
     columns_in_common = OrderedDict()
     cdef vector[pair[int, int]] c_columns_in_common

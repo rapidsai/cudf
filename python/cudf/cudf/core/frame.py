@@ -16,7 +16,6 @@ from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
-    is_datetime_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
@@ -1379,104 +1378,52 @@ class Frame(libcudf.table.Table):
         right_on,
         left_index,
         right_index,
+        how,
+        sort,
         lsuffix,
         rsuffix,
-        how,
         method,
-        sort=False,
+        indicator,
+        suffixes,
     ):
 
         lhs = self
         rhs = right
-
-        if left_on is None:
-            left_on = []
-        if right_on is None:
-            right_on = []
-
-        # Making sure that the "on" arguments are list of column names
-        if on:
-            on = [on] if isinstance(on, str) else list(on)
-        if left_on:
-            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
-        if right_on:
-            right_on = (
-                [right_on] if isinstance(right_on, str) else list(right_on)
-            )
-
-        self._validate_merge_cfg(
-            self,
-            right,
-            left_on,
-            right_on,
-            on,
-            how,
-            left_index=left_index,
-            right_index=right_index,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
-        )
-
-        if on:
-            left_on = right_on = on
-
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_on or right_on) and not (left_index and right_index):
-            left_on = right_on = list(same_named_columns)
-
-        no_suffix_cols = []
-        for name in same_named_columns:
-            if left_on is not None and right_on is not None:
-                if name in left_on and name in right_on:
-                    if left_on.index(name) == right_on.index(name):
-                        no_suffix_cols.append(name)
-
-        for name in same_named_columns:
-            if name not in no_suffix_cols:
-                lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
-                rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
-                if name in left_on:
-                    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                if name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         categorical_dtypes = {}
         for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
             if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
 
-        # Save the order of the original column names for preservation later
-        org_names = list(itertools.chain(lhs._data.keys(), rhs._data.keys()))
+        from cudf.core.join import Merge
 
-        # If neither left_index or right_index specified, that data won't
-        # be carried through the join. We'll get a new RangeIndex afterwards
-        lhs_full_view = False
-        rhs_full_view = False
-        if left_index:
-            lhs_full_view = True
-        if right_index:
-            rhs_full_view = True
-
-        # potentially do an implicit typecast
-        lhs, rhs = self._typecast_before_merge(
-            lhs, rhs, left_on, right_on, left_index, right_index, how
-        )
-
-        gdf_result = libcudf.join.join(
+        mergeop = Merge(
             lhs,
             rhs,
+            on,
             left_on,
             right_on,
+            left_index,
+            right_index,
             how,
+            sort,
+            lsuffix,
+            rsuffix,
             method,
-            left_index=lhs_full_view,
-            right_index=rhs_full_view,
+            indicator,
+            suffixes,
+        )
+        # Save the order of the original column names for preservation later
+        org_names = list(
+            itertools.chain(mergeop.lhs._data.keys(), mergeop.rhs._data.keys())
         )
 
-        gdf_data = list(gdf_result._data.items())
+        gdf_result = mergeop.perform_merge()
 
+        gdf_data = list(gdf_result._data.items())
+        # import pdb
+        # pdb.set_trace()
         result = []
-        cat_codes = []
         for org_name in org_names:
             for i in range(len(gdf_data)):
                 if gdf_data[i][0] == org_name:
@@ -1493,7 +1440,9 @@ class Frame(libcudf.table.Table):
 
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = col.astype(dtype)
-                to_frame_data[name] = to_frame_data[name].cat().set_categories(dtype.categories)
+                to_frame_data[name] = (
+                    to_frame_data[name].cat().set_categories(dtype.categories)
+                )
                 to_frame_data[name].set_mask(col.mask)
             else:
 
@@ -1518,15 +1467,15 @@ class Frame(libcudf.table.Table):
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
-                    by += list(to_return[left_on]._data.columns)
+                    by += list(to_return[mergeop.left_on]._data.columns)
             elif left_index:
-                by = list(to_return[right_on]._data.columns)
+                by = list(to_return[mergeop.right_on]._data.columns)
             elif right_index:
-                by = list(to_return[left_on]._data.columns)
+                by = list(to_return[mergeop.left_on]._data.columns)
             else:
                 # left_on == right_on, or different names but same columns
                 # in both cases we can sort by either
-                by = list(to_return[left_on]._data.columns)
+                by = list(to_return[mergeop.left_on]._data.columns)
             for i, col in enumerate(by):
                 to_sort[i] = col
             inds = to_sort.argsort()
@@ -1536,114 +1485,6 @@ class Frame(libcudf.table.Table):
             return to_return
         else:
             return to_return
-
-    def _typecast_before_merge(
-        self, lhs, rhs, left_on, right_on, left_index, right_index, how
-    ):
-        def casting_rules(lcol, rcol, how):
-            cast_warn = "can't safely cast column {} from {} with type \
-                         {} to {}, upcasting to {}"
-            ctgry_err = "can't implicitly cast column {0} to categories \
-                         from {1} during {1} join"
-
-            dtype_l = lcol.dtype
-            dtype_r = rcol.dtype
-
-            rtn = None
-            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-                rtn = dtype_l
-            elif is_categorical_dtype(dtype_l) and is_categorical_dtype(
-                dtype_r
-            ):
-                raise TypeError("Left and right categories must be the same.")
-            elif how == "left":
-
-                check_col = rcol.fillna(0)
-                if not check_col.can_cast_safely(dtype_l):
-                    rtn = casting_rules(lcol, rcol, "inner")
-                    warnings.warn(
-                        cast_warn.format(rcol, "right", dtype_r, dtype_l, rtn)
-                    )
-                else:
-                    rtn = dtype_l
-            elif how == "right":
-                check_col = lcol.fillna(0)
-                if not check_col.can_cast_safely(dtype_r):
-                    rtn = casting_rules(lcol, rcol, "inner")
-                    warnings.warn(
-                        cast_warn.format(lcol, "left", dtype_l, dtype_r, rtn)
-                    )
-                else:
-                    rtn = dtype_r
-
-            elif is_categorical_dtype(dtype_l):
-                if how == "right":
-                    raise ValueError(ctgry_err.format(rcol, "right"))
-
-                rtn = lcol.cat().categories.dtype
-            elif is_categorical_dtype(dtype_r):
-                if how == "left":
-                    raise ValueError(ctgry_err.format(lcol, "left"))
-                rtn = rcol.cat().categories.dtype
-            elif how in ["inner", "outer"]:
-                if (np.issubdtype(dtype_l, np.number)) and (
-                    np.issubdtype(dtype_r, np.number)
-                ):
-                    if dtype_l.kind == dtype_r.kind:
-                        # both ints or both floats
-                        rtn = max(dtype_l, dtype_r)
-                    else:
-                        rtn = np.find_common_type([], [dtype_l, dtype_r])
-                elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
-                    rtn = max(dtype_l, dtype_r)
-            return rtn
-
-        # gather references to all the left and right hand join columns 
-        # regardless of if they're index or data columns
-        # line them up in order in a list such that matching indices in
-        # the lists are joined against each other
-        lhs_join_cols = []
-        rhs_join_cols = []
-        if left_index and right_index:
-            for ((kl, vl), (kr, vr)) in zip(
-                lhs.index._data.items(),
-                rhs.index._data.items()
-            ):
-                to_dtype = casting_rules(vl, vr, how)
-                lhs.index._data[kl] = vl.astype(to_dtype)
-                rhs.index._data[kr] = vr.astype(to_dtype)
-            if left_on and right_on:
-                for lcol, rcol in zip(left_on, right_on):
-                    to_dtype = casting_rules(vl, vr, how)
-                    lhs._data[lcol] = lhs._data[lcol].astype(to_dtype)
-                    rhs._data[rcol] = rhs._data[rcol].astype(to_dtype)
-        elif left_index and right_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                lhs.index._data.items(),
-                rhs._data.items()
-            ):
-                to_dtype = casting_rules(vl, vr, how)
-                lhs.index._data[kl] = vl.astype(to_dtype)
-                rhs._data[kr] = vr.astype(to_dtype)
-        elif right_index and left_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                lhs._data.items(),
-                rhs.index._data.items()
-            ):
-                to_dtype = casting_rules(vl, vr, how)
-                lhs._data[kl] = vl.astype(to_dtype)
-                rhs.index._data[kr] = vr.astype(to_dtype)
-                
-        elif left_on and right_on:    
-            for ((kl, vl), (kr, vr)) in zip(
-                lhs._data.items(),
-                rhs._data.items()
-            ):
-                to_dtype = casting_rules(vl, vr, how)
-                lhs._data[kl] = vl.astype(to_dtype)
-                rhs._data[kr] = vr.astype(to_dtype)
-        
-        return lhs, rhs
 
     def _is_sorted(self, ascending=None, null_position=None):
         """

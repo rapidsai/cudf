@@ -7,7 +7,6 @@ import itertools
 import logging
 import numbers
 import pickle
-import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -2224,11 +2223,11 @@ class DataFrame(Frame):
         self,
         right,
         on=None,
-        how="inner",
         left_on=None,
         right_on=None,
         left_index=False,
         right_index=False,
+        how="inner",
         sort=False,
         lsuffix=None,
         rsuffix=None,
@@ -2338,11 +2337,13 @@ class DataFrame(Frame):
             right_on,
             left_index,
             right_index,
+            how,
+            sort,
             lsuffix,
             rsuffix,
-            how,
             method,
-            sort=sort,
+            indicator,
+            suffixes,
         )
         return gdf_result
 
@@ -2404,77 +2405,19 @@ class DataFrame(Frame):
                 method="hash",
             )
 
-        same_names = set(self._data.names) & set(other._data.names)
-        if same_names and not (lsuffix or rsuffix):
-            raise ValueError(
-                "there are overlapping columns but "
-                "lsuffix and rsuffix are not defined"
-            )
-
-        lhs = DataFrame()
-        rhs = DataFrame()
-
-        idx_col_names = []
-        if isinstance(self.index, cudf.core.multiindex.MultiIndex):
-            if not isinstance(other.index, cudf.core.multiindex.MultiIndex):
-                raise TypeError(
-                    "Left index is MultiIndex, but right index is "
-                    + type(other.index)
-                )
-
-            index_frame_l = self.index.copy().to_frame(index=False)
-            index_frame_r = other.index.copy().to_frame(index=False)
-
-            if (index_frame_l.columns != index_frame_r.columns).any():
-                raise ValueError(
-                    "Left and Right indice-column names must match."
-                )
-
-            for name in index_frame_l.columns:
-                idx_col_name = str(uuid.uuid4())
-                idx_col_names.append(idx_col_name)
-
-                lhs[idx_col_name] = index_frame_l._data[name]
-                rhs[idx_col_name] = index_frame_r._data[name]
-
-        else:
-            idx_col_names.append(str(uuid.uuid4()))
-            lhs[idx_col_names[0]] = self.index._values
-            rhs[idx_col_names[0]] = other.index._values
-
-        for name, col in self._data.items():
-            lhs[name] = col
-
-        for name, col in other._data.items():
-            rhs[name] = col
-
-        lhs.reset_index(drop=True, inplace=True)
-        rhs.reset_index(drop=True, inplace=True)
-
-        if lsuffix == "":
-            lsuffix = "l"
-        if rsuffix == "":
-            rsuffix = "r"
+        lhs = self
+        rhs = other
 
         df = lhs.merge(
             rhs,
-            on=idx_col_names,
+            left_index=True,
+            right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
             method=method,
+            sort=sort,
         )
-
-        if sort and len(df):
-            df = df.sort_values(idx_col_names)
-
-        df = df.set_index(idx_col_names)
-        # change index to None to better reflect pandas behavior
         df.index.name = None
-
-        if len(idx_col_names) > 1:
-            df.index.names = index_frame_l.columns
-            for new_key, old_key in zip(index_frame_l.columns, idx_col_names):
-                df.index._data[new_key] = df.index._data.pop(old_key)
         return df
 
     @copy_docstring(DataFrameGroupBy)
