@@ -1967,6 +1967,21 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
 /**
  * @brief Computes the size of temporary memory for Brotli decompression
  *
+ * In most case, a brotli metablock will require in the order of ~10KB 
+ * to ~40KB of scratch space for various lookup tables (mainly context maps
+ * and Huffman lookup tables), as well as temporary scratch space to decode
+ * the header. However, because the syntax allows for a huge number of unique
+ * tables, the theoretical worst case is quite large at ~1.3MB per threadblock,
+ * which would scale with gpu occupancy.
+ *
+ * This is solved by a custom memory allocator that first allocates from a local
+ * heap in shared mem (with the end of the heap being used as a stack for
+ * intermediate small allocations). Once this is exhausted, the 'external'
+ * heap is used, allocating from a single scratch surface shared between all
+ * the threadblocks, such that allocation can't fail, but may cause serialization
+ * between threadblocks should more than one threadblock ever allocate the worst
+ * case size.
+ *
  * @param[in] max_num_inputs The maximum number of compressed input chunks
  *
  * @return The size in bytes of required temporary memory
