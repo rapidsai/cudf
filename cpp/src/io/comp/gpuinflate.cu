@@ -1098,6 +1098,7 @@ __global__ void __launch_bounds__(NUMTHREADS)
       if (t < 1 * 32) {
         // WARP0: decode variable-length symbols
         if (!t) {
+          // Thread0: decode symbols (single threaded)
           decode_symbols(state);
 #if ENABLE_PREFETCH
           state->pref.run = 0;
