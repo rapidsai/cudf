@@ -62,6 +62,7 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
 
     token = tokenize(df, columns)
     simple_shuffle_group_token = "simple-shuffle-group-" + token
+    df_nparitions = set(range(df.npartitions))
     group = {  # Convert partition into dict of dataframe pieces
         (simple_shuffle_group_token, i): (
             _shuffle_group,
@@ -73,9 +74,10 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
             ignore_index,
             npartitions,
         )
-        for i in range(df.npartitions)
+        for i in df_nparitions
     }
 
+    _nparitions = set(range(npartitions))
     simple_shuffle_split_token = "simple-shuffle-split-" + token
     split = {  # Get out each individual dataframe piece from the dicts
         (simple_shuffle_split_token, i, j): (
@@ -83,21 +85,18 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
             (simple_shuffle_group_token, i),
             j,
         )
-        for i in range(df.npartitions)
-        for j in range(npartitions)
+        for i in df_nparitions
+        for j in _nparitions
     }
 
     simple_shuffle_combine_token = "simple-shuffle-combine-" + token
     combine = {  # concatenate those pieces together, with their friends
         (simple_shuffle_combine_token, j): (
             _concat,
-            [
-                (simple_shuffle_split_token, i, j)
-                for i in range(df.npartitions)
-            ],
+            [(simple_shuffle_split_token, i, j) for i in df_nparitions],
             ignore_index,
         )
-        for j in range(npartitions)
+        for j in _nparitions
     }
 
     dsk = toolz.merge(group, split, combine)
