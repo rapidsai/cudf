@@ -306,7 +306,7 @@ static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
   s->heap_limit  = (uint16_t)heap_limit;
 }
 
-/// Alloc memory from the fixed-size heap shared between all blocks
+/// Alloc memory from the fixed-size heap shared between all blocks (thread0-only)
 static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
                                           uint8_t *ext_heap_base,
                                           uint32_t ext_heap_size)
@@ -319,6 +319,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
+      // Wait a bit in a attempt to make the spin less resource-hungry
       NANOSLEEP(100);
       continue;
     }
@@ -377,7 +378,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
   return nullptr;
 }
 
-/// Free a memory block
+/// Free a memory block (thread0-only)
 static __device__ void ext_heap_free(void *ptr,
                                      uint32_t bytes,
                                      uint8_t *ext_heap_base,
@@ -598,6 +599,7 @@ static __device__ int NextTableBitSize(const uint16_t *const count, int len, int
   return len - root_bits;
 }
 
+// Build a huffman lookup table (currently thread0-only)
 static __device__ uint32_t BuildHuffmanTable(uint16_t *root_lut,
                                              int root_bits,
                                              const uint16_t *const symbol_lists,
@@ -847,6 +849,7 @@ invalid.
 
 **/
 
+// Decode Huffman tree (thread0-only)
 static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
                                              uint32_t alphabet_size,
                                              uint32_t max_symbol,
