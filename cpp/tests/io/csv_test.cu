@@ -111,25 +111,30 @@ void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const
   EXPECT_THAT(cudf::test::to_host<T>(rhs).first, ::testing::ElementsAreArray(lhs));
 }
 
-void write_csv_helper(std::string const& filename, cudf::table_view const& table, bool include_header, std::vector<std::string> const& names = {}) {
+void write_csv_helper(std::string const& filename,
+                      cudf::table_view const& table,
+                      bool include_header,
+                      std::vector<std::string> const& names = {})
+{
   // NOTE sink_info, na, and metadata lifetimes must extend past write_csv call since
   // write_csv_args is non-owning
   cudf_io::sink_info const sink{filename};
-  std::string const na{"null"}; // why doesn't this have a default?
+  std::string const na{"null"};  // why doesn't this have a default?
   cudf_io::table_metadata metadata{};
 
   if (not names.empty()) {
     metadata.column_names = names;
   } else {
     // generate some dummy column names
-    int i = 0;
+    int i                  = 0;
     auto const num_columns = table.num_columns();
     metadata.column_names.reserve(num_columns);
-    std::generate_n(std::back_inserter(metadata.column_names), num_columns,
-      [&i]() { return std::string("col") + std::to_string(i++); });
+    std::generate_n(std::back_inserter(metadata.column_names), num_columns, [&i]() {
+      return std::string("col") + std::to_string(i++);
+    });
   }
 
-  int const rows_per_chunk{1}; // what should this be set to? how would I know?
+  int const rows_per_chunk{1};  // what should this be set to? how would I know?
   cudf_io::write_csv_args write_args{sink, table, na, include_header, rows_per_chunk};
   write_args.metadata_ = &metadata;
 
@@ -165,7 +170,7 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
   auto sequence           = cudf::test::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
   auto input_column = column_wrapper<TypeParam>(sequence, sequence + num_rows);
-  auto input_table = cudf::table_view{std::vector<cudf::column_view>{input_column}};
+  auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};
 
   auto filepath = temp_env->get_temp_filepath("SingleColumnWithWriter.csv");
 
@@ -234,11 +239,11 @@ TEST_F(CsvReaderTest, MultiColumn)
 TEST_F(CsvReaderTest, MultiColumnWithWriter)
 {
   constexpr auto num_rows = 10;
-  auto int8_column = [](){
+  auto int8_column        = []() {
     auto values = random_values<int8_t>(num_rows);
     return column_wrapper<int8_t>(values.begin(), values.end());
   }();
-  auto int16_column = [](){
+  auto int16_column = []() {
     auto values = random_values<int16_t>(num_rows);
     return column_wrapper<int16_t>(values.begin(), values.end());
   }();
@@ -259,7 +264,17 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
     return column_wrapper<double>(values.begin(), values.end());
   }();
 
-  std::vector<cudf::column_view> input_columns{int8_column, int16_column, int16_column, int32_column, int32_column, int64_column, int64_column, float32_column, float32_column, float64_column, float64_column};
+  std::vector<cudf::column_view> input_columns{int8_column,
+                                               int16_column,
+                                               int16_column,
+                                               int32_column,
+                                               int32_column,
+                                               int64_column,
+                                               int64_column,
+                                               float32_column,
+                                               float32_column,
+                                               float64_column,
+                                               float64_column};
   cudf::table_view input_table{input_columns};
 
   auto filepath = temp_env->get_temp_dir() + "MultiColumnWithWriter.csv";
@@ -354,15 +369,15 @@ TEST_F(CsvReaderTest, DatesWithWriter)
   auto filepath = temp_env->get_temp_dir() + "DatesWithWriter.csv";
 
   auto input_column = column_wrapper<cudf::timestamp_ms>{983750400000,
-                                                           1288483200000,
-                                                           782611200000,
-                                                           656208000000,
-                                                           (long)0,
-                                                           798163200000,
-                                                           774144000000,
-                                                           1149679230400,
-                                                           1126875750400,
-                                                           2764800000};
+                                                         1288483200000,
+                                                         782611200000,
+                                                         656208000000,
+                                                         (long)0,
+                                                         798163200000,
+                                                         774144000000,
+                                                         1149679230400,
+                                                         1126875750400,
+                                                         2764800000};
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO need to add a dayfirst flag?
@@ -551,18 +566,19 @@ TEST_F(CsvReaderTest, FloatingPointWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "FloatingPointWithWriter.csv";
 
-  auto input_column = column_wrapper<double>{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998};
+  auto input_column =
+    column_wrapper<double>{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998};
   cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
 
   // TODO add lineterminator=";"
   write_csv_helper(filepath, input_table, false);
 
   cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
-  in_args.names          = {"A"};
-  in_args.dtype          = {"float64"};
-  //in_args.lineterminator = ';';
-  in_args.header         = -1;
-  auto result            = cudf_io::read_csv(in_args);
+  in_args.names = {"A"};
+  in_args.dtype = {"float64"};
+  // in_args.lineterminator = ';';
+  in_args.header = -1;
+  auto result    = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
   cudf::test::expect_tables_equivalent(input_table, result_table);
@@ -604,7 +620,8 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   auto filepath = temp_env->get_temp_dir() + "StringsWithWriter.csv";
 
   auto int_column = column_wrapper<int32_t>{10, 20, 30};
-  auto string_column = column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
+  auto string_column =
+    column_wrapper<cudf::string_view>{"abc def ghi", "\"jkl mno pqr\"", "stu \"\"vwx\"\" yz"};
   cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
 
   // TODO add quoting style flag?
