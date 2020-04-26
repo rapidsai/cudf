@@ -332,8 +332,6 @@ class Merge(object):
                 libcudf_join_type = max(dtype_l, dtype_r)
         return libcudf_join_type
 
-    # def libcudf_to_output_casting_rules(lhs, rhs, how):
-
     @staticmethod
     def compute_result_col_names(lhs, rhs, how):
         if how in ("left", "inner", "outer"):
