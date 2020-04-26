@@ -94,7 +94,7 @@ to automatically run `isort`, `Black`, and `flake8` when you make a git commit.
 This can be done by installing `pre-commit` via `conda` or `pip`:
 
 ```bash
-conda install pre_commit
+conda install pre_commit -c conda-forge
 ```
 
 ```bash
