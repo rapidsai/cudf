@@ -1421,8 +1421,7 @@ class Frame(libcudf.table.Table):
         gdf_result = mergeop.perform_merge()
 
         gdf_data = list(gdf_result._data.items())
-        # import pdb
-        # pdb.set_trace()
+
         result = []
         for org_name in org_names:
             for i in range(len(gdf_data)):
