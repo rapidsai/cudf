@@ -1159,3 +1159,83 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_typecast_on_join_indexes():
+    join_data_l = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_r = Series([1, 2, 3, 4, 6], dtype="int32")
+    other_data = ["a", "b", "c", "d", "e"]
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    gdf_l = gdf_l.set_index("join_col")
+    gdf_r = gdf_r.set_index("join_col")
+
+    exp_join_data = [1, 2, 3, 4]
+    exp_other_data = ["a", "b", "c", "d"]
+    exp_join_col = Series(exp_join_data, dtype="int32")
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_data,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index("join_col")
+
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
+
+
+def test_typecast_on_join_multiindices():
+    join_data_l_0 = Series([1, 2, 3, 4, 5], dtype="int8")
+    join_data_l_1 = Series([2, 3, 4.1, 5.9, 6], dtype="float32")
+    join_data_l_2 = Series([7, 8, 9, 0, 1], dtype="float32")
+
+    join_data_r_0 = Series([1, 2, 3, 4, 5], dtype="int32")
+    join_data_r_1 = Series([2, 3, 4, 5, 6], dtype="int32")
+    join_data_r_2 = Series([7, 8, 9, 0, 0], dtype="float64")
+
+    other_data = ["a", "b", "c", "d", "e"]
+
+    gdf_l = DataFrame(
+        {
+            "join_col_0": join_data_l_0,
+            "join_col_1": join_data_l_1,
+            "join_col_2": join_data_l_2,
+            "B": other_data,
+        }
+    )
+    gdf_r = DataFrame(
+        {
+            "join_col_0": join_data_r_0,
+            "join_col_1": join_data_r_1,
+            "join_col_2": join_data_r_2,
+            "B": other_data,
+        }
+    )
+
+    gdf_l = gdf_l.set_index(["join_col_0", "join_col_1", "join_col_2"])
+    gdf_r = gdf_r.set_index(["join_col_0", "join_col_1", "join_col_2"])
+
+    exp_join_data_0 = Series([1, 2], dtype="int32")
+    exp_join_data_1 = Series([2, 3], dtype="float64")
+    exp_join_data_2 = Series([7, 8], dtype="float64")
+    exp_other_data = Series(["a", "b"])
+
+    expect = DataFrame(
+        {
+            "join_col_0": exp_join_data_0,
+            "join_col_1": exp_join_data_1,
+            "join_col_2": exp_join_data_2,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index(["join_col_0", "join_col_1", "join_col_2"])
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
