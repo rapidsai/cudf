@@ -2417,7 +2417,7 @@ class DataFrame(Frame):
             method=method,
             sort=sort,
         )
-        df.index.name = None
+        df.index.name = None if lhs.index.name != rhs.index.name else lhs.index.name
         return df
 
     @copy_docstring(DataFrameGroupBy)
