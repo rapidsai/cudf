@@ -27,6 +27,7 @@
 #include <jit/type.h>
 #include "jit/code/code.h"
 
+#include <timestamps.hpp.jit>
 #include <types.hpp.jit>
 
 namespace cudf {
@@ -42,15 +43,13 @@ void unary_operation(mutable_column_view output,
 {
   std::string hash = "prog_transform.experimental" + std::to_string(std::hash<std::string>{}(udf));
 
-  std::string cuda_source;
+  std::string cuda_source = code::kernel_header;
   if (is_ptx) {
-    cuda_source = "\n#include <cudf/types.hpp>\n" +
-                  cudf::jit::parse_single_function_ptx(
-                    udf, "GENERIC_UNARY_OP", cudf::jit::get_type_name(output_type), {0}) +
-                  code::kernel;
+    cuda_source += cudf::jit::parse_single_function_ptx(
+                     udf, "GENERIC_UNARY_OP", cudf::jit::get_type_name(output_type), {0}) +
+                   code::kernel;
   } else {
-    cuda_source =
-      "\n" + cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") + code::kernel;
+    cuda_source += cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") + code::kernel;
   }
 
   const std::vector<std::string> compiler_flags{"-std=c++14",
@@ -60,7 +59,12 @@ void unary_operation(mutable_column_view output,
                                                 "-w"};
 
   // Launch the jitify kernel
-  cudf::jit::launcher(hash, cuda_source, {cudf_types_hpp}, compiler_flags, nullptr, stream)
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      {cudf_types_hpp, cudf_wrappers_timestamps_hpp},
+                      compiler_flags,
+                      nullptr,
+                      stream)
     .set_kernel_inst("kernel",  // name of the kernel we are launching
                      {cudf::jit::get_type_name(output.type()),  // list of template arguments
                       cudf::jit::get_type_name(input.type())})

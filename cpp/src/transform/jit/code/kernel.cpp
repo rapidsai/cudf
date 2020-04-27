@@ -19,10 +19,14 @@ namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
+const char* kernel_header =
+  R"***(
+#include <cudf/types.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+)***";
+
 const char* kernel =
   R"***(
-    #include <cudf/types.hpp>
-
     template <typename TypeOut, typename TypeIn>
     __global__
     void kernel(cudf::size_type size,
