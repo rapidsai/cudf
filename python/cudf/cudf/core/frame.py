@@ -1390,13 +1390,7 @@ class Frame(libcudf.table.Table):
         lhs = self
         rhs = right
 
-        categorical_dtypes = {}
-        for name, col in itertools.chain(lhs._data.items(), rhs._data.items()):
-            if is_categorical_dtype(col):
-                categorical_dtypes[name] = col.dtype
-
         from cudf.core.join import Merge
-
         mergeop = Merge(
             lhs,
             rhs,
@@ -1435,19 +1429,10 @@ class Frame(libcudf.table.Table):
         for name, col in result:
             if is_string_dtype(col):
                 to_frame_data[name] = col
-            elif is_categorical_dtype(categorical_dtypes.get(name, col.dtype)):
-
-                dtype = categorical_dtypes.get(name, col.dtype)
-                to_frame_data[name] = col.astype(dtype)
-                to_frame_data[name] = (
-                    to_frame_data[name].cat().set_categories(dtype.categories)
-                )
-                to_frame_data[name].set_mask(col.mask)
             else:
-
                 to_frame_data[name] = column.build_column(
                     col.base_data,
-                    dtype=categorical_dtypes.get(name, col.dtype),
+                    dtype=col.dtype,
                     mask=col.base_mask,
                     offset=col.offset,
                     size=col.size,
