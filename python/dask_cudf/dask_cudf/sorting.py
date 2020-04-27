@@ -152,24 +152,23 @@ def rearrange_by_hash(
     groups = []
     splits = []
     combines = []
+    inputs = []
 
-    inputs = [
-        tuple(digit(i, j, k) for j in range(stages))
-        for i in range(k ** stages)
-    ]
+    start = {}
+    end = {}
 
     token = tokenize(df, columns, max_branch)
     shuffle_combine_token = "shuffle-combine-" + token
     shuffle_token = "shuffle-" + token
 
-    start = {}
-    end = {}
+    for index, i in enumerate(range(k ** stages)):
+        inp = tuple(digit(i, j, k) for j in range(stages))
 
-    for i, inp in enumerate(inputs):
         start[(shuffle_combine_token, 0, inp)] = (
-            (df._name, i) if i < df.npartitions else df._meta
+            (df._name, index) if index < df.npartitions else df._meta
         )
-        end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
+        end[(shuffle_token, index)] = (shuffle_combine_token, stages, inp)
+        inputs.append(inp)
 
     shuffle_group_token = "shuffle-group-" + token
     shuffle_split_token = "shuffle-split-" + token
