@@ -161,13 +161,13 @@ def rearrange_by_hash(
     shuffle_combine_token = "shuffle-combine-" + token
     shuffle_token = "shuffle-" + token
 
-    for index, i in enumerate(range(k ** stages)):
+    for i in range(k ** stages):
         inp = tuple(digit(i, j, k) for j in range(stages))
 
         start[(shuffle_combine_token, 0, inp)] = (
-            (df._name, index) if index < df.npartitions else df._meta
+            (df._name, i) if i < df.npartitions else df._meta
         )
-        end[(shuffle_token, index)] = (shuffle_combine_token, stages, inp)
+        end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
         inputs.append(inp)
 
     shuffle_group_token = "shuffle-group-" + token
