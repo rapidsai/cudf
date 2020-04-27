@@ -90,6 +90,10 @@ class CategoricalAccessor(object):
         ordered = kwargs.get("ordered", self.ordered)
         rename = kwargs.pop("rename", False)
         new_categories = column.as_column(new_categories)
+
+        if isinstance(new_categories, CategoricalColumn):
+            new_categories = new_categories.categories
+
         # when called with rename=True, the pandas behavior is
         # to replace the current category values with the new
         # categories.
@@ -111,7 +115,16 @@ class CategoricalAccessor(object):
             )
         else:
             out_col = self._column
-            if not self._categories_equal(new_categories, **kwargs):
+            if not (type(out_col.categories) is type(new_categories)):
+                # If both categories are of different Column types,
+                # return a column full of Nulls.
+                out_col = _create_empty_categorical_column(
+                    self._column,
+                    CategoricalDtype(
+                        categories=new_categories, ordered=ordered
+                    ),
+                )
+            elif not self._categories_equal(new_categories, **kwargs):
                 out_col = self._set_categories(new_categories, **kwargs)
 
         return self._return_or_inplace(out_col, **kwargs)
@@ -582,7 +595,30 @@ class CategoricalColumn(column.ColumnBase):
         return self._is_monotonic_decreasing
 
     def as_categorical_column(self, dtype, **kwargs):
-        return self
+        if isinstance(dtype, str) and dtype == "category":
+            return self
+        if (
+            isinstance(
+                dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
+            )
+            and (dtype.categories is None)
+            and (dtype.ordered is None)
+        ):
+            return self
+
+        if isinstance(dtype, pd.CategoricalDtype):
+            dtype = CategoricalDtype(
+                categories=dtype.categories, ordered=dtype.ordered
+            )
+
+        if not isinstance(self.categories, type(dtype.categories._values)):
+            # If both categories are of different Column types,
+            # return a column full of Nulls.
+            return _create_empty_categorical_column(self, dtype)
+
+        return self.cat().set_categories(
+            new_categories=dtype.categories, ordered=dtype.ordered
+        )
 
     def as_numerical_column(self, dtype, **kwargs):
         return self._get_decategorized_column().as_numerical_column(
@@ -644,7 +680,7 @@ class CategoricalColumn(column.ColumnBase):
             return self.__sizeof__()
         else:
             return (
-                self._categories._memory_usage()
+                self.categories._memory_usage()
                 + self.cat().codes.memory_usage()
             )
 
@@ -654,6 +690,24 @@ class CategoricalColumn(column.ColumnBase):
             self._codes = other_col._codes
 
         return out
+
+
+def _create_empty_categorical_column(categorical_column, dtype):
+
+    return column.build_categorical_column(
+        categories=dtype.categories,
+        codes=column.as_column(
+            cudf.utils.utils.scalar_broadcast_to(
+                categorical_column.default_na_value(),
+                categorical_column.size,
+                np.dtype(categorical_column.cat().codes),
+            )
+        ),
+        offset=categorical_column.offset,
+        size=categorical_column.size,
+        mask=categorical_column.base_mask,
+        ordered=dtype.ordered,
+    )
 
 
 def pandas_categorical_as_column(categorical, codes=None):
