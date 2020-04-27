@@ -62,7 +62,7 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
 
     token = tokenize(df, columns)
     simple_shuffle_group_token = "simple-shuffle-group-" + token
-    df_nparitions = set(range(df.npartitions))
+    df_nparitions = tuple(range(df.npartitions))
     group = {  # Convert partition into dict of dataframe pieces
         (simple_shuffle_group_token, i): (
             _shuffle_group,
@@ -77,7 +77,7 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
         for i in df_nparitions
     }
 
-    _nparitions = set(range(npartitions))
+    _nparitions = tuple(range(npartitions))
     simple_shuffle_split_token = "simple-shuffle-split-" + token
     split = {  # Get out each individual dataframe piece from the dicts
         (simple_shuffle_split_token, i, j): (
@@ -176,7 +176,7 @@ def rearrange_by_hash(
             for inp in inputs
         }
 
-        k_list = set(range(k))
+        k_list = tuple(range(k))
         shuffle_split_token = "shuffle-split-" + token
         split = {  # Get out each individual dataframe piece from the dicts
             (shuffle_split_token, stage, i, inp): (
@@ -221,7 +221,7 @@ def rearrange_by_hash(
     df2 = df.__class__(graph, shuffle_token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
-        npartitions_list = set(range(npartitions))
+        npartitions_list = tuple(range(npartitions))
         parts = [i % df.npartitions for i in npartitions_list]
         token = tokenize(df2, npartitions)
 
