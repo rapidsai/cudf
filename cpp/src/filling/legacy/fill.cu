@@ -17,9 +17,7 @@
 #include <copying/legacy/copy_range.cuh>
 
 namespace cudf {
-
 namespace detail {
-
 struct scalar_factory {
   gdf_scalar value;
 
@@ -28,27 +26,25 @@ struct scalar_factory {
     T value;
     bool is_valid;
 
-    __device__
-    T data(cudf::size_type index) { return value; }
+    __device__ T data(cudf::size_type index) { return value; }
 
-    __device__
-    bool valid(cudf::size_type index) { return is_valid; }
+    __device__ bool valid(cudf::size_type index) { return is_valid; }
   };
 
   template <typename T>
-  scalar<T> make() {
-    T val{}; // Safe type pun, compiler should optimize away the memcpy
+  scalar<T> make()
+  {
+    T val{};  // Safe type pun, compiler should optimize away the memcpy
     memcpy(&val, &value.data, sizeof(T));
     return scalar<T>{val, value.is_valid};
   }
 };
 
-}; // namespace detail
+};  // namespace detail
 
-void fill(gdf_column *column, gdf_scalar const& value, 
-          cudf::size_type begin, cudf::size_type end)
-{ 
-  if (end != begin) { // otherwise no-op   
+void fill(gdf_column* column, gdf_scalar const& value, cudf::size_type begin, cudf::size_type end)
+{
+  if (end != begin) {  // otherwise no-op
     validate(column);
     // TODO: once gdf_scalar supports string scalar values we can add support
     CUDF_EXPECTS(column->dtype != GDF_STRING_CATEGORY,
@@ -58,4 +54,4 @@ void fill(gdf_column *column, gdf_scalar const& value,
   }
 }
 
-}; // namespace cudf
+};  // namespace cudf

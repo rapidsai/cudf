@@ -18,11 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Translates individual characters within each string.
  *
@@ -41,9 +38,10 @@ namespace strings
  * @param chars_table Table of UTF-8 character mappings.
  * @return New column with padded strings.
  */
-std::unique_ptr<column> translate( strings_column_view const& strings,
-                                   std::vector<std::pair<char_utf8,char_utf8>> const& chars_table,
-                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+std::unique_ptr<column> translate(
+  strings_column_view const& strings,
+  std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

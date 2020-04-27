@@ -11,6 +11,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -90,6 +91,13 @@ class Index(Frame):
             return self
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            col = self._data[self.name]
+            col._mimic_inplace(other._data[other.name], inplace=True)
+        else:
+            return other
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -281,6 +289,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True
@@ -375,7 +384,6 @@ class Index(Frame):
         return Series(self._values)
 
     @property
-    @property
     def is_unique(self):
         raise (NotImplementedError)
 
@@ -451,6 +459,27 @@ class Index(Frame):
 
         return result
 
+    def where(self, cond, other=None):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, or array-like
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+        Returns
+        -------
+        Same type as caller
+        """
+        return super().where(cond=cond, other=other)
+
     @property
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
@@ -468,16 +497,28 @@ class Index(Frame):
         return ind
 
     @classmethod
-    def _from_table(cls, table, names=None):
+    def _from_table(cls, table):
         if not isinstance(table, RangeIndex):
             if table._num_columns == 0:
                 raise ValueError("Cannot construct Index from any empty Table")
-            if names is None:
-                names = table._data.names
             if table._num_columns == 1:
-                return as_index(table._data.columns[0], name=names[0])
+                values = next(iter(table._data.values()))
+
+                if isinstance(values, NumericalColumn):
+                    out = GenericIndex.__new__(GenericIndex)
+                elif isinstance(values, DatetimeColumn):
+                    out = DatetimeIndex.__new__(DatetimeIndex)
+                elif isinstance(values, StringColumn):
+                    out = StringIndex.__new__(StringIndex)
+                elif isinstance(values, CategoricalColumn):
+                    out = CategoricalIndex.__new__(CategoricalIndex)
+                out._data = table._data
+                out._index = None
+                return out
             else:
-                return cudf.MultiIndex._from_table(table, names=names)
+                return cudf.MultiIndex._from_table(
+                    table, names=table._data.names
+                )
         else:
             return as_index(table)
 

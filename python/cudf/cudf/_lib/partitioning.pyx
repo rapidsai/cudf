@@ -16,12 +16,15 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.partitioning cimport (
     partition as cpp_partition,
 )
+from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 cimport cudf._lib.cpp.types as libcudf_types
 
 
 def partition(Table source_table, Column partition_map,
-              int num_partitions, bool keep_index=True):
+              object num_partitions, bool keep_index=True):
 
+    if num_partitions is None:
+        num_partitions = cpp_unique_count(partition_map, ignore_nulls=True)
     cdef int c_num_partitions = num_partitions
     cdef table_view c_source_view
 

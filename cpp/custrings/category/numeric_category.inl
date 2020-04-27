@@ -30,6 +30,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include "nvstrings/numeric_category.h"
+#include <cudf/utilities/error.hpp>
 
 #define BYTES_FROM_BITS(c) ((c+7)/8)
 
@@ -122,7 +123,7 @@ public:
             return;
         size_t byte_count = (count+7)/8;
         _bitmask.resize(byte_count);
-        cudaMemcpyAsync(_bitmask.data().get(),nulls,byte_count,cudaMemcpyDeviceToDevice);
+        CUDA_TRY(cudaMemcpyAsync(_bitmask.data().get(),nulls,byte_count,cudaMemcpyDeviceToDevice));
         bkeyset_includes_null = count_nulls(nulls,count)>0;
     }
 
@@ -280,8 +281,7 @@ void numeric_category<T>::print(const char* prefix, const char* delimiter)
         std::cout << "<no keys>";
     const T* d_keys = pImpl->get_keys();
     thrust::host_vector<T> h_keys(count);
-    if( cudaMemcpyAsync(h_keys.data(), d_keys, count*sizeof(T), cudaMemcpyDeviceToHost) != cudaSuccess )
-        throw std::runtime_error("cudaMemcpy error");
+    CUDA_TRY(cudaMemcpyAsync(h_keys.data(), d_keys, count*sizeof(T), cudaMemcpyDeviceToHost));
     for( size_t idx=0; idx < count; ++idx )
     {
         if( idx || !pImpl->bkeyset_includes_null )
@@ -303,8 +303,7 @@ void numeric_category<T>::print(const char* prefix, const char* delimiter)
         std::cout << "<no values>";
     const int* d_values = pImpl->get_values();
     thrust::host_vector<int> h_values(count);
-    if( cudaMemcpyAsync( h_values.data(), d_values, count*sizeof(int), cudaMemcpyDeviceToHost) != cudaSuccess )
-        throw std::runtime_error("cudaMemcpy error");
+    CUDA_TRY(cudaMemcpyAsync( h_values.data(), d_values, count*sizeof(int), cudaMemcpyDeviceToHost));
     const BYTE* d_nulls = pImpl->get_nulls();
     size_t byte_count = (count+7)/8;
     thrust::host_vector<BYTE> nulls(byte_count);
@@ -312,8 +311,7 @@ void numeric_category<T>::print(const char* prefix, const char* delimiter)
     if( d_nulls )
     {
         h_nulls = nulls.data();
-        if( cudaMemcpy( h_nulls, d_nulls, byte_count*sizeof(BYTE), cudaMemcpyDeviceToHost) != cudaSuccess )
-            throw std::runtime_error("cudaMemcpy error");
+        CUDA_TRY(cudaMemcpy( h_nulls, d_nulls, byte_count*sizeof(BYTE), cudaMemcpyDeviceToHost));
     }
     for( size_t idx=0; idx < count; ++idx )
     {
@@ -403,7 +401,7 @@ void numeric_category<T>::to_type( T* d_results, BYTE* nulls )
     thrust::gather(execpol->on(0), d_values, d_values + count, pImpl->get_keys(), d_results);
     const BYTE* d_nulls = pImpl->get_nulls();
     if( d_nulls && nulls )
-        cudaMemcpyAsync(nulls, d_nulls, ((count+7)/8), cudaMemcpyDeviceToDevice);
+        CUDA_TRY(cudaMemcpyAsync(nulls, d_nulls, ((count+7)/8), cudaMemcpyDeviceToDevice));
 }
 
 template<typename T>

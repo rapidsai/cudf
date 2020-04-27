@@ -21,13 +21,12 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
 namespace orc {
-
 /**---------------------------------------------------------------------------*
  * @brief Supported compression algorithms for the ORC writer
  *---------------------------------------------------------------------------**/
@@ -39,7 +38,7 @@ enum class compression_type { none, snappy };
 struct writer_options {
   compression_type compression = compression_type::none;
 
-  writer_options() = default;
+  writer_options()                       = default;
   writer_options(writer_options const &) = default;
 
   /**---------------------------------------------------------------------------*
@@ -69,7 +68,7 @@ class writer {
    *
    * @param[in] table Object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
-  void write_all(const cudf::table& table);
+  void write_all(const cudf::table &table);
 
   ~writer();
 };

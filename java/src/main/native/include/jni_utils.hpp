@@ -17,8 +17,6 @@
 
 #include <jni.h>
 
-#include <rmm/rmm.h>
-
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/error.hpp>
@@ -644,104 +642,6 @@ inline jthrowable cuda_exception(JNIEnv *const env, cudaError_t status, jthrowab
   return (jthrowable)ret;
 }
 
-/**
- * @brief create a rmm exception from a given rmmError_t
- */
-inline jthrowable rmmException(JNIEnv *const env, rmmError_t status, jthrowable cause = NULL) {
-  jclass ex_class = env->FindClass("ai/rapids/cudf/RmmException");
-  if (ex_class == NULL) {
-    return NULL;
-  }
-  jmethodID ctor_id =
-      env->GetMethodID(ex_class, "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V");
-  if (ctor_id == NULL) {
-    return NULL;
-  }
-
-  jstring msg = env->NewStringUTF(rmmGetErrorString(status));
-  if (msg == NULL) {
-    return NULL;
-  }
-
-  jobject ret = env->NewObject(ex_class, ctor_id, msg, cause);
-  return (jthrowable)ret;
-}
-
-/**
- * @brief will properly free something allocated through rmm. If the free fails
- * a java exception will be thrown, but not a C++ exception, so we can try and
- * clean up anything else properly.
- */
-template <typename T> struct rmm_deleter {
-private:
-  JNIEnv *env;
-  cudaStream_t stream;
-
-public:
-  rmm_deleter(JNIEnv *const env = NULL, cudaStream_t stream = 0) noexcept
-      : env(env), stream(stream) {}
-
-  rmm_deleter(const rmm_deleter &other) noexcept : env(other.env), stream(other.stream) {}
-
-  rmm_deleter &operator=(const rmm_deleter &other) {
-    env = other.env;
-    stream = other.stream;
-    return *this;
-  }
-
-  inline void operator()(T *ptr) {
-    rmmError_t rmmStatus = RMM_FREE(ptr, stream);
-    if (RMM_SUCCESS != rmmStatus) {
-      jthrowable cuda_e = NULL;
-      // a NULL env should never happen for something that is going to
-      // actually delete things...
-      if (RMM_ERROR_CUDA_ERROR == rmmStatus) {
-        cuda_e = cuda_exception(env, cudaGetLastError());
-      }
-      jthrowable jt = rmmException(env, rmmStatus, cuda_e);
-      if (jt != NULL) {
-        jthrowable orig = env->ExceptionOccurred();
-        if (orig != NULL) {
-          jclass clz = env->GetObjectClass(jt);
-          if (clz != NULL) {
-            jmethodID id = env->GetMethodID(clz, "addSuppressed", "(Ljava/lang/Throwable;)V");
-            if (id != NULL) {
-              env->CallVoidMethod(jt, id, orig);
-            }
-          }
-        }
-        env->Throw(jt);
-        // Don't throw a C++ exception, we will let java handle it later on.
-      }
-    }
-  }
-};
-
-template <typename T> using jni_rmm_unique_ptr = std::unique_ptr<T, rmm_deleter<T>>;
-
-/**
- * @brief Allocate memory using RMM in a C++ safe way. Will throw java and C++
- * exceptions on errors.
- */
-template <typename T>
-inline jni_rmm_unique_ptr<T> jni_rmm_alloc(JNIEnv *const env, const size_t size,
-                                           const cudaStream_t stream = 0) {
-  T *ptr;
-  rmmError_t rmmStatus = RMM_ALLOC(&ptr, size, stream);
-  if (RMM_SUCCESS != rmmStatus) {
-    jthrowable cuda_e = NULL;
-    if (RMM_ERROR_CUDA_ERROR == rmmStatus) {
-      cuda_e = cuda_exception(env, cudaGetLastError());
-    }
-    jthrowable jt = rmmException(env, rmmStatus, cuda_e);
-    if (jt != NULL) {
-      env->Throw(jt);
-      throw jni_exception("RMM Error...");
-    }
-  }
-  return jni_rmm_unique_ptr<T>(ptr, rmm_deleter<T>(env, stream));
-}
-
 inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   if (cudaSuccess != cuda_status) {
     // Clear the last error so it does not propagate.
@@ -759,6 +659,8 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length);
 
 std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op);
+
+jlongArray convert_table_for_return(JNIEnv * env, std::unique_ptr<cudf::experimental::table> &table_result);
 
 /**
  * Allocate a HostMemoryBuffer
@@ -778,6 +680,16 @@ jlong get_host_buffer_length(JNIEnv* env, jobject buffer);
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
 JNIEnv* get_jni_env(JavaVM* jvm);
+
+/** Set the device to use for cudf */
+void set_cudf_device(int device);
+
+/**
+ * If the current thread has not set the CUDA device via Cuda.setDevice then this could
+ * set the device, throw an exception, or do nothing depending on how the application has
+ * configured it via Cuda.setAutoSetDeviceMode.
+ */
+void auto_set_device(JNIEnv* env);
 
 } // namespace jni
 } // namespace cudf
@@ -815,24 +727,6 @@ JNIEnv* get_jni_env(JavaVM* jvm);
     }                                                                                              \
   }
 
-#define JNI_RMM_TRY(env, ret_val, call)                                                            \
-  {                                                                                                \
-    rmmError_t internal_rmmStatus = (call);                                                        \
-    if (RMM_SUCCESS != internal_rmmStatus) {                                                       \
-      jthrowable cuda_e = NULL;                                                                    \
-      if (RMM_ERROR_CUDA_ERROR == internal_rmmStatus) {                                            \
-        cuda_e = cudf::jni::cuda_exception(env, cudaGetLastError());                               \
-      }                                                                                            \
-      if (!env->ExceptionCheck()) {                                                                \
-        jthrowable jt = cudf::jni::rmmException(env, internal_rmmStatus, cuda_e);                  \
-        if (jt != NULL) {                                                                          \
-          env->Throw(jt);                                                                          \
-        }                                                                                          \
-      }                                                                                            \
-      return ret_val;                                                                              \
-    }                                                                                              \
-  }
-
 #define JNI_NULL_CHECK(env, obj, error_msg, ret_val)                                               \
   {                                                                                                \
     if ((obj) == 0) {                                                                              \
@@ -856,6 +750,10 @@ JNIEnv* get_jni_env(JavaVM* jvm);
 
 #define CATCH_STD(env, ret_val)                                                                    \
   catch (const std::bad_alloc &e) {                                                                \
+    /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
+    if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
+         cudaGetLastError();                                                                       \
+    }                                                                                              \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, "Could not allocate native memory", ret_val);   \
   }                                                                                                \
   catch (const std::exception &e) {                                                                \

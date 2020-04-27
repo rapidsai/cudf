@@ -15,15 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
  * specified delimiter.
@@ -50,9 +47,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> partition( strings_column_view const& strings,
-                                                string_scalar const& delimiter = string_scalar(""),
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> partition(
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
@@ -80,9 +78,10 @@ std::unique_ptr<experimental::table> partition( strings_column_view const& strin
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rpartition( strings_column_view const& strings,
-                                                 string_scalar const& delimiter = string_scalar(""),
-                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> rpartition(
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

@@ -17,12 +17,12 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
 
 #include <thrust/equal.h>
 #include <thrust/swap.h>
@@ -30,7 +30,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**---------------------------------------------------------------------------*
  * @brief Result type of the `element_relational_comparator` function object.
  *
@@ -58,14 +57,14 @@ namespace detail {
 template <typename Element>
 __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 {
-    if(lhs < rhs) {
-        return weak_ordering::LESS;
-    } else if(rhs < lhs) {
-        return weak_ordering::GREATER;
-    }
-    return weak_ordering::EQUIVALENT;
+  if (lhs < rhs) {
+    return weak_ordering::LESS;
+  } else if (rhs < lhs) {
+    return weak_ordering::GREATER;
+  }
+  return weak_ordering::EQUIVALENT;
 }
-}
+}  // namespace detail
 /**---------------------------------------------------------------------------*
  * @brief A specialization for floating-point `Element` type rerlational comparison
  * to derive the order of the elements with respect to `lhs`. Specialization is to
@@ -78,19 +77,18 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  *---------------------------------------------------------------------------**/
-template <typename Element,
-            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
+template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+{
+  if (isnan(lhs) and isnan(rhs)) {
+    return weak_ordering::EQUIVALENT;
+  } else if (isnan(rhs)) {
+    return weak_ordering::LESS;
+  } else if (isnan(lhs)) {
+    return weak_ordering::GREATER;
+  }
 
-    if(isnan(lhs) and isnan(rhs)) {
-        return weak_ordering::EQUIVALENT;
-    } else if(isnan(rhs)) {
-        return weak_ordering::LESS;
-    } else if(isnan(lhs)) {
-        return weak_ordering::GREATER;
-    }
-
-    return detail::compare_elements(lhs, rhs);
+  return detail::compare_elements(lhs, rhs);
 }
 
 /**---------------------------------------------------------------------------*
@@ -102,10 +100,10 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  *---------------------------------------------------------------------------**/
-template <typename Element,
-            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ weak_ordering relational_compare(Element lhs, Element rhs) {
-    return detail::compare_elements(lhs, rhs);
+template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ weak_ordering relational_compare(Element lhs, Element rhs)
+{
+  return detail::compare_elements(lhs, rhs);
 }
 
 /**---------------------------------------------------------------------------*
@@ -116,13 +114,11 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs) {
  * @param[in] rhs second element
  * @return bool `true` if `lhs` == `rhs` else `false`.
  *---------------------------------------------------------------------------**/
-template <typename Element,
-            std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element lhs, Element rhs) {
-    if (isnan(lhs) and isnan(rhs)) {
-        return true;
-    }
-    return lhs == rhs;
+template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element lhs, Element rhs)
+{
+  if (isnan(lhs) and isnan(rhs)) { return true; }
+  return lhs == rhs;
 }
 
 /**---------------------------------------------------------------------------*
@@ -133,10 +129,10 @@ __device__ bool equality_compare(Element lhs, Element rhs) {
  * @param[in] rhs second element
  * @return bool `true` if `lhs` == `rhs` else `false`.
  *---------------------------------------------------------------------------**/
-template <typename Element,
-            std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
-__device__ bool equality_compare(Element const lhs, Element const rhs) {
-    return lhs == rhs;
+template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
+__device__ bool equality_compare(Element const lhs, Element const rhs)
+{
+  return lhs == rhs;
 }
 
 /**---------------------------------------------------------------------------*
@@ -161,7 +157,9 @@ class element_equality_comparator {
   __host__ __device__ element_equality_comparator(column_device_view lhs,
                                                   column_device_view rhs,
                                                   bool nulls_are_equal = true)
-      : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {}
+    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Compares the specified elements for equality.
@@ -170,8 +168,9 @@ class element_equality_comparator {
    * @param rhs_element_index The index of the second element
    *---------------------------------------------------------------------------**/
   template <typename Element>
-  __device__ bool operator()(size_type lhs_element_index,
-                             size_type rhs_element_index) const noexcept {
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
+    noexcept
+  {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -195,23 +194,23 @@ class element_equality_comparator {
 template <bool has_nulls = true>
 class row_equality_comparator {
  public:
-  row_equality_comparator(table_device_view lhs, table_device_view rhs,
-                          bool nulls_are_equal = true)
-      : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {
-    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
-                 "Mismatched number of columns.");
+  row_equality_comparator(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
+    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  {
+    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
 
-  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept{
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) const noexcept
+  {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::experimental::type_dispatcher(
-          l.type(),
-          element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
-          lhs_row_index, rhs_row_index);
+        l.type(),
+        element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
+        lhs_row_index,
+        rhs_row_index);
     };
 
-    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
-                         equal_elements);
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements);
   }
 
  private:
@@ -242,7 +241,9 @@ class element_relational_comparator {
   __host__ __device__ element_relational_comparator(column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence)
-      : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence} {}
+    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
+  {
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Performs a relational comparison between the specified elements
@@ -254,11 +255,11 @@ class element_relational_comparator {
    * @return weak_ordering Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    *---------------------------------------------------------------------------**/
-  template <typename Element, std::enable_if_t<cudf::is_relationally_comparable<
-                                  Element, Element>()>* = nullptr>
+  template <typename Element,
+            std::enable_if_t<cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) const
-      noexcept {
+                                      size_type rhs_element_index) const noexcept
+  {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -279,12 +280,10 @@ class element_relational_comparator {
   }
 
   template <typename Element,
-            std::enable_if_t<not cudf::is_relationally_comparable<
-                Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(size_type lhs_element_index,
-                                      size_type rhs_element_index) {
-    release_assert(false &&
-                   "Attempted to compare elements of uncomparable types.");
+            std::enable_if_t<not cudf::is_relationally_comparable<Element, Element>()>* = nullptr>
+  __device__ weak_ordering operator()(size_type lhs_element_index, size_type rhs_element_index)
+  {
+    release_assert(false && "Attempted to compare elements of uncomparable types.");
   }
 
  private:
@@ -327,16 +326,14 @@ class row_lexicographic_comparator {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    *---------------------------------------------------------------------------**/
-  row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               order const* column_order = nullptr,
+  row_lexicographic_comparator(table_device_view lhs,
+                               table_device_view rhs,
+                               order const* column_order         = nullptr,
                                null_order const* null_precedence = nullptr)
-      : _lhs{lhs},
-        _rhs{rhs},
-        _column_order{column_order},
-        _null_precedence{null_precedence} {
+    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+  {
     // Add check for types to be the same.
-    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
-                 "Mismatched number of columns.");
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
   }
 
   /**---------------------------------------------------------------------------*
@@ -348,25 +345,22 @@ class row_lexicographic_comparator {
    * @return `true` if row from the `lhs` table compares less than row in the
    * `rhs` table
    *---------------------------------------------------------------------------**/
-  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const
-      noexcept {
+  __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
+  {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      bool ascending =
-          (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
+      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
       weak_ordering state{weak_ordering::EQUIVALENT};
-      null_order null_precedence = _null_precedence == nullptr ?
-                                     null_order::BEFORE: _null_precedence[i];
+      null_order null_precedence =
+        _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      auto comparator = element_relational_comparator<has_nulls>{
-          _lhs.column(i), _rhs.column(i), null_precedence};
+      auto comparator =
+        element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
 
-      state = cudf::experimental::type_dispatcher(_lhs.column(i).type(), comparator,
-                                         lhs_index, rhs_index);
+      state = cudf::experimental::type_dispatcher(
+        _lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
-      if (state == weak_ordering::EQUIVALENT) {
-        continue;
-      }
+      if (state == weak_ordering::EQUIVALENT) { continue; }
 
       return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
@@ -376,7 +370,7 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  null_order const*  _null_precedence{};
+  null_order const* _null_precedence{};
   order const* _column_order{};
 };  // class row_lexicographic_comparator
 
@@ -390,11 +384,9 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher {
  public:
   template <typename T>
-  __device__ inline hash_value_type operator()(
-      column_device_view col, size_type row_index) {
-    if (has_nulls && col.is_null(row_index)) {
-      return std::numeric_limits<hash_value_type>::max();
-    }
+  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  {
+    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
 
     return hash_function<T>{}(col.element<T>(row_index));
   }
@@ -412,24 +404,27 @@ class row_hasher {
   row_hasher() = delete;
   row_hasher(table_device_view t) : _table{t} {}
 
-  __device__ auto operator()(size_type row_index) const {
+  __device__ auto operator()(size_type row_index) const
+  {
     auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
 
     // Hashes an element in a column
     auto hasher = [=](size_type column_index) {
-      return cudf::experimental::type_dispatcher(
-          _table.column(column_index).type(),
-          element_hasher<hash_function, has_nulls>{},
-          _table.column(column_index), row_index);
+      return cudf::experimental::type_dispatcher(_table.column(column_index).type(),
+                                                 element_hasher<hash_function, has_nulls>{},
+                                                 _table.column(column_index),
+                                                 row_index);
     };
 
     // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(
-        thrust::seq, thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(_table.num_columns()), hasher,
-        hash_value_type{0}, hash_combiner);
+    return thrust::transform_reduce(thrust::seq,
+                                    thrust::make_counting_iterator(0),
+                                    thrust::make_counting_iterator(_table.num_columns()),
+                                    hasher,
+                                    hash_value_type{0},
+                                    hash_combiner);
   }
 
  private:
@@ -447,34 +442,40 @@ template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher_initial_values {
  public:
   row_hasher_initial_values() = delete;
-  row_hasher_initial_values(table_device_view t, hash_value_type *initial_hash)
-      : _table{t}, _initial_hash(initial_hash) {}
+  row_hasher_initial_values(table_device_view t, hash_value_type* initial_hash)
+    : _table{t}, _initial_hash(initial_hash)
+  {
+  }
 
-  __device__ auto operator()(size_type row_index) const {
+  __device__ auto operator()(size_type row_index) const
+  {
     auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
       return hash_function<hash_value_type>{}.hash_combine(lhs, rhs);
     };
 
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
-      auto hash_value = cudf::experimental::type_dispatcher(
-          _table.column(column_index).type(),
-          element_hasher<hash_function, has_nulls>{},
-          _table.column(column_index), row_index);
+      auto hash_value =
+        cudf::experimental::type_dispatcher(_table.column(column_index).type(),
+                                            element_hasher<hash_function, has_nulls>{},
+                                            _table.column(column_index),
+                                            row_index);
 
       return hash_combiner(_initial_hash[column_index], hash_value);
     };
 
     // Hash each element and combine all the hash values together
-    return thrust::transform_reduce(
-        thrust::seq, thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(_table.num_columns()), hasher,
-        hash_value_type{0}, hash_combiner);
+    return thrust::transform_reduce(thrust::seq,
+                                    thrust::make_counting_iterator(0),
+                                    thrust::make_counting_iterator(_table.num_columns()),
+                                    hasher,
+                                    hash_value_type{0},
+                                    hash_combiner);
   }
 
  private:
   table_device_view _table;
-  hash_value_type *_initial_hash;
+  hash_value_type* _initial_hash;
 };
 
 }  // namespace experimental

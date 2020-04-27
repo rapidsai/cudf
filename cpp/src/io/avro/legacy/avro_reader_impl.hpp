@@ -23,15 +23,14 @@
 #include <utility>
 #include <vector>
 
-#include <cudf/legacy/table.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
 namespace cudf {
 namespace io {
 namespace avro {
-
 // Forward declare Avro metadata parser
 class avro_metadata;
 
@@ -43,8 +42,7 @@ class reader::Impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<datasource> source,
-                reader_options const &options);
+  explicit Impl(std::unique_ptr<datasource> source, reader_options const &options);
 
   /**
    * @brief Read an entire set or a subset of data from the source and returns

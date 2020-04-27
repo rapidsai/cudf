@@ -25,10 +25,9 @@
 
 namespace cudf {
 namespace detail {
-
 /**
  * @brief Internal API to calculate groupwise quantiles
- * 
+ *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param group_sizes Number of valid elements per group
@@ -40,14 +39,14 @@ namespace detail {
 void group_quantiles(gdf_column const& values,
                      rmm::device_vector<cudf::size_type> const& group_offsets,
                      rmm::device_vector<cudf::size_type> const& group_sizes,
-                     gdf_column * result,
+                     gdf_column* result,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
                      cudaStream_t stream = 0);
 
 /**
  * @brief Internal API to calculate groupwise medians
- * 
+ *
  * @param values Grouped and sorted (within group) values to get medians from
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param group_sizes Number of valid elements per group
@@ -57,8 +56,8 @@ void group_quantiles(gdf_column const& values,
 void group_medians(gdf_column const& values,
                    rmm::device_vector<cudf::size_type> const& group_offsets,
                    rmm::device_vector<cudf::size_type> const& group_sizes,
-                   gdf_column * result,
+                   gdf_column* result,
                    cudaStream_t stream = 0);
 
-} // namespace detail
-} // namespace cudf
+}  // namespace detail
+}  // namespace cudf

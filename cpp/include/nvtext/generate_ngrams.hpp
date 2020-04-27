@@ -19,9 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
-
+namespace nvtext {
 /**
  * @brief Returns a single column of strings by generating ngrams from
  * a strings column.
@@ -32,7 +30,7 @@ namespace nvtext
  * ["a", "bb", "ccc"] would generate bigrams as ["a_bb", "bb_ccc"]
  * and trigrams as ["a_bb_ccc"]
  * ```
- * 
+ *
  * The size of the output column will be the total number of ngrams generated from
  * the input strings column.
  *
@@ -46,11 +44,10 @@ namespace nvtext
  * @param mr Resource for allocating device memory.
  * @return New strings columns of tokens.
  */
-std::unique_ptr<cudf::column> generate_ngrams( cudf::strings_column_view const& strings,
-                                               cudf::size_type ngrams = 2,
-                                               cudf::string_scalar const& separator = cudf::string_scalar{"_"},
-                                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::column> generate_ngrams(
+  cudf::strings_column_view const& strings,
+  cudf::size_type ngrams               = 2,
+  cudf::string_scalar const& separator = cudf::string_scalar{"_"},
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
-
-} // namespace nvtext
-
+}  // namespace nvtext

@@ -18,6 +18,7 @@
 #include <cmath>
 
 #include "./custring.cuh"
+#include <cudf/utilities/error.hpp>
 
 // 8-byte boundary
 #define ALIGN_SIZE(v) (((v + 7) / 8) * 8)
@@ -238,7 +239,7 @@ __host__ inline custring_view* custring_view::create_from_host(void* devmem, con
     unsigned int alsz = alloc_size(data,size);
     char* buffer = new char[alsz];
     custring_view* hstr = create_from(buffer,data,size);
-    cudaMemcpy(devmem,buffer,alsz,cudaMemcpyHostToDevice);
+    CUDA_TRY(cudaMemcpy(devmem,buffer,alsz,cudaMemcpyHostToDevice));
     delete buffer;
     return (custring_view*)devmem;
 }

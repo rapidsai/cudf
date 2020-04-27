@@ -22,19 +22,22 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
-bool checkFile(std::string const &fname) {
+bool checkFile(std::string const &fname)
+{
   struct stat st;
   return (stat(fname.c_str(), &st) ? 0 : 1);
 }
 
-void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs) {
+void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs)
+{
   ASSERT_EQ(col->dtype, GDF_STRING);
 
   auto result = nvstrings_to_strings(static_cast<NVStrings *>(col->data));
   EXPECT_THAT(refs, ::testing::ContainerEq(result));
 }
 
-std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr) {
+std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr)
+{
   const auto num_strings = nvstr->size();
 
   // Allocate host buffer large enough for characters + null-terminator
@@ -54,6 +57,7 @@ std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr) {
   return std::vector<std::string>(strings.data(), strings.data() + num_strings);
 }
 
-std::vector<std::string> nvcategory_to_strings(NVCategory *nvcat) {
+std::vector<std::string> nvcategory_to_strings(NVCategory *nvcat)
+{
   return nvstrings_to_strings(nvcat->to_strings());
 }

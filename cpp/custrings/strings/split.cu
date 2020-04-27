@@ -161,7 +161,7 @@ int NVStrings::split_record( const char* delimiter, int maxsplit, std::vector<NV
             d_totals[idx] = dstr->split_size(d_delimiter,dellen,dsizes,dcount);
         });
     //
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // now build an array of custring_views* arrays for each value
     int totalNewStrings = 0;
@@ -338,7 +338,7 @@ int NVStrings::split_record( int maxsplit, std::vector<NVStrings*>& results)
         });
 
     //
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // now build an array of custring_views* arrays for each value
     int totalNewStrings = 0;
@@ -470,7 +470,7 @@ int NVStrings::rsplit_record( const char* delimiter, int maxsplit, std::vector<N
             int* dsizes = d_sizes + d_offsets[idx];
             d_totals[idx] = dstr->rsplit_size(d_delimiter,dellen,dsizes,dcount);
         });
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // now build an array of custring_views* arrays for each value
     int totalNewStrings = 0;
@@ -604,7 +604,7 @@ int NVStrings::rsplit_record( int maxsplit, std::vector<NVStrings*>& results)
             d_totals[idx] = bytes;
         });
 
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // now build an array of custring_views* arrays for each value
     int totalNewStrings = 0;
@@ -1194,7 +1194,7 @@ int NVStrings::partition( const char* delimiter, std::vector<NVStrings*>& result
             d_totals[idx] = dstr->split_size(d_delimiter,bytes,dsizes,2) + d_asize;
         });
 
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // build an output array of custring_views* arrays for each value
     // there will always be 3 per string
@@ -1298,7 +1298,7 @@ int NVStrings::rpartition( const char* delimiter, std::vector<NVStrings*>& resul
             d_totals[idx] = dstr->rsplit_size(d_delimiter,bytes,dsizes,2) + d_asize;
         });
 
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
 
     // now build an output array of custring_views* arrays for each value
     // there will always be 3 per string
