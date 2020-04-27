@@ -678,4 +678,21 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::STRING);
 }
 
+TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
+{
+  std::string buffer = "1,2,3";
+
+  cudf_io::read_csv_args skiprows_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};
+  skiprows_args.header = -1;
+  // only set skiprows
+  skiprows_args.skiprows = 0;
+  EXPECT_NO_THROW(cudf_io::read_csv(skiprows_args));
+
+  cudf_io::read_csv_args skipfooter_args{cudf_io::source_info{buffer.c_str(), buffer.size()}};
+  skipfooter_args.header = -1;
+  // only set skipfooter
+  skipfooter_args.skipfooter = 0;
+  EXPECT_NO_THROW(cudf_io::read_csv(skipfooter_args));
+}
+
 CUDF_TEST_PROGRAM_MAIN()
