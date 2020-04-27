@@ -74,6 +74,10 @@ class ColumnAccessor(MutableMapping):
         else:
             return self._level_names
 
+    @level_names.setter
+    def level_names(self, value):
+        self._level_names = value
+
     @property
     def nlevels(self):
         if len(self._data) == 0:
