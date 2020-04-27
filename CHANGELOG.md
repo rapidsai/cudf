@@ -194,6 +194,7 @@
 - PR #4889 Fix multi-index merging
 - PR #4922 Fix cudf::strings:split logic for many columns
 - PR #4949 Fix scatter, gather benchmark constructor call
+- PR #4958 Fix strings::replace perf for long strings
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
 - PR #4996 Parquet writer: fix potentially zero-sized string dictionary
 - PR #5009 Fix pickling for string and categorical columns
