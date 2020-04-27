@@ -53,7 +53,6 @@ class Merge(object):
 
     def perform_merge(self):
         self.typecast_input_to_libcudf()
-
         libcudf_result = libcudf.join.join(
             self.lhs,
             self.rhs,
@@ -64,8 +63,8 @@ class Merge(object):
             left_index=self.left_index,
             right_index=self.right_index,
         )
-
-        return libcudf_result
+        result = self.typecast_libcudf_to_output(libcudf_result)
+        return result
 
     def preprocess_merge_params(self, on, left_on, right_on, lsuffix, rsuffix):
         if on:
@@ -331,6 +330,66 @@ class Merge(object):
             elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
                 libcudf_join_type = max(dtype_l, dtype_r)
         return libcudf_join_type
+
+    def libcudf_to_output_casting_rules(self, lcol, rcol, how):
+
+        dtype_l = lcol.dtype
+        dtype_r = rcol.dtype
+
+        merge_return_type = None
+        # we  currently only need to do this for categorical variables
+        if (is_categorical_dtype(dtype_l) or is_categorical_dtype(dtype_r)):
+            assert(pd.api.types.is_dtype_equal(dtype_l, dtype_r))
+            if how in ['inner', 'left']:
+                merge_return_type = dtype_l
+            elif how == 'outer':
+                new_cats = cudf.concat(dtype_l.categories, dtype_r.categories)
+                merge_return_type = cudf.core.dtypes.CategoricalDtype(categories=new_cats)
+        return merge_return_type
+
+
+    def typecast_libcudf_to_output(self, output):
+        if self.left_index and self.right_index:
+            for ((kl, vl), (kr, vr), (out_idx_lbl, out_idx_col)) in zip(
+                self.lhs.index._data.items(),
+                self.rhs.index._data.items(),
+                output._index._data.items(),
+            ):
+                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                output._index._data[out_idx_lbl] = output._index._data[out_idx_lbl].astype(to_dtype)
+            if self.left_on and self.right_on:
+                for ((kl, vl), (kr, vr), (out_col_lbl, out_col)) in zip(
+                    self.lhs._data.items(),
+                    self.rhs._data.items(),
+                    output._data.items(),
+                ):
+                    to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                    output._data[out_col_lbl] = output._data[out_col_lbl].astype(to_dtype)
+        elif self.left_index and self.right_on:
+            for ((kl, vl), (kr, vr), (out_col_lbl, out_col)) in zip(
+                self.lhs.index._data.items(),
+                self.rhs._data.items(),
+                output._data.items(),
+            ):
+                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                output._data[out_col_lbl] = output._data[out_col_lbl].astype(to_dtype)
+        elif self.right_index and self.left_on:
+            for ((kl, vl), (kr, vr), (out_col_lbl, out_col)) in zip(
+                self.lhs._data.items(),
+                self.rhs.index._data.items(),
+                output._data.items(),
+            ):
+                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                output._data[out_col_lbl] = output._data[out_col_lbl].astype(to_dtype)
+        elif self.left_on and self.right_on:
+            for ((kl, vl), (kr, vr), (out_col_lbl, out_col_col)) in zip(
+                self.lhs._data.items(),
+                self.rhs._data.items(),
+                output._data.items(),
+            ):
+                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                output._data[out_col_lbl] = output._data[out_col_lbl].astype(to_dtype)
+        return output
 
     @staticmethod
     def compute_result_col_names(lhs, rhs, how):
