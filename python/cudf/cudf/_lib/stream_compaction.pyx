@@ -10,7 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type, null_policy
+from cudf._lib.cpp.types cimport size_type, null_policy, nan_policy
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -208,14 +208,18 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
         if ignore_nulls
         else null_policy.INCLUDE
     )
-    cdef bool cpp_nan_as_null = nan_as_null
+    cdef nan_policy cpp_nan_handling = (
+        nan_policy.NAN_IS_NULL
+        if nan_as_null
+        else nan_policy.NAN_IS_VALID
+    )
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
         count = cpp_unique_count(
             source_column_view,
             cpp_null_handling,
-            cpp_nan_as_null
+            cpp_nan_handling
         )
 
     return count

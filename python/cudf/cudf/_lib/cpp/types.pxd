@@ -38,6 +38,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         EXCLUDE "cudf::null_policy::EXCLUDE"
         INCLUDE "cudf::null_policy::INCLUDE"
 
+    ctypedef enum nan_policy "cudf::nan_policy":
+        NAN_IS_NULL  "cudf::nan_policy::NAN_IS_NULL"
+        NAN_IS_VALID "cudf::nan_policy::NAN_IS_VALID"
+
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1

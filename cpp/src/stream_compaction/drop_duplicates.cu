@@ -284,8 +284,8 @@ struct has_nans {
 };
 
 cudf::size_type unique_count(column_view const& input,
-                             null_policy const null_handling,
-                             bool const nan_as_null,
+                             null_policy null_handling,
+                             nan_policy nan_handling,
                              cudaStream_t stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
@@ -294,18 +294,18 @@ cudf::size_type unique_count(column_view const& input,
 
   bool has_nan = false;
   // Check for Nans
-  // Checking for nulls in input and flag nan_as_null, as the count will
+  // Checking for nulls in input and flag nan_handling, as the count will
   // only get affected if these two conditions are true. NAN will only be
-  // be an extra if nan_as_null was true and input also had null, which
+  // be an extra if nan_handling was NAN_IS_NULL and input also had null, which
   // will increase the count by 1.
-  if (input.has_nulls() and nan_as_null) {
+  if (input.has_nulls() and nan_handling == nan_policy::NAN_IS_NULL) {
     has_nan = cudf::experimental::type_dispatcher(input.type(), has_nans{}, input, stream);
   }
 
   auto count = detail::unique_count(table_view{{input}}, true, stream);
 
   // if nan is considered null and there are already null values
-  if (nan_as_null and has_nan and input.has_nulls()) --count;
+  if (nan_handling == nan_policy::NAN_IS_NULL and has_nan and input.has_nulls()) --count;
 
   if (null_handling == null_policy::EXCLUDE and input.has_nulls())
     return --count;
@@ -326,12 +326,11 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
 }
 
 cudf::size_type unique_count(column_view const& input,
-                             null_policy const null_handling,
-                             bool const nan_as_null,
-                             rmm::mr::device_memory_resource* mr)
+                             null_policy null_handling,
+                             nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::unique_count(input, null_handling, nan_as_null);
+  return detail::unique_count(input, null_handling, nan_handling);
 }
 
 }  // namespace experimental
