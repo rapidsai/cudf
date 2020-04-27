@@ -122,6 +122,7 @@
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
+- PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 
 ## Bug Fixes
 

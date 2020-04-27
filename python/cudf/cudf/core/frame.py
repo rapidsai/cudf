@@ -744,7 +744,9 @@ class Frame(libcudf.table.Table):
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            map_index = map_index.as_categorical_column(np.int32).as_numerical
+            map_index = map_index.as_categorical_column(
+                "category"
+            ).as_numerical
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."

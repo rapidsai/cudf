@@ -4474,7 +4474,6 @@ def test_df_sr_binop_col_order(gsr, op):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
@@ -4541,7 +4540,6 @@ def test_memory_usage_string():
     ) == df.B.memory_usage(deep=True, index=False)
 
 
-@pytest.mark.xfail
 def test_memory_usage_cat():
     rows = int(100)
     df = pd.DataFrame(

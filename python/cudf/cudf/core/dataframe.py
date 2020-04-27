@@ -4841,6 +4841,8 @@ def from_pandas(obj):
         )
     elif isinstance(obj, pd.Index):
         return cudf.Index.from_pandas(obj)
+    elif isinstance(obj, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, "
