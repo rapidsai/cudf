@@ -77,9 +77,7 @@ void ASSERT_BINOP(column_view const& out, scalar const& lhs, column_view const& 
     for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
       ASSERT_EQ(out_valid[i], (lhs_valid & rhs_valid[i]));
     }
-  }
-  else
-  {
+  } else {
     if (lhs.is_valid()) {
       ASSERT_FALSE(out.nullable());
     } else {
@@ -113,15 +111,13 @@ void ASSERT_BINOP(column_view const& out, column_view const& lhs, scalar const& 
     ASSERT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto out_valid = out_h.second;
-  
+
     uint32_t rhs_valid = (rhs.is_valid() ? std::numeric_limits<bitmask_type>::max() : 0);
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
     for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
       ASSERT_EQ(out_valid[i], (rhs_valid & lhs_valid[i]));
     }
-  }
-  else
-  {
+  } else {
     if (rhs.is_valid()) {
       ASSERT_FALSE(out.nullable());
     } else {
@@ -152,20 +148,18 @@ void ASSERT_BINOP(column_view const& out,
     ASSERT_TRUE(test_equality(out_data[i], static_cast<TypeOut>(op(lhs_data[i], rhs_data[i]))));
   }
 
- if (lhs.nullable() and rhs.nullable()) {
+  if (lhs.nullable() and rhs.nullable()) {
     ASSERT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto rhs_valid = rhs_h.second;
     auto out_valid = out_h.second;
-  
+
     ASSERT_EQ(out_valid.size(), lhs_valid.size());
     ASSERT_EQ(out_valid.size(), rhs_valid.size());
     for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
       ASSERT_EQ(out_valid[i], (lhs_valid[i] & rhs_valid[i]));
     }
-  }
-  else if (not lhs.nullable() and rhs.nullable())
-  {
+  } else if (not lhs.nullable() and rhs.nullable()) {
     ASSERT_TRUE(out.nullable());
     auto rhs_valid = rhs_h.second;
     auto out_valid = out_h.second;
@@ -174,9 +168,7 @@ void ASSERT_BINOP(column_view const& out,
     for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
       ASSERT_EQ(out_valid[i], rhs_valid[i]);
     }
-  }
-  else if (lhs.nullable() and not rhs.nullable())
-  {
+  } else if (lhs.nullable() and not rhs.nullable()) {
     ASSERT_TRUE(out.nullable());
     auto lhs_valid = lhs_h.second;
     auto out_valid = out_h.second;
@@ -185,8 +177,9 @@ void ASSERT_BINOP(column_view const& out,
     for (size_type i = 0; i < num_bitmask_words(out_data.size()); ++i) {
       ASSERT_EQ(out_valid[i], lhs_valid[i]);
     }
+  } else {
+    ASSERT_FALSE(out.nullable());
   }
-  else { ASSERT_FALSE(out.nullable()); }
 }  // namespace cudf
 
 /**

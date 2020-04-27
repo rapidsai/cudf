@@ -207,6 +207,6 @@ TEST_F(BinaryOperationNullTest, Vector_NonNullable_Vector_NonNullable)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
 }
 
+}  // namespace binop
 }  // namespace test
-}  // namespace cudf
 }  // namespace cudf
