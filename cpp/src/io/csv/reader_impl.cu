@@ -238,7 +238,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
-    // Preload the intput data to device
+    // Preload the input data to device
     if (load_whole_file) data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
 
     // Pass nullptr for the device data is the data is not preloaded (will cause additional copies)
@@ -251,7 +251,12 @@ table_with_metadata reader::impl::read(size_t range_offset,
     data_size = row_range.second - row_range.first;
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
 
-    num_bits = (data_size + 63) / 64;
+    // FIXME: This is really a WAR for the datasource's inability to read bytes outside the mapped
+    // range. The header should be always parsed from the start of the file (would also allow
+    // access to csv column names with byte range)
+    size_t header_offset = (range_offset != 0) ? std::min(row_range.first, h_uncomp_size) : 0;
+    parse_csv_header(h_uncomp_data + header_offset, h_uncomp_size - header_offset);
+
     if (load_whole_file) {
       // Loaded the whole file, add the start offset (e.g. empty rows) to the pointer
       data_ptr = static_cast<char *>(data_.data()) + row_range.first;
@@ -497,12 +502,7 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
 
   // Exclude the rows before the header row (inclusive)
   if (std::distance(it_begin, it_end) > 1) {
-    if (args_.header == -1) {
-      header.assign(h_data + *(it_begin), h_data + *(it_begin + 1));
-    } else {
-      header.assign(h_data + *(it_begin + args_.header), h_data + *(it_begin + args_.header + 1));
-      it_begin += args_.header + 1;
-    }
+    if (args_.header >= 0) { it_begin += args_.header + 1; }
   }
 
   // Exclude the rows that exceed past the requested number
@@ -534,6 +534,53 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   }
 
   return std::make_pair(offset_start, offset_end);
+}
+
+size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
+{
+  using namespace cudf::io::csv::gpu;
+  size_t header_start = 0;
+  size_t header_end   = 0;
+  size_t data_start   = 0;
+  cudf::size_type row = 0;
+  int ctx             = ROW_CTX_NONE;
+  int commentchar     = (opts.comment != '\0') ? opts.comment : 0x100;
+  int quotechar       = (opts.quotechar != '\0') ? opts.quotechar : 0x100;
+  int escapechar      = 0x100;  // FIXME: Add escapechar to API
+  int prev_ch         = opts.terminator;
+
+  for (size_t pos = 0; pos < h_size; pos++) {
+    int ch = h_data[pos];
+    if ((ch == opts.terminator && ctx != ROW_CTX_QUOTE) || pos + 1 == h_size) {
+      if (ctx == ROW_CTX_COMMENT) {
+        ctx = ROW_CTX_NONE;
+      } else if (opts.skipblanklines &&
+                 (pos == header_start ||
+                  (pos == header_start + 1 && opts.terminator == '\n' && prev_ch == '\r'))) {
+      } else if (row >= args_.header || pos + 1 == h_size) {
+        header_end = pos + 1;
+        if (row == args_.header) { data_start = header_end; }
+        break;
+      } else {
+        row++;
+      }
+      header_start = header_end = pos + 1;
+    } else if (ctx == ROW_CTX_NONE) {
+      if (prev_ch == opts.terminator && ch == commentchar) {
+        ctx = ROW_CTX_COMMENT;
+      } else if (ch == quotechar && (prev_ch == opts.terminator || prev_ch == opts.delimiter ||
+                                     prev_ch == quotechar)) {
+        ctx = ROW_CTX_QUOTE;
+      }
+    } else if (ctx == ROW_CTX_QUOTE) {
+      if (ch == quotechar || (ch == opts.delimiter && prev_ch != escapechar)) {
+        ctx = ROW_CTX_NONE;
+      }
+    }
+    prev_ch = ch;
+  }
+  header.assign(h_data + header_start, h_data + header_end);
+  return data_start;
 }
 
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)

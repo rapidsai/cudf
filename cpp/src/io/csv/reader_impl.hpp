@@ -124,6 +124,16 @@ class reader::impl {
                                             cudaStream_t stream);
 
   /**
+   * @brief Parse the CSV header and return the position of the first data row
+   *
+   * @param h_data Uncompressed input data in host memory
+   * @param h_size Number of bytes of uncompressed input data
+   *
+   * @return Byte position of the first row
+   */
+  size_t parse_csv_header(const char *h_data, size_t h_size);
+
+  /**
    * @brief Returns a detected or parsed list of column dtypes.
    *
    * @param stream Stream to use for memory allocation and kernels
@@ -154,7 +164,6 @@ class reader::impl {
   char *data_ptr{};
   rmm::device_vector<uint64_t> row_offsets;
   size_t num_records  = 0;  // Number of rows with actual data
-  long num_bits       = 0;  // Numer of 64-bit bitmaps (different than valid)
   int num_active_cols = 0;  // Number of columns to read
   int num_actual_cols = 0;  // Number of columns in the dataset
 

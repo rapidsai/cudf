@@ -23,6 +23,10 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
+
+/// CSV row parsing context
+enum { ROW_CTX_NONE = 0, ROW_CTX_QUOTE = 1, ROW_CTX_COMMENT = 2, ROW_CTX_EOF = 3 };
+
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data
  *
