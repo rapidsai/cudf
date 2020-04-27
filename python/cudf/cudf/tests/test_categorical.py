@@ -562,7 +562,6 @@ def test_categorical_set_categories_categoricals(data, new_categories):
 @pytest.mark.parametrize(
     "dtype",
     [
-        "category",
         pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
         pd.CategoricalDtype(categories=[2, 4, 10, 100]),
         pd.CategoricalDtype(categories=["aa", "bb", "c"]),
@@ -575,6 +574,13 @@ def test_categorical_set_categories_categoricals(data, new_categories):
 def test_categorical_creation(data, dtype):
     expected = pd.Series(data, dtype=dtype)
     got = gd.Series(data, dtype=dtype)
+    assert_eq(expected, got)
+
+    got = gd.Series(data, dtype=gd.from_pandas(dtype))
+    assert_eq(expected, got)
+
+    expected = pd.Series(data, dtype="category")
+    got = gd.Series(data, dtype="category")
     assert_eq(expected, got)
 
 
