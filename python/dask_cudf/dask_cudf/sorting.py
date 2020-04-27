@@ -160,16 +160,19 @@ def rearrange_by_hash(
 
     token = tokenize(df, columns, max_branch)
     shuffle_combine_token = "shuffle-combine-" + token
-    start = {
-        (shuffle_combine_token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
-        for i, inp in enumerate(inputs)
-    }
+    shuffle_token = "shuffle-" + token
+
+    start = {}
+    end = {}
+
+    for i, inp in enumerate(inputs):
+        start[(shuffle_combine_token, 0, inp)] = (
+            (df._name, i) if i < df.npartitions else df._meta
+        )
+        end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
 
     shuffle_group_token = "shuffle-group-" + token
     shuffle_split_token = "shuffle-split-" + token
-    k_list = tuple(range(k))
 
     for stage in range(1, stages + 1):
         group = {}
@@ -189,7 +192,7 @@ def rearrange_by_hash(
             )
 
             _concat_list = []
-            for i in k_list:
+            for i in range(k):
                 # Get out each individual dataframe piece from the dicts
                 split[(shuffle_split_token, stage, i, inp)] = (
                     getitem,
@@ -216,12 +219,6 @@ def rearrange_by_hash(
         groups.append(group)
         splits.append(split)
         combines.append(combine)
-
-    shuffle_token = "shuffle-" + token
-    end = {
-        (shuffle_token, i): (shuffle_combine_token, stages, inp)
-        for i, inp in enumerate(inputs)
-    }
 
     dsk = toolz.merge(start, end, *(groups + splits + combines))
     graph = HighLevelGraph.from_collections(
