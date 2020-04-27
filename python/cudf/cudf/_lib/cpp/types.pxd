@@ -42,6 +42,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         NAN_IS_NULL  "cudf::nan_policy::NAN_IS_NULL"
         NAN_IS_VALID "cudf::nan_policy::NAN_IS_VALID"
 
+    ctypedef enum null_equality "cudf::null_equality":
+        EQUAL "cudf::null_equality::EQUAL"
+        UNEQUAL "cudf::null_equality::UNEQUAL"
+
     cdef enum type_id:
         EMPTY = 0
         INT8 = 1

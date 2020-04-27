@@ -10,7 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type, null_policy, nan_policy
+from cudf._lib.cpp.types cimport size_type, null_policy, nan_policy, null_equality
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -163,7 +163,11 @@ def drop_duplicates(Table source_table, keys=None,
         )
     )
 
-    cdef bool cpp_nulls_are_equal = nulls_are_equal
+    cdef null_equality cpp_nulls_equal = (
+        null_equality.EQUAL
+        if nulls_are_equal
+        else null_equality.UNEQUAL
+    )
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = source_table.view()
 
@@ -173,7 +177,7 @@ def drop_duplicates(Table source_table, keys=None,
                 source_table_view,
                 cpp_keys,
                 cpp_keep_option,
-                cpp_nulls_are_equal
+                cpp_nulls_equal
             )
         )
 

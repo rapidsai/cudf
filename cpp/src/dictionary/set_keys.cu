@@ -94,7 +94,7 @@ std::unique_ptr<column> set_keys(
     experimental::detail::drop_duplicates(table_view{{new_keys}},
                                           std::vector<size_type>{0},
                                           experimental::duplicate_keep_option::KEEP_FIRST,
-                                          true,
+                                          null_equality::EQUAL,
                                           mr,
                                           stream)
       ->release();

@@ -138,17 +138,17 @@ enum class duplicate_keep_option {
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
- * @param[in] nulls_are_equal flag to denote nulls are equal if true,
- * nulls are not equal if false
- * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
+ * nulls are not equal if null_equality::UNEQUAL
+ * @param[in] mr Optional, The resource to use for allocation of returned table
  *
  * @return unique_ptr<table> Table with unique rows as per specified `keep`.
  */
 std::unique_ptr<experimental::table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option const keep,
-  bool const nulls_are_equal          = true,
+  duplicate_keep_option keep,
+  null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**

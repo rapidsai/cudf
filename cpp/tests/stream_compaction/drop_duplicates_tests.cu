@@ -29,6 +29,7 @@
 #include <tests/utilities/type_lists.hpp>
 
 using cudf::nan_policy;
+using cudf::null_equality;
 using cudf::null_policy;
 template <typename T>
 struct UniqueCountCommon : public cudf::test::BaseFixture {
@@ -256,8 +257,8 @@ TEST_F(DropDuplicate, WithNull)
   cudf::test::fixed_width_column_wrapper<int32_t> exp_col_first{{4, 5, 5, 8}, {0, 1, 1, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> exp_key_col_first{{20, 19, 20, 21}, {0, 1, 1, 1}};
   cudf::table_view expected_first{{exp_col_first, exp_key_col_first}};
-  auto got_first =
-    drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, true);
+  auto got_first = drop_duplicates(
+    input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   cudf::test::expect_tables_equal(expected_first, got_first->view());
 
@@ -304,8 +305,8 @@ TEST_F(DropDuplicate, EmptyInputTable)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, true);
+  auto got = drop_duplicates(
+    input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   cudf::test::expect_tables_equal(input, got->view());
 }
@@ -315,8 +316,8 @@ TEST_F(DropDuplicate, NoColumnInputTable)
   cudf::table_view input{std::vector<cudf::column_view>()};
   std::vector<cudf::size_type> keys{1, 2};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, true);
+  auto got = drop_duplicates(
+    input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   cudf::test::expect_tables_equal(input, got->view());
 }
@@ -328,8 +329,8 @@ TEST_F(DropDuplicate, EmptyKeys)
   cudf::table_view input{{col}};
   std::vector<cudf::size_type> keys{};
 
-  auto got =
-    drop_duplicates(input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, true);
+  auto got = drop_duplicates(
+    input, keys, cudf::experimental::duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL);
 
   cudf::test::expect_tables_equal(cudf::table_view{{empty_col}}, got->view());
 }
