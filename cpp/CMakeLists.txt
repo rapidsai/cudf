@@ -632,6 +632,7 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
             src/strings/split/split.cu
+            src/strings/split/split_record.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
