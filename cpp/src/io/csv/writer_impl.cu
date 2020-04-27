@@ -385,8 +385,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
                                        cudaStream_t stream)
 {
-  if (options_.include_header()) {
-    CUDF_EXPECTS(metadata != nullptr, "Unexpected null metadata.");
+  if ((metadata != nullptr) && (options_.include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
@@ -416,72 +415,16 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
   //               sink->host_write(host_buffer_.data(), host_buffer_.size());
   //           });//or...sink->device_write(device_buffer,...);
 
-  auto pair_buff_offsets = cudf::strings::create_offsets(strings_column, stream, mr_);
+  CUDF_EXPECTS(strings_column.size() > 0, "Unexpected empty strings column.");
 
-  auto num_rows                  = strings_column.size();
-  decltype(num_rows) num_offsets = pair_buff_offsets.second.size();
-
-  CUDF_EXPECTS(num_rows == num_offsets,
-               "Unexpected discrepancy between number of offsets and number of rows.");
-
-  auto total_num_bytes      = pair_buff_offsets.first.size();
-  char const* ptr_all_bytes = pair_buff_offsets.first.data().get();
-
-  rmm::device_vector<size_type> d_row_sizes(num_rows);
-
-  // extended device lambdas called inside a member function
-  // of a nested classes need:
-  //(1) the nested class to be declared public;
-  //(2) the calling member function to be public;
-  //(otherwise known compiler error)
-  //
-  // extract row sizes in bytes from the offsets:
-  //
-  auto exec = rmm::exec_policy(stream);
-  thrust::transform(exec->on(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(num_offsets),
-                    d_row_sizes.begin(),
-                    [ptr_all_bytes, total_num_bytes, num_offsets] __device__(auto row_index) {
-                      return row_index < num_offsets - 1
-                               ? ptr_all_bytes[row_index + 1] - ptr_all_bytes[row_index]
-                               : total_num_bytes - ptr_all_bytes[row_index];
-                    });
-
-  // copy offsets to host:
-  //
-  thrust::host_vector<size_type> h_offsets(num_offsets);
-  CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
-                           pair_buff_offsets.second.data().get(),
-                           num_offsets * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-
-  // copy sizes to host:
-  //
-  thrust::host_vector<size_type> h_row_sizes(num_rows);
-  CUDA_TRY(cudaMemcpyAsync(h_row_sizes.data(),
-                           d_row_sizes.data().get(),
-                           num_rows * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  auto total_num_bytes      = strings_column.chars_size();
+  char const* ptr_all_bytes = strings_column.chars().data<char>();
 
   if (out_sink_->supports_device_write()) {
     // host algorithm call, but the underlying call
     // is a device_write taking a device buffer;
     //
-    thrust::transform(
-      thrust::host,
-      h_offsets.begin(),
-      h_offsets.end(),
-      h_row_sizes.begin(),
-      thrust::make_discard_iterator(),  // discard output
-      [& sink = out_sink_, ptr_all_bytes, stream](size_type offset_indx, size_type row_sz) mutable {
-        sink->device_write(ptr_all_bytes + offset_indx, row_sz, stream);
-        return 0;  // discarded (but necessary)
-      });
+    out_sink_->device_write(ptr_all_bytes, total_num_bytes, stream);
   } else {
     // no device write possible;
     //
@@ -500,16 +443,7 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
     // is also host_write taking a host buffer;
     //
     char const* ptr_h_bytes = h_bytes.data();
-    thrust::transform(
-      thrust::host,
-      h_offsets.begin(),
-      h_offsets.end(),
-      h_row_sizes.begin(),
-      thrust::make_discard_iterator(),  // discard output
-      [& sink = out_sink_, ptr_h_bytes, stream](size_type offset_indx, size_type row_sz) mutable {
-        sink->host_write(ptr_h_bytes + offset_indx, row_sz);
-        return 0;  // discarded (but necessary)
-      });
+    out_sink_->host_write(ptr_h_bytes, total_num_bytes);
   }
 }
 
