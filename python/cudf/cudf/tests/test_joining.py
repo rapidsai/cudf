@@ -179,7 +179,7 @@ def test_dataframe_join_cats():
     rhs["a"] = pd.Categorical(list("abcac"), categories=list("abc"))
     rhs["c"] = cc = np.arange(len(rhs))
     rhs = rhs.set_index("a")
-
+    
     got = lhs.join(rhs)
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
@@ -1236,6 +1236,33 @@ def test_typecast_on_join_multiindices():
         }
     )
     expect = expect.set_index(["join_col_0", "join_col_1", "join_col_2"])
+    got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
+
+    assert_eq(expect, got)
+
+def test_typecast_on_join_indexes_matching_categorical():
+    join_data_l = Series(['a', 'b', 'c', 'd', 'e'], dtype="category")
+    join_data_r = Series(['a', 'b', 'c', 'd', 'e'], dtype="str")
+    other_data = [1, 2, 3, 4, 5]
+
+    gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
+    gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
+
+    gdf_l = gdf_l.set_index("join_col")
+    gdf_r = gdf_r.set_index("join_col")
+
+    exp_join_data = ['a', 'b', 'c', 'd', 'e']
+    exp_other_data = [1, 2, 3, 4, 5]
+    exp_join_col = Series(exp_join_data, dtype="category")
+
+    expect = DataFrame(
+        {
+            "join_col": exp_join_data,
+            "B_x": exp_other_data,
+            "B_y": exp_other_data,
+        }
+    )
+    expect = expect.set_index("join_col")
     got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
 
     assert_eq(expect, got)
