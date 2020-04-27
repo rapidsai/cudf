@@ -6,7 +6,6 @@ import inspect
 import itertools
 import logging
 import numbers
-import pickle
 import uuid
 import warnings
 from collections import OrderedDict
@@ -326,39 +325,6 @@ class DataFrame(Frame):
         raise NotImplementedError(
             "_constructor_expanddim not supported for DataFrames!"
         )
-
-    def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["index"], index_frames = self._index.serialize()
-        header["index_frame_count"] = len(index_frames)
-        frames.extend(index_frames)
-
-        # Use the column directly to avoid duplicating the index
-        # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.names))
-        column_header, column_frames = column.serialize_columns(self._columns)
-        header["columns"] = column_header
-        frames.extend(column_frames)
-
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        # Reconstruct the index
-        index_frames = frames[: header["index_frame_count"]]
-
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], index_frames)
-
-        # Reconstruct the columns
-        column_frames = frames[header["index_frame_count"] :]
-
-        column_names = pickle.loads(header["column_names"])
-        columns = column.deserialize_columns(header["columns"], column_frames)
-
-        return cls(dict(zip(column_names, columns)), index=index)
 
     @property
     def dtypes(self):

@@ -1,5 +1,4 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-import pickle
 import warnings
 from numbers import Number
 
@@ -190,20 +189,6 @@ class Series(Frame):
     def from_arrow(cls, s):
         return cls(s)
 
-    def serialize(self):
-        header = {}
-        frames = []
-        header["index"], index_frames = self._index.serialize()
-        header["name"] = pickle.dumps(self.name)
-        frames.extend(index_frames)
-        header["index_frame_count"] = len(index_frames)
-        header["column"], column_frames = self._column.serialize()
-        header["type-serialized"] = pickle.dumps(type(self))
-        frames.extend(column_frames)
-        header["column_frame_count"] = len(column_frames)
-
-        return header, frames
-
     @property
     def shape(self):
         """Returns a tuple representing the dimensionality of the Series.
@@ -235,22 +220,6 @@ class Series(Frame):
     def name(self, value):
         col = self._data.pop(self.name)
         self._data[value] = col
-
-    @classmethod
-    def deserialize(cls, header, frames):
-
-        index_nframes = header["index_frame_count"]
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
-        name = pickle.loads(header["name"])
-
-        frames = frames[index_nframes:]
-
-        column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type-serialized"])
-        column = col_typ.deserialize(header["column"], frames[:column_nframes])
-
-        return Series(column, index=index, name=name)
 
     def _copy_construct_defaults(self):
         return dict(data=self._column, index=self._index, name=self.name)

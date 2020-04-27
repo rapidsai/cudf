@@ -10,7 +10,7 @@ from cudf._lib.cpp.types cimport (
 )
 from cudf._lib.cpp.aggregation cimport aggregation
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.copying cimport packed_table, contiguous_split_result
+from cudf._lib.cpp.copying cimport packed_columns, unpack_result
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
@@ -62,9 +62,9 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef device_buffer move(device_buffer)
     cdef unique_ptr[device_buffer] move(unique_ptr[device_buffer])
     cdef unique_ptr[scalar] move(unique_ptr[scalar])
-    cdef packed_table move(packed_table)
-    cdef unique_ptr[packed_table] move(unique_ptr[packed_table])
-    cdef contiguous_split_result move(contiguous_split_result)
+    cdef packed_columns move(packed_columns)
+    cdef unique_ptr[packed_columns] move(unique_ptr[packed_columns])
+    cdef unpack_result move(unpack_result)
     cdef pair[unique_ptr[device_buffer], size_type] move(
         pair[unique_ptr[device_buffer], size_type]
     )

@@ -171,7 +171,7 @@ __launch_bounds__(block_size) __global__
 // start at that alignment.
 static constexpr size_t split_align = 64;
 
- * @brief Functor called by the `type_dispatcher` to incrementally compute total
+/** @brief Functor called by the `type_dispatcher` to incrementally compute total
  * memory buffer size needed to allocate a contiguous copy of all columns within
  * a source table.
  */

@@ -114,16 +114,20 @@ cdef extern from "cudf/copying.hpp" namespace "cudf::experimental" nogil:
         vector[size_type] splits
     ) except +
 
-    cdef struct packed_table:
-        unique_ptr[vector[uint8_t]] table_metadata
-        unique_ptr[device_buffer] table_data
+    cdef struct packed_columns:
+        unique_ptr[vector[uint8_t]] metadata
+        unique_ptr[device_buffer] data
 
-    cdef packed_table pack (
-        table_view input_table
+    cdef struct unpack_result:
+        vector[column_view] columns
+        unique_ptr[device_buffer] all_data
+
+    cdef packed_columns pack (
+        vector[column_view] columns
     ) except +
 
-    cdef contiguous_split_result unpack (
-        unique_ptr[packed_table] input_packed_table
+    cdef unpack_result unpack (
+        unique_ptr[packed_columns]
     ) except +
 
     cdef unique_ptr[column] copy_if_else (

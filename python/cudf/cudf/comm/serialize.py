@@ -26,7 +26,6 @@ try:
     def cuda_serialize_cudf_object(x):
         with log_errors():
             header, frames = x.serialize()
-            assert all((type(f) is cudf.core.buffer.Buffer) for f in frames)
             header["lengths"] = [f.nbytes for f in frames]
             return header, frames
 
@@ -34,9 +33,13 @@ try:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(serializable_classes)
     def dask_serialize_cudf_object(x):
+        import rmm
+
         header, frames = cuda_serialize_cudf_object(x)
         with log_errors():
-            frames = [f.to_host_array().data for f in frames]
+            for i, f in enumerate(frames):
+                if isinstance(f, rmm.DeviceBuffer):
+                    frames[i] = f.copy_to_host().data
             return header, frames
 
     @cuda_deserialize.register(serializable_classes)
@@ -44,10 +47,11 @@ try:
     def deserialize_cudf_object(header, frames):
         with log_errors():
             if header["serializer"] == "cuda":
-                for f in frames:
-                    # some frames are empty -- meta/empty partitions/etc
-                    if len(f) > 0:
-                        assert hasattr(f, "__cuda_array_interface__")
+                pass
+                # for f in frames:
+                #     # some frames are empty -- meta/empty partitions/etc
+                #     if len(f) > 0:
+                #         assert hasattr(f, "__cuda_array_interface__")
             elif header["serializer"] == "dask":
                 frames = [memoryview(f) for f in frames]
 

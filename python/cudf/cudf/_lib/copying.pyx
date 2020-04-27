@@ -450,55 +450,58 @@ def table_split(Table input_table, object splits, bool keep_index=True):
     return result
 
 
-def pack(Table input_table):
+def pack(columns):
+    """
+    Pack the given list of columns into a single contiguous bufferr
+    and associated metadata.
+    """
+    cdef vector[column_view] c_columns
+    cdef Column col
+    for col in columns:
+        c_columns.push_back(col.view())
 
-    cdef table_view input_table_view = input_table.view()
-
-    cdef cpp_copying.packed_table c_result
+    cdef cpp_copying.packed_columns c_result
 
     with nogil:
         c_result = move(
             cpp_copying.pack(
-                input_table_view
+                c_columns
             )
         )
 
-    # Convert to python object and return
-    # python objects needed: wrap vector of bytes, wrap rmm device vector
-    data = DeviceBuffer.c_from_unique_ptr(move(c_result.table_data))
-    metadata_py = BufferArrayFromVector.from_unique_ptr(
-        move(c_result.table_metadata)
+    # Convert to python objects:
+    data = DeviceBuffer.c_from_unique_ptr(move(c_result.data))
+    metadata = BufferArrayFromVector.from_unique_ptr(
+        move(c_result.metadata)
     )
-    metadata = np.asarray(metadata_py)
+    metadata = np.asarray(metadata)
 
     return (metadata, data)
 
 
-def unpack(vector[uint8_t] input_packed_table_metadata,
-           DeviceBuffer input_packed_table_data):
-
-    cdef unique_ptr[vector[uint8_t]] c_metadata = move(
-        make_unique[vector[uint8_t]](move(input_packed_table_metadata))
+def unpack(vector[uint8_t] metadata,
+           DeviceBuffer data):
+    """
+    Given the results of a `pack`, unpack into a list of Columns
+    """
+    cdef unique_ptr[cpp_copying.packed_columns] c_packed_columns = move(
+        make_unique[cpp_copying.packed_columns](
+            make_unique[vector[uint8_t]](metadata),
+            move(data.c_obj)
+        )
     )
-
-    cdef unique_ptr[device_buffer] c_data = move(input_packed_table_data.c_obj)
-    cdef unique_ptr[cpp_copying.packed_table] c_packed_table = move(
-        make_unique[cpp_copying.packed_table](move(c_metadata), move(c_data))
-    )
-
-    cdef cpp_copying.contiguous_split_result c_result
+    cdef cpp_copying.unpack_result c_result
 
     with nogil:
         c_result = move(
-            cpp_copying.unpack(move(c_packed_table))
+            cpp_copying.unpack(move(c_packed_columns))
         )
 
-    table_data_owner = DeviceBuffer.c_from_unique_ptr(move(c_result.all_data))
-    return Table.from_table_view(
-        c_result.table,
-        owner=table_data_owner,
-        column_names=range(c_result.table.num_columns())
-    )
+    owner = DeviceBuffer.c_from_unique_ptr(move(c_result.all_data))
+    columns = []
+    for i in range(c_result.columns.size()):
+        columns.append(Column.from_column_view(c_result.columns[i], owner))
+    return columns
 
 
 def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
