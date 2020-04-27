@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_convert Converters
+ * APIs to convert strings to and from other data-types.
+ * @{
+ */
+
+/**
  * @brief Converts IPv4 addresses into integers.
  *
  * The IPv4 format is 1-3 character digits [0-9] between 3 dots
@@ -71,5 +78,6 @@ std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

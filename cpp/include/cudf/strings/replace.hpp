@@ -22,6 +22,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_replace Replace
+ * APIs to replace substrings/patterns within strings.
+ * @{
+ */
+
+/**
  * @brief Replaces target string within each string with the specified
  * replacement string.
  *
@@ -163,5 +170,6 @@ std::unique_ptr<column> replace_nulls(
   string_scalar const& repl           = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

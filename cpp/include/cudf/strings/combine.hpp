@@ -23,6 +23,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_combine Combine
+ * APIs to combine strings row-wise.
+ * @{
+ */
+
+/**
  * @brief Row-wise concatenates the given list of strings columns and
  * returns a single strings column result.
  *
@@ -91,5 +98,6 @@ std::unique_ptr<column> join_strings(
   string_scalar const& narep          = string_scalar("", false),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

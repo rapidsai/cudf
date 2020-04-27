@@ -22,6 +22,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_modify Modify
+ * APIs to modify from strings.
+ * @{
+ */
+
+/**
  * @brief Pad types for the pad method specify where the pad
  * character should be placed.
  */
@@ -86,5 +93,6 @@ std::unique_ptr<column> zfill(
   size_type width,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

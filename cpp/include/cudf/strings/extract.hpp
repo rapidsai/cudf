@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_substring Substring
+ * APIs to extract substrings from strings.
+ * @{
+ */
+
+/**
  * @brief Returns a vector of strings columns for each matching group specified in the given regular
  * expression pattern.
  *
@@ -46,5 +53,6 @@ std::unique_ptr<experimental::table> extract(
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

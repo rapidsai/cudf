@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_contains Contains
+ * APIs to search for substrings/patterns within strings.
+ * @{
+ */
+
+/**
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.
  *
@@ -86,5 +93,6 @@ std::unique_ptr<column> count_re(
   std::string const& pattern,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_find Find
+ * APIs to locate for substrings within strings.
+ * @{
+ */
+
+/**
  * @brief Returns a column with character position values where each
  * of the target strings are found in each string.
  *
@@ -47,5 +54,6 @@ std::unique_ptr<column> find_multiple(
   strings_column_view const& targets,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

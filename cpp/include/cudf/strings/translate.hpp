@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_modify Modify
+ * APIs to modify from strings.
+ * @{
+ */
+
+/**
  * @brief Translates individual characters within each string.
  *
  * This can also be used to remove a character by specifying 0 for the corresponding table entry.
@@ -36,6 +43,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param chars_table Table of UTF-8 character mappings.
+ * @param mr Resource for allocating device memory.
  * @return New column with padded strings.
  */
 std::unique_ptr<column> translate(
@@ -43,5 +51,6 @@ std::unique_ptr<column> translate(
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

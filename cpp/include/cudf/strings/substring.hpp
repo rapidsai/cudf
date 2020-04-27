@@ -22,6 +22,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_substring Substring
+ * APIs to extract substrings from strings.
+ * @{
+ */
+
+/**
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column.
  *
@@ -96,5 +103,6 @@ std::unique_ptr<column> slice_strings(
   column_view const& stops,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

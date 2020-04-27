@@ -22,6 +22,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_split Split
+ * APIs to split strings into multiple columns of strings.
+ * @{
+ */
+
+/**
  * @brief Returns a list of columns by splitting each string using the
  * specified delimiter.
  *
@@ -159,5 +166,6 @@ contiguous_split_record_result contiguous_rsplit_record(
   size_type maxsplit                  = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

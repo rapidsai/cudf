@@ -21,6 +21,13 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_modify Modify
+ * APIs to modify from strings.
+ * @{
+ */
+
 enum class strip_type {
   LEFT,   //<< strip characters from the beginning of the string
   RIGHT,  //<< strip characters from the end of the string
@@ -62,5 +69,6 @@ std::unique_ptr<column> strip(
   string_scalar const& to_strip       = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

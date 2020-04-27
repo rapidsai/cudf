@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_convert Converters
+ * APIs to convert strings to and from other data-types.
+ * @{
+ */
+
+/**
  * @brief Decodes each string using URL encoding.
  *
  * Converts mostly non-ascii characters and control characters into UTF-8 hex code-points
@@ -59,5 +66,6 @@ std::unique_ptr<column> url_decode(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

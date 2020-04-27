@@ -22,6 +22,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_split Split
+ * APIs to split strings into multiple columns of strings.
+ * @{
+ */
+
+/**
  * @brief Returns a set of 3 columns by splitting each string using the
  * specified delimiter.
  *
@@ -83,5 +90,6 @@ std::unique_ptr<experimental::table> rpartition(
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
