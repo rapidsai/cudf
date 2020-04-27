@@ -10,7 +10,9 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type, null_policy, nan_policy, null_equality
+from cudf._lib.cpp.types cimport (
+    size_type, null_policy, nan_policy, null_equality
+)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
