@@ -1799,8 +1799,10 @@ class Frame(libcudf.table.Table):
         header["categorical_column_names"] = pickle.dumps(
             categorical_column_names
         )
-        header["multicolumn"] = pickle.dumps(self._data.multiindex)
-        header["level_names"] = pickle.dumps(self._data.level_names)
+        header["has_multicolumn"] = pickle.dumps(self._data.multiindex)
+        header["multicolumn_level_names"] = pickle.dumps(
+            self._data.level_names
+        )
 
         frames = [packed_meta.data, packed_data]
 
@@ -1808,20 +1810,27 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     def deserialize(self, header, frames):
+        import rmm
+
         typ = pickle.loads(header["type-serialized"])
         column_names = pickle.loads(header["column_names"])
         categorical_column_names = pickle.loads(
             header["categorical_column_names"]
         )
-        multicolumn = pickle.loads(header["multicolumn"])
-        level_names = pickle.loads(header["level_names"])
+        has_multicolumn = pickle.loads(header["has_multicolumn"])
+        multicolumn_level_names = pickle.loads(
+            header["multicolumn_level_names"]
+        )
 
         if "index_names" in header:
             index_names = pickle.loads(header["index_names"])
+            num_index_columns = len(index_names)
         else:
             index_names = []
+            num_index_columns = 0
 
-        import rmm
+        num_data_columns = len(column_names)
+        num_categorical_columns = len(categorical_column_names)
 
         if not isinstance(frames[1], rmm.DeviceBuffer):
             frames[1] = rmm.DeviceBuffer.to_device(frames[1])
@@ -1829,7 +1838,8 @@ class Frame(libcudf.table.Table):
         # unpack into columns
         columns = libcudf.copying.unpack(frames[0], frames[1])
 
-        if "index_names" in header:
+        # construct Index
+        if num_index_columns:
             index_columns = columns[: len(index_names)]
             index = cudf.core.index.Index._from_table(
                 libcudf.table.Table(dict(zip(index_names, index_columns)))
@@ -1837,13 +1847,14 @@ class Frame(libcudf.table.Table):
         else:
             index = None
 
+        # construct data dictionary
         data_columns = columns[
-            len(index_names) : len(index_names) + len(column_names)
+            num_index_columns : num_index_columns + num_data_columns
         ]
         data = dict(zip(column_names, data_columns))
 
-        categorical_columns = columns[-len(categorical_column_names) :]
-
+        # add category information back to categorical columns:
+        categorical_columns = columns[-num_categorical_columns:]
         for i, name in enumerate(categorical_column_names):
             mask = data[name].mask
             data[name].set_base_mask(None)
@@ -1852,8 +1863,8 @@ class Frame(libcudf.table.Table):
             )
 
         tbl = libcudf.table.Table(data, index=index)
-        tbl._multiindex = multicolumn
-        tbl._level_names = level_names
+        tbl._data.multiindex = has_multicolumn
+        tbl._data.level_names = multicolumn_level_names
         return typ._from_table(tbl)
 
 
