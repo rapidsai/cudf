@@ -16,22 +16,22 @@
 
 #include <cudf/copying.hpp>
 #include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/table_utilities.hpp>
 
 namespace cudf {
 namespace test {
 
 struct PackUnpackTest : public BaseFixture {
-  void run_test(table_view const& t) {
+  void run_test(std::vector<column_view> const& t) {
     auto packed  = experimental::pack(t);
-    auto packed2 = std::make_unique<experimental::packed_table>(
-      std::make_unique<std::vector<uint8_t>>(*packed.table_metadata),
-      std::make_unique<rmm::device_buffer>(*packed.table_data));
+    auto packed2 = std::make_unique<experimental::packed_columns>(
+      std::make_unique<std::vector<uint8_t>>(*packed.metadata),
+      std::make_unique<rmm::device_buffer>(*packed.data));
 
-    experimental::contiguous_split_result unpacked = experimental::unpack(std::move(packed2));
+    experimental::unpack_result unpacked = experimental::unpack(std::move(packed2));
 
-    expect_tables_equal(t, unpacked.table);
+    for (size_t i = 0; i < t.size(); i++) { expect_columns_equal(t[i], unpacked.columns[i]); }
   }
 };
 
@@ -40,17 +40,15 @@ TEST_F(PackUnpackTest, SingleColumnFixedWidth)
 {
   fixed_width_column_wrapper<int64_t> col1 ({ 1, 2, 3, 4, 5, 6, 7},
                                             { 1, 1, 1, 0, 1, 0, 1});
-  table_view t({col1});
 
-  this->run_test(t);
+  this->run_test({col1});
 }
 
 TEST_F(PackUnpackTest, SingleColumnFixedWidthNonNullable)
 {
   fixed_width_column_wrapper<int64_t> col1 ({ 1, 2, 3, 4, 5, 6, 7});
-  table_view t({col1});
 
-  this->run_test(t);
+  this->run_test({col1});
 }
 
 TEST_F(PackUnpackTest, MultiColumnFixedWidth)
@@ -59,23 +57,21 @@ TEST_F(PackUnpackTest, MultiColumnFixedWidth)
                                             { 1, 1, 1, 0, 1, 0, 1});
   fixed_width_column_wrapper<float>   col2 ({ 7, 8, 6, 5, 4, 3, 2},
                                             { 1, 0, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<double>  col3 ({ 8, 4, 2, 0, 7, 1, 9},
-                                            { 0, 1, 1, 1, 1, 1, 1});
-  table_view t({col1, col2, col3});
+  fixed_width_column_wrapper<double>  col3 ({ 8, 4, 2, 0, 7, 1, 9, 3},
+                                            { 0, 1, 1, 1, 1, 1, 1, 1});
 
-  this->run_test(t);
+  this->run_test({col1, col2, col3});
 }
 
 TEST_F(PackUnpackTest, MultiColumnWithStrings)
 {
   fixed_width_column_wrapper<int16_t> col1 ({ 1, 2, 3, 4, 5, 6, 7},
                                             { 1, 1, 1, 0, 1, 0, 1});
-  strings_column_wrapper              col2 ({"Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing"},
-                                            {      1,       0,       1,     1,      1,             1,            1});
+  strings_column_wrapper              col2 ({"Lorem", "ipsum", "dolor", "sit", "amet"},
+                                            {      1,       0,       1,     1,      1});
   strings_column_wrapper              col3 ({"", "this", "is", "a", "column", "of", "strings"});
-  table_view t({col1, col2, col3});
 
-  this->run_test(t);
+  this->run_test({col1, col2, col3});
 }
 // clang-format on
 
