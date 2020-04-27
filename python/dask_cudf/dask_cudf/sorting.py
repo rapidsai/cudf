@@ -65,8 +65,8 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
     simple_shuffle_split_token = "simple-shuffle-split-" + token
     simple_shuffle_combine_token = "simple-shuffle-combine-" + token
 
-    # Pre-Materialize maximum number of a typle with max number
-    # of values to be iterated upon in this function and
+    # Pre-Materialize tuples with max number of values
+    # to be iterated upon in this function and
     # loop using slicing later.
     iter_tuples = tuple(range(max(df.npartitions, npartitions)))
 
