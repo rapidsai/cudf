@@ -202,7 +202,7 @@
 - PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
-
+- PR #5022 Add timestamp header to transform
 
 # cuDF 0.13.0 (31 Mar 2020)
 
