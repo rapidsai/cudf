@@ -193,13 +193,17 @@
 - PR #4899 Fix series inplace handling
 - PR #4940 Fix boolean mask issue with large sized Dataframe
 - PR #4889 Fix multi-index merging
+- PR #4922 Fix cudf::strings:split logic for many columns
 - PR #4949 Fix scatter, gather benchmark constructor call
+- PR #4958 Fix strings::replace perf for long strings
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #4996 Parquet writer: fix potentially zero-sized string dictionary
 - PR #5009 Fix pickling for string and categorical columns
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 - PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
+- PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 
 
 # cuDF 0.13.0 (31 Mar 2020)

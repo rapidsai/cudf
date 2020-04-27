@@ -26,6 +26,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cudf/cudf.h>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
 // Forward declarations

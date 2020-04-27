@@ -472,9 +472,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       max_page_size = (rows_in_page * 2 >= ck_g.num_rows)
                         ? 256 * 1024
                         : (rows_in_page * 3 >= ck_g.num_rows) ? 384 * 1024 : 512 * 1024;
-      if (num_rows >= ck_g.num_rows || page_size + fragment_data_size > max_page_size ||
-          (ck_g.has_dictionary && rows_in_page > 0 &&
-           fragments_in_chunk == ck_g.num_dict_fragments)) {
+      if (num_rows >= ck_g.num_rows ||
+          (rows_in_page > 0 &&
+           (page_size + fragment_data_size > max_page_size ||
+            (ck_g.has_dictionary && fragments_in_chunk == ck_g.num_dict_fragments)))) {
         uint32_t dict_bits_plus1;
 
         if (ck_g.has_dictionary && page_start < ck_g.num_dict_fragments) {
