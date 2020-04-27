@@ -746,6 +746,30 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   }
 }
 
+namespace 
+{
+  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
+  using index_vector = sort_groupby_helper::index_vector;
+
+  std::pair<index_vector, index_vector> get_group_offsets_and_labels(
+    table_view const& group_keys, 
+    column_view const& input) 
+    {
+      if (group_keys.num_columns() > 0) {
+        // Groupby columns are available.
+        sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES}; 
+        return std::make_pair(helper.group_offsets(), helper.group_labels());
+      }
+      else {
+        // No Groupby columns specified. Treat as one big group.
+        return std::make_pair(
+          index_vector{std::vector<size_type>{0, input.size()}},
+          index_vector{std::vector<size_type>(input.size(), 0)}
+        );
+      }
+    }
+}
+
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                size_type preceding_window,
@@ -756,19 +780,13 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 {
   if (input.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS(group_keys.num_columns() > 0,
-               "Cannot calculate grouped_rolling_window without grouping-key columns.");
-
-  CUDF_EXPECTS((group_keys.num_rows() == input.size()),
+  CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
-  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
-
-  auto group_offsets{helper.group_offsets()};
-  auto const& group_labels{helper.group_labels()};
+  index_vector group_offsets, group_labels; 
+  std::tie(group_offsets, group_labels) = get_group_offsets_and_labels(group_keys, input);
 
   // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
   // of the first, and one past the last elements in a group.
@@ -956,18 +974,13 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 {
   if (input.size() == 0) return empty_like(input);
 
-  CUDF_EXPECTS((group_keys.num_columns() > 0), "Expected at least one grouping key.");
-
-  CUDF_EXPECTS((group_keys.num_rows() == input.size()),
+  CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
 
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
-  using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
-
-  auto group_offsets{helper.group_offsets()};
-  auto const& group_labels{helper.group_labels()};
+  index_vector group_offsets, group_labels;
+  std::tie(group_offsets, group_labels) = get_group_offsets_and_labels(group_keys, input);
 
   // Assumes that `group_offsets` starts with `0`, ends with `input.size`
   assert(group_offsets.size() >= 2 && group_offsets[0] == 0 &&

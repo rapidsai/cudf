@@ -82,7 +82,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                         size_type min_periods)
   {
     // Skip grouping-tests on bool8 keys. sort_helper does not support this.
-    if (cudf::is_boolean(keys.column(0).type())) { return; }
+    if (keys.num_columns()>0 && cudf::is_boolean(keys.column(0).type())) { return; }
 
     // test all supported aggregators
     run_test_col(keys,
@@ -451,6 +451,24 @@ TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
     grouping_keys, input, expected_group_offsets, preceding_window, following_window, 1);
 }
 
+TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowWithNoGroupKeys)
+{
+  const auto col_data =
+    cudf::test::make_type_param_vector<TypeParam>({0, 10, 20, 30, 40, 50, 60, 70, 80, 90});
+  const size_type DATA_SIZE{static_cast<size_type>(col_data.size())};
+  const std::vector<bool> col_mask(DATA_SIZE, true);
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+
+  const cudf::table_view grouping_keys{std::vector<cudf::column_view>{}};
+
+  size_type preceding_window = 2;
+  size_type following_window = 1;
+  std::vector<size_type> expected_group_offsets{0, DATA_SIZE};
+
+  this->run_test_col_agg(
+    grouping_keys, input, expected_group_offsets, preceding_window, following_window, 1);
+}
+
 // all rows are invalid
 TYPED_TEST(GroupedRollingTest, AllInvalid)
 {
@@ -593,7 +611,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                         size_type min_periods)
   {
     // Skip grouping-tests on bool8 keys. sort_helper does not support this.
-    if (cudf::is_boolean(keys.column(0).type())) { return; }
+    if (keys.num_columns()>0 && cudf::is_boolean(keys.column(0).type())) { return; }
 
     // test all supported aggregators
     run_test_col(keys,
@@ -1018,6 +1036,26 @@ TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithGroupK
   std::vector<int32_t> timestamp_days_vec {0, 2, 3, 4, 5, 7,  0, 0, 1, 2, 3, 3,  0, 1, 2, 3, 3, 3};
   fixed_width_column_wrapper<cudf::timestamp_D> timestamp_days_descending(timestamp_days_vec.rbegin(), timestamp_days_vec.rend());
   this->run_test_col_agg(grouping_keys, timestamp_days_descending, cudf::order::DESCENDING, input, expected_group_offsets, preceding_window_in_days, following_window_in_days, 1);
+}
+
+TYPED_TEST(GroupedTimeRangeRollingTest, SimplePartitionedStaticWindowsWithNoGroupingKeys)
+{
+  const size_type DATA_SIZE {static_cast<size_type>(6)};
+  const std::vector<TypeParam> col_data (DATA_SIZE, 1);
+  const std::vector<bool>      col_mask (DATA_SIZE, true);
+  fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_mask.begin());
+
+  const cudf::table_view grouping_keys {std::vector<cudf::column_view>{}};
+
+  size_type preceding_window_in_days = 1;
+  size_type following_window_in_days = 1;
+  std::vector<size_type> expected_group_offsets{0, DATA_SIZE};
+
+  // Timestamp column.
+  std::vector<int32_t> timestamp_days_vec {0, 2, 3, 4, 5, 7};
+  fixed_width_column_wrapper<cudf::timestamp_D> timestamp_days_ascending(timestamp_days_vec.begin(), timestamp_days_vec.end());
+
+  this->run_test_col_agg(grouping_keys, timestamp_days_ascending, cudf::order::ASCENDING, input, expected_group_offsets, preceding_window_in_days, following_window_in_days, 1);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
