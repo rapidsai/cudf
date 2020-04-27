@@ -51,14 +51,6 @@ class Merge(object):
         )
         self.how = how
         self.preprocess_merge_params(on, left_on, right_on, lsuffix, rsuffix)
-        #self.set_operand_join_columns()
-
-    def set_operand_join_columns(self):
-        # set self.left_join_columns and self.right_join_columns
-        #     based on left_index, right_index, etc
-        
-        # TODO 
-        pass
 
     def perform_merge(self):
         output_dtypes = self.compute_output_dtypes()
