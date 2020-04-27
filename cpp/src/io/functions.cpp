@@ -278,18 +278,14 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  *
  **/
 std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(write_parquet_chunked_args const& args,
-                                                              rmm::mr::device_memory_resource*  mr){
+                                                              rmm::mr::device_memory_resource*  mr) {
   parquet::writer_options options{args.compression, args.stats_level};
 
-  auto       writer            = make_writer<parquet::writer>(args.sink, options, mr);
+  auto writer                  = make_writer<parquet::writer>(args.sink, options, mr);
   auto const curr_chunk_offset = writer->write_chunked_begin();
 
   return std::make_shared<pq_chunked_state>(
-    std::move(writer),
-    curr_chunk_offset,
-    SetMetadata::WITH_NULLABILITY,
-    nullptr,
-    args.metadata);
+    std::move(writer), curr_chunk_offset, SetMetadata::WITH_NULLABILITY, nullptr, args.metadata);
 }
 
 /**

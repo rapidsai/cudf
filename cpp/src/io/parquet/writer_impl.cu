@@ -437,25 +437,26 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 {
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
-                         table_view const &table, const table_metadata *metadata,
-                         bool return_filemetadata, const std::string& metadata_out_file_path,
-                         cudaStream_t stream) {    
-
-  pq_chunked_state state{
-    nullptr,
-    write_chunked_begin(),
-    SetMetadata::WITHOUT_NULLABILITY,
-    metadata,
-    nullptr,
-    SingleWriteMode::YES,
-    stream};
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &table,
+                                                          const table_metadata *metadata,
+                                                          bool return_filemetadata,
+                                                          const std::string &metadata_out_file_path,
+                                                          cudaStream_t stream)
+{
+  pq_chunked_state state{nullptr,
+                         write_chunked_begin(),
+                         SetMetadata::WITHOUT_NULLABILITY,
+                         metadata,
+                         nullptr,
+                         SingleWriteMode::YES,
+                         stream};
 
   write_chunked(table, state);
   return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
 }
 
-std::size_t writer::impl::write_chunked_begin() {
+std::size_t writer::impl::write_chunked_begin()
+{
   // Write file header
   file_header_s fhdr;
   fhdr.magic = PARQUET_MAGIC;
@@ -935,9 +936,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::write_all(table_view const &table,
 }
 
 // Forward to implementation
-std::size_t writer::write_chunked_begin() {
-  return _impl->write_chunked_begin();
-}
+std::size_t writer::write_chunked_begin() { return _impl->write_chunked_begin(); }
 
 // Forward to implementation
 void writer::write_chunked(table_view const &table, pq_chunked_state &state)
