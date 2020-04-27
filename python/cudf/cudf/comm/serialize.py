@@ -33,28 +33,19 @@ try:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(serializable_classes)
     def dask_serialize_cudf_object(x):
-        import rmm
-
         header, frames = cuda_serialize_cudf_object(x)
         with log_errors():
             for i, f in enumerate(frames):
-                if isinstance(f, rmm.DeviceBuffer):
-                    frames[i] = f.copy_to_host().data
+                if hasattr(f, "__cuda_array_interface__"):
+                    frames[i] = cudf.core.buffer.Buffer(f).to_host_array().data
             return header, frames
 
     @cuda_deserialize.register(serializable_classes)
     @dask_deserialize.register(serializable_classes)
     def deserialize_cudf_object(header, frames):
         with log_errors():
-            if header["serializer"] == "cuda":
-                pass
-                # for f in frames:
-                #     # some frames are empty -- meta/empty partitions/etc
-                #     if len(f) > 0:
-                #         assert hasattr(f, "__cuda_array_interface__")
-            elif header["serializer"] == "dask":
+            if header["serializer"] == "dask":
                 frames = [memoryview(f) for f in frames]
-
             cudf_typ = pickle.loads(header["type-serialized"])
             cudf_obj = cudf_typ.deserialize(header, frames)
             return cudf_obj
