@@ -25,12 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
-from cudf.core.column import (
-    CategoricalColumn,
-    StringColumn,
-    as_column,
-    column_empty,
-)
+from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
@@ -165,7 +160,9 @@ class DataFrame(Frame):
     3 3 0.3
     """
 
-    @annotate("DATAFRAME_INIT", color="cyan", domain="cudf_python")
+    _internal_names = {"_data", "_index"}
+
+    @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
         super().__init__()
 
@@ -219,9 +216,6 @@ class DataFrame(Frame):
         if dtype:
             self._data = self.astype(dtype)._data
 
-        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
-        self._allow_setattr_to_setitem = True
-
     def _init_from_list_like(self, data, index=None, columns=None):
         if index is None:
             index = RangeIndex(start=0, stop=len(data))
@@ -244,7 +238,6 @@ class DataFrame(Frame):
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
             data = {key: data[key] for key in keys}
-
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
@@ -284,7 +277,12 @@ class DataFrame(Frame):
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
-        return cls(data=table._data, index=index)
+            else:
+                index = RangeIndex(table._num_rows)
+        out = cls.__new__(cls)
+        out._data = table._data
+        out._index = index
+        return out
 
     @staticmethod
     def _align_input_series_indices(data, index):
@@ -390,16 +388,17 @@ class DataFrame(Frame):
         return list(o)
 
     def __setattr__(self, key, col):
-        if getattr(self, "_allow_setattr_to_setitem", False):
-            # if an attribute already exists, set it.
-            try:
-                object.__getattribute__(self, key)
-                object.__setattr__(self, key, col)
-                return
-            except AttributeError:
-                pass
 
-            # if a column already exists, set it.
+        # if an attribute already exists, set it.
+        try:
+            object.__getattribute__(self, key)
+            object.__setattr__(self, key, col)
+            return
+        except AttributeError:
+            pass
+
+        # if a column already exists, set it.
+        if key not in self._internal_names:
             try:
                 self[key]  # __getitem__ to verify key exists
                 self[key] = col
@@ -407,18 +406,14 @@ class DataFrame(Frame):
             except KeyError:
                 pass
 
-            warnings.warn(
-                "Columns may not be added to a DataFrame using a new "
-                + "attribute name. A new attribute will be created: '%s'"
-                % key,
-                UserWarning,
-            )
-
         object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
-        if key != "_data" and key in self._data:
-            return self[key]
+        if key in self._internal_names:
+            return object.__getattribute__(self, key)
+        else:
+            if key in self:
+                return self[key]
 
         raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
@@ -900,10 +895,24 @@ class DataFrame(Frame):
             if len(self._data.names) > ncols:
                 right_cols = len(self._data.names) - int(ncols / 2.0) - 1
                 left_cols = int(ncols / 2.0) + 1
+            if right_cols > 0:
+                # Pick ncols - left_cols number of columns
+                # from the right side/from the end.
+                right_cols = -(int(ncols) - left_cols + 1)
+            else:
+                # If right_cols is 0 or negative, it means
+                # self has lesser number of columns thans ncols.
+                # Hence assign len(self._data.names) which
+                # will result in empty `*_right` quadrants.
+                # This is because `*_left` quadransts will
+                # contain all columns.
+                right_cols = len(self._data.names)
+
             upper_left = self.head(upper_rows).iloc[:, :left_cols]
             upper_right = self.head(upper_rows).iloc[:, right_cols:]
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
+
             upper = cudf.concat([upper_left, upper_right], axis=1)
             lower = cudf.concat([lower_left, lower_right], axis=1)
             output = cudf.concat([upper, lower])
@@ -4702,67 +4711,6 @@ class DataFrame(Frame):
         import cudf.io.orc as orc
 
         orc.to_orc(self, fname, compression, *args, **kwargs)
-
-    def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, **kwargs
-    ):
-        """Scatter to a list of dataframes.
-
-        Uses map_index to determine the destination
-        of each row of the original DataFrame.
-
-        Parameters
-        ----------
-        map_index : Series, str or list-like
-            Scatter assignment for each row
-        map_size : int
-            Length of output list. Must be >= uniques in map_index
-        keep_index : bool
-            Conserve original index values for each row
-
-        Returns
-        -------
-        A list of cudf.DataFrame objects.
-        """
-
-        # map_index might be a column name or array,
-        # make it a Column
-        if isinstance(map_index, str):
-            map_index = self[map_index]._column
-        elif isinstance(map_index, Series):
-            map_index = map_index._column
-        else:
-            map_index = as_column(map_index)
-
-        # Convert float to integer
-        if map_index.dtype == np.float:
-            map_index = map_index.astype(np.int32)
-
-        # Convert string or categorical to integer
-        if isinstance(map_index, StringColumn):
-            map_index = map_index.as_categorical_column(np.int32).as_numerical
-            warnings.warn(
-                "Using StringColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-        elif isinstance(map_index, CategoricalColumn):
-            map_index = map_index.as_numerical
-            warnings.warn(
-                "Using CategoricalColumn for map_index in scatter_by_map. "
-                "Use an integer array/column for better performance."
-            )
-
-        if kwargs.get("debug", False) == 1 and map_size is not None:
-            unique_count = map_index.unique_count()
-            if map_size < unique_count:
-                raise ValueError(
-                    "ERROR: map_size must be >= %d (got %d)."
-                    % (unique_count, map_size)
-                )
-
-        tables = self._partition(map_index, map_size, keep_index)
-
-        return tables
 
     def stack(self, level=-1, dropna=True):
         """Stack the prescribed level(s) from columns to index

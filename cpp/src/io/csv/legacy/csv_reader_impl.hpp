@@ -29,64 +29,71 @@
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
 namespace csv {
-
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns
  *---------------------------------------------------------------------------**/
 class reader::Impl {
-private:
+ private:
   const reader_options args_;
 
   rmm::device_buffer data_;
   rmm::device_vector<uint64_t> row_offsets;
 
-  cudf::size_type num_records = 0;    ///< Number of rows with actual data
+  cudf::size_type num_records = 0;  ///< Number of rows with actual data
 
- // dataframe dimensions
-  long num_bits = 0;       ///< The number of 64-bit bitmaps (different than valid).
-  int num_active_cols = 0; ///< Number of columns that will be return to user.
-  int num_actual_cols = 0; ///< Number of columns in the file --- based on the number of columns in header.
+  // dataframe dimensions
+  long num_bits       = 0;  ///< The number of 64-bit bitmaps (different than valid).
+  int num_active_cols = 0;  ///< Number of columns that will be return to user.
+  int num_actual_cols =
+    0;  ///< Number of columns in the file --- based on the number of columns in header.
 
   // Parsing options
-  ParseOptions opts{};                            ///< Whole dataset parsing options
+  ParseOptions opts{};                                      ///< Whole dataset parsing options
   thrust::host_vector<column_parse::flags> h_column_flags;  ///< Per-column parsing flags
-  rmm::device_vector<column_parse::flags> d_column_flags;   ///< Per-column parsing flags (device memory)
+  rmm::device_vector<column_parse::flags>
+    d_column_flags;  ///< Per-column parsing flags (device memory)
 
-  rmm::device_vector<SerialTrieNode> d_trueTrie;  ///< device: serialized trie of values to recognize as true
-  rmm::device_vector<SerialTrieNode> d_falseTrie; ///< device: serialized trie of values to recognize as false
-  rmm::device_vector<SerialTrieNode> d_naTrie;    ///< device: serialized trie of NA values
+  rmm::device_vector<SerialTrieNode>
+    d_trueTrie;  ///< device: serialized trie of values to recognize as true
+  rmm::device_vector<SerialTrieNode>
+    d_falseTrie;  ///< device: serialized trie of values to recognize as false
+  rmm::device_vector<SerialTrieNode> d_naTrie;  ///< device: serialized trie of NA values
 
   // Intermediate data
-  std::vector<std::string> col_names; ///< Array of column names.
-  std::vector<char> header;           ///< Header row data, for parsing column names.
+  std::vector<std::string> col_names;  ///< Array of column names.
+  std::vector<char> header;            ///< Header row data, for parsing column names.
 
-public:
- /**
-  * @brief Constructor from a dataset source with reader options.
-  **/
- explicit Impl(std::unique_ptr<datasource> source, std::string filepath,
-               reader_options const &args);
+ public:
+  /**
+   * @brief Constructor from a dataset source with reader options.
+   **/
+  explicit Impl(std::unique_ptr<datasource> source,
+                std::string filepath,
+                reader_options const &args);
 
- /**
-  * @brief Read an entire set or a subset of data from the source and returns
-  * an array of gdf_columns.
-  *
-  * @param[in] range_offset Number of bytes offset from the start
-  * @param[in] range_size Bytes to read; use `0` for all remaining data
-  * @param[in] skip_rows Number of rows to skip from the start
-  * @param[in] skip_end_rows Number of rows to skip from the end
-  * @param[in] num_rows Number of rows to read; use -1 for all remaining data
-  *
-  * @return Object that contains the array of gdf_columns
-  **/
- table read(size_t range_offset, size_t range_size, cudf::size_type skip_rows,
-            cudf::size_type skip_end_rows, cudf::size_type num_rows);
+  /**
+   * @brief Read an entire set or a subset of data from the source and returns
+   * an array of gdf_columns.
+   *
+   * @param[in] range_offset Number of bytes offset from the start
+   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] skip_end_rows Number of rows to skip from the end
+   * @param[in] num_rows Number of rows to read; use -1 for all remaining data
+   *
+   * @return Object that contains the array of gdf_columns
+   **/
+  table read(size_t range_offset,
+             size_t range_size,
+             cudf::size_type skip_rows,
+             cudf::size_type skip_end_rows,
+             cudf::size_type num_rows);
 
  private:
   /**
@@ -100,8 +107,7 @@ public:
    * @param[in] h_size Number of bytes of uncompressed input data
    * @param[in] range_offset Number of bytes offset from the start
    **/
-  void gather_row_offsets(const char *h_data, size_t h_size,
-                          size_t range_offset);
+  void gather_row_offsets(const char *h_data, size_t h_size, size_t range_offset);
 
   /**
    * @brief Filters and discards row positions that are not used
@@ -115,7 +121,8 @@ public:
    *
    * @return First and last row positions
    **/
-  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size,
+  std::pair<uint64_t, uint64_t> select_rows(const char *h_data,
+                                            size_t h_size,
                                             size_t range_size,
                                             cudf::size_type skip_rows,
                                             cudf::size_type skip_end_rows,
@@ -137,10 +144,10 @@ public:
    **/
   void decode_data(const std::vector<gdf_column_wrapper> &columns);
 
-private:
- std::unique_ptr<datasource> source_;
- std::string filepath_;
- std::string compression_type_;
+ private:
+  std::unique_ptr<datasource> source_;
+  std::string filepath_;
+  std::string compression_type_;
 };
 
 }  // namespace csv

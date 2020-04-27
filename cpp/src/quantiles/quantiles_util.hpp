@@ -15,103 +15,94 @@
  */
 
 #include <cmath>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
 
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE
-Result get_array_value(T const* devarr, size_type location)
+CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location)
 {
-    T result;
+  T result;
 #if defined(__CUDA_ARCH__)
-    result = devarr[location];
+  result = devarr[location];
 #else
-    CUDA_TRY( cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost) );
+  CUDA_TRY(cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost));
 #endif
-    return static_cast<Result>(result);
+  return static_cast<Result>(result);
 }
 
 namespace interpolate {
-
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE
-Result linear(T lhs, T rhs, double frac)
+CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac)
 {
-    // TODO: safe operation to avoid overflow/underflow
-    // double can fully represent int8-32 value range.
-    // Since the fraction part of double is 52 bits,
-    // double cannot fully represent int64.
-    // Underflow may occur when converting int64 to double
-    // detail: https://github.com/rapidsai/cudf/issues/1417
+  // TODO: safe operation to avoid overflow/underflow
+  // double can fully represent int8-32 value range.
+  // Since the fraction part of double is 52 bits,
+  // double cannot fully represent int64.
+  // Underflow may occur when converting int64 to double
+  // detail: https://github.com/rapidsai/cudf/issues/1417
 
-    double dlhs = static_cast<double>(lhs);
-    double drhs = static_cast<double>(rhs);
-    double one_minus_frac = 1.0 - frac;
-    return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
+  double dlhs           = static_cast<double>(lhs);
+  double drhs           = static_cast<double>(rhs);
+  double one_minus_frac = 1.0 - frac;
+  return static_cast<Result>(one_minus_frac * dlhs + frac * drhs);
 }
 
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE
-Result midpoint(T lhs, T rhs)
+CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs)
 {
-    // TODO: try std::midpoint (C++20) if available
-    double dlhs = static_cast<double>(lhs);
-    double drhs = static_cast<double>(rhs);
-    return static_cast<Result>(dlhs / 2 + drhs / 2);
+  // TODO: try std::midpoint (C++20) if available
+  double dlhs = static_cast<double>(lhs);
+  double drhs = static_cast<double>(rhs);
+  return static_cast<Result>(dlhs / 2 + drhs / 2);
 }
 
 template <typename Result>
-CUDA_HOST_DEVICE_CALLABLE
-Result midpoint(int64_t lhs, int64_t rhs)
+CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs)
 {
-    // caring to avoid integer overflow and underflow between int64_t and Result( double )
-    int64_t half = lhs / 2 + rhs / 2;
-    int64_t rest = lhs % 2 + rhs % 2;
-    return static_cast<Result>(static_cast<Result>(half) +
-                               static_cast<Result>(rest) * 0.5);
+  // caring to avoid integer overflow and underflow between int64_t and Result( double )
+  int64_t half = lhs / 2 + rhs / 2;
+  int64_t rest = lhs % 2 + rhs % 2;
+  return static_cast<Result>(static_cast<Result>(half) + static_cast<Result>(rest) * 0.5);
 }
 
 template <>
-CUDA_HOST_DEVICE_CALLABLE
-int64_t midpoint(int64_t lhs, int64_t rhs)
+CUDA_HOST_DEVICE_CALLABLE int64_t midpoint(int64_t lhs, int64_t rhs)
 {
-    // caring to avoid integer overflow
-    int64_t half = lhs / 2 + rhs / 2;
-    int64_t rest = lhs % 2 + rhs % 2;
-    int64_t result = half;
+  // caring to avoid integer overflow
+  int64_t half   = lhs / 2 + rhs / 2;
+  int64_t rest   = lhs % 2 + rhs % 2;
+  int64_t result = half;
 
-    // rounding toward zero
-    result += ( half >= 0 && rest != 0 ) ? rest/2 : 0;
-    result += ( half <  0 && rest != 0 ) ? 1 : 0;
+  // rounding toward zero
+  result += (half >= 0 && rest != 0) ? rest / 2 : 0;
+  result += (half < 0 && rest != 0) ? 1 : 0;
 
-    return result;
+  return result;
 }
 
-} // namespace interpolate
+}  // namespace interpolate
 
-struct quantile_index
-{
-    size_type lower;
-    size_type higher;
-    size_type nearest;
-    double fraction;
+struct quantile_index {
+  size_type lower;
+  size_type higher;
+  size_type nearest;
+  double fraction;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    quantile_index(size_type count, double quantile)
-    {
-        quantile = std::min(std::max(quantile, 0.0), 1.0);
+  CUDA_HOST_DEVICE_CALLABLE
+  quantile_index(size_type count, double quantile)
+  {
+    quantile = std::min(std::max(quantile, 0.0), 1.0);
 
-        double val = quantile * (count - 1);
-        lower = std::floor(val);
-        higher = static_cast<size_type>(std::ceil(val));
-        nearest = static_cast<size_type>(std::nearbyint(val));
-        fraction = val - lower;
-    }
+    double val = quantile * (count - 1);
+    lower      = std::floor(val);
+    higher     = static_cast<size_type>(std::ceil(val));
+    nearest    = static_cast<size_type>(std::nearbyint(val));
+    fraction   = val - lower;
+  }
 };
 
 #pragma nv_exec_check_disable
@@ -131,114 +122,92 @@ struct quantile_index
  *
  * @returns Value of the desired quantile.
  */
-template<typename Result, typename ValueAccessor>
-CUDA_HOST_DEVICE_CALLABLE
-Result
-select_quantile(ValueAccessor get_value,
-                size_type size,
-                double q,
-                interpolation interp)
+template <typename Result, typename ValueAccessor>
+CUDA_HOST_DEVICE_CALLABLE Result
+select_quantile(ValueAccessor get_value, size_type size, double q, interpolation interp)
 {
-    if (size < 2) {
-        return get_value(0);
-    }
+  if (size < 2) { return get_value(0); }
 
-    quantile_index idx(size, q);
+  quantile_index idx(size, q);
 
-    switch (interp) {
+  switch (interp) {
     case interpolation::LINEAR:
-        return interpolate::linear<Result>(get_value(idx.lower),
-                                           get_value(idx.higher),
-                                           idx.fraction);
+      return interpolate::linear<Result>(get_value(idx.lower), get_value(idx.higher), idx.fraction);
 
     case interpolation::MIDPOINT:
-        return interpolate::midpoint<Result>(get_value(idx.lower),
-                                             get_value(idx.higher));
+      return interpolate::midpoint<Result>(get_value(idx.lower), get_value(idx.higher));
 
-    case interpolation::LOWER:
-        return static_cast<Result>(get_value(idx.lower));
+    case interpolation::LOWER: return static_cast<Result>(get_value(idx.lower));
 
-    case interpolation::HIGHER:
-        return static_cast<Result>(get_value(idx.higher));
+    case interpolation::HIGHER: return static_cast<Result>(get_value(idx.higher));
 
-    case interpolation::NEAREST:
-        return static_cast<Result>(get_value(idx.nearest));
+    case interpolation::NEAREST: return static_cast<Result>(get_value(idx.nearest));
 
     default:
-        #if defined(__CUDA_ARCH__)
-            release_assert(false && "Invalid interpolation operation for quantiles");
-            return Result();
-        #else
-            CUDF_FAIL("Invalid interpolation operation for quantiles.");
-        #endif
-    }
+#if defined(__CUDA_ARCH__)
+      release_assert(false && "Invalid interpolation operation for quantiles");
+      return Result();
+#else
+      CUDF_FAIL("Invalid interpolation operation for quantiles.");
+#endif
+  }
 }
 
-template<typename Result, typename Iterator>
-CUDA_HOST_DEVICE_CALLABLE
-Result
+template <typename Result, typename Iterator>
+CUDA_HOST_DEVICE_CALLABLE Result
 select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
 {
-    quantile_index idx(size, q);
+  quantile_index idx(size, q);
 
-    switch (interp) {
-    case interpolation::LOWER:
-        return static_cast<Result>(*(begin + idx.lower));
+  switch (interp) {
+    case interpolation::LOWER: return static_cast<Result>(*(begin + idx.lower));
 
-    case interpolation::HIGHER:
-        return static_cast<Result>(*(begin + idx.higher));
+    case interpolation::HIGHER: return static_cast<Result>(*(begin + idx.higher));
 
-    case interpolation::NEAREST:
-        return static_cast<Result>(*(begin + idx.nearest));
+    case interpolation::NEAREST: return static_cast<Result>(*(begin + idx.nearest));
 
     case interpolation::LINEAR:
-        return interpolate::linear<Result>(*(begin + idx.lower),
-                                           *(begin + idx.higher),
-                                           idx.fraction);
+      return interpolate::linear<Result>(*(begin + idx.lower), *(begin + idx.higher), idx.fraction);
 
     case interpolation::MIDPOINT:
-        return interpolate::midpoint<Result>(*(begin + idx.lower),
-                                             *(begin + idx.higher));
-    }
+      return interpolate::midpoint<Result>(*(begin + idx.lower), *(begin + idx.higher));
+  }
 
-    #if defined(__CUDA_ARCH__)
-        release_assert(false && "Invalid interpolation operation for quantiles");
-        return Result();
-    #else
-        CUDF_FAIL("Invalid interpolation operation for quantiles.");
-    #endif
+#if defined(__CUDA_ARCH__)
+  release_assert(false && "Invalid interpolation operation for quantiles");
+  return Result();
+#else
+  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+#endif
 }
 
-template<typename Iterator>
-CUDA_HOST_DEVICE_CALLABLE
-bool
-select_quantile_validity(Iterator begin, size_type size, double q, interpolation interp)
+template <typename Iterator>
+CUDA_HOST_DEVICE_CALLABLE bool select_quantile_validity(Iterator begin,
+                                                        size_type size,
+                                                        double q,
+                                                        interpolation interp)
 {
-    quantile_index idx(size, q);
+  quantile_index idx(size, q);
 
-    switch (interp) {
-    case interpolation::HIGHER:
-        return *(begin + idx.higher);
+  switch (interp) {
+    case interpolation::HIGHER: return *(begin + idx.higher);
 
-    case interpolation::LOWER:
-        return *(begin + idx.lower);
+    case interpolation::LOWER: return *(begin + idx.lower);
 
-    case interpolation::NEAREST:
-        return *(begin + idx.nearest);
+    case interpolation::NEAREST: return *(begin + idx.nearest);
 
     case interpolation::LINEAR:
-    case interpolation::MIDPOINT:
-        return *(begin + idx.lower) and *(begin + idx.higher);
-    }
+    case interpolation::MIDPOINT: return *(begin + idx.lower) and *(begin + idx.higher);
+  }
 
-    #if defined(__CUDA_ARCH__)
-        release_assert(false && "Invalid interpolation operation for quantiles");
-        return false;
-    #else
-        CUDF_FAIL("Invalid interpolation operation for quantiles.");
-    #endif
+#if defined(__CUDA_ARCH__)
+  release_assert(false && "Invalid interpolation operation for quantiles");
+  return false;
+#else
+  CUDF_FAIL("Invalid interpolation operation for quantiles.");
+#endif
 }
 
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

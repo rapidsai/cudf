@@ -19,67 +19,75 @@
 
 #pragma once
 
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_wrapper.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace test {
 namespace binop {
 
-struct BinaryOperationTest : public cudf::test::BaseFixture
-{
-    BinaryOperationTest() {}
+struct BinaryOperationTest : public cudf::test::BaseFixture {
+  BinaryOperationTest() {}
 
-    static constexpr int r_min = 1;
-    static constexpr int r_max = 10;
+  static constexpr int r_min = 1;
+  static constexpr int r_max = 10;
 
-    template<typename T>
-    auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen) {  
-        return cudf::test::make_counting_transform_iterator(0,
-            [&](auto row) { return rand_gen.generate(); });
-    }
+  template <typename T>
+  auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
+  {
+    return cudf::test::make_counting_transform_iterator(
+      0, [&](auto row) { return rand_gen.generate(); });
+  }
 
-    auto make_validity_iter() {
-        cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max, detail::random_generator_incrementing_seed());
-        uint8_t mod_base = rand_gen.generate();
-        return cudf::test::make_counting_transform_iterator(0,
-            [mod_base](auto row) { return (row % mod_base) > 0; });
-    }
-    
-    template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr >
-    auto make_random_wrapped_column(size_type size) {
-        cudf::test::UniformRandomGenerator<long> rand_gen(r_min, r_max, detail::random_generator_incrementing_seed());
-        auto data_iter = make_data_iter(rand_gen);
-        auto validity_iter = make_validity_iter();
+  auto make_validity_iter()
+  {
+    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(
+      r_min, r_max, detail::random_generator_incrementing_seed());
+    uint8_t mod_base = rand_gen.generate();
+    return cudf::test::make_counting_transform_iterator(
+      0, [mod_base](auto row) { return (row % mod_base) > 0; });
+  }
 
-        return cudf::test::fixed_width_column_wrapper<T>(
-            data_iter, data_iter + size, validity_iter);
-    }
+  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  auto make_random_wrapped_column(size_type size)
+  {
+    cudf::test::UniformRandomGenerator<long> rand_gen(
+      r_min, r_max, detail::random_generator_incrementing_seed());
+    auto data_iter     = make_data_iter(rand_gen);
+    auto validity_iter = make_validity_iter();
 
-    template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-    auto make_random_wrapped_column(size_type size) {
-        cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max, detail::random_generator_incrementing_seed());
-        auto data_iter = make_data_iter(rand_gen);
-        auto validity_iter = make_validity_iter();
+    return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
+  }
 
-        return cudf::test::fixed_width_column_wrapper<T>(
-            data_iter, data_iter + size, validity_iter);
-    }
-    
-    template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr >
-    auto make_random_wrapped_scalar() {
-        cudf::test::UniformRandomGenerator<long> rand_gen(r_min, r_max, detail::random_generator_incrementing_seed());
-        return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
-    }
+  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  auto make_random_wrapped_column(size_type size)
+  {
+    cudf::test::UniformRandomGenerator<T> rand_gen(
+      r_min, r_max, detail::random_generator_incrementing_seed());
+    auto data_iter     = make_data_iter(rand_gen);
+    auto validity_iter = make_validity_iter();
 
-    template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-    auto make_random_wrapped_scalar() {
-        cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max, detail::random_generator_incrementing_seed());
-        return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
-    }
+    return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+  auto make_random_wrapped_scalar()
+  {
+    cudf::test::UniformRandomGenerator<long> rand_gen(
+      r_min, r_max, detail::random_generator_incrementing_seed());
+    return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
+  }
+
+  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  auto make_random_wrapped_scalar()
+  {
+    cudf::test::UniformRandomGenerator<T> rand_gen(
+      r_min, r_max, detail::random_generator_incrementing_seed());
+    return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
+  }
 };
 
-} // namespace binop
-} // namespace test
-} // namespace cudf
+}  // namespace binop
+}  // namespace test
+}  // namespace cudf

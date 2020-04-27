@@ -22,24 +22,23 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-
 /**
  * @brief Struct to describe the output of a string datatype
  **/
 struct nvstrdesc_s {
-    const char *ptr;
-    size_t count;
+  const char *ptr;
+  size_t count;
 };
 
 /**
  * @brief Struct to describe the avro schema
  **/
 struct schemadesc_s {
-    uint32_t kind;  // avro type kind
-    uint32_t count; // for records/unions: number of following child columns, for nulls: global null_count, for enums: dictionary ofs
-    void *dataptr;  // Ptr to column data, or null if column not selected
+  uint32_t kind;   // avro type kind
+  uint32_t count;  // for records/unions: number of following child columns, for nulls: global
+                   // null_count, for enums: dictionary ofs
+  void *dataptr;   // Ptr to column data, or null if column not selected
 };
-
 
 /**
  * @brief Launches kernel for decoding column data
@@ -58,12 +57,21 @@ struct schemadesc_s {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, const uint8_t *avro_data,
-    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows = ~0, size_t first_row = 0, uint32_t min_row_size = 0, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DecodeAvroColumnData(block_desc_s *blocks,
+                                 schemadesc_s *schema,
+                                 nvstrdesc_s *global_dictionary,
+                                 const uint8_t *avro_data,
+                                 uint32_t num_blocks,
+                                 uint32_t schema_len,
+                                 uint32_t num_dictionary_entries,
+                                 size_t max_rows       = ~0,
+                                 size_t first_row      = 0,
+                                 uint32_t min_row_size = 0,
+                                 cudaStream_t stream   = (cudaStream_t)0);
 
+}  // namespace gpu
+}  // namespace avro
+}  // namespace io
+}  // namespace cudf
 
-}}}} // cudf::io::avro::gpu namespace
-
-#endif // __IO_AVRO_GPU_H__
-
-
+#endif  // __IO_AVRO_GPU_H__

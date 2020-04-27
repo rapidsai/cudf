@@ -29,6 +29,6 @@ uint64_t random_generator_incrementing_seed()
   return ++seed;
 }
 
-} // namespace detail
-} // namespace test
-} // namespace cudf
+}  // namespace detail
+}  // namespace test
+}  // namespace cudf

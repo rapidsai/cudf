@@ -94,7 +94,7 @@ to automatically run `isort`, `Black`, and `flake8` when you make a git commit.
 This can be done by installing `pre-commit` via `conda` or `pip`:
 
 ```bash
-conda install pre_commit
+conda install -c conda-forge pre_commit
 ```
 
 ```bash
@@ -109,6 +109,15 @@ pre-commit install
 
 from the root of the cuDF repository. Now `isort`, `Black`, and `flake8` will be
 run each time you commit changes.
+
+#### C++/CUDA
+
+cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html)
+
+In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
+```
+python3 ./cpp/scripts/run-clang-format.py -inplace
+```
 
 ### Get libcudf Dependencies
 

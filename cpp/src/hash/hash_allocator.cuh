@@ -20,54 +20,76 @@
 #include <new>
 
 #include <rmm/rmm.h>
+#include <rmm/mr/device/default_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/default_memory_resource.hpp>
 
 template <class T>
 struct managed_allocator {
-      typedef T value_type;
-      rmm::mr::device_memory_resource* mr = new rmm::mr::managed_memory_resource;
+  typedef T value_type;
+  rmm::mr::device_memory_resource* mr = new rmm::mr::managed_memory_resource;
 
-      managed_allocator() = default;
+  managed_allocator() = default;
 
-      template <class U> constexpr managed_allocator(const managed_allocator<U>&) noexcept {}
-      
-      T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          return static_cast<T*>(mr->allocate( n*sizeof(T), stream ));
-      }
+  template <class U>
+  constexpr managed_allocator(const managed_allocator<U>&) noexcept
+  {
+  }
 
-      void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
-          mr->deallocate( p, n*sizeof(T), stream );
-      }
+  T* allocate(std::size_t n, cudaStream_t stream = 0) const
+  {
+    return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
+  }
+
+  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const
+  {
+    mr->deallocate(p, n * sizeof(T), stream);
+  }
 };
 
 template <class T, class U>
-bool operator==(const managed_allocator<T>&, const managed_allocator<U>&) { return true; }
+bool operator==(const managed_allocator<T>&, const managed_allocator<U>&)
+{
+  return true;
+}
 template <class T, class U>
-bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&) { return false; }
+bool operator!=(const managed_allocator<T>&, const managed_allocator<U>&)
+{
+  return false;
+}
 
 template <class T>
 struct default_allocator {
-      typedef T value_type;
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource();
+  typedef T value_type;
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource();
 
-      default_allocator() = default;
+  default_allocator() = default;
 
-      template <class U> constexpr default_allocator(const default_allocator<U>&) noexcept {}
+  template <class U>
+  constexpr default_allocator(const default_allocator<U>&) noexcept
+  {
+  }
 
-      T* allocate(std::size_t n, cudaStream_t stream = 0) const {
-          return static_cast<T*>(mr->allocate( n*sizeof(T), stream ));
-      }
+  T* allocate(std::size_t n, cudaStream_t stream = 0) const
+  {
+    return static_cast<T*>(mr->allocate(n * sizeof(T), stream));
+  }
 
-      void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const {
-          mr->deallocate( p, n*sizeof(T), stream );
-      }
+  void deallocate(T* p, std::size_t n, cudaStream_t stream = 0) const
+  {
+    mr->deallocate(p, n * sizeof(T), stream);
+  }
 };
 
 template <class T, class U>
-bool operator==(const default_allocator<T>&, const default_allocator<U>&) { return true; }
+bool operator==(const default_allocator<T>&, const default_allocator<U>&)
+{
+  return true;
+}
 template <class T, class U>
-bool operator!=(const default_allocator<T>&, const default_allocator<U>&) { return false; }
+bool operator!=(const default_allocator<T>&, const default_allocator<U>&)
+{
+  return false;
+}
 
 #endif

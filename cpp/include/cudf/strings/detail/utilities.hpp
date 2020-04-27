@@ -16,17 +16,13 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Create a chars column to be a child of a strings column.
  * This will return the properly sized column to be filled in by the caller.
@@ -38,10 +34,12 @@ namespace detail
  * @param stream Stream to use for any kernel calls.
  * @return The chars child column for a strings column.
  */
-std::unique_ptr<column> create_chars_child_column( size_type strings_count,
-    size_type null_count, size_type bytes,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+std::unique_ptr<column> create_chars_child_column(
+  size_type strings_count,
+  size_type null_count,
+  size_type bytes,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Create a strings column with no strings.
@@ -51,8 +49,7 @@ std::unique_ptr<column> create_chars_child_column( size_type strings_count,
  * @return Empty strings column
  */
 std::unique_ptr<column> make_empty_strings_column(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(), cudaStream_t stream = 0);
 
 /**
  * @brief Creates a string_view vector from a strings column.
@@ -61,9 +58,8 @@ std::unique_ptr<column> make_empty_strings_column(
  * @param stream Stream to execute any device code against.
  * @return Device vector of string_views
  */
-rmm::device_vector<string_view> create_string_vector_from_column(
-    cudf::strings_column_view strings,
-    cudaStream_t stream=0 );
+rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
+                                                                 cudaStream_t stream = 0);
 
 /**
  * @brief Creates an offsets column from a string_view vector.
@@ -74,9 +70,9 @@ rmm::device_vector<string_view> create_string_vector_from_column(
  * @return Child offsets column
  */
 std::unique_ptr<cudf::column> child_offsets_from_string_vector(
-    const rmm::device_vector<string_view>& strings,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream=0 );
+  const rmm::device_vector<string_view>& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Creates a chars column from a string_view vector.
@@ -89,12 +85,12 @@ std::unique_ptr<cudf::column> child_offsets_from_string_vector(
  * @return Child chars column
  */
 std::unique_ptr<cudf::column> child_chars_from_string_vector(
-    const rmm::device_vector<string_view>& strings,
-    const int32_t* d_offsets, cudf::size_type null_count,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream=0 );
+  const rmm::device_vector<string_view>& strings,
+  const int32_t* d_offsets,
+  cudf::size_type null_count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf
