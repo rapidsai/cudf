@@ -277,8 +277,9 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  * @copydoc cudf::experimental::io::write_parquet_chunked_begin
  *
  **/
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(write_parquet_chunked_args const& args,
-                                                              rmm::mr::device_memory_resource*  mr) {
+std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
+  write_parquet_chunked_args const& args, rmm::mr::device_memory_resource* mr)
+{
   parquet::writer_options options{args.compression, args.stats_level};
 
   auto writer                  = make_writer<parquet::writer>(args.sink, options, mr);
