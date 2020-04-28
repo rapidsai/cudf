@@ -265,6 +265,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
     // Exclude the end-of-data row from number of rows with actual data
     num_records = row_offsets.size();
     num_records -= (num_records > 0);
+  } else {
+    num_records = 0;
   }
 
   // Check if the user gave us a list of column names
@@ -357,24 +359,31 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
   }
 
-  if (num_records != 0) { decode_data(column_types, out_buffers, stream); }
+  if (num_records != 0) {
+    decode_data(column_types, out_buffers, stream);
 
-  for (size_t i = 0; i < column_types.size(); ++i) {
-    if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
-        opts.doublequote == true && num_records != 0) {
-      // PANDAS' default behavior of enabling doublequote for two consecutive
-      // quotechars in quoted fields results in reduction to a single quotechar
-      // TODO: Would be much more efficient to perform this operation in-place
-      // during the conversion stage
-      const std::string quotechar(1, opts.quotechar);
-      const std::string dblquotechar(2, opts.quotechar);
-      std::unique_ptr<column> col =
-        make_column(column_types[i], num_records, out_buffers[i], stream, mr_);
-      out_columns.emplace_back(
-        cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
-    } else {
-      out_columns.emplace_back(
-        make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
+          opts.doublequote == true && num_records != 0) {
+        // PANDAS' default behavior of enabling doublequote for two consecutive
+        // quotechars in quoted fields results in reduction to a single quotechar
+        // TODO: Would be much more efficient to perform this operation in-place
+        // during the conversion stage
+        const std::string quotechar(1, opts.quotechar);
+        const std::string dblquotechar(2, opts.quotechar);
+        std::unique_ptr<column> col =
+          make_column(column_types[i], num_records, out_buffers[i], stream, mr_);
+        out_columns.emplace_back(
+          cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
+      } else {
+        out_columns.emplace_back(
+          make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
+      }
+    }
+  } else {
+    // Create empty columns
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      out_columns.emplace_back(make_empty_column(column_types[i]));
     }
   }
 
@@ -424,6 +433,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                                                  buffer_pos,
                                                                  h_size,
                                                                  range_begin,
+                                                                 range_end,
                                                                  skip_rows,
                                                                  0,
                                                                  opts,
@@ -460,10 +470,29 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                              buffer_pos,
                                              h_size,
                                              range_begin,
+                                             range_end,
                                              skip_rows,
                                              num_row_offsets,
                                              opts,
                                              stream);
+      // With byte range, we want to keep only one row out of the specified range
+      if (range_end < h_size) {
+        CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
+                                 row_ctx.device_ptr(),
+                                 num_blocks * sizeof(uint64_t),
+                                 cudaMemcpyDeviceToHost,
+                                 stream));
+        CUDA_TRY(cudaStreamSynchronize(stream));
+        size_t rows_out_of_range = 0;
+        for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
+        if (rows_out_of_range != 0) {
+          // Keep one row out of range (used to infer length of previous row)
+          num_row_offsets -= std::min(rows_out_of_range - 1, num_row_offsets);
+          row_offsets.resize(num_row_offsets);
+          // Implies we reached the end of the range
+          break;
+        }
+      }
       if (num_rows > 0 && num_row_offsets > static_cast<size_t>(num_rows)) {
         // Got the desired number of rows
         break;

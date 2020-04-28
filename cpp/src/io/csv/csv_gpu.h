@@ -83,6 +83,8 @@ inline __host__ __device__ uint64_t select_row_context(uint64_t sel_ctx, uint64_
  * individual block and total row count.
  * The second phase outputs the location of each row in the block, using the parsing
  * context and initial row counter resulting from the previous phase.
+ * Row parsing context will be updated after phase 2 such that the value contains
+ * the number of rows starting at byte_range_end or beyond.
  *
  * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
  * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
@@ -92,6 +94,7 @@ inline __host__ __device__ uint64_t select_row_context(uint64_t sel_ctx, uint64_
  * @param start_offset Position of the start of the character buffer in the file
  * @param data_size CSV file size
  * @param byte_range_start Ignore rows starting before this position in the file
+ * @param byte_range_end In phase 2, store the number of rows beyond range in row_ctx
  * @param skip_rows Number of rows to skip (ignored in phase 1)
  * @param num_row_offsets Number of entries in offsets_out array
  * @param options Options that control parsing of individual fields
@@ -107,6 +110,7 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
                             size_t start_offset,
                             size_t data_size,
                             size_t byte_range_start,
+                            size_t byte_range_end,
                             size_t skip_rows,
                             size_t num_row_offsets,
                             const cudf::experimental::io::ParseOptions &options,

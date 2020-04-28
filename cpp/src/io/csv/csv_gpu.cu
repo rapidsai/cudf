@@ -721,6 +721,8 @@ static inline __device__ uint32_t rowctx_inverse_merge_transform(uint64_t ctxtre
  * individual block and total row count.
  * The second phase outputs the location of each row in the block, using the parsing
  * context and initial row counter resulting from the previous phase.
+ * Row parsing context will be updated after phase 2 such that the value contains
+ * the number of rows starting at byte_range_end or beyond.
  *
  * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
  * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
@@ -730,6 +732,7 @@ static inline __device__ uint32_t rowctx_inverse_merge_transform(uint64_t ctxtre
  * @param start_offset Position of the start of the character buffer in the file
  * @param data_size CSV file size
  * @param byte_range_start Ignore rows starting before this position in the file
+ * @param byte_range_end In phase 2, store the number of rows beyond range in row_ctx
  * @param skip_rows Number of rows to skip (ignored in phase 1)
  * @param num_row_offsets Number of entries in offsets_out array
  * @param terminator Line terminator character
@@ -748,6 +751,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            size_t start_offset,
                                                                            size_t data_size,
                                                                            size_t byte_range_start,
+                                                                           size_t byte_range_end,
                                                                            size_t skip_rows,
                                                                            size_t num_row_offsets,
                                                                            int terminator,
@@ -843,8 +847,9 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     __syncthreads();
 
     // Walk back the transform tree with the initial row context
-    uint32_t ctx = rowctx_inverse_merge_transform(ctxtree, t);
-    uint64_t row = (ctxtree[0] >> 2) + (ctx >> 2);
+    uint32_t ctx               = rowctx_inverse_merge_transform(ctxtree, t);
+    uint64_t row               = (ctxtree[0] >> 2) + (ctx >> 2);
+    uint32_t rows_out_of_range = 0;
     uint32_t rowmap =
       ((ctx & 3) == ROW_CTX_NONE)
         ? ctx_map.x
@@ -856,9 +861,18 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       if (row >= skip_rows && row - skip_rows < num_row_offsets) {
         // Output byte offsets are relative to the base of the input buffer
         offsets_out[row - skip_rows] = block_pos - 1;
+        rows_out_of_range += (block_pos - 1 >= byte_range_end);
       }
       row++;
       rowmap >>= pos;
+    }
+    rows_out_of_range = WarpReduceSum16(rows_out_of_range);
+    __syncthreads();
+    if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
+    __syncthreads();
+    if (t < 32) {
+      rows_out_of_range = WarpReduceSum32(static_cast<uint32_t>(ctxtree[t]));
+      if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {
     // Just store the row counts
@@ -918,6 +932,7 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
                                      size_t start_offset,
                                      size_t data_size,
                                      size_t byte_range_start,
+                                     size_t byte_range_end,
                                      size_t skip_rows,
                                      size_t num_row_offsets,
                                      const ParseOptions &options,
@@ -933,6 +948,7 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
     start_offset,
     data_size,
     byte_range_start,
+    byte_range_end,
     skip_rows,
     num_row_offsets,
     options.terminator,
