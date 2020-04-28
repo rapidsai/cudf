@@ -902,6 +902,83 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
 
+TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
+{
+  using TypeOut = float;
+  using TypeLhs = float;
+  using TypeRhs = float;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-86099.68377);
+  auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
+
+  auto out =
+    cudf::experimental::binary_operation(lhs,
+                                         rhs,
+                                         cudf::experimental::binary_operator::POSITIVE_REMAINDER,
+                                         data_type(experimental::type_to_id<TypeOut>()));
+
+  auto out_h    = cudf::test::to_host<TypeOut>(*out);
+  auto out_data = out_h.first;
+  for (size_t i = 0; i < out_data.size(); ++i) {
+    EXPECT_TRUE(out_data[i] > 0);
+  }
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = double;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
+  auto rhs = cudf::experimental::scalar_type_t<TypeRhs>(-86099.68377);
+
+  auto out =
+    cudf::experimental::binary_operation(lhs,
+                                         rhs,
+                                         cudf::experimental::binary_operator::POSITIVE_REMAINDER,
+                                         data_type(experimental::type_to_id<TypeOut>()));
+
+  auto out_h    = cudf::test::to_host<TypeOut>(*out);
+  auto out_data = out_h.first;
+  for (size_t i = 0; i < out_data.size(); ++i) {
+    EXPECT_TRUE(out_data[i] > 0);
+  }
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI32_FP32_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = float;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs =
+    fixed_width_column_wrapper<TypeLhs>{{24854.55893, 79946.87288, -86099.68377, -86099.68377}};
+  auto rhs =
+    fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 36223.96138, -15456.4335}};
+
+  auto out =
+    cudf::experimental::binary_operation(lhs,
+                                         rhs,
+                                         cudf::experimental::binary_operator::POSITIVE_REMAINDER,
+                                         data_type(experimental::type_to_id<TypeOut>()));
+
+  auto out_h    = cudf::test::to_host<TypeOut>(*out);
+  auto out_data = out_h.first;
+  for (size_t i = 0; i < out_data.size(); ++i) {
+    EXPECT_TRUE(out_data[i] > 0);
+  }
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf

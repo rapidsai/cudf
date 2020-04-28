@@ -186,6 +186,48 @@ struct LogBase {
   }
 };
 
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct PMod {
+  using CommonArgsT = typename std::common_type<TypeLhs, TypeRhs>::type;
+
+  template <typename RemainderT, typename DivisorT>
+  TypeOut positive_remainder(RemainderT rem, DivisorT div) const
+  {
+    if (rem < 0) rem += (div < 0) ? -div : div;
+    return TypeOut{rem};
+  }
+
+  template <typename LhsT = TypeLhs, typename RhsT = TypeRhs, typename CommonT = CommonArgsT>
+  typename std::enable_if_t<std::is_integral<CommonT>::value, TypeOut> operator()(LhsT x,
+                                                                                  RhsT y) const
+  {
+    auto xconv = CommonT{x};
+    auto yconv = CommonT{y};
+    auto rem   = xconv % yconv;
+    return positive_remainder(rem, yconv);
+  }
+
+  template <typename LhsT = TypeLhs, typename RhsT = TypeRhs, typename CommonT = CommonArgsT>
+  typename std::enable_if_t<std::is_same<CommonT, float>::value, TypeOut> operator()(LhsT x,
+                                                                                     RhsT y) const
+  {
+    auto xconv = float{x};
+    auto yconv = float{y};
+    auto rem   = fmodf(xconv, yconv);
+    return positive_remainder(rem, yconv);
+  }
+
+  template <typename LhsT = TypeLhs, typename RhsT = TypeRhs, typename CommonT = CommonArgsT>
+  typename std::enable_if_t<std::is_same<CommonT, double>::value, TypeOut> operator()(LhsT x,
+                                                                                      RhsT y) const
+  {
+    auto xconv = double{x};
+    auto yconv = double{y};
+    auto rem   = fmod(xconv, yconv);
+    return positive_remainder(rem, yconv);
+  }
+};
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf

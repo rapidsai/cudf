@@ -400,6 +400,60 @@ const char* operation =
             return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
         }
     };
+
+    struct PMod {
+        template <typename TypeOut>
+        struct PositiveRemainder {
+            template <typename RemainderT, typename DivisorT>
+            TypeOut operator()(RemainderT rem, DivisorT div) const {
+                if (rem < 0) rem += (div < 0) ? -div : div;
+                return TypeOut{rem};
+            }
+        };
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            auto xconv = common_t{x};
+            auto yconv = common_t{y};
+            auto rem = xconv % yconv;
+            return PositiveRemainder<TypeOut>()(rem, yconv);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(isFloat<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            auto xconv = float{x};
+            auto yconv = float{y};
+            auto rem = fmodf(xconv, yconv);
+            return PositiveRemainder<TypeOut>()(rem, yconv);
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(isDouble<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            auto xconv = double{x};
+            auto yconv = double{y};
+            auto rem = fmod(xconv, yconv);
+            return PositiveRemainder<TypeOut>()(rem, yconv);
+        }
+    };
+
+    struct RPMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return PMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
 )***";
 
 }  // namespace code
