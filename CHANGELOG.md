@@ -127,7 +127,7 @@
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
-= PR #4822 RAII-ify `pq_chunked_state`
+- PR #4822 Add constructor to `pq_chunked_state` and use RAII idiom
 
 ## Bug Fixes
 
