@@ -28,8 +28,8 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/writers.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/io/writers.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -45,7 +45,7 @@ namespace csv {
 
 using namespace cudf::io::csv;
 using namespace cudf::io;
-  
+
 /**
  * @brief Implementation for CSV writer
  **/
@@ -70,9 +70,8 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write(table_view const& table,
-             const table_metadata *metadata = nullptr,
-             cudaStream_t stream = nullptr);
-
+             const table_metadata* metadata = nullptr,
+             cudaStream_t stream            = nullptr);
 
   /**
    * @brief Write the header of a CSV format.
@@ -82,8 +81,8 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write_chunked_begin(table_view const& table,
-                           const table_metadata *metadata = nullptr,
-                           cudaStream_t stream = nullptr);
+                           const table_metadata* metadata = nullptr,
+                           cudaStream_t stream            = nullptr);
 
   /**
    * @brief Write dataset to CSV format without header.
@@ -93,8 +92,8 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write_chunked(strings_column_view const& strings_column,
-                     const table_metadata *metadata = nullptr,
-                     cudaStream_t stream = nullptr);
+                     const table_metadata* metadata = nullptr,
+                     cudaStream_t stream            = nullptr);
 
   /**
    * @brief Write footer of CSV format (typically, empty).
@@ -104,16 +103,16 @@ class writer::impl {
    * @param stream Stream to use for memory allocation and kernels
    **/
   void write_chunked_end(table_view const& table,
-                         const table_metadata *metadata = nullptr,
-                         cudaStream_t stream = nullptr)
+                         const table_metadata* metadata = nullptr,
+                         cudaStream_t stream            = nullptr)
   {
-    //purposely no-op (for now);
+    // purposely no-op (for now);
   }
 
-private:
+ private:
   std::unique_ptr<data_sink> out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
-  writer_options const& options_;
+  writer_options const options_;
 };
 
 }  // namespace csv
