@@ -5,6 +5,7 @@ import numpy as np
 from . import (
     avro,
     binaryop,
+    csv,
     concat,
     copying,
     datetime,
@@ -31,6 +32,7 @@ from . import (
     table,
     transpose,
     unary,
+    io
 )
 
 MAX_COLUMN_SIZE = np.iinfo(np.int32).max

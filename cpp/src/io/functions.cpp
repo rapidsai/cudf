@@ -117,6 +117,7 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
   options.skipinitialspace = args.skipinitialspace;
   options.skip_blank_lines = args.skip_blank_lines;
   options.header           = args.header;
+  options.infer_date_names = args.infer_date_names;
   options.names            = args.names;
   options.dtype            = args.dtype;
   options.use_cols_indexes = args.use_cols_indexes;
