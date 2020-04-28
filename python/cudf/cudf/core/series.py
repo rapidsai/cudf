@@ -3152,7 +3152,9 @@ class Series(Frame):
                     "The 'method' argument is deprecated and will be unused",
                     DeprecationWarning,
                 )
-            return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
+            return SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
 
     @copy_docstring(Rolling)
     def rolling(
