@@ -47,11 +47,12 @@ enum class strip_type {
  *
  * Any null string entries return corresponding null output column entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = [" aaa ", "_bbbb ", "__cccc  ", "ddd", " ee _ff gg_"]
  * r = strip(s,both," _")
  * r is now ["aaa", "bbbb", "cccc", "ddd", "ee _ff gg"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if `to_strip` is invalid.
  *

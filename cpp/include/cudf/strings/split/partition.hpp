@@ -40,13 +40,14 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
- * r = rpartition(s,"_")
+ * r = partition(s,"_")
  * r[0] is ["ab","def"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","g_h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
@@ -71,13 +72,14 @@ std::unique_ptr<experimental::table> partition(
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
  * r = rpartition(s,"_")
  * r[0] is ["ab","def_g"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.

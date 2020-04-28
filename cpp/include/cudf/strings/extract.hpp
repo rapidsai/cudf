@@ -36,12 +36,15 @@ namespace strings {
  *
  * Any null string entries return corresponding null output column entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["a1","b2","c3"]
  * r = extract(s,"([ab])(\\d)")
  * r is now [["a","b",null],
  *           ["1","2",null]]
- * ```
+ * @endcode
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.

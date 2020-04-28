@@ -36,6 +36,8 @@ namespace strings {
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
  * @param mr Resource for allocating device memory.

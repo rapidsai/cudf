@@ -34,12 +34,13 @@ namespace strings {
  *
  * Null string entries result in null entries in the output column.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["aa","bbb","cccc","abcd"]
  * t = [['a','A'],['b',''],['d':'Q']]
  * r = translate(s,t)
  * r is now ["AA", "", "cccc", "AcQ"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param chars_table Table of UTF-8 character mappings.

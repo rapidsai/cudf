@@ -31,13 +31,16 @@ namespace strings {
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abc","123","def456"]
  * r = contains(s,"\\d+")
  * r is now [false, true, true]
- * ```
+ * @endcode
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
@@ -53,13 +56,16 @@ std::unique_ptr<column> contains_re(
  * @brief Returns a boolean column identifying rows which
  * matching the given regex pattern but only at the beginning the string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abc","123","def456"]
  * r = contains(s,"\\d+")
  * r is now [false, true, false]
- * ```
+ * @endcode
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
@@ -75,13 +81,16 @@ std::unique_ptr<column> matches_re(
  * @brief Returns the number of times the given regex pattern
  * matches in each string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abc","123","def45"]
  * r = contains(s,"\\d")
  * r is now [0, 3, 2]
- * ```
+ * @endcode
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.

@@ -32,7 +32,7 @@ namespace strings {
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column.
  *
- * The character positions to retrieve in each string are [start,stop).
+ * The character positions to retrieve in each string are `[start,stop)`.
  * If the start position is outside a string's length, an empty
  * string is returned for that entry. If the stop position is past the
  * end of a string's length, the end of the string is used for
@@ -40,13 +40,14 @@ namespace strings {
  *
  * Null string entries will return null output string entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * r = substring(s,2,6)
  * r is now ["llo","odby"]
  * r2 = substring(s,2,5,2)
  * r2 is now ["lo","ob"]
- * ```
+ * @endcode
  *
  * @param strings Strings column for this operation.
  * @param start First character position to begin the substring.
@@ -66,7 +67,8 @@ std::unique_ptr<column> slice_strings(
  * @brief Returns a new strings column that contains substrings of the
  * strings in the provided column using unique ranges for each string.
  *
- * The character positions to retrieve in each string are [start,stop).
+ * The character positions to retrieve in each string are specified in
+ * the `starts` and `stops` integer columns.
  * If a start position is outside a string's length, an empty
  * string is returned for that entry. If a stop position is past the
  * end of a string's length, the end of the string is used for
@@ -79,13 +81,14 @@ std::unique_ptr<column> slice_strings(
  * The starts and stops column must both be the same integer type and
  * must be the same size as the strings column.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * starts = [ 1, 2 ]
  * stops = [ 5, 4 ]
  * r = substring_from(s,starts,stops)
  * r is now ["ello","od"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if starts or stops is a different size than the strings column.
  * @throw cudf::logic_error if starts and stops are not same integer type.

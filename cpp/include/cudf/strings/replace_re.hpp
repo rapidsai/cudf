@@ -57,6 +57,8 @@ std::unique_ptr<column> replace_re(
  *
  * Any null string entries return corresponding null output column entries.
  *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
+ *
  * @param strings Strings instance for this operation.
  * @param patterns The regular expression patterns to search within each string.
  * @param repls The strings used for replacement.
@@ -74,6 +76,8 @@ std::unique_ptr<column> replace_re(
  * using the repl template for back-references.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
