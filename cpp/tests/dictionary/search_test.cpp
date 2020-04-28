@@ -23,55 +23,58 @@
 
 #include <vector>
 
-struct DictionarySearchTest : public cudf::test::BaseFixture {};
+struct DictionarySearchTest : public cudf::test::BaseFixture {
+};
 
 TEST_F(DictionarySearchTest, StringsColumn)
 {
-    std::vector<const char*> h_strings{ "fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", nullptr };
-    cudf::test::strings_column_wrapper strings( h_strings.begin(), h_strings.end(),
-         thrust::make_transform_iterator( h_strings.begin(), [] (auto str) { return str!=nullptr; }));
+  std::vector<const char*> h_strings{"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "", nullptr};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-    auto dictionary = cudf::dictionary::encode( strings );
+  auto dictionary = cudf::dictionary::encode(strings);
 
-    cudf::string_scalar key("ccc");
-    auto result = cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),key );
-    EXPECT_TRUE( result->is_valid() );
-    EXPECT_EQ(3,result->value());
+  cudf::string_scalar key("ccc");
+  auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
+  EXPECT_TRUE(result->is_valid());
+  EXPECT_EQ(3, result->value());
 
-    cudf::string_scalar no_key("zzz");
-    result = cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),no_key );
-    EXPECT_FALSE( result->is_valid() );
+  cudf::string_scalar no_key("zzz");
+  result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
+  EXPECT_FALSE(result->is_valid());
 }
 
 TEST_F(DictionarySearchTest, WithNulls)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input( {9,8,7,6,4},{0,1,1,0,1} );
-    auto dictionary = cudf::dictionary::encode( input );
+  cudf::test::fixed_width_column_wrapper<int64_t> input({9, 8, 7, 6, 4}, {0, 1, 1, 0, 1});
+  auto dictionary = cudf::dictionary::encode(input);
 
-    cudf::numeric_scalar<int64_t> key(4);
-    auto result = cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),key );
-    EXPECT_TRUE( result->is_valid() );
-    EXPECT_EQ(0,result->value());
+  cudf::numeric_scalar<int64_t> key(4);
+  auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
+  EXPECT_TRUE(result->is_valid());
+  EXPECT_EQ(0, result->value());
 
-    cudf::numeric_scalar<int64_t> no_key(9);
-    result = cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),no_key );
-    EXPECT_FALSE( result->is_valid() );
+  cudf::numeric_scalar<int64_t> no_key(9);
+  result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), no_key);
+  EXPECT_FALSE(result->is_valid());
 }
 
 TEST_F(DictionarySearchTest, EmptyColumn)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input{};
-    auto dictionary = cudf::dictionary::encode( input );
-    cudf::numeric_scalar<int64_t> key(7);
-    auto result = cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),key );
-    EXPECT_FALSE( result->is_valid() );
+  cudf::test::fixed_width_column_wrapper<int64_t> input{};
+  auto dictionary = cudf::dictionary::encode(input);
+  cudf::numeric_scalar<int64_t> key(7);
+  auto result = cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key);
+  EXPECT_FALSE(result->is_valid());
 }
 
 TEST_F(DictionarySearchTest, Errors)
 {
-    cudf::test::fixed_width_column_wrapper<int64_t> input({1,2,3});
-    auto dictionary = cudf::dictionary::encode( input );
-    cudf::numeric_scalar<double> key(7);
-    EXPECT_THROW( cudf::dictionary::get_index( cudf::dictionary_column_view(dictionary->view()),key ),
-                  cudf::logic_error );
+  cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3});
+  auto dictionary = cudf::dictionary::encode(input);
+  cudf::numeric_scalar<double> key(7);
+  EXPECT_THROW(cudf::dictionary::get_index(cudf::dictionary_column_view(dictionary->view()), key),
+               cudf::logic_error);
 }
