@@ -151,8 +151,20 @@ std::unique_ptr<cudf::column> extract_second(
  * @returns cudf::column containing last day of the month as TIMESTAMP_DAYS
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
-
 std::unique_ptr<cudf::column> last_day_of_month(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief  Computes the day number since the start of the year from the datetime and
+ * returns an int16_t cudf::column. The value is between [1, {365-366}]
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column of datatype INT16 containing the day number since the start of the year.
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ */
+std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
