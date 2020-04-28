@@ -134,7 +134,7 @@ class TempDirTestEnvironment : public ::testing::Environment {
 
   void SetUp()
   {
-    char tmp_format[] = "/tmp/gtest.XXXXXX";
+    char tmp_format[] = "./gtest.XXXXXX";
     tmpdir            = mkdtemp(tmp_format);
     tmpdir += "/";
   }
