@@ -507,9 +507,6 @@ void reader::impl::gather_row_offsets(const char *h_data,
     }
     pos = target_pos;
   } while (pos < h_size);
-
-  // TODO/FIXME: Find a not-too-ugly way to remove all row offsets above range end
-  // except one (probably have the kernel return a count of row offsets above range end
 }
 
 size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
