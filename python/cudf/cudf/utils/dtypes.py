@@ -253,7 +253,12 @@ def check_cast_unsupported_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return dtype
-    dtype = np.dtype(dtype)
+
+    if isinstance(dtype, pd.core.arrays.numpy_.PandasDtype):
+        dtype = dtype.numpy_dtype
+    else:
+        dtype = np.dtype(dtype)
+
     if dtype in np_to_cudf_types:
         return dtype
 

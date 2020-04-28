@@ -1156,11 +1156,13 @@ class Series(Frame):
         """
         return super().dropna(subset=[self.name])
 
-    def drop_duplicates(self, keep="first", inplace=False):
+    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed
         """
-        result = super().drop_duplicates(subset=[self.name], keep=keep)
+        result = super().drop_duplicates(
+            subset=[self.name], keep=keep, ignore_index=ignore_index
+        )
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -2802,11 +2804,7 @@ class Series(Frame):
             The sequence of values to test. Passing in a single string will
             raise a TypeError. Instead, turn a single string into a list
             of one element.
-        use_name : bool
-            If ``True`` then combine hashed column values
-            with hashed column name. This is useful for when the same
-            values in different columns should be encoded
-            with different hashed values.
+
         Returns
         -------
         result: Series
