@@ -125,6 +125,7 @@
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #5028 Add Docker 19 support to local gpuci build
 
 ## Bug Fixes
 
