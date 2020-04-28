@@ -23,6 +23,10 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 
+import collections.abc as abc
+import errno
+import os
+
 from cudf.utils import ioutils
 
 from libc.stdint cimport int32_t
@@ -43,7 +47,7 @@ class Compression(IntEnum):
     GZIP = (
         <underlying_type_t_compression> compression_type.GZIP
     )
-    BZIP2 = (
+    BZ2 = (
         <underlying_type_t_compression> compression_type.BZIP2
     )
     BROTLI = (
@@ -79,7 +83,8 @@ cdef read_csv_args make_read_csv_args(
     decimal,
     true_values,
     false_values,
-    int nrows,
+    nrows,
+    byte_range,
     bool skip_blank_lines,
     parse_dates,
     comment,
@@ -90,11 +95,37 @@ cdef read_csv_args make_read_csv_args(
     index_col,
     ) except +:
 
+    if delim_whitespace:
+        if delimiter is not None:
+            raise ValueError("cannot set both delimiter and delim_whitespace")
+        if sep != ',':
+            raise ValueError("cannot set both sep and delim_whitespace")
+
+    # Alias sep -> delimiter.
+    if delimiter is None:
+        delimiter = sep
+
+    if decimal == delimiter:
+        raise ValueError("decimal cannot be the same as delimiter")
+
+    if thousands == delimiter:
+        raise ValueError("thousands cannot be the same as delimiter")
+
+
+    if nrows is not None and skipfooter != 0:
+        raise ValueError("cannot use both nrows and skipfooter parameters")
+
+    if byte_range is not None:
+        if skipfooter != 0 or skiprows != 0 or nrows is not None:
+            raise ValueError("""cannot manually limit rows to be read when
+                                using the byte range parameter""")
+
     cdef source_info c_source_info = make_source_info(filepath_or_buffer)
     cdef read_csv_args read_csv_args_c = read_csv_args(c_source_info)
     read_csv_args_c.lineterminator = ord(lineterminator)
     read_csv_args_c.quotechar = ord(quotechar)
     if quoting == 1:
+        print("RGSl : Setting quoting to ALL")
         read_csv_args_c.quoting = quote_style.QUOTE_ALL
     elif quoting == 2:
         read_csv_args_c.quoting = quote_style.QUOTE_NONNUMERIC
@@ -104,29 +135,53 @@ cdef read_csv_args make_read_csv_args(
         # Default value
         read_csv_args_c.quoting = quote_style.QUOTE_MINIMAL
     read_csv_args_c.doublequote = doublequote
-    if header == 'infer':
+    if header is None:
         read_csv_args_c.header = -1
+    elif header == 'infer':
+        read_csv_args_c.header = 0
     else:
-        read_csv_args_c.header = 1-int(header)
+        read_csv_args_c.header = header
     read_csv_args_c.mangle_dupe_cols = mangle_dupe_cols
     read_csv_args_c.delim_whitespace = delim_whitespace
     read_csv_args_c.skipinitialspace = skipinitialspace
     read_csv_args_c.skip_blank_lines = skip_blank_lines
-    read_csv_args_c.nrows = nrows
+    read_csv_args_c.nrows = nrows if nrows is not None else -1
+    read_csv_args_c.byte_range_offset = byte_range[0] if byte_range is not None else 0
+    read_csv_args_c.byte_range_size = byte_range[1] if byte_range is not None else 0
     read_csv_args_c.skiprows = skiprows
     read_csv_args_c.skipfooter = skipfooter
+    read_csv_args_c.keep_default_na = keep_default_na
+    read_csv_args_c.na_filter = na_filter
+    print ("RGSL : Setting keep_default_na to ", keep_default_na)
     if comment is not None:
         read_csv_args_c.comment = ord(comment)
     read_csv_args_c.decimal = ord(decimal)
     if thousands is not None:
         read_csv_args_c.thousands = ord(thousands)
     if prefix is not None:
-        read_csv_args_c.prefix = prefix
+        read_csv_args_c.prefix = prefix.encode()
     compression = 'none' if compression is None else compression
     compression = Compression[compression.upper()]
     read_csv_args_c.compression = <compression_type> (
         <underlying_type_t_compression> compression
     )
+
+    if usecols is not None:
+        all_int = True
+        # TODO Refactor to use `all_of()`
+        for col in usecols:
+            if not isinstance(col, int):
+                all_int = False
+                break
+        if all_int:
+            read_csv_args_c.use_cols_indexes.reserve(len(usecols))
+            read_csv_args_c.use_cols_indexes = usecols
+        else:
+            for col_name in usecols:
+                read_csv_args_c.use_cols_names.reserve(len(usecols))
+                read_csv_args_c.use_cols_names.push_back(str(col_name).encode())
+
+    """
     if usecols is not None and len(usecols) > 0:
         if isinstance(usecols[0], str):
             read_csv_args_c.use_cols_names.reserve(len(usecols))
@@ -136,16 +191,48 @@ cdef read_csv_args make_read_csv_args(
             read_csv_args_c.use_cols_indexes.reserve(len(usecols))
             for index in usecols:
                 read_csv_args_c.use_cols_indexes.push_back(index)
+    """
 
-    if names is not None and len(names) > 0:
+
+    
+    names_from_dtype = None
+    """
+    if dtype is not None:
+        if len(dtype) > 0:
+            if isinstance(dtype, abc.Mapping):
+                names_from_dtype = [None]*len(dtype.keys())
+                dtypes = [None]*len(dtype.values())
+                for idx, item in enumerate(dtype.items()):
+                    names_from_dtype[idx] = item[0]
+                    dtypes[idx] = item[1]
+            else:
+                dtypes = dtype
+            read_csv_args_c.dtype.reserve(len(dtypes))
+            for dt in dtype:
+                read_csv_args_c.dtype.push_back(str(dt).encode())
+        else:
+            read_csv_args_c.dtype.reserve(1)
+            read_csv_args_c.dtype.push_back(str(dtype).encode())
+    """
+    if dtype is not None:
+        if isinstance(dtype, abc.Mapping):
+            for k, v in dtype.items():
+                read_csv_args_c.dtype.push_back(str(str(k)+":"+str(v)).encode())
+        elif isinstance(dtype, abc.Iterable):
+            for col_dtype in dtype:
+                read_csv_args_c.dtype.push_back(str(col_dtype).encode())
+        else:
+            read_csv_args_c.dtype.push_back(str(dtype).encode())
+    
+    if names is not None:
+        # explicitly mentioned name, so don't check header
+        read_csv_args_c.header = -1
         read_csv_args_c.names.reserve(len(names))
         for name in names:
+            read_csv_args_c.names.push_back(str(name).encode())
+    elif names_from_dtype is not None:
+        for name in names_from_dtype:
             read_csv_args_c.names.push_back(name.encode())
-
-    if dtype is not None and len(dtype) > 0:
-        read_csv_args_c.dtype.reserve(len(dtype))
-        for dt in dtype:
-            read_csv_args_c.dtype.push_back(str(dt).encode())
 
     if true_values is not None and len(true_values) > 0:
         read_csv_args_c.true_values.reserve(len(true_values))
@@ -162,19 +249,15 @@ cdef read_csv_args make_read_csv_args(
         for nv in na_values:
             read_csv_args_c.na_values.push_back(nv.encode())
     
-    if sep is not None:
-        read_csv_args_c.delimiter = ord(sep)
-    elif delimiter is not None:
+    if delimiter is not None:
         read_csv_args_c.delimiter = ord(delimiter)
 
     if parse_dates is not None and len(parse_dates) > 0:
-        if isinstance(parse_dates[0], str):
-            for name in parse_dates:
-                print(" RGSL --------------- name is ", parse_dates[0])
-                read_csv_args_c.infer_date_names.push_back(name.encode())
-        else:
-            for index in parse_dates:
-                read_csv_args_c.infer_date_indexes.push_back(index)
+            for idx in parse_dates:
+                if isinstance(idx, str):
+                    read_csv_args_c.infer_date_names.push_back(idx.encode())
+                else:
+                    read_csv_args_c.infer_date_indexes.push_back(idx)
 
     read_csv_args_c.dayfirst=dayfirst
 
@@ -203,7 +286,7 @@ def read_csv(
     decimal=".",
     true_values=None,
     false_values=None,
-    nrows=-1,
+    nrows=None,
     byte_range=None,
     skip_blank_lines=True,
     parse_dates=None,
@@ -217,9 +300,17 @@ def read_csv(
 ):
     """{docstring}"""
 
+
+    
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
+    
+    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
 
     if isinstance(filepath_or_buffer, StringIO):
         filepath_or_buffer = filepath_or_buffer.read().encode()
@@ -231,7 +322,7 @@ def read_csv(
         mangle_dupe_cols, usecols, sep, delimiter, delim_whitespace,
         skipinitialspace,  names, dtype, skipfooter, skiprows, dayfirst,
         compression, thousands, decimal, true_values, false_values, nrows,
-        skip_blank_lines, parse_dates, comment, na_values, keep_default_na,
+        byte_range, skip_blank_lines, parse_dates, comment, na_values, keep_default_na,
         na_filter, prefix, index_col)
 
 
@@ -239,11 +330,26 @@ def read_csv(
     with nogil:
         c_result = move(cpp_read_csv(read_csv_arg_c))
 
-    names = [name.decode() for name in c_result.metadata.column_names]
-    return cudf.DataFrame._from_table(Table.from_unique_ptr(
+    meta_names = [name.decode() for name in c_result.metadata.column_names]
+    df = cudf.DataFrame._from_table(Table.from_unique_ptr(
         move(c_result.tbl),
-        column_names=names
+        column_names=meta_names
     ))
+
+
+    if names is not None and isinstance(names[0], (int)):
+        df.columns = [int(x) for x in df.columns]
+
+    # Set index if the index_col parameter is passed
+    if index_col is not None and index_col is not False:
+        if isinstance(index_col, int):
+            df = df.set_index(df.columns[index_col])
+        else:
+            df = df.set_index(index_col)
+
+    return df
+
+
 
 
 
