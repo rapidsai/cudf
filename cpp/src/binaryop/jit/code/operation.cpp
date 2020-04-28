@@ -401,9 +401,9 @@ const char* operation =
         }
     };
 
-    struct PMod {
+    struct PositiveRemainder {
         template <typename TypeOut>
-        struct PositiveRemainder {
+        struct AbsoluteRemainderValue {
             template <typename RemainderT, typename DivisorT>
             TypeOut operator()(RemainderT rem, DivisorT div) const {
                 if (rem < 0) rem += (div < 0) ? -div : div;
@@ -411,47 +411,41 @@ const char* operation =
             }
         };
 
+        // Ideally, these two specializations - one for integral types and one for non integral
+        // types shouldn't be required, as std::fmod should promote integral types automatically
+        // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
+        // code does not work - it is having trouble deciding between float/double overloads
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
-            auto xconv = common_t{x};
-            auto yconv = common_t{y};
+            common_t xconv{x};
+            common_t yconv{y};
             auto rem = xconv % yconv;
-            return PositiveRemainder<TypeOut>()(rem, yconv);
+            return AbsoluteRemainderValue<TypeOut>()(rem, yconv);
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isFloat<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            auto xconv = float{x};
-            auto yconv = float{y};
-            auto rem = fmodf(xconv, yconv);
-            return PositiveRemainder<TypeOut>()(rem, yconv);
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(isDouble<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            auto xconv = double{x};
-            auto yconv = double{y};
-            auto rem = fmod(xconv, yconv);
-            return PositiveRemainder<TypeOut>()(rem, yconv);
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = std::fmod(xconv, yconv);
+            return AbsoluteRemainderValue<TypeOut>()(rem, yconv);
         }
     };
 
-    struct RPMod {
+    struct RPositiveRemainder {
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return PMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+            return PositiveRemainder::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 )***";
