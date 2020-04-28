@@ -776,7 +776,7 @@ class MultiIndex(Index):
     def is_unique(self):
         if not hasattr(self, "_is_unique"):
             self._is_unique = len(self._source_data) == len(
-                self._source_data.drop_duplicates()
+                self._source_data.drop_duplicates(ignore_index=True)
             )
         return self._is_unique
 
