@@ -58,10 +58,10 @@ class Merge(object):
         libcudf_result = libcudf.join.join(
             self.lhs,
             self.rhs,
-            self.left_on,
-            self.right_on,
             self.how,
             self.method,
+            left_on=self.left_on,
+            right_on=self.right_on,
             left_index=self.left_index,
             right_index=self.right_index,
         )
@@ -69,21 +69,17 @@ class Merge(object):
         return result
 
     def preprocess_merge_params(self, on, left_on, right_on, lsuffix, rsuffix):
+        assert not (on and left_on) or (on and right_on)
         if on:
             on = [on] if isinstance(on, str) else list(on)
             left_on = right_on = on
         else:
-            on = []
-        if left_on:
-            left_on = [left_on] if isinstance(left_on, str) else list(left_on)
-        else:
-            left_on = []
-        if right_on:
-            right_on = (
-                [right_on] if isinstance(right_on, str) else list(right_on)
-            )
-        else:
-            right_on = []
+            if left_on:
+                left_on = [left_on] if isinstance(left_on, str) else list(left_on)
+            if right_on:
+                right_on = (
+                    [right_on] if isinstance(right_on, str) else list(right_on)
+                )
 
         same_named_columns = set(self.lhs._data.keys()) & set(
             self.rhs._data.keys()
@@ -95,22 +91,25 @@ class Merge(object):
 
         no_suffix_cols = []
         for name in same_named_columns:
-            if left_on is not None and right_on is not None:
-                if name in left_on and name in right_on:
-                    if left_on.index(name) == right_on.index(name):
-                        no_suffix_cols.append(name)
+            if (
+                (left_on and right_on)
+                and (name in left_on and name in right_on)
+                and (left_on.index(name) == right_on.index(name))
+            ):
+                no_suffix_cols.append(name)
+
 
         for name in same_named_columns:
             if name not in no_suffix_cols:
                 self.lhs.rename({name: f"{name}{lsuffix}"}, inplace=True)
                 self.rhs.rename({name: f"{name}{rsuffix}"}, inplace=True)
-                if name in left_on:
+                if left_on and name in left_on:
                     left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                if name in right_on:
+                if right_on and name in right_on:
                     right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         self.left_on = left_on if left_on is not None else []
-        self.right_on = right_on if left_on is not None else []
+        self.right_on = right_on if right_on is not None else []
         self.lsuffix = lsuffix
         self.rsuffix = rsuffix
 

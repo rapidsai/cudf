@@ -18,10 +18,10 @@ from cudf.core.join.join import Merge
 
 cpdef join(Table lhs,
            Table rhs,
-           object left_on,
-           object right_on,
            object how,
            object method,
+           object left_on=[],
+           object right_on=[],
            bool left_index=False,
            bool right_index=False
            ):
