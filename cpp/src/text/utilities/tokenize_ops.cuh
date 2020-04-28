@@ -36,6 +36,12 @@ using position_pair     = thrust::pair<cudf::size_type, cudf::size_type>;
  * current token's byte offsets within the string.
  */
 struct characters_tokenizer {
+  /**
+   * @brief Constructor for characters_tokenizer.
+   *
+   * @param d_str The string to tokenize.
+   * @param d_delimiter The (optional) delimiter to locate tokens.
+   */
   __device__ characters_tokenizer(cudf::string_view const& d_str,
                                   cudf::string_view const& d_delimiter = cudf::string_view{})
     : d_str{d_str},
@@ -106,6 +112,8 @@ struct characters_tokenizer {
   /**
    * @brief Returns the byte offsets for the current token
    * within this string.
+   *
+   * @return Byte positions of the current token.
    */
   __device__ position_pair token_byte_positions()
   {
@@ -113,12 +121,12 @@ struct characters_tokenizer {
   }
 
  private:
-  cudf::string_view const d_str;          // string to tokenize
-  cudf::string_view const d_delimiter;    // delimiter characters
-  bool spaces;                            // true if current position is delimiter
-  cudf::string_view::const_iterator itr;  // current position in d_str
-  cudf::size_type start_position;         // starting character position of token found
-  cudf::size_type end_position;           // ending character position (excl) of token found
+  cudf::string_view const d_str;          ///< string to tokenize
+  cudf::string_view const d_delimiter;    ///< delimiter characters
+  bool spaces;                            ///< true if current position is delimiter
+  cudf::string_view::const_iterator itr;  ///< current position in d_str
+  cudf::size_type start_position;         ///< starting character position of token found
+  cudf::size_type end_position;           ///< ending character position (excl) of token found
 };
 
 /**
@@ -129,10 +137,10 @@ struct characters_tokenizer {
  * positions into the d_tokens vector.
  */
 struct strings_tokenizer {
-  cudf::column_device_view const d_strings;  // strings to tokenize
-  cudf::string_view const d_delimiter;       // delimiter characters to tokenize around
-  cudf::size_type* d_offsets{};              // offsets into the d_tokens vector for each string
-  string_index_pair* d_tokens{};             // token positions in device memory
+  cudf::column_device_view const d_strings;  ///< strings to tokenize
+  cudf::string_view const d_delimiter;       ///< delimiter characters to tokenize around
+  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens vector for each string
+  string_index_pair* d_tokens{};             ///< token positions in device memory
 
   /**
    * @brief Identifies the token positions within each string.
@@ -173,11 +181,11 @@ using delimiterator = cudf::column_device_view::const_iterator<cudf::string_view
  * each string of a given strings column.
  */
 struct multi_delimiter_strings_tokenizer {
-  cudf::column_device_view const d_strings;  // strings column to tokenize
-  delimiterator delimiters_begin;            // first delimiter
-  delimiterator delimiters_end;              // last delimiter
-  cudf::size_type* d_offsets{};              // offsets into the d_tokens output vector
-  string_index_pair* d_tokens{};             // token positions found for each string
+  cudf::column_device_view const d_strings;  ///< strings column to tokenize
+  delimiterator delimiters_begin;            ///< first delimiter
+  delimiterator delimiters_end;              ///< last delimiter
+  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens output vector
+  string_index_pair* d_tokens{};             ///< token positions found for each string
 
   /**
    * @brief Identifies the token positions within each string.

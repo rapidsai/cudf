@@ -28,6 +28,9 @@ namespace strings {
  * @{
  */
 
+/**
+ * @brief Direction identifier for strip() function.
+ */
 enum class strip_type {
   LEFT,   //<< strip characters from the beginning of the string
   RIGHT,  //<< strip characters from the end of the string
