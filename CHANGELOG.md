@@ -18,6 +18,7 @@
 
 ## Improvements
 
+- PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
@@ -116,6 +117,7 @@
 - PR #4960 Return the result of `to_json`
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
+- PR #4967 Add more comments to top-level gpuinflate and debrotli kernels
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 - PR #4994 clang-format "cpp/tests" directory
@@ -210,6 +212,7 @@
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5030 Fix Groupby sort=True
 
 
 # cuDF 0.13.0 (31 Mar 2020)
