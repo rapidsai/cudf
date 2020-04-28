@@ -2668,7 +2668,7 @@ class DataFrame(Frame):
             }
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
-            return self.loc[boolmask]
+            return self._apply_boolean_mask(boolmask)
 
     @applyutils.doc_apply()
     def apply_rows(
