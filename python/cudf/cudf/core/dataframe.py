@@ -2663,14 +2663,7 @@ class DataFrame(Frame):
             }
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
-
-            selected = Series(boolmask)
-            newdf = DataFrame()
-            for col_name in self._data.names:
-                newseries = self[col_name][selected]
-                newdf[col_name] = newseries
-            result = newdf
-            return result
+            return self.loc[boolmask]
 
     @applyutils.doc_apply()
     def apply_rows(
