@@ -34,6 +34,16 @@ namespace strings {
  * The number of output columns is determined by the string with the most
  * matches.
  *
+ * @code{.pseudo}
+ * Example:
+ * s = ["bunny","rabbit"]
+ * r = findall(s, "[ab]"")
+ * r is now a table of 3 columns:
+ *   ["b","a"]
+ *   [null,"b"]
+ *   [null,"b"]
+ * @endcode
+ *
  * Any null string entries return corresponding null output column entries.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.

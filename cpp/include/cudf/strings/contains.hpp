@@ -34,7 +34,7 @@ namespace strings {
  * @code{.pseudo}
  * Example:
  * s = ["abc","123","def456"]
- * r = contains(s,"\\d+")
+ * r = contains_re(s,"\\d+")
  * r is now [false, true, true]
  * @endcode
  *
@@ -59,7 +59,7 @@ std::unique_ptr<column> contains_re(
  * @code{.pseudo}
  * Example:
  * s = ["abc","123","def456"]
- * r = contains(s,"\\d+")
+ * r = matches_re(s,"\\d+")
  * r is now [false, true, false]
  * @endcode
  *
@@ -84,7 +84,7 @@ std::unique_ptr<column> matches_re(
  * @code{.pseudo}
  * Example:
  * s = ["abc","123","def45"]
- * r = contains(s,"\\d")
+ * r = count_re(s,"\\d")
  * r is now [0, 3, 2]
  * @endcode
  *
