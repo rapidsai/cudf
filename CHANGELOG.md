@@ -208,6 +208,7 @@
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5029 Change temporary dir to working dir for cudf io tests
 
 
 # cuDF 0.13.0 (31 Mar 2020)
