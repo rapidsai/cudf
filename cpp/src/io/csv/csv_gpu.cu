@@ -26,9 +26,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <io/utilities/parsing_utils.cuh>
-
 #include <cuda_runtime.h>
+
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/parsing_utils.cuh>
 
 using namespace ::cudf::experimental::io;
 
@@ -36,6 +37,7 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
+
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
@@ -570,6 +572,299 @@ __global__ void convertCsvToGdf(const char *raw_csv,
   }
 }
 
+/**
+ * @brief merge two packed row contexts (each corresponding to a block of characters)
+ * and returns the packed row context corresponding to the merged character block
+ **/
+inline __device__ uint64_t merge_row_contexts(uint64_t first_ctx, uint32_t second_ctx)
+{
+  uint32_t id0 = get_row_context(first_ctx, ROW_CTX_NONE) & 3;
+  uint32_t id1 = get_row_context(first_ctx, ROW_CTX_QUOTE) & 3;
+  uint32_t id2 = get_row_context(first_ctx, ROW_CTX_COMMENT) & 3;
+  return (first_ctx & ~pack_row_contexts(3, 3, 3)) +
+         pack_row_contexts(get_row_context(second_ctx, id0),
+                           get_row_context(second_ctx, id1),
+                           get_row_context(second_ctx, id2));
+}
+
+/**
+ * @brief Short row context:
+ * 1-bit count (0 or 1) per context in the lower 4 bits
+ * 2-bit output context id per input context in bits 8..15
+ **/
+inline __device__ uint32_t make_short_row_context(uint32_t id0,
+                                                  uint32_t id1,
+                                                  uint32_t id2 = ROW_CTX_COMMENT,
+                                                  uint32_t c0  = 0,
+                                                  uint32_t c1  = 0,
+                                                  uint32_t c2  = 0)
+{
+  return (id0 << 8) | (id1 << 10) | (id2 << 12) | (ROW_CTX_EOF << 14) | (c0) | (c1 << 1) |
+         (c2 << 2);
+}
+
+/**
+ * @brief Merge a short row context to keep track of bitmasks where new rows occur
+ **/
+inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, uint32_t pos)
+{
+  uint32_t id0 = (ctx.w >> 0) & 3;
+  uint32_t id1 = (ctx.w >> 2) & 3;
+  uint32_t id2 = (ctx.w >> 4) & 3;
+  ctx.x |= ((ctx_short >> id0) & 1) << pos;
+  ctx.y |= ((ctx_short >> id1) & 1) << pos;
+  ctx.z |= ((ctx_short >> id2) & 1) << pos;
+  ctx.w = ((ctx_short >> (8 + id0 * 2)) & 0x03) | ((ctx_short >> (6 + id1 * 2)) & 0x0c) |
+          ((ctx_short >> (4 + id2 * 2)) & 0x30) | (ROW_CTX_EOF << 6);
+}
+
+/**
+ * @brief 512-wide row context merge transform
+ *
+ * Repeatingly merge row context blocks, keeping track of each merge operation
+ * in a context tree so that the transform is reversible
+ * The tree is organized such that the left and right children of node n
+ * are located at indices n*2 and n*2+1, the root node starting at index 1
+ *
+ * Each node contains the counts and output contexts corresponding to the
+ * possible input contexts.
+ * Each parent node's count is obtained by adding the corresponding counts
+ * from the left child node with the right child node's count selected from
+ * the left child node's output context:
+ *   parent.count[k] = left.count[k] + right.count[left.outctx[k]]
+ *   parent.outctx[k] = right.outctx[left.outctx[k]]
+ *
+ * @param ctxtree[out] packed row context tree
+ * @param ctxb[in] packed row context for the current character block
+ * @param t thread id (leaf node id)
+ *
+ **/
+static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
+                                                     uint64_t ctxb,
+                                                     uint32_t t)
+{
+  uint64_t tmp;
+
+#define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
+  tmp = SHFL_XOR(ctxb, lanemask);                                           \
+  if (!(t & (tmask))) {                                                     \
+    ctxb                                   = merge_row_contexts(ctxb, tmp); \
+    ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
+  }
+
+  ctxtree[512 + t] = ctxb;
+  CTX_MERGE(1, 0x1, 256, 1);
+  CTX_MERGE(2, 0x3, 128, 2);
+  CTX_MERGE(4, 0x7, 64, 3);
+  CTX_MERGE(8, 0xf, 32, 4);
+  __syncthreads();
+  if (t < 32) {
+    ctxb = ctxtree[32 + t];
+    CTX_MERGE(1, 0x1, 16, 1);
+    CTX_MERGE(2, 0x3, 8, 2);
+    CTX_MERGE(4, 0x7, 4, 3);
+    CTX_MERGE(8, 0xf, 2, 4);
+    // Final stage
+    tmp = SHFL_XOR(ctxb, 16);
+    if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
+  }
+#undef CTX_MERGE
+}
+
+/**
+ * @brief 512-wide row context inverse merge transform
+ *
+ * Walks the context tree starting from the root node (index 1) using
+ * the starting context in node index 0.
+ * The return value is the starting row and input context for the given leaf node
+ *
+ * @param[in] ctxtree Merge transform tree
+ * @param[in] t thread id (leaf node id)
+ *
+ * @return Final row context and count (row_position*4 + context_id format)
+ **/
+static inline __device__ uint32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024], uint32_t t)
+{
+  uint32_t ctx   = ctxtree[0] & 3;  // Starting input context
+  uint32_t brow4 = 0;               // output row in block *4
+  uint32_t ctxb_left, ctxb_right, ctxb_sum;
+
+#define CTX_UNMERGE(rmask, base)                                      \
+  ctxb_sum   = get_row_context(ctxtree[base], ctx);                   \
+  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], ctx);           \
+  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3); \
+  if (t & (rmask)) {                                                  \
+    brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);                     \
+    ctx = ctxb_left & 3;                                              \
+  }
+
+  CTX_UNMERGE(256, 1);
+  CTX_UNMERGE(128, 2 + (t >> 8));
+  CTX_UNMERGE(64, 4 + (t >> 7));
+  CTX_UNMERGE(32, 8 + (t >> 6));
+  CTX_UNMERGE(16, 16 + (t >> 5));
+  CTX_UNMERGE(8, 32 + (t >> 4));
+  CTX_UNMERGE(4, 64 + (t >> 3));
+  CTX_UNMERGE(2, 128 + (t >> 2));
+  CTX_UNMERGE(1, 256 + (t >> 1));
+#undef CTX_UNMERGE
+
+  return brow4 + ctx;
+}
+
+/**
+ * @brief Gather row offsets from CSV character data split into 16KB chunks
+ *
+ * This is done in two phases: the first phase returns the possible row counts
+ * per 16K character block for each possible parsing context at the start of the block,
+ * along with the resulting parsing context at the end of the block.
+ * The caller can then compute the actual parsing context at the beginning of each
+ * individual block and total row count.
+ * The second phase outputs the location of each row in the block, using the parsing
+ * context and initial row counter resulting from the previous phase.
+ *
+ * @param row_ctx Row parsing context (output of phase 1 or input to phase 2)
+ * @param offsets_out Row offsets (nullptr for phase1, non-null indicates phase 2)
+ * @param start Base pointer of character data (all row offsets are relative to this)
+ * @param chunk_size Total number of characters to parse
+ * @param parse_pos Current parsing position in the file
+ * @param start_offset Position of the start of the character buffer in the file
+ * @param data_size CSV file size
+ * @param byte_range_start Ignore rows starting before this position in the file
+ * @param skip_rows Number of rows to skip (ignored in phase 1)
+ * @param num_row_offsets Number of entries in offsets_out array
+ * @param terminator Line terminator character
+ * @param delimiter Column delimiter character
+ * @param quotechar Quote character
+ * @param escapechar Delimiter escape character
+ * @param commentchar Comment line character (skip rows starting with this character)
+ * @param skipblanklines Skip empty rows
+ **/
+__global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint64_t *row_ctx,
+                                                                           uint64_t *offsets_out,
+                                                                           const char *start,
+                                                                           size_t chunk_size,
+                                                                           size_t parse_pos,
+                                                                           size_t start_offset,
+                                                                           size_t data_size,
+                                                                           size_t byte_range_start,
+                                                                           size_t skip_rows,
+                                                                           size_t num_row_offsets,
+                                                                           int terminator,
+                                                                           int delimiter,
+                                                                           int quotechar,
+                                                                           int escapechar,
+                                                                           int commentchar,
+                                                                           bool skipblanklines)
+{
+  __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
+
+  const char *end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
+  uint32_t t      = threadIdx.x;
+  size_t block_pos =
+    (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
+  const char *cur = start + block_pos;
+  uint64_t ctxb;
+  uint4 ctx_map;
+  int c, c_prev;
+
+  // Initial state is neutral context, zero rows
+  ctx_map.x = ctx_map.y = ctx_map.z = 0;
+  ctx_map.w                         = (0 << 0) | (1 << 2) | (2 << 4) | (3 << 6);  // i << (2*i)
+  c_prev                            = (cur > start) ? cur[-1] : terminator;
+  // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
+  for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
+    uint32_t ctx;
+    if (cur < end) {
+      c = cur[0];
+      if (c_prev == terminator) {
+        if (c == commentchar ||
+            (skipblanklines && (c == terminator || (c == '\r' && terminator == '\n')))) {
+          // Start of a new comment or empty row
+          ctx = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 0, 0, 0);
+        } else if (c == quotechar) {
+          // Quoted string on newrow, or quoted string ending in terminator
+          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
+        } else {
+          // Start of a new row unless within a quote
+          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
+        }
+      } else if (c == quotechar) {
+        if (c_prev == delimiter || c_prev == quotechar) {
+          // Quoted string after delimiter or quoted string ending in delimiter
+          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        } else {
+          // Closing or ignored quote
+          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
+        }
+      } else if (c == delimiter && c_prev != escapechar) {
+        // Delimiter (ends quoted string)
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
+      } else {
+        // Neutral character
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+      }
+    } else {
+      const char *data_end = start + data_size - start_offset;
+      if (cur >= data_end) {
+        // Add a newline at data end (need the extra row offset to infer length of previous row)
+        uint32_t eof_row = (cur == data_end && cur <= end) ? 1 : 0;
+        ctx =
+          make_short_row_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
+      } else {
+        // Pass-through context (beyond chunk_size but before data_size)
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+      }
+    }
+    // Merge with current context, keeping track of where new rows occur
+    merge_short_row_context(ctx_map, ctx, pos);
+  }
+
+  // Eliminate rows that start before byte_range_start
+  if (start_offset + block_pos < byte_range_start) {
+    uint32_t dist_minus1 = min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
+    uint32_t mask        = 0xfffffffe << dist_minus1;
+    ctx_map.x &= mask;
+    ctx_map.y &= mask;
+    ctx_map.z &= mask;
+  }
+
+  // Convert the long-form version into packed version
+  ctxb = pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
+                           make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
+                           make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3));
+
+  // Merge the row contexts
+  rowctx_merge_transform(ctxtree, ctxb, t);
+
+  if (offsets_out) {
+    if (t == 0) { ctxtree[0] = row_ctx[blockIdx.x]; }
+    __syncthreads();
+
+    // Walk back the transform tree with the initial row context
+    uint32_t ctx = rowctx_inverse_merge_transform(ctxtree, t);
+    uint64_t row = (ctxtree[0] >> 2) + (ctx >> 2);
+    uint32_t rowmap =
+      ((ctx & 3) == ROW_CTX_NONE)
+        ? ctx_map.x
+        : ((ctx & 3) == ROW_CTX_QUOTE) ? ctx_map.y : ((ctx & 3) == ROW_CTX_COMMENT) ? ctx_map.z : 0;
+    // Output row positions
+    while (rowmap != 0) {
+      uint32_t pos = __ffs(rowmap);
+      block_pos += pos;
+      if (row >= skip_rows && row - skip_rows < num_row_offsets) {
+        // Output byte offsets are relative to the base of the input buffer
+        offsets_out[row - skip_rows] = block_pos - 1;
+      }
+      row++;
+      rowmap >>= pos;
+    }
+  } else {
+    // Just store the row counts
+    if (t == 0) { row_ctx[blockIdx.x] = ctxtree[1]; }
+  }
+}
+
 cudaError_t __host__ DetectColumnTypes(const char *data,
                                        const uint64_t *row_starts,
                                        size_t num_rows,
@@ -610,6 +905,41 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
 
   convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
+
+  return cudaSuccess;
+}
+
+cudaError_t __host__ gather_row_offsets(uint64_t *row_ctx,
+                                        uint64_t *offsets_out,
+                                        const char *start,
+                                        size_t chunk_size,
+                                        size_t parse_pos,
+                                        size_t start_offset,
+                                        size_t data_size,
+                                        size_t byte_range_start,
+                                        size_t skip_rows,
+                                        size_t num_row_offsets,
+                                        const ParseOptions &options,
+                                        cudaStream_t stream)
+{
+  uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
+  gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream>>>(
+    row_ctx,
+    offsets_out,
+    start,
+    chunk_size,
+    parse_pos,
+    start_offset,
+    data_size,
+    byte_range_start,
+    skip_rows,
+    num_row_offsets,
+    options.terminator,
+    options.delimiter,
+    (options.quotechar) ? options.quotechar : 0x100,
+    /*(options.escapechar) ? options.escapechar :*/ 0x100,
+    (options.comment) ? options.comment : 0x100,
+    options.skipblanklines);
 
   return cudaSuccess;
 }
