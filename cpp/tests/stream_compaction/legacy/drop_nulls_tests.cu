@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/legacy/stream_compaction.hpp>
 #include <cudf/legacy/copying.hpp>
+#include <cudf/legacy/stream_compaction.hpp>
 
 #include <cudf/utilities/error.hpp>
 
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <sstream>
@@ -29,7 +29,8 @@
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
-struct DropNullsErrorTest : GdfTest {};
+struct DropNullsErrorTest : GdfTest {
+};
 
 TEST_F(DropNullsErrorTest, EmptyInput)
 {
@@ -43,35 +44,32 @@ TEST_F(DropNullsErrorTest, EmptyInput)
   EXPECT_EQ(output.num_rows(), 0);
   EXPECT_EQ(output.get_column(0)->null_count, 0);
 
-  bad_input.valid = reinterpret_cast<cudf::valid_type*>(0x0badf00d);
+  bad_input.valid      = reinterpret_cast<cudf::valid_type *>(0x0badf00d);
   bad_input.null_count = 1;
-  bad_input.size = 2; 
+  bad_input.size       = 2;
 
   // nonzero, with non-null valid mask, so non-null input expected
-  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_input}),
-                            "Null input data");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_input}), "Null input data");
 
   gdf_column bad_keys{};
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
-  bad_keys.valid = reinterpret_cast<cudf::valid_type*>(0x0badf00d);
+  bad_keys.valid      = reinterpret_cast<cudf::valid_type *>(0x0badf00d);
   bad_keys.null_count = 1;
-  bad_keys.size = 1;
+  bad_keys.size       = 1;
 
   // keys size smaller than table size
-  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_keys}),
-                            "Column size mismatch");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_keys}), "Column size mismatch");
 }
 
 /*
- * Runs drop_nulls checking for errors, and compares the result column 
+ * Runs drop_nulls checking for errors, and compares the result column
  * to the specified expected result column.
  */
 template <typename T>
-void DropNulls(column_wrapper<T> const& source,
-               column_wrapper<T> const& expected)
+void DropNulls(column_wrapper<T> const &source, column_wrapper<T> const &expected)
 {
   cudf::table result;
-  cudf::table source_table{const_cast<gdf_column*>(source.get())};
+  cudf::table source_table{const_cast<gdf_column *>(source.get())};
   EXPECT_NO_THROW(result = cudf::drop_nulls(source_table, source_table));
   gdf_column *res = result.get_column(0);
   EXPECT_EQ(res->null_count, 0);
@@ -93,43 +91,49 @@ void DropNulls(column_wrapper<T> const& source,
 constexpr cudf::size_type column_size{100};
 
 template <typename T>
-struct DropNullsTest : GdfTest 
-{
+struct DropNullsTest : GdfTest {
   cudf::test::column_wrapper_factory<T> factory;
 };
 
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                     cudf::timestamp, cudf::date32, cudf::date64,
-                     cudf::bool8, cudf::nvstring_category>;
+using test_types = ::testing::Types<int8_t,
+                                    int16_t,
+                                    int32_t,
+                                    int64_t,
+                                    float,
+                                    double,
+                                    cudf::timestamp,
+                                    cudf::date32,
+                                    cudf::date64,
+                                    cudf::bool8,
+                                    cudf::nvstring_category>;
 TYPED_TEST_CASE(DropNullsTest, test_types);
 
 TYPED_TEST(DropNullsTest, Identity)
 {
-  auto col = this->factory.make(column_size,
-    [](cudf::size_type row) { return row; },
-    [](cudf::size_type row) { return true; });
+  auto col = this->factory.make(
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   DropNulls<TypeParam>(col, col);
 }
 
 TYPED_TEST(DropNullsTest, AllNull)
 {
-  DropNulls<TypeParam>(
-    this->factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return false; }),
-    column_wrapper<TypeParam>(0, false));
+  DropNulls<TypeParam>(this->factory.make(
+                         column_size,
+                         [](cudf::size_type row) { return row; },
+                         [](cudf::size_type row) { return false; }),
+                       column_wrapper<TypeParam>(0, false));
 }
 
 TYPED_TEST(DropNullsTest, EvensNull)
 {
-  DropNulls<TypeParam>(
-    this->factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 == 1; }),
-    this->factory.make(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1; },
-      [](cudf::size_type row) { return true; }));
+  DropNulls<TypeParam>(this->factory.make(
+                         column_size,
+                         [](cudf::size_type row) { return row; },
+                         [](cudf::size_type row) { return row % 2 == 1; }),
+                       this->factory.make(
+                         column_size / 2,
+                         [](cudf::size_type row) { return 2 * row + 1; },
+                         [](cudf::size_type row) { return true; }));
 }
 
 TYPED_TEST(DropNullsTest, NonalignedGap)
@@ -137,31 +141,29 @@ TYPED_TEST(DropNullsTest, NonalignedGap)
   const int start{1}, end{column_size / 4};
 
   DropNulls<TypeParam>(
-    this->factory.make(column_size,
+    this->factory.make(
+      column_size,
       [](cudf::size_type row) { return row; },
       [&](cudf::size_type row) { return (row < start) || (row >= end); }),
-    this->factory.make(column_size - (end - start),
-      [&](cudf::size_type row) { 
-        return (row < start) ? row : row + end - start;
-      },
+    this->factory.make(
+      column_size - (end - start),
+      [&](cudf::size_type row) { return (row < start) ? row : row + end - start; },
       [](cudf::size_type row) { return true; }));
 }
 
 TYPED_TEST(DropNullsTest, NoNullMask)
 {
-  DropNulls<TypeParam>(
-    this->factory.make(column_size,
-      [](cudf::size_type row) { return row; }),
-    this->factory.make(column_size,
-      [](cudf::size_type row) { return row; }));
+  DropNulls<TypeParam>(this->factory.make(column_size, [](cudf::size_type row) { return row; }),
+                       this->factory.make(column_size, [](cudf::size_type row) { return row; }));
 }
 
-struct DropNullsTableTest : GdfTest {};
+struct DropNullsTableTest : GdfTest {
+};
 
 static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factory;
 
 /*
- * Runs drop_nulls checking for errors, and compares the result column 
+ * Runs drop_nulls checking for errors, and compares the result column
  * to the specified expected result column.
  */
 void DropNullsTable(cudf::table const &source,
@@ -172,18 +174,18 @@ void DropNullsTable(cudf::table const &source,
   cudf::table result;
   if (keep_thresh >= 0)
     EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys, keep_thresh));
-  else 
+  else
     EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys));
 
   for (int c = 0; c < result.num_columns(); c++) {
-    gdf_column *res = result.get_column(c);
+    gdf_column *res       = result.get_column(c);
     gdf_column const *exp = expected.get_column(c);
     EXPECT_EQ(res->null_count, exp->null_count);
     bool columns_equal{false};
     EXPECT_TRUE(columns_equal = gdf_equal_columns(*res, *exp));
 
     if (!columns_equal) {
-      std:: cout << "Column " << c << "\n";
+      std::cout << "Column " << c << "\n";
       std::cout << "expected\n";
       print_gdf_column(exp);
       std::cout << exp->null_count << "\n";
@@ -198,24 +200,17 @@ void DropNullsTable(cudf::table const &source,
 TEST_F(DropNullsTableTest, Identity)
 {
   cudf::test::column_wrapper<int32_t> int_column(
-      column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; });
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<float> float_column(
-      column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; });
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
   cudf::test::column_wrapper<cudf::bool8> bool_column(
-      column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; });
+    column_size,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column = string_factory.make(
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
-
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
@@ -230,70 +225,79 @@ TEST_F(DropNullsTableTest, Identity)
 
 TEST_F(DropNullsTableTest, AllNull)
 {
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return false; });
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return false; });
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [](cudf::size_type row) { return false; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return false; });
-    
-  std::vector<gdf_column*> cols;
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return false; });
+  cudf::test::column_wrapper<float> float_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return false; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return false; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column = string_factory.make(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return false; });
+
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
-  cudf::table table_expected(0, column_dtypes(table_source),
-                             column_dtype_infos(table_source), true, false);
+  cudf::table table_expected(
+    0, column_dtypes(table_source), column_dtype_infos(table_source), true, false);
 
   DropNullsTable(table_source, table_source, table_expected);
 }
 
 TEST_F(DropNullsTableTest, EvensNull)
 {
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 != 0; });
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 != 0; });
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [](cudf::size_type row) { return row % 2 != 0; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<float> float_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column = string_factory.make(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return row % 2 != 0; });
 
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
 
-  cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<float> float_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
-      [](cudf::size_type row) { return cudf::bool8{true};  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_expected =
-    string_factory.make(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1; },
-      [](cudf::size_type row) { return true; });
-  
-  std::vector<gdf_column*> cols_expected;
+  cudf::test::column_wrapper<int32_t> int_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected = string_factory.make(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+
+  std::vector<gdf_column *> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
@@ -305,42 +309,44 @@ TEST_F(DropNullsTableTest, EvensNull)
 
 TEST_F(DropNullsTableTest, OneColumnEvensNull)
 {
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 != 0; });
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<float> float_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column = string_factory.make(
+    column_size, [](cudf::size_type row) { return row; }, [](cudf::size_type row) { return true; });
 
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
 
-  cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<float> float_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
-      [](cudf::size_type row) { return cudf::bool8{true};  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_expected =
-    string_factory.make(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1; },
-      [](cudf::size_type row) { return true; });
-  
-  std::vector<gdf_column*> cols_expected;
+  cudf::test::column_wrapper<int32_t> int_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected = string_factory.make(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+
+  std::vector<gdf_column *> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
@@ -356,36 +362,36 @@ TEST_F(DropNullsTableTest, OneColumnEvensNull)
 
 TEST_F(DropNullsTableTest, SomeNullMasks)
 {
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; }, false);
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return row % 2 != 0; });
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; }, false);
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size, [](cudf::size_type row) { return row; }, false);
+  cudf::test::column_wrapper<float> float_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size, [](cudf::size_type row) { return cudf::bool8{true}; }, false);
   cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; });
+    string_factory.make(column_size, [](cudf::size_type row) { return row; });
 
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
 
-  cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  }, false);
-  cudf::test::column_wrapper<float> float_expected(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1;  },
-      [](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
-      [](cudf::size_type row) { return cudf::bool8{true};  }, false);
+  cudf::test::column_wrapper<int32_t> int_expected(
+    column_size / 2, [](cudf::size_type row) { return 2 * row + 1; }, false);
+  cudf::test::column_wrapper<float> float_expected(
+    column_size / 2,
+    [](cudf::size_type row) { return 2 * row + 1; },
+    [](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(
+    column_size / 2, [](cudf::size_type row) { return cudf::bool8{true}; }, false);
   cudf::test::column_wrapper<cudf::nvstring_category> string_expected =
-    string_factory.make(column_size / 2,
-      [](cudf::size_type row) { return 2 * row + 1; });
-  
-  std::vector<gdf_column*> cols_expected;
+    string_factory.make(column_size / 2, [](cudf::size_type row) { return 2 * row + 1; });
+
+  std::vector<gdf_column *> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
@@ -414,7 +420,7 @@ TEST_F(DropNullsTableTest, SomeNullMasks)
   DropNullsTable(table_source, subset_columns, table_source, 1);
 
   // thresh of 1 valid means we drop half the rows when we only consider float_column
-  cudf::table subset_columns2{float_column}; // 50% nulls
+  cudf::table subset_columns2{float_column};  // 50% nulls
   DropNullsTable(table_source, subset_columns2, table_expected, 1);
 }
 
@@ -422,42 +428,48 @@ TEST_F(DropNullsTableTest, NonalignedGap)
 {
   const int start{1}, end{column_size / 4};
 
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return (row < start) || (row >= end); });
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return (row < start) || (row >= end); });
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [](cudf::size_type row) { return (row < start) || (row >= end); });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<float> float_column(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size,
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [](cudf::size_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column = string_factory.make(
+    column_size,
+    [](cudf::size_type row) { return row; },
+    [](cudf::size_type row) { return (row < start) || (row >= end); });
 
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
 
-  cudf::test::column_wrapper<int32_t> int_expected(column_size - (end - start),
-      [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
-      [&](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<float> float_expected(column_size - (end - start),
-      [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
-      [&](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size - (end - start),
-      [](cudf::size_type row) { return cudf::bool8{true}; },
-      [&](cudf::size_type row) { return true; });
-  cudf::test::column_wrapper<cudf::nvstring_category> string_expected =
-    string_factory.make(column_size - (end - start),
-      [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
-      [&](cudf::size_type row) { return true; });
-  
-  std::vector<gdf_column*> cols_expected;
+  cudf::test::column_wrapper<int32_t> int_expected(
+    column_size - (end - start),
+    [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
+    [&](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(
+    column_size - (end - start),
+    [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
+    [&](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(
+    column_size - (end - start),
+    [](cudf::size_type row) { return cudf::bool8{true}; },
+    [&](cudf::size_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected = string_factory.make(
+    column_size - (end - start),
+    [](cudf::size_type row) { return (row < start) ? row : row + end - start; },
+    [&](cudf::size_type row) { return true; });
+
+  std::vector<gdf_column *> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
@@ -469,17 +481,16 @@ TEST_F(DropNullsTableTest, NonalignedGap)
 
 TEST_F(DropNullsTableTest, NoNullMask)
 {
-  cudf::test::column_wrapper<int32_t> int_column(column_size,
-      [](cudf::size_type row) { return row; }, false);
-  cudf::test::column_wrapper<float> float_column(column_size,
-      [](cudf::size_type row) { return row; }, false);
-  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
-      [](cudf::size_type row) { return cudf::bool8{true}; }, false);
+  cudf::test::column_wrapper<int32_t> int_column(
+    column_size, [](cudf::size_type row) { return row; }, false);
+  cudf::test::column_wrapper<float> float_column(
+    column_size, [](cudf::size_type row) { return row; }, false);
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+    column_size, [](cudf::size_type row) { return cudf::bool8{true}; }, false);
   cudf::test::column_wrapper<cudf::nvstring_category> string_column =
-    string_factory.make(column_size,
-      [](cudf::size_type row) { return row; });
+    string_factory.make(column_size, [](cudf::size_type row) { return row; });
 
-  std::vector<gdf_column*> cols;
+  std::vector<gdf_column *> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());

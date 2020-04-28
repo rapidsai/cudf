@@ -4,24 +4,23 @@
 
 namespace cudf {
 namespace nvtx {
-
 enum class color : uint32_t {
-  GREEN = 0xff00ff00, 
-  BLUE = 0xff0000ff,
-  YELLOW = 0xffffff00,
-  PURPLE = 0xffff00ff,
-  CYAN = 0xff00ffff,
-  RED = 0xffff0000,
-  WHITE = 0xffffffff,
+  GREEN      = 0xff00ff00,
+  BLUE       = 0xff0000ff,
+  YELLOW     = 0xffffff00,
+  PURPLE     = 0xffff00ff,
+  CYAN       = 0xff00ffff,
+  RED        = 0xffff0000,
+  WHITE      = 0xffffffff,
   DARK_GREEN = 0xff006600,
-  ORANGE = 0xffffa500,
+  ORANGE     = 0xffffa500,
 };
 
-constexpr color JOIN_COLOR = color::CYAN;
-constexpr color GROUPBY_COLOR = color::GREEN;
+constexpr color JOIN_COLOR      = color::CYAN;
+constexpr color GROUPBY_COLOR   = color::GREEN;
 constexpr color BINARY_OP_COLOR = color::YELLOW;
 constexpr color PARTITION_COLOR = color::PURPLE;
-constexpr color READ_CSV_COLOR = color::PURPLE;
+constexpr color READ_CSV_COLOR  = color::PURPLE;
 
 /**---------------------------------------------------------------------------*
  * @brief  Start an NVTX range.

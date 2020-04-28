@@ -5,6 +5,7 @@ import pandas as pd
 import cython
 import rmm
 
+import cudf
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 import cudf._lib as libcudfxx
@@ -39,33 +40,21 @@ cdef class Column:
 
     The *dtype* indicates the Column's element type.
     """
-    def __init__(self, data, size, dtype, mask=None, offset=0, children=()):
-        if not pd.api.types.is_integer(offset):
-            raise TypeError("Expected an integer for offset, got " +
-                            type(offset).__name__)
+    def __init__(
+            self,
+            object data,
+            int size,
+            object dtype,
+            object mask=None,
+            int offset=0,
+            object null_count=None,
+            object children=()
+    ):
 
-        if not pd.api.types.is_integer(size):
-            raise TypeError("Expected an integer for size, got " +
-                            type(size).__name__)
-
-        if size < 0:
-            raise RuntimeError(
-                "Cannot create columns of size < 0. Got size: {}".format(
-                    str(size)
-                )
-            )
-
-        if size > libcudfxx.MAX_COLUMN_SIZE:
-            raise MemoryError(
-                "Cannot create columns of size > {}. "
-                "Consider using dask_cudf to partition your data".format(
-                    libcudfxx.MAX_COLUMN_SIZE_STR
-                )
-            )
-
-        self._offset = int(offset)
-        self._size = int(size)
-        self.dtype = dtype
+        self._size = size
+        self._dtype = dtype
+        self._offset = offset
+        self._null_count = null_count
         self.set_base_children(children)
         self.set_base_data(data)
         self.set_base_mask(mask)
@@ -73,6 +62,10 @@ cdef class Column:
     @property
     def base_size(self):
         return int(self.base_data.size / self.dtype.itemsize)
+
+    @property
+    def dtype(self):
+        return self._dtype
 
     @property
     def size(self):
@@ -229,9 +222,7 @@ cdef class Column:
                 + type(value).__name__
             )
 
-        from cudf.core.column import build_column
-
-        return build_column(
+        return cudf.core.column.build_column(
             self.data,
             self.dtype,
             mask,
@@ -285,7 +276,7 @@ cdef class Column:
         if inplace:
             self._offset = other_col.offset
             self._size = other_col.size
-            self.dtype = other_col.dtype
+            self._dtype = other_col._dtype
             self.set_base_data(other_col.base_data)
             self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
@@ -386,10 +377,10 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_unique_ptr(unique_ptr[column] c_col):
-        from cudf.core.column import build_column
 
         size = c_col.get()[0].size()
         dtype = cudf_to_np_types[c_col.get()[0].type().id()]
+
         has_nulls = c_col.get()[0].has_nulls()
 
         # After call to release(), c_col is unusable
@@ -401,8 +392,10 @@ cdef class Column:
         if has_nulls:
             mask = DeviceBuffer.c_from_unique_ptr(move(contents.null_mask))
             mask = Buffer(mask)
+            null_count = c_col.get()[0].null_count()
         else:
             mask = None
+            null_count = 0
 
         cdef vector[unique_ptr[column]] c_children = move(contents.children)
         children = ()
@@ -410,7 +403,13 @@ cdef class Column:
             children = tuple(Column.from_unique_ptr(move(c_children[i]))
                              for i in range(c_children.size()))
 
-        return build_column(data, dtype=dtype, mask=mask, children=children)
+        return cudf.core.column.build_column(
+            data,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children
+        )
 
     @staticmethod
     cdef Column from_column_view(column_view cv, object owner):
@@ -422,9 +421,8 @@ cdef class Column:
         ``Buffer`` from the ``owner`` ``cudf.Column``. If ``owner`` is
         ``None``, we allocate new memory for the resulting ``cudf.Column``.
         """
-        from cudf.core.column import build_column
-
         column_owner = isinstance(owner, Column)
+        mask_owner = owner
         if column_owner and is_categorical_dtype(owner.dtype):
             owner = owner.base_children[0]
 
@@ -459,9 +457,8 @@ cdef class Column:
         mask_ptr = <uintptr_t>(cv.null_mask())
         mask = None
         if mask_ptr:
-            mask_owner = owner
             if column_owner:
-                mask_owner = owner.base_mask
+                mask_owner = mask_owner.base_mask
             if mask_owner is None:
                 mask = Buffer(
                     rmm.DeviceBuffer(
@@ -476,6 +473,11 @@ cdef class Column:
                     owner=mask_owner
                 )
 
+        if cv.has_nulls():
+            null_count = cv.null_count()
+        else:
+            null_count = 0
+
         children = []
         for child_index in range(cv.num_children()):
             child_owner = owner
@@ -489,12 +491,13 @@ cdef class Column:
             )
         children = tuple(children)
 
-        result = build_column(
+        result = cudf.core.column.build_column(
             data,
             dtype,
             mask,
             size,
             offset,
+            null_count,
             tuple(children)
         )
 

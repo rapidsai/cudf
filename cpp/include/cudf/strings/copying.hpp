@@ -15,17 +15,12 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-
-namespace cudf
-{
-namespace strings
-{
-namespace detail
-{
-
+namespace cudf {
+namespace strings {
+namespace detail {
 /**
  * @brief Returns a new strings column created from a subset of
  * of the strings column. The subset of strings selected is between
@@ -49,13 +44,14 @@ namespace detail
  * @param mr Resource for allocating device memory.
  * @return New strings column of size (end-start)/step.
  */
-std::unique_ptr<cudf::column> slice( strings_column_view const& strings,
-                                     size_type start, size_type end=-1,
-                                     size_type step=1,
-                                     cudaStream_t stream=0,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+std::unique_ptr<cudf::column> slice(
+  strings_column_view const& strings,
+  size_type start,
+  size_type end                       = -1,
+  size_type step                      = 1,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace detail
-} // namespace strings
-} // namespace cudf
+}  // namespace detail
+}  // namespace strings
+}  // namespace cudf

@@ -19,17 +19,14 @@ namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
-
-
-
-const char* kernel_headers = 
-R"***(
+const char* kernel_headers =
+  R"***(
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 )***";
 
 const char* kernel =
-R"***(
+  R"***(
 #include "operation.h"
 
 template <typename WindowType>
@@ -113,8 +110,8 @@ void gpu_rolling_new(cudf::size_type nrows,
 }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace rolling
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace experimental
+}  // namespace cudf

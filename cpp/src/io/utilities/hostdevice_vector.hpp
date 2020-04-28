@@ -35,23 +35,27 @@ class hostdevice_vector {
   using value_type = T;
 
   explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
-      : hostdevice_vector(max_size, max_size, stream) {}
+    : hostdevice_vector(max_size, max_size, stream)
+  {
+  }
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size,
-                             cudaStream_t stream = 0)
-      : num_elements(initial_size), max_elements(max_size) {
+  explicit hostdevice_vector(size_t initial_size, size_t max_size, cudaStream_t stream = 0)
+    : num_elements(initial_size), max_elements(max_size)
+  {
     if (max_elements != 0) {
       CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
       d_data.resize(sizeof(T) * max_elements, stream);
     }
   }
 
-  ~hostdevice_vector() {
+  ~hostdevice_vector()
+  {
     auto const free_result = cudaFreeHost(h_data);
     assert(free_result == cudaSuccess);
   }
 
-  bool insert(const T &data) {
+  bool insert(const T &data)
+  {
     if (num_elements < max_elements) {
       h_data[num_elements] = data;
       num_elements++;
@@ -66,17 +70,16 @@ class hostdevice_vector {
 
   T &operator[](size_t i) const { return h_data[i]; }
   T *host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T *device_ptr(size_t offset = 0) { 
-      return reinterpret_cast<T*>(d_data.data()) + offset; 
-    }
-  T const* device_ptr(size_t offset = 0) const { 
-      return reinterpret_cast<T const*>(d_data.data()) + offset; 
-    }
+  T *device_ptr(size_t offset = 0) { return reinterpret_cast<T *>(d_data.data()) + offset; }
+  T const *device_ptr(size_t offset = 0) const
+  {
+    return reinterpret_cast<T const *>(d_data.data()) + offset;
+  }
 
  private:
   cudaStream_t stream = 0;
   size_t max_elements = 0;
   size_t num_elements = 0;
-  T *h_data = nullptr;
+  T *h_data           = nullptr;
   rmm::device_buffer d_data;
 };

@@ -338,24 +338,6 @@ def test_dataframe_column_drop_via_attr():
     assert tuple(df.columns) == tuple("a")
 
 
-def test_dataframe_attribute_add_drop():
-    df = DataFrame()
-
-    with pytest.warns(UserWarning) as record:
-        df.some_new_attr = 5
-
-    assert len(record) == 1
-    assert "A new attribute will be created" in str(record[0].message)
-
-    assert hasattr(df, "some_new_attr")
-    assert isinstance(df.some_new_attr, int)
-    assert df.some_new_attr == 5
-
-    del df.some_new_attr
-
-    assert not hasattr(df, "some_new_attr")
-
-
 def test_dataframe_pop():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [7.0, 8.0, 9.0]}
@@ -3674,6 +3656,7 @@ def test_series_value_counts():
     [
         [],
         [0, 12, 14],
+        [0, 14, 12, 12, 3, 10, 12, 14],
         np.random.randint(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
         [None, None, None, None],
@@ -3687,6 +3670,7 @@ def test_series_value_counts():
         [],
         [np.nan, None, -1, 2, 3],
         [1.0, 12.0, None, None, 120],
+        [0, 14, 12, 12, 3, 10, 12, 14, None],
         [None, None, None],
         ["0", "12", "14"],
         ["0", "12", "14", "a"],
@@ -3710,6 +3694,17 @@ def test_isin_numeric(data, values):
             ["2018-01-01", "2019-04-03", None, "2019-12-30"],
             dtype="datetime64[ns]",
         ),
+        pd.Series(
+            [
+                "2018-01-01",
+                "2019-04-03",
+                None,
+                "2019-12-30",
+                "2018-01-01",
+                "2018-01-01",
+            ],
+            dtype="datetime64[ns]",
+        ),
     ],
 )
 @pytest.mark.parametrize(
@@ -3717,7 +3712,22 @@ def test_isin_numeric(data, values):
     [
         [],
         [1514764800000000000, 1577664000000000000],
+        [
+            1514764800000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1577664000000000000,
+            1514764800000000000,
+        ],
         ["2019-04-03", "2019-12-30", "2012-01-01"],
+        [
+            "2012-01-01",
+            "2012-01-01",
+            "2012-01-01",
+            "2019-04-03",
+            "2019-12-30",
+            "2012-01-01",
+        ],
     ],
 )
 def test_isin_datetime(data, values):
@@ -3734,6 +3744,7 @@ def test_isin_datetime(data, values):
     [
         [],
         pd.Series(["this", "is", None, "a", "test"]),
+        pd.Series(["test", "this", "test", "is", None, "test", "a", "test"]),
         pd.Series(["0", "12", "14"]),
     ],
 )
@@ -3753,6 +3764,7 @@ def test_isin_datetime(data, values):
                 )
             ],
         ),
+        ["is", "this", "is", "this", "is"],
     ],
 )
 def test_isin_string(data, values):
@@ -3771,6 +3783,7 @@ def test_isin_string(data, values):
         pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
         pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
         pd.Series([0, 3, 10, 12], dtype="category"),
+        pd.Series([0, 3, 10, 12, 0, 10, 3, 0, 0, 3, 3], dtype="category"),
     ],
 )
 @pytest.mark.parametrize(
@@ -3780,6 +3793,7 @@ def test_isin_string(data, values):
         ["a", "b", None, "f", "words"],
         ["0", "12", None, "14"],
         [0, 10, 12, None, 39, 40, 1000],
+        [0, 0, 0, 0, 3, 3, 3, None, 1, 2, 3],
     ],
 )
 def test_isin_categorical(data, values):
@@ -4460,7 +4474,6 @@ def test_df_sr_binop_col_order(gsr, op):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize("set_index", [None, "A", "C", "D"])
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
@@ -4527,7 +4540,6 @@ def test_memory_usage_string():
     ) == df.B.memory_usage(deep=True, index=False)
 
 
-@pytest.mark.xfail
 def test_memory_usage_cat():
     rows = int(100)
     df = pd.DataFrame(

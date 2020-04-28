@@ -15,14 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a new numeric column by parsing float values from each string
  * in the provided strings column.
@@ -39,9 +36,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column with floats converted from strings.
  */
-std::unique_ptr<column> to_floats( strings_column_view const& strings,
-                                   data_type output_type,
-                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_floats(
+  strings_column_view const& strings,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a new strings column converting the float values from the
@@ -60,8 +58,8 @@ std::unique_ptr<column> to_floats( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column with floats as strings.
  */
-std::unique_ptr<column> from_floats( column_view const& floats,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_floats(
+  column_view const& floats, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

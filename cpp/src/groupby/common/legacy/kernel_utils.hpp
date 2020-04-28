@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief This functor is used by elementwise_aggregator to do in-place update
  * operations.
@@ -33,13 +32,13 @@ namespace groupby {
  * @note A struct is used instead of a function to allow for partial
  * specialization.
  *---------------------------------------------------------------------------**/
-template <typename SourceType, operators op, bool values_have_nulls,
-          typename Enable = void>
+template <typename SourceType, operators op, bool values_have_nulls, typename Enable = void>
 struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index) {
+                                    cudf::size_type source_index)
+  {
     release_assert(false && "Invalid Source type and Aggregation combination.");
   }
 };
@@ -54,8 +53,10 @@ struct update_target_element {
  *---------------------------------------------------------------------------**/
 template <typename SourceType, operators op, bool source_has_nulls>
 struct update_target_element<
-    SourceType, op, source_has_nulls,
-    std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
+  SourceType,
+  op,
+  source_has_nulls,
+  std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Performs in-place update of a target element via a binary operation
    * with a source element.
@@ -79,26 +80,24 @@ struct update_target_element<
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index) {
+                                    cudf::size_type source_index)
+  {
     using TargetType = target_type_t<SourceType, op>;
-    
-    assert(gdf_dtype_of<TargetType>() == target.dtype); 
-    
-    TargetType* const __restrict__ target_data{
-        static_cast<TargetType*>(target.data)};
-    SourceType const* const __restrict__ source_data{
-        static_cast<SourceType const*>(source.data)};
+
+    assert(gdf_dtype_of<TargetType>() == target.dtype);
+
+    TargetType* const __restrict__ target_data{static_cast<TargetType*>(target.data)};
+    SourceType const* const __restrict__ source_data{static_cast<SourceType const*>(source.data)};
 
     SourceType const source_element{source_data[source_index]};
 
     using FunctorType = corresponding_functor_t<op>;
 
-    cudf::genericAtomicOperation(&target_data[target_index],
-                                 static_cast<TargetType>(source_element),
-                                 FunctorType{});
+    cudf::genericAtomicOperation(
+      &target_data[target_index], static_cast<TargetType>(source_element), FunctorType{});
 
     bit_mask::bit_mask_t* const __restrict__ target_mask{
-        reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
+      reinterpret_cast<bit_mask::bit_mask_t*>(target.valid)};
 
     if (source_has_nulls) {
       if (not bit_mask::is_valid(target_mask, target_index)) {
@@ -112,9 +111,11 @@ struct update_target_element<
  * @brief Specialization for COUNT.
  *---------------------------------------------------------------------------**/
 template <typename SourceType, bool source_has_nulls>
-struct update_target_element<SourceType, COUNT, source_has_nulls,
-                             std::enable_if_t<not std::is_void<
-                                 target_type_t<SourceType, COUNT>>::value>> {
+struct update_target_element<
+  SourceType,
+  COUNT,
+  source_has_nulls,
+  std::enable_if_t<not std::is_void<target_type_t<SourceType, COUNT>>::value>> {
   /**---------------------------------------------------------------------------*
    * @brief Increments the target_element by 1.
    *
@@ -125,15 +126,15 @@ struct update_target_element<SourceType, COUNT, source_has_nulls,
    *---------------------------------------------------------------------------**/
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
-                                    gdf_column const&, cudf::size_type) {
+                                    gdf_column const&,
+                                    cudf::size_type)
+  {
     using TargetType = target_type_t<SourceType, COUNT>;
     assert(gdf_dtype_of<TargetType>() == target.dtype);
 
-    TargetType* const __restrict__ target_data{
-        static_cast<TargetType*>(target.data)};
+    TargetType* const __restrict__ target_data{static_cast<TargetType*>(target.data)};
 
-    cudf::genericAtomicOperation(&target_data[target_index], TargetType{1},
-                                 DeviceSum{});
+    cudf::genericAtomicOperation(&target_data[target_index], TargetType{1}, DeviceSum{});
   }
 };
 
@@ -143,29 +144,30 @@ struct elementwise_aggregator {
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
-                                    cudf::size_type source_index, operators op) {
+                                    cudf::size_type source_index,
+                                    operators op)
+  {
     switch (op) {
       case MIN: {
         update_target_element<SourceType, MIN, source_has_nulls>{}(
-            target, target_index, source, source_index);
+          target, target_index, source, source_index);
         break;
       }
       case MAX: {
         update_target_element<SourceType, MAX, source_has_nulls>{}(
-            target, target_index, source, source_index);
+          target, target_index, source, source_index);
         break;
       }
       case SUM: {
         update_target_element<SourceType, SUM, source_has_nulls>{}(
-            target, target_index, source, source_index);
+          target, target_index, source, source_index);
         break;
       }
       case COUNT: {
         update_target_element<SourceType, COUNT, source_has_nulls>{}(
-            target, target_index, source, source_index);
+          target, target_index, source, source_index);
       }
-      default:
-        return;
+      default: return;
     }
   }
 };
@@ -203,24 +205,27 @@ __device__ inline void aggregate_row(device_table const& target,
                                      cudf::size_type target_index,
                                      device_table const& source,
                                      cudf::size_type source_index,
-                                     operators* ops) {
+                                     operators* ops)
+{
   using namespace bit_mask;
   for (cudf::size_type i = 0; i < target.num_columns(); ++i) {
     bit_mask_t const* const __restrict__ source_mask{
-        reinterpret_cast<bit_mask_t const*>(source.get_column(i)->valid)};
+      reinterpret_cast<bit_mask_t const*>(source.get_column(i)->valid)};
 
-    if (values_have_nulls and nullptr != source_mask and
-        not is_valid(source_mask, source_index)) {
+    if (values_have_nulls and nullptr != source_mask and not is_valid(source_mask, source_index)) {
       continue;
     }
 
     cudf::type_dispatcher(source.get_column(i)->dtype,
                           elementwise_aggregator<values_have_nulls>{},
-                          *target.get_column(i), target_index,
-                          *source.get_column(i), source_index, ops[i]);
+                          *target.get_column(i),
+                          target_index,
+                          *source.get_column(i),
+                          source_index,
+                          ops[i]);
   }
-} 
+}
 
 }  // namespace groupby
 }  // namespace cudf
-#endif // _GROUPBY_KERNEL_UTILS_H
+#endif  // _GROUPBY_KERNEL_UTILS_H

@@ -131,6 +131,32 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    from cudf.tests.utils import assert_eq
+    import dask.dataframe as dd
+
+    df = DataFrame()
+    df["a"] = ["xyz", "abc", "def"] * 10
+
+    pdf = df.to_pandas()
+    cddf = dgd.from_cudf(df, 1)
+    cddf["b"] = cddf["a"].astype("category")
+
+    ddf = dd.from_pandas(pdf, 1)
+    ddf["b"] = ddf["a"].astype("category")
+
+    assert_eq(ddf._meta_nonempty["b"], cddf._meta_nonempty["b"])
+
+    with pytest.raises(NotImplementedError):
+        cddf["b"].cat.categories
+
+    with pytest.raises(NotImplementedError):
+        ddf["b"].cat.categories
+
+    cddf = cddf.categorize()
+    ddf = ddf.categorize()
+
+    assert_eq(ddf["b"].cat.categories, cddf["b"].cat.categories)
+    assert_eq(ddf["b"].cat.ordered, cddf["b"].cat.ordered)
 
 
 @pytest.mark.parametrize("data", [data_cat_1()])
