@@ -27,6 +27,7 @@
 #include <tuple>
 #include <unordered_map>
 
+#include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -251,7 +252,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
                        h_uncomp_size,
                        data_start_offset,
                        (range_size) ? range_size : h_uncomp_size,
-                       skip_rows,
+                       (skip_rows > 0) ? skip_rows : 0,
                        num_rows,
                        load_whole_file,
                        stream);
@@ -359,25 +360,23 @@ table_with_metadata reader::impl::read(size_t range_offset,
   if (num_records != 0) { decode_data(column_types, out_buffers, stream); }
 
   for (size_t i = 0; i < column_types.size(); ++i) {
-    out_columns.emplace_back(make_column(column_types[i], num_records, out_buffers[i]));
-  }
-
-  // TODO: String columns need to be reworked to actually copy characters in
-  // kernel to allow skipping quotation characters
-  /*for (auto &column : columns) {
-    column.finalize();
-
-    // PANDAS' default behavior of enabling doublequote for two consecutive
-    // quotechars in quoted fields results in reduction to a single quotechar
-    if (column->dtype == GDF_STRING &&
-        (opts.quotechar != '\0' && opts.doublequote == true)) {
+    if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
+        opts.doublequote == true && num_records != 0) {
+      // PANDAS' default behavior of enabling doublequote for two consecutive
+      // quotechars in quoted fields results in reduction to a single quotechar
+      // TODO: Would be much more efficient to perform this operation in-place
+      // during the conversion stage
       const std::string quotechar(1, opts.quotechar);
       const std::string dblquotechar(2, opts.quotechar);
-      auto str_data = static_cast<NVStrings *>(column->data);
-      column->data = str_data->replace(dblquotechar.c_str(), quotechar.c_str());
-      NVStrings::destroy(str_data);
+      std::unique_ptr<column> col =
+        make_column(column_types[i], num_records, out_buffers[i], stream, mr_);
+      out_columns.emplace_back(
+        cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
+    } else {
+      out_columns.emplace_back(
+        make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
     }
-  }*/
+  }
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
@@ -396,7 +395,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                       size_t range_begin,
                                       size_t range_end,
                                       size_t skip_rows,
-                                      cudf::size_type num_rows,
+                                      int64_t num_rows,
                                       bool load_whole_file,
                                       cudaStream_t stream)
 {
@@ -495,7 +494,9 @@ size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
   int commentchar     = (opts.comment != '\0') ? opts.comment : 0x100;
   int quotechar       = (opts.quotechar != '\0') ? opts.quotechar : 0x100;
   int escapechar      = 0x100;  // FIXME: Add escapechar to API
-  int prev_ch         = opts.terminator;
+  /// Escapable quote-terminating delimiter (must have escapechar support)
+  int esc_delimiter = 0x100;
+  int prev_ch       = opts.terminator;
 
   for (size_t pos = 0; pos < h_size; pos++) {
     int ch = h_data[pos];
@@ -521,9 +522,7 @@ size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
         ctx = ROW_CTX_QUOTE;
       }
     } else if (ctx == ROW_CTX_QUOTE) {
-      if (ch == quotechar || (ch == opts.delimiter && prev_ch != escapechar)) {
-        ctx = ROW_CTX_NONE;
-      }
+      if (ch == quotechar || (ch == esc_delimiter && prev_ch != escapechar)) { ctx = ROW_CTX_NONE; }
     }
     prev_ch = ch;
   }

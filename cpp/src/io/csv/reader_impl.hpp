@@ -104,7 +104,7 @@ class reader::impl {
                           size_t range_begin,
                           size_t range_end,
                           size_t skip_rows,
-                          cudf::size_type num_rows,
+                          int64_t num_rows,
                           bool load_whole_file,
                           cudaStream_t stream);
 

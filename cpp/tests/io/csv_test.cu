@@ -446,7 +446,7 @@ TEST_F(CsvReaderTest, Strings)
     view.column(1));
 }
 
-TEST_F(CsvReaderTest, DISABLED_StringsQuotes)
+TEST_F(CsvReaderTest, StringsQuotes)
 {
   std::vector<std::string> names{"line", "verse"};
 

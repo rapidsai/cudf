@@ -734,6 +734,7 @@ static inline __device__ uint32_t rowctx_inverse_merge_transform(uint64_t ctxtre
  * @param num_row_offsets Number of entries in offsets_out array
  * @param terminator Line terminator character
  * @param delimiter Column delimiter character
+ * @param delimiter_esc Escapable quote-terminating delimiter character
  * @param quotechar Quote character
  * @param escapechar Delimiter escape character
  * @param commentchar Comment line character (skip rows starting with this character)
@@ -751,6 +752,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            size_t num_row_offsets,
                                                                            int terminator,
                                                                            int delimiter,
+                                                                           int delimiter_esc,
                                                                            int quotechar,
                                                                            int escapechar,
                                                                            int commentchar,
@@ -796,8 +798,8 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
           // Closing or ignored quote
           ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
-      } else if (c == delimiter && c_prev != escapechar) {
-        // Delimiter (ends quoted string)
+      } else if (c == delimiter_esc && c_prev != escapechar) {
+        // Escapable delimiter ends quoted string
         ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
       } else {
         // Neutral character
@@ -935,6 +937,7 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
     num_row_offsets,
     options.terminator,
     options.delimiter,
+    /*(options.escapechar) ? delimiter :*/ 0x100,
     (options.quotechar) ? options.quotechar : 0x100,
     /*(options.escapechar) ? options.escapechar :*/ 0x100,
     (options.comment) ? options.comment : 0x100,
