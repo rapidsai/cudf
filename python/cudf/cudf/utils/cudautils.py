@@ -4,7 +4,14 @@ from functools import lru_cache
 
 import cupy
 import numpy as np
-from numba import cuda, numpy_support
+from numba import cuda
+
+try:
+    # Numba >= 0.49
+    from numba.np import numpy_support
+except ImportError:
+    # Numba <= 0.49
+    from numba import numpy_support
 
 import rmm
 
