@@ -2563,7 +2563,12 @@ class DataFrame(Frame):
                 DeprecationWarning,
             )
         return DataFrameGroupBy(
-            self, by=by, level=level, as_index=as_index, dropna=dropna
+            self,
+            by=by,
+            level=level,
+            as_index=as_index,
+            dropna=dropna,
+            sort=sort,
         )
 
     @copy_docstring(Rolling)

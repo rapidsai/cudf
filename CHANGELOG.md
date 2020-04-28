@@ -18,6 +18,7 @@
 
 ## Improvements
 
+- PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
@@ -126,6 +127,7 @@
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
+- PR #5039 Make `annotate` picklable
 
 ## Bug Fixes
 
@@ -210,6 +212,7 @@
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5030 Fix Groupby sort=True
 
 
 # cuDF 0.13.0 (31 Mar 2020)
