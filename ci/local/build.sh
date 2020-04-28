@@ -22,7 +22,7 @@ where:
 if [[ -z "${CUDA_VISIBLE_DEVICES}" ]]; then
     NVIDIA_VISIBLE_DEVICES="all"
 else
-    NVIDIA_VISIBLE_DEVICES="device=${CUDA_VISIBLE_DEVICES}"
+    NVIDIA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
 fi
 
 while getopts ":hHr:i:s" option; do
@@ -125,7 +125,7 @@ fi
 docker pull "${DOCKER_IMAGE}"
 
 DOCKER_MAJOR=$(docker -v|sed 's/[^[0-9]*\([0-9]*\).*/\1/')
-GPU_OPTS="--gpus ${NVIDIA_VISIBLE_DEVICES}"
+GPU_OPTS="--gpus device=${NVIDIA_VISIBLE_DEVICES}"
 if [ "$DOCKER_MAJOR" -lt 19 ]
 then
     GPU_OPTS="--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES='${NVIDIA_VISIBLE_DEVICES}'"
