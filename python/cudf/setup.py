@@ -38,6 +38,9 @@ try:
 except Exception:
     nthreads = 0
 
+ARROW_HOME = os.environ.get("ARROW_HOME")
+DLPACK_HOME = os.environ.get("DLPACK_HOME")
+
 extensions = [
     Extension(
         "*",
@@ -48,9 +51,9 @@ extensions = [
             "../../cpp/build/include",
             "../../thirdparty/cub",
             "../../thirdparty/libcudacxx/include",
-            "/home/jdyer/Development/cudf/cpp/build/arrow/install/include",
+            ARROW_HOME + "/include",
             "/include",
-            "/home/jdyer/Development/dlpack/include",
+            DLPACK_HOME + "/include",
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
             cuda_include_dir,
