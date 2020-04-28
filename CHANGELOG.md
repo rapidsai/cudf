@@ -214,6 +214,7 @@
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
+- PR #5041 Fix invalid java test for shift right unsigned
 
 
 # cuDF 0.13.0 (31 Mar 2020)
