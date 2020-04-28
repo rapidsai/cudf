@@ -18,6 +18,7 @@
 
 ## Improvements
 
+- PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
@@ -205,9 +206,11 @@
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 - PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
+- PR #5018 Fix crash when JIT cache dir inaccessible. Fix inter version cache clash for custom cache path.
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5030 Fix Groupby sort=True
 - PR #5029 Change temporary dir to working dir for cudf io tests
 
 
