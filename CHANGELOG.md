@@ -7,11 +7,13 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4788 Add cudf::day_of_year API
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
 - PR #4906 Add Java bindings for interleave_columns
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 
 ## Improvements
@@ -119,9 +121,11 @@
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
+- PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 
 ## Bug Fixes
 
@@ -202,7 +206,10 @@
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
 - PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
+- PR #5018 Fix crash when JIT cache dir inaccessible. Fix inter version cache clash for custom cache path.
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
+- PR #5021 Fix bug with unsigned right shift and scalar lhs
+- PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 
 
 # cuDF 0.13.0 (31 Mar 2020)
