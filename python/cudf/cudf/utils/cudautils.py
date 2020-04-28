@@ -24,7 +24,6 @@ except ImportError:
     from numba import numpy_support
 
 
-
 # GPU array type casting
 
 
