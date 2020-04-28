@@ -17,28 +17,22 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-namespace cudf
-{
-namespace dictionary
-{
-namespace detail
-{
+namespace cudf {
+namespace dictionary {
+namespace detail {
 
 /**
- * @brief Return the index value for a given key.
+ * @copydoc cudf::dictionary::get_index(dictionary_column_view const&,scalar
+ * const&,rmm::mr::device_memory_resource*)
  *
- * If the key does not exist in the dictionary the returned scalar will have `is_valid()==false`
- * 
- * @throw cudf::logic_error if `key.type() != dictionary.keys().type()`
- * 
- * @param dictionary The dictionary to search for the key.
- * @param key The value to search for in the dictionary keyset.
- * @return index value of the key within the dictionary
+ * @param stream Optional CUDA stream on which to execute kernels
  */
-std::unique_ptr<numeric_scalar<int32_t>> get_index( dictionary_column_view const& dictionary, scalar const& key,
-                                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                                                    cudaStream_t stream = 0 );
+std::unique_ptr<numeric_scalar<int32_t>> get_index(
+  dictionary_column_view const& dictionary,
+  scalar const& key,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
-} // namespace detail
-} // namespace dictionary
-} // namespace cudf
+}  // namespace detail
+}  // namespace dictionary
+}  // namespace cudf
