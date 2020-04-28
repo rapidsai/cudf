@@ -64,16 +64,6 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
 endfunction(ConfigureTest)
 
 ###################################################################################################
-# - build options ---------------------------------------------------------------------------------
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread")
-endif(PER_THREAD_DEFAULT_STREAM)
-
-###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)

@@ -276,6 +276,16 @@ if(JITIFY_USE_CACHE)
 endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
+# - per-thread default stream option --------------------------------------------------------------
+# This needs to be defined first so tests and benchmarks can inherit it.
+
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -806,13 +816,6 @@ if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
 endif(HT_DEFAULT_ALLOCATOR)
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --default-stream per-thread")
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
