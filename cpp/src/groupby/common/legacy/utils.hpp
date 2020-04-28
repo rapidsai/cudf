@@ -17,30 +17,27 @@
 #ifndef _GROUPBY_COMMON_H
 #define _GROUPBY_COMMON_H
 
-
 #include <cudf/cudf.h>
-#include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/legacy/copying.hpp>
-#include <cudf/legacy/groupby.hpp>
-#include <cudf/legacy/bitmask.hpp>
-#include <cudf/legacy/table.hpp>
-#include <hash/concurrent_unordered_map.cuh>
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include <table/legacy/device_table.cuh>
-#include <table/legacy/device_table_row_operators.cuh>
-#include <utilities/legacy/column_utils.hpp>
-#include <utilities/legacy/cuda_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/legacy/bitmask.hpp>
+#include <cudf/legacy/copying.hpp>
+#include <cudf/legacy/groupby.hpp>
+#include <cudf/legacy/table.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <hash/concurrent_unordered_map.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <type_traits>
+#include <utilities/legacy/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 #include <vector>
 #include "type_info.hpp"
 
-
 namespace cudf {
 namespace groupby {
-
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
@@ -54,16 +51,15 @@ namespace groupby {
  * @param values The table of columns
  * @param ops The aggregation operators
  *---------------------------------------------------------------------------**/
-static void verify_operators(table const& values, std::vector<operators> const& ops) {
+static void verify_operators(table const& values, std::vector<operators> const& ops)
+{
   CUDF_EXPECTS(static_cast<cudf::size_type>(ops.size()) == values.num_columns(),
                "Size mismatch between ops and value columns");
   for (cudf::size_type i = 0; i < values.num_columns(); ++i) {
     // TODO Add more checks here, i.e., can't compute sum of non-arithemtic
     // types
-    if ((ops[i] == SUM) and
-        (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
-      CUDF_FAIL(
-          "Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
+    if ((ops[i] == SUM) and (values.get_column(i)->dtype == GDF_STRING_CATEGORY)) {
+      CUDF_FAIL("Cannot compute SUM aggregation of GDF_STRING_CATEGORY column.");
     }
   }
 }
@@ -80,21 +76,21 @@ static void verify_operators(table const& values, std::vector<operators> const& 
  * @param op The aggregation operations
  * @return Target gdf_dtypes to use for the target aggregation columns
  *---------------------------------------------------------------------------**/
-inline std::vector<gdf_dtype> target_dtypes(
-    std::vector<gdf_dtype> const& source_dtypes,
-    std::vector<operators> const& ops) {
+inline std::vector<gdf_dtype> target_dtypes(std::vector<gdf_dtype> const& source_dtypes,
+                                            std::vector<operators> const& ops)
+{
   std::vector<gdf_dtype> output_dtypes(source_dtypes.size());
 
-  std::transform(
-      source_dtypes.begin(), source_dtypes.end(), ops.begin(),
-      output_dtypes.begin(), [](gdf_dtype source_dtype, operators op) {
-        gdf_dtype t =
-            cudf::type_dispatcher(source_dtype, target_type_mapper{}, op);
-        CUDF_EXPECTS(
-            t != GDF_invalid,
-            "Invalid combination of input type and aggregation operation.");
-        return t;
-      });
+  std::transform(source_dtypes.begin(),
+                 source_dtypes.end(),
+                 ops.begin(),
+                 output_dtypes.begin(),
+                 [](gdf_dtype source_dtype, operators op) {
+                   gdf_dtype t = cudf::type_dispatcher(source_dtype, target_type_mapper{}, op);
+                   CUDF_EXPECTS(t != GDF_invalid,
+                                "Invalid combination of input type and aggregation operation.");
+                   return t;
+                 });
 
   return output_dtypes;
 }
@@ -105,34 +101,28 @@ inline std::vector<gdf_dtype> target_dtypes(
  *---------------------------------------------------------------------------**/
 struct identity_initializer {
   template <typename T>
-  T get_identity(operators op) {
+  T get_identity(operators op)
+  {
     switch (op) {
-      case SUM:
-        return corresponding_functor_t<SUM>::identity<T>();
-      case MIN:
-        return corresponding_functor_t<MIN>::identity<T>();
-      case MAX:
-        return corresponding_functor_t<MAX>::identity<T>();
-      case COUNT:
-        return corresponding_functor_t<COUNT>::identity<T>();
-      default:
-        CUDF_FAIL("Invalid aggregation operation.");
+      case SUM: return corresponding_functor_t<SUM>::identity<T>();
+      case MIN: return corresponding_functor_t<MIN>::identity<T>();
+      case MAX: return corresponding_functor_t<MAX>::identity<T>();
+      case COUNT: return corresponding_functor_t<COUNT>::identity<T>();
+      default: CUDF_FAIL("Invalid aggregation operation.");
     }
   }
 
   template <typename T>
-  void operator()(gdf_column const& col, operators op,
-                  cudaStream_t stream = 0) {
+  void operator()(gdf_column const& col, operators op, cudaStream_t stream = 0)
+  {
     T* typed_data = static_cast<T*>(col.data);
-    thrust::fill(rmm::exec_policy(stream)->on(stream), typed_data,
-                 typed_data + col.size, get_identity<T>(op));
+    thrust::fill(
+      rmm::exec_policy(stream)->on(stream), typed_data, typed_data + col.size, get_identity<T>(op));
 
     // For COUNT operator, initialize column's bitmask to be all valid
     if ((nullptr != col.valid) and (COUNT == op)) {
       CUDA_TRY(cudaMemsetAsync(
-          col.valid, 0xff,
-          sizeof(cudf::valid_type) * gdf_valid_allocation_size(col.size),
-          stream));
+        col.valid, 0xff, sizeof(cudf::valid_type) * gdf_valid_allocation_size(col.size), stream));
     }
   }
 };
@@ -152,8 +142,9 @@ struct identity_initializer {
  *used to initialize the columns.
  *---------------------------------------------------------------------------**/
 static void initialize_with_identity(cudf::table const& table,
-                              std::vector<operators> const& ops,
-                              cudaStream_t stream = 0) {
+                                     std::vector<operators> const& ops,
+                                     cudaStream_t stream = 0)
+{
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
@@ -176,34 +167,34 @@ static void initialize_with_identity(cudf::table const& table,
  * @param[in] input_values The set of input value columns
  * @param[in/out] output_values The set of output value columns
  *---------------------------------------------------------------------------**/
-static void update_nvcategories(table const& input_keys, table& output_keys,
-                         table const& input_values, table& output_values) {
+static void update_nvcategories(table const& input_keys,
+                                table& output_keys,
+                                table const& input_values,
+                                table& output_values)
+{
   gdf_error update_err = nvcategory_gather_table(input_keys, output_keys);
   CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for keys");
 
   // Filter out columns from (input/output)_values where the output datatype is
   // not GDF_STRING_CATEGORY. This is possible in aggregations like `count`.
-  std::vector<gdf_column *> string_input_value_cols;
-  std::vector<gdf_column *> string_output_value_cols;
+  std::vector<gdf_column*> string_input_value_cols;
+  std::vector<gdf_column*> string_output_value_cols;
 
   for (cudf::size_type i = 0; i < input_values.num_columns(); i++) {
     if (output_values.get_column(i)->dtype == GDF_STRING_CATEGORY) {
-      string_input_value_cols.push_back(
-        const_cast<gdf_column*>(input_values.get_column(i)));
-      string_output_value_cols.push_back(
-        const_cast<gdf_column*>(output_values.get_column(i)));
+      string_input_value_cols.push_back(const_cast<gdf_column*>(input_values.get_column(i)));
+      string_output_value_cols.push_back(const_cast<gdf_column*>(output_values.get_column(i)));
     }
   }
-  
+
   cudf::table string_input_values(string_input_value_cols);
   cudf::table string_output_values(string_output_value_cols);
-  
+
   update_err = nvcategory_gather_table(string_input_values, string_output_values);
   CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for values");
 }
 
-
-} // namespace groupby 
-} // namespace cudf 
+}  // namespace groupby
+}  // namespace cudf
 
 #endif

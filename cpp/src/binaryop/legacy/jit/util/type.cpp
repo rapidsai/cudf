@@ -23,62 +23,40 @@
 namespace cudf {
 namespace binops {
 namespace jit {
+/**---------------------------------------------------------------------------*
+ * @brief Get the Operator Name
+ *
+ * @param ope (enum) The binary operator as enum of type gdf_binary_operator
+ * @return std::string The name of the operator as string
+ *---------------------------------------------------------------------------**/
+std::string getOperatorName(gdf_binary_operator ope)
+{
+  switch (ope) {
+    case GDF_ADD: return "Add";
+    case GDF_SUB: return "Sub";
+    case GDF_MUL: return "Mul";
+    case GDF_DIV: return "Div";
+    case GDF_TRUE_DIV: return "TrueDiv";
+    case GDF_FLOOR_DIV: return "FloorDiv";
+    case GDF_MOD: return "Mod";
+    case GDF_PYMOD: return "PyMod";
+    case GDF_POW: return "Pow";
+    case GDF_EQUAL: return "Equal";
+    case GDF_NOT_EQUAL: return "NotEqual";
+    case GDF_LESS: return "Less";
+    case GDF_GREATER: return "Greater";
+    case GDF_LESS_EQUAL: return "LessEqual";
+    case GDF_GREATER_EQUAL: return "GreaterEqual";
+    case GDF_BITWISE_AND: return "BitwiseAnd";
+    case GDF_BITWISE_OR: return "BitwiseOr";
+    case GDF_BITWISE_XOR: return "BitwiseXor";
+    case GDF_LOGICAL_AND: return "LogicalAnd";
+    case GDF_LOGICAL_OR: return "LogicalOr";
+    case GDF_GENERIC_BINARY: return "UserDefinedOp";
+    default: return "None";
+  }
+}
 
-    /**---------------------------------------------------------------------------*
-     * @brief Get the Operator Name
-     * 
-     * @param ope (enum) The binary operator as enum of type gdf_binary_operator
-     * @return std::string The name of the operator as string
-     *---------------------------------------------------------------------------**/
-    std::string getOperatorName(gdf_binary_operator ope) {
-        switch (ope) {
-            case GDF_ADD:
-                return "Add";
-            case GDF_SUB:
-                return "Sub";
-            case GDF_MUL:
-                return "Mul";
-            case GDF_DIV:
-                return "Div";
-            case GDF_TRUE_DIV:
-                return "TrueDiv";
-            case GDF_FLOOR_DIV:
-                return "FloorDiv";
-            case GDF_MOD:
-                return "Mod";
-            case GDF_PYMOD:
-                return "PyMod";
-            case GDF_POW:
-                return "Pow";
-            case GDF_EQUAL:
-                return "Equal";
-            case GDF_NOT_EQUAL:
-                return "NotEqual";
-            case GDF_LESS:
-                return "Less";
-            case GDF_GREATER:
-                return "Greater";
-            case GDF_LESS_EQUAL:
-                return "LessEqual";
-            case GDF_GREATER_EQUAL:
-                return "GreaterEqual";
-            case GDF_BITWISE_AND:
-                return "BitwiseAnd";
-            case GDF_BITWISE_OR:
-                return "BitwiseOr";
-            case GDF_BITWISE_XOR:
-                return "BitwiseXor";
-            case GDF_LOGICAL_AND:
-                return "LogicalAnd";
-            case GDF_LOGICAL_OR:
-                return "LogicalOr";
-            case GDF_GENERIC_BINARY:
-                return "UserDefinedOp";
-            default:
-                return "None";
-        }
-    }
-
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf

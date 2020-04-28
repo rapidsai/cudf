@@ -30,7 +30,6 @@
 
 namespace cudf {
 namespace legacy {
-
 /**---------------------------------------------------------------------------*
  * @brief Converts a `gdf_dtype` to the corresponding `data_type`, if possible.
  *

@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-
+#include <cudf/cudf.h>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
-#include <cudf/cudf.h>
-
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -28,8 +26,7 @@
 
 template <class ColumnType>
 struct DigitizeTest : public GdfTest {
-  using gdf_col_pointer =
-    typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+  using gdf_col_pointer = typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
 
   std::vector<ColumnType> col_in_data;
   std::vector<ColumnType> bins_data;
@@ -38,35 +35,37 @@ struct DigitizeTest : public GdfTest {
   gdf_col_pointer col_in;
   gdf_col_pointer bins;
 
-  DigitizeTest(){
+  DigitizeTest()
+  {
     // Use constant seed so the psuedo-random order is the same each time
     // Each time the class is constructed a new constant seed is used
     static size_t number_of_instantiations{0};
     std::srand(number_of_instantiations++);
   }
 
-  ~DigitizeTest(){}
+  ~DigitizeTest() {}
 
-  void initialize_data(size_t column_length, size_t column_range,
-                       size_t bins_length, size_t bins_range)
+  void initialize_data(size_t column_length,
+                       size_t column_range,
+                       size_t bins_length,
+                       size_t bins_range)
   {
     initialize_vector(col_in_data, column_length, column_range, false);
     col_in = create_gdf_column(col_in_data);
 
     initialize_vector(bins_data, bins_length, bins_range, true);
     bins = create_gdf_column(bins_data);
-
   }
 
-  gdf_error digitize(bool right) {
-
+  gdf_error digitize(bool right)
+  {
     rmm::device_vector<cudf::size_type> out_indices_dev(col_in->size);
     gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
     out_data.resize(out_indices_dev.size());
-    cudaMemcpy(out_data.data(),
-               out_indices_dev.data().get(),
-               out_indices_dev.size() * sizeof(cudf::size_type),
-               cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(out_data.data(),
+                        out_indices_dev.data().get(),
+                        out_indices_dev.size() * sizeof(cudf::size_type),
+                        cudaMemcpyDeviceToHost));
     return result;
   }
 };
@@ -88,7 +87,8 @@ TYPED_TEST(DigitizeTest, LowerBound)
   EXPECT_EQ(result, GDF_SUCCESS);
 }
 
-void digitize_detail(bool right, const std::vector<int32_t>& expected) {
+void digitize_detail(bool right, const std::vector<int32_t>& expected)
+{
   std::vector<double> bins_data{0, 2, 5, 7, 8};
   gdf_col_pointer bins = create_gdf_column(bins_data);
 
@@ -99,24 +99,24 @@ void digitize_detail(bool right, const std::vector<int32_t>& expected) {
   gdf_error result = gdf_digitize(col_in.get(), bins.get(), right, out_indices_dev.data().get());
 
   std::vector<cudf::size_type> out_indices(out_indices_dev.size());
-  cudaMemcpy(out_indices.data(),
-             out_indices_dev.data().get(),
-             out_indices_dev.size() * sizeof(cudf::size_type),
-             cudaMemcpyDeviceToHost);
+  CUDA_TRY(cudaMemcpy(out_indices.data(),
+                      out_indices_dev.data().get(),
+                      out_indices_dev.size() * sizeof(cudf::size_type),
+                      cudaMemcpyDeviceToHost));
   EXPECT_EQ(result, GDF_SUCCESS);
 
   const size_t num_rows = col_in_data.size();
-  for (unsigned int i = 0; i < num_rows; ++i) {
-    EXPECT_EQ(expected[i], out_indices[i]);
-  }
+  for (unsigned int i = 0; i < num_rows; ++i) { EXPECT_EQ(expected[i], out_indices[i]); }
 }
 
-TYPED_TEST(DigitizeTest, UpperBoundDetail) {
+TYPED_TEST(DigitizeTest, UpperBoundDetail)
+{
   std::vector<int32_t> expected{0, 0, 1, 1, 2, 4, 5};
   digitize_detail(true, expected);
 }
 
-TYPED_TEST(DigitizeTest, LowerBoundDetail) {
+TYPED_TEST(DigitizeTest, LowerBoundDetail)
+{
   std::vector<int32_t> expected{0, 1, 1, 2, 2, 5, 5};
   digitize_detail(false, expected);
 }

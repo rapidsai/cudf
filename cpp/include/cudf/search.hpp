@@ -16,31 +16,30 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/types.hpp>
 
 #include <vector>
 
 namespace cudf {
 namespace experimental {
-
 /**
- * @brief Find smallest indices in a sorted table where values should be 
+ * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the first index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  1 }
- * 
+ *
  *  Multi Column:
  *      idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -50,7 +49,7 @@ namespace experimental {
  *             { .7 },
  *             { 61 }}
  *   result =  {  3 }
- * 
+ *
  * @param t               Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
@@ -60,27 +59,28 @@ namespace experimental {
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  */
-std::unique_ptr<column> lower_bound(table_view const& t,
-                                    table_view const& values,
-                                    std::vector<order> const& column_order,
-                                    std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> lower_bound(
+  table_view const& t,
+  table_view const& values,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Find largest indices in a sorted table where values should be 
+ * @brief Find largest indices in a sorted table where values should be
  *  inserted to maintain order
- * 
+ *
  * For each row v in @p values, find the last index in @p t where
  *  inserting the row will maintain the sort order of @p t
- * 
+ *
  * Example:
- * 
+ *
  *  Single Column:
  *      idx      0   1   2   3   4
  *   column = { 10, 20, 20, 30, 50 }
  *   values = { 20 }
  *   result = {  3 }
- * 
+ *
  *  Multi Column:
  *    idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
@@ -89,7 +89,7 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  *   values = {{ 20 },
  *             { .7 },
  *             { 61 }}
- *   result =  {  5  *   * 
+ *   result =  {  5  *   *
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
@@ -99,11 +99,12 @@ std::unique_ptr<column> lower_bound(table_view const& t,
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
  */
-std::unique_ptr<column> upper_bound(table_view const& t,
-                                    table_view const& values,
-                                    std::vector<order> const& column_order,
-                                    std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> upper_bound(
+  table_view const& t,
+  table_view const& values,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Find if the `value` is present in the `col`
@@ -126,7 +127,8 @@ std::unique_ptr<column> upper_bound(table_view const& t,
  *
  * @return bool    If `value` is found in `column` true, else false.
  */
-bool contains(column_view const& col, scalar const& value,
+bool contains(column_view const& col,
+              scalar const& value,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -154,10 +156,10 @@ bool contains(column_view const& col, scalar const& value,
  * true if the corresponding entry in haystack is contained in needles and false
  * if it is not.
  */
-std::unique_ptr<column> contains(column_view const& haystack, column_view const& needles,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> contains(
+  column_view const& haystack,
+  column_view const& needles,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace experimental
-} // namespace cudf
-
-
+}  // namespace experimental
+}  // namespace cudf

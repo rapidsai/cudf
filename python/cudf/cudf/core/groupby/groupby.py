@@ -8,7 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib.groupby as libgroupby
-from cudf._lib.nvtx import range_pop, range_push
+from cudf._lib.nvtx import annotate
 
 
 class GroupBy(object):
@@ -83,6 +83,7 @@ class GroupBy(object):
             .agg("size")
         )
 
+    @annotate("GROUPBY_AGG", domain="cudf_python")
     def agg(self, func):
         """
         Apply aggregation(s) to the groups.
@@ -135,8 +136,6 @@ class GroupBy(object):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        range_push("CUDF_GROUPBY", "purple")
-
         normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
@@ -165,6 +164,7 @@ class GroupBy(object):
 
         # copy categorical information from keys to the result index:
         result.index._copy_categories(self.grouping.keys)
+        result._index = cudf.core.index.as_index(result._index)
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
@@ -175,7 +175,6 @@ class GroupBy(object):
                 )
             result.index = cudf.core.index.RangeIndex(len(result))
 
-        range_pop()
         return result
 
     aggregate = agg

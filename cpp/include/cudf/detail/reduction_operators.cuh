@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <cudf/types.hpp>  //for CUDA_HOST_DEVICE_CALLABLE
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/detail/utilities/transform_unary_functions.cuh>
+#include <cudf/types.hpp>  //for CUDA_HOST_DEVICE_CALLABLE
 
 #include <thrust/functional.h>
 #include <cmath>
@@ -27,7 +27,6 @@
 namespace cudf {
 namespace experimental {
 namespace reduction {
-
 // intermediate data structure to compute `var`, `std`
 template <typename ResultType>
 struct var_std {
@@ -36,14 +35,14 @@ struct var_std {
 
   CUDA_HOST_DEVICE_CALLABLE
   var_std(ResultType _value = 0, ResultType _value_squared = 0)
-      : value(_value), value_squared(_value_squared){};
+    : value(_value), value_squared(_value_squared){};
 
   using this_t = var_std<ResultType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  this_t operator+(this_t const& rhs) const {
-    return this_t((this->value + rhs.value),
-                  (this->value_squared + rhs.value_squared));
+  this_t operator+(this_t const& rhs) const
+  {
+    return this_t((this->value + rhs.value), (this->value_squared + rhs.value_squared));
   };
 };
 
@@ -53,9 +52,7 @@ struct transformer_var_std {
   using OutputType = var_std<ResultType>;
 
   CUDA_HOST_DEVICE_CALLABLE
-  OutputType operator()(ResultType const& value) {
-    return OutputType(value, value * value);
-  };
+  OutputType operator()(ResultType const& value) { return OutputType(value, value * value); };
 };
 
 // ------------------------------------------------------------------------
@@ -66,7 +63,6 @@ struct transformer_var_std {
 // By default `transformer` is static type conversion to ResultType.
 // In some cases, it could be square or abs or complex operations
 namespace op {
-
 /**
  * @brief  Simple reduction operator CRTP Base class
  *
@@ -79,7 +75,8 @@ struct simple_op {
    *
    * @return binary operator functor object
    */
-  auto get_binary_op() {
+  auto get_binary_op()
+  {
     using binary_op = typename Derived::op;
     return binary_op{};
   }
@@ -93,7 +90,8 @@ struct simple_op {
    * @return element transformer functor object
    */
   template <typename ResultType>
-  auto get_element_transformer() {
+  auto get_element_transformer()
+  {
     using element_transformer = typename Derived::transformer<ResultType>;
     return element_transformer{};
   }
@@ -103,10 +101,11 @@ struct simple_op {
    *
    * @tparam T data type of identity value
    *
-   * @return identity value 
+   * @return identity value
    */
   template <typename T>
-  constexpr T get_identity() {
+  constexpr T get_identity()
+  {
     return Derived::op::template identity<T>();
   }
 };
@@ -176,9 +175,10 @@ struct compound_op : public simple_op<Derived> {
    * @return transformed output result of compount operator
    */
   template <typename ResultType, typename IntermediateType>
-  CUDA_HOST_DEVICE_CALLABLE static ResultType compute_result(
-      const IntermediateType& input, const cudf::size_type& count,
-      const cudf::size_type& ddof) {
+  CUDA_HOST_DEVICE_CALLABLE static ResultType compute_result(const IntermediateType& input,
+                                                             const cudf::size_type& count,
+                                                             const cudf::size_type& ddof)
+  {
     // Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
   }
@@ -207,7 +207,8 @@ struct mean : public compound_op<mean> {
     CUDA_HOST_DEVICE_CALLABLE
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
-                                     const cudf::size_type& ddof) {
+                                     const cudf::size_type& ddof)
+    {
       return (input / count);
     };
   };
@@ -222,18 +223,18 @@ struct variance : public compound_op<variance> {
 
   template <typename ResultType>
   struct intermediate {
-    using IntermediateType =
-        var_std<ResultType>;  // with sum of value, and sum of squared value
+    using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `variance` from intermediate type `IntermediateType`
     CUDA_HOST_DEVICE_CALLABLE
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
-                                     const cudf::size_type& ddof) {
-      ResultType mean = input.value / count;
-      ResultType asum = input.value_squared;
+                                     const cudf::size_type& ddof)
+    {
+      ResultType mean     = input.value / count;
+      ResultType asum     = input.value_squared;
       cudf::size_type div = count - ddof;
-      ResultType var = asum / div - ((mean * mean) * count) / div;
+      ResultType var      = asum / div - ((mean * mean) * count) / div;
 
       return var;
     };
@@ -249,16 +250,16 @@ struct standard_deviation : public compound_op<standard_deviation> {
 
   template <typename ResultType>
   struct intermediate {
-    using IntermediateType =
-        var_std<ResultType>;  // with sum of value, and sum of squared value
+    using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `standard deviation` from intermediate type `IntermediateType`
     CUDA_HOST_DEVICE_CALLABLE
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
-                                     const cudf::size_type& ddof) {
+                                     const cudf::size_type& ddof)
+    {
       using intermediateOp = variance::template intermediate<ResultType>;
-      ResultType var = intermediateOp::compute_result(input, count, ddof);
+      ResultType var       = intermediateOp::compute_result(input, count, ddof);
 
       return static_cast<ResultType>(std::sqrt(var));
     };

@@ -15,14 +15,11 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
-
+namespace cudf {
+namespace strings {
 /**
  * @brief Returns a boolean column identifying rows which
  * match the given regex pattern.
@@ -40,9 +37,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<column> contains_re( strings_column_view const& strings,
-                                     std::string const& pattern,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> contains_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -61,9 +59,10 @@ std::unique_ptr<column> contains_re( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New column of boolean results for each string.
  */
-std::unique_ptr<column> matches_re( strings_column_view const& strings,
-                                    std::string const& pattern,
-                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> matches_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns the number of times the given regex pattern
@@ -82,9 +81,10 @@ std::unique_ptr<column> matches_re( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with counts for each string.
  */
-std::unique_ptr<column> count_re( strings_column_view const& strings,
-                                  std::string const& pattern,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> count_re(
+  strings_column_view const& strings,
+  std::string const& pattern,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+}  // namespace cudf

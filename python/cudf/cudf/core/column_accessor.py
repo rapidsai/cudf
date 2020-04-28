@@ -69,8 +69,8 @@ class ColumnAccessor(MutableMapping):
 
     @property
     def level_names(self):
-        if self._level_names is None:
-            return tuple((None,) * self.nlevels)
+        if self._level_names is None or len(self._level_names) == 0:
+            return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
 
@@ -179,10 +179,14 @@ class ColumnAccessor(MutableMapping):
 
     def copy(self, deep=False):
         """
-        Make a (shallow) copy of this ColumnAccessor.
+        Make a copy of this ColumnAccessor.
         """
         if deep:
-            raise TypeError("Cannot deep copy a ColumnAccessor")
+            return self.__class__(
+                {k: v.copy(deep=True) for k, v in self._data.items()},
+                multiindex=self.multiindex,
+                level_names=self.level_names,
+            )
         return self.__class__(
             self._data.copy(),
             multiindex=self.multiindex,

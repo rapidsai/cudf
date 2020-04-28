@@ -20,32 +20,41 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 class RmmMemoryAccessorTest extends CudfTestBase {
   @Test
-  public void log() {
+  public void log() throws IOException {
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
-    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, true, 1024*1024*1024);
-    long address = Rmm.alloc(10, 0);
-    try {
+    File f = File.createTempFile("ALL_LOG",".csv");
+    f.deleteOnExit();
+    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logTo(f), 1024*1024*1024);
+    try (DeviceMemoryBuffer address = Rmm.alloc(10, Cuda.DEFAULT_STREAM)) {
       assertNotEquals(0, address);
-    } finally {
-      Rmm.free(address, 0);
     }
-    String log = Rmm.getLog();
+    StringBuilder log = new StringBuilder();
+    try (Stream<String> stream = Files.lines(f.toPath(), StandardCharsets.UTF_8))
+    {
+        stream.forEach(s -> log.append(s).append("\n"));
+    }
     System.err.println(log);
-    assertNotNull(log);
+    assertNotNull(log.toString());
+    assertTrue(0 < log.length());
   }
+
 
   @Test
   public void init() {
@@ -73,11 +82,8 @@ class RmmMemoryAccessorTest extends CudfTestBase {
 
   @Test
   public void allocate() {
-    long address = Rmm.alloc(10, 0);
-    try {
-      assertNotEquals(0, address);
-    } finally {
-      Rmm.free(address, 0);
+    try (DeviceMemoryBuffer address = Rmm.alloc(10, Cuda.DEFAULT_STREAM)) {
+      assertNotEquals(0, address.address);
     }
   }
 
@@ -86,8 +92,7 @@ class RmmMemoryAccessorTest extends CudfTestBase {
     if (!Rmm.isInitialized()) {
       Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0);
     }
-    assertThrows(IllegalStateException.class, () -> {
-      Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024);
-    });
+    assertThrows(IllegalStateException.class,
+        () -> Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024));
   }
 }

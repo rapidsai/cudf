@@ -21,9 +21,8 @@ namespace cudf {
 namespace binops {
 namespace jit {
 namespace code {
-
 const char* traits =
-R"***(
+  R"***(
 #pragma once
     #include <cstdint>
     #include <type_traits>
@@ -53,7 +52,7 @@ R"***(
     constexpr bool isDouble<double> = true;
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf

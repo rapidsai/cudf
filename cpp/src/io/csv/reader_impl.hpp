@@ -24,10 +24,10 @@
 #include "csv.h"
 #include "csv_gpu.h"
 
+#include <cudf/detail/utilities/trie.cuh>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
-#include <cudf/detail/utilities/trie.cuh>
 
 #include <cudf/io/readers.hpp>
 
@@ -41,7 +41,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
-
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
@@ -58,7 +57,8 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source, std::string filepath,
+  explicit impl(std::unique_ptr<datasource> source,
+                std::string filepath,
                 reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
@@ -75,8 +75,11 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_t range_offset, size_t range_size,
-                           int skip_rows, int skip_end_rows, int num_rows,
+  table_with_metadata read(size_t range_offset,
+                           size_t range_size,
+                           int skip_rows,
+                           int skip_end_rows,
+                           int num_rows,
                            cudaStream_t stream);
 
  private:
@@ -93,8 +96,11 @@ class reader::impl {
    * @param stream Stream to use for memory allocation and kernels
    * @param d_data Uncompressed input data in device memory (optional)
    */
-  void gather_row_offsets(const char *h_data, size_t h_size,
-                          size_t range_offset, cudaStream_t stream, const rmm::device_buffer* d_data = nullptr);
+  void gather_row_offsets(const char *h_data,
+                          size_t h_size,
+                          size_t range_offset,
+                          cudaStream_t stream,
+                          const rmm::device_buffer *d_data = nullptr);
 
   /**
    * @brief Filters and discards row positions that are not used.
@@ -109,7 +115,8 @@ class reader::impl {
    *
    * @return `std::pair<uint64_t, uint64_t>` First and last row positions
    */
-  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size,
+  std::pair<uint64_t, uint64_t> select_rows(const char *h_data,
+                                            size_t h_size,
                                             size_t range_size,
                                             cudf::size_type skip_rows,
                                             cudf::size_type skip_end_rows,
@@ -144,10 +151,10 @@ class reader::impl {
   const reader_options args_;
 
   rmm::device_buffer data_;
-  char* data_ptr{};
+  char *data_ptr{};
   rmm::device_vector<uint64_t> row_offsets;
-  size_t num_records = 0;   // Number of rows with actual data
-  long num_bits = 0;        // Numer of 64-bit bitmaps (different than valid)
+  size_t num_records  = 0;  // Number of rows with actual data
+  long num_bits       = 0;  // Numer of 64-bit bitmaps (different than valid)
   int num_active_cols = 0;  // Number of columns to read
   int num_actual_cols = 0;  // Number of columns in the dataset
 
