@@ -172,7 +172,7 @@
 - PR #4915 Fix to `reset_index` inplace in MultiIndex and other places
 - Pr #4899 Fix series inplace handling
 - PR #4889 Fix multi-index merging
-
+- PR #5030 Fix Groupby sort=True
 
 # cuDF 0.13.0 (31 Mar 2020)
 
