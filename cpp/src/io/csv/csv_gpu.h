@@ -97,20 +97,20 @@ inline __host__ __device__ uint64_t select_row_context(uint64_t sel_ctx, uint64_
  * @param options Options that control parsing of individual fields
  * @param stream CUDA stream to use, default 0
  *
- * @return cudaSuccess if successful, a CUDA error code otherwise
+ * @return Number of row contexts
  **/
-cudaError_t gather_row_offsets(uint64_t *row_ctx,
-                               uint64_t *offsets_out,
-                               const char *start,
-                               size_t chunk_size,
-                               size_t parse_pos,
-                               size_t start_offset,
-                               size_t data_size,
-                               size_t byte_range_start,
-                               size_t skip_rows,
-                               size_t num_row_offsets,
-                               const cudf::experimental::io::ParseOptions &options,
-                               cudaStream_t stream = 0);
+uint32_t gather_row_offsets(uint64_t *row_ctx,
+                            uint64_t *offsets_out,
+                            const char *start,
+                            size_t chunk_size,
+                            size_t parse_pos,
+                            size_t start_offset,
+                            size_t data_size,
+                            size_t byte_range_start,
+                            size_t skip_rows,
+                            size_t num_row_offsets,
+                            const cudf::experimental::io::ParseOptions &options,
+                            cudaStream_t stream = 0);
 
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data

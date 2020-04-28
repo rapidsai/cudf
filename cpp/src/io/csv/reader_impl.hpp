@@ -92,36 +92,21 @@ class reader::impl {
    *
    * @param h_data Uncompressed input data in host memory
    * @param h_size Number of bytes of uncompressed input data
-   * @param range_offset Number of bytes offset from the start
+   * @param range_begin Only include rows starting after this position
+   * @param range_end Only include rows starting before this position
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read; -1: all remaining data
+   * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream Stream to use for memory allocation and kernels
-   * @param d_data Uncompressed input data in device memory (optional)
    */
   void gather_row_offsets(const char *h_data,
                           size_t h_size,
-                          size_t range_offset,
-                          cudaStream_t stream,
-                          const rmm::device_buffer *d_data = nullptr);
-
-  /**
-   * @brief Filters and discards row positions that are not used.
-   *
-   * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
-   * @param range_size Bytes to read; use `0` for all remaining data
-   * @param skip_rows Number of rows to skip from the start
-   * @param skip_end_rows Number of rows to skip from the end
-   * @param num_rows Number of rows to read; use -1 for all remaining data
-   * @param stream Stream to use for memory allocation and kernels
-   *
-   * @return `std::pair<uint64_t, uint64_t>` First and last row positions
-   */
-  std::pair<uint64_t, uint64_t> select_rows(const char *h_data,
-                                            size_t h_size,
-                                            size_t range_size,
-                                            cudf::size_type skip_rows,
-                                            cudf::size_type skip_end_rows,
-                                            cudf::size_type num_rows,
-                                            cudaStream_t stream);
+                          size_t range_begin,
+                          size_t range_end,
+                          size_t skip_rows,
+                          cudf::size_type num_rows,
+                          bool load_whole_file,
+                          cudaStream_t stream);
 
   /**
    * @brief Parse the CSV header and return the position of the first data row
@@ -132,6 +117,16 @@ class reader::impl {
    * @return Byte position of the first row
    */
   size_t parse_csv_header(const char *h_data, size_t h_size);
+
+  /**
+   * @brief Find the start position of the first data row
+   *
+   * @param h_data Uncompressed input data in host memory
+   * @param h_size Number of bytes of uncompressed input data
+   *
+   * @return Byte position of the first row
+   */
+  size_t find_first_row_start(const char *h_data, size_t h_size);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.
@@ -160,8 +155,7 @@ class reader::impl {
   std::string compression_type_;
   const reader_options args_;
 
-  rmm::device_buffer data_;
-  char *data_ptr{};
+  rmm::device_vector<char> data_;
   rmm::device_vector<uint64_t> row_offsets;
   size_t num_records  = 0;  // Number of rows with actual data
   int num_active_cols = 0;  // Number of columns to read

@@ -37,7 +37,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
@@ -909,18 +908,18 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
   return cudaSuccess;
 }
 
-cudaError_t __host__ gather_row_offsets(uint64_t *row_ctx,
-                                        uint64_t *offsets_out,
-                                        const char *start,
-                                        size_t chunk_size,
-                                        size_t parse_pos,
-                                        size_t start_offset,
-                                        size_t data_size,
-                                        size_t byte_range_start,
-                                        size_t skip_rows,
-                                        size_t num_row_offsets,
-                                        const ParseOptions &options,
-                                        cudaStream_t stream)
+uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
+                                     uint64_t *offsets_out,
+                                     const char *start,
+                                     size_t chunk_size,
+                                     size_t parse_pos,
+                                     size_t start_offset,
+                                     size_t data_size,
+                                     size_t byte_range_start,
+                                     size_t skip_rows,
+                                     size_t num_row_offsets,
+                                     const ParseOptions &options,
+                                     cudaStream_t stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
   gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream>>>(
@@ -941,7 +940,7 @@ cudaError_t __host__ gather_row_offsets(uint64_t *row_ctx,
     (options.comment) ? options.comment : 0x100,
     options.skipblanklines);
 
-  return cudaSuccess;
+  return dim_grid;
 }
 
 }  // namespace gpu
