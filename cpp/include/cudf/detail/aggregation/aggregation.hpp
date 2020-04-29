@@ -29,7 +29,7 @@ namespace experimental {
 namespace detail {
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
- * 
+ *
  * Derived aggregations are required to implement operator==() and hash_impl().
  *
  * https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern
@@ -39,7 +39,8 @@ class derived_aggregation : public aggregation {
  public:
   derived_aggregation(aggregation::Kind a) : aggregation(a) {}
 
-  bool is_equal(aggregation const& other) const override {
+  bool is_equal(aggregation const& other) const override
+  {
     if (this->aggregation::is_equal(other)) {
       // Dispatch to operator== using static polymorphism
       return static_cast<Derived const&>(*this) == static_cast<Derived const&>(other);
@@ -48,12 +49,14 @@ class derived_aggregation : public aggregation {
     }
   }
 
-  size_t do_hash() const override {
+  size_t do_hash() const override
+  {
     // Dispatch to hash_impl() using static polymorphism
     return this->aggregation::do_hash() ^ static_cast<Derived const&>(*this).hash_impl();
   }
 
-  std::unique_ptr<aggregation> clone() const override {
+  std::unique_ptr<aggregation> clone() const override
+  {
     // Dispatch to copy constructor using static polymorphism
     return std::make_unique<Derived>(static_cast<Derived const&>(*this));
   }
@@ -64,19 +67,23 @@ class derived_aggregation : public aggregation {
  */
 struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   quantile_aggregation(std::vector<double> const& q, experimental::interpolation i)
-    : derived_aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
+    : derived_aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
+  {
+  }
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
 
  protected:
   friend class derived_aggregation<quantile_aggregation>;
 
-  bool operator==(quantile_aggregation const& other) const {
+  bool operator==(quantile_aggregation const& other) const
+  {
     return _interpolation == other._interpolation and
            std::equal(_quantiles.begin(), _quantiles.end(), other._quantiles.begin());
   }
 
-  size_t hash_impl() const {
+  size_t hash_impl() const
+  {
     return std::hash<experimental::interpolation>{}(_interpolation) ^
            std::accumulate(_quantiles.cbegin(), _quantiles.cend(), 0, [](size_t a, double b) {
              return a ^ std::hash<double>{}(b);
@@ -104,13 +111,16 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
  */
 struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
   nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
-    : derived_aggregation{k}, _include_nulls{_include_nulls} {}
+    : derived_aggregation{k}, _include_nulls{_include_nulls}
+  {
+  }
   include_nulls _include_nulls;  ///< include or exclude nulls
 
  protected:
   friend class derived_aggregation<nunique_aggregation>;
 
-  bool operator==(nunique_aggregation const& other) const {
+  bool operator==(nunique_aggregation const& other) const
+  {
     return _include_nulls == other._include_nulls;
   }
 
@@ -122,18 +132,22 @@ struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
  */
 struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
   nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
-    : derived_aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
+    : derived_aggregation{k}, n{n}, _include_nulls{_include_nulls}
+  {
+  }
   size_type n;                   ///< nth index to return
   include_nulls _include_nulls;  ///< include or exclude nulls
 
  protected:
   friend class derived_aggregation<nth_element_aggregation>;
 
-  bool operator==(nth_element_aggregation const& other) const {
+  bool operator==(nth_element_aggregation const& other) const
+  {
     return n == other.n and _include_nulls == other._include_nulls;
   }
 
-  size_t hash_impl() const {
+  size_t hash_impl() const
+  {
     return std::hash<size_type>{}(n) ^ std::hash<include_nulls>{}(_include_nulls);
   }
 };
@@ -161,12 +175,14 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
  protected:
   friend class derived_aggregation<udf_aggregation>;
 
-  bool operator==(udf_aggregation const& other) const {
+  bool operator==(udf_aggregation const& other) const
+  {
     return _source == other._source and _operator_name == other._operator_name and
            _function_name == other._function_name and _output_type == other._output_type;
   }
 
-  size_t hash_impl() const {
+  size_t hash_impl() const
+  {
     return std::hash<std::string>{}(_source) ^ std::hash<std::string>{}(_operator_name) ^
            std::hash<std::string>{}(_function_name) ^ std::hash<type_id>{}(_output_type.id());
   }

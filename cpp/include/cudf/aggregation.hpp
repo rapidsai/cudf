@@ -75,7 +75,8 @@ class aggregation {
 
   virtual size_t do_hash() const { return std::hash<decltype(kind)>{}(kind); }
 
-  virtual std::unique_ptr<aggregation> clone() const {
+  virtual std::unique_ptr<aggregation> clone() const
+  {
     return std::make_unique<aggregation>(*this);
   }
 

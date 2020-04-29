@@ -20,7 +20,8 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-bool result_cache::has_result(size_t col_idx, aggregation const& agg) const {
+bool result_cache::has_result(size_t col_idx, aggregation const& agg) const
+{
   if (col_idx < 0 or col_idx > _cache.size()) return false;
 
   auto result_it = _cache[col_idx].find(agg);
@@ -28,9 +29,8 @@ bool result_cache::has_result(size_t col_idx, aggregation const& agg) const {
   return (result_it != _cache[col_idx].end());
 }
 
-void result_cache::add_result(size_t col_idx,
-                              aggregation const& agg,
-                              std::unique_ptr<column>&& col) {
+void result_cache::add_result(size_t col_idx, aggregation const& agg, std::unique_ptr<column>&& col)
+{
   // We can't guarantee that agg will outlive the cache, so we need to take ownership of a copy.
   // To allow lookup by reference, make the key a reference and keep the owner in the value pair.
   auto owned_agg  = agg.clone();
@@ -39,14 +39,16 @@ void result_cache::add_result(size_t col_idx,
   _cache[col_idx].emplace(key, std::move(value));
 }
 
-column_view result_cache::get_result(size_t col_idx, aggregation const& agg) const {
+column_view result_cache::get_result(size_t col_idx, aggregation const& agg) const
+{
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
   auto result_it = _cache[col_idx].find(agg);
   return result_it->second.second->view();
 }
 
-std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation const& agg) {
+std::unique_ptr<column> result_cache::release_result(size_t col_idx, aggregation const& agg)
+{
   CUDF_EXPECTS(has_result(col_idx, agg), "Result does not exist in cache");
 
   // unordered_map.extract() is a c++17 feature so we do this:

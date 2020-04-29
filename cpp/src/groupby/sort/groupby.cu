@@ -62,7 +62,9 @@ struct store_result_functor {
   }
 
   template <aggregation::Kind k>
-  void operator()(aggregation const& agg) {}
+  void operator()(aggregation const& agg)
+  {
+  }
 
  private:
   /**
@@ -112,7 +114,8 @@ struct store_result_functor {
 };
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -125,7 +128,8 @@ void store_result_functor::operator()<aggregation::COUNT_VALID>(aggregation cons
 }
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -133,7 +137,8 @@ void store_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const&
 }
 
 template <>
-void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -143,7 +148,8 @@ void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -157,7 +163,8 @@ void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& ag
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -171,7 +178,8 @@ void store_result_functor::operator()<aggregation::ARGMIN>(aggregation const& ag
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
@@ -201,7 +209,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
@@ -231,7 +240,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto sum_agg   = make_sum_aggregation();
@@ -254,7 +264,8 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
 };
 
 template <>
-void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto var_agg   = static_cast<experimental::detail::std_var_aggregation const&>(agg);
@@ -276,7 +287,8 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::STD>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto std_agg = static_cast<experimental::detail::std_var_aggregation const&>(agg);
@@ -290,7 +302,8 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
@@ -310,7 +323,8 @@ void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
@@ -329,7 +343,8 @@ void store_result_functor::operator()<aggregation::MEDIAN>(aggregation const& ag
 };
 
 template <>
-void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto nunique_agg = static_cast<experimental::detail::nunique_aggregation const&>(agg);
@@ -345,7 +360,8 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& a
 };
 
 template <>
-void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg) {
+void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
+{
   if (cache.has_result(col_idx, agg)) return;
 
   auto nth_element_agg = static_cast<experimental::detail::nth_element_aggregation const&>(agg);
