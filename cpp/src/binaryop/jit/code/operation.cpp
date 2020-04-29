@@ -400,6 +400,41 @@ const char* operation =
             return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
         }
     };
+
+    struct ATan2 {
+        // Ideally, these two specializations - one for integral types and one for non integral
+        // types shouldn't be required, as std::atan2 should promote integral types automatically
+        // to double and call the std::atan2 overload for doubles. Sadly, doing this in jitified
+        // code does not work - it is having trouble deciding between float/double overloads. Hence,
+        // promote these types manually to double, for what should have happened naturally
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{std::atan2(double{x}, double{y})};
+        }
+
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            // In case the types differ and the common type isn't integral
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            return TypeOut{std::atan2(common_t{x}, common_t{y})};
+        }
+    };
+
+    struct RATan2 {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{ATan2::operate<TypeOut, TypeRhs, TypeLhs>(y, x)};
+        }
+    };
 )***";
 
 }  // namespace code

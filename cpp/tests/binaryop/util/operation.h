@@ -186,6 +186,17 @@ struct LogBase {
   }
 };
 
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct ATan2 {
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    // In case, the types differ
+    using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+    // atan2 will promote TypeLhs and/or TypeRhs if they are integral types
+    return TypeOut{std::atan2(common_t{x}, common_t{y})};
+  }
+};
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
