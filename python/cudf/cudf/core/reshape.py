@@ -34,11 +34,7 @@ def align_objs(objs, how="outer"):
         )
         index.name = name
 
-    a_objs = []
-    for i, obj in enumerate(objs):
-        a_objs.append(obj.reindex(index))
-
-    return a_objs
+    return [obj.reindex(index) for obj in objs]
 
 
 def concat(objs, axis=0, ignore_index=False, sort=None):
