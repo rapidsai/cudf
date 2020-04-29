@@ -312,13 +312,13 @@ def getDeviceCount():
     return count
 
 
-def getDeviceAttribute(object attr, int device):
+def getDeviceAttribute(cudaDeviceAttr attr, int device):
     """
     Returns information about the device.
 
     Parameters
     ----------
-        attr : object (CudaDeviceAttr)
+        attr : cudaDeviceAttr
             Device attribute to query
         device : int
             Device number to query

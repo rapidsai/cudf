@@ -51,8 +51,14 @@ class annotate(ContextDecorator):
         ...    time.sleep(10)
         ...
         """
+        self._message = message
+        self._color = color
+        self._domain_name = domain
         self.attributes = EventAttributes(message, color)
         self.domain = Domain(domain)
+
+    def __reduce__(self):
+        return self.__class__, (self._message, self._color, self._domain_name)
 
     def __enter__(self):
         libnvtx_push_range(self.attributes, self.domain.handle)
@@ -76,7 +82,7 @@ class _annotate_nop:
         pass
 
     def __exit__(self, *args, **kwargs):
-        pass
+        return False
 
     def __call__(self, func):
         return func

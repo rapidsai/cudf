@@ -15,49 +15,42 @@
  */
 
 #include <cudf/cudf.h>
-#include <cudf/types.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/legacy/cuda_utils.hpp>
-#include <utilities/legacy/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/legacy/filling.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <utilities/legacy/column_utils.hpp>
+#include <utilities/legacy/cuda_utils.hpp>
 
 using bit_mask::bit_mask_t;
 
 namespace cudf {
-
 namespace detail {
+gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStream_t stream = 0)
+{
+  auto output = cudf::allocate_column(GDF_BOOL8, input.size, false, gdf_dtype_extra_info{}, stream);
 
-gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStream_t stream = 0) {
-    auto output = cudf::allocate_column(GDF_BOOL8, input.size, false, 
-		  gdf_dtype_extra_info{}, stream);
+  if (not cudf::is_nullable(input)) {
+    gdf_scalar value{nulls_are_false, GDF_BOOL8, true};
+    cudf::fill(&output, value, 0, output.size);
+  } else {
+    const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid);
 
-    if (not cudf::is_nullable(input)) {
-	gdf_scalar value {nulls_are_false, GDF_BOOL8, true}; 
-	cudf::fill(&output, value, 0, output.size);
-    } else {
-        const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid);
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
+                      thrust::make_counting_iterator(static_cast<gdf_size_type>(input.size)),
+                      static_cast<bool*>(output.data),
+                      [=] __device__(auto index) {
+                        return (nulls_are_false == bit_mask::is_valid(typed_input_valid, index));
+                      });
+  }
 
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
-                          thrust::make_counting_iterator(static_cast<gdf_size_type>(input.size)),
-                          static_cast<bool*>(output.data),
-                          [=]__device__(auto index){
-                              return (nulls_are_false ==
-                                      bit_mask::is_valid(typed_input_valid, index));
-                          });
-    }
-
-    return output;
+  return output;
 }
-}// detail
+}  // namespace detail
 
-gdf_column is_null(gdf_column const& input) {
-    return detail::null_op(input, false, 0);
-}
+gdf_column is_null(gdf_column const& input) { return detail::null_op(input, false, 0); }
 
-gdf_column is_not_null(gdf_column const& input) {
-    return detail::null_op(input, true, 0);
-}
+gdf_column is_not_null(gdf_column const& input) { return detail::null_op(input, true, 0); }
 
-}// cudf
+}  // namespace cudf

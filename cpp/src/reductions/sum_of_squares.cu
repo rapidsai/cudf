@@ -19,9 +19,12 @@
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::sum_of_squares(
-    column_view const& col, cudf::data_type const output_dtype,
-    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  column_view const& col,
+  cudf::data_type const output_dtype,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
-  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher< cudf::experimental::reduction::op::sum_of_squares>;
+  using reducer = cudf::experimental::reduction::simple::element_type_dispatcher<
+    cudf::experimental::reduction::op::sum_of_squares>;
   return cudf::experimental::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
 }

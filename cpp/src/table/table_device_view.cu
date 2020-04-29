@@ -21,26 +21,23 @@
 
 #include <rmm/rmm.h>
 
-#include <vector>
 #include <algorithm>
 #include <numeric>
-
+#include <vector>
 
 namespace cudf {
 namespace detail {
-
 template <typename ColumnDeviceView, typename HostTableView>
-void table_device_view_base<ColumnDeviceView, HostTableView>::destroy() {
+void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
+{
   delete this;
 }
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
-    HostTableView source_view, cudaStream_t stream)
-    : _num_rows{source_view.num_rows()},
-      _num_columns{source_view.num_columns()},
-      _stream{stream} {
-
+  HostTableView source_view, cudaStream_t stream)
+  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}, _stream{stream}
+{
   // The table's columns must be converted to ColumnDeviceView
   // objects and copied into device memory for the table_device_view's
   // _columns member.
@@ -50,10 +47,9 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // table's ColumnDeviceViews. This is done by calling extent()
     // for each of the table's ColumnViews columns.
     std::size_t views_size_bytes =
-        std::accumulate(source_view.begin(), source_view.end(), 0,
-            [](std::size_t init, auto col) {
-                return init + ColumnDeviceView::extent(col);
-            });
+      std::accumulate(source_view.begin(), source_view.end(), 0, [](std::size_t init, auto col) {
+        return init + ColumnDeviceView::extent(col);
+      });
     // A buffer of CPU memory is allocated to hold the ColumnDeviceView
     // objects. Once filled, the CPU memory is then copied to device memory
     // and the pointer is set in the _columns member.
@@ -67,7 +63,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // ColumnDeviceViews so the column can set the pointer(s) for any
     // of its child objects.
     _descendant_storage = new rmm::device_buffer(views_size_bytes, stream);
-    _columns = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
+    _columns            = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // objects in order for _columns to be used as an array. Therefore,
     // any child data is assigned to the end of this array (h_end/d_end).
@@ -76,20 +72,19 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     // Create the ColumnDeviceView from each column within the CPU memory
     // Any column child data should be copied into h_end and any
     // internal pointers should be set using d_end.
-    for( auto itr=source_view.begin(); itr!=source_view.end(); ++itr )
-    {
+    for (auto itr = source_view.begin(); itr != source_view.end(); ++itr) {
       auto col = *itr;
       // convert the ColumnView into ColumnDeviceView
-      new(h_column) ColumnDeviceView(col, h_end, d_end);
-      h_column++; // point to memory slot for the next ColumnDeviceView
+      new (h_column) ColumnDeviceView(col, h_end, d_end);
+      h_column++;  // point to memory slot for the next ColumnDeviceView
       // update the pointers for holding ColumnDeviceView's child data
       auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));
       h_end += col_child_data_size;
       d_end += col_child_data_size;
     }
-    
-    CUDA_TRY(cudaMemcpyAsync(_columns, h_buffer.data(),
-                             views_size_bytes, cudaMemcpyDefault, stream));
+
+    CUDA_TRY(
+      cudaMemcpyAsync(_columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
   }
 }
@@ -98,8 +93,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
 template class table_device_view_base<column_device_view, table_view>;
 
 // Explicit instantiation for a device table of mutable views
-template class table_device_view_base<mutable_column_device_view,
-                                      mutable_table_view>;
+template class table_device_view_base<mutable_column_device_view, mutable_table_view>;
 
 }  // namespace detail
 }  // namespace cudf

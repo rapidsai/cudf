@@ -10,6 +10,7 @@ from numba import njit
 
 import rmm
 
+import cudf
 from cudf.core.buffer import Buffer
 
 mask_dtype = np.dtype(np.int32)
@@ -337,9 +338,8 @@ class ColumnValuesMappingMixin:
     """
 
     def __setitem__(self, key, value):
-        from cudf.core.column import as_column
 
-        value = as_column(value)
+        value = cudf.core.column.as_column(value)
         super().__setitem__(key, value)
 
 

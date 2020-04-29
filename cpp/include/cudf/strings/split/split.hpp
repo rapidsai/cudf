@@ -15,14 +15,18 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_split Split
+ * APIs to split strings into multiple columns of strings.
+ * @{
+ */
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -38,7 +42,7 @@ namespace strings
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
+ * @param strings_column Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -46,10 +50,11 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> split( strings_column_view const& strings,
-                                            string_scalar const& delimiter = string_scalar(""),
-                                            size_type maxsplit=-1,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> split(
+  strings_column_view const& strings_column,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -65,7 +70,7 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
+ * @param strings_column Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -73,10 +78,11 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
-                                             string_scalar const& delimiter = string_scalar(""),
-                                             size_type maxsplit=-1,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<experimental::table> rsplit(
+  strings_column_view const& strings_column,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief The result(s) of a `contiguous_(r)split_record`
@@ -123,11 +129,10 @@ struct contiguous_split_record_result {
  *         element of the input column).
  */
 contiguous_split_record_result contiguous_split_record(
-    strings_column_view const& strings,
-    string_scalar const& delimiter = string_scalar(""),
-    size_type maxsplit=-1,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-);
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Splits each element of the input column from the end to a column of
@@ -156,11 +161,11 @@ contiguous_split_record_result contiguous_split_record(
  *         element of the input column).
  */
 contiguous_split_record_result contiguous_rsplit_record(
-    strings_column_view const& strings,
-    string_scalar const& delimiter = string_scalar(""),
-    size_type maxsplit=-1,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-);
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

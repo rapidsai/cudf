@@ -40,7 +40,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace avro {
-
 using namespace cudf::io::avro;
 using namespace cudf::io;
 
@@ -72,8 +71,7 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int skip_rows, int num_rows,
-                           cudaStream_t stream);
+  table_with_metadata read(int skip_rows, int num_rows, cudaStream_t stream);
 
  private:
   /**
@@ -100,7 +98,8 @@ class reader::impl {
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
                    hostdevice_vector<uint8_t> &global_dictionary,
-                   size_t total_dictionary_entries, size_t num_rows,
+                   size_t total_dictionary_entries,
+                   size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer> &out_buffers,
                    cudaStream_t stream);

@@ -27,15 +27,12 @@ namespace cudf {
 namespace experimental {
 //! `groupby` APIs
 namespace groupby {
-
 namespace detail {
 namespace sort {
-
 class sort_groupby_helper;
-    
-} // namespace sort  
-} // namespace detail
 
+}  // namespace sort
+}  // namespace detail
 
 /**
  * @brief Request for groupby aggregation(s) to perform on a column.
@@ -48,9 +45,8 @@ class sort_groupby_helper;
  * `values.size()` column must equal `keys.num_rows()`.
  */
 struct aggregation_request {
-  column_view values;  ///< The elements to aggregate
-  std::vector<std::unique_ptr<aggregation>>
-      aggregations;  ///< Desired aggregations
+  column_view values;                                      ///< The elements to aggregate
+  std::vector<std::unique_ptr<aggregation>> aggregations;  ///< Desired aggregations
 };
 
 /**
@@ -66,7 +62,6 @@ struct aggregation_result {
   std::vector<std::unique_ptr<column>> results{};
 };
 
-
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
  */
@@ -75,7 +70,7 @@ class groupby {
   groupby() = delete;
   ~groupby();
   groupby(groupby const&) = delete;
-  groupby(groupby&&) = delete;
+  groupby(groupby&&)      = delete;
   groupby& operator=(groupby const&) = delete;
   groupby& operator=(groupby&&) = delete;
 
@@ -92,7 +87,7 @@ class groupby {
    * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
-   * @param include_nulls_keys Indicates whether rows in `keys` that contain 
+   * @param include_nulls_keys Indicates whether rows in `keys` that contain
    * NULL values should be included
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
    * @param column_order If `keys_are_sorted == YES`, indicates whether each
@@ -103,9 +98,9 @@ class groupby {
    * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys,
-                   include_nulls include_nulls_keys = include_nulls::NO,
-                   sorted keys_are_sorted = sorted::NO,
-                   std::vector<order> const& column_order = {},
+                   include_nulls include_nulls_keys               = include_nulls::NO,
+                   sorted keys_are_sorted                         = sorted::NO,
+                   std::vector<order> const& column_order         = {},
                    std::vector<null_order> const& null_precedence = {});
 
   /**
@@ -162,8 +157,8 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
-      std::vector<aggregation_request> const& requests,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+    std::vector<aggregation_request> const& requests,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
@@ -190,28 +185,26 @@ class groupby {
    * @param mr Memory resource used to allocate the returned tables
    * @return A `groups` object representing grouped keys and values
    */
-  groups get_groups(
-      cudf::table_view values={},
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-  );
+  groups get_groups(cudf::table_view values             = {},
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-private:
-  table_view _keys;                    ///< Keys that determine grouping
-  include_nulls _include_null_keys{include_nulls::NO}; ///< Include rows in keys 
-                                                       ///< with NULLs
-  sorted _keys_are_sorted{sorted::NO}; ///< Whether or not the keys are sorted
-  std::vector<order> _column_order{};  ///< If keys are sorted, indicates
-                                       ///< the order of each column
-  std::vector<null_order> _null_precedence{};  ///< If keys are sorted,
-                                               ///< indicates null order
-                                               ///< of each column
-  std::unique_ptr<detail::sort::sort_groupby_helper> _helper; ///< Helper object
-                                       ///< used by sort based implementation
+ private:
+  table_view _keys;                                     ///< Keys that determine grouping
+  include_nulls _include_null_keys{include_nulls::NO};  ///< Include rows in keys
+                                                        ///< with NULLs
+  sorted _keys_are_sorted{sorted::NO};                  ///< Whether or not the keys are sorted
+  std::vector<order> _column_order{};                   ///< If keys are sorted, indicates
+                                                        ///< the order of each column
+  std::vector<null_order> _null_precedence{};           ///< If keys are sorted,
+                                                        ///< indicates null order
+                                                        ///< of each column
+  std::unique_ptr<detail::sort::sort_groupby_helper>
+    _helper;  ///< Helper object
+              ///< used by sort based implementation
 
   /**
    * @brief Get the sort helper object
-   * 
+   *
    * The object is constructed on first invocation and subsequent invocations
    * of this function return the memoized object.
    */
@@ -221,16 +214,16 @@ private:
    * @brief Dispatches to the appropriate implementation to satisfy the
    * aggregation requests.
    */
-  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>>
-  dispatch_aggregation(std::vector<aggregation_request> const& requests,
-                       cudaStream_t stream,
-                       rmm::mr::device_memory_resource* mr);
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> dispatch_aggregation(
+    std::vector<aggregation_request> const& requests,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr);
 
   // Sort-based groupby
-  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> 
-  sort_aggregate(std::vector<aggregation_request> const& requests,
-                 cudaStream_t stream, rmm::mr::device_memory_resource* mr);
-
+  std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_aggregate(
+    std::vector<aggregation_request> const& requests,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr);
 };
 }  // namespace groupby
 }  // namespace experimental

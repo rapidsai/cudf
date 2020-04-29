@@ -16,8 +16,8 @@
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
-#include <cudf/legacy/search.hpp>
 #include <cudf/legacy/copying.hpp>
+#include <cudf/legacy/search.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -26,58 +26,55 @@
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
-class Search : public cudf::benchmark {};
+class Search : public cudf::benchmark {
+};
 
-void BM_non_null_column(benchmark::State& state){
+void BM_non_null_column(benchmark::State& state)
+{
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  cudf::test::column_wrapper<float> column(column_size,
-    [=](cudf::size_type row) { return static_cast<float>(row); }
-  );
-  cudf::test::column_wrapper<float> values(values_size,
-    [=](cudf::size_type row) { return static_cast<float>(values_size - row); }
-  );
-  
-  for(auto _ : state){
+  cudf::test::column_wrapper<float> column(
+    column_size, [=](cudf::size_type row) { return static_cast<float>(row); });
+  cudf::test::column_wrapper<float> values(
+    values_size, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
+
+  for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
     gdf_column_free(&col);
   }
 }
 
-BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) {
-  BM_non_null_column(state);
-}
+BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) { BM_non_null_column(state); }
 
 BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(100000000);
 
-void BM_nullable_column(benchmark::State& state){
+void BM_nullable_column(benchmark::State& state)
+{
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  cudf::test::column_wrapper<float> column(column_size,
+  cudf::test::column_wrapper<float> column(
+    column_size,
     [=](cudf::size_type row) { return static_cast<float>(row); },
-    [=](cudf::size_type row) { return row < (9 * column_size / 10); }
-  );
-  cudf::test::column_wrapper<float> values(values_size,
+    [=](cudf::size_type row) { return row < (9 * column_size / 10); });
+  cudf::test::column_wrapper<float> values(
+    values_size,
     [=](cudf::size_type row) { return static_cast<float>(values_size - row); },
-    [=](cudf::size_type row) { return row < (9 * column_size / 10); }
-  );
-  
-  for(auto _ : state){
+    [=](cudf::size_type row) { return row < (9 * column_size / 10); });
+
+  for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
     gdf_column_free(&col);
   }
 }
 
-BENCHMARK_DEFINE_F(Search, NullableColumn)(::benchmark::State& state) {
-  BM_nullable_column(state);
-}
+BENCHMARK_DEFINE_F(Search, NullableColumn)(::benchmark::State& state) { BM_nullable_column(state); }
 
 BENCHMARK_REGISTER_F(Search, NullableColumn)
   ->UseManualTime()
@@ -94,7 +91,8 @@ T random_int(T min, T max)
   return uniform(engine);
 }
 
-void sort_table(cudf::table& t, std::vector<bool>& desc_flags) {
+void sort_table(cudf::table& t, std::vector<bool>& desc_flags)
+{
   rmm::device_vector<int8_t> dv_desc_flags(desc_flags);
   auto d_desc_flags = dv_desc_flags.data().get();
 
@@ -107,7 +105,8 @@ void sort_table(cudf::table& t, std::vector<bool>& desc_flags) {
   cudf::gather(&t, indices, &t);
 }
 
-void BM_table(benchmark::State& state){
+void BM_table(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<float>;
 
   const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
@@ -117,48 +116,42 @@ void BM_table(benchmark::State& state){
   std::vector<wrapper> columns;
   std::vector<wrapper> values;
 
-  auto make_table = [&] (std::vector<wrapper>& cols,
-                         cudf::size_type col_size) -> cudf::table
-  {
+  auto make_table = [&](std::vector<wrapper>& cols, cudf::size_type col_size) -> cudf::table {
     for (cudf::size_type i = 0; i < num_columns; i++) {
-      cols.emplace_back(col_size,
+      cols.emplace_back(
+        col_size,
         [=](cudf::size_type row) { return random_int(0, 100); },
-        [=](cudf::size_type row) { return random_int(0, 100) < 90; }
-      );
+        [=](cudf::size_type row) { return random_int(0, 100) < 90; });
     }
 
     std::vector<gdf_column*> raw_cols(num_columns, nullptr);
-    std::transform(cols.begin(), cols.end(), raw_cols.begin(),
-                   [](wrapper &c) { return c.get(); });
+    std::transform(cols.begin(), cols.end(), raw_cols.begin(), [](wrapper& c) { return c.get(); });
 
     return cudf::table{raw_cols.data(), num_columns};
   };
 
-  auto data_table = make_table(columns, column_size);
+  auto data_table   = make_table(columns, column_size);
   auto values_table = make_table(values, values_size);
 
   std::vector<bool> desc_flags(num_columns, false);
   sort_table(data_table, desc_flags);
-  
-  for(auto _ : state){
+
+  for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::lower_bound(data_table, values_table, desc_flags);
     gdf_column_free(&col);
   }
 }
 
-BENCHMARK_DEFINE_F(Search, Table)(::benchmark::State& state) {
-  BM_table(state);
-}
+BENCHMARK_DEFINE_F(Search, Table)(::benchmark::State& state) { BM_table(state); }
 
-static void CustomArguments(benchmark::internal::Benchmark* b) {
+static void CustomArguments(benchmark::internal::Benchmark* b)
+{
   for (int num_cols = 1; num_cols <= 10; num_cols *= 2)
-    for (int col_size = 1000; col_size <= 100000000; col_size *= 10)
-      b->Args({num_cols, col_size});
+    for (int col_size = 1000; col_size <= 100000000; col_size *= 10) b->Args({num_cols, col_size});
 }
 
 BENCHMARK_REGISTER_F(Search, Table)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Apply(CustomArguments);
-

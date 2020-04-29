@@ -19,9 +19,12 @@
 #include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::experimental::reduction::all(
-    column_view const& col, cudf::data_type const output_dtype,
-    rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  column_view const& col,
+  cudf::data_type const output_dtype,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
-  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::BOOL8), "all() operation can be applied with output type `bool8` only");
+  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::BOOL8),
+               "all() operation can be applied with output type `bool8` only");
   return cudf::experimental::reduction::min(col, cudf::data_type(cudf::BOOL8), mr, stream);
 }
