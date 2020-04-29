@@ -7,15 +7,18 @@
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
 - PR #4689 Compute last day of the month for a given date
 - PR #4771 Added in an option to statically link against cudart
+- PR #4788 Add cudf::day_of_year API
 - PR #4789 Disallow timestamp sum and diffs via binary ops
 - PR #4815 Add JNI total memory allocated API
 - PR #4906 Add Java bindings for interleave_columns
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 
 ## Improvements
 
+- PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
@@ -23,6 +26,7 @@
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4483 Add support fill() on dictionary columns
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
@@ -114,13 +118,20 @@
 - PR #4960 Return the result of `to_json`
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
+- PR #4967 Add more comments to top-level gpuinflate and debrotli kernels
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
+- PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
+- PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
+- PR #5039 Make `annotate` picklable
+- PR #5045 Remove call to `unique()` in concat when `axis=1`
 
 ## Bug Fixes
 
@@ -193,10 +204,22 @@
 - PR #4899 Fix series inplace handling
 - PR #4940 Fix boolean mask issue with large sized Dataframe
 - PR #4889 Fix multi-index merging
+- PR #4922 Fix cudf::strings:split logic for many columns
 - PR #4949 Fix scatter, gather benchmark constructor call
+- PR #4958 Fix strings::replace perf for long strings
 - PR #4965 Raise Error when there are duplicate columns sent to `cudf.concat`
+- PR #4996 Parquet writer: fix potentially zero-sized string dictionary
+- PR #5009 Fix pickling for string and categorical columns
 - PR #4984 Fix groupby nth aggregation negative n and exclude nulls
+- PR #5011 Fix DataFrame loc issue with boolean masking
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
+- PR #5018 Fix crash when JIT cache dir inaccessible. Fix inter version cache clash for custom cache path.
+- PR #5005 Fix CSV reader error when only one of the row selection parameters is set
+- PR #5021 Fix bug with unsigned right shift and scalar lhs
+- PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5030 Fix Groupby sort=True
+- PR #5041 Fix invalid java test for shift right unsigned
+- PR #5043 Remove invalid examples page libcudf doxygen
 
 
 # cuDF 0.13.0 (31 Mar 2020)

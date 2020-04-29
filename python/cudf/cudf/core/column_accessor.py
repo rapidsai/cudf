@@ -69,8 +69,8 @@ class ColumnAccessor(MutableMapping):
 
     @property
     def level_names(self):
-        if self._level_names is None:
-            return tuple((None,) * self.nlevels)
+        if self._level_names is None or len(self._level_names) == 0:
+            return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
 

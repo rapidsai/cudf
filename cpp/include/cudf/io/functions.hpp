@@ -158,7 +158,7 @@ struct read_csv_args {
   size_type nrows = -1;
   /// Rows to skip from the start; -1 is none
   size_type skiprows = -1;
-  /// Rows to skip from the end
+  /// Rows to skip from the end; -1 is none
   size_type skipfooter = -1;
   /// Header row index
   size_type header = 0;

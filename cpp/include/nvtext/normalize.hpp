@@ -18,7 +18,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+//! NVText APIs
 namespace nvtext {
+/**
+ * @ingroup nvtext_apis
+ * @addtogroup nvtext_normalize Normalize
+ * APIs to normalize strings column.
+ * @{
+ */
+
 /**
  * @brief Returns a new strings column by normalizing the whitespace in each
  * string in the input column.
@@ -27,12 +35,12 @@ namespace nvtext {
  * (character code-point <= ' ') runs with a single space ' ' and
  * trims whitespace from the beginning and end of the string.
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a b", "  c  d\n", "e \t f "]
  * t = normalize_spaces(s)
  * t is now ["a b","c d","e f"]
- * ```
+ * @endcode
  *
  * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
@@ -45,4 +53,5 @@ std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace nvtext
