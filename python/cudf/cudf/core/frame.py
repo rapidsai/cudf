@@ -1499,8 +1499,8 @@ class Frame(libcudf.table.Table):
             suffixes,
             self.__class__
         )
-        # Save the order of the original column names for preservation later
         to_return = mergeop.perform_merge()
+
         # If sort=True, Pandas would sort on the key columns in the
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
