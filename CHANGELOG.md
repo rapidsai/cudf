@@ -19,6 +19,7 @@
 
 ## Improvements
 
+- PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
 - PR #4450 Parquet writer: add parameter to retrieve the raw file metadata
@@ -26,6 +27,7 @@
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4483 Add support fill() on dictionary columns
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
@@ -117,6 +119,7 @@
 - PR #4960 Return the result of `to_json`
 - PR #4963 Use `cudaDeviceAttr` in `getDeviceAttribute`
 - PR #4953 add documentation for supported NVIDIA GPUs and CUDA versions for cuDF
+- PR #4967 Add more comments to top-level gpuinflate and debrotli kernels
 - PR #4968 Add CODE_OF_CONDUCT.md
 - PR #4980 Change Java HostMemoryBuffer default to prefer pinned memory
 - PR #4994 clang-format "cpp/tests" directory
@@ -125,7 +128,11 @@
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
+- PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
+- PR #5039 Make `annotate` picklable
+- PR #5045 Remove call to `unique()` in concat when `axis=1`
 
 ## Bug Fixes
 
@@ -210,6 +217,9 @@
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
+- PR #5030 Fix Groupby sort=True
+- PR #5041 Fix invalid java test for shift right unsigned
+- PR #5043 Remove invalid examples page libcudf doxygen
 
 
 # cuDF 0.13.0 (31 Mar 2020)
