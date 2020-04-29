@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_case Case
+ * APIs to convert the upper/lower case of strings characters.
+ * @{
+ */
+
+/**
  * @brief Returns a column of capitalized strings.
  *
  * Any null string entries return corresponding null output column entries.
@@ -64,5 +71,6 @@ std::unique_ptr<column> title(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
