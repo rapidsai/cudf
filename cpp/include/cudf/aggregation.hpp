@@ -18,9 +18,9 @@
 
 #include <cudf/types.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
-#include <functional>
 
 /**
  * @file aggregation.hpp
@@ -74,7 +74,7 @@ class aggregation {
 
   virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
 
-  virtual size_t do_hash() const { return std::hash<decltype(kind)>{}(kind); }
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
 
   virtual std::unique_ptr<aggregation> clone() const
   {

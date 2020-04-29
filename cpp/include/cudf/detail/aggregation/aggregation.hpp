@@ -22,8 +22,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <numeric>
 #include <functional>
+#include <numeric>
 
 namespace cudf {
 namespace experimental {
@@ -85,7 +85,7 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
 
   size_t hash_impl() const
   {
-    return std::hash<experimental::interpolation>{}(_interpolation) ^
+    return std::hash<int>{}(static_cast<int>(_interpolation)) ^
            std::accumulate(_quantiles.cbegin(), _quantiles.cend(), 0, [](size_t a, double b) {
              return a ^ std::hash<double>{}(b);
            });
@@ -125,7 +125,7 @@ struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
     return _include_nulls == other._include_nulls;
   }
 
-  size_t hash_impl() const { return std::hash<include_nulls>{}(_include_nulls); }
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_include_nulls)); }
 };
 
 /**
@@ -149,7 +149,7 @@ struct nth_element_aggregation final : derived_aggregation<nth_element_aggregati
 
   size_t hash_impl() const
   {
-    return std::hash<size_type>{}(n) ^ std::hash<include_nulls>{}(_include_nulls);
+    return std::hash<size_type>{}(n) ^ std::hash<int>{}(static_cast<int>(_include_nulls));
   }
 };
 
@@ -185,7 +185,7 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
   size_t hash_impl() const
   {
     return std::hash<std::string>{}(_source) ^ std::hash<std::string>{}(_operator_name) ^
-           std::hash<std::string>{}(_function_name) ^ std::hash<type_id>{}(_output_type.id());
+           std::hash<std::string>{}(_function_name) ^ std::hash<int>{}(_output_type.id());
   }
 };
 
