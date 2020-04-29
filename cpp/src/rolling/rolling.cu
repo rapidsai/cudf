@@ -86,21 +86,24 @@ process_rolling_window(column_device_view input,
  *        Count is updated depending on `min_periods`
  *        Returns true if it was valid, else false.
  */
-template <typename InputType, typename OutputType, typename agg_op, aggregation::Kind op, bool has_nulls>
-std::enable_if_t<op == aggregation::ROW_NUMBER, bool>
-__device__
+template <typename InputType,
+          typename OutputType,
+          typename agg_op,
+          aggregation::Kind op,
+          bool has_nulls>
+std::enable_if_t<op == aggregation::ROW_NUMBER, bool> __device__
 process_rolling_window(column_device_view input,
-                        mutable_column_device_view output,
-                        size_type start_index,
-                        size_type end_index,
-                        size_type current_index,
-                        size_type min_periods,
-                        InputType identity) {
+                       mutable_column_device_view output,
+                       size_type start_index,
+                       size_type end_index,
+                       size_type current_index,
+                       size_type min_periods,
+                       InputType identity)
+{
+  bool output_is_valid                      = ((end_index - start_index) >= min_periods);
+  output.element<OutputType>(current_index) = (current_index - start_index + 1);
 
-    bool output_is_valid = ((end_index - start_index) >= min_periods);
-    output.element<OutputType>(current_index) = (current_index - start_index + 1);
-
-    return output_is_valid;
+  return output_is_valid;
 }
 
 /**
@@ -159,7 +162,8 @@ template <typename InputType,
           aggregation::Kind op,
           bool has_nulls>
 std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
-                   !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL || op == aggregation::ROW_NUMBER),
+                   !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
+                     op == aggregation::ROW_NUMBER),
                  bool>
   __device__ process_rolling_window(column_device_view input,
                                     mutable_column_device_view output,
@@ -768,9 +772,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
 
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES}; 
+  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
   auto group_offsets{helper.group_offsets()};
-  auto const& group_labels{helper.group_labels()}; 
+  auto const& group_labels{helper.group_labels()};
 
   // `group_offsets` are interpreted in adjacent pairs, each pair representing the offsets
   // of the first, and one past the last elements in a group.
@@ -844,54 +848,57 @@ size_t multiplication_factor(cudf::data_type const& data_type)
   }
 }
 
-// Time-range window computation, with 
+// Time-range window computation, with
 //   1. no grouping keys specified
 //   2. timetamps in ASCENDING order.
 // Treat as one single group.
 template <typename TimestampImpl_t>
-std::unique_ptr<column> time_range_window_ASC(
-  column_view const& input,
-  column_view const& timestamp_column,
-  TimestampImpl_t const& mult_factor,
-  size_type preceding_window_in_days,  
-  size_type following_window_in_days,
-  size_type min_periods,
-  std::unique_ptr<aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> time_range_window_ASC(column_view const& input,
+                                              column_view const& timestamp_column,
+                                              TimestampImpl_t const& mult_factor,
+                                              size_type preceding_window_in_days,
+                                              size_type following_window_in_days,
+                                              size_type min_periods,
+                                              std::unique_ptr<aggregation> const& aggr,
+                                              rmm::mr::device_memory_resource* mr)
 {
-
-  auto preceding_calculator = [d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+  auto preceding_calculator = [d_timestamps = timestamp_column.data<TimestampImpl_t>(),
                                preceding_window_in_days,
                                mult_factor] __device__(size_type idx) {
-    auto group_start = 0;
+    auto group_start                = 0;
     auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window_in_days * mult_factor;
 
-    return ((d_timestamps + idx) -
-            thrust::lower_bound(
-              thrust::seq, d_timestamps + group_start, d_timestamps + idx, lowest_timestamp_in_window)) +
+    return ((d_timestamps + idx) - thrust::lower_bound(thrust::seq,
+                                                       d_timestamps + group_start,
+                                                       d_timestamps + idx,
+                                                       lowest_timestamp_in_window)) +
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator = [num_rows = input.size(),
-                               d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+  auto following_calculator = [num_rows     = input.size(),
+                               d_timestamps = timestamp_column.data<TimestampImpl_t>(),
                                following_window_in_days,
-                               mult_factor] __device__ (size_type idx) {
-      auto group_end = num_rows;
-      auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days*mult_factor;
+                               mult_factor] __device__(size_type idx) {
+    auto group_end                   = num_rows;
+    auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days * mult_factor;
 
-      return (thrust::upper_bound(thrust::seq, 
-                                  d_timestamps + idx, 
-                                  d_timestamps + group_end, 
-                                  highest_timestamp_in_window) 
-               - (d_timestamps + idx))
-             - 1;
+    return (thrust::upper_bound(thrust::seq,
+                                d_timestamps + idx,
+                                d_timestamps + group_end,
+                                highest_timestamp_in_window) -
+            (d_timestamps + idx)) -
+           1;
   };
 
   return cudf::experimental::detail::rolling_window(
     input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-    min_periods, aggr, mr);
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    preceding_calculator),
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    following_calculator),
+    min_periods,
+    aggr,
+    mr);
 }
 
 // Time-range window computation, for timestamps in ASCENDING order.
@@ -902,7 +909,7 @@ std::unique_ptr<column> time_range_window_ASC(
   TimestampImpl_t const& mult_factor,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type preceding_window_in_days,  
+  size_type preceding_window_in_days,
   size_type following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
@@ -913,94 +920,102 @@ std::unique_ptr<column> time_range_window_ASC(
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
                                preceding_window_in_days,
                                mult_factor] __device__(size_type idx) {
-    auto group_label = d_group_labels[idx];
-    auto group_start = d_group_offsets[group_label];
+    auto group_label                = d_group_labels[idx];
+    auto group_start                = d_group_offsets[group_label];
     auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window_in_days * mult_factor;
 
-    return ((d_timestamps + idx) -
-            thrust::lower_bound(
-              thrust::seq, d_timestamps + group_start, d_timestamps + idx, lowest_timestamp_in_window)) +
+    return ((d_timestamps + idx) - thrust::lower_bound(thrust::seq,
+                                                       d_timestamps + group_start,
+                                                       d_timestamps + idx,
+                                                       lowest_timestamp_in_window)) +
            1;  // Add 1, for `preceding` to account for current row.
-  }; 
+  };
 
   auto following_calculator = [d_group_offsets = group_offsets.data().get(),
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
                                following_window_in_days,
-                               mult_factor] __device__ (size_type idx) {
-      auto group_label = d_group_labels[idx];
-      auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
-      auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days*mult_factor;
+                               mult_factor] __device__(size_type idx) {
+    auto group_label = d_group_labels[idx];
+    auto group_end =
+      d_group_offsets[group_label +
+                      1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
+    auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days * mult_factor;
 
-      return (thrust::upper_bound(thrust::seq, 
-                                  d_timestamps + idx, 
-                                  d_timestamps + group_end, 
-                                  highest_timestamp_in_window) 
-               - (d_timestamps + idx))
-             - 1;
+    return (thrust::upper_bound(thrust::seq,
+                                d_timestamps + idx,
+                                d_timestamps + group_end,
+                                highest_timestamp_in_window) -
+            (d_timestamps + idx)) -
+           1;
   };
 
   return cudf::experimental::detail::rolling_window(
     input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-    min_periods, aggr, mr);
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    preceding_calculator),
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    following_calculator),
+    min_periods,
+    aggr,
+    mr);
 }
 
-// Time-range window computation, with 
+// Time-range window computation, with
 //   1. no grouping keys specified
 //   2. timetamps in DESCENDING order.
 // Treat as one single group.
 template <typename TimestampImpl_t>
-std::unique_ptr<column> time_range_window_DESC(
-  column_view const& input,
-  column_view const& timestamp_column,
-  TimestampImpl_t const& mult_factor,
-  size_type preceding_window_in_days, 
-  size_type following_window_in_days,
-  size_type min_periods,
-  std::unique_ptr<aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> time_range_window_DESC(column_view const& input,
+                                               column_view const& timestamp_column,
+                                               TimestampImpl_t const& mult_factor,
+                                               size_type preceding_window_in_days,
+                                               size_type following_window_in_days,
+                                               size_type min_periods,
+                                               std::unique_ptr<aggregation> const& aggr,
+                                               rmm::mr::device_memory_resource* mr)
 {
-  auto preceding_calculator = [d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+  auto preceding_calculator = [d_timestamps = timestamp_column.data<TimestampImpl_t>(),
                                preceding_window_in_days,
-                               mult_factor] __device__ (size_type idx) {
-      auto group_start = 0;
-      auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days*mult_factor;
+                               mult_factor] __device__(size_type idx) {
+    auto group_start                 = 0;
+    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days * mult_factor;
 
-      return ((d_timestamps + idx) 
-               - thrust::lower_bound(thrust::seq, 
-                                     d_timestamps + group_start, 
-                                     d_timestamps + idx, 
-                                     highest_timestamp_in_window,
-                                     thrust::greater<decltype(highest_timestamp_in_window)>())) 
-             + 1; // Add 1, for `preceding` to account for current row.
+    return ((d_timestamps + idx) -
+            thrust::lower_bound(thrust::seq,
+                                d_timestamps + group_start,
+                                d_timestamps + idx,
+                                highest_timestamp_in_window,
+                                thrust::greater<decltype(highest_timestamp_in_window)>())) +
+           1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator =
-    [
-      num_rows = input.size(),
-      d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-      following_window_in_days,
-      mult_factor
-    ] __device__ (size_type idx) {
-      auto group_end = num_rows; // Cannot fall off the end, since offsets is capped with `input.size()`.
-      auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days*mult_factor;
+  auto following_calculator = [num_rows     = input.size(),
+                               d_timestamps = timestamp_column.data<TimestampImpl_t>(),
+                               following_window_in_days,
+                               mult_factor] __device__(size_type idx) {
+    auto group_end =
+      num_rows;  // Cannot fall off the end, since offsets is capped with `input.size()`.
+    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days * mult_factor;
 
-      return (thrust::upper_bound(thrust::seq,
-                                  d_timestamps + idx,
-                                  d_timestamps + group_end,
-                                  lowest_timestamp_in_window,
-                                  thrust::greater<decltype(lowest_timestamp_in_window)>())
-                - (d_timestamps + idx))
-              - 1;
-    };
+    return (thrust::upper_bound(thrust::seq,
+                                d_timestamps + idx,
+                                d_timestamps + group_end,
+                                lowest_timestamp_in_window,
+                                thrust::greater<decltype(lowest_timestamp_in_window)>()) -
+            (d_timestamps + idx)) -
+           1;
+  };
 
   return cudf::experimental::detail::rolling_window(
     input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-    min_periods, aggr, mr);
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    preceding_calculator),
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    following_calculator),
+    min_periods,
+    aggr,
+    mr);
 }
 
 // Time-range window computation, for timestamps in DESCENDING order.
@@ -1011,7 +1026,7 @@ std::unique_ptr<column> time_range_window_DESC(
   TimestampImpl_t const& mult_factor,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type preceding_window_in_days, 
+  size_type preceding_window_in_days,
   size_type following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
@@ -1021,46 +1036,49 @@ std::unique_ptr<column> time_range_window_DESC(
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
                                preceding_window_in_days,
-                               mult_factor] __device__ (size_type idx) {
-      auto group_label = d_group_labels[idx];
-      auto group_start = d_group_offsets[group_label];
-      auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days*mult_factor;
+                               mult_factor] __device__(size_type idx) {
+    auto group_label                 = d_group_labels[idx];
+    auto group_start                 = d_group_offsets[group_label];
+    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days * mult_factor;
 
-      return ((d_timestamps + idx) 
-               - thrust::lower_bound(thrust::seq, 
-                                     d_timestamps + group_start, 
-                                     d_timestamps + idx, 
-                                     highest_timestamp_in_window,
-                                     thrust::greater<decltype(highest_timestamp_in_window)>())) 
-             + 1; // Add 1, for `preceding` to account for current row.
+    return ((d_timestamps + idx) -
+            thrust::lower_bound(thrust::seq,
+                                d_timestamps + group_start,
+                                d_timestamps + idx,
+                                highest_timestamp_in_window,
+                                thrust::greater<decltype(highest_timestamp_in_window)>())) +
+           1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator =
-  [
-    d_group_offsets = group_offsets.data().get(),
-    d_group_labels  = group_labels.data().get(),
-    d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-    following_window_in_days,
-    mult_factor
-  ] __device__ (size_type idx) {
+  auto following_calculator = [d_group_offsets = group_offsets.data().get(),
+                               d_group_labels  = group_labels.data().get(),
+                               d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
+                               following_window_in_days,
+                               mult_factor] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
-    auto group_end = d_group_offsets[group_label+1]; // Cannot fall off the end, since offsets is capped with `input.size()`.
-    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days*mult_factor;
+    auto group_end =
+      d_group_offsets[group_label +
+                      1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
+    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days * mult_factor;
 
     return (thrust::upper_bound(thrust::seq,
                                 d_timestamps + idx,
                                 d_timestamps + group_end,
                                 lowest_timestamp_in_window,
-                                thrust::greater<decltype(lowest_timestamp_in_window)>())
-              - (d_timestamps + idx))
-            - 1;
+                                thrust::greater<decltype(lowest_timestamp_in_window)>()) -
+            (d_timestamps + idx)) -
+           1;
   };
 
   return cudf::experimental::detail::rolling_window(
     input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), following_calculator),
-    min_periods, aggr, mr);
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    preceding_calculator),
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    following_calculator),
+    min_periods,
+    aggr,
+    mr);
 }
 
 template <typename TimestampImpl_t>
@@ -1081,56 +1099,44 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
     static_cast<TimestampImpl_t>(multiplication_factor(timestamp_column.type()))};
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
-    return (group_offsets.size() == 0)?
-      time_range_window_ASC<TimestampImpl_t>(
-        input, 
-        timestamp_column,
-        mult_factor,
-        preceding_window_in_days,
-        following_window_in_days,
-        min_periods,
-        aggr,
-        mr
-      )
-      :
-      time_range_window_ASC(
-        input, 
-        timestamp_column,
-        mult_factor,
-        group_offsets,
-        group_labels,
-        preceding_window_in_days,
-        following_window_in_days,
-        min_periods,
-        aggr,
-        mr
-      );
-  }
-  else {
-    return (group_offsets.size() == 0)?
-      time_range_window_DESC(
-        input, 
-        timestamp_column,
-        mult_factor,
-        preceding_window_in_days,
-        following_window_in_days,
-        min_periods,
-        aggr,
-        mr
-      )
-      :
-      time_range_window_DESC(
-        input, 
-        timestamp_column,
-        mult_factor,
-        group_offsets,
-        group_labels,
-        preceding_window_in_days,
-        following_window_in_days,
-        min_periods,
-        aggr,
-        mr
-      );
+    return (group_offsets.size() == 0)
+             ? time_range_window_ASC<TimestampImpl_t>(input,
+                                                      timestamp_column,
+                                                      mult_factor,
+                                                      preceding_window_in_days,
+                                                      following_window_in_days,
+                                                      min_periods,
+                                                      aggr,
+                                                      mr)
+             : time_range_window_ASC(input,
+                                     timestamp_column,
+                                     mult_factor,
+                                     group_offsets,
+                                     group_labels,
+                                     preceding_window_in_days,
+                                     following_window_in_days,
+                                     min_periods,
+                                     aggr,
+                                     mr);
+  } else {
+    return (group_offsets.size() == 0) ? time_range_window_DESC(input,
+                                                                timestamp_column,
+                                                                mult_factor,
+                                                                preceding_window_in_days,
+                                                                following_window_in_days,
+                                                                min_periods,
+                                                                aggr,
+                                                                mr)
+                                       : time_range_window_DESC(input,
+                                                                timestamp_column,
+                                                                mult_factor,
+                                                                group_offsets,
+                                                                group_labels,
+                                                                preceding_window_in_days,
+                                                                following_window_in_days,
+                                                                min_periods,
+                                                                aggr,
+                                                                mr);
   }
 }
 
@@ -1154,11 +1160,11 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  using index_vector = sort_groupby_helper::index_vector;
+  using index_vector        = sort_groupby_helper::index_vector;
 
   index_vector group_offsets, group_labels;
   if (group_keys.num_columns() > 0) {
-    sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES}; 
+    sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
     group_offsets = helper.group_offsets();
     group_labels  = helper.group_labels();
   }

@@ -113,7 +113,8 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, include_n
     aggregation::NTH_ELEMENT, n, _include_nulls);
 }
 /// Factory to create a ROW_NUMBER aggregation
-std::unique_ptr<aggregation> make_row_number_aggregation() {
+std::unique_ptr<aggregation> make_row_number_aggregation()
+{
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
 /// Factory to create a UDF aggregation

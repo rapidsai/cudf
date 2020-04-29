@@ -77,7 +77,8 @@ struct DeviceCount {
 /* @brief `row_number` operator - used in rolling windows */
 struct DeviceRowNumber {
   template <typename T>
-  static constexpr T identity() {
+  static constexpr T identity()
+  {
     return T{0};
   }
 };
