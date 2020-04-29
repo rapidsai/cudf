@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 
 import cudf
-import cudf._libxx.json as libjson
+import cudf._lib.json as libjson
 from cudf.utils import ioutils
 
 
@@ -73,4 +73,4 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = cudf_val.to_pandas()
-    pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)
+    return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)

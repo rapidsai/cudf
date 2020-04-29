@@ -17,15 +17,13 @@
 #include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
-
 // Create a strings-type column from array of pointer/size pairs
-std::unique_ptr<scalar> make_string_scalar(
-    std::string const& string,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<scalar> make_string_scalar(std::string const& string,
+                                           cudaStream_t stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
-    auto s = new string_scalar(string, true, stream, mr);
-    return std::unique_ptr<scalar>(s);
+  auto s = new string_scalar(string, true, stream, mr);
+  return std::unique_ptr<scalar>(s);
 }
 
 }  // namespace cudf

@@ -22,26 +22,35 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
- * @brief Computes a value for a quantile by interpolating between the values on
- *        either side of the desired quantile.
+ * @brief Computes quantiles with interpolation.
+
+ * Computes the specified quantiles by interpolating values between which they
+ * lie, using the interpolation strategy specified in `interp`.
  *
- * @param[in] input        Column used to compute quantile values.
- * @param[in] q            Desired quantile in range [0, 1].
- * @param[in] interp       Strategy used to interpolate between the two values
- *                         on either side of the desired quantile.
- * @param[in] column_order Indicates the sortedness of the column.
- *
- * @returns Value of the desired quantile, or null if the column has no valid
- *          elements.
+ * @param[in] input           Column from which to compute quantile values.
+ * @param[in] q               Specified quantiles in range [0, 1].
+ * @param[in] interp          Strategy used to select between values adjacent to
+ *                            a specified quantile.
+ * @param[in] ordered_indices Column containing the sorted order of `input`.
+ *                            If the column is empty, all `input` values are
+ *                            used in existing order. Indices must be in range
+ *                            [0, `input.size()`), but are not required to be
+ *                            unique. Values not indexed by this column will be
+ *                            ignored.
+ * @param[in] exact           If true, returns doubles.
+ *                            If false, returns same type as input.
+
+ * @returns Column of specified quantiles, with nulls for indeterminable values.
  */
 
-std::unique_ptr<scalar>
-quantile(column_view const& input,
-         double q,
-         interpolation interp = interpolation::LINEAR,
-         order_info column_order = {});
+std::unique_ptr<column> quantile(
+  column_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                = interpolation::LINEAR,
+  column_view const& ordered_indices  = {},
+  bool exact                          = true,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -71,15 +80,14 @@ quantile(column_view const& input,
  * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
  */
-std::unique_ptr<table>
-quantiles(table_view const& input,
-          std::vector<double> const& q,
-          interpolation interp = interpolation::NEAREST,
-          cudf::sorted is_input_sorted = sorted::NO,
-          std::vector<order> const& column_order = {},
-          std::vector<null_order> const& null_precedence = {},
-          rmm::mr::device_memory_resource* mr =
-            rmm::mr::get_default_resource());
+std::unique_ptr<table> quantiles(
+  table_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                           = interpolation::NEAREST,
+  cudf::sorted is_input_sorted                   = sorted::NO,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-} // namespace experimental
-} // namespace cudf
+}  // namespace experimental
+}  // namespace cudf

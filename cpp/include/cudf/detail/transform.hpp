@@ -20,16 +20,15 @@
 
 namespace cudf {
 namespace experimental {
-namespace detail {    
-
+namespace detail {
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.
  *
  * Computes:
  * `out[i] = F(in[i])`
- * 
- * The output null mask is the same is the input null mask so if input[i] is 
+ *
+ * The output null mask is the same is the input null mask so if input[i] is
  * null then output[i] is also null
  *
  * @param input         An immutable view of the input column to transform
@@ -46,29 +45,28 @@ std::unique_ptr<column> transform(
   std::string const& unary_udf,
   data_type output_type,
   bool is_ptx,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream = 0);
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::experimental::nans_to_nulls
  *
  * @param stream        CUDA stream on which to execute kernels
  **/
-std::pair<std::unique_ptr<rmm::device_buffer>, size_type>
-nans_to_nulls(column_view const& input,
-              rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource(),
-              cudaStream_t stream = 0);
-
+std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::experimental::bools_to_mask
  *
  * @param stream        CUDA stream on which to execute kernels
  **/
-std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type>
-bools_to_mask(column_view const& input,
-                  rmm::mr::device_memory_resource * mr = rmm::mr::get_default_resource(),
-                  cudaStream_t stream = 0);
-} // namespace detail
-} // namespace experimental
-} // namespace cudf
+std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
+  column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+}  // namespace detail
+}  // namespace experimental
+}  // namespace cudf

@@ -40,10 +40,6 @@ public final class Table implements AutoCloseable {
   private final long rows;
   private long nativeHandle;
   private ColumnVector[] columns;
-  // This is an estimate of how compressed data is when guessing the output size of data
-  // For ORC and Parquet this is relatively conservative. We might want a different
-  // one for text based formats.
-  private static final long COMPRESSION_RATIO_ESTIMATE = 10;
 
   /**
    * Table class makes a copy of the array of {@link ColumnVector}s passed to it. The class
@@ -73,7 +69,12 @@ public final class Table implements AutoCloseable {
     nativeHandle = createCudfTableView(viewPointers);
   }
 
-  private Table(long[] cudfColumns) {
+  /**
+   * Table class makes a copy of the array of cudfColumns passed to it. The class will decrease the
+   * refcount on itself and all its contents when closed and free resources if refcount is zero
+   * @param cudfColumns - Array of nativeHandles
+   */
+  Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
     this.columns = new ColumnVector[cudfColumns.length];
     try {
@@ -361,11 +362,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long interleaveColumns(long input);
+
   private static native long[] filter(long input, long mask);
 
-  //XXX until we have split a ColumnVector into a host column and a device column
-  // caching the table_view is a bug, as we could drop the device data which would
-  // invalidate everything that the table_view is pointing at on the device.
   private native long createCudfTableView(long[] nativeColumnViewHandles);
 
   /////////////////////////////////////////////////////////////////////////////
@@ -390,20 +390,17 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
-    long amount = opts.getSizeGuessOrElse(() -> path.length());
-    try (DevicePrediction prediction = new DevicePrediction(amount, "CSV FILE")) {
-      return new Table(
-          readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
-              opts.getIncludeColumnNames(), path.getAbsolutePath(),
-              0, 0,
-              opts.getHeaderRow(),
-              opts.getDelim(),
-              opts.getQuote(),
-              opts.getComment(),
-              opts.getNullValues(),
-              opts.getTrueValues(),
-              opts.getFalseValues()));
-    }
+    return new Table(
+        readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+            opts.getIncludeColumnNames(), path.getAbsolutePath(),
+            0, 0,
+            opts.getHeaderRow(),
+            opts.getDelim(),
+            opts.getQuote(),
+            opts.getComment(),
+            opts.getNullValues(),
+            opts.getTrueValues(),
+            opts.getFalseValues()));
   }
 
   /**
@@ -444,8 +441,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostPrediction prediction = new HostPrediction(len, "readCSV");
-        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
@@ -468,19 +464,16 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuessOrElse(len);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "CSV BUFFER")) {
-      return new Table(readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
-          opts.getIncludeColumnNames(), null,
-          buffer.getAddress() + offset, len,
-          opts.getHeaderRow(),
-          opts.getDelim(),
-          opts.getQuote(),
-          opts.getComment(),
-          opts.getNullValues(),
-          opts.getTrueValues(),
-          opts.getFalseValues()));
-    }
+    return new Table(readCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
+        opts.getIncludeColumnNames(), null,
+        buffer.getAddress() + offset, len,
+        opts.getHeaderRow(),
+        opts.getDelim(),
+        opts.getQuote(),
+        opts.getComment(),
+        opts.getNullValues(),
+        opts.getTrueValues(),
+        opts.getFalseValues()));
   }
 
   /**
@@ -499,11 +492,8 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readParquet(ParquetOptions opts, File path) {
-    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET FILE")) {
-      return new Table(readParquet(opts.getIncludeColumnNames(),
-          path.getAbsolutePath(), 0, 0, opts.timeUnit().nativeId));
-    }
+    return new Table(readParquet(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().nativeId));
   }
 
   /**
@@ -540,8 +530,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostPrediction prediction = new HostPrediction(len, "readParquet");
-        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
@@ -563,11 +552,8 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "PARQUET BUFFER")) {
-      return new Table(readParquet(opts.getIncludeColumnNames(),
-          null, buffer.getAddress() + offset, len, opts.timeUnit().nativeId));
-    }
+    return new Table(readParquet(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len, opts.timeUnit().nativeId));
   }
 
   /**
@@ -586,16 +572,12 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, File path) {
-    long amount = opts.getSizeGuessOrElse(() -> path.length() * COMPRESSION_RATIO_ESTIMATE);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "ORC FILE")) {
-      return new Table(readORC(opts.getIncludeColumnNames(),
-          path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().nativeId));
-    }
+    return new Table(readORC(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().nativeId));
   }
 
   /**
    * Read ORC formatted data.
-   * @param buffer raw ORC formatted bytes.
    * @param buffer raw ORC formatted bytes.
    * @return the data parsed as a table on the GPU.
    */
@@ -628,8 +610,7 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostPrediction prediction = new HostPrediction(len, "readORC");
-        HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
@@ -651,12 +632,9 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    long amount = opts.getSizeGuessOrElse(len * COMPRESSION_RATIO_ESTIMATE);
-    try (DevicePrediction prediction = new DevicePrediction(amount, "ORC BUFFER")) {
-      return new Table(readORC(opts.getIncludeColumnNames(),
-          null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-          opts.timeUnit().nativeId));
-    }
+    return new Table(readORC(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
+        opts.timeUnit().nativeId));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -850,18 +828,31 @@ public final class Table implements AutoCloseable {
     if (tables.length < 2) {
       throw new IllegalArgumentException("concatenate requires 2 or more tables");
     }
-    long amount = 0;
     int numColumns = tables[0].getNumberOfColumns();
     long[] tableHandles = new long[tables.length];
     for (int i = 0; i < tables.length; ++i) {
-      amount += tables[i].getDeviceMemorySize();
       tableHandles[i] = tables[i].nativeHandle;
       assert tables[i].getNumberOfColumns() == numColumns : "all tables must have the same schema";
     }
-    try (DevicePrediction prediction = new DevicePrediction(amount, "concat")) {
-      return new Table(concatenate(tableHandles));
-    }
+    return new Table(concatenate(tableHandles));
   }
+
+  /**
+   * Interleave all columns into a single column. Columns must all have the same data type and length.
+   *
+   * Example:
+   * ```
+   * input  = [[A1, A2, A3], [B1, B2, B3]]
+   * return = [A1, B1, A2, B2, A3, B3]
+   * ```
+   *
+   * @return The interleaved columns as a single column
+   */
+  public ColumnVector interleaveColumns() {
+    assert this.getNumberOfColumns() >= 2 : ".interleaveColumns() operation requires at least 2 columns";
+    return new ColumnVector(interleaveColumns(this.nativeHandle));
+  }
+
 
   /**
    * Given a sorted table return the lower bound.
@@ -971,9 +962,7 @@ public final class Table implements AutoCloseable {
       sortKeys[i] = columns[index].getNativeView();
     }
 
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "orderBy")) {
-      return new Table(orderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
-    }
+    return new Table(orderBy(nativeHandle, sortKeys, isDescending, areNullsSmallest));
   }
 
   public static OrderByArg asc(final int index) {
@@ -992,34 +981,105 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true, isNullSmallest);
   }
 
+  /**
+   * Returns count aggregation with only valid values.
+   * Null values are skipped.
+   * @param index Column on which aggregation is to be performed
+   * @return count aggregation of column `index` with null values skipped.
+   */
   public static Aggregate count(int index) {
-    return Aggregate.count(index);
+    return Aggregate.count(index, false);
   }
 
+  /**
+   * Returns count aggregation
+   * @param index Column on which aggregation is to be performed.
+   * @param include_nulls Include nulls if set to true
+   * @return count aggregation of column `index`
+   */
+  public static Aggregate count(int index, boolean include_nulls) {
+    return Aggregate.count(index, include_nulls);
+  }
+
+  /**
+   * Returns max aggregation. Null values are skipped.
+   * @param index Column on which max aggregation is to be performed.
+   * @return max aggregation of column `index`
+   */
   public static Aggregate max(int index) {
     return Aggregate.max(index);
   }
 
+  /**
+   * Returns min aggregation. Null values are skipped.
+   * @param index Column on which min aggregation is to be performed.
+   * @return min aggregation of column `index`
+   */
   public static Aggregate min(int index) {
     return Aggregate.min(index);
   }
 
+  /**
+   * Returns sum aggregation. Null values are skipped.
+   * @param index Column on which sum aggregation is to be performed.
+   * @return sum aggregation of column `index`
+   */
   public static Aggregate sum(int index) {
     return Aggregate.sum(index);
   }
 
+  /**
+   * Returns mean aggregation. Null values are skipped.
+   * @param index Column on which mean aggregation is to be performed.
+   * @return mean aggregation of column `index`
+   */
   public static Aggregate mean(int index) {
     return Aggregate.mean(index);
   }
 
+  /**
+   * Returns median aggregation. Null values are skipped.
+   * @param index Column on which median aggregation is to be performed.
+   * @return median aggregation of column `index`
+   */
   public static Aggregate median(int index) {
     return Aggregate.median(index);
   }
 
+  /**
+   * Returns first aggregation.
+   * @param index Column on which first aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return first aggregation of column `index`
+   */
+  public static Aggregate first(int index, boolean includeNulls) {
+    return Aggregate.first(index, includeNulls);
+  }
+
+  /**
+   * Returns last aggregation.
+   * @param index Column on which last aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return last aggregation of column `index`
+   */
+  public static Aggregate last(int index, boolean includeNulls) {
+    return Aggregate.last(index, includeNulls);
+  }
+
+  /**
+   * Returns aggregate operations grouped by columns provided in indices
+   * @param groupByOptions Options provided in the builder
+   * @param indices columnns to be considered for groupBy
+   */
   public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
+  /**
+   * Returns aggregate operations grouped by columns provided in indices
+   * null is considered as key while grouping.
+   * @param indices columnns to be considered for groupBy
+   */
   public AggregateOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);
@@ -1043,11 +1103,9 @@ public final class Table implements AutoCloseable {
    */
   public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
     int[] partitionOffsets = new int[numberOfPartitions];
-    try (DevicePrediction dp = new DevicePrediction(getDeviceMemorySize(), "roundRobinPartition")) {
-      return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
-          numberOfPartitions, startPartition,
-          partitionOffsets)), partitionOffsets);
-    }
+    return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
+        numberOfPartitions, startPartition,
+        partitionOffsets)), partitionOffsets);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -1086,9 +1144,7 @@ public final class Table implements AutoCloseable {
   public Table filter(ColumnVector mask) {
     assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
-    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
-      return new Table(filter(nativeHandle, mask.getNativeView()));
-    }
+    return new Table(filter(nativeHandle, mask.getNativeView()));
   }
 
   /**
@@ -1233,8 +1289,6 @@ public final class Table implements AutoCloseable {
      *        output:   1,   1
      *                  1,   2
      *                  2,   1 ==> aggregated count
-     * @param aggregates
-     * @return
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null;
@@ -1267,14 +1321,12 @@ public final class Table implements AutoCloseable {
       assert opIndex == totalOps: opIndex + " == " + totalOps;
 
       Table aggregate;
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "aggregate")) {
-        aggregate = new Table(groupByAggregate(
-            operation.table.nativeHandle,
-            operation.indices,
-            aggColumnIndexes,
-            aggOperationIds,
-            groupByOptions.getIgnoreNullKeys()));
-      }
+      aggregate = new Table(groupByAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          aggColumnIndexes,
+          aggOperationIds,
+          groupByOptions.getIgnoreNullKeys()));
       try {
         // prepare the final table
         ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
@@ -1317,7 +1369,7 @@ public final class Table implements AutoCloseable {
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
      * 
-     * This method returns a {@Table} instance, with one result column for each specified
+     * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
      * 
      * In this example, for the following input:
@@ -1348,7 +1400,8 @@ public final class Table implements AutoCloseable {
      * 
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
-     * @throws IllegalArgumentException if the window arguments are not of type {@link FrameType#ROWS},
+     * @throws IllegalArgumentException if the window arguments are not of type
+     * {@link WindowOptions.FrameType#ROWS},
      * i.e. a timestamp column is specified for a window-aggregation.
      */
     public Table aggregateWindows(WindowAggregate... windowAggregates) {
@@ -1390,14 +1443,12 @@ public final class Table implements AutoCloseable {
       assert opIndex == totalOps : opIndex + " == " + totalOps;
 
       Table aggregate;
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "window-aggregate")) {
-        aggregate = new Table(rollingWindowAggregate(
-            operation.table.nativeHandle,
-            operation.indices,
-            aggColumnIndexes,
-            aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-            groupByOptions.getIgnoreNullKeys()));
-      }
+      aggregate = new Table(rollingWindowAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          aggColumnIndexes,
+          aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+          groupByOptions.getIgnoreNullKeys()));
       try {
         // prepare the final table
         ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -1436,7 +1487,7 @@ public final class Table implements AutoCloseable {
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
      * 
-     * This method returns a {@Table} instance, with one result column for each specified
+     * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
      * 
      * In this example, for the following input:
@@ -1467,7 +1518,8 @@ public final class Table implements AutoCloseable {
      * 
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
-     * @throws IllegalArgumentException if the window arguments are not of type {@link FrameType#RANGE}, 
+     * @throws IllegalArgumentException if the window arguments are not of type
+     * {@link WindowOptions.FrameType#RANGE},
      * i.e. the timestamp-column was not specified for the aggregation.
      */
     public Table aggregateWindowsOverTimeRanges(WindowAggregate... windowAggregates) {
@@ -1512,15 +1564,13 @@ public final class Table implements AutoCloseable {
       assert opIndex == totalOps : opIndex + " == " + totalOps;
 
       Table aggregate;
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "time-range window-aggregate")) {
-        aggregate = new Table(timeRangeRollingWindowAggregate(
-            operation.table.nativeHandle,
-            operation.indices,
-            timestampColumnIndexes,
-            aggColumnIndexes,
-            aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-            groupByOptions.getIgnoreNullKeys()));
-      }
+      aggregate = new Table(timeRangeRollingWindowAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          timestampColumnIndexes,
+          aggColumnIndexes,
+          aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+          groupByOptions.getIgnoreNullKeys()));
       try {
         // prepare the final table
         ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -1561,11 +1611,8 @@ public final class Table implements AutoCloseable {
      * left non-join columns, right non-join columns.
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize() +
-          rightJoinIndices.operation.table.getDeviceMemorySize(), "leftJoin")) {
-        return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
-            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
-      }
+      return new Table(Table.leftJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -1579,11 +1626,8 @@ public final class Table implements AutoCloseable {
      * left non-join columns, right non-join columns.
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize() +
-          rightJoinIndices.operation.table.getDeviceMemorySize(), "innerJoin")) {
-        return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
-            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
-      }
+      return new Table(Table.innerJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -1597,10 +1641,8 @@ public final class Table implements AutoCloseable {
      * @return the left semi-joined table.
      */
     public Table leftSemiJoin(TableOperation rightJoinIndices) {
-      try (DevicePrediction ignored = new DevicePrediction(operation.table.getDeviceMemorySize(), "leftSemiJoin")) {
-        return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
-            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
-      }
+      return new Table(Table.leftSemiJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -1614,10 +1656,8 @@ public final class Table implements AutoCloseable {
      * @return the left anti-joined table.
      */
     public Table leftAntiJoin(TableOperation rightJoinIndices) {
-      try (DevicePrediction ignored = new DevicePrediction(operation.table.getDeviceMemorySize(), "leftSemiJoin")) {
-        return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
-            rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
-      }
+      return new Table(Table.leftAntiJoin(operation.table.nativeHandle, operation.indices,
+          rightJoinIndices.operation.table.nativeHandle, rightJoinIndices.operation.indices));
     }
 
     /**
@@ -1628,12 +1668,10 @@ public final class Table implements AutoCloseable {
      */
     public PartitionedTable hashPartition(int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      try (DevicePrediction prediction = new DevicePrediction(operation.table.getDeviceMemorySize(), "partition")) {
-        return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
-            operation.indices,
-            partitionOffsets.length,
-            partitionOffsets)), partitionOffsets);
-      }
+      return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
+          operation.indices,
+          partitionOffsets.length,
+          partitionOffsets)), partitionOffsets);
     }
 
     /**

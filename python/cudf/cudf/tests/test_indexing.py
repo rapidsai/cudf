@@ -1,5 +1,6 @@
 from itertools import combinations
 
+import cupy
 import numpy as np
 import pandas as pd
 import pytest
@@ -96,14 +97,14 @@ def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = Series(a1)
     # Indexing
-    sr1 = series[i1]
+    sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
-    sr2 = sr1[i2]
+    sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
     # Index with stride
-    sr3 = sr2[i3]
+    sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
     np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
 
@@ -114,6 +115,29 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+
+def test_series_indexing_large_size():
+    n_elem = 100_000
+    gsr = cudf.Series(cupy.ones(n_elem))
+    gsr[0] = None
+    got = gsr[gsr.isna()]
+    expect = Series([None], dtype="float64")
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
+)
+def test_series_get_item(psr, arg):
+    gsr = Series.from_pandas(psr)
+
+    expect = psr[arg]
+    got = gsr[arg]
+
+    assert_eq(expect, got)
 
 
 def test_dataframe_column_name_indexing():
@@ -259,6 +283,27 @@ def test_dataframe_loc(scalar, step):
     )
 
 
+def test_dataframe_loc_duplicate_index_scalar():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf.loc[2], gdf.loc[2])
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [[True, False, False, False, False], [True, False, True, False, True]],
+)
+@pytest.mark.parametrize("arg", ["a", slice("a", "a"), slice("a", "b")])
+def test_dataframe_loc_mask(mask, arg):
+    pdf = pd.DataFrame(
+        {"a": ["a", "b", "c", "d", "e"], "b": ["f", "g", "h", "i", "j"]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
+
+
 @pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()
@@ -290,6 +335,7 @@ def test_series_loc_numerical():
         ps.loc[[True, False, True, False, True]],
         gs.loc[[True, False, True, False, True]],
     )
+    assert_eq(ps.loc[[5, 8, 9]], gs.loc[cupy.array([5, 8, 9])])
 
 
 def test_series_loc_string():
@@ -387,6 +433,46 @@ def test_series_loc_categorical():
     )
 
 
+@pytest.mark.parametrize(
+    "obj",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3, 4]},
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+        pd.Series(
+            [1, 2, 3, 4],
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    {"A": [2, 3, 1, 4], "B": ["low", "high", "high", "low"]}
+                )
+            ),
+        ),
+    ],
+)
+def test_dataframe_series_loc_multiindex(obj):
+    pindex = pd.MultiIndex.from_frame(
+        pd.DataFrame({"A": [3, 2], "B": ["high", "low"]})
+    )
+
+    gobj = cudf.from_pandas(obj)
+    gindex = cudf.MultiIndex.from_pandas(pindex)
+
+    # cudf MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[gindex]
+    assert_eq(expected, got)
+
+    # pandas MultinIndex as arg
+    expected = obj.loc[pindex]
+    got = gobj.loc[pindex]
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 5, 20, 100])
 def test_series_iloc(nelem):
 
@@ -405,19 +491,22 @@ def test_series_iloc(nelem):
     np.testing.assert_allclose(gs.iloc[nelem - 1], ps.iloc[nelem - 1])
 
     # positive tests for slice
-    np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
+    np.testing.assert_allclose(gs.iloc[-1:1].to_array(), ps.iloc[-1:1])
     np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : -1], ps.iloc[nelem - 1 : -1]
-    )
-    np.testing.assert_allclose(gs.iloc[0 : nelem - 1], ps.iloc[0 : nelem - 1])
-    np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
-    np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
-    np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
-    np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : nelem + 1], ps.iloc[nelem - 1 : nelem + 1]
+        gs.iloc[nelem - 1 : -1].to_array(), ps.iloc[nelem - 1 : -1]
     )
     np.testing.assert_allclose(
-        gs.iloc[nelem : nelem * 2], ps.iloc[nelem : nelem * 2]
+        gs.iloc[0 : nelem - 1].to_pandas(), ps.iloc[0 : nelem - 1]
+    )
+    np.testing.assert_allclose(gs.iloc[0:nelem].to_pandas(), ps.iloc[0:nelem])
+    np.testing.assert_allclose(gs.iloc[1:1].to_pandas(), ps.iloc[1:1])
+    np.testing.assert_allclose(gs.iloc[1:2].to_pandas(), ps.iloc[1:2].values)
+    np.testing.assert_allclose(
+        gs.iloc[nelem - 1 : nelem + 1].to_pandas(),
+        ps.iloc[nelem - 1 : nelem + 1],
+    )
+    np.testing.assert_allclose(
+        gs.iloc[nelem : nelem * 2].to_pandas(), ps.iloc[nelem : nelem * 2]
     )
 
 
@@ -509,7 +598,42 @@ def test_dataframe_take(ntake):
     assert out.ff.null_count == 0
     np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
     np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
-    np.testing.assert_array_equal(out.index, take_indices)
+    np.testing.assert_array_equal(out.index.to_array(), take_indices)
+
+
+@pytest.mark.parametrize("keep_index", [True, False])
+@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
+def test_series_take(ntake, keep_index):
+    np.random.seed(0)
+    nelem = 123
+
+    data = np.random.randint(0, 20, nelem)
+    sr = Series(data)
+
+    take_indices = np.random.randint(0, len(sr), ntake)
+
+    if keep_index is True:
+        out = sr.take(take_indices)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+    elif keep_index is False:
+        out = sr.take(take_indices, keep_index=False)
+        np.testing.assert_array_equal(out.to_array(), data[take_indices])
+        np.testing.assert_array_equal(
+            out.index.to_array(), sr.index.to_array()
+        )
+
+
+def test_series_take_positional():
+    psr = pd.Series([1, 2, 3, 4, 5], index=["a", "b", "c", "d", "e"])
+
+    gsr = Series.from_pandas(psr)
+
+    take_indices = [1, 2, 0, 3]
+
+    expect = psr.take(take_indices)
+    got = gsr.take(take_indices, keep_index=True)
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])

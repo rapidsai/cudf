@@ -11,6 +11,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf._lib.nvtx import annotate
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -90,6 +91,13 @@ class Index(Frame):
             return self
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
+
+    def _mimic_inplace(self, other, inplace=False):
+        if inplace is True:
+            col = self._data[self.name]
+            col._mimic_inplace(other._data[other.name], inplace=True)
+        else:
+            return other
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -281,6 +289,7 @@ class Index(Frame):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
         if self is other:
             return True
@@ -375,7 +384,6 @@ class Index(Frame):
         return Series(self._values)
 
     @property
-    @property
     def is_unique(self):
         raise (NotImplementedError)
 
@@ -429,7 +437,48 @@ class Index(Frame):
             return NotImplemented
 
     def isin(self, values):
-        return self.to_series().isin(values)
+        """Return a boolean array where the index values are in values.
+
+        Compute boolean array of whether each index value is found in
+        the passed set of values. The length of the returned boolean
+        array matches the length of the index.
+
+        Parameters
+        ----------
+        values : set, list-like, Index
+            Sought values.
+
+        Returns
+        -------
+        is_contained : cupy array
+            CuPy array of boolean values.
+
+        """
+
+        result = self.to_series().isin(values).values
+
+        return result
+
+    def where(self, cond, other=None):
+        """
+        Replace values where the condition is False.
+
+        Parameters
+        ----------
+        cond : bool array-like with the same length as self
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, or array-like
+            Entries where cond is False are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+        Returns
+        -------
+        Same type as caller
+        """
+        return super().where(cond=cond, other=other)
 
     @property
     def __cuda_array_interface__(self):
@@ -448,16 +497,28 @@ class Index(Frame):
         return ind
 
     @classmethod
-    def _from_table(cls, table, names=None):
+    def _from_table(cls, table):
         if not isinstance(table, RangeIndex):
             if table._num_columns == 0:
                 raise ValueError("Cannot construct Index from any empty Table")
-            if names is None:
-                names = table._data.names
             if table._num_columns == 1:
-                return as_index(table._data.columns[0], name=names[0])
+                values = next(iter(table._data.values()))
+
+                if isinstance(values, NumericalColumn):
+                    out = GenericIndex.__new__(GenericIndex)
+                elif isinstance(values, DatetimeColumn):
+                    out = DatetimeIndex.__new__(DatetimeIndex)
+                elif isinstance(values, StringColumn):
+                    out = StringIndex.__new__(StringIndex)
+                elif isinstance(values, CategoricalColumn):
+                    out = CategoricalIndex.__new__(CategoricalIndex)
+                out._data = table._data
+                out._index = None
+                return out
             else:
-                return cudf.MultiIndex._from_table(table, names=names)
+                return cudf.MultiIndex._from_table(
+                    table, names=table._data.names
+                )
         else:
             return as_index(table)
 
@@ -779,18 +840,44 @@ class GenericIndex(Index):
         return len(self._values)
 
     def __repr__(self):
-        vals = [self._values[i] for i in range(min(len(self), 10))]
-        return (
-            "{}({}, dtype={}".format(
-                self.__class__.__name__, vals, self._values.dtype
+        from pandas._config import get_option
+
+        max_seq_items = get_option("max_seq_items") or len(self)
+        mr = 0
+        if 2 * max_seq_items < len(self):
+            mr = max_seq_items + 1
+
+        if len(self) > mr and mr != 0:
+            top = self[0:mr]
+            bottom = self[-1 * mr :]
+            from cudf import concat
+
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        if preprocess._values.nullable:
+            output = (
+                self.__class__(preprocess._values.astype("O").fillna("null"))
+                .to_pandas()
+                .__repr__()
             )
-            + (
-                ", name='{}'".format(self.name)
-                if self.name is not None
-                else ""
-            )
-            + ")"
-        )
+        else:
+            output = preprocess.to_pandas().__repr__()
+
+        lines = output.split("\n")
+        if len(lines) > 1:
+            tmp_meta = lines[-1]
+            prior_to_dtype = lines[-1].split("dtype")[0]
+            lines = lines[:-1]
+            lines.append(prior_to_dtype + "dtype='%s'" % self.dtype)
+            if self.name is not None:
+                lines[-1] = lines[-1] + ", name='%s'" % self.name
+            if "length" in tmp_meta:
+                lines[-1] = lines[-1] + ", length=%d)" % len(self)
+            else:
+                lines[-1] = lines[-1] + ")"
+
+        return "\n".join(lines)
 
     def __getitem__(self, index):
         res = self._values[index]

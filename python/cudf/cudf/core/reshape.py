@@ -75,8 +75,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for idx, o in enumerate(objs):
             if idx == 0:
                 df.index = o.index
-            for col in o.columns:
-                df[col] = o[col]._column
+            for col in o._data.names:
+                if col in df._data:
+                    raise NotImplementedError(
+                        "A Column with duplicate name found: {0}, cuDF\
+                        doesn't support having multiple columns with\
+                        same names yet.".format(
+                            col
+                        )
+                    )
+                df[col] = o._data[col]
 
         result_columns = objs[0].columns
         for o in objs[1:]:
@@ -360,8 +368,7 @@ def get_dummies(
     if len(columns) == 0:
         return df.select_dtypes(exclude=encode_fallback_dtypes)
     else:
-        df_list = []
-
+        result_df = df.drop(labels=columns)
         for name in columns:
             if hasattr(df[name]._column, "categories"):
                 unique = df[name]._column.categories
@@ -375,9 +382,10 @@ def get_dummies(
                 prefix_sep=prefix_sep_map.get(name, prefix_sep),
                 dtype=dtype,
             )
-            df_list.append(col_enc_df)
+            for col in col_enc_df.columns.difference(df._data.names):
+                result_df[col] = col_enc_df._data[col]
 
-        return concat(df_list, axis=1).drop(labels=columns)
+        return result_df
 
 
 def merge_sorted(
@@ -430,7 +438,7 @@ def merge_sorted(
         raise ValueError("`by_index` and `ignore_index` cannot both be True")
 
     result = objs[0].__class__._from_table(
-        cudf._libxx.merge.merge_sorted(
+        cudf._lib.merge.merge_sorted(
             objs,
             keys=keys,
             by_index=by_index,

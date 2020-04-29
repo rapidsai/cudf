@@ -24,7 +24,6 @@ namespace cudf {
 namespace experimental {
 namespace io {
 namespace json {
-
 struct ColumnInfo {
   cudf::size_type float_count;
   cudf::size_type datetime_count;

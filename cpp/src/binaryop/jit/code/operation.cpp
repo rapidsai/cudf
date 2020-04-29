@@ -22,16 +22,19 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
-
 const char* operation =
-R"***(
+  R"***(
     #pragma once
-    #include "traits.h"
     #include <cmath>
+    #include "traits.h"
     using namespace simt::std;
 
     struct Add {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow sum of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
         }
@@ -40,7 +43,11 @@ R"***(
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Disallow difference of timestamps with any other type (including itself)
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_timestamp_v<TypeOut> &&
+                               !is_timestamp_v<TypeLhs> &&
+                               !is_timestamp_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
         }
@@ -49,7 +56,7 @@ R"***(
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            return Sub::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -395,8 +402,8 @@ R"***(
     };
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace experimental
+}  // namespace cudf

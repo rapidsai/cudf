@@ -30,8 +30,26 @@ public final class Aggregate {
     this.index = index;
   }
 
-  static Aggregate count(int index) {
-    return new Aggregate(AggregateOp.COUNT, index);
+  // Include null in count if include_nulls = true
+  static Aggregate count(int index, boolean include_nulls) {
+    return new Aggregate(include_nulls ?
+            AggregateOp.COUNT_ALL :
+            AggregateOp.COUNT_VALID,
+            index);
+  }
+
+  static Aggregate first(int index, boolean includeNulls) {
+    return new Aggregate(includeNulls ?
+            AggregateOp.FIRST_INCLUDE_NULLS :
+            AggregateOp.FIRST_EXCLUDE_NULLS,
+            index);
+  }
+
+  static Aggregate last(int index, boolean includeNulls) {
+    return new Aggregate(includeNulls ?
+            AggregateOp.LAST_INCLUDE_NULLS :
+            AggregateOp.LAST_EXCLUDE_NULLS,
+            index);
   }
 
   static Aggregate max(int index) {

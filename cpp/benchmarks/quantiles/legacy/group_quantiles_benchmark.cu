@@ -25,7 +25,8 @@
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
-class Quantiles : public cudf::benchmark {};
+class Quantiles : public cudf::benchmark {
+};
 
 // TODO: put it in a struct so `uniform` can be remade with different min, max
 template <typename T>
@@ -38,7 +39,8 @@ T random_int(T min, T max)
   return uniform(engine);
 }
 
-void BM_table(benchmark::State& state){
+void BM_table(benchmark::State& state)
+{
   using wrapper = cudf::test::column_wrapper<int64_t>;
 
   const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
@@ -47,19 +49,16 @@ void BM_table(benchmark::State& state){
   std::vector<wrapper> key_columns;
   std::vector<wrapper> val_columns;
 
-  auto make_table = [&] (std::vector<wrapper>& cols,
-                         cudf::size_type col_size) -> cudf::table
-  {
+  auto make_table = [&](std::vector<wrapper>& cols, cudf::size_type col_size) -> cudf::table {
     for (cudf::size_type i = 0; i < num_columns; i++) {
-      cols.emplace_back(col_size,
-        [=](cudf::size_type row) { return random_int(0, 10); }
-        ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
-      );
+      cols.emplace_back(
+        col_size,
+        [=](cudf::size_type row) { return random_int(0, 10); },
+        [=](cudf::size_type row) { return random_int(0, 10) < 90; });
     }
 
     std::vector<gdf_column*> raw_cols(num_columns, nullptr);
-    std::transform(cols.begin(), cols.end(), raw_cols.begin(),
-                   [](wrapper &c) { return c.get(); });
+    std::transform(cols.begin(), cols.end(), raw_cols.begin(), [](wrapper& c) { return c.get(); });
 
     return cudf::table{raw_cols.data(), num_columns};
   };
@@ -67,26 +66,23 @@ void BM_table(benchmark::State& state){
   auto key_table = make_table(key_columns, column_size);
   auto val_table = make_table(val_columns, column_size);
 
-  for(auto _ : state){
+  for (auto _ : state) {
     cuda_event_timer timer(state, true);
 
     cudf::table out_keys, out_vals;
-    std::tie(out_keys, out_vals) = 
-      cudf::group_quantiles(key_table, val_table, {0.5});
-    
+    std::tie(out_keys, out_vals) = cudf::group_quantiles(key_table, val_table, {0.5});
+
     out_keys.destroy();
     out_vals.destroy();
   }
 }
 
-BENCHMARK_DEFINE_F(Quantiles, Table)(::benchmark::State& state) {
-  BM_table(state);
-}
+BENCHMARK_DEFINE_F(Quantiles, Table)(::benchmark::State& state) { BM_table(state); }
 
-static void CustomArguments(benchmark::internal::Benchmark* b) {
+static void CustomArguments(benchmark::internal::Benchmark* b)
+{
   for (int num_cols = 1; num_cols <= 3; num_cols++)
-    for (int col_size = 1000; col_size <= 100000000; col_size *= 10)
-      b->Args({num_cols, col_size});
+    for (int col_size = 1000; col_size <= 100000000; col_size *= 10) b->Args({num_cols, col_size});
 }
 
 BENCHMARK_REGISTER_F(Quantiles, Table)

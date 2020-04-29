@@ -31,7 +31,7 @@ public class WindowAggregate {
   }
 
   public static WindowAggregate count(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(AggregateOp.COUNT, columnIndex, windowOptions);
+    return new WindowAggregate(AggregateOp.COUNT_ALL, columnIndex, windowOptions);
   }
 
   public static WindowAggregate min(int columnIndex, WindowOptions windowOptions) {

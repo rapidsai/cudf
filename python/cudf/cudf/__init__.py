@@ -1,4 +1,8 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
+from cudf.utils.gpu_utils import validate_setup  # isort:skip
+
+validate_setup(check_dask=False)
 
 import cupy
 
@@ -15,10 +19,12 @@ from cudf.core.ops import (
     arctan,
     cos,
     exp,
+    floor_divide,
     log,
     logical_and,
     logical_not,
     logical_or,
+    remainder,
     sin,
     sqrt,
     tan,

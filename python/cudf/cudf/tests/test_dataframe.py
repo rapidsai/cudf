@@ -2,12 +2,14 @@
 
 import array as arr
 import operator
+import random
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
 
 import cudf as gd
 from cudf.core.dataframe import DataFrame, Series
@@ -334,24 +336,6 @@ def test_dataframe_column_drop_via_attr():
         del df.a
 
     assert tuple(df.columns) == tuple("a")
-
-
-def test_dataframe_attribute_add_drop():
-    df = DataFrame()
-
-    with pytest.warns(UserWarning) as record:
-        df.some_new_attr = 5
-
-    assert len(record) == 1
-    assert "A new attribute will be created" in str(record[0].message)
-
-    assert hasattr(df, "some_new_attr")
-    assert isinstance(df.some_new_attr, int)
-    assert df.some_new_attr == 5
-
-    del df.some_new_attr
-
-    assert not hasattr(df, "some_new_attr")
 
 
 def test_dataframe_pop():
@@ -1461,32 +1445,88 @@ def gdf(pdf):
 
 
 @pytest.mark.parametrize(
-    "func",
+    "data",
     [
-        lambda df: df.count(),
-        lambda df: df.min(),
-        lambda df: df.max(),
-        lambda df: df.sum(),
-        lambda df: df.product(),
-        lambda df: df.cummin(),
-        lambda df: df.cummax(),
-        lambda df: df.cumsum(),
-        lambda df: df.cumprod(),
-        lambda df: df.mean(),
-        lambda df: df.sum(),
-        lambda df: df.max(),
-        lambda df: df.std(ddof=1),
-        lambda df: df.var(ddof=1),
-        lambda df: df.std(ddof=2),
-        lambda df: df.var(ddof=2),
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
     ],
 )
-def test_dataframe_reductions(func):
-    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
-    print(func(pdf))
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda df, **kwargs: df.min(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.product(**kwargs),
+        lambda df, **kwargs: df.cummin(**kwargs),
+        lambda df, **kwargs: df.cummax(**kwargs),
+        lambda df, **kwargs: df.cumsum(**kwargs),
+        lambda df, **kwargs: df.cumprod(**kwargs),
+        lambda df, **kwargs: df.mean(**kwargs),
+        lambda df, **kwargs: df.sum(**kwargs),
+        lambda df, **kwargs: df.max(**kwargs),
+        lambda df, **kwargs: df.std(ddof=1, **kwargs),
+        lambda df, **kwargs: df.var(ddof=1, **kwargs),
+        lambda df, **kwargs: df.std(ddof=2, **kwargs),
+        lambda df, **kwargs: df.var(ddof=2, **kwargs),
+        lambda df, **kwargs: df.kurt(**kwargs),
+        lambda df, **kwargs: df.skew(**kwargs),
+        lambda df, **kwargs: df.all(**kwargs),
+        lambda df, **kwargs: df.any(**kwargs),
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False, None])
+def test_dataframe_reductions(data, func, skipna):
+    pdf = pd.DataFrame(data=data)
+    print(func(pdf, skipna=skipna))
     gdf = DataFrame.from_pandas(pdf)
-    print(func(gdf))
+    print(func(gdf, skipna=skipna))
+    assert_eq(func(pdf, skipna=skipna), func(gdf, skipna=skipna))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
+    ],
+)
+@pytest.mark.parametrize("func", [lambda df: df.count()])
+def test_dataframe_count_reduction(data, func):
+    pdf = pd.DataFrame(data=data)
+    gdf = DataFrame.from_pandas(pdf)
+
     assert_eq(func(pdf), func(gdf))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
+        {"x": [1, 2, 3], "y": [4, 5, 6]},
+        {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
+        {"x": [], "y": []},
+        {"x": []},
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
+def test_dataframe_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.DataFrame(data)
+    gsr = DataFrame(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+        check_dtype=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -1722,7 +1762,6 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
 
 @pytest.mark.skip(reason="Test was designed to be run in isolation")
 def test_gpu_memory_usage_with_boolmask():
-    from numba import cuda
     import cudf
 
     ctx = cuda.current_context()
@@ -1784,7 +1823,6 @@ def test_dataframe_boolmask(mask_shape):
         pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
     gdf = DataFrame.from_pandas(pdf)
     gdf_mask = DataFrame.from_pandas(pdf_mask)
-
     gdf = gdf[gdf_mask]
     pdf = pdf[pdf_mask]
 
@@ -2980,6 +3018,11 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.all(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.all(level="a")
 
     got = gdata.all()
     expected = pdata.all()
@@ -3024,9 +3067,14 @@ def test_any(data):
 
         # test bool_only
         if pdata["b"].dtype == "bool":
-            got = gdata.all(bool_only=True)
-            expected = pdata.all(bool_only=True)
+            got = gdata.any(bool_only=True)
+            expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
+        else:
+            with pytest.raises(NotImplementedError):
+                gdata.any(bool_only=False)
+            with pytest.raises(NotImplementedError):
+                gdata.any(level="a")
 
     got = gdata.any()
     expected = pdata.any()
@@ -3610,6 +3658,8 @@ def test_series_value_counts():
         [0, 12, 14],
         np.random.randint(-100, 100, 200),
         pd.Series([0.0, 1.0, None, 10.0]),
+        [None, None, None, None],
+        [np.nan, None, -1, 2, 3],
     ],
 )
 @pytest.mark.parametrize(
@@ -3617,21 +3667,16 @@ def test_series_value_counts():
     [
         np.random.randint(-100, 100, 10),
         [],
-        pytest.param([1.0, 12.0, None, None, 120], marks=pytest.mark.xfail),
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [np.nan, None, -1, 2, 3],
+        [1.0, 12.0, None, None, 120],
+        [None, None, None],
         ["0", "12", "14"],
-        pytest.param(
-            ["0", "12", "14", "a"],
-            marks=[
-                pytest.mark.xfail(
-                    reason="We don't gracefully handle typecasting errors."
-                )
-            ],
-        ),
+        ["0", "12", "14", "a"],
     ],
 )
 def test_isin_numeric(data, values):
-    psr = pd.Series(data)
+    index = np.random.randint(0, 100, len(data))
+    psr = pd.Series(data, index=index)
     gsr = Series.from_pandas(psr)
 
     got = gsr.isin(values)
@@ -3653,12 +3698,7 @@ def test_isin_numeric(data, values):
     "values",
     [
         [],
-        pytest.param(
-            [1514764800000000000, 1577664000000000000],
-            marks=[
-                pytest.mark.xfail(reason="We don't yet support nanoseconds.")
-            ],
-        ),
+        [1514764800000000000, 1577664000000000000],
         ["2019-04-03", "2019-12-30", "2012-01-01"],
     ],
 )
@@ -3684,7 +3724,8 @@ def test_isin_datetime(data, values):
     [
         [],
         ["this", "is"],
-        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        [None, None, None],
+        ["12", "14", "19"],
         pytest.param(
             [12, 14, 19],
             marks=[
@@ -3764,7 +3805,153 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got._column.data_array_view.copy_to_host(), expected)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3], ["red", "blue", "green"]], names=("number", "color")
+        ),
+        pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 10, 100], ["red", "blue", "green", "pink", "white"]],
+            names=("number", "color"),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values,level,err",
+    [
+        (["red", "orange", "yellow"], "color", None),
+        (["red", "white", "yellow"], "color", None),
+        ([0, 1, 2, 10, 11, 15], "number", None),
+        ([0, 1, 2, 10, 11, 15], None, TypeError),
+        (pd.Series([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 10, 11, 15]), None, TypeError),
+        (pd.Index([0, 1, 2, 8, 11, 15]), "number", None),
+        (pd.Index(["red", "white", "yellow"]), "color", None),
+        ([(1, "red"), (3, "red")], None, None),
+        (((1, "red"), (3, "red")), None, None),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3], ["red", "blue", "green"]],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays([[], []], names=("number", "color")),
+            None,
+            None,
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [
+                    [1, 2, 3, 10, 100],
+                    ["red", "blue", "green", "pink", "white"],
+                ],
+                names=("number", "color"),
+            ),
+            None,
+            None,
+        ),
+    ],
+)
+def test_isin_multiindex(data, values, level, err):
+    pmdx = data
+    gmdx = gd.from_pandas(data)
+
+    if err is None:
+        expected = pmdx.isin(values, level=level)
+        if isinstance(values, pd.MultiIndex):
+            values = gd.from_pandas(values)
+        got = gmdx.isin(values, level=level)
+
+        assert_eq(got, expected)
+    else:
+        with pytest.raises((ValueError, TypeError)):
+            expected = pmdx.isin(values, level=level)
+
+        with pytest.raises(err):
+            got = gmdx.isin(values, level=level)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [8, 2, 1, 0, 2, 4, 5],
+                "num_wings": [2, 0, 2, 1, 2, 4, -1],
+            }
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [0, 2],
+        {"num_wings": [0, 3]},
+        pd.DataFrame(
+            {"num_legs": [8, 2], "num_wings": [0, 2]},
+            index=["spider", "falcon"],
+        ),
+        pd.DataFrame(
+            {
+                "num_legs": [2, 4],
+                "num_wings": [2, 0],
+                "bird_cats": pd.Series(
+                    ["sparrow", "pigeon"],
+                    dtype="category",
+                    index=["falcon", "dog"],
+                ),
+            },
+            index=["falcon", "dog"],
+        ),
+        ["sparrow", "pigeon"],
+        pd.Series(["sparrow", "pigeon"], dtype="category"),
+        pd.Series([1, 2, 3, 4, 5]),
+        "abc",
+        123,
+    ],
+)
+def test_isin_dataframe(data, values):
+    from cudf.utils.dtypes import is_scalar
+
+    pdf = data
+    gdf = gd.from_pandas(pdf)
+
+    if is_scalar(values):
+        with pytest.raises(TypeError):
+            pdf.isin(values)
+        with pytest.raises(TypeError):
+            gdf.isin(values)
+    else:
+        expected = pdf.isin(values)
+        if isinstance(values, (pd.DataFrame, pd.Series)):
+            values = gd.from_pandas(values)
+        got = gdf.isin(values)
+
+        assert_eq(got, expected)
 
 
 def test_constructor_properties():
@@ -4457,7 +4644,7 @@ def test_change_column_dtype_in_empty():
 
 
 def test_dataframe_from_table_empty_index():
-    from cudf._libxx.table import Table
+    from cudf._lib.table import Table
 
     df = DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     odict = df._data
@@ -4487,3 +4674,546 @@ def test_dataframe_from_dictionary_series_same_name_index(dtype):
 
     assert_eq(expect, got)
     assert expect.index.names == got.index.names
+
+
+@pytest.mark.parametrize(
+    "arg", [slice(2, 8, 3), slice(1, 20, 4), slice(-2, -6, -2)]
+)
+def test_dataframe_strided_slice(arg):
+    mul = pd.DataFrame(
+        {
+            "Index": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "AlphaIndex": ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+        }
+    )
+    pdf = pd.DataFrame(
+        {"Val": [10, 9, 8, 7, 6, 5, 4, 3, 2]},
+        index=pd.MultiIndex.from_frame(mul),
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
+
+    expect = pdf[arg]
+    got = gdf[arg]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data,condition,other,error",
+    [
+        (pd.Series(range(5)), pd.Series(range(5)) > 0, None, None),
+        (pd.Series(range(5)), pd.Series(range(5)) > 1, None, None),
+        (pd.Series(range(5)), pd.Series(range(5)) > 1, 10, None),
+        (
+            pd.Series(range(5)),
+            pd.Series(range(5)) > 1,
+            pd.Series(range(5, 10)),
+            None,
+        ),
+        (
+            pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"]),
+            (
+                pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"])
+                % 3
+            )
+            == 0,
+            -pd.DataFrame(np.arange(10).reshape(-1, 2), columns=["A", "B"]),
+            None,
+        ),
+        (
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}),
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}),
+            pd.DataFrame({"a": [1, 2, np.nan], "b": [4, np.nan, 6]}) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [True, True, True],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [True, True, True, False],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True, True, False], [True, True, True, False]],
+            None,
+            ValueError,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True], [False, True], [True, False], [False, True]],
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            cuda.to_device(
+                np.array(
+                    [[True, True], [False, True], [True, False], [False, True]]
+                )
+            ),
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            cupy.array(
+                [[True, True], [False, True], [True, False], [False, True]]
+            ),
+            17,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [[True, True], [False, True], [True, False], [False, True]],
+            17,
+            None,
+        ),
+        (
+            pd.DataFrame({"p": [-2, 3, -4, -79], "k": [9, 10, 11, 12]}),
+            [
+                [True, True, False, True],
+                [True, True, False, True],
+                [True, True, False, True],
+                [True, True, False, True],
+            ],
+            None,
+            ValueError,
+        ),
+        (
+            pd.Series([1, 2, np.nan]),
+            pd.Series([1, 2, np.nan]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([1, 2, np.nan]),
+            pd.Series([1, 2, np.nan]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6]),
+            pd.Series([4, np.nan, 6]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6]),
+            pd.Series([4, np.nan, 6]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series([4, np.nan, 6], dtype="category"),
+            pd.Series([4, np.nan, 6], dtype="category") != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category"),
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category") == "b",
+            None,
+            None,
+        ),
+        (
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category"),
+            pd.Series(["a", "b", "b", "d", "c", "s"], dtype="category") == "b",
+            "s",
+            None,
+        ),
+        (
+            pd.Series([1, 2, 3, 2, 5]),
+            pd.Series([1, 2, 3, 2, 5]) == 2,
+            pd.DataFrame(
+                {
+                    "a": pd.Series([1, 2, 3, 2, 5]),
+                    "b": pd.Series([1, 2, 3, 2, 5]),
+                }
+            ),
+            NotImplementedError,
+        ),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_df_sr_mask_where(data, condition, other, error, inplace):
+    ps_where = data
+    gs_where = gd.from_pandas(data)
+
+    ps_mask = ps_where.copy(deep=True)
+    gs_mask = gs_where.copy(deep=True)
+
+    if hasattr(condition, "__cuda_array_interface__"):
+        if type(condition).__module__.split(".")[0] == "cupy":
+            ps_condition = cupy.asnumpy(condition)
+        else:
+            ps_condition = np.array(condition).astype("bool")
+    else:
+        ps_condition = condition
+
+    if type(condition).__module__.split(".")[0] == "pandas":
+        gs_condition = gd.from_pandas(condition)
+    else:
+        gs_condition = condition
+
+    ps_other = other
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_other = gd.from_pandas(other)
+    else:
+        gs_other = other
+
+    if error is None:
+        expect_where = ps_where.where(
+            ps_condition, other=ps_other, inplace=inplace
+        )
+        got_where = gs_where.where(
+            gs_condition, other=gs_other, inplace=inplace
+        )
+
+        expect_mask = ps_mask.mask(
+            ps_condition, other=ps_other, inplace=inplace
+        )
+        got_mask = gs_mask.mask(gs_condition, other=gs_other, inplace=inplace)
+
+        if inplace:
+            expect_where = ps_where
+            got_where = gs_where
+
+            expect_mask = ps_mask
+            got_mask = gs_mask
+
+        if pd.api.types.is_categorical_dtype(expect_where):
+            np.testing.assert_array_equal(
+                expect_where.cat.codes,
+                got_where.cat.codes.fillna(-1).to_array(),
+            )
+            assert tuple(expect_where.cat.categories) == tuple(
+                got_where.cat.categories
+            )
+
+            np.testing.assert_array_equal(
+                expect_mask.cat.codes, got_mask.cat.codes.fillna(-1).to_array()
+            )
+            assert tuple(expect_mask.cat.categories) == tuple(
+                got_mask.cat.categories
+            )
+        else:
+            assert_eq(
+                expect_where.fillna(-1),
+                got_where.fillna(-1),
+                check_dtype=False,
+            )
+            assert_eq(
+                expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False,
+            )
+    else:
+        with pytest.raises(error):
+            ps_where.where(ps_condition, other=ps_other, inplace=inplace)
+        with pytest.raises(error):
+            gs_where.where(gs_condition, other=gs_other, inplace=inplace)
+
+        with pytest.raises(error):
+            ps_mask.mask(ps_condition, other=ps_other, inplace=inplace)
+        with pytest.raises(error):
+            gs_mask.mask(gs_condition, other=gs_other, inplace=inplace)
+
+
+@pytest.mark.parametrize(
+    "data,condition,other,has_cat",
+    [
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(["a", "a", "b", "c", "a", "d", "d", "a"]),
+                    "b": pd.Series(["o", "p", "q", "e", "p", "p", "a", "a"]),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(["a", "a", "b", "c", "a", "d", "d", "a"]),
+                    "b": pd.Series(["o", "p", "q", "e", "p", "p", "a", "a"]),
+                }
+            )
+            != "a",
+            None,
+            None,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            != "a",
+            None,
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            == "a",
+            None,
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            != "a",
+            "a",
+            True,
+        ),
+        (
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        ["a", "a", "b", "c", "a", "d", "d", "a"],
+                        dtype="category",
+                    ),
+                    "b": pd.Series(
+                        ["o", "p", "q", "e", "p", "p", "a", "a"],
+                        dtype="category",
+                    ),
+                }
+            )
+            == "a",
+            "a",
+            True,
+        ),
+    ],
+)
+def test_df_string_cat_types_mask_where(data, condition, other, has_cat):
+    ps = data
+    gs = gd.from_pandas(data)
+
+    ps_condition = condition
+    if type(condition).__module__.split(".")[0] == "pandas":
+        gs_condition = gd.from_pandas(condition)
+    else:
+        gs_condition = condition
+
+    ps_other = other
+    if type(other).__module__.split(".")[0] == "pandas":
+        gs_other = gd.from_pandas(other)
+    else:
+        gs_other = other
+
+    expect_where = ps.where(ps_condition, other=ps_other)
+    got_where = gs.where(gs_condition, other=gs_other)
+
+    expect_mask = ps.mask(ps_condition, other=ps_other)
+    got_mask = gs.mask(gs_condition, other=gs_other)
+
+    if has_cat is None:
+        assert_eq(
+            expect_where.fillna(-1).astype("str"),
+            got_where.fillna(-1),
+            check_dtype=False,
+        )
+        assert_eq(
+            expect_mask.fillna(-1).astype("str"),
+            got_mask.fillna(-1),
+            check_dtype=False,
+        )
+    else:
+        assert_eq(
+            expect_where, got_where, check_dtype=False,
+        )
+        assert_eq(
+            expect_mask, got_mask, check_dtype=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "data,expected_upcast_type,error",
+    [
+        (
+            pd.Series(
+                [random.choice([0, 1, 255, 250]) for _ in range(10)],
+                dtype="uint8",
+            ),
+            np.dtype("int16"),
+            None,
+        ),
+        (
+            pd.Series(
+                [random.choice([0, 1, 65535, 65534]) for _ in range(10)],
+                dtype="uint16",
+            ),
+            np.dtype("int32"),
+            None,
+        ),
+        (
+            pd.Series(
+                [
+                    random.choice([0, 1, 4294967295, 4294967294])
+                    for _ in range(10)
+                ],
+                dtype="uint32",
+            ),
+            np.dtype("int64"),
+            None,
+        ),
+        (
+            pd.Series(
+                [
+                    random.choice(
+                        [0, 1, 18446744073709551615, 18446744073709551614]
+                    )
+                    for _ in range(10)
+                ],
+                dtype="uint64",
+            ),
+            None,
+            UserWarning,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float32"),
+            np.dtype("float32"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float16"),
+            np.dtype("float32"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float64"),
+            np.dtype("float64"),
+            None,
+        ),
+        (
+            pd.Series([random.random() for _ in range(10)], dtype="float128"),
+            None,
+            NotImplementedError,
+        ),
+    ],
+)
+def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
+    pdf = pd.DataFrame({"one_col": data})
+    if error == NotImplementedError:
+        with pytest.raises(error):
+            df = gd.from_pandas(data)
+
+        with pytest.raises(error):
+            df = gd.Series(data)
+
+        with pytest.raises(error):
+            df = gd.from_pandas(pdf)
+
+        with pytest.raises(error):
+            df = gd.DataFrame(pdf)
+    elif error == UserWarning:
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.Series(data)
+
+        with pytest.warns(UserWarning):
+            df = gd.from_pandas(pdf)
+
+        with pytest.warns(UserWarning):
+            df = gd.DataFrame(pdf)
+    else:
+        df = gd.from_pandas(data)
+
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = gd.Series(data)
+        assert_eq(data, df, check_dtype=False)
+        assert df.dtype == expected_upcast_type
+
+        df = gd.from_pandas(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type
+
+        df = gd.DataFrame(pdf)
+        assert_eq(pdf, df, check_dtype=False)
+        assert df["one_col"].dtype == expected_upcast_type

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from cudf._libxx.scalar import Scalar
+from cudf._lib.scalar import Scalar
 
 
 @pytest.mark.parametrize(
