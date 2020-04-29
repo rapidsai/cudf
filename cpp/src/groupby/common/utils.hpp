@@ -31,7 +31,7 @@ inline std::vector<aggregation_result> extract_results(
 
   for (size_t i = 0; i < requests.size(); i++) {
     for (auto&& agg : requests[i].aggregations) {
-      results[i].results.emplace_back(cache.release_result(i, agg));
+      results[i].results.emplace_back(cache.release_result(i, *agg));
     }
   }
   return results;

@@ -155,7 +155,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
     auto transformed_result = [&col, to_dense_agg_result, mr, stream](auto const& agg_kind) {
       auto transformed_agg = std::make_unique<aggregation>(agg_kind);
-      auto arg_result      = to_dense_agg_result(transformed_agg);
+      auto arg_result      = to_dense_agg_result(*transformed_agg);
       // We make a view of ARG(MIN/MAX) result without a null mask and gather
       // using this map. The values in data buffer of ARG(MIN/MAX) result
       // corresponding to null values was initialized to ARG(MIN/MAX)_SENTINEL
@@ -171,17 +171,18 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     };
 
     for (auto&& agg : agg_v) {
+      auto const& agg_ref = *agg;
       if (agg->kind == aggregation::COUNT_VALID or agg->kind == aggregation::COUNT_ALL) {
-        dense_results->add_result(i, agg, to_dense_agg_result(agg));
+        dense_results->add_result(i, agg_ref, to_dense_agg_result(agg_ref));
       } else if (col.type().id() == type_id::STRING and
                  (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
         if (agg->kind == aggregation::MAX) {
-          dense_results->add_result(i, agg, transformed_result(aggregation::ARGMAX));
+          dense_results->add_result(i, agg_ref, transformed_result(aggregation::ARGMAX));
         } else if (agg->kind == aggregation::MIN) {
-          dense_results->add_result(i, agg, transformed_result(aggregation::ARGMIN));
+          dense_results->add_result(i, agg_ref, transformed_result(aggregation::ARGMIN));
         }
-      } else if (sparse_results.has_result(i, agg)) {
-        dense_results->add_result(i, agg, to_dense_agg_result(agg));
+      } else if (sparse_results.has_result(i, agg_ref)) {
+        dense_results->add_result(i, agg_ref, to_dense_agg_result(agg_ref));
       }
     }
   }
@@ -290,8 +291,10 @@ void compute_single_pass_aggs(table_view const& keys,
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
+    // Note that the cache will make a copy of this temporary aggregation
+    auto agg = std::make_unique<aggregation>(aggs[i]);
     sparse_results->add_result(
-      col_ids[i], std::make_unique<aggregation>(aggs[i]), std::move(sparse_result_cols[i]));
+      col_ids[i], *agg, std::move(sparse_result_cols[i]));
   }
 }
 
