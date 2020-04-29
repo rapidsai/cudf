@@ -1491,7 +1491,7 @@ class DataFrame(Frame):
 
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
-
+        
         length = len(idx)
         cols = OrderedDict()
 
@@ -1505,7 +1505,7 @@ class DataFrame(Frame):
                     col, dtype=dtype, masked=True, newsize=length
                 )
                 cols[name] = col
-
+                
         return DataFrame(cols, idx)
 
     def set_index(self, index, drop=True):
@@ -2178,8 +2178,10 @@ class DataFrame(Frame):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        # Never transpose a MultiIndex - remove the existing columns and
-        # replace with a RangeIndex. Afterward, reassign.
+        if isinstance(self.index, cudf.MultiIndex):
+            raise ValueError("Never transpose a MultiIndex - remove the "
+                             "existing columns and replace with a "
+                             "RangeIndex. Afterward, reassign.")
         columns = self.index.copy(deep=False)
         index = self.columns.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
