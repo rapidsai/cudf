@@ -36,7 +36,7 @@ def partition(Table source_table, Column partition_map,
     cdef column_view c_partition_map_view = partition_map.view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_partition(
                 c_source_view,

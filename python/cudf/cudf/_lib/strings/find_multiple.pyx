@@ -20,7 +20,7 @@ def find_multiple(Column source_strings, Column target_strings):
     cdef column_view source_view = source_strings.view()
     cdef column_view target_view = target_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_find_multiple(
             source_view,
             target_view

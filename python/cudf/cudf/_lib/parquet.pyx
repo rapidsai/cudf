@@ -181,7 +181,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
 
-    with nogil:
+    with memoryview(b''):
         c_out_table = move(parquet_reader(args))
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
@@ -268,7 +268,7 @@ cpdef write_parquet(
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
 
     # Perform write
-    with nogil:
+    with memoryview(b''):
         args = write_parquet_args(sink,
                                   tv,
                                   tbl_meta.get(),
@@ -279,7 +279,7 @@ cpdef write_parquet(
         args.metadata_out_file_path = str.encode(metadata_file_path)
         args.return_filemetadata = True
 
-    with nogil:
+    with memoryview(b''):
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
@@ -325,12 +325,12 @@ cdef class ParquetWriter:
                     or table._index.name is not None:
                 tv = table.view()
 
-        with nogil:
+        with memoryview(b''):
             write_parquet_chunked(tv, self.state)
 
     def close(self):
         if self.state:
-            with nogil:
+            with memoryview(b''):
                 write_parquet_chunked_end(self.state)
                 self.state.reset()
 
@@ -351,7 +351,7 @@ cdef class ParquetWriter:
 
         # call write_parquet_chunked_begin
         cdef write_parquet_chunked_args args
-        with nogil:
+        with memoryview(b''):
             args = write_parquet_chunked_args(self.sink, tbl_meta.get(),
                                               self.comp_type, self.stat_freq)
             self.state = write_parquet_chunked_begin(args)
@@ -373,7 +373,7 @@ cpdef merge_filemetadata(filemetadata_list):
         blob_c = blob_py
         list_c.push_back(make_unique[vector[uint8_t]](blob_c))
 
-    with nogil:
+    with memoryview(b''):
         output_c = move(parquet_merge_metadata(list_c))
 
     out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))

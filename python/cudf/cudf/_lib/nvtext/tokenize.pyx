@@ -35,7 +35,7 @@ def _tokenize_scalar(Column strings, Scalar delimiter):
     cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_tokenize(
                 c_strings,
@@ -51,7 +51,7 @@ def _tokenize_column(Column strings, Column delimiters):
     cdef column_view c_delimiters = delimiters.view()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_tokenize(
                 c_strings,
@@ -81,7 +81,7 @@ def _count_tokens_scalar(Column strings, Scalar delimiter):
     cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_count_tokens(
                 c_strings,
@@ -97,7 +97,7 @@ def _count_tokens_column(Column strings, Column delimiters):
     cdef column_view c_delimiters = delimiters.view()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_count_tokens(
                 c_strings,

@@ -66,7 +66,7 @@ cdef class GroupBy:
 
         cdef table_view keys_view = keys.view()
 
-        with nogil:
+        with memoryview(b''):
             self.c_obj.reset(
                 new libcudf_groupby.groupby(
                     keys_view,
@@ -82,7 +82,7 @@ cdef class GroupBy:
 
         cdef table_view values_view = values.view()
 
-        with nogil:
+        with memoryview(b''):
             c_groups = move(self.c_obj.get()[0].get_groups(values_view))
 
         c_grouped_keys = move(c_groups.keys)
@@ -139,7 +139,7 @@ cdef class GroupBy:
             vector[libcudf_groupby.aggregation_result]
         ] c_result
 
-        with nogil:
+        with memoryview(b''):
             c_result = move(
                 self.c_obj.get()[0].aggregate(
                     c_agg_requests

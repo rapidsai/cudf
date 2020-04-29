@@ -17,7 +17,7 @@ def to_upper(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_to_upper(source_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -27,7 +27,7 @@ def to_lower(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_to_lower(source_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -37,7 +37,7 @@ def swapcase(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_swapcase(source_view))
 
     return Column.from_unique_ptr(move(c_result))

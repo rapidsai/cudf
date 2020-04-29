@@ -100,7 +100,7 @@ def is_sorted(
 
     cdef bool c_result
     cdef table_view source_table_view = source_table.data_view()
-    with nogil:
+    with memoryview(b''):
         c_result = cpp_is_sorted(
             source_table_view,
             column_order,
@@ -147,7 +147,7 @@ def order_by(Table source_table, object ascending, bool na_position):
             column_order.push_back(order.DESCENDING)
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(sorted_order(source_table_view,
                                      column_order,
                                      null_precedence))
@@ -184,7 +184,7 @@ def digitize(Table source_values_table, Table bins, bool right=False):
 
     cdef unique_ptr[column] c_result
     if right is True:
-        with nogil:
+        with memoryview(b''):
             c_result = move(lower_bound(
                 bins_view,
                 source_values_table_view,
@@ -192,7 +192,7 @@ def digitize(Table source_values_table, Table bins, bool right=False):
                 null_precedence)
             )
     else:
-        with nogil:
+        with memoryview(b''):
             c_result = move(upper_bound(
                 bins_view,
                 source_values_table_view,
@@ -259,7 +259,7 @@ def rank_columns(Table source_table, object method, str na_option,
     cdef Column col
     for col in source_table._columns:
         c_view = col.view()
-        with nogil:
+        with memoryview(b''):
             c_results.push_back(move(
                 rank(
                     c_view,

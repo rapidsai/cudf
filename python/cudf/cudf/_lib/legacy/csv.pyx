@@ -193,7 +193,7 @@ cpdef read_csv(
         filepath = <string>str(filepath_or_buffer).encode()
 
     cdef unique_ptr[csv_reader] reader
-    with nogil:
+    with memoryview(b''):
         if buffer is None:
             reader = unique_ptr[csv_reader](
                 new csv_reader(filepath, args)
@@ -214,7 +214,7 @@ cpdef read_csv(
     cdef size_type c_skiprows = skiprows if skiprows is not None else 0
     cdef size_type c_skipend = skipfooter if skipfooter is not None else 0
     cdef size_type c_nrows = nrows if nrows is not None else -1
-    with nogil:
+    with memoryview(b''):
         if c_range_offset !=0 or c_range_size != 0:
             c_out_table = reader.get().read_byte_range(
                 c_range_offset, c_range_size
@@ -310,7 +310,7 @@ cpdef write_csv(
     csv_writer.num_cols = len(columns) if columns else len(cols)
 
     # Call write_csv
-    with nogil:
+    with memoryview(b''):
         result = cpp_csv.write_csv(&csv_writer)
 
     check_gdf_error(result)

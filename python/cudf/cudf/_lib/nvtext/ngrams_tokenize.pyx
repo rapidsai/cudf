@@ -26,7 +26,7 @@ def ngrams_tokenize(
     cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_ngrams_tokenize(
                 c_strings,

@@ -42,7 +42,7 @@ def fill(Column destination, int begin, int end, Scalar value):
     cdef scalar* c_value = value.c_value.get()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_filling.fill(
             c_destination,
             c_begin,
@@ -72,7 +72,7 @@ def _repeat_via_column(Table inp, Column count, bool check_count):
     cdef bool c_check_count = check_count
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_filling.repeat(
             c_inp,
             c_count,
@@ -91,7 +91,7 @@ def _repeat_via_scalar(Table inp, Scalar count):
     cdef scalar* c_count = count.c_value.get()
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_filling.repeat(
             c_inp,
             c_count[0]

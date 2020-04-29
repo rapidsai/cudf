@@ -27,7 +27,7 @@ def findall(Column source_strings, pattern):
 
     cdef string pattern_string = <string>str(pattern).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_findall_re(
             source_view,
             pattern_string

@@ -28,7 +28,7 @@ def strip(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_strip(
             source_view,
             strip_type.BOTH,
@@ -50,7 +50,7 @@ def lstrip(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_strip(
             source_view,
             strip_type.LEFT,
@@ -72,7 +72,7 @@ def rstrip(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_strip(
             source_view,
             strip_type.RIGHT,

@@ -28,7 +28,7 @@ def extract(Column source_strings, object pattern):
 
     cdef string pattern_string = <string>str(pattern).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_extract(
             source_view,
             pattern_string

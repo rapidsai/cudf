@@ -20,7 +20,7 @@ def interleave_columns(Table source_table):
     cdef table_view c_view = source_table.data_view()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_interleave_columns(c_view))
 
     return Column.from_unique_ptr(
@@ -33,7 +33,7 @@ def tile(Table source_table, size_type count):
     cdef table_view c_view = source_table.view()
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_tile(c_view, c_count))
 
     return Table.from_unique_ptr(

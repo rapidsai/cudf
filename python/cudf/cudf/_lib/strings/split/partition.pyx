@@ -30,7 +30,7 @@ def partition(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_partition(
             source_view,
             scalar_str[0]
@@ -52,7 +52,7 @@ def rpartition(Column source_strings,
     cdef column_view source_view = source_strings.view()
     cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_rpartition(
             source_view,
             scalar_str[0]

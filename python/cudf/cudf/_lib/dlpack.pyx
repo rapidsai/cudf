@@ -35,7 +35,7 @@ def from_dlpack(dlpack_capsule):
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_from_dlpack(dlpack_tensor)
         )
@@ -67,7 +67,7 @@ def to_dlpack(Table source_table):
     cdef DLManagedTensor *dlpack_tensor
     cdef table_view source_table_view = source_table.data_view()
 
-    with nogil:
+    with memoryview(b''):
         dlpack_tensor = cpp_to_dlpack(
             source_table_view
         )

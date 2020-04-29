@@ -20,7 +20,7 @@ def count_characters(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_count_characters(source_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -34,7 +34,7 @@ def code_points(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_code_points(source_view))
 
     return Column.from_unique_ptr(move(c_result))

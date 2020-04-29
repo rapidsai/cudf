@@ -93,7 +93,7 @@ def merge_sorted(
 
     # Perform sorted merge operation
     cdef unique_ptr[table] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_merge(
                 c_input_tables,

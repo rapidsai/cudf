@@ -28,7 +28,7 @@ def contains(Column source_strings, Scalar target):
 
     cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_contains(
             source_view,
             scalar_str[0]
@@ -47,7 +47,7 @@ def endswith(Column source_strings, Scalar target):
 
     cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_ends_with(
             source_view,
             scalar_str[0]
@@ -66,7 +66,7 @@ def startswith(Column source_strings, Scalar target):
 
     cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_starts_with(
             source_view,
             scalar_str[0]
@@ -90,7 +90,7 @@ def find(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_find(
             source_view,
             scalar_str[0],
@@ -116,7 +116,7 @@ def rfind(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_rfind(
             source_view,
             scalar_str[0],

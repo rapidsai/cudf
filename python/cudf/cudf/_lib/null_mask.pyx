@@ -44,7 +44,7 @@ def copy_bitmask(Column col):
     cdef device_buffer db
     cdef unique_ptr[device_buffer] up_db
 
-    with nogil:
+    with memoryview(b''):
         db = cpp_copy_bitmask(col_view)
         up_db = make_unique[device_buffer](move(db))
 
@@ -60,7 +60,7 @@ def bitmask_allocation_size_bytes(size_type num_bits):
     """
     cdef size_t output_size
 
-    with nogil:
+    with memoryview(b''):
         output_size = cpp_bitmask_allocation_size_bytes(num_bits)
 
     return output_size
@@ -90,7 +90,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
         <underlying_type_t_mask_state>(state.value)
     )
 
-    with nogil:
+    with memoryview(b''):
         db = cpp_create_null_mask(size, c_mask_state)
         up_db = make_unique[device_buffer](move(db))
 

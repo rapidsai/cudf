@@ -74,7 +74,7 @@ cpdef read_json(filepath_or_buffer, dtype,
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_out_table
 
-    with nogil:
+    with memoryview(b''):
         c_out_table = move(libcudf_read_json(args))
 
     column_names = [x.decode() for x in c_out_table.metadata.column_names]

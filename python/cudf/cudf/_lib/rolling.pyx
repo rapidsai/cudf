@@ -65,7 +65,7 @@ def rolling(Column source_column, Column pre_column_window,
             )
         pre_column_window_view = pre_column_window.view()
         fwd_column_window_view = fwd_column_window.view()
-        with nogil:
+        with memoryview(b''):
             c_result = move(
                 cpp_rolling_window(
                     source_column_view,
@@ -85,7 +85,7 @@ def rolling(Column source_column, Column pre_column_window,
             c_window = window
             c_forward_window = 0
 
-        with nogil:
+        with memoryview(b''):
             c_result = move(
                 cpp_rolling_window(
                     source_column_view,

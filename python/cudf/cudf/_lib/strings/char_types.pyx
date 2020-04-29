@@ -21,7 +21,7 @@ def is_decimal(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.DECIMAL,
@@ -41,7 +41,7 @@ def is_alnum(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.ALPHANUM,
@@ -59,7 +59,7 @@ def is_alpha(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.ALPHA,
@@ -77,7 +77,7 @@ def is_digit(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.DIGIT,
@@ -96,7 +96,7 @@ def is_numeric(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.NUMERIC,
@@ -114,7 +114,7 @@ def is_upper(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.UPPER,
@@ -132,7 +132,7 @@ def is_lower(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.LOWER,
@@ -150,7 +150,7 @@ def is_space(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_all_characters_of_type(
             source_view,
             string_character_types.SPACE,

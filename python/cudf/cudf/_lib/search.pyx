@@ -52,7 +52,7 @@ def search_sorted(
     )
 
     if side == 'left':
-        with nogil:
+        with memoryview(b''):
             c_result = move(
                 cpp_search.lower_bound(
                     c_table_data,
@@ -62,7 +62,7 @@ def search_sorted(
                 )
             )
     elif side == 'right':
-        with nogil:
+        with memoryview(b''):
             c_result = move(
                 cpp_search.upper_bound(
                     c_table_data,
@@ -88,7 +88,7 @@ def contains(Column haystack, Column needles):
     cdef column_view c_haystack = haystack.view()
     cdef column_view c_needles = needles.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_search.contains(
                 c_haystack,

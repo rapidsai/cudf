@@ -34,7 +34,7 @@ def concatenate(Table source_strings,
         <string_scalar*>(separator.c_value.get())
     cdef string_scalar* scalar_narep = <string_scalar*>(narep.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_concatenate(
             source_view,
             scalar_separator[0],
@@ -59,7 +59,7 @@ def join(Column source_strings,
         <string_scalar*>(separator.c_value.get())
     cdef string_scalar* scalar_narep = <string_scalar*>(narep.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_join_strings(
             source_view,
             scalar_separator[0],

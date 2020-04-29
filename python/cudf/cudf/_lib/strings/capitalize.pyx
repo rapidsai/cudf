@@ -16,7 +16,7 @@ def capitalize(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_capitalize(source_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -26,7 +26,7 @@ def title(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_title(source_view))
 
     return Column.from_unique_ptr(move(c_result))

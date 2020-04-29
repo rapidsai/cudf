@@ -58,7 +58,7 @@ cpdef read_orc(filepath_or_buffer, columns=None,
 
     cdef table_with_metadata c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(libcudf_read_orc(c_read_orc_args))
 
     names = [name.decode() for name in c_result.metadata.column_names]
@@ -99,7 +99,7 @@ cpdef write_orc(Table table,
         <bool> (True if enable_statistics else False)
     )
 
-    with nogil:
+    with memoryview(b''):
         libcudf_write_orc(c_write_orc_args)
 
 

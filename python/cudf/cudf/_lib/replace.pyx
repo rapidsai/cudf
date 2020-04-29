@@ -40,7 +40,7 @@ def replace(Column input_col, Column values_to_replace,
     cdef column_view replacement_values_view = replacement_values.view()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_find_and_replace_all(input_col_view,
                                                  values_to_replace_view,
                                                  replacement_values_view))
@@ -63,7 +63,7 @@ def replace_nulls_column(Column input_col, Column replacement_values):
     cdef column_view replacement_values_view = replacement_values.view()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_nulls(input_col_view,
                                           replacement_values_view))
 
@@ -84,7 +84,7 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     cdef scalar* replacement_value_scalar = replacement_value.c_value.get()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_nulls(input_col_view,
                                           replacement_value_scalar[0]))
 
@@ -128,7 +128,7 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
     cdef scalar* hi_replace_value = hi_replace.c_value.get()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_clamp(
             input_col_view, lo_value[0],
             lo_replace_value[0], hi_value[0], hi_replace_value[0]))
@@ -153,7 +153,7 @@ def clamp(Column input_col, Scalar lo, Scalar hi):
     cdef scalar* hi_value = hi.c_value.get()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_clamp(input_col_view, lo_value[0], hi_value[0]))
 
     return Column.from_unique_ptr(move(c_result))
@@ -165,7 +165,7 @@ def normalize_nans_and_zeros_inplace(Column input_col):
     """
 
     cdef mutable_column_view input_col_view = input_col.mutable_view()
-    with nogil:
+    with memoryview(b''):
         cpp_normalize_nans_and_zeros(input_col_view)
 
 
@@ -176,7 +176,7 @@ def normalize_nans_and_zeros_column(Column input_col):
 
     cdef column_view input_col_view = input_col.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_normalize_nans_and_zeros(input_col_view))
 
     return Column.from_unique_ptr(move(c_result))

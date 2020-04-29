@@ -36,7 +36,7 @@ def slice_replace(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_slice(
             source_view,
             scalar_str[0],
@@ -59,7 +59,7 @@ def insert(Column source_strings,
 
     cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_slice(
             source_view,
             scalar_str[0],
@@ -86,7 +86,7 @@ def replace(Column source_strings,
     cdef string_scalar* scalar_target = <string_scalar*>(target.c_value.get())
     cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace(
             source_view,
             scalar_target[0],
@@ -109,7 +109,7 @@ def replace_multi(Column source_strings,
     cdef column_view target_view = target_strings.view()
     cdef column_view repl_view = repl_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace(
             source_view,
             target_view,

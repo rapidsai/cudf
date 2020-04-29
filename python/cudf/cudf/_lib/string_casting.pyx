@@ -49,7 +49,7 @@ from libcpp.string cimport string
 def floating_to_string(Column input_col):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_from_floats(
                 input_column_view))
@@ -62,7 +62,7 @@ def string_to_floating(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = np_to_cudf_types[out_type]
     cdef data_type c_out_type = data_type(tid)
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_to_floats(
                 input_column_view,
@@ -138,7 +138,7 @@ def stof(Column input_col, **kwargs):
 def integer_to_string(Column input_col):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_from_integers(
                 input_column_view))
@@ -151,7 +151,7 @@ def string_to_integer(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = np_to_cudf_types[out_type]
     cdef data_type c_out_type = data_type(tid)
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_to_integers(
                 input_column_view,
@@ -307,7 +307,7 @@ def _to_booleans(Column input_col, object string_true="True"):
     cdef string_scalar* string_scalar_true = <string_scalar*>(
         str_true.c_value.get())
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_to_booleans(
                 input_column_view,
@@ -347,7 +347,7 @@ def _from_booleans(
     cdef string_scalar* string_scalar_false = <string_scalar*>(
         str_false.c_value.get())
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_from_booleans(
                 input_column_view,
@@ -383,7 +383,7 @@ def int2timestamp(
     cdef string c_timestamp_format = kwargs.get(
         'format', "%Y-%m-%dT%H:%M:%SZ").encode('UTF-8')
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_from_timestamps(
                 input_column_view,
@@ -415,7 +415,7 @@ def timestamp2int(
     cdef data_type out_type = data_type(tid)
     cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_to_timestamps(
                 input_column_view,
@@ -441,7 +441,7 @@ def int2ip(Column input_col, **kwargs):
 
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_integers_to_ipv4(input_column_view))
 
@@ -464,7 +464,7 @@ def ip2int(Column input_col, **kwargs):
 
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_ipv4_to_integers(input_column_view))
 
@@ -491,7 +491,7 @@ def htoi(Column input_col, **kwargs):
     cdef data_type c_out_type = data_type(tid)
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_hex_to_integers(input_column_view,
                                 c_out_type))

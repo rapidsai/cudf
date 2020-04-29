@@ -36,7 +36,7 @@ def translate(Column source_strings,
             key = ord(key)
         c_mapping_table.push_back((key, value))
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_translate(source_view, c_mapping_table))
 
     return Column.from_unique_ptr(move(c_result))

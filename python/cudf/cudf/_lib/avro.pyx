@@ -33,7 +33,7 @@ cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=-1, num_rows=-1):
         filepath_or_buffer, columns or [], num_rows, skip_rows
     )
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(libcudf_read_avro(c_read_avro_args))
 
     names = [name.decode() for name in c_result.metadata.column_names]

@@ -162,7 +162,7 @@ cpdef join(Table lhs,
     c_columns_in_common = list(columns_in_common.keys())
     cdef unique_ptr[table] c_result
     if how == 'inner':
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_join.inner_join(
                 lhs_view,
                 rhs_view,
@@ -171,7 +171,7 @@ cpdef join(Table lhs,
                 c_columns_in_common
             ))
     elif how == 'left':
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_join.left_join(
                 lhs_view,
                 rhs_view,
@@ -180,7 +180,7 @@ cpdef join(Table lhs,
                 c_columns_in_common
             ))
     elif how == 'outer':
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_join.full_join(
                 lhs_view,
                 rhs_view,
@@ -189,7 +189,7 @@ cpdef join(Table lhs,
                 c_columns_in_common
             ))
     elif how == 'leftsemi':
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_join.left_semi_join(
                 lhs_view,
                 rhs_view,
@@ -198,7 +198,7 @@ cpdef join(Table lhs,
                 all_left_inds
             ))
     elif how == 'leftanti':
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_join.left_anti_join(
                 lhs_view,
                 rhs_view,

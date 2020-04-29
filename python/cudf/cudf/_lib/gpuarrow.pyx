@@ -40,7 +40,7 @@ cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
         cdef CCudaBufferReader* data_ = to_buffer_reader(source)
         cdef CBufferReader* schema_ = schema_to_buffer_reader(schema)
 
-        with nogil:
+        with memoryview(b''):
             message_reader = CCudaMessageReader.Open(data_, schema_)
             check_status(CRecordBatchStreamReader.Open2(
                 move(message_reader), &self.reader

@@ -44,7 +44,7 @@ def pad(Column source_strings,
         <underlying_type_t_pad_side> side
     )
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_pad(
             source_view,
             width,
@@ -64,7 +64,7 @@ def zfill(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_zfill(
             source_view,
             width
@@ -87,7 +87,7 @@ def center(Column source_strings,
     cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_pad(
             source_view,
             width,
@@ -111,7 +111,7 @@ def ljust(Column source_strings,
     cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_pad(
             source_view,
             width,
@@ -135,7 +135,7 @@ def rjust(Column source_strings,
     cdef pad_side pad_direction
     cdef string f_char = <string>str(fill_char).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_pad(
             source_view,
             width,

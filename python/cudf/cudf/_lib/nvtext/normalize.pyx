@@ -15,7 +15,7 @@ def normalize_spaces(Column strings):
     cdef column_view c_strings = strings.view()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_normalize_spaces(c_strings))
 
     return Column.from_unique_ptr(move(c_result))

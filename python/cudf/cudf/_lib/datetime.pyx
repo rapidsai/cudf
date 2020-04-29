@@ -14,7 +14,7 @@ def extract_datetime_component(Column col, object field):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 
-    with nogil:
+    with memoryview(b''):
         if field == "year":
             c_result = move(libcudf_datetime.extract_year(col_view))
         elif field == "month":

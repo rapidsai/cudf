@@ -20,7 +20,7 @@ def generate_ngrams(Column strings, int ngrams, Scalar separator):
     cdef string_scalar* c_separator = <string_scalar*>separator.c_value.get()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_generate_ngrams(
                 c_strings,

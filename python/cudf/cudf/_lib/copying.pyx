@@ -42,7 +42,7 @@ def copy_column(Column input_column):
 
     cdef column_view input_column_view = input_column.view()
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(make_unique[column](input_column_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -60,7 +60,7 @@ def _copy_range_in_place(Column input_column,
     cdef size_type c_input_end = input_end
     cdef size_type c_target_begin = target_begin
 
-    with nogil:
+    with memoryview(b''):
         cpp_copying.copy_range_in_place(
             input_column_view,
             target_column_view,
@@ -83,7 +83,7 @@ def _copy_range(Column input_column,
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_copying.copy_range(
             input_column_view,
             target_column_view,
@@ -139,7 +139,7 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
     cdef column_view gather_map_view = gather_map.view()
     cdef bool c_bounds_check = True
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.gather(
                 source_table_view,
@@ -170,7 +170,7 @@ def _scatter_table(Table source_table, Column scatter_map,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.scatter(
                 source_table_view,
@@ -209,7 +209,7 @@ def _scatter_scalar(scalars, Column scatter_map,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.scatter(
                 source_scalars,
@@ -256,7 +256,7 @@ def column_empty_like(Column input_column):
     cdef column_view input_column_view = input_column.view()
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_copying.empty_like(input_column_view))
 
     return Column.from_unique_ptr(move(c_result))
@@ -269,14 +269,14 @@ def column_allocate_like(Column input_column, size=None):
     cdef unique_ptr[column] c_result
 
     if size is None:
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_copying.allocate_like(
                 input_column_view,
                 cpp_copying.mask_allocation_policy.RETAIN)
             )
     else:
         c_size = size
-        with nogil:
+        with memoryview(b''):
             c_result = move(cpp_copying.allocate_like(
                 input_column_view,
                 c_size,
@@ -296,7 +296,7 @@ def table_empty_like(Table input_table, bool keep_index=True):
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_copying.empty_like(input_table_view))
 
     return Table.from_unique_ptr(
@@ -321,7 +321,7 @@ def column_slice(Column input_column, object indices):
     for index in indices:
         c_indices.push_back(index)
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.slice(
                 input_column_view,
@@ -354,7 +354,7 @@ def table_slice(Table input_table, object indices, bool keep_index=True):
     for index in indices:
         c_indices.push_back(index)
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.slice(
                 input_table_view,
@@ -390,7 +390,7 @@ def column_split(Column input_column, object splits):
     for split in splits:
         c_splits.push_back(split)
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.split(
                 input_column_view,
@@ -425,7 +425,7 @@ def table_split(Table input_table, object splits, bool keep_index=True):
     for split in splits:
         c_splits.push_back(split)
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.split(
                 input_table_view,
@@ -454,7 +454,7 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.copy_if_else(
                 lhs_view,
@@ -474,7 +474,7 @@ def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.copy_if_else(
                 lhs_scalar[0],
@@ -494,7 +494,7 @@ def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.copy_if_else(
                 lhs_view,
@@ -514,7 +514,7 @@ def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.copy_if_else(
                 lhs_scalar[0],
@@ -555,7 +555,7 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.boolean_mask_scatter(
                 input_table_view,
@@ -585,7 +585,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_copying.boolean_mask_scatter(
                 input_scalar_vector,
@@ -633,7 +633,7 @@ def shift(Column input, int offset, object fill_value=None):
     cdef scalar* c_fill_value = fill.c_value.get()
     cdef unique_ptr[column] c_output
 
-    with nogil:
+    with memoryview(b''):
         c_output = move(
             cpp_copying.shift(
                 c_input,

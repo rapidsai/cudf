@@ -42,7 +42,7 @@ def bools_to_mask(Column col):
     cdef unique_ptr[device_buffer] up_db
     cdef size_type null_count
 
-    with nogil:
+    with memoryview(b''):
         cpp_out = move(libcudf_transform.bools_to_mask(col_view))
         up_db = move(cpp_out.first)
 
@@ -56,7 +56,7 @@ def nans_to_nulls(Column input):
     cdef pair[unique_ptr[device_buffer], size_type] c_output
     cdef unique_ptr[device_buffer] c_buffer
 
-    with nogil:
+    with memoryview(b''):
         c_output = move(libcudf_transform.nans_to_nulls(c_input))
         c_buffer = move(c_output.first)
 
@@ -89,7 +89,7 @@ def transform(Column input, op):
             .format(np_dtype)
         )
 
-    with nogil:
+    with memoryview(b''):
         c_output = move(libcudf_transform.transform(
             c_input,
             c_str,

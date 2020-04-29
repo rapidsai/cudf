@@ -33,7 +33,7 @@ def hash_partition(Table source_table, object columns_to_hash,
         c_source_view = source_table.data_view()
 
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_hash_partition(
                 c_source_view,
@@ -60,7 +60,7 @@ def hash(Table source_table, object initial_hash_values=None):
     cdef table_view c_source_view = source_table.data_view()
 
     cdef unique_ptr[column] c_result
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_hash(
                 c_source_view,

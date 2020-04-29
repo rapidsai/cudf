@@ -50,7 +50,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             return incol.dtype.type(1)
         return np.nan
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_reduce(
             c_incol_view,
             c_agg,
@@ -86,7 +86,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     elif inclusive is False:
         c_inclusive = scan_type.EXCLUSIVE
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_scan(
             c_incol_view,
             c_agg,

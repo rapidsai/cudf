@@ -290,7 +290,7 @@ cdef gdf_column* column_view_from_column(Column col,
         category=<void*>category
     )
 
-    with nogil:
+    with memoryview(b''):
         gdf_column_view_augmented(
             <gdf_column*>c_col,
             <void*>data_ptr,
@@ -385,7 +385,7 @@ cdef gdf_column* column_view_from_string_column(
         category=<void*>category
     )
 
-    with nogil:
+    with memoryview(b''):
         gdf_column_view_augmented(
             <gdf_column*>c_col,
             <void*>data_ptr,
@@ -469,7 +469,7 @@ cdef gdf_context* create_context_view(
         _null_sort_behavior_api[flag_null_sort_behavior]
     cdef bool c_flag_groupby_include_nulls = flag_groupby_include_nulls
 
-    with nogil:
+    with memoryview(b''):
         gdf_context_view(
             context,
             c_flag_sorted,
@@ -493,14 +493,14 @@ cpdef check_gdf_error(errcode):
 
     if c_errcode != GDF_SUCCESS:
         if c_errcode == GDF_CUDA_ERROR:
-            with nogil:
+            with memoryview(b''):
                 cudaerr = gdf_cuda_last_error()
                 errname = gdf_cuda_error_name(cudaerr)
                 details = gdf_cuda_error_string(cudaerr)
             msg = 'CUDA ERROR. {}: {}'.format(errname, details)
 
         else:
-            with nogil:
+            with memoryview(b''):
                 errname = gdf_error_get_name(c_errcode)
             msg = errname
 

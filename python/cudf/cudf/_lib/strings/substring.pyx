@@ -40,7 +40,7 @@ def slice_strings(Column source_strings,
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
         <numeric_scalar[size_type]*>(step_scalar.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_slice_strings(
             source_view,
             start_numeric_scalar[0],
@@ -64,7 +64,7 @@ def slice_from(Column source_strings,
     cdef column_view starts_view = starts.view()
     cdef column_view stops_view = stops.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_slice_strings(
             source_view,
             starts_view,
@@ -100,7 +100,7 @@ def get(Column source_strings,
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
         <numeric_scalar[size_type]*>(step_scalar.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_slice_strings(
             source_view,
             start_numeric_scalar[0],

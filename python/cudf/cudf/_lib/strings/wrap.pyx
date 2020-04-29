@@ -23,7 +23,7 @@ def wrap(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_wrap(
             source_view,
             width

@@ -25,7 +25,7 @@ def contains_re(Column source_strings, object reg_ex):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_contains_re(
             source_view,
             reg_ex_string
@@ -44,7 +44,7 @@ def count_re(Column source_strings, object reg_ex):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_count_re(
             source_view,
             reg_ex_string
@@ -63,7 +63,7 @@ def match_re(Column source_strings, object reg_ex):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_matches_re(
             source_view,
             reg_ex_string

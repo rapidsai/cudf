@@ -27,7 +27,7 @@ def url_decode(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_url_decode(
             source_view
         ))
@@ -55,7 +55,7 @@ def url_encode(Column source_strings):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_url_encode(
             source_view
         ))

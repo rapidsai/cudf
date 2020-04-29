@@ -58,7 +58,7 @@ def quantile(
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_quantile(
                 c_input,
@@ -104,7 +104,7 @@ def quantiles(Table source_table,
 
     cdef unique_ptr[table] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_quantiles(
                 c_input,

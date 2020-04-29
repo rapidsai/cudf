@@ -100,7 +100,7 @@ cdef binaryop_v_v(Column lhs, Column rhs,
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_binaryop.binary_operation(
                 c_lhs,
@@ -120,7 +120,7 @@ cdef binaryop_v_s(Column lhs, Scalar rhs,
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_binaryop.binary_operation(
                 c_lhs,
@@ -140,7 +140,7 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_binaryop.binary_operation(
                 c_lhs[0],
@@ -228,7 +228,7 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
 
     cdef unique_ptr[column] c_result
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(
             cpp_binaryop.binary_operation(
                 c_lhs,

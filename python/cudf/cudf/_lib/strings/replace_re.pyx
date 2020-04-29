@@ -36,7 +36,7 @@ def replace_re(Column source_strings,
     cdef string_scalar* scalar_repl = \
         <string_scalar*>(repl.c_value.get())
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_re(
             source_view,
             pattern_string,
@@ -62,7 +62,7 @@ def replace_with_backrefs(
     cdef string pattern_string = <string>str(pattern).encode()
     cdef string repl_string = <string>str(repl).encode()
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_with_backrefs(
             source_view,
             pattern_string,
@@ -91,7 +91,7 @@ def replace_multi_re(Column source_strings,
     for pattern in patterns:
         patterns_vector.push_back(str.encode(pattern))
 
-    with nogil:
+    with memoryview(b''):
         c_result = move(cpp_replace_re(
             source_view,
             patterns_vector,
