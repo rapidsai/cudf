@@ -38,7 +38,8 @@ namespace detail {
  *
  * Any non-nullable column in the input is treated as all non-null.
  *
- * @example input   {col1: {1, 2,    3,    null},
+ * @code{.pseudo}
+ *          input   {col1: {1, 2,    3,    null},
  *                   col2: {4, 5,    null, null},
  *                   col3: {7, null, null, null}}
  *          keys = {0, 1, 2} // All columns
@@ -47,6 +48,7 @@ namespace detail {
  *          output {col1: {1, 2}
  *                  col2: {4, 5}
  *                  col3: {7, null}}
+ * @endcode
  *
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
  * there is no error, and an empty `table` is returned
