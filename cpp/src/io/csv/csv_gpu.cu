@@ -288,7 +288,7 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
+  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 template <typename T>

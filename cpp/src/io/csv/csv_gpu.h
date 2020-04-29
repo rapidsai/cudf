@@ -39,6 +39,10 @@ constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadbl
 
 /**
  * @brief return a row context from a {count, id} pair
+ *
+ * The 32-bit row context consists of the 2-bit parser state stored in the lower 2-bits
+ * and a 30-bit row count in the upper 30 bits.
+ *
  **/
 inline __host__ __device__ uint32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
 {
@@ -47,7 +51,16 @@ inline __host__ __device__ uint32_t make_row_context(uint32_t row_count, uint32_
 
 /**
  * @brief pack multiple row contexts together
- * each row count is assumed to fit in 18-bit (local count)
+ *
+ * The 64-bit packed row context format represents the four possible output row context state
+ * from each of the four possible input row context state.
+ * Each output state consists of the 2-bit row context state along with a 18-bit row count
+ * value (row count is assumed to be a local count that fits in 18-bit)
+ * The four 20-bit values are concatenated to form a 80-bit value, truncated to 64-bit
+ * since a block starting in a EOF state can only have a zero row count (and the output
+ * state corresponding to an EOF input state can only be EOF, so only the first 3 output
+ * states are included as parameters, and the EOF->EOF state transition is hardcoded)
+ *
  **/
 inline __host__ __device__ uint64_t pack_row_contexts(uint32_t ctx0, uint32_t ctx1, uint32_t ctx2)
 {
