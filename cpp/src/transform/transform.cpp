@@ -27,6 +27,7 @@
 #include <jit/type.h>
 #include "jit/code/code.h"
 
+#include <jit/common_headers.hpp>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
 
@@ -34,6 +35,18 @@ namespace cudf {
 namespace experimental {
 namespace transformation {
 namespace jit {
+
+const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp};
+
+std::istream* headers_code(std::string filename, std::iostream& stream)
+{
+  auto it = cudf::jit::stringified_headers.find(filename);
+  if (it != cudf::jit::stringified_headers.end()) {
+    return cudf::jit::send_stringified_header(stream, it->second);
+  }
+  return nullptr;
+}
+
 void unary_operation(mutable_column_view output,
                      column_view input,
                      const std::string& udf,
@@ -52,18 +65,12 @@ void unary_operation(mutable_column_view output,
     cuda_source += cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP") + code::kernel;
   }
 
-  const std::vector<std::string> compiler_flags{"-std=c++14",
-                                                // Have jitify prune unused global variables
-                                                "-remove-unused-globals",
-                                                // suppress all NVRTC warnings
-                                                "-w"};
-
   // Launch the jitify kernel
   cudf::jit::launcher(hash,
                       cuda_source,
-                      {cudf_types_hpp, cudf_wrappers_timestamps_hpp},
-                      compiler_flags,
-                      nullptr,
+                      header_names,
+                      cudf::jit::compiler_flags,
+                      headers_code,
                       stream)
     .set_kernel_inst("kernel",  // name of the kernel we are launching
                      {cudf::jit::get_type_name(output.type()),  // list of template arguments
