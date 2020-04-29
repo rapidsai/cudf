@@ -1469,6 +1469,7 @@ class DataFrame(Frame):
         cols = columns
         original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
+
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
@@ -1478,12 +1479,12 @@ class DataFrame(Frame):
 
             if isinstance(idx, cudf.core.MultiIndex):
                 idx_dtype_match = (
-                    df.index._source_data.dtypes != idx._source_data.dtypes
+                    df.index._source_data.dtypes == idx._source_data.dtypes
                 ).all()
             else:
-                idx_dtype_match = df.index.dtype != idx.dtype
+                idx_dtype_match = df.index.dtype == idx.dtype
 
-            if idx_dtype_match:
+            if not idx_dtype_match:
                 cols = cols if cols is not None else list(df.columns)
                 df = DataFrame()
             else:
@@ -2180,10 +2181,8 @@ class DataFrame(Frame):
         Difference from pandas:
         Not supporting *copy* because default and only behaviour is copy=True
         """
-        if isinstance(self.index, cudf.MultiIndex):
-            warnings.warn("Never transpose a MultiIndex - remove the "
-                "existing columns and replace with a "
-                "RangeIndex. Afterward, reassign.", Warning)
+        # Never transpose a MultiIndex - remove the existing columns and
+        # replace with a RangeIndex. Afterward, reassign.
         columns = self.index.copy(deep=False)
         index = self.columns.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:

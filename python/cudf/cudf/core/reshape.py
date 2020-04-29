@@ -91,7 +91,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     if axis == 1:
         """ Check if *objs* index contains any duplicates """
         for o in objs:
-            if not len(o.index) == len(set(o.index)):
+            if not o.index.is_unique:
                 raise ValueError("cannot reindex from a duplicate axis")
 
         assert typs.issubset(allowed_typs)

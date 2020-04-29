@@ -289,10 +289,11 @@ def test_pandas_concat_compatibility_axis1_overlap(index2, names):
 
 
 @pytest.mark.xfail(raises=ValueError)
-def test_pandas_concat_compatibility_axis1_duplicate_axis():
+def test_pandas_concat_compatibility_axis1_equal_duplicate():
     data = [1, 2, 3]
-    s1 = gd.Series(data, index=[1, 1, 0])
-    s2 = gd.Series(data, index=[0, 1, 1])
+    index = [1, 1, 0]
+    s1 = gd.Series(data, index=index)
+    s2 = gd.Series(data, index=index)
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)
