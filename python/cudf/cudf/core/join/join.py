@@ -137,20 +137,19 @@ class Merge(object):
             )
 
         # Passing 'on' with 'left_on' or 'right_on' is ambiguous
-        if on is not None:
-            if left_on is not None or right_on is not None:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-            # Keys in 'on' need to be in both operands
+        if on and (left_on or right_on):
+            raise ValueError(
+                'Can only pass argument "on" OR "left_on" '
+                'and "right_on", not a combination of both.'
+            )
+
+        # Keys need to be in their corresponding operands
+        if on:
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
                     raise KeyError("on key {} not in both operands".format(on))
-
-        # in this case, keys must be present in their corresponding operands
-        if left_on is not None and right_on is not None:
+        elif left_on and right_on:
             left_on_keys = (
                 [left_on] if not isinstance(left_on, list) else left_on
             )
@@ -166,19 +165,12 @@ class Merge(object):
                     raise KeyError('Key "{}" not in right operand'.format(key))
 
         # Require same total number of columns to join on in both operands
-        if left_on is None:
-            len_left_on = 0
-        elif not isinstance(left_on, list):
-            len_left_on = 1
-        else:
-            len_left_on = len(left_on)
-
-        if right_on is None:
-            len_right_on = 0
-        elif not isinstance(right_on, list):
-            len_right_on = 1
-        else:
-            len_right_on = len(right_on)
+        len_left_on = 0
+        len_right_on = 0
+        if left_on:
+            len_left_on += len(left_on) if isinstance(left_on, list) else 1
+        if right_on:
+            len_right_on += len(right_on) if isinstance(right_on, list) else 1
         if not (len_left_on + left_index * lhs._num_indices) == (
             len_right_on + right_index * rhs._num_indices
         ):
@@ -193,10 +185,8 @@ class Merge(object):
                 if len(same_named_columns) == 0:
                     raise ValueError("No common columns to perform merge on")
 
-        if left_on is None:
-            left_on = []
-        if right_on is None:
-            right_on = []
+        left_on = [] if not left_on else None
+        right_on = [] if not right_on else None
         for name in same_named_columns:
             if not (
                 name in left_on
@@ -211,53 +201,27 @@ class Merge(object):
 
     def typecast_input_to_libcudf(self):
         if self.left_index and self.right_index:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs.index._data.items(), self.rhs.index._data.items()
-            ):
-                to_dtype = self.input_to_libcudf_casting_rules(
-                    vl, vr, self.how
-                )
-                self.lhs.index._data[kl] = vl.astype(to_dtype)
-                self.rhs.index._data[kr] = vr.astype(to_dtype)
+            on_cols_and_inds = ((self.lhs.index, self.rhs.index),)
             if self.left_on and self.right_on:
-                for lcol, rcol in zip(self.left_on, self.right_on):
-                    to_dtype = self.input_to_libcudf_casting_rules(
-                        self.lhs._data[lcol], self.rhs._data[rcol], self.how
-                    )
-                    self.lhs._data[lcol] = self.lhs._data[lcol].astype(
-                        to_dtype
-                    )
-                    self.rhs._data[rcol] = self.rhs._data[rcol].astype(
-                        to_dtype
-                    )
+                on_cols_and_inds = (on_cols_and_inds, (self.lhs[self.left_on], self.rhs[right_on]))
         elif self.left_index and self.right_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs.index._data.items(), self.rhs._data.items()
-            ):
-                to_dtype = self.input_to_libcudf_casting_rules(
-                    vl, vr, self.how
-                )
-                self.lhs.index._data[kl] = vl.astype(to_dtype)
-                self.rhs._data[kr] = vr.astype(to_dtype)
+            on_cols_and_inds = ((self.lhs.index, self.rhs[self.right_on]),)
         elif self.right_index and self.left_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs._data.items(), self.rhs.index._data.items()
-            ):
-                to_dtype = self.input_to_libcudf_casting_rules(
-                    vl, vr, self.how
-                )
-                self.lhs._data[kl] = vl.astype(to_dtype)
-                self.rhs.index._data[kr] = vr.astype(to_dtype)
-
+            on_cols_and_inds = ((self.lhs[self.left_on], self.rhs.index),)
         elif self.left_on and self.right_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs._data.items(), self.rhs._data.items()
-            ):
-                to_dtype = self.input_to_libcudf_casting_rules(
-                    vl, vr, self.how
-                )
-                self.lhs._data[kl] = vl.astype(to_dtype)
-                self.rhs._data[kr] = vr.astype(to_dtype)
+            on_cols_and_inds = ((self.lhs[self.left_on], self.rhs[self.right_on]),)
+        for key_pair_group in on_cols_and_inds:
+            left, right = key_pair_group
+            for ((kl, vl), (kr, vr)) in zip(left._data.items(), right._data.items()):
+                to_dtype = self.input_to_libcudf_casting_rules(vl, vr, self.how)
+                if isinstance(left, (cudf.core.index.Index, cudf.core.multiindex.MultiIndex)):
+                    left._data[kl] = vl.astype(to_dtype)
+                else:
+                    self.lhs._data[kl] = vl.astype(to_dtype)
+                if isinstance(right, (cudf.core.index.Index, cudf.core.multiindex.MultiIndex)):
+                    right._data[kr] = vr.astype(to_dtype)
+                else:
+                    self.rhs._data[kr] = vr.astype(to_dtype)
 
     def input_to_libcudf_casting_rules(self, lcol, rcol, how):
         cast_warn = "can't safely cast column {} from {} with type \
