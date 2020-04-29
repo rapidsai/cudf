@@ -187,7 +187,7 @@ struct LogBase {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-struct PositiveRemainder {
+struct PMod {
   using CommonArgsT = typename std::common_type<TypeLhs, TypeRhs>::type;
 
   TypeOut operator()(TypeLhs x, TypeRhs y) const
@@ -195,7 +195,7 @@ struct PositiveRemainder {
     CommonArgsT xconv{x};
     CommonArgsT yconv{y};
     auto rem = std::fmod(xconv, yconv);
-    if (rem < 0) rem += (yconv < 0) ? -yconv : yconv;
+    if (rem < 0 && xconv < 0 && yconv > 0) rem += yconv;
     return TypeOut{rem};
   }
 };

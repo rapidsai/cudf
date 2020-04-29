@@ -60,9 +60,9 @@ enum class binary_operator : int32_t {
 
   LOG_BASE,  ///< logarithm to the base
 
-  // If the dividend is negative, this returns (dividend % divisor) + abs(divisor)
+  // If only the dividend is negative, this returns (dividend % divisor) + abs(divisor)
   // else, it returns (dividend % divisor)
-  POSITIVE_REMAINDER,  ///< positive modulo operator
+  PMOD,  ///< positive modulo operator
 
   INVALID_BINARY  ///< invalid operation
 };
