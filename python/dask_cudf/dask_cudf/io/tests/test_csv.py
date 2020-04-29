@@ -64,6 +64,7 @@ def test_raises_FileNotFoundError():
         dask_cudf.read_csv("foo.csv")
 
 
+@pytest.mark.xfail()
 def test_read_csv_w_bytes(tmp_path):
     df = dask.datasets.timeseries(
         dtypes={"x": int, "y": int}, freq="120s"

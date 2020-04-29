@@ -352,34 +352,33 @@ def test_csv_reader_strings(tmpdir):
 
 
 # Quoting not yet supported
-# def test_csv_reader_strings_quotechars(tmpdir):
-#    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
-#
-#    names = ["text", "int"]
-#    dtypes = ["str", "int"]
-#    lines = [
-#        ",".join(names), '"a,\n",0', '"b ""c"" d",0', "e,0", '"f,,!.,",0'
-#    ]
-#
-#    with open(str(fname), "w") as fp:
-#        fp.write("\n".join(lines))
-#
-#    df = read_csv(
-#        str(fname),
-#        names=names,
-#        dtype=dtypes,
-#        skiprows=1,
-#        quotechar='"',
-#        quoting=1,
-#    )
-#
-#    assert len(df.columns) == 2
-#    assert df["text"].dtype == np.dtype("object")
-#    assert df["int"].dtype == np.dtype("int32")
-#    assert df["text"][0] == "a,\n"
-#    assert df["text"][1] == 'b "c" d'
-#    assert df["text"][2] == "e"
-#    assert df["text"][3] == "f,,!.,"
+@pytest.mark.xfail()
+def test_csv_reader_strings_quotechars(tmpdir):
+    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
+
+    names = ["text", "int"]
+    dtypes = ["str", "int"]
+    lines = [",".join(names), '"a,\n",0', '"b ""c"" d",0', "e,0", '"f,,!.,",0']
+
+    with open(str(fname), "w") as fp:
+        fp.write("\n".join(lines))
+
+    df = read_csv(
+        str(fname),
+        names=names,
+        dtype=dtypes,
+        skiprows=1,
+        quotechar='"',
+        quoting=1,
+    )
+
+    assert len(df.columns) == 2
+    assert df["text"].dtype == np.dtype("object")
+    assert df["int"].dtype == np.dtype("int32")
+    assert df["text"][0] == "a,\n"
+    assert df["text"][1] == 'b "c" d'
+    assert df["text"][2] == "e"
+    assert df["text"][3] == "f,,!.,"
 
 
 def test_csv_reader_usecols_int_char(tmpdir):
@@ -1035,15 +1034,16 @@ def test_csv_reader_prefix():
 
 
 # Category is not yet supported from libcudf
-# def test_csv_reader_category_hash():
-#
-#    lines = ["HBM0676", "KRC0842", "ILM1441", "EJV0094", "ILM1441"]
-#    buffer = "\n".join(lines)
-#
-#    df = read_csv(StringIO(buffer), names=["user"], dtype=["category"])
-#
-#    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
-#    assert list(df["user"]) == hash_ref
+@pytest.mark.xfail()
+def test_csv_reader_category_hash():
+
+    lines = ["HBM0676", "KRC0842", "ILM1441", "EJV0094", "ILM1441"]
+    buffer = "\n".join(lines)
+
+    df = read_csv(StringIO(buffer), names=["user"], dtype=["category"])
+
+    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
+    assert list(df["user"]) == hash_ref
 
 
 def test_csv_reader_delim_whitespace():
@@ -1163,45 +1163,47 @@ def test_csv_reader_aligned_byte_range(tmpdir):
 
 
 # Hex is not working
-# @pytest.mark.parametrize(
-#    "pdf_dtype, gdf_dtype",
-#    [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
-# )
-# def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
-#    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
-#    values = [int(hex_int, 16) for hex_int in lines]
-#
-#    buffer = "\n".join(lines)
-#
-#    if gdf_dtype is not None:
-#        # require explicit `hex` dtype to parse hexadecimals
-#        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
-#        gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
-#        np.testing.assert_array_equal(
-#            pdf["hex_int"], gdf["hex_int"].to_array()
-#        )
-#    else:
-#        # otherwise, dtype inference returns as object (string)
-#        pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
-#        gdf = read_csv(StringIO(buffer), names=["hex_int"])
-#        assert_eq(pdf, gdf)
+@pytest.mark.xfail()
+@pytest.mark.parametrize(
+    "pdf_dtype, gdf_dtype",
+    [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+)
+def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
+    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
+    values = [int(hex_int, 16) for hex_int in lines]
+
+    buffer = "\n".join(lines)
+
+    if gdf_dtype is not None:
+        # require explicit `hex` dtype to parse hexadecimals
+        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
+        gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
+        np.testing.assert_array_equal(
+            pdf["hex_int"], gdf["hex_int"].to_array()
+        )
+    else:
+        # otherwise, dtype inference returns as object (string)
+        pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
+        gdf = read_csv(StringIO(buffer), names=["hex_int"])
+        assert_eq(pdf, gdf)
 
 
 # Quoting not yet supported
-# @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
-# def test_csv_reader_pd_consistent_quotes(quoting):
-#    names = ["text"]
-#    dtypes = ["str"]
-#    lines = ['"a"', '"b ""c"" d"', '"f!\n."']
-#
-#    buffer = "\n".join(lines)
-#
-#    gd_df = read_csv(
-#        StringIO(buffer), names=names, dtype=dtypes, quoting=quoting
-#    )
-#    pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
-#
-#    assert_eq(pd_df, gd_df)
+@pytest.mark.xfail()
+@pytest.mark.parametrize("quoting", [0, 1, 2, 3])
+def test_csv_reader_pd_consistent_quotes(quoting):
+    names = ["text"]
+    dtypes = ["str"]
+    lines = ['"a"', '"b ""c"" d"', '"f!\n."']
+
+    buffer = "\n".join(lines)
+
+    gd_df = read_csv(
+        StringIO(buffer), names=names, dtype=dtypes, quoting=quoting
+    )
+    pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
+
+    assert_eq(pd_df, gd_df)
 
 
 def test_csv_reader_scientific_type_detection():
