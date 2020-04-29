@@ -23,6 +23,7 @@
 
 #include "types.hpp"
 
+#include <cudf/io/writers.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -236,6 +237,70 @@ struct read_csv_args {
  */
 table_with_metadata read_csv(read_csv_args const& args,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Settings to use for `write_csv()`
+ */
+struct write_csv_args : detail::csv::writer_options {
+  write_csv_args(sink_info const& snk,
+                 table_view const& table,
+                 std::string const& na,
+                 bool include_header,
+                 int rows_per_chunk,
+                 std::string line_term          = std::string{"\n"},
+                 char delim                     = ',',
+                 std::string true_v             = std::string{"true"},
+                 std::string false_v            = std::string{"false"},
+                 table_metadata const* metadata = nullptr)
+    : writer_options(na, include_header, rows_per_chunk, line_term, delim, true_v, false_v),
+      sink_(snk),
+      table_(table),
+      metadata_(metadata)
+  {
+  }
+
+  detail::csv::writer_options const& get_options(void) const
+  {
+    return *this;  // sliced to base
+  }
+
+  sink_info const& sink(void) const { return sink_; }
+
+  table_view const& table(void) const { return table_; }
+
+  table_metadata const* metadata(void) const { return metadata_; }
+
+  // Specify the sink to use for writer output:
+  //
+  sink_info const sink_;
+
+  // Set of columns to output:
+  //
+  table_view const& table_;
+
+  // Optional associated metadata
+  //
+  table_metadata const* metadata_;
+};
+
+/**
+ * @brief Writes a set of columns to CSV format
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.csv";
+ *  cudf::write_csv_args args{cudf::sink_info(filepath), table->view()};
+ *  ...
+ *  cudf::write_csv(args);
+ * @endcode
+ *
+ * @param args Settings for controlling writing behavior
+ * @param mr Optional resource to use for device memory allocation
+ */
+void write_csv(write_csv_args const& args,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Settings to use for `read_orc()`
