@@ -20,6 +20,7 @@
 
 #include <memory>
 #include <vector>
+#include <functional>
 
 /**
  * @file aggregation.hpp

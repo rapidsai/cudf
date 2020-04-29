@@ -23,6 +23,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <numeric>
+#include <functional>
 
 namespace cudf {
 namespace experimental {
