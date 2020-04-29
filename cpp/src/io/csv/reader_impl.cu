@@ -449,7 +449,9 @@ void reader::impl::gather_row_offsets(const char *h_data,
                              cudaMemcpyDeviceToHost,
                              stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    // Sum up the rows in each block, using the known input context
+    // Sum up the rows in each block, selecting the row count that corresponds to the
+    // current input context. Also stores the known input context per block that will
+    // be needed by the second pass.
     for (uint32_t i = 0; i < num_blocks; i++) {
       uint64_t ctx_next = cudf::io::csv::gpu::select_row_context(ctx, row_ctx[i]);
       row_ctx[i]        = ctx;
