@@ -128,6 +128,8 @@
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 - PR #4822 Add constructor to `pq_chunked_state` and use RAII idiom
+- PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
+- PR #5039 Make `annotate` picklable
 
 ## Bug Fixes
 
@@ -213,6 +215,7 @@
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
+- PR #5041 Fix invalid java test for shift right unsigned
 
 
 # cuDF 0.13.0 (31 Mar 2020)
