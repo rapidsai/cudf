@@ -575,7 +575,7 @@ __global__ void convertCsvToGdf(const char *raw_csv,
  * @brief merge two packed row contexts (each corresponding to a block of characters)
  * and returns the packed row context corresponding to the merged character block
  **/
-inline __device__ uint64_t merge_row_contexts(uint64_t first_ctx, uint32_t second_ctx)
+inline __device__ uint64_t merge_row_contexts(uint64_t first_ctx, uint64_t second_ctx)
 {
   uint32_t id0 = get_row_context(first_ctx, ROW_CTX_NONE) & 3;
   uint32_t id1 = get_row_context(first_ctx, ROW_CTX_QUOTE) & 3;

@@ -364,7 +364,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
     for (size_t i = 0; i < column_types.size(); ++i) {
       if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
-          opts.doublequote == true && num_records != 0) {
+          opts.doublequote == true) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
         // quotechars in quoted fields results in reduction to a single quotechar
         // TODO: Would be much more efficient to perform this operation in-place
