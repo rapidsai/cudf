@@ -23,6 +23,13 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @ingroup column_apis
+ * @addtogroup column_partition Partition
+ * Patition APIs
+ * @{
+ */
+
+/**
  * @brief Partitions rows of `t` according to the mapping specified by
  * `partition_map`.
  *
@@ -93,8 +100,8 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * Rows are assigned partitions based on their row index in the table,
  * in a round robin fashion.
  *
- * @throws cudf::logic_error if num_partitions <= 1
- * @throws cudf::logic_error if start_partition >= num_partitions.
+ * @throws cudf::logic_error if `num_partitions <= 1`
+ * @throws cudf::logic_error if `start_partition >= num_partitions`
  *
  * A good analogy for the algorithm is dealing out cards:
  *
@@ -104,11 +111,11 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  *
  * The algorithm has two outcomes:
  *
- *  (a) Another deck of cards formed by stacking each
+ *  1. Another deck of cards formed by stacking each
  *      player's cards back into a deck again,
  *      preserving the order of cards dealt to each player,
  *      starting with player 0.
- *  (b) A vector into the output deck indicating where a player's cards start.
+ *  2. A vector into the output deck indicating where a player's cards start.
  *
  * A player's deck (partition) is the range of cards starting
  * at the corresponding offset and ending at the next player's
@@ -118,10 +125,11 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * We start dealing to the first indicated player and continuing
  * around the players until we run out of cards before we run out of players.
  * Players that did not get any cards are represented by
- * offset[i] == offset[i+1] or
- * offset[i] == table.num_rows() if i == num_partitions-1
+ * `offset[i] == offset[i+1] or
+ * offset[i] == table.num_rows() if i == num_partitions-1`
  * meaning there are no cards (rows) in their deck (partition).
  *
+ * ```
  * Example 1:
  * input:
  * table => col 1 {0, ..., 12}
@@ -211,6 +219,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * output: pair<table, partition_offsets>
  * table => col 1 {9,10,0,1,2,3,4,5,6,7,8}
  * partition_offsets => {0,1,2,3,4,5,6,7,8,9,10}
+ * ```
  *
  * @param[in] input The input table to be round-robin partitioned
  * @param[in] num_partitions Number of partitions for the table
@@ -226,5 +235,6 @@ round_robin_partition(table_view const& input,
                       cudf::size_type start_partition     = 0,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

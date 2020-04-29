@@ -21,6 +21,13 @@
 namespace cudf {
 namespace dictionary {
 /**
+ * @ingroup dictionary_apis
+ * @addtogroup dictionary_update_keys Update Keys
+ * Dictionary update keys APIs
+ * @{
+ */
+
+/**
  * @brief Create a new dictionary column by adding the new keys elements
  * to the existing dictionary_column.
  *
@@ -133,5 +140,6 @@ std::unique_ptr<column> set_keys(
   column_view const& keys,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace dictionary
 }  // namespace cudf

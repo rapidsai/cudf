@@ -24,6 +24,13 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @ingroup column_apis
+ * @addtogroup column_binaryop BinaryOp
+ * BinaryOp APIs
+ * @{
+ */
+
+/**
  * @brief Types of binary operations that can be performed on data.
  */
 enum class binary_operator : int32_t {
@@ -167,5 +174,6 @@ std::unique_ptr<column> binary_operation(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

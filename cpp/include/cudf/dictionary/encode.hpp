@@ -25,8 +25,18 @@
  */
 
 namespace cudf {
-//! Dictionary column APIs.
+/**
+ * @brief Dictionary APIs
+ * @defgroup dictionary_apis Dictionary APIs
+ */
 namespace dictionary {
+/**
+ * @ingroup dictionary_apis
+ * @addtogroup dictionary_encode Encode/Decode
+ * Encode/Decode APIs
+ * @{
+ */
+
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -76,5 +86,6 @@ std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace dictionary
 }  // namespace cudf

@@ -19,6 +19,12 @@
 
 namespace cudf {
 namespace dictionary {
+/**
+ * @ingroup dictionary_apis
+ * @addtogroup dictionary_search Search
+ * Dictionary Search APIs
+ * @{
+ */
 
 /**
  * @brief Return the index value for a given key.
@@ -36,5 +42,6 @@ std::unique_ptr<numeric_scalar<int32_t>> get_index(
   scalar const& key,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace dictionary
 }  // namespace cudf

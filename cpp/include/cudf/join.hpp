@@ -23,7 +23,12 @@
 
 namespace cudf {
 namespace experimental {
-// joins
+/**
+ * @ingroup column_apis
+ * @addtogroup column_join Join
+ * Join APIs
+ * @{
+ */
 
 /**
  * @brief  Performs an inner join on the specified columns of two
@@ -322,6 +327,7 @@ std::unique_ptr<cudf::experimental::table> left_anti_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-}  // namespace experimental
 
+/** @} */  // end of group
+}  // namespace experimental
 }  // namespace cudf
