@@ -109,8 +109,7 @@ struct store_result_functor {
 };
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT_VALID>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -123,8 +122,7 @@ void store_result_functor::operator()<aggregation::COUNT_VALID>(
 }
 
 template <>
-void store_result_functor::operator()<aggregation::COUNT_ALL>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
@@ -142,8 +140,7 @@ void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMAX>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -157,8 +154,7 @@ void store_result_functor::operator()<aggregation::ARGMAX>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::ARGMIN>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,
@@ -255,8 +251,7 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
 };
 
 template <>
-void store_result_functor::operator()<aggregation::VARIANCE>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   auto var_agg   = static_cast<experimental::detail::std_var_aggregation const&>(agg);
@@ -292,14 +287,13 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg) 
 };
 
 template <>
-void store_result_functor::operator()<aggregation::QUANTILE>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
-  auto quantile_agg = static_cast<experimental::detail::quantile_aggregation const&>(agg);
+  auto quantile_agg       = static_cast<experimental::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -313,8 +307,7 @@ void store_result_functor::operator()<aggregation::QUANTILE>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::MEDIAN>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
@@ -333,8 +326,7 @@ void store_result_functor::operator()<aggregation::MEDIAN>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::NUNIQUE>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
   auto nunique_agg = static_cast<experimental::detail::nunique_aggregation const&>(agg);
@@ -350,12 +342,10 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(
 };
 
 template <>
-void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
-  aggregation const& agg) {
+void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg) {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nth_element_agg =
-    static_cast<experimental::detail::nth_element_aggregation const&>(agg);
+  auto nth_element_agg = static_cast<experimental::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._include_nulls);
   if (count_agg->kind == aggregation::COUNT_VALID)

@@ -293,8 +293,7 @@ void compute_single_pass_aggs(table_view const& keys,
   for (size_t i = 0; i < aggs.size(); i++) {
     // Note that the cache will make a copy of this temporary aggregation
     auto agg = std::make_unique<aggregation>(aggs[i]);
-    sparse_results->add_result(
-      col_ids[i], *agg, std::move(sparse_result_cols[i]));
+    sparse_results->add_result(col_ids[i], *agg, std::move(sparse_result_cols[i]));
   }
 }
 

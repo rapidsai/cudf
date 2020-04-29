@@ -26,16 +26,13 @@ namespace experimental {
 namespace detail {
 
 struct aggregation_equality {
-  bool operator()(aggregation const& lhs,
-                  aggregation const& rhs) const {
+  bool operator()(aggregation const& lhs, aggregation const& rhs) const {
     return lhs.is_equal(rhs);
   }
 };
 
 struct aggregation_hash {
-  size_t operator()(aggregation const& key) const noexcept {
-    return key.do_hash();
-  }
+  size_t operator()(aggregation const& key) const noexcept { return key.do_hash(); }
 };
 
 class result_cache {
@@ -49,9 +46,7 @@ class result_cache {
 
   bool has_result(size_t col_idx, aggregation const& agg) const;
 
-  void add_result(size_t col_idx,
-                  aggregation const& agg,
-                  std::unique_ptr<column>&& col);
+  void add_result(size_t col_idx, aggregation const& agg, std::unique_ptr<column>&& col);
 
   column_view get_result(size_t col_idx, aggregation const& agg) const;
 
