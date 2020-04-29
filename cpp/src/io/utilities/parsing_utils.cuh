@@ -154,7 +154,7 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
   }
 
   // Skip over the "0x" prefix for hex notation
-  if (base == 16 && start + 2 < end && data[start] == '0' && data[start + 1] == 'x') { start += 2; }
+  if (base == 16 && start + 2 <= end && data[start] == '0' && data[start + 1] == 'x') { start += 2; }
 
   // Handle the whole part of the number
   long index = start;
