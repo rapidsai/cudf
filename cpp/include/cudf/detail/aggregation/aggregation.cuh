@@ -77,10 +77,6 @@ template <>
 struct corresponding_operator<aggregation::COUNT_ALL> {
   using type = DeviceCount;
 };
-template <>
-struct corresponding_operator<aggregation::ROW_NUMBER> {
-  using type = DeviceRowNumber;
-};
 
 template <aggregation::Kind k>
 using corresponding_operator_t = typename corresponding_operator<k>::type;

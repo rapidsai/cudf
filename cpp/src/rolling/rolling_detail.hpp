@@ -30,9 +30,9 @@ namespace detail {
 template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind op, bool is_mean>
 static constexpr bool is_supported()
 {
-  constexpr bool is_comparable_countable_op =
-    std::is_same<AggOp, DeviceMin>::value || std::is_same<AggOp, DeviceMax>::value ||
-    std::is_same<AggOp, DeviceCount>::value || std::is_same<AggOp, DeviceRowNumber>::value;
+  constexpr bool is_comparable_countable_op = std::is_same<AggOp, DeviceMin>::value ||
+                                              std::is_same<AggOp, DeviceMax>::value ||
+                                              std::is_same<AggOp, DeviceCount>::value;
 
   constexpr bool is_operation_supported =
     (op == experimental::aggregation::SUM) or (op == experimental::aggregation::MIN) or
@@ -66,8 +66,7 @@ static constexpr bool is_string_supported()
            std::is_same<AggOp, DeviceCount>::value) or
           (cudf::experimental::aggregation::COUNT_ALL == Op and
            std::is_same<AggOp, DeviceCount>::value) or
-          (cudf::experimental::aggregation::ROW_NUMBER == Op and
-           std::is_same<AggOp, DeviceRowNumber>::value));
+          (cudf::experimental::aggregation::ROW_NUMBER == Op));
 }
 
 // store functor

@@ -74,15 +74,6 @@ struct DeviceCount {
   }
 };
 
-/* @brief `row_number` operator - used in rolling windows */
-struct DeviceRowNumber {
-  template <typename T>
-  static constexpr T identity()
-  {
-    return T{0};
-  }
-};
-
 /**
  * @brief string value for sentinel which is used in min, max reduction
  * operators
@@ -112,10 +103,14 @@ struct DeviceMin {
   // @brief identity specialized for string_view
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  static constexpr T identity()
+  CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
     const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+    psentinel = &max_string_sentinel[0];
+#else
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
+#endif
     return T(psentinel, 4);
   }
 };
@@ -136,10 +131,14 @@ struct DeviceMax {
   }
   template <typename T,
             typename std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  static constexpr T identity()
+  CUDA_HOST_DEVICE_CALLABLE static constexpr T identity()
   {
     const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+    psentinel = &max_string_sentinel[0];
+#else
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
+#endif
     return T(psentinel, 0);
   }
 };

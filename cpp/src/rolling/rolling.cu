@@ -64,8 +64,7 @@ process_rolling_window(column_device_view input,
                        size_type start_index,
                        size_type end_index,
                        size_type current_index,
-                       size_type min_periods,
-                       InputType identity)
+                       size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
@@ -97,8 +96,7 @@ process_rolling_window(column_device_view input,
                        size_type start_index,
                        size_type end_index,
                        size_type current_index,
-                       size_type min_periods,
-                       InputType identity)
+                       size_type min_periods)
 {
   bool output_is_valid                      = ((end_index - start_index) >= min_periods);
   output.element<OutputType>(current_index) = (current_index - start_index + 1);
@@ -124,13 +122,12 @@ std::enable_if_t<(op == aggregation::ARGMIN or op == aggregation::ARGMAX) and
                                     size_type start_index,
                                     size_type end_index,
                                     size_type current_index,
-                                    size_type min_periods,
-                                    InputType identity)
+                                    size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
   volatile cudf::size_type count = 0;
-  InputType val                  = identity;
+  InputType val                  = agg_op::template identity<InputType>();
   OutputType val_index           = (op == aggregation::ARGMIN) ? ARGMIN_SENTINEL : ARGMAX_SENTINEL;
 
   for (size_type j = start_index; j < end_index; j++) {
@@ -170,8 +167,7 @@ std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                                     size_type start_index,
                                     size_type end_index,
                                     size_type current_index,
-                                    size_type min_periods,
-                                    InputType identity)
+                                    size_type min_periods)
 {
   // declare this as volatile to avoid some compiler optimizations that lead to incorrect results
   // for CUDA 10.0 and below (fixed in CUDA 10.1)
@@ -215,7 +211,6 @@ std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
  *                in_col[i+following_window] inclusive
  * @param min_periods[in]  Minimum number of observations in window required to
  *                have a value, otherwise 0 is stored in the valid bit mask
- * @param identity identity value of `InputType`
  */
 template <typename InputType,
           typename OutputType,
@@ -231,8 +226,7 @@ __launch_bounds__(block_size) __global__
                    size_type* __restrict__ output_valid_count,
                    PrecedingWindowIterator preceding_window_begin,
                    FollowingWindowIterator following_window_begin,
-                   size_type min_periods,
-                   InputType identity)
+                   size_type min_periods)
 {
   size_type i      = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
@@ -257,7 +251,7 @@ __launch_bounds__(block_size) __global__
 
     volatile bool output_is_valid = false;
     output_is_valid = process_rolling_window<InputType, OutputType, agg_op, op, has_nulls>(
-      input, output, start_index, end_index, i, min_periods, identity);
+      input, output, start_index, end_index, i, min_periods);
 
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -293,7 +287,6 @@ struct rolling_window_launcher {
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
                             std::unique_ptr<aggregation> const& agg,
-                            T identity,
                             cudaStream_t stream)
   {
     cudf::nvtx::range_push("CUDF_ROLLING_WINDOW", cudf::nvtx::color::ORANGE);
@@ -313,8 +306,7 @@ struct rolling_window_launcher {
                                                      device_valid_count.data(),
                                                      preceding_window_begin,
                                                      following_window_begin,
-                                                     min_periods,
-                                                     identity);
+                                                     min_periods);
     } else {
       gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream>>>(*input_device_view,
@@ -322,8 +314,7 @@ struct rolling_window_launcher {
                                                      device_valid_count.data(),
                                                      preceding_window_begin,
                                                      following_window_begin,
-                                                     min_periods,
-                                                     identity);
+                                                     min_periods);
     }
 
     size_type valid_count = device_valid_count.value(stream);
@@ -369,7 +360,6 @@ struct rolling_window_launcher {
         following_window_begin,
         min_periods,
         agg,
-        agg_op::template identity<T>(),
         stream);
 
     output->set_null_count(output->size() - valid_count);
@@ -418,7 +408,6 @@ struct rolling_window_launcher {
                                                following_window_begin,
                                                min_periods,
                                                agg,
-                                               DeviceMin::template identity<T>(),
                                                stream);
     } else if (op == aggregation::MAX) {
       kernel_launcher<T,
@@ -431,7 +420,6 @@ struct rolling_window_launcher {
                                                following_window_begin,
                                                min_periods,
                                                agg,
-                                               DeviceMax::template identity<T>(),
                                                stream);
     } else {
       CUDF_EXPECTS(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL,
@@ -448,7 +436,7 @@ struct rolling_window_launcher {
                                                                following_window_begin,
                                                                min_periods,
                                                                agg,
-                                                               string_view{},
+                                                               //  string_view{},
                                                                stream);
       else
         valid_count = kernel_launcher<T,
@@ -461,7 +449,7 @@ struct rolling_window_launcher {
                                                                following_window_begin,
                                                                min_periods,
                                                                agg,
-                                                               string_view{},
+                                                               //  string_view{},
                                                                stream);
       output->set_null_count(output->size() - valid_count);
     }
