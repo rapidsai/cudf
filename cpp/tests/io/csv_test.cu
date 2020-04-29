@@ -620,6 +620,22 @@ TEST_F(CsvReaderTest, NoDataFile)
   EXPECT_EQ(0, view.num_columns());
 }
 
+TEST_F(CsvReaderTest, HeaderOnlyFile)
+{
+  auto filepath = temp_env->get_temp_dir() + "HeaderOnlyFile.csv";
+  {
+    std::ofstream outfile{filepath, std::ofstream::out};
+    outfile << "\"a\",\"b\",\"c\"\n\n";
+  }
+
+  cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(0, view.num_rows());
+  EXPECT_EQ(3, view.num_columns());
+}
+
 TEST_F(CsvReaderTest, ArrowFileSource)
 {
   auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
