@@ -217,6 +217,7 @@
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
+- PR #5043 Remove invalid examples page libcudf doxygen
 
 
 # cuDF 0.13.0 (31 Mar 2020)
