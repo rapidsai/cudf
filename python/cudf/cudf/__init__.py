@@ -33,15 +33,13 @@ from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
 from cudf.io import (
     from_dlpack,
     read_avro,
+    read_csv,
     read_feather,
     read_hdf,
     read_json,
     read_orc,
     read_parquet,
 )
-
-from cudf._lib.csv import read_csv
-
 from cudf.utils.utils import set_allocator
 
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)

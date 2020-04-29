@@ -58,10 +58,10 @@ cdef extern from "cudf/io/functions.hpp" \
         # Filter settings
         vector[string] use_cols_names
         vector[int] use_cols_indexes
-        size_t nrows
-        size_t skiprows
-        size_t skipfooter
-        size_t header
+        size_type nrows
+        size_type skiprows
+        size_type skipfooter
+        size_type header
 
         # Parsing settings
         char lineterminator
