@@ -276,7 +276,7 @@ struct write_csv_args : detail::csv::writer_options {
 
   // Set of columns to output:
   //
-  table_view const& table_;
+  table_view const table_;
 
   // Optional associated metadata
   //
