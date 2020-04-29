@@ -22,6 +22,7 @@ namespace code {
 const char* kernel_header =
   R"***(
 #include <cudf/types.hpp>
+#include <simt/limits>
 #include <cudf/wrappers/timestamps.hpp>
 )***";
 
