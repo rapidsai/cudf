@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace io {
-
 #define GZ_FLG_FTEXT 0x01     // ASCII text hint
 #define GZ_FLG_FHCRC 0x02     // Header CRC present
 #define GZ_FLG_FEXTRA 0x04    // Extra fields present
@@ -50,9 +49,8 @@ struct zip_eocd_s  // end of central directory
   uint16_t num_entries;    // number of entries in the central dir on this disk
   uint16_t total_entries;  // total number of entries in the central dir
   uint32_t cdir_size;      // size of the central directory
-  uint32_t
-    cdir_offset;  // offset of start of central directory with respect to the starting disk number
-                  //uint16_t comment_len;   // comment length (excluded from struct)
+  uint32_t cdir_offset;    // offset of start of central directory with respect to the starting disk
+                         // number uint16_t comment_len;   // comment length (excluded from struct)
 };
 
 struct zip64_eocdl  // end of central dir locator
@@ -124,7 +122,8 @@ struct zip_archive_s {
   const zip_cdfh_s *cdfh;    // start of central directory file headers
 };
 
-bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len) {
+bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
+{
   const gz_file_header_s *fhdr;
 
   if (!dst) return false;
@@ -187,7 +186,8 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len) {
   return (fhdr->comp_mthd == 8 && len > 0);
 }
 
-bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len) {
+bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
+{
   memset(dst, 0, sizeof(zip_archive_s));
   // Find the end of central directory
   if (len >= sizeof(zip_eocd_s) + 2) {
@@ -212,7 +212,8 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len) {
   return (dst->eocd && dst->cdfh);
 }
 
-int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data, size_t comp_len) {
+int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data, size_t comp_len)
+{
   int zerr;
   z_stream strm;
 
@@ -244,7 +245,8 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
  * @param comp_data[in] Raw compressed data
  * @param comp_len[in] Compressed data size
  */
-int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t comp_len) {
+int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t comp_len)
+{
   int zerr;
   z_stream strm;
 
@@ -275,23 +277,24 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @Brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
  * The result is allocated and stored in a vector.
  * If the function call fails, the output vector is empty.
- * 
+ *
  * @param src[in] Pointer to the compressed data in system memory
  * @param src_size[in] The size of the compressed data, in bytes
  * @param strm_type[in] Type of compression of the input data
  * @param dst[out] Vector containing the uncompressed output
- * 
+ *
  * @returns gdf_error with error code on failure, otherwise GDF_SUCCESS
  */
 /* ----------------------------------------------------------------------------*/
 gdf_error io_uncompress_single_h2d(const void *src,
                                    size_t src_size,
                                    int strm_type,
-                                   std::vector<char> &dst) {
+                                   std::vector<char> &dst)
+{
   const uint8_t *raw       = (const uint8_t *)src;
   const uint8_t *comp_data = nullptr;
   size_t comp_len          = 0;
@@ -366,9 +369,8 @@ gdf_error io_uncompress_single_h2d(const void *src,
   }
   if (!comp_data || comp_len <= 0) return GDF_UNSUPPORTED_DTYPE;
   if (uncomp_len <= 0) {
-    uncomp_len =
-      comp_len * 4 +
-      4096;  // In case uncompressed size isn't known in advance, assume ~4:1 compression for initial size
+    uncomp_len = comp_len * 4 + 4096;  // In case uncompressed size isn't known in advance, assume
+                                       // ~4:1 compression for initial size
   }
 
   if (strm_type == IO_UNCOMP_STREAM_TYPE_GZIP || strm_type == IO_UNCOMP_STREAM_TYPE_ZIP) {
@@ -412,20 +414,21 @@ gdf_error io_uncompress_single_h2d(const void *src,
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Uncompresses the input data and stores the allocated result into 
+ * @brief Uncompresses the input data and stores the allocated result into
  * a vector.
- * 
+ *
  * @param[in] h_data Pointer to the csv data in host memory
  * @param[in] num_bytes Size of the input data, in bytes
  * @param[in] compression String describing the compression type
  * @param[out] h_uncomp_data Vector containing the output uncompressed data
- * 
+ *
  * @return gdf_error with error code on failure, otherwise GDF_SUCCESS
  *---------------------------------------------------------------------------**/
 gdf_error getUncompressedHostData(const char *h_data,
                                   size_t num_bytes,
                                   const std::string &compression,
-                                  std::vector<char> &h_uncomp_data) {
+                                  std::vector<char> &h_uncomp_data)
+{
   int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
   if (compression == "gzip")
     comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
@@ -441,8 +444,8 @@ gdf_error getUncompressedHostData(const char *h_data,
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief ZLIB host decompressor class
-*/
+ * @Brief ZLIB host decompressor class
+ */
 /* ----------------------------------------------------------------------------*/
 
 class HostDecompressor_ZLIB : public HostDecompressor {
@@ -451,7 +454,8 @@ class HostDecompressor_ZLIB : public HostDecompressor {
   size_t Decompress(uint8_t *dstBytes,
                     size_t dstLen,
                     const uint8_t *srcBytes,
-                    size_t srcLen) override {
+                    size_t srcLen) override
+  {
     if (gz_hdr) {
       gz_archive_s gz;
       if (!ParseGZArchive(&gz, srcBytes, srcLen)) { return 0; }
@@ -471,8 +475,8 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief SNAPPY host decompressor class
-*/
+ * @Brief SNAPPY host decompressor class
+ */
 /* ----------------------------------------------------------------------------*/
 
 class HostDecompressor_SNAPPY : public HostDecompressor {
@@ -481,7 +485,8 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
   size_t Decompress(uint8_t *dstBytes,
                     size_t dstLen,
                     const uint8_t *srcBytes,
-                    size_t srcLen) override {
+                    size_t srcLen) override
+  {
     uint32_t uncompressed_size, bytes_left, dst_pos;
     const uint8_t *cur = srcBytes;
     const uint8_t *end = srcBytes + srcLen;
@@ -567,15 +572,16 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief CPU decompression class
-*
-* @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
-*
-* @returns corresponding HostDecompressor class, nullptr if failure
-*/
+ * @Brief CPU decompression class
+ *
+ * @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+ *
+ * @returns corresponding HostDecompressor class, nullptr if failure
+ */
 /* ----------------------------------------------------------------------------*/
 
-HostDecompressor *HostDecompressor::Create(int stream_type) {
+HostDecompressor *HostDecompressor::Create(int stream_type)
+{
   HostDecompressor *decompressor;
   switch (stream_type) {
     case IO_UNCOMP_STREAM_TYPE_GZIP: decompressor = new HostDecompressor_ZLIB(true); break;

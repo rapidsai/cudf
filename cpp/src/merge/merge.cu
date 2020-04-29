@@ -64,7 +64,8 @@ __global__ void materialize_merged_bitmask_kernel(
   column_device_view right_dcol,
   mutable_column_device_view out_dcol,
   size_type const num_destination_rows,
-  index_type const* const __restrict__ merged_indices) {
+  index_type const* const __restrict__ merged_indices)
+{
   size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
@@ -99,7 +100,8 @@ void materialize_bitmask(column_view const& left_col,
                          column_view const& right_col,
                          mutable_column_view& out_col,
                          index_type const* merged_indices,
-                         cudaStream_t stream) {
+                         cudaStream_t stream)
+{
   constexpr size_type BLOCK_SIZE{256};
   experimental::detail::grid_1d grid_config{out_col.size(), BLOCK_SIZE};
 
@@ -135,15 +137,18 @@ void materialize_bitmask(column_view const& left_col,
 }
 
 /**
- * @brief Generates the row indices and source side (left or right) in accordance with the index columns.
+ * @brief Generates the row indices and source side (left or right) in accordance with the index
+ * columns.
  *
  *
  * @tparam index_type Indicates the type to be used to collect index and side information;
  * @param[in] left_table The left table_view to be merged
  * @param[in] right_tbale The right table_view to be merged
  * @param[in] column_order Sort order types of index columns
- * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the index columns
- * @param[in] nullable Flag indicating if at least one of the table_view arguments has nulls (defaults to true)
+ * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the
+ * index columns
+ * @param[in] nullable Flag indicating if at least one of the table_view arguments has nulls
+ * (defaults to true)
  * @param[in] stream CUDA stream (defaults to nullptr)
  *
  * @return A vector of merged indices
@@ -154,7 +159,8 @@ rmm::device_vector<index_type> generate_merged_indices(
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
   bool nullable       = true,
-  cudaStream_t stream = nullptr) {
+  cudaStream_t stream = nullptr)
+{
   const size_type left_size  = left_table.num_rows();
   const size_type right_size = right_table.num_rows();
   const size_type total_size = left_size + right_size;
@@ -220,23 +226,25 @@ rmm::device_vector<index_type> generate_merged_indices(
 namespace cudf {
 namespace experimental {
 namespace detail {
-
-//generate merged column
-//given row order of merged tables
+// generate merged column
+// given row order of merged tables
 //(ordered according to indices of key_cols)
-//and the 2 columns to merge
+// and the 2 columns to merge
 //
 struct column_merger {
   using index_vector = rmm::device_vector<index_type>;
   explicit column_merger(index_vector const& row_order,
                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                          cudaStream_t stream                 = nullptr)
-    : dv_row_order_(row_order), mr_(mr), stream_(stream) {}
+    : dv_row_order_(row_order), mr_(mr), stream_(stream)
+  {
+  }
 
   // column merger operator;
   //
-  template <typename Element>  //required: column type
-  std::unique_ptr<column> operator()(column_view const& lcol, column_view const& rcol) const {
+  template <typename Element>  // required: column type
+  std::unique_ptr<column> operator()(column_view const& lcol, column_view const& rcol) const
+  {
     auto lsz         = lcol.size();
     auto merged_size = lsz + rcol.size();
     auto type        = lcol.type();
@@ -253,29 +261,29 @@ struct column_merger {
     //
     cudf::mutable_column_view merged_view = p_merged_col->mutable_view();
 
-    //initialize null_mask to all valid:
+    // initialize null_mask to all valid:
     //
-    //Note: this initialization in conjunction with _conditionally_
-    //calling materialze_bitmask() below covers the case
-    //materialize_merged_bitmask_kernel<false, false>()
-    //which won't be called anymore (because of the _condition_ below)
+    // Note: this initialization in conjunction with _conditionally_
+    // calling materialze_bitmask() below covers the case
+    // materialize_merged_bitmask_kernel<false, false>()
+    // which won't be called anymore (because of the _condition_ below)
     //
     cudf::set_null_mask(merged_view.null_mask(), 0, merged_view.size(), true, stream_);
 
-    //set the null count:
+    // set the null count:
     //
     p_merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
-    //to resolve view.data()'s types use: Element
+    // to resolve view.data()'s types use: Element
     //
     Element const* p_d_lcol = lcol.data<Element>();
     Element const* p_d_rcol = rcol.data<Element>();
 
     auto exe_pol = rmm::exec_policy(stream_);
 
-    //capture lcol, rcol
-    //and "gather" into merged_view.data()[indx_merged]
-    //from lcol or rcol, depending on side;
+    // capture lcol, rcol
+    // and "gather" into merged_view.data()[indx_merged]
+    // from lcol or rcol, depending on side;
     //
     thrust::transform(exe_pol->on(stream_),
                       dv_row_order_.begin(),
@@ -289,11 +297,11 @@ struct column_merger {
                         return val;
                       });
 
-    //CAVEAT: conditional call below is erroneous without
-    //set_null_mask() call (see TODO above):
+    // CAVEAT: conditional call below is erroneous without
+    // set_null_mask() call (see TODO above):
     //
     if (lcol.has_nulls() || rcol.has_nulls()) {
-      //resolve null mask:
+      // resolve null mask:
       //
       materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
     }
@@ -309,8 +317,9 @@ struct column_merger {
 
 // specialization for strings
 template <>
-std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
-  column_view const& lcol, column_view const& rcol) const {
+std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view const& lcol,
+                                                                     column_view const& rcol) const
+{
   auto column = strings::detail::merge<index_type>(strings_column_view(lcol),
                                                    strings_column_view(rcol),
                                                    dv_row_order_.begin(),
@@ -326,34 +335,35 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
 
 // specialization for dictionary
 template <>
-std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
-  column_view const& lcol, column_view const& rcol) const {
+std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
+                                                                      column_view const& rcol) const
+{
   CUDF_FAIL("dictionary not supported yet");
 }
 
 using table_ptr_type = std::unique_ptr<cudf::experimental::table>;
 
 namespace {
-
 table_ptr_type merge(cudf::table_view const& left_table,
                      cudf::table_view const& right_table,
                      std::vector<cudf::size_type> const& key_cols,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
                      rmm::mr::device_memory_resource* mr,
-                     cudaStream_t stream = 0) {
-  //collect index columns for lhs, rhs, resp.
+                     cudaStream_t stream = 0)
+{
+  // collect index columns for lhs, rhs, resp.
   //
   cudf::table_view index_left_view{left_table.select(key_cols)};
   cudf::table_view index_right_view{right_table.select(key_cols)};
   bool const nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
-  //extract merged row order according to indices:
+  // extract merged row order according to indices:
   //
   rmm::device_vector<index_type> merged_indices = generate_merged_indices(
     index_left_view, index_right_view, column_order, null_precedence, nullable);
 
-  //create merged table:
+  // create merged table:
   //
   auto const n_cols = left_table.num_columns();
   std::vector<std::unique_ptr<column>> merged_cols;
@@ -380,14 +390,17 @@ struct merge_queue_item {
   cudf::size_type priority = 0;
 
   merge_queue_item(table_view const& view, table_ptr_type&& table)
-    : view{view}, table{std::move(table)}, priority{-view.num_rows()} {}
+    : view{view}, table{std::move(table)}, priority{-view.num_rows()}
+  {
+  }
 
   bool operator<(merge_queue_item const& other) const { return priority < other.priority; }
 };
 
 // Helper function to ensure that moving out of the priority_queue is "atomic"
 template <typename T>
-T top_and_pop(std::priority_queue<T>& q) {
+T top_and_pop(std::priority_queue<T>& q)
+{
   auto moved = std::move(const_cast<T&>(q.top()));
   q.pop();
   return moved;
@@ -400,7 +413,8 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
                      std::vector<cudf::order> const& column_order,
                      std::vector<cudf::null_order> const& null_precedence,
                      rmm::mr::device_memory_resource* mr,
-                     cudaStream_t stream = 0) {
+                     cudaStream_t stream = 0)
+{
   if (tables_to_merge.empty()) { return std::make_unique<cudf::experimental::table>(); }
 
   auto const& first_table = tables_to_merge.front();
@@ -459,7 +473,8 @@ std::unique_ptr<cudf::experimental::table> merge(
   std::vector<cudf::size_type> const& key_cols,
   std::vector<cudf::order> const& column_order,
   std::vector<cudf::null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::merge(tables_to_merge, key_cols, column_order, null_precedence, mr);
 }

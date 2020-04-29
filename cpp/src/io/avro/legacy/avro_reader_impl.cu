@@ -25,7 +25,6 @@
 namespace cudf {
 namespace io {
 namespace avro {
-
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
@@ -35,7 +34,8 @@ namespace avro {
 /**
  * @brief Function that translates Avro datatype to GDF dtype
  **/
-gdf_dtype to_dtype(const avro::schema_entry *col) {
+gdf_dtype to_dtype(const avro::schema_entry *col)
+{
   switch (col->kind) {
     case avro::type_boolean: return GDF_BOOL8;
     case avro::type_int: return GDF_INT32;
@@ -63,7 +63,8 @@ class avro_metadata : public avro::file_metadata {
    * @param[in,out] row_start Starting row of the selection
    * @param[in,out] row_count Total number of rows selected
    **/
-  void init_and_select_rows(int &row_start, int &row_count) {
+  void init_and_select_rows(int &row_start, int &row_count)
+  {
     const auto buffer = source->get_buffer(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
     CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
@@ -79,7 +80,8 @@ class avro_metadata : public avro::file_metadata {
    *
    * @return List of column names
    **/
-  auto select_columns(std::vector<std::string> use_names) {
+  auto select_columns(std::vector<std::string> use_names)
+  {
     std::vector<std::pair<int, std::string>> selection;
 
     const auto num_avro_columns = static_cast<int>(columns.size());
@@ -108,7 +110,8 @@ class avro_metadata : public avro::file_metadata {
     return selection;
   }
 
-  void print_metadata() const {
+  void print_metadata() const
+  {
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" size = %zd\n", metadata_size);
     LOG_PRINTF(" codec = \"%s\"\n", codec.c_str());
@@ -139,12 +142,14 @@ class avro_metadata : public avro::file_metadata {
 };
 
 reader::Impl::Impl(std::unique_ptr<datasource> source, reader_options const &options)
-  : source_(std::move(source)), columns_(options.columns) {
+  : source_(std::move(source)), columns_(options.columns)
+{
   // Open the source Avro dataset metadata
   md_ = std::make_unique<avro_metadata>(source_.get());
 }
 
-table reader::Impl::read(int skip_rows, int num_rows) {
+table reader::Impl::read(int skip_rows, int num_rows)
+{
   // Select and read partial metadata / schema within the subset of rows
   md_->init_and_select_rows(skip_rows, num_rows);
 
@@ -252,7 +257,8 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   return cudf::table(out_cols.data(), out_cols.size());
 }
 
-rmm::device_buffer reader::Impl::decompress_data(const rmm::device_buffer &comp_block_data) {
+rmm::device_buffer reader::Impl::decompress_data(const rmm::device_buffer &comp_block_data)
+{
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(md_->block_list.size());
   hostdevice_vector<gpu_inflate_status_s> inflate_out(md_->block_list.size());
@@ -353,7 +359,8 @@ void reader::Impl::decode_data(const rmm::device_buffer &block_data,
                                const std::vector<std::pair<uint32_t, uint32_t>> &dict,
                                hostdevice_vector<uint8_t> &global_dictionary,
                                size_t total_dictionary_entries,
-                               const std::vector<gdf_column_wrapper> &columns) {
+                               const std::vector<gdf_column_wrapper> &columns)
+{
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(md_->schema.size());
   uint32_t min_row_data_size = 0;
@@ -447,17 +454,24 @@ void reader::Impl::decode_data(const rmm::device_buffer &block_data,
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(filepath), options))
+{
+}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), options))
+{
+}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(file), options))
+{
+}
 
 table reader::read_all() { return impl_->read(0, -1); }
 
-table reader::read_rows(size_t skip_rows, size_t num_rows) {
+table reader::read_rows(size_t skip_rows, size_t num_rows)
+{
   return impl_->read(skip_rows, (num_rows != 0) ? static_cast<int>(num_rows) : -1);
 }
 

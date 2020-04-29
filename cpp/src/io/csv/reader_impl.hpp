@@ -41,7 +41,6 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
-
 using namespace cudf::io::csv;
 using namespace cudf::io;
 

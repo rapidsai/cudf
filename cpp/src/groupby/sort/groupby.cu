@@ -41,10 +41,9 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 /**
  * @brief Functor to dispatch aggregation with
- * 
+ *
  * This functor is to be used with `aggregation_dispatcher` to compute the
  * appropriate aggregation. If the values on which to run the aggregation are
  * unchanged, then this functor should be re-used. This is because it stores
@@ -58,7 +57,9 @@ struct store_result_functor {
                        experimental::detail::result_cache& cache,
                        cudaStream_t stream,
                        rmm::mr::device_memory_resource* mr)
-    : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr) {}
+    : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr)
+  {
+  }
 
   template <aggregation::Kind k>
   void operator()(aggregation const& agg) {}
@@ -66,11 +67,12 @@ struct store_result_functor {
  private:
   /**
    * @brief Get the grouped values
-   * 
+   *
    * Computes the grouped values from @p values on first invocation and returns
    * the stored result on subsequent invocation
    */
-  column_view get_grouped_values() {
+  column_view get_grouped_values()
+  {
     // TODO (dm): After implementing single pass mutli-agg, explore making a
     //            cache of all grouped value columns rather than one at a time
     if (grouped_values)
@@ -86,11 +88,12 @@ struct store_result_functor {
 
   /**
    * @brief Get the grouped and sorted values
-   * 
-   * Computes the grouped and sorted (within each group) values from @p values 
+   *
+   * Computes the grouped and sorted (within each group) values from @p values
    * on first invocation and returns the stored result on subsequent invocation
    */
-  column_view get_sorted_values() {
+  column_view get_sorted_values()
+  {
     if (not sorted_values) sorted_values = helper.sorted_values(values);
     return sorted_values->view();
   };
@@ -374,7 +377,8 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
   std::vector<aggregation_request> const& requests,
   cudaStream_t stream,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   // We're going to start by creating a cache of results so that aggs that
   // depend on other aggs will not have to be recalculated. e.g. mean depends on
   // sum and count. std depends on mean and count

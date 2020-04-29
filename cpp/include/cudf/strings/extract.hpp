@@ -20,9 +20,9 @@
 
 namespace cudf {
 namespace strings {
-
 /**
- * @brief Returns a vector of strings columns for each matching group specified in the given regular expression pattern.
+ * @brief Returns a vector of strings columns for each matching group specified in the given regular
+ * expression pattern.
  *
  * All the strings for the first group will go in the first output column; the second group
  * go in the second column and so on. Null entries are added if the string does match.

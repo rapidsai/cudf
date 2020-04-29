@@ -26,19 +26,18 @@
 
 namespace cudf {
 namespace experimental {
-
 namespace detail {
-
 namespace {
-
-// This functor only exists here because using a lambda directly in the tabulate() call generates the cryptic
+// This functor only exists here because using a lambda directly in the tabulate() call generates
+// the cryptic
 // __T289 link error.  This seems to be related to lambda usage within functions using SFINAE.
 template <typename T>
 struct tabulator {
   cudf::numeric_scalar_device_view<T> const n_init;
   cudf::numeric_scalar_device_view<T> const n_step;
 
-  T __device__ operator()(cudf::size_type i) {
+  T __device__ operator()(cudf::size_type i)
+  {
     return n_init.value() + (static_cast<T>(i) * n_step.value());
   }
 };
@@ -51,7 +50,7 @@ struct const_tabulator {
 };
 
 /**
- * @brief Functor called by the `type_dispatcher` to generate the sequence specified 
+ * @brief Functor called by the `type_dispatcher` to generate the sequence specified
  * by init and step.
  */
 struct sequence_functor {
@@ -62,7 +61,8 @@ struct sequence_functor {
                                      scalar const& init,
                                      scalar const& step,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
@@ -89,7 +89,8 @@ struct sequence_functor {
                                      scalar const& init,
                                      scalar const& step,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("Unsupported sequence scalar type");
   }
 
@@ -99,7 +100,8 @@ struct sequence_functor {
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     auto result = make_fixed_width_column(init.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto result_device_view = mutable_column_device_view::create(*result, stream);
 
@@ -123,7 +125,8 @@ struct sequence_functor {
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
                                      rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) {
+                                     cudaStream_t stream)
+  {
     CUDF_FAIL("Unsupported sequence scalar type");
   }
 };
@@ -134,7 +137,8 @@ std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
                                  rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream) {
+                                 cudaStream_t stream)
+{
   CUDF_EXPECTS(init.type() == step.type(), "init and step must be of the same type.");
   CUDF_EXPECTS(size >= 0, "size must be >= 0");
   CUDF_EXPECTS(is_numeric(init.type()), "Input scalar types must be numeric");
@@ -146,7 +150,8 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(size >= 0, "size must be >= 0");
   CUDF_EXPECTS(is_numeric(init.type()), "init scalar type must be numeric");
 
@@ -158,13 +163,15 @@ std::unique_ptr<column> sequence(
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
                                  scalar const& step,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::sequence(size, init, step, mr, 0);
 }
 
 std::unique_ptr<column> sequence(size_type size,
                                  scalar const& init,
-                                 rmm::mr::device_memory_resource* mr) {
+                                 rmm::mr::device_memory_resource* mr)
+{
   return detail::sequence(size, init, mr, 0);
 }
 

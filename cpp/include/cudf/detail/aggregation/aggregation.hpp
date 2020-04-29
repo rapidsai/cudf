@@ -27,7 +27,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
  * 
@@ -151,7 +150,9 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
       _source{user_defined_aggregator},
       _operator_name{(type == aggregation::PTX) ? "rolling_udf_ptx" : "rolling_udf_cuda"},
       _function_name{"rolling_udf"},
-      _output_type{output_type} {}
+      _output_type{output_type}
+  {
+  }
   std::string const _source;
   std::string const _operator_name;
   std::string const _function_name;
@@ -250,7 +251,8 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-constexpr bool is_sum_product_agg(aggregation::Kind k) {
+constexpr bool is_sum_product_agg(aggregation::Kind k)
+{
   return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
          (k == aggregation::SUM_OF_SQUARES);
 }
@@ -373,7 +375,8 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kind k,
                                                                 F&& f,
-                                                                Ts&&... args) {
+                                                                Ts&&... args)
+{
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
@@ -435,7 +438,8 @@ template <typename Element>
 struct dispatch_aggregation {
 #pragma nv_exec_check_disable
   template <aggregation::Kind k, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept {
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept
+  {
     return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
 };
@@ -445,7 +449,8 @@ struct dispatch_source {
   template <typename Element, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(aggregation::Kind k,
                                                       F&& f,
-                                                      Ts&&... args) const noexcept {
+                                                      Ts&&... args) const noexcept
+  {
     return aggregation_dispatcher(
       k, dispatch_aggregation<Element>{}, std::forward<F>(f), std::forward<Ts>(args)...);
   }
@@ -469,7 +474,8 @@ struct dispatch_source {
 #pragma nv_exec_check_disable
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_type_and_aggregation(
-  data_type type, aggregation::Kind k, F&& f, Ts&&... args) {
+  data_type type, aggregation::Kind k, F&& f, Ts&&... args)
+{
   return type_dispatcher(type, dispatch_source{}, k, std::forward<F>(f), std::forward<Ts>(args)...);
 }
 /**
@@ -491,7 +497,8 @@ data_type target_type(data_type source_type, aggregation::Kind k);
  * @tparam k The aggregation to perform
  */
 template <typename Source, aggregation::Kind k>
-constexpr inline bool is_valid_aggregation() {
+constexpr inline bool is_valid_aggregation()
+{
   return (not std::is_void<target_type_t<Source, k>>::value);
 }
 

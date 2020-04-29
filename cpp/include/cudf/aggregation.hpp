@@ -33,7 +33,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -99,9 +98,9 @@ std::unique_ptr<aggregation> make_max_aggregation();
 
 /**
  * @brief Factory to create a COUNT aggregation
- * 
+ *
  * @param _include_nulls Indicates if null values will be counted.
-*/
+ */
 std::unique_ptr<aggregation> make_count_aggregation(
   include_nulls _include_nulls = include_nulls::NO);
 
@@ -119,16 +118,16 @@ std::unique_ptr<aggregation> make_mean_aggregation();
 
 /**
  * @brief Factory to create a VARIANCE aggregation
- * 
- * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
- * 
- * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
@@ -147,24 +146,24 @@ std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const
 
 /**
  * @brief Factory to create an `argmax` aggregation
- * 
+ *
  * `argmax` returns the index of the maximum element.
-*/
+ */
 std::unique_ptr<aggregation> make_argmax_aggregation();
 
 /**
  * @brief Factory to create an `argmin` aggregation
- * 
+ *
  * `argmin` returns the index of the minimum element.
-*/
+ */
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
 /**
  * @brief Factory to create a `nunique` aggregation
- * 
+ *
  * `nunique` returns the number of unique elements.
  * @param _include_nulls Indicates if null values will be counted.
-*/
+ */
 std::unique_ptr<aggregation> make_nunique_aggregation(
   include_nulls _include_nulls = include_nulls::NO);
 

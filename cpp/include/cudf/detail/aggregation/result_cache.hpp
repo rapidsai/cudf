@@ -24,7 +24,6 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 struct aggregation_equality {
   bool operator()(aggregation const& lhs, aggregation const& rhs) const {
     return lhs.is_equal(rhs);

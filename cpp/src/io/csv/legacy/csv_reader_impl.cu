@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -50,19 +50,19 @@ using std::vector;
 namespace cudf {
 namespace io {
 namespace csv {
-
 /**---------------------------------------------------------------------------*
- * @brief Estimates the maximum expected length or a row, based on the number 
+ * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
- * 
- * If the number of columns is not available, it will return a value large 
+ *
+ * If the number of columns is not available, it will return a value large
  * enough for most use cases
- * 
+ *
  * @param[in] num_columns Number of columns in the CSV file (optional)
- * 
+ *
  * @return Estimated maximum size of a row, in bytes
  *---------------------------------------------------------------------------**/
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
+constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
+{
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
@@ -76,7 +76,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
 }
 
 /**
- * @brief Translates a dtype string and returns its dtype enumeration and any 
+ * @brief Translates a dtype string and returns its dtype enumeration and any
  * extended dtype flags that are supported by cuIO. Often, this is a column
  * with the same underlying dtype the basic types, but with different parsing
  * interpretations.
@@ -86,7 +86,8 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
  * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
  */
 std::tuple<gdf_dtype, gdf_dtype_extra_info, column_parse::flags> get_dtype_info(
-  const std::string &dtype) {
+  const std::string &dtype)
+{
   if (dtype == "hex" || dtype == "hex64") {
     return std::make_tuple(
       GDF_INT64, gdf_dtype_extra_info{TIME_UNIT_NONE}, column_parse::as_hexadecimal);
@@ -104,9 +105,10 @@ std::tuple<gdf_dtype, gdf_dtype_extra_info, column_parse::flags> get_dtype_info(
 }
 
 /**
-* @brief Removes the first and Last quote in the string
-*/
-string removeQuotes(string str, char quotechar) {
+ * @brief Removes the first and Last quote in the string
+ */
+string removeQuotes(string str, char quotechar)
+{
   // Exclude first and last quotation char
   const size_t first_quote = str.find(quotechar);
   if (first_quote != string::npos) { str.erase(first_quote, 1); }
@@ -117,13 +119,14 @@ string removeQuotes(string str, char quotechar) {
 }
 
 /**
- * @brief Parse the first row to set the column names in the raw_csv parameter 
+ * @brief Parse the first row to set the column names in the raw_csv parameter
  *
  * The first row can be either the header row, or the first data row
  *
  * @return void
-*/
-void reader::Impl::setColumnNamesFromCsv() {
+ */
+void reader::Impl::setColumnNamesFromCsv()
+{
   // If there is only a single character then it would be the terminator
   if (header.size() <= 1) { return; }
 
@@ -156,9 +159,9 @@ void reader::Impl::setColumnNamesFromCsv() {
         const string new_col_name(first_row.data() + prev, col_name_len);
         col_names.push_back(removeQuotes(new_col_name, opts.quotechar));
 
-        // Stop parsing when we hit the line terminator; relevant when there is a blank line following the header.
-        // In this case, first_row includes multiple line terminators at the end, as the new recStart belongs
-        // to a line that comes after the blank line(s)
+        // Stop parsing when we hit the line terminator; relevant when there is a blank line
+        // following the header. In this case, first_row includes multiple line terminators at the
+        // end, as the new recStart belongs to a line that comes after the blank line(s)
         if (!quotation && first_row[pos] == opts.terminator) { break; }
       } else {
         // This is the first data row, add the automatically generated name
@@ -180,7 +183,8 @@ table reader::Impl::read(size_t range_offset,
                          size_t range_size,
                          cudf::size_type skip_rows,
                          cudf::size_type skip_end_rows,
-                         cudf::size_type num_rows) {
+                         cudf::size_type num_rows)
+{
   if (range_offset > 0 || range_size > 0) {
     CUDF_EXPECTS(compression_type_ == "none",
                  "Reading compressed data using `byte range` is unsupported");
@@ -373,7 +377,8 @@ table reader::Impl::read(size_t range_offset,
   return cudf::table(out_cols.data(), out_cols.size());
 }
 
-void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size, size_t range_offset) {
+void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size, size_t range_offset)
+{
   // Account for the start and end of row region offsets
   const bool require_first_line_start = (range_offset == 0);
   const bool require_last_line_end    = (h_data[h_size - 1] != opts.terminator);
@@ -410,7 +415,8 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
                                                         size_t range_size,
                                                         cudf::size_type skip_rows,
                                                         cudf::size_type skip_end_rows,
-                                                        cudf::size_type num_rows) {
+                                                        cudf::size_type num_rows)
+{
   thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
   auto it_begin                               = h_row_offsets.begin();
   auto it_end                                 = h_row_offsets.end();
@@ -452,7 +458,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
+  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
 
   // Exclude the rows outside of requested range
   if (range_size != 0) {
@@ -489,7 +495,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
     it_end -= skip_end_rows;
   }
 
@@ -514,7 +520,8 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
 }
 
 std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>>
-reader::Impl::gather_column_dtypes() {
+reader::Impl::gather_column_dtypes()
+{
   std::vector<gdf_dtype> dtypes;
   std::vector<gdf_dtype_extra_info> dtypes_extra_info;
 
@@ -631,7 +638,8 @@ reader::Impl::gather_column_dtypes() {
   return std::make_pair(std::move(dtypes), std::move(dtypes_extra_info));
 }
 
-void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
+void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns)
+{
   thrust::host_vector<gdf_dtype> h_dtypes(num_active_cols);
   thrust::host_vector<void *> h_data(num_active_cols);
   thrust::host_vector<cudf::valid_type *> h_valid(num_active_cols);
@@ -669,7 +677,8 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
 reader::Impl::Impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    reader_options const &options)
-  : source_(std::move(source)), filepath_(filepath), args_(options) {
+  : source_(std::move(source)), filepath_(filepath), args_(options)
+{
   num_actual_cols = args_.names.size();
   num_active_cols = args_.names.size();
 
@@ -740,26 +749,33 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-  : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {
+  : impl_(std::make_unique<Impl>(nullptr, filepath, options))
+{
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
 }
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "", options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "", options))
+{
+}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options)
-  : impl_(std::make_unique<Impl>(datasource::create(file), "", options)) {}
+  : impl_(std::make_unique<Impl>(datasource::create(file), "", options))
+{
+}
 
 table reader::read() { return impl_->read(0, 0, 0, 0, -1); }
 
-table reader::read_byte_range(size_t offset, size_t size) {
+table reader::read_byte_range(size_t offset, size_t size)
+{
   return impl_->read(offset, size, 0, 0, -1);
 }
 
 table reader::read_rows(cudf::size_type num_skip_header,
                         cudf::size_type num_skip_footer,
-                        cudf::size_type num_rows) {
+                        cudf::size_type num_rows)
+{
   CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
                "Cannot use both `num_rows` and `num_skip_footer`");
 

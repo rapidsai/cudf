@@ -22,7 +22,6 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
-
 const char* operation =
   R"***(
     #pragma once
@@ -384,7 +383,7 @@ const char* operation =
     struct RShiftRightUnsigned {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<make_unsigned_t<TypeLhs>>(y) >> x);            
+            return (static_cast<make_unsigned_t<TypeRhs>>(y) >> x);            
         }
     };    
 
