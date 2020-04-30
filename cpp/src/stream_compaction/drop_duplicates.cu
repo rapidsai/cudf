@@ -209,15 +209,14 @@ std::unique_ptr<experimental::table> drop_duplicates(table_view const& input,
 }
 
 /**
- * @brief A structure to be used for checking `NAN` at an index in a
- * `column_device_view`
+ * @brief Functor to check for `NAN` at an index in a `column_device_view`.
  *
  * @tparam T The type of `column_device_view`
  */
 template <typename T>
 struct check_for_nan {
-  /**
-   * @brief Construct a structure
+  /*
+   * @brief Construct from a column_device_view.
    *
    * @param[in] input The `column_device_view`
    */
