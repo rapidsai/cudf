@@ -86,7 +86,7 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   size_t hash_impl() const
   {
     return std::hash<int>{}(static_cast<int>(_interpolation)) ^
-           std::accumulate(_quantiles.cbegin(), _quantiles.cend(), 0, [](size_t a, double b) {
+           std::accumulate(_quantiles.cbegin(), _quantiles.cend(), size_t{0}, [](size_t a, double b) {
              return a ^ std::hash<double>{}(b);
            });
   }
