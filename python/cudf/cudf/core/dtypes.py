@@ -55,7 +55,13 @@ class CategoricalDtype(ExtensionDtype):
             dtype = "object"
         else:
             dtype = None
-        return cudf.core.column.as_column(categories, dtype=dtype)
+
+        column = cudf.core.column.as_column(categories, dtype=dtype)
+
+        if isinstance(column, cudf.core.column.CategoricalColumn):
+            return column.categories
+        else:
+            return column
 
     def __eq__(self, other):
         if isinstance(other, str):

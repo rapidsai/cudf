@@ -33,7 +33,7 @@ struct argument_type<T(U)> {
   using type = U;
 };
 }  // namespace
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs a compile-time check that two types are equivalent.
  *
  * @note In order to work around commas in macros, any type containing commas
@@ -48,19 +48,19 @@ struct argument_type<T(U)> {
  * // Paranthesis around types with commas
  * EXPECT_SAME_TYPE((std::map<int, float>), (std::map<int, float>));
  * ```
- *---------------------------------------------------------------------------**/
+ **/
 #define EXPECT_SAME_TYPE(expected, actual) \
   static_assert(                           \
     std::is_same_v<argument_type<void(expected)>::type, argument_type<void(actual)>::type>, "");
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Return a string of the demangled name of a type `T`
  *
  * This is useful for debugging Type list utilities.
  *
  * @tparam T The type whose name is returned as a string
  * @return std::string The demangled name of `T`
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 std::string type_name()
 {

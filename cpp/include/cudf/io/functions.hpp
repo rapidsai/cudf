@@ -78,7 +78,7 @@ table_with_metadata read_avro(
   read_avro_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_json` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
@@ -97,7 +97,7 @@ table_with_metadata read_avro(
  *  `date_unit`             - only millisecond units are supported
  *  `encoding`              - only ASCII-encoded data is supported
  *  `chunksize`             - use `byte_range_xxx` for chunking instead
- *---------------------------------------------------------------------------**/
+ **/
 struct read_json_args {
   source_info source;
 
