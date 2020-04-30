@@ -175,9 +175,13 @@ class Merge(object):
         len_left_on = 0
         len_right_on = 0
         if left_on:
-            len_left_on += len(left_on) if isinstance(left_on, list) else 1
+            len_left_on += (
+                len(left_on) if pd.api.types.is_list_like(left_on) else 1
+            )
         if right_on:
-            len_right_on += len(right_on) if isinstance(right_on, list) else 1
+            len_right_on += (
+                len(right_on) if pd.api.types.is_list_like(right_on) else 1
+            )
         if not (len_left_on + left_index * lhs._num_indices) == (
             len_right_on + right_index * rhs._num_indices
         ):
@@ -187,10 +191,12 @@ class Merge(object):
 
         # If nothing specified, must have common cols to use implicitly
         same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_index or right_index):
-            if not (left_on or right_on):
-                if len(same_named_columns) == 0:
-                    raise ValueError("No common columns to perform merge on")
+        if (
+            not (left_index or right_index)
+            and not (left_on or right_on)
+            and len(same_named_columns) == 0
+        ):
+            raise ValueError("No common columns to perform merge on")
 
         for name in same_named_columns:
             if name == left_on == right_on:
@@ -324,40 +330,53 @@ class Merge(object):
     def compute_output_dtypes(self):
         index_dtypes = []
         data_dtypes = {}
-        for name, col in itertools.chain(self.lhs._data.items(), self.rhs._data.items()):
-                data_dtypes[name] = col.dtype
+        for name, col in itertools.chain(
+            self.lhs._data.items(), self.rhs._data.items()
+        ):
+            data_dtypes[name] = col.dtype
 
         if self.left_index and self.right_index:
             for ((kl, vl), (kr, vr)) in zip(
-                self.lhs.index._data.items(),
-                self.rhs.index._data.items()
+                self.lhs.index._data.items(), self.rhs.index._data.items()
             ):
-                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                to_dtype = self.libcudf_to_output_casting_rules(
+                    vl, vr, self.how
+                )
                 index_dtypes.append(to_dtype)
         if self.left_on and self.right_on:
             for ((kl, vl), (kr, vr)) in zip(
                 self.lhs[self.left_on]._data.items(),
-                self.rhs[self.right_on]._data.items()
+                self.rhs[self.right_on]._data.items(),
             ):
-                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                to_dtype = self.libcudf_to_output_casting_rules(
+                    vl, vr, self.how
+                )
                 data_dtypes[kl] = to_dtype
                 data_dtypes[kr] = to_dtype
         if self.left_index and self.right_on:
             for ((kl, vl), (kr, vr)) in zip(
                 self.lhs.index._data.items(),
-                self.rhs[self.right_on]._data.items()
+                self.rhs[self.right_on]._data.items(),
             ):
-                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                to_dtype = self.libcudf_to_output_casting_rules(
+                    vl, vr, self.how
+                )
                 data_dtypes[kr] = to_dtype
-                index_dtypes = [col.dtype for col in self.rhs.index._data.values()]
+                index_dtypes = [
+                    col.dtype for col in self.rhs.index._data.values()
+                ]
         if self.right_index and self.left_on:
             for ((kl, vl), (kr, vr)) in zip(
                 self.lhs[self.left_on]._data.items(),
-                self.rhs.index._data.items()
+                self.rhs.index._data.items(),
             ):
-                to_dtype = self.libcudf_to_output_casting_rules(vl, vr, self.how)
+                to_dtype = self.libcudf_to_output_casting_rules(
+                    vl, vr, self.how
+                )
                 data_dtypes[kl] = to_dtype
-                index_dtypes = [col.dtype for col in self.lhs.index._data.values()]
+                index_dtypes = [
+                    col.dtype for col in self.lhs.index._data.values()
+                ]
         return (index_dtypes, data_dtypes)
 
     def typecast_libcudf_to_output(self, output, output_dtypes):
