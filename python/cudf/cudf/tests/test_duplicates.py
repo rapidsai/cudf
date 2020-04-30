@@ -6,6 +6,9 @@ import cudf
 from cudf import concat
 from cudf.tests.utils import assert_eq
 
+# TODO: PANDAS 1.0 support
+# Revisit drop_duplicates() tests to update parameters like ignore_index.
+
 
 def assert_df(g, p):
     # assert_eq() with sorted index of dataframes
@@ -321,15 +324,26 @@ def test_dataframe_drop_duplicates_method():
     gdf = cudf.DataFrame.from_pandas(pdf)
     assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    assert tuple(gdf.drop_duplicates("n1")["n1"]) == (1, 2, 3)
-    assert tuple(gdf.drop_duplicates("n2")["n2"]) == (2, 3, 4, 5)
-    assert tuple(gdf.drop_duplicates("s1")["s1"]) == ("a", "b", "c", "d")
-    assert tuple(gdf.drop_duplicates("s1", keep="last")["s1"]) == (
+    assert tuple(gdf.drop_duplicates("n1")["n1"].reset_index(drop=True)) == (
+        1,
+        2,
+        3,
+    )
+    assert tuple(gdf.drop_duplicates("n2")["n2"].reset_index(drop=True)) == (
+        2,
+        3,
+        4,
+        5,
+    )
+    assert tuple(gdf.drop_duplicates("s1")["s1"].reset_index(drop=True)) == (
         "a",
         "b",
         "c",
         "d",
     )
+    assert tuple(
+        gdf.drop_duplicates("s1", keep="last")["s1"].reset_index(drop=True)
+    ) == ("a", "b", "c", "d",)
     assert gdf.drop_duplicates("s1", inplace=True) is None
 
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -445,6 +459,9 @@ def test_drop_duplicates_NA():
 
 
 def test_drop_duplicates_NA_for_take_all():
+    # TODO: PANDAS 1.0 support - add ignore_index for
+    # pandas drop_duplicates calls in this function.
+
     # none
     pdf = DataFrame(
         {
@@ -458,14 +475,26 @@ def test_drop_duplicates_NA_for_take_all():
     result = df.drop_duplicates("A")
     expected = pdf.iloc[[0, 2, 3, 5, 7]]
     assert_df(result, expected)
+    assert_df(
+        df.drop_duplicates("A", ignore_index=True),
+        result.reset_index(drop=True),
+    )
 
     result = df.drop_duplicates("A", keep="last")
     expected = pdf.iloc[[1, 4, 5, 6, 7]]
     assert_df(result, expected)
+    assert_df(
+        df.drop_duplicates("A", ignore_index=True, keep="last"),
+        result.reset_index(drop=True),
+    )
 
     result = df.drop_duplicates("A", keep=False)
     expected = pdf.iloc[[5, 7]]
     assert_df(result, expected)
+    assert_df(
+        df.drop_duplicates("A", ignore_index=True, keep=False),
+        result.reset_index(drop=True),
+    )
 
     # nan
 

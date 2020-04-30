@@ -17,15 +17,15 @@
 #ifndef BITMASK_OPS_HPP
 #define BITMASK_OPS_HPP
 
-#include <cudf/cudf.h>
 #include <cuda_runtime.h>
+#include <cudf/cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 
 /**
  * @file legacy/bitmask_ops.hpp
  * @brief Internal functions for bitmask operations.
-**/
+ **/
 
 /**
  * @brief Sets all bits in input valid mask to 1
@@ -38,7 +38,8 @@
  **/
 gdf_error all_bitmask_on(cudf::valid_type* valid_out,
                          cudf::size_type& out_null_count,
-                         cudf::size_type num_values, cudaStream_t stream);
+                         cudf::size_type num_values,
+                         cudaStream_t stream);
 
 /**
  * @brief Computes bitwise AND on two valid masks and sets it in output
@@ -58,7 +59,6 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    const cudf::valid_type* valid_right,
                                    cudaStream_t stream,
                                    cudf::size_type num_values);
-
 
 namespace cudf {
 

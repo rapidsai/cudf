@@ -40,12 +40,13 @@ namespace detail {
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
- **/
+ */
 std::unique_ptr<column> sorted_order(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource(),
+  cudaStream_t stream                            = 0);
 
 /**
  * @brief Computes the row indices that would produce `input` in a stable
@@ -55,10 +56,11 @@ std::unique_ptr<column> sorted_order(
  * @copydetails cudf::experimental::detail::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource(),
+  cudaStream_t stream                            = 0);
 
 /**
  * @copydoc cudf::experimental::sort_by_key
@@ -66,11 +68,12 @@ std::unique_ptr<column> stable_sorted_order(
  * @param[in] stream Optional CUDA stream on which to execute kernels
  */
 std::unique_ptr<table> sort_by_key(
-    table_view const& values, table_view const& keys,
-    std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-    cudaStream_t stream = 0);
+  table_view const& values,
+  table_view const& keys,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource(),
+  cudaStream_t stream                            = 0);
 
 }  // namespace detail
 }  // namespace experimental

@@ -312,6 +312,8 @@ if(BUILD_BENCHMARKS)
 
 endif(BUILD_BENCHMARKS)
 
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
@@ -630,6 +632,7 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
             src/strings/split/split.cu
+            src/strings/split/split_record.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
@@ -649,6 +652,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
@@ -882,6 +886,9 @@ add_custom_target(test_cudf
 add_custom_target(test_nvstrings
                   COMMAND ctest -R "NVSTRINGS"
                   DEPENDS build_tests_nvstrings)
+
+add_custom_target(build_benchmarks_cudf
+                  DEPENDS ${BENCHMARK_LIST})
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

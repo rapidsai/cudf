@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.Aggregate.max;
+import static ai.rapids.cudf.Aggregate.first;
+import static ai.rapids.cudf.Aggregate.last;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -48,6 +50,7 @@ import static ai.rapids.cudf.Table.sum;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1049,6 +1052,52 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInterleaveIntColumns() {
+    try (Table t = new Table.TestBuilder()
+          .column(1,2,3,4,5)
+          .column(6,7,8,9,10)
+          .build();
+         ColumnVector expected = ColumnVector.fromInts(1,6,2,7,3,8,4,9,5,10);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveFloatColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6f,7f,8f,9f,10f)
+        .build();
+         ColumnVector expected = ColumnVector.fromFloats(1f,6f,2f,7f,3f,8f,4f,9f,5f,10f);
+         ColumnVector actual = t.interleaveColumns()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testInterleaveStringColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column("a", "b", "c")
+        .column("d", "e", "f")
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "Only fixed-width types are supported in interleave_columns");
+    }
+  }
+
+  @Test
+  void testInterleaveMixedColumns() {
+    try (Table t = new Table.TestBuilder()
+        .column(1f,2f,3f,4f,5f)
+        .column(6,7,8,9,10)
+        .build()) {
+      assertThrows(CudfException.class, () -> t.interleaveColumns(),
+          "All columns must have the same data type in interleave_columns");
+    }
+  }
+
+  @Test
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
@@ -1237,6 +1286,8 @@ public class TableTest extends CudfTestBase {
       DataInputStream din = new DataInputStream(bin);
       try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(din)) {
         assertTablesAreEqual(t, result.getTable());
+        assertEquals(result.getTable(), result.getContiguousTable().getTable());
+        assertNotNull(result.getContiguousTable().getBuffer());
       }
     }
   }
@@ -1248,6 +1299,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(10, result.getNumRows());
     }
   }
@@ -1259,6 +1311,7 @@ public class TableTest extends CudfTestBase {
     ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
     try (JCudfSerialization.TableAndRowCountPair result = JCudfSerialization.readTableFrom(bin)) {
       assertNull(result.getTable());
+      assertNull(result.getContiguousTable());
       assertEquals(0, result.getNumRows());
     }
   }
@@ -1534,8 +1587,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
             assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin2).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin2);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         } finally {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
@@ -1569,8 +1626,12 @@ public class TableTest extends CudfTestBase {
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
             assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
+            assertEquals(found.getTable(), found.getContiguousTable().getTable());
+            assertNotNull(found.getContiguousTable().getBuffer());
           }
-          assertNull(JCudfSerialization.readTableFrom(bin).getTable());
+          JCudfSerialization.TableAndRowCountPair tp = JCudfSerialization.readTableFrom(bin);
+          assertNull(tp.getTable());
+          assertNull(tp.getContiguousTable());
         }
       }
     }
@@ -2157,6 +2218,66 @@ public class TableTest extends CudfTestBase {
           }
         }
       }
+    }
+  }
+
+  @Test
+  void testGroupByFirstExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(13, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, 15)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByFirstIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(null, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, null)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, true))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 

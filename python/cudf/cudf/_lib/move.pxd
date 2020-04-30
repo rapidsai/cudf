@@ -74,3 +74,6 @@ cdef extern from "<utility>" namespace "std" nogil:
     cdef cudf_io_types.source_info move(cudf_io_types.source_info)
     cdef cudf_io_types.table_with_metadata move(
         cudf_io_types.table_with_metadata)
+    cdef pair[unique_ptr[column], table_view] move(
+        pair[unique_ptr[column], table_view]
+    )

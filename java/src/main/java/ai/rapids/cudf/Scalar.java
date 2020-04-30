@@ -323,9 +323,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnVector) {
       ColumnVector cvRhs = (ColumnVector) rhs;
-      try (DevicePrediction prediction = new DevicePrediction(cvRhs.predictSizeFor(outType), "binaryOp")) {
-        return new ColumnVector(binaryOp(this, cvRhs, op, outType));
-      }
+      return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
           "Scalar");
@@ -489,8 +487,14 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
           LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");
           logRefCountDebug("Leaked scalar");
         }
-        closeScalar(scalarHandle);
-        scalarHandle = 0;
+        try {
+          closeScalar(scalarHandle);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          scalarHandle = 0;
+        }
         return true;
       }
       return false;

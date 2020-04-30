@@ -108,11 +108,11 @@ def test_string_index():
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
 
@@ -225,12 +225,14 @@ def test_multiindex_take(pdf, gdf, pdfIndex):
     assert_eq(pdf.index.take(np.array([0])), gdf.index.take(np.array([0])))
     from cudf import Series
 
-    assert_eq(pdf.index.take(Series([0])), gdf.index.take(Series([0])))
+    assert_eq(pdf.index.take(pd.Series([0])), gdf.index.take(Series([0])))
     assert_eq(pdf.index.take([0, 1]), gdf.index.take([0, 1]))
     assert_eq(
         pdf.index.take(np.array([0, 1])), gdf.index.take(np.array([0, 1]))
     )
-    assert_eq(pdf.index.take(Series([0, 1])), gdf.index.take(Series([0, 1])))
+    assert_eq(
+        pdf.index.take(pd.Series([0, 1])), gdf.index.take(Series([0, 1]))
+    )
 
 
 def test_multiindex_getitem(pdf, gdf, pdfIndex):

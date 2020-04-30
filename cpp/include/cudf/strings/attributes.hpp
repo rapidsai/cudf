@@ -15,15 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-//! Strings column APIs.
-namespace strings
-{
-
+namespace cudf {
+/**
+ * @brief Strings column APIs.
+ *
+ * @defgroup strings_apis Strings APIs
+ * @{
+ */
+namespace strings {
 /**
  * @brief Returns an integer numeric column containing the length of each string in
  * characters.
@@ -38,8 +40,9 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with lengths for each string.
  */
-std::unique_ptr<column> count_characters( strings_column_view const& strings,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> count_characters(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a numeric column containing the length of each string in
@@ -55,8 +58,9 @@ std::unique_ptr<column> count_characters( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with the number of bytes for each string.
  */
-std::unique_ptr<column> count_bytes( strings_column_view const& strings,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> count_bytes(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a numeric column with code point values (integers) for each
@@ -74,8 +78,10 @@ std::unique_ptr<column> count_bytes( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New INT32 column with code point integer values for each character.
  */
-std::unique_ptr<column> code_points( strings_column_view const& strings,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> code_points(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+}  // namespace strings
+/** @} */  // end of strings_apis group
+}  // namespace cudf

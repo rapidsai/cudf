@@ -2,7 +2,7 @@
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -19,42 +19,46 @@
  *
  */
 
-
 #pragma once
 
 #include <cudf/cudf.h>
 
 #include <vector>
 
-#include <io/utilities/legacy/wrapper_utils.hpp>
 #include <io/csv/legacy/type_conversion.cuh>
+#include <io/utilities/legacy/wrapper_utils.hpp>
 
-#include <thrust/pair.h>
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
-#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/pair.h>
 
-cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
+cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char> &keys);
 
-template<class T>
-cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
-	T *positions);
+template <class T>
+cudf::size_type findAllFromSet(const char *h_data,
+                               size_t h_size,
+                               const std::vector<char> &keys,
+                               uint64_t result_offset,
+                               T *positions);
 
-rmm::device_vector<int16_t> getBracketLevels(
-	thrust::pair<uint64_t,char>* brackets, int count, 
-	const std::string& open_chars, const std::string& close_chars);
+rmm::device_vector<int16_t> getBracketLevels(thrust::pair<uint64_t, char> *brackets,
+                                             int count,
+                                             const std::string &open_chars,
+                                             const std::string &close_chars);
 
 #ifdef __CUDACC__
 /**
  * @brief Sets the specified bit in a device memory bitmap.
  * Uses atomics for synchronization.
  */
-__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) {
+__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx)
+{
   constexpr int32_t bit_mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
-  const auto address = bitmap + bit_idx / 8;
+  const auto address            = bitmap + bit_idx / 8;
 
   int32_t *const base_address = (int32_t *)((cudf::valid_type *)address - ((size_t)address & 3));
-  const int32_t mask = bit_mask[bit_idx % 8] << (((size_t)address & 3) * 8);
+  const int32_t mask          = bit_mask[bit_idx % 8] << (((size_t)address & 3) * 8);
 
   atomicOr(base_address, mask);
 }
@@ -63,14 +67,12 @@ __device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) 
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  */
-__device__ __inline__ bool isDigit(char c, bool is_hex = false) {
-  if (c >= '0' && c <= '9')
-    return true;
+__device__ __inline__ bool isDigit(char c, bool is_hex = false)
+{
+  if (c >= '0' && c <= '9') return true;
   if (is_hex) {
-    if (c >= 'A' && c <= 'F')
-      return true;
-    if (c >= 'a' && c <= 'f')
-      return true;
+    if (c >= 'A' && c <= 'F') return true;
+    if (c >= 'a' && c <= 'f') return true;
   }
   return false;
 }
@@ -80,27 +82,23 @@ __device__ __inline__ bool isDigit(char c, bool is_hex = false) {
  * False positives are possible because positions are not taken into account.
  * For example, field "e.123-" would match the pattern.
  */
-__device__ __inline__ bool isLikeFloat(long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+__device__ __inline__ bool isLikeFloat(
+  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt)
+{
   // Can't have more than one exponent and one decimal point
-  if (decimal_cnt > 1)
-    return false;
-  if (exponent_cnt > 1)
-    return false;
+  if (decimal_cnt > 1) return false;
+  if (exponent_cnt > 1) return false;
   // Without the exponent or a decimal point, this is an integer, not a float
-  if (decimal_cnt == 0 && exponent_cnt == 0)
-    return false;
+  if (decimal_cnt == 0 && exponent_cnt == 0) return false;
 
   // Can only have one '-' per component
-  if (dash_cnt > 1 + exponent_cnt)
-    return false;
+  if (dash_cnt > 1 + exponent_cnt) return false;
 
   // If anything other than these characters is present, it's not a float
-  if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len)
-    return false;
+  if (digit_cnt + decimal_cnt + dash_cnt + exponent_cnt != len) return false;
 
   // Needs at least 1 digit, 2 if exponent is present
-  if (digit_cnt < 1 + exponent_cnt)
-    return false;
+  if (digit_cnt < 1 + exponent_cnt) return false;
 
   return true;
 }
@@ -126,17 +124,13 @@ __device__ __inline__ bool isLikeFloat(long len, long digit_cnt, long decimal_cn
  *
  * @return `true` if it is date-like, `false` otherwise
  */
-__device__ __inline__ bool isLikeDateTime(long letter_count, long decimal_count,
-                                          long colon_count, long dash_count,
-                                          long slash_count) {
+__device__ __inline__ bool isLikeDateTime(
+  long letter_count, long decimal_count, long colon_count, long dash_count, long slash_count)
+{
   // Must not exceed count of longest month (September) plus `T` time indicator
-  if (letter_count > 10) {
-    return false;
-  }
+  if (letter_count > 10) { return false; }
   // Must not exceed more than one decimals or more than two time separators
-  if (decimal_count > 1 || colon_count > 2) {
-    return false;
-  }
+  if (decimal_count > 1 || colon_count > 2) { return false; }
   // Must have one or two '-' or '/' but not both as date separators
   if ((dash_count > 0 && dash_count < 3 && slash_count == 0) ||
       (dash_count == 0 && slash_count > 0 && slash_count < 3)) {
@@ -160,7 +154,11 @@ __device__ __inline__ bool isLikeDateTime(long letter_count, long decimal_count,
  * @return long position of the last character in the field, including the
  *  delimiter(s) following the field data
  **/
-__inline__ __device__ long seekFieldEnd(const char *data, const ParseOptions opts, long pos, long stop) {
+__inline__ __device__ long seekFieldEnd(const char *data,
+                                        const ParseOptions opts,
+                                        long pos,
+                                        long stop)
+{
   bool quotation = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq
@@ -170,9 +168,7 @@ __inline__ __device__ long seekFieldEnd(const char *data, const ParseOptions opt
       quotation = !quotation;
     } else if (quotation == false) {
       if (data[pos] == opts.delimiter) {
-        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) {
-          ++pos;
-        }
+        while (opts.multi_delimiter && pos < stop && data[pos + 1] == opts.delimiter) { ++pos; }
         break;
       } else if (data[pos] == opts.terminator) {
         break;
@@ -181,8 +177,7 @@ __inline__ __device__ long seekFieldEnd(const char *data, const ParseOptions opt
         break;
       }
     }
-    if (pos >= stop)
-      break;
+    if (pos >= stop) break;
     pos++;
   }
   return pos;

@@ -47,16 +47,16 @@ namespace detail {
 template <typename ColumnView>
 class table_view_base {
   static_assert(std::is_same<ColumnView, column_view>::value or
-                    std::is_same<ColumnView, mutable_column_view>::value,
+                  std::is_same<ColumnView, mutable_column_view>::value,
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 
  private:
   std::vector<ColumnView> _columns{};  ///< ColumnViews to columns of equal size
-  size_type _num_rows{};  ///< The number of elements in every column
+  size_type _num_rows{};               ///< The number of elements in every column
 
  public:
-  using iterator = decltype(std::begin(_columns));
+  using iterator       = decltype(std::begin(_columns));
   using const_iterator = decltype(std::cbegin(_columns));
 
   /**
@@ -145,7 +145,7 @@ class table_view_base {
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
-public:
+ public:
   using ColumnView = column_view;
 
   table_view() = default;
@@ -168,7 +168,7 @@ public:
    *
    * @param views The vector of table views to construct the table from
    **/
-  table_view(std::vector<table_view> const &views);
+  table_view(std::vector<table_view> const& views);
 
   /**
    * @brief Returns a table_view with set of specified columns.
@@ -192,12 +192,13 @@ public:
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
-public:
+ public:
   using ColumnView = mutable_column_view;
 
   mutable_table_view() = default;
 
-  mutable_column_view& column(size_type column_index) const {
+  mutable_column_view& column(size_type column_index) const
+  {
     return const_cast<mutable_column_view&>(table_view_base::column(column_index));
   }
   /**
@@ -223,26 +224,28 @@ public:
    *
    * @param views The vector of table views to construct the table from
    **/
-  mutable_table_view(std::vector<mutable_table_view> const &views);
+  mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view) {
-  return std::any_of(view.begin(), view.end(),
-                     [](column_view col) { return col.has_nulls(); });
+inline bool has_nulls(table_view view)
+{
+  return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
 }
 
-/**
-   * @brief Checks if two `table_view`s have columns of same types
-   *
-   * @param lhs left-side table_view operand
-   * @param rhs right-side table_view operand
-   * @return boolean comparison result
-   **/
-inline bool have_same_types(table_view const& lhs, table_view const& rhs) {
-  return std::equal(lhs.begin(), lhs.end(),
-                    rhs.begin(), rhs.end(),
-                    [](column_view const& lcol, column_view const& rcol){
-                      return (lcol.type() == rcol.type());
-                    });
+/*
+ * @brief Checks if two `table_view`s have columns of same types
+ *
+ * @param lhs left-side table_view operand
+ * @param rhs right-side table_view operand
+ * @return boolean comparison result
+ */
+inline bool have_same_types(table_view const& lhs, table_view const& rhs)
+{
+  return std::equal(
+    lhs.begin(),
+    lhs.end(),
+    rhs.begin(),
+    rhs.end(),
+    [](column_view const& lcol, column_view const& rcol) { return (lcol.type() == rcol.type()); });
 }
 }  // namespace cudf

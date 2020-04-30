@@ -24,15 +24,14 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 struct aggregation_equality {
-  struct typed_aggregation_equality
-  {
+  struct typed_aggregation_equality {
     std::shared_ptr<aggregation> const& lhs;
     std::shared_ptr<aggregation> const& rhs;
 
     template <aggregation::Kind k>
-    bool operator()() const {
+    bool operator()() const
+    {
       using agg_type = experimental::detail::kind_to_type<k>;
       auto typed_lhs = static_cast<agg_type const*>(lhs.get());
       auto typed_rhs = static_cast<agg_type const*>(rhs.get());
@@ -43,16 +42,16 @@ struct aggregation_equality {
   bool operator()(std::shared_ptr<aggregation> const& lhs,
                   std::shared_ptr<aggregation> const& rhs) const
   {
-    if (lhs->kind != rhs->kind)
-      return false;
-    
+    if (lhs->kind != rhs->kind) return false;
+
     return experimental::detail::aggregation_dispatcher(lhs->kind,
-              typed_aggregation_equality{lhs, rhs});
+                                                        typed_aggregation_equality{lhs, rhs});
   }
 };
 
 struct aggregation_hash {
-  size_t operator()(std::shared_ptr<aggregation> const& key) const noexcept {
+  size_t operator()(std::shared_ptr<aggregation> const& key) const noexcept
+  {
     if (key) {
       return key->kind;
     } else {
@@ -63,37 +62,30 @@ struct aggregation_hash {
 
 class result_cache {
  public:
-  result_cache() = delete;
-  ~result_cache() = default;
+  result_cache()                    = delete;
+  ~result_cache()                   = default;
   result_cache(result_cache const&) = delete;
   result_cache& operator=(const result_cache& other) = delete;
 
-  result_cache(size_t num_columns)
-  : _cache(num_columns)
-  {}
+  result_cache(size_t num_columns) : _cache(num_columns) {}
 
   bool has_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
-  void add_result(size_t col_idx, std::unique_ptr<aggregation> const& agg,
+  void add_result(size_t col_idx,
+                  std::unique_ptr<aggregation> const& agg,
                   std::unique_ptr<column>&& col);
 
-  column_view
-  get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
+  column_view get_result(size_t col_idx, std::unique_ptr<aggregation> const& agg) const;
 
-  std::unique_ptr<column>
-  release_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
+  std::unique_ptr<column> release_result(size_t col_idx, std::unique_ptr<aggregation> const& agg);
 
  private:
-  std::vector<
-    std::unordered_map<
-      std::shared_ptr<aggregation>,
-      std::unique_ptr<column>,
-      aggregation_hash,
-      aggregation_equality
-    >
-  > _cache;
+  std::vector<std::unordered_map<std::shared_ptr<aggregation>,
+                                 std::unique_ptr<column>,
+                                 aggregation_hash,
+                                 aggregation_equality>>
+    _cache;
 };
-
 
 }  // namespace detail
 }  // namespace experimental

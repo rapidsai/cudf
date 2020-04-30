@@ -65,8 +65,10 @@ class example_class {
    *
    * @return The result of the complex function
    **/
-  T complicated_function(int const first_parameter, double* second_parameter,
-                         float* third_parameter) {
+  T complicated_function(int const first_parameter,
+                         double* second_parameter,
+                         float* third_parameter)
+  {
     // DESCRIPTION: Notice the use of *human readable* variable names. Human
     // readable variable names are vastly prefered to short, hard to read names.
     // E.g., use 'first_parameter' or `firstParameter` instead of 'fp'. When in
@@ -101,7 +103,8 @@ class example_class {
  * @return The result of calling the functor on the input argument
  **/
 template <class functor_type, typename input_type, typename return_type>
-return_type free_function(functor_type functor, input_type input_argument) {
+return_type free_function(functor_type functor, input_type input_argument)
+{
   // Calls the passed in functor on the passed in input argument and returns
   // the result
   return functor(input_argument);

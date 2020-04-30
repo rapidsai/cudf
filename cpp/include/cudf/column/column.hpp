@@ -27,11 +27,10 @@
 #include <vector>
 
 namespace cudf {
-
 class column {
  public:
-  column() = default;
-  ~column() = default;
+  column()        = default;
+  ~column()       = default;
   column& operator=(column const& other) = delete;
   column& operator=(column&& other) = delete;
 
@@ -55,8 +54,9 @@ class column {
    * @param other The `column` to copy
    * @param stream The stream on which to execute all allocations and copies
    * @param mr The resource to use for all allocations
-   **/
-  column(column const& other, cudaStream_t stream,
+   */
+  column(column const& other,
+         cudaStream_t stream,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
@@ -85,15 +85,20 @@ class column {
    * @param children Optional, vector of child columns
    **/
   template <typename B1, typename B2 = rmm::device_buffer>
-  column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
-         size_type null_count = UNKNOWN_NULL_COUNT,
+  column(data_type dtype,
+         size_type size,
+         B1&& data,
+         B2&& null_mask                                  = {},
+         size_type null_count                            = UNKNOWN_NULL_COUNT,
          std::vector<std::unique_ptr<column>>&& children = {})
-      : _type{dtype},
-        _size{size},
-        _data{std::forward<B1>(data)},
-        _null_mask{std::forward<B2>(null_mask)},
-        _null_count{null_count},
-        _children{std::move(children)} {}
+    : _type{dtype},
+      _size{size},
+      _data{std::forward<B1>(data)},
+      _null_mask{std::forward<B2>(null_mask)},
+      _null_count{null_count},
+      _children{std::move(children)}
+  {
+  }
 
   /**
    * @brief Construct a new column by deep copying the contents of a
@@ -105,19 +110,19 @@ class column {
    * @param stream The stream on which all allocations and copies will be
    * executed
    * @param mr The resource to use for all allocations
-   **/
-  explicit column(
-      column_view view, cudaStream_t stream = 0,
-      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+   */
+  explicit column(column_view view,
+                  cudaStream_t stream                 = 0,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**
    * @brief Returns the column's logical element type
-   **/
+   */
   data_type type() const noexcept { return _type; }
 
   /**
    * @brief Returns the number of elements
-   **/
+   */
   size_type size() const noexcept { return _size; }
 
   /**
@@ -127,7 +132,7 @@ class column {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
-   **/
+   */
   size_type null_count() const;
 
   /**
@@ -142,7 +147,7 @@ class column {
    * @param new_null_count Optional, the count of null elements. If unknown,
    * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
    * computed on the first invocation of `null_count()`.
-   **/
+   */
   void set_null_mask(rmm::device_buffer&& new_null_mask,
                      size_type new_null_count = UNKNOWN_NULL_COUNT);
 
@@ -158,7 +163,7 @@ class column {
    * @param new_null_count Optional, the count of null elements. If unknown,
    * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
    * computed on the first invocation of `null_count()`.
-   **/
+   */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
                      size_type new_null_count = UNKNOWN_NULL_COUNT);
 
@@ -172,7 +177,7 @@ class column {
    * @throws cudf::logic_error if `new_null_count > 0 and nullable() == false`
    *
    * @param new_null_count The new null count.
-   **/
+   */
   void set_null_count(size_type new_null_count);
 
   /**
@@ -186,7 +191,7 @@ class column {
    *
    * @return true The column can hold null values
    * @return false The column cannot hold null values
-   **/
+   */
   bool nullable() const noexcept { return (_null_mask.size() > 0); }
 
   /**
@@ -194,12 +199,12 @@ class column {
    *
    * @return true One or more elements are null
    * @return false Zero elements are null
-   **/
+   */
   bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**
    * @brief Returns the number of child columns
-   **/
+   */
   size_type num_children() const noexcept { return _children.size(); }
 
   /**
@@ -207,26 +212,22 @@ class column {
    *
    * @param child_index Index of the desired child
    * @return column& Reference to the desired child
-   **/
-  column& child(size_type child_index) noexcept {
-    return *_children[child_index];
-  };
+   */
+  column& child(size_type child_index) noexcept { return *_children[child_index]; };
 
   /**
    * @brief Returns a const reference to the specified child
    *
    * @param child_index Index of the desired child
    * @return column const& Const reference to the desired child
-   **/
-  column const& child(size_type child_index) const noexcept {
-    return *_children[child_index];
-  };
+   */
+  column const& child(size_type child_index) const noexcept { return *_children[child_index]; };
 
   /**
    * @brief Wrapper for the contents of a column.
    *
    * Returned by `column::release()`.
-   **/
+   */
   struct contents {
     std::unique_ptr<rmm::device_buffer> data;
     std::unique_ptr<rmm::device_buffer> null_mask;
@@ -247,7 +248,7 @@ class column {
    *
    * @return A `contents` struct containing the data, null mask, and children of
    * the column.
-   **/
+   */
   contents release() noexcept;
 
   /**
@@ -255,7 +256,7 @@ class column {
    * children.
    *
    * @return column_view The immutable, non-owning view
-   **/
+   */
   column_view view() const;
 
   /**
@@ -265,7 +266,7 @@ class column {
    * requires a `column_view`. The conversion is automatic.
    *
    * @return column_view Immutable, non-owning `column_view`
-   **/
+   */
   operator column_view() const { return this->view(); };
 
   /**
@@ -279,7 +280,7 @@ class column {
    *`null_count()`.
    *
    * @return mutable_column_view The mutable, non-owning view
-   **/
+   */
   mutable_column_view mutable_view();
 
   /**
@@ -295,21 +296,19 @@ class column {
    * `null_count()`.
    *
    * @return mutable_column_view Mutable, non-owning `mutable_column_view`
-   **/
+   */
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{EMPTY};      ///< Logical type of elements in the column
-  cudf::size_type _size{};     ///< The number of elements in the column
-  rmm::device_buffer _data{};  ///< Dense, contiguous, type erased device memory
-                               ///< buffer containing the column elements
+  data_type _type{EMPTY};           ///< Logical type of elements in the column
+  cudf::size_type _size{};          ///< The number of elements in the column
+  rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
+                                    ///< buffer containing the column elements
   rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
                                     ///< May be empty if `null_count() == 0`
-  mutable size_type _null_count{
-      UNKNOWN_NULL_COUNT};  ///< The number of null elements
-  std::vector<std::unique_ptr<column>>
-      _children{};  ///< Depending on element type, child
-                    ///< columns may contain additional data
+  mutable size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
+  std::vector<std::unique_ptr<column>> _children{};   ///< Depending on element type, child
+                                                      ///< columns may contain additional data
 };
 
 }  // namespace cudf

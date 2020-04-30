@@ -20,7 +20,6 @@
 #include <cudf/types.h>
 
 namespace cudf {
-
 // Forward declaration
 struct table;
 
@@ -65,26 +64,31 @@ namespace detail {
  * i.e., setting both to `true` is undefined.
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
- * `nvstring_category` objects of these will be synchronizeded before gather is 
- * performed. 
+ * `nvstring_category` objects of these will be synchronizeded before gather is
+ * performed.
  * @param allow_negative_indices Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @return gdf_error
  **/
-void gather(table const* source_table, gdf_column const& gather_map,
-	    table * destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool allow_negative_indices = false);
+void gather(table const* source_table,
+            gdf_column const& gather_map,
+            table* destination_table,
+            bool check_bounds           = false,
+            bool ignore_out_of_bounds   = false,
+            bool sync_nvstring_category = false,
+            bool allow_negative_indices = false);
 
 /**
  * @overload This function accepts `gather_map` as an array instead of
  * a `gdf_column`.
  */
-void gather(table const* source_table, cudf::size_type const gather_map[],
-	    table* destination_table, bool check_bounds = false,
-	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool allow_negative_indices = false);
-
+void gather(table const* source_table,
+            cudf::size_type const gather_map[],
+            table* destination_table,
+            bool check_bounds           = false,
+            bool ignore_out_of_bounds   = false,
+            bool sync_nvstring_category = false,
+            bool allow_negative_indices = false);
 
 }  // namespace detail
 }  // namespace cudf

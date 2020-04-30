@@ -24,12 +24,9 @@
  * @brief Dictionary encode and decode APIs.
  */
 
-namespace cudf
-{
+namespace cudf {
 //! Dictionary column APIs.
-namespace dictionary
-{
-
+namespace dictionary {
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -43,6 +40,7 @@ namespace dictionary
  * The null_mask and null count are copied from the input column to the output column.
  *
  * @throw cudf::logic_error if indices type is not INT32
+ * @throw cudf::logic_error if the column to encode is already a DICTIONARY type.
  *
  * ```
  * c = [429,111,213,111,213,429,213]
@@ -56,9 +54,9 @@ namespace dictionary
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
-    column_view const& column,
-    data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& column,
+  data_type indices_type              = data_type{INT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Create a column by gathering the keys from the provided
@@ -74,8 +72,9 @@ std::unique_ptr<column> encode(
  * @param mr Resource for allocating memory for the output.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> decode(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace dictionary
-} // namespace cudf
+}  // namespace dictionary
+}  // namespace cudf

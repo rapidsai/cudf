@@ -71,7 +71,6 @@
 
 namespace cudf {
 namespace test {
-
 // Utilities for creating parameters for typed tests on GoogleTest
 //
 // Types is used to define type list, it's just an alias to ::testing::Types:
@@ -152,8 +151,7 @@ struct ConcatImpl;
 
 template <class HEAD1, class HEAD2, class... TAIL>
 struct ConcatImpl<HEAD1, HEAD2, TAIL...> {
-  using type = typename ConcatImpl<typename detail::Concat2<HEAD1, HEAD2>::type,
-                                   TAIL...>::type;
+  using type = typename ConcatImpl<typename detail::Concat2<HEAD1, HEAD2>::type, TAIL...>::type;
 };
 
 template <class A>
@@ -238,7 +236,8 @@ struct Prepend<T, Types<TUPLES...>> {
 
 // skip empty tuples
 template <class T, class... TUPLES>
-struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
+struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {
+};
 }  // namespace detail
 
 template <class... ARGS>
@@ -256,13 +255,14 @@ struct CrossProductImpl<Types<ARGS...>> {
 
 template <class... AARGS, class... TAIL>
 struct CrossProductImpl<Types<AARGS...>, TAIL...> {
-  using type = Concat<typename detail::Prepend<
-      AARGS, typename CrossProductImpl<TAIL...>::type>::type...>;
+  using type =
+    Concat<typename detail::Prepend<AARGS, typename CrossProductImpl<TAIL...>::type>::type...>;
 };
 
 // to make it easy for the user when there's only one element to be joined
 template <class T, class... TAIL>
-struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {};
+struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {
+};
 
 /**
  * @brief Creates a new type list from the cross product (cartesian product) of
@@ -285,20 +285,25 @@ using CrossProduct = typename CrossProductImpl<ARGS...>::type;
 // AllSame -----------------------------------------
 namespace detail {
 template <class... ITEMS>
-struct AllSame : std::false_type {};
+struct AllSame : std::false_type {
+};
 
 // degenerate case
 template <class A>
-struct AllSame<A> : std::true_type {};
+struct AllSame<A> : std::true_type {
+};
 
 template <class A>
-struct AllSame<A, A> : std::true_type {};
+struct AllSame<A, A> : std::true_type {
+};
 
 template <class HEAD, class... TAIL>
-struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {};
+struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {
+};
 
 template <class... ITEMS>
-struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {};
+struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {
+};
 
 }  // namespace detail
 
@@ -330,16 +335,19 @@ struct ExistsImpl;
 
 // end case, no more types to check
 template <class NEEDLE>
-struct ExistsImpl<NEEDLE, Types<>> : std::false_type {};
+struct ExistsImpl<NEEDLE, Types<>> : std::false_type {
+};
 
 // next one matches
 template <class NEEDLE, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {};
+struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {
+};
 
 // next one doesn't match
 template <class NEEDLE, class HEAD, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>>
-    : ExistsImpl<NEEDLE, Types<TAIL...>> {};
+struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>> {
+};
+
 /**
  * @brief Indicates if a type exists within a type list.
  *
@@ -399,9 +407,8 @@ struct RemoveIfImpl<PRED, Types<>> {
 template <class PRED, class HEAD, class... TAIL>
 struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
   using type =
-      Concat<typename std::conditional<PRED::template Call<HEAD>::value,
-                                       Types<>, Types<HEAD>>::type,
-             typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
+    Concat<typename std::conditional<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>::type,
+           typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
 };
 
 /**
@@ -543,8 +550,8 @@ struct Remove<Types<HEAD, TAIL...>, CUR, IDXHEAD, IDXTAIL...> {
   static_assert(sizeof...(TAIL) + 1 > IDXHEAD - CUR, "Index out of bounds");
 
   // add current item to output and recurse into the remaining items
-  using type = Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1,
-                                                   IDXHEAD, IDXTAIL...>::type>;
+  using type =
+    Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1, IDXHEAD, IDXTAIL...>::type>;
 };
 }  // namespace detail
 
@@ -575,9 +582,8 @@ struct Unique<> {
 
 template <class HEAD, class... TAIL>
 struct Unique<HEAD, TAIL...> {
-  using type = Concat<
-      std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>, Types<HEAD>>,
-      typename Unique<TAIL...>::type>;
+  using type = Concat<std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>, Types<HEAD>>,
+                      typename Unique<TAIL...>::type>;
 };
 }  // namespace detail
 

@@ -34,11 +34,26 @@ using namespace cudf::groupby;
  *
  * @tparam op The enum to map to its corresponding functor
  **/
-template <operators op> struct corresponding_functor { using type = void; };
-template <> struct corresponding_functor<MIN> { using type = DeviceMin; };
-template <> struct corresponding_functor<MAX> { using type = DeviceMax; };
-template <> struct corresponding_functor<SUM> { using type = DeviceSum; };
-template <> struct corresponding_functor<COUNT> { using type = DeviceSum; };
+template <operators op>
+struct corresponding_functor {
+  using type = void;
+};
+template <>
+struct corresponding_functor<MIN> {
+  using type = DeviceMin;
+};
+template <>
+struct corresponding_functor<MAX> {
+  using type = DeviceMax;
+};
+template <>
+struct corresponding_functor<SUM> {
+  using type = DeviceSum;
+};
+template <>
+struct corresponding_functor<COUNT> {
+  using type = DeviceSum;
+};
 template <operators op>
 using corresponding_functor_t = typename corresponding_functor<op>::type;
 
@@ -49,8 +64,7 @@ using corresponding_functor_t = typename corresponding_functor<op>::type;
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
  **/
-template <typename SourceType, operators op,
-          typename dummy = void>
+template <typename SourceType, operators op, typename dummy = void>
 struct expected_result_type {
   using type = void;
 };
@@ -76,43 +90,42 @@ struct expected_result_type<SourceType, COUNT> {
 
 // Always use `double` as output of MEAN
 template <typename SourceType>
-struct expected_result_type<SourceType, MEAN> { using type = double; };
+struct expected_result_type<SourceType, MEAN> {
+  using type = double;
+};
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, SUM, std::enable_if_t<std::is_integral<SourceType>::value>> {
+struct expected_result_type<SourceType,
+                            SUM,
+                            std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
 };
 
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, SUM,
-    std::enable_if_t<std::is_floating_point<SourceType>::value>> {
+struct expected_result_type<SourceType,
+                            SUM,
+                            std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
 
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, MEDIAN> {
+struct expected_result_type<SourceType, MEDIAN> {
   using type = double;
 };
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, QUANTILE> {
-  using type = double;
-};
-
-template <typename SourceType>
-struct expected_result_type<
-    SourceType, VARIANCE> {
+struct expected_result_type<SourceType, QUANTILE> {
   using type = double;
 };
 
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, STD> {
+struct expected_result_type<SourceType, VARIANCE> {
+  using type = double;
+};
+
+template <typename SourceType>
+struct expected_result_type<SourceType, STD> {
   using type = double;
 };
 

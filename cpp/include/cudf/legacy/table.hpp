@@ -17,7 +17,7 @@
 #ifndef TABLE_HPP
 #define TABLE_HPP
 
-#include <cudf/cudf.h>
+#include <cudf/types.h>
 #include <cudf/types.hpp>
 
 #include <cassert>
@@ -25,10 +25,9 @@
 #include <vector>
 
 // Forward declaration
-typedef struct CUstream_st* cudaStream_t;
+using cudaStream_t = struct CUstream_st*;
 
 namespace cudf {
-
 /**
  * @brief A wrapper for a set of gdf_columns of equal number of rows.
  *
@@ -53,7 +52,7 @@ struct table {
    * @brief Construct a table from an initializer_list of `gdf_column` pointers
    *
    * @param list The initializer_list of `gdf_column` pointers
-   * ---------------------------------------------------------------------------**/
+   */
   table(std::initializer_list<gdf_column*> list);
 
   /**
@@ -73,8 +72,9 @@ struct table {
   table(cudf::size_type num_rows,
         std::vector<gdf_dtype> const& dtypes,
         std::vector<gdf_dtype_extra_info> const& dtype_infos,
-        bool allocate_bitmasks = false, bool all_valid = false,
-        cudaStream_t stream = 0);
+        bool allocate_bitmasks = false,
+        bool all_valid         = false,
+        cudaStream_t stream    = 0);
 
   table() = default;
 
@@ -110,7 +110,8 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    **/
-  gdf_column* get_column(cudf::size_type index) {
+  gdf_column* get_column(cudf::size_type index)
+  {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -121,7 +122,8 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    **/
-  gdf_column const* get_column(cudf::size_type index) const {
+  gdf_column const* get_column(cudf::size_type index) const
+  {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -136,10 +138,9 @@ struct table {
    * @brief Returns the number of rows in the table
    *
    **/
-  cudf::size_type num_rows() const {
-    if (not _columns.empty()) {
-      return this->get_column(0)->size;
-    }
+  cudf::size_type num_rows() const
+  {
+    if (not _columns.empty()) { return this->get_column(0)->size; }
     return 0;
   }
 
@@ -204,7 +205,7 @@ bool has_nulls(cudf::table const& table);
  * @return A single table having all the columns from `table1` and `table2`
  * respectively in the same order.
  **/
-table concat(cudf::table const& table1, cudf::table const&table2);
+table concat(cudf::table const& table1, cudf::table const& table2);
 
 }  // namespace cudf
 

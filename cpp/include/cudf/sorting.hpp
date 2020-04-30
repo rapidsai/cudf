@@ -22,17 +22,16 @@
 #include <vector>
 
 namespace cudf {
-
 /**
  * @brief Tie-breaker method to use for ranking the column.
- * 
+ *
  */
 enum class rank_method {
-  FIRST,   ///< stable sort order ranking (no ties)
-  AVERAGE, ///< mean of first in the group
-  MIN,     ///< min of first in the group
-  MAX,     ///< max of first in the group
-  DENSE    ///< rank always increases by 1 between groups
+  FIRST,    ///< stable sort order ranking (no ties)
+  AVERAGE,  ///< mean of first in the group
+  MIN,      ///< min of first in the group
+  MAX,      ///< max of first in the group
+  DENSE     ///< rank always increases by 1 between groups
 };
 
 namespace experimental {
@@ -52,21 +51,23 @@ namespace experimental {
  * containing the permuted row indices of `input` if it were sorted
  **/
 std::unique_ptr<column> sorted_order(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
 /**
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
  * The order of equivalent elements is guaranteed to be preserved.
- * 
+ *
  * @copydetails cudf::experimental::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
 /**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
@@ -102,11 +103,10 @@ bool is_sorted(cudf::table_view const& table,
  * @param mr The device memory resource used to allocate the returned table
  * @return New table containing the desired sorted order of `input`
  */
-std::unique_ptr<table> sort(
-    table_view input, std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+std::unique_ptr<table> sort(table_view input,
+                            std::vector<order> const& column_order         = {},
+                            std::vector<null_order> const& null_precedence = {},
+                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a key-value sort.
@@ -130,23 +130,26 @@ std::unique_ptr<table> sort(
  * the rows of `keys`.
  */
 std::unique_ptr<table> sort_by_key(
-    table_view const& values, table_view const& keys,
-    std::vector<order> const& column_order = {},
-    std::vector<null_order> const& null_precedence = {},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& values,
+  table_view const& keys,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
 /**
  * @brief Computes the ranks of input column in sorted order.
  * Rank indicate the position of each element in the sorted column and rank
  * value starts from 1.
  *
- * @example input = { 3, 4, 5, 4, 1, 2}
+ * @code{.pseudo}
+ * input = { 3, 4, 5, 4, 1, 2}
  * Result for different rank_method are
  * FIRST    = {3, 4, 6, 5, 1, 2}
  * AVERAGE  = {3, 4.5, 6, 4.5, 1, 2}
  * MIN      = {3, 4, 6, 4, 1, 2}
  * MAX      = {3, 5, 6, 5, 1, 2}
  * DENSE    = {3, 4, 5, 4, 1, 2}
+ * @endcode
  *
  * @param input The column to rank
  * @param method The ranking method used for tie breaking (same values).
@@ -161,15 +164,14 @@ std::unique_ptr<table> sort_by_key(
  * element of the column of `input`. The output column type will be `size_type`
  * column by default or else `double` when `method=rank_method::AVERAGE` or
  *`percentage=True`
- **/
-std::unique_ptr<column> rank(
-    column_view const &input,
-    rank_method method,
-    order column_order,
-    include_nulls _include_nulls,
-    null_order null_precedence,
-    bool percentage,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
- 
+ */
+std::unique_ptr<column> rank(column_view const& input,
+                             rank_method method,
+                             order column_order,
+                             include_nulls _include_nulls,
+                             null_order null_precedence,
+                             bool percentage,
+                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 }  // namespace experimental
 }  // namespace cudf

@@ -3,9 +3,11 @@
 from io import BytesIO, IOBase, StringIO
 
 import cudf._lib.legacy as libcudf_legacy
+from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
 
+@annotate("READ_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -83,6 +85,7 @@ def read_csv(
     )
 
 
+@annotate("WRITE_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_to_csv()
 def to_csv(
     df,
@@ -96,6 +99,10 @@ def to_csv(
     chunksize=None,
 ):
     """{docstring}"""
+
+    if path is None:
+        raise ValueError("path/filename not provided")
+
     if index:
         from cudf import MultiIndex
 

@@ -26,7 +26,7 @@
  *
  * The purpose of these functions is to enable interoperability with APIs that
  * may not yet be updated to use the new constructs.
- **/
+ */
 
 namespace cudf {
 namespace legacy {
@@ -36,7 +36,7 @@ namespace legacy {
  *
  * @param dtype The `gdf_dtype` to convert
  * @return data_type The `data_type` corresponding to `dtype`.
- **/
+ */
 data_type gdf_dtype_to_data_type(gdf_dtype dtype);
 
 /**
@@ -44,7 +44,7 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype);
  *
  * @param type The `data_type` to convert
  * @return gdf_dtype The `gdf_dtype` corresponding to `type`.
- **/
+ */
 gdf_dtype data_type_to_gdf_dtype(data_type type);
 
 /**
@@ -52,7 +52,7 @@ gdf_dtype data_type_to_gdf_dtype(data_type type);
  *
  * @param col The `gdf_column` to construct a view from
  * @return column_view A view of the same data contained in the `gdf_column`.
- **/
+ */
 column_view gdf_column_to_view(gdf_column const& col);
 
 /**
@@ -62,7 +62,7 @@ column_view gdf_column_to_view(gdf_column const& col);
  * @param col The `gdf_column` to construct a view from
  * @return mutable_column_view A view of the same data contained in the
  * `gdf_column`.
- **/
+ */
 mutable_column_view gdf_column_to_mutable_view(gdf_column* col);
 
 /**
@@ -74,7 +74,7 @@ mutable_column_view gdf_column_to_mutable_view(gdf_column* col);
  *
  * @param view The view containing the data to wrap in a `gdf_column`
  * @return gdf_column The `gdf_column` referencing the data from `view`
- **/
+ */
 gdf_column view_to_gdf_column(mutable_column_view view);
 }  // namespace legacy
 }  // namespace cudf
