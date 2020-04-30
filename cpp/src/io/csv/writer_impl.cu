@@ -56,6 +56,12 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/modify_strings.cuh>
 
+#define _DEBUG
+
+#ifdef _DEBUG
+#include <iostream>
+#endif
+
 namespace cudf {
 namespace experimental {
 namespace io {
@@ -403,6 +409,9 @@ void writer::impl::write_chunked_begin(table_view const& table,
   }
 }
 
+#ifdef _OPTIMIZED_BUT_INCOMPLETE
+//line_terminator functionality is missing...
+// 
 void writer::impl::write_chunked(strings_column_view const& strings_column,
                                  const table_metadata* metadata,
                                  cudaStream_t stream)
@@ -444,6 +453,153 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
     //
     char const* ptr_h_bytes = h_bytes.data();
     out_sink_->host_write(ptr_h_bytes, total_num_bytes);
+  }
+}
+#endif
+
+void writer::impl::write_chunked(strings_column_view const& strings_column,
+                                 const table_metadata* metadata,
+                                 cudaStream_t stream)
+{
+  // algorithm outline:
+  //
+  //  for_each(strings_column.begin(), strings_column.end(),
+  //           [sink = out_sink_](auto str_row) mutable {
+  //               auto host_buffer = str_row.host_buffer();
+  //               sink->host_write(host_buffer_.data(), host_buffer_.size());
+  //           });//or...sink->device_write(device_buffer,...);
+
+  auto pair_buff_offsets = cudf::strings::create_offsets(strings_column, stream, mr_);
+
+  auto num_rows                  = strings_column.size();
+  decltype(num_rows) num_offsets = pair_buff_offsets.second.size();
+  size_type const* ptr_d_offsets = pair_buff_offsets.second.data().get();
+
+#ifdef _DEBUG
+    {
+      std::cout<<"num_rows: "<< num_rows << "; num_offsets: " << num_offsets << "\n";
+    }
+#endif
+
+    CUDF_EXPECTS(1 + num_rows == num_offsets,
+               "Unexpected discrepancy between number of offsets and number of rows.");
+
+  auto total_num_bytes      = strings_column.chars_size();
+  char const* ptr_all_bytes = strings_column.chars().data<char>();
+
+  rmm::device_vector<size_type> d_row_sizes(num_rows);
+
+  // extended device lambdas called inside a member function
+  // of a nested classes need:
+  //(1) the nested class to be declared public;
+  //(2) the calling member function to be public;
+  //(otherwise known compiler error)
+  //
+  // extract row sizes in bytes from the offsets:
+  //
+  auto exec = rmm::exec_policy(stream);
+  thrust::transform(exec->on(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(num_rows),
+                    d_row_sizes.begin(),
+                    [ptr_d_offsets] __device__(auto row_index) {
+                      return ptr_d_offsets[row_index + 1] - ptr_d_offsets[row_index];
+                    });
+
+  // copy offsets to host:
+  //
+  thrust::host_vector<size_type> h_offsets(num_offsets);
+  CUDA_TRY(cudaMemcpyAsync(h_offsets.data(),
+                           pair_buff_offsets.second.data().get(),
+                           num_offsets * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+
+  // copy sizes to host:
+  //
+  thrust::host_vector<size_type> h_row_sizes(num_rows);
+  CUDA_TRY(cudaMemcpyAsync(h_row_sizes.data(),
+                           d_row_sizes.data().get(),
+                           num_rows * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+
+  std::vector<char> h_new_line{options_.line_terminator().begin(),
+      options_.line_terminator().end()};
+  auto nl_len = h_new_line.size();
+
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+#ifdef _DEBUG
+  std::cout<<"offsets{";
+  std::copy(h_offsets.begin(), h_offsets.end(), std::ostream_iterator<size_type>(std::cout, ", "));
+  std::cout<<"}\n";
+
+  std::cout<<"sizes{";
+  std::copy(h_row_sizes.begin(), h_row_sizes.end(), std::ostream_iterator<size_type>(std::cout, ", "));
+  std::cout<<"}\n";
+#endif
+
+  size_type const* ptr_h_offsets = h_offsets.data();
+  size_type const* ptr_h_sizes   = h_row_sizes.data();
+
+  if (out_sink_->supports_device_write()) {
+    rmm::device_vector<char> d_new_line(h_new_line);
+    char const* ptr_new_ln = d_new_line.data().get();
+    
+    // host algorithm call, but the underlying call
+    // is a device_write taking a device buffer;
+    //
+    thrust::for_each(
+      thrust::host,
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_rows),
+      [& sink = out_sink_, ptr_all_bytes, ptr_h_offsets, ptr_h_sizes, stream, ptr_new_ln, nl_len](auto row_index) mutable {
+        sink->device_write(ptr_all_bytes + ptr_h_offsets[row_index], ptr_h_sizes[row_index], stream);
+        sink->device_write(ptr_new_ln, nl_len, stream);//lineterminator
+      });
+  } else {
+    // no device write possible;
+    //
+    // copy the bytes to host, too:
+    //
+    thrust::host_vector<char> h_bytes(total_num_bytes);
+    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
+                             ptr_all_bytes,
+                             total_num_bytes * sizeof(char),
+                             cudaMemcpyDeviceToHost,
+                             stream));
+
+    char const* ptr_new_ln = h_new_line.data();
+
+    CUDA_TRY(cudaStreamSynchronize(stream));
+
+    // host algorithm call, where the underlying call
+    // is also host_write taking a host buffer;
+    //
+    char const* ptr_h_bytes = h_bytes.data();
+#ifdef _DEBUG
+    std::cout << "##### dump rows:{\n";
+    std::vector<size_type> counter(num_rows);
+  
+    std::iota(counter.begin(), counter.end(), 0);
+    std::for_each(counter.begin(), counter.end(),
+                  [ptr_h_bytes, ptr_h_offsets, ptr_h_sizes, ptr_new_ln, nl_len](auto row_index) mutable {
+                    std::copy_n(ptr_h_bytes + ptr_h_offsets[row_index], ptr_h_sizes[row_index], std::ostream_iterator<size_type>(std::cout, ""));
+                    std::copy_n(ptr_new_ln, nl_len, std::ostream_iterator<size_type>(std::cout, ""));//lineterminator
+                  });
+  
+    std::cout<<"}\n";
+#endif
+
+    thrust::for_each(
+      thrust::host,
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_rows),
+      [& sink = out_sink_, ptr_h_bytes, ptr_h_offsets, ptr_h_sizes, stream, ptr_new_ln, nl_len](auto row_index) mutable {
+        sink->host_write(ptr_h_bytes + ptr_h_offsets[row_index], ptr_h_sizes[row_index]);
+        sink->host_write(ptr_new_ln, nl_len);//lineterminator
+      });
   }
 }
 
@@ -492,16 +648,30 @@ void writer::impl::write(table_view const& table,
     CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
+#ifdef _DEBUG
+  std::cout << "num columns: " << table.num_columns() << '\n';
+
+  std::cout<<"nrows: "<<num_rows
+           <<"; nrows/chunk: "<< n_rows_per_chunk
+           <<"; splits{";
+  std::copy(splits.begin(), splits.end(), std::ostream_iterator<size_type>(std::cout, ", "));
+  std::cout<<"}\n";
+#endif
+
   // split table_view into chunks:
   //
   auto vector_views = cudf::experimental::split(table, splits);
 
+#ifdef _DEBUG
+  std::cout<<"views.size(): " << vector_views.size() << '\n';
+#endif
+
   // convert each chunk to CSV:
   //
+  column_to_strings_fn converter{options_, mr_};
   for (auto&& sub_view : vector_views) {
     std::vector<std::unique_ptr<column>> str_column_vec;
-    column_to_strings_fn converter{options_, mr_};
-
+    
     // populate vector of string-converted columns:
     //
     std::transform(sub_view.begin(),
@@ -512,10 +682,26 @@ void writer::impl::write(table_view const& table,
                        current_col.type(), converter, current_col);
                    });
 
+#ifdef _DEBUG
+    {
+      std::cout<<"str_column_vec.size(): " << str_column_vec.size() << '\n';
+      strings_column_view str_view = str_column_vec[0]->view();
+      strings::print(str_view);
+    }
+#endif
+
     // create string table view from str_column_vec:
     //
     auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
     table_view str_table_view{std::move(*str_table_ptr)};
+
+#ifdef _DEBUG
+    {
+      strings_column_view str_view = str_table_view.column(0);
+      strings::print(str_view);
+    }
+#endif
+
 
     // concatenate columns in each row into one big string column
     //(using null representation and delimiter):
@@ -525,6 +711,14 @@ void writer::impl::write(table_view const& table,
       cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
 
     strings_column_view strings_converted{std::move(*str_concat_col)};
+
+#ifdef _DEBUG
+    {
+      std::cout<<"before write_chunked():\n";
+      strings::print(strings_converted);
+    }
+#endif
+    
     write_chunked(strings_converted, metadata, stream);
   }
 
