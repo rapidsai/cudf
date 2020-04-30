@@ -169,8 +169,8 @@ class element_equality_comparator {
    * @param rhs_element_index The index of the second element
    **/
   template <typename Element>
-  __device__ bool operator()(size_type lhs_element_index,
-                             size_type rhs_element_index) const noexcept
+  __device__ bool operator()(size_type lhs_element_index, size_type rhs_element_index) const
+    noexcept
   {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
