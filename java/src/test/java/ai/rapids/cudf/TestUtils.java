@@ -29,6 +29,7 @@ class TestUtils {
    *
    * @param seed seed to be used to generate values
    * @param size number of values to be generated
+   * @param nullsAllowed if true the result array will have nulls
    */
   static Double[] getDoubles(final long seed, final int size, boolean nullsAllowed) {
     Random r = new Random(seed);
