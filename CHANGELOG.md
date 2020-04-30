@@ -220,6 +220,7 @@
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5060 Fix unsigned char limits issue in JIT by updating Jitify
 
 
 # cuDF 0.13.0 (31 Mar 2020)
