@@ -287,7 +287,7 @@ struct writer_options {
 
   // string to use for null entries:
   //
-  std::string const na_rep_;
+  std::string na_rep_;
 
   // Indicates whether to write headers to csv:
   //
@@ -299,7 +299,7 @@ struct writer_options {
 
   // character to use for separating lines (default "\n"):
   //
-  std::string const line_terminator_;
+  std::string line_terminator_;
 
   // character to use between each column entry (default ','):
   //
@@ -307,11 +307,11 @@ struct writer_options {
 
   // string to use for values !=0 in GDF_INT8 types (default 'true'):
   //
-  std::string const true_value_;
+  std::string true_value_;
 
   // string to use for values ==0 in GDF_INT8 types (default 'false'):
   //
-  std::string const false_value_;
+  std::string false_value_;
 };
 
 /**

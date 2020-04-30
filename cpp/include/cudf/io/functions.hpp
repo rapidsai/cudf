@@ -242,6 +242,9 @@ table_with_metadata read_csv(read_csv_args const& args,
  * @brief Settings to use for `write_csv()`
  */
 struct write_csv_args : detail::csv::writer_options {
+
+  write_csv_args() = default;
+
   write_csv_args(sink_info const& snk,
                  table_view const& table,
                  std::string const& na,
@@ -272,11 +275,11 @@ struct write_csv_args : detail::csv::writer_options {
 
   // Specify the sink to use for writer output:
   //
-  sink_info const sink_;
+  sink_info sink_;
 
   // Set of columns to output:
   //
-  table_view const& table_;
+  table_view table_;
 
   // Optional associated metadata
   //
