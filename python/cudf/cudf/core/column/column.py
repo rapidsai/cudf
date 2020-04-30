@@ -230,7 +230,7 @@ class ColumnBase(Column):
             cats = (
                 cudf.concat([o.cat().categories for o in objs])
                 .to_series()
-                .drop_duplicates()
+                .drop_duplicates(ignore_index=True)
                 ._column
             )
             objs = [
@@ -695,11 +695,7 @@ class ColumnBase(Column):
             The sequence of values to test. Passing in a single string will
             raise a TypeError. Instead, turn a single string into a list
             of one element.
-        use_name : bool
-            If ``True`` then combine hashed column values
-            with hashed column name. This is useful for when the same
-            values in different columns should be encoded
-            with different hashed values.
+
         Returns
         -------
         result: Column
@@ -748,10 +744,10 @@ class ColumnBase(Column):
         lhs = cudf.DataFrame({"x": lhs, "orig_order": cupy.arange(len(lhs))})
         rhs = cudf.DataFrame({"x": rhs, "bool": cupy.ones(len(rhs), "bool")})
         res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
-        res = res["bool"].fillna(False)
+        res = res.drop_duplicates(subset="orig_order", ignore_index=True)
+        res = res._data["bool"].fillna(False)
 
-        return res._column
+        return res
 
     def as_mask(self):
         """Convert booleans to bitmask
@@ -842,12 +838,10 @@ class ColumnBase(Column):
     def astype(self, dtype, **kwargs):
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
-            return self.as_string_column(dtype, **kwargs)
-
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
-
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+            return self.as_string_column(dtype, **kwargs)
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
@@ -932,7 +926,11 @@ class ColumnBase(Column):
         """
         Get unique values in the data
         """
-        return self.as_frame().drop_duplicates(keep="first")._as_column()
+        return (
+            self.as_frame()
+            .drop_duplicates(keep="first", ignore_index=True)
+            ._as_column()
+        )
 
     def serialize(self):
         header = {}
@@ -1501,6 +1499,25 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         else:
             data = as_column(cupy.asarray(arbitrary), nan_as_null=nan_as_null,)
 
+    elif isinstance(arbitrary, pd.core.arrays.numpy_.PandasArray):
+        if is_categorical_dtype(arbitrary.dtype):
+            arb_dtype = arbitrary.dtype
+        else:
+            arb_dtype = check_cast_unsupported_dtype(arbitrary.dtype)
+            if arb_dtype != arbitrary.dtype.numpy_dtype:
+                arbitrary = arbitrary.astype(arb_dtype)
+        if arb_dtype.kind in ("O", "U"):
+            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+        else:
+            data = as_column(
+                pa.array(
+                    arbitrary,
+                    from_pandas=True if nan_as_null is None else nan_as_null,
+                ),
+                nan_as_null=nan_as_null,
+            )
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, memoryview):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
