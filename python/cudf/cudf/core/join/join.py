@@ -70,7 +70,9 @@ class Merge(object):
         )
         result = self.parent_class()._from_table(libcudf_result)
         result = self.typecast_libcudf_to_output(result, output_dtypes)
-        return result[self.compute_result_col_names(self.lhs, self.rhs, self.how)]
+        return result[
+            self.compute_result_col_names(self.lhs, self.rhs, self.how)
+        ]
 
     def preprocess_merge_params(self, on, left_on, right_on, lsuffix, rsuffix):
         assert not (on and left_on) or (on and right_on)
@@ -190,31 +192,15 @@ class Merge(object):
                 if len(same_named_columns) == 0:
                     raise ValueError("No common columns to perform merge on")
 
-        if on:
-            on = [on] if isinstance(on, str) else list(on)
-            left_on = right_on = on
-        else:
-            if left_on:
-                left_on = (
-                    [left_on] if isinstance(left_on, str) else list(left_on)
-                )
-            if right_on:
-                right_on = (
-                    [right_on] if isinstance(right_on, str) else list(right_on)
-                )
-        if on is None:
-            on = []
-        if left_on is None:
-            left_on = []
-        if right_on is None:
-            right_on = []
-
         for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
+            if name == left_on == right_on:
+                continue
+            elif left_on and right_on:
+                if (name in left_on and name in right_on) and (
+                    left_on.index(name) == right_on.index(name)
+                ):
+                    continue
+            else:
                 if not (lsuffix or rsuffix):
                     raise ValueError(
                         "there are overlapping columns but "
