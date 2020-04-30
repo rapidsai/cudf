@@ -65,7 +65,7 @@ Examples
 --------
 
 >>> import pprint  # doctest: +SKIP
->>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+>>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
 >>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
  'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
@@ -111,15 +111,19 @@ from queue import Queue
 
 from dask import config
 from dask.callbacks import local_callbacks, unpack_callbacks
-from dask.core import (
-    _execute_task,
-    flatten,
-    get_dependencies,
+from dask.core import _execute_task, flatten, get_dependencies
+from dask.local import (
+    apply_sync,
+    default_get_id,
+    default_pack_exception,
+    execute_task,
+    finish_task,
+    identity,
+    nested_get,
+    queue_get,
+    reraise,
+    start_state_from_dask,
 )
-
-# We import the scheduler from Dask and overwrite the functions
-# we want to change.
-from dask.local import *  # noga: F403
 from dask.utils_test import add, inc  # noqa: F401
 
 from .order import order
@@ -227,7 +231,6 @@ def get_async(
                 started_cbs.append(cb)
 
             keyorder = order(dsk)
-            print("keyorder = order(dsk)")
             state = start_state_from_dask(
                 dsk, cache=cache, sortkey=keyorder.get
             )
