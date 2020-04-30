@@ -12,7 +12,7 @@
 #include <cassert>
 #include <vector>
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets a @ref gdf_column 's (uninitialized) null_count value by
  * counting the zeros in its validity indicator bits (if it has them).
  **---------------------------------------------------------------------------*/

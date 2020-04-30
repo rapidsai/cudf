@@ -90,7 +90,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
 
-        df.columns = result_columns.unique()
+        df.columns = result_columns
         return df
 
     typ = list(typs)[0]
