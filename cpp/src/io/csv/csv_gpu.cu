@@ -834,12 +834,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     ctx_map.z &= mask;
   }
 
-  // Convert the long-form version into packed version
+  // Convert the long-form {rowmap,outctx}[inctx] version into packed version {rowcount,ouctx}[inctx]
   ctxb = pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
                            make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
                            make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3));
 
-  // Merge the row contexts
+  // Merge the row contexts of the 32-character blocks into a single 16K-character block context
   rowctx_merge_transform(ctxtree, ctxb, t);
 
   if (offsets_out) {
