@@ -316,6 +316,8 @@ auto groupby_null_specialization(table const& keys, table const& values)
 }
 }  // anonymous namespace
 
+namespace detail {
+
 /**
  * @brief Verifies the requested aggregation is valid for the arguments of the
  * operator.
@@ -378,7 +380,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
   return std::make_pair(std::move(output_keys), std::move(output_values));
 }
 
-}  // namespace sort
+}  // namespace detail
 
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                                          cudf::table const& values,
@@ -388,6 +390,6 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
   return detail::groupby(keys, values, ops, options);
 }
 
+}  // namespace sort
 }  // namespace groupby
-}  // namespace cudf
 }  // namespace cudf
