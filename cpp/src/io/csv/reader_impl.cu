@@ -233,17 +233,15 @@ table_with_metadata reader::impl::read(size_t range_offset,
                                  skip_end_rows <= 0 && num_rows == -1;
 
     // With byte range, find the start of the first data row
-    size_t data_start_offset =
-      (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
-
     // FIXME: This is really a WAR for the datasource's inability to read bytes outside the mapped
     // range. The header should be always parsed from the start of the file (would also allow
     // access to csv column names with byte range)
-    size_t header_offset = (range_offset != 0) ? data_start_offset : 0;
-    size_t header_end =
+    size_t const header_offset =
+      (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
+    size_t const header_end =
       parse_csv_header(h_uncomp_data + header_offset, h_uncomp_size - header_offset);
+    size_t const data_start_offset = (range_offset != 0) ? header_offset : header_end;
 
-    if (range_offset == 0) { data_start_offset = header_end; }
     CUDF_EXPECTS((range_offset == 0 || args_.header < 0),
                  "byte_range offset with header not supported");
 
