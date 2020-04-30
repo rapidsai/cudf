@@ -70,6 +70,7 @@
 - PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
 - PR #4793 Add `cudf._cuda` to setup.py
 - PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4809 Improve libcudf doc rendering and add a new main page
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
