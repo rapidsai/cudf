@@ -208,43 +208,34 @@ class Merge(object):
                     )
 
     def typecast_input_to_libcudf(self):
-        if self.left_index and self.right_index:
-            on_cols_and_inds = ((self.lhs.index, self.rhs.index),)
-            if self.left_on and self.right_on:
-                on_cols_and_inds = (
-                    (self.lhs.index, self.rhs.index),
-                    (self.lhs[self.left_on], self.rhs[self.right_on]),
-                )
-        elif self.left_index and self.right_on:
-            on_cols_and_inds = ((self.lhs.index, self.rhs[self.right_on]),)
-        elif self.right_index and self.left_on:
-            on_cols_and_inds = ((self.lhs[self.left_on], self.rhs.index),)
-        elif self.left_on and self.right_on:
-            on_cols_and_inds = (
-                (self.lhs[self.left_on], self.rhs[self.right_on]),
-            )
-        for key_pair_group in on_cols_and_inds:
-            left, right = key_pair_group
-            for ((kl, vl), (kr, vr)) in zip(
-                left._data.items(), right._data.items()
-            ):
+
+        lhs_keys, rhs_keys, lhs_cols, rhs_cols = [], [], [], []
+        if self.left_index:
+            lhs_keys.append(self.lhs.index._data.keys())
+            lhs_cols.append(self.lhs.index)
+        if self.right_index:
+            rhs_keys.append(self.rhs.index._data.keys())
+            rhs_cols.append(self.rhs.index)
+        if self.left_on:
+            lhs_keys.append(self.left_on)
+            lhs_cols.append(self.lhs)
+        if self.right_on:
+            rhs_keys.append(self.right_on)
+            rhs_cols.append(self.rhs)
+
+        for l_key_grp, r_key_grp, l_col_grp, r_col_grp in zip(
+            lhs_keys, rhs_keys, lhs_cols, rhs_cols
+        ):
+            for l_key, r_key in zip(l_key_grp, r_key_grp):
                 to_dtype = self.input_to_libcudf_casting_rules(
-                    vl, vr, self.how
+                    l_col_grp._data[l_key], r_col_grp._data[r_key], self.how
                 )
-                if isinstance(
-                    left,
-                    (cudf.core.index.Index, cudf.core.multiindex.MultiIndex),
-                ):
-                    left._data[kl] = vl.astype(to_dtype)
-                else:
-                    self.lhs._data[kl] = vl.astype(to_dtype)
-                if isinstance(
-                    right,
-                    (cudf.core.index.Index, cudf.core.multiindex.MultiIndex),
-                ):
-                    right._data[kr] = vr.astype(to_dtype)
-                else:
-                    self.rhs._data[kr] = vr.astype(to_dtype)
+                l_col_grp._data[l_key] = l_col_grp._data[l_key].astype(
+                    to_dtype
+                )
+                r_col_grp._data[r_key] = r_col_grp._data[r_key].astype(
+                    to_dtype
+                )
 
     def input_to_libcudf_casting_rules(self, lcol, rcol, how):
         cast_warn = "can't safely cast column {} from {} with type \
