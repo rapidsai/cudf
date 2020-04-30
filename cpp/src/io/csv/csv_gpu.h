@@ -77,7 +77,15 @@ inline __host__ __device__ uint32_t get_row_context(uint64_t packed_ctx, uint32_
 }
 
 /**
- * @brief Select a row context given another input context (updating 62-bit row count)
+ * @brief Select the output row context from a given input context and a packed row
+ * context corresponding to a block of characters, and return the new output context with
+ * updated total row count.
+ * The input context here is a 64-bit version of the 32-bit single row context as returned
+ * by make_row_context(), so the maximum row rount here is a 62-bit value.
+ *
+ * @param sel_ctx input context (2-bit context id, 62-bit row count)
+ * @param packed_ctx row context of character block
+ * @return total_row_count * 4 + output context id
  **/
 inline __host__ __device__ uint64_t select_row_context(uint64_t sel_ctx, uint64_t packed_ctx)
 {
