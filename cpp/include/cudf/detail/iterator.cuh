@@ -226,6 +226,7 @@ struct scalar_value_accessor {
  *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  * @throws `cudf::logic_error` if scalar is null.
+ * @throws `cudf::logic_error` if the returned iterator is dereferenced in host
  *
  * @tparam Element The type of element in the scalar
  * @param scalar_value The scalar to iterate
@@ -257,9 +258,9 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
 
   /**
    * @brief returns a pair with value and validity of the scalar.
-   * 
+   *
    * @throw `cudf::logic_error` if this function is called in host.
-   * 
+   *
    * @return a pair with value and validity of the scalar.
    */
   CUDA_HOST_DEVICE_CALLABLE
@@ -286,6 +287,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
  * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
+ * @throws `cudf::logic_error` if the returned iterator is dereferenced in host
  *
  * @tparam Element The type of elements in the scalar
  * @tparam bool unused. This template parameter exists to enforce same
