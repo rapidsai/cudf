@@ -29,7 +29,7 @@ namespace experimental {
 /**
  * @ingroup column_apis
  * @addtogroup column_copy Copy
- * BinaryOp APIs
+ * Copy APIs
  * @{
  */
 
