@@ -885,14 +885,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env, jclass, jlong column_view) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env, jclass, jlong column_view,
+                                                                  jint strip_type, jlong to_strip) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, to_strip, "to_strip scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
     cudf::strings_column_view scv(*cv);
+    cudf::strings::strip_type s_striptype = static_cast<cudf::strings::strip_type>(strip_type);
+    cudf::string_scalar* ss_tostrip = reinterpret_cast<cudf::string_scalar*>(to_strip);
 
-    std::unique_ptr<cudf::column> result = cudf::strings::strip(scv);
+    std::unique_ptr<cudf::column> result = cudf::strings::strip(scv, s_striptype, *ss_tostrip);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1289,6 +1293,26 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_title(JNIEnv *env, jobj
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_nansToNulls(JNIEnv *env, jobject j_object, jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view * view = reinterpret_cast<cudf::column_view *>(handle);
+    // get a new null mask by setting all the nans to null
+    std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> pair = cudf::experimental::nans_to_nulls(*view);
+    // create a column_view which is a no-copy wrapper around the original column without the null mask
+    std::unique_ptr<cudf::column_view> copy_view(new cudf::column_view(view->type(), view->size(), view->data<char>()));
+    // create a column by deep copying the copy_view
+    std::unique_ptr<cudf::column> copy(new cudf::column(*copy_view));
+    // set the null mask with nans set to null
+    copy->set_null_mask(std::move(*pair.first), pair.second);
+    return reinterpret_cast<jlong>(copy.release());
+  }
+  CATCH_STD(env, 0)
 }
 
 } // extern "C"

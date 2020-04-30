@@ -18,7 +18,7 @@
 
 #include <cuda_runtime.h>
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief `assert`-like macro for device code that persists in Release builds.
  *
  * This is effectively the same as the standard `assert` macro, except it will
@@ -27,7 +27,7 @@
  *
  * Relies on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang.
  *
- *---------------------------------------------------------------------------**/
+ **/
 #if defined(__CUDACC_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
 #define release_assert(e)     \

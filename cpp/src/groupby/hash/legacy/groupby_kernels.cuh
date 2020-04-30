@@ -36,7 +36,7 @@ struct row_hasher {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Builds a hash map where the keys are the rows of a `keys` table, and
  * the values are the aggregation(s) of corresponding rows in a `values` table.
  *
@@ -85,7 +85,7 @@ struct row_hasher {
  * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
  * `true`.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
 __global__ void build_aggregation_map(Map map,
                                       device_table input_keys,
@@ -109,7 +109,7 @@ __global__ void build_aggregation_map(Map map,
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Extracts the resulting keys and values of the groupby operation from a
  * hash map and sparse output table.
  *
@@ -134,7 +134,7 @@ __global__ void build_aggregation_map(Map map,
  * @param output_write_index[in/out] Global counter used for determining write
  * location for output keys/values. When kernel is complete, indicates the final
  * result size.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
 __global__ void extract_groupby_result(Map map,
                                        device_table const input_keys,

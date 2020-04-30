@@ -177,9 +177,10 @@ class _DataFrameIndexer(object):
                 if not is_scalar(arg[1]):
                     return False
             else:
-                # row selection using boolean indexing - never downcasts
-                if pd.api.types.is_bool_dtype(as_column(arg[0]).dtype):
-                    return False
+                if pd.api.types.is_bool_dtype(
+                    as_column(arg[0]).dtype
+                ) and not isinstance(arg[1], slice):
+                    return True
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
                 [pd.api.types.is_numeric_dtype(t) for t in dtypes]

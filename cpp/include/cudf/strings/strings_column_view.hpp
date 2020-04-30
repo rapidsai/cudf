@@ -76,6 +76,7 @@ class strings_column_view : private column_view {
   size_type chars_size() const noexcept;
 };
 
+//! Strings column APIs.
 namespace strings {
 /**
  * @brief Prints the strings to stdout.

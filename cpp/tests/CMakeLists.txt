@@ -187,21 +187,21 @@ ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cpp")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
@@ -880,9 +880,11 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/fill_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/search_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

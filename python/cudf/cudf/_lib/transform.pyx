@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import numpy as np
-import numba.numpy_support
 from cudf.utils import cudautils
 
 from libcpp.string cimport string
@@ -22,6 +21,14 @@ from cudf._lib.cpp.types cimport (
 )
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.cpp.column.column_view cimport column_view
+
+try:
+    # Numba >= 0.49
+    from numba.np import numpy_support
+except ImportError:
+    # Numba <= 0.49
+    from numba import numpy_support
+
 cimport cudf._lib.cpp.transform as libcudf_transform
 
 
@@ -67,7 +74,7 @@ def transform(Column input, op):
     cdef type_id c_tid
     cdef data_type c_dtype
 
-    nb_type = numba.numpy_support.from_dtype(input.dtype)
+    nb_type = numpy_support.from_dtype(input.dtype)
     nb_signature = (nb_type,)
     compiled_op = cudautils.compile_udf(op, nb_signature)
     c_str = compiled_op[0].encode('UTF-8')
