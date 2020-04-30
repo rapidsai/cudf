@@ -21,9 +21,9 @@ namespace jit {
 namespace code {
 const char* kernel_headers =
   R"***(
-#include <../src/rolling/rolling_jit_detail.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <../src/rolling/rolling_jit_detail.hpp>
 )***";
 
 const char* kernel =
