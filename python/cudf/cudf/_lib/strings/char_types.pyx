@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
@@ -185,9 +186,9 @@ def all_integer(Column source_strings):
     cdef column_view source_view = source_strings.view()
 
     with nogil:
-        c_result = move(cpp_all_integer(
+        c_result = cpp_all_integer(
             source_view
-        ))
+        )
 
     return c_result
 
@@ -213,8 +214,8 @@ def all_float(Column source_strings):
     cdef column_view source_view = source_strings.view()
 
     with nogil:
-        c_result = move(cpp_all_float(
+        c_result = cpp_all_float(
             source_view
-        ))
+        )
 
     return c_result

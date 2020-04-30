@@ -3,6 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
+from libcpp cimport bool
 
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
         namespace "cudf::strings" nogil:
