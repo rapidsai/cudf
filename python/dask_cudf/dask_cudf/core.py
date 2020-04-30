@@ -104,10 +104,6 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         """Create a dask.dataframe object from a dask_cudf object"""
         return self.map_partitions(M.to_pandas)
 
-    def persist(self, **kwargs):
-        (ret,) = dask.persist(self, traverse=False, **kwargs)
-        return ret
-
 
 concat = dd.concat
 
