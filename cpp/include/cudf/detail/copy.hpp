@@ -24,7 +24,7 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Constructs a zero-copy `column_view`/`mutable_column_view` of the
  * elements in the range `[begin,end)` in `input`.
  *
@@ -39,7 +39,7 @@ namespace detail {
  * @param[in] end Index of the last desired element in the slice (exclusive).
  *
  * @return ColumnView View of the elements `[begin,end)` from `input`.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
 {

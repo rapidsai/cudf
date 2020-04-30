@@ -23,7 +23,8 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Internal API to repeat rows of a Table.
  *
  * Creates a new table by repeating the rows of @p input_table. The number of
@@ -53,14 +54,14 @@ namespace detail {
  * @param mr Memory resource to allocate the result output table
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Internal API to repeat rows of a Table.
  *
  * Creates a new table by repeating @p count times the rows of @p input_table.
@@ -80,7 +81,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * @param mr Memory resource to allocate the result output table
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               scalar const& count,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
