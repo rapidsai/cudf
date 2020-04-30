@@ -184,7 +184,7 @@ class Frame(libcudf.table.Table):
         # order. This strips the given index/column names and replaces the
         # names with their integer positions in the `cols` list
         tables = []
-        for i, cols in enumerate(columns):
+        for cols in columns:
             table_cols = cols[first_data_column_position:]
             table_names = indices[first_data_column_position:]
             table = cls(data=dict(zip(table_names, table_cols)))

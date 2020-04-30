@@ -879,9 +879,11 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/fill_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/search_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

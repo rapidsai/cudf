@@ -38,6 +38,8 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                cudaStream_t stream)
 {
   CUDF_EXPECTS(indices_type.id() == INT32, "only INT32 type for indices");
+  CUDF_EXPECTS(input_column.type().id() != DICTIONARY32,
+               "cannot encode a dictionary from a dictionary");
 
   // side effects of this function were are now dependent on:
   // - resulting column elements are sorted ascending
