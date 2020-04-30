@@ -21,6 +21,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/table/table.hpp>
@@ -29,6 +30,9 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <thrust/transform_scan.h>
+#include <thrust/binary_search.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -39,8 +43,11 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/iterator/transform_output_iterator.h>
 
 #include <cub/cub.cuh>
+
+#include <../tests/utilities/column_utilities.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -123,6 +130,8 @@ struct column_gatherer_impl {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
+    printf("GL : D\n");
+
     size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
     cudf::experimental::mask_allocation_policy policy =
       cudf::experimental::mask_allocation_policy::NEVER;
@@ -256,6 +265,215 @@ struct column_gatherer_impl<dictionary32, MapItType> {
   }
 };
 
+// gather anything except a list!
+struct nonlist_column_gatherer {
+  template<typename Element, typename MapItType, 
+          std::enable_if_t<!std::is_same<Element, cudf::list_view>::value>* = nullptr>
+   std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    column_gatherer_impl<Element, MapItType> gatherer{};
+
+    printf("GL : C\n");
+    return gatherer(source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, mr, stream);
+  }
+
+   template<typename Element, typename MapItType, 
+            std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
+   std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("Should never get here");
+  }
+};
+
+/**
+ * @brief Column gather specialization for list_view column type.
+ */
+template <typename MapItType>
+struct column_gatherer_impl<list_view, MapItType> {  
+  
+  // create output offset data
+  template<typename MapItType2>
+  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> 
+                                                  make_offsets(lists_column_view const& source_column, MapItType2 gather_map, size_type output_count,
+                                                  rmm::mr::device_memory_resource* mr,
+                                                  cudaStream_t stream)
+  {    
+    // offsets
+    size_type const* src_offsets{source_column.offsets().data<size_type>()};
+    
+    size_type offset_count = output_count + 1;
+    auto dst_offsets_c = cudf::make_fixed_width_column(data_type{INT32}, offset_count, mask_state::UNALLOCATED, stream, mr); 
+    mutable_column_view mcv = dst_offsets_c->mutable_view();    
+    size_type* dst_offsets = mcv.data<size_type>();
+    
+    // compact offsets.      
+    auto count_iter = thrust::make_counting_iterator<size_type>(0);
+    thrust::plus<size_type> sum;
+    thrust::transform_exclusive_scan(rmm::exec_policy(stream)->on(stream), count_iter, count_iter + offset_count, dst_offsets, 
+        [gather_map, output_count, src_offsets] __device__ (size_type index) -> size_type {
+          // last offset index is always the previous offset_index + 1, since each entry in the gather map represents
+          // a virtual pair of offsets
+          size_type offset_index = index < output_count ? gather_map[index] : gather_map[index-1] + 1;
+          // the length of this list
+          return src_offsets[offset_index + 1] - src_offsets[offset_index];
+        },
+        0,
+        sum);
+
+    // base offsets    
+    auto base_offsets = cudf::make_fixed_width_column(data_type{INT32}, output_count, mask_state::UNALLOCATED, stream, mr); 
+    mutable_column_view base_offsets_mcv = base_offsets->mutable_view();    
+    size_type* base_offsets_p = base_offsets_mcv.data<size_type>();
+    thrust::transform(rmm::exec_policy(stream)->on(stream), gather_map, gather_map + offset_count, base_offsets_p,
+      [src_offsets] __device__ (size_type index){
+        return src_offsets[index];
+      }
+    );
+
+    return {std::move(dst_offsets_c), std::move(base_offsets)};
+  }  
+
+  #define LIST_GATHER_ITERATOR(__name, gather_data) \
+  auto __name##span_upper_bound = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), [offsets = gather_data.offsets] __device__ (size_type index){   \
+      return offsets[index+1]; \
+  }); \
+  column_view __name##base_offsets_v(*gather_data.base_offsets);  \
+  size_type const* __name##base_offsets = __name##base_offsets_v.data<size_type>(); \
+  auto __name = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), [span_upper_bound = __name##span_upper_bound, offset_count = __name##base_offsets_v.size(), offsets = gather_data.offsets, base_offsets = __name##base_offsets] __device__ (size_type index){ \
+      auto bound = thrust::upper_bound(thrust::device, span_upper_bound, span_upper_bound + offset_count, index); \
+      size_type offset_index = thrust::distance(span_upper_bound, bound); \
+      size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index]; \
+      return offset_subindex + base_offsets[offset_index]; \
+  });\
+
+  struct gather_data {
+    size_type const*          offsets;
+    std::unique_ptr<column>   base_offsets;    
+  };
+
+  // we've reached a leaf. just do a regular gather
+  std::unique_ptr<column> gather_list_leaf(column_view const& column,
+                                           gather_data const& gd,
+                                           bool nullify_out_of_bounds,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream)
+  {
+    // gather map for our child
+    LIST_GATHER_ITERATOR(child_gather_map, gd);
+   
+    // size of the child gather map
+    size_type child_gather_map_size;    
+    CUDA_TRY(cudaMemcpy(&child_gather_map_size, gd.offsets + gd.base_offsets->size(), sizeof(size_type), cudaMemcpyDeviceToHost));
+    printf("C gather map size : %d\n", child_gather_map_size);
+
+    // otherwise, just call a regular gather
+    return cudf::experimental::type_dispatcher( column.type(),
+                                                nonlist_column_gatherer{},
+                                                column,
+                                                child_gather_map,
+                                                child_gather_map + child_gather_map_size,
+                                                nullify_out_of_bounds,
+                                                mr,
+                                                stream);
+  }
+
+  // nested list gather
+  std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
+                                             gather_data &parent,
+                                             bool nullify_out_of_bounds,
+                                             rmm::mr::device_memory_resource* mr,
+                                             cudaStream_t stream)
+  {
+    printf("GL : B\n");
+        
+    // build the gather map iterator
+    LIST_GATHER_ITERATOR(gather_map_begin, parent);
+
+    // size of the child gather map
+    size_type gather_map_size;    
+    CUDA_TRY(cudaMemcpy(&gather_map_size, parent.offsets + parent.base_offsets->size(), sizeof(size_type), cudaMemcpyDeviceToHost));
+    printf("B gather map size : %d\n", gather_map_size);
+
+    // generate gather_data for this level
+    auto offset_result = make_offsets(list, gather_map_begin, gather_map_size, mr, stream);
+    test::print(*offset_result.first);
+    test::print(*offset_result.second);
+    column_view offsets_v(*offset_result.first);
+    gather_data gd { offsets_v.data<size_type>(), std::move(offset_result.second) }; 
+                
+    // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
+    // templates, so we can't pass an iterator.  so instead call a function that can build it's own
+    // iterator that does the same thing as -this- function.
+    if(list.child().type() == cudf::data_type{LIST}){
+      // gather children
+      auto child = gather_list_nested(list.child(), gd, nullify_out_of_bounds, mr, stream);
+
+      // return the final column
+      return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+    }
+
+    // it's a leaf.  do a regular gather
+    auto child = gather_list_leaf(list.child(), gd, nullify_out_of_bounds, mr, stream);
+
+    // assemble final column
+    return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+  }   
+
+  // top level gather.    
+  std::unique_ptr<column> operator()(column_view const& source_column,
+                                     MapItType gather_map_begin,
+                                     MapItType gather_map_end,
+                                     bool nullify_out_of_bounds,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    printf("GL : A\n");
+
+    lists_column_view list(source_column);
+    auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
+    if (gather_map_size == 0){
+       return make_empty_column(data_type{LIST});
+    }
+
+    printf("Root gather map size : %lu\n", gather_map_size);
+    
+    // generate gather_data for this level 
+    auto offset_result = make_offsets(source_column, gather_map_begin, gather_map_size, mr, stream);
+    test::print(*offset_result.first);
+    test::print(*offset_result.second);
+    column_view offsets_v(*offset_result.first);      
+    gather_data gd { offsets_v.data<size_type>(), std::move(offset_result.second) };    
+                
+    // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
+    // templates, so we can't pass an iterator.  so instead call a function that can build it's own
+    // iterator that does the same thing as -this- function.
+    if(list.child().type() == cudf::data_type{LIST}){
+      // gather children
+      auto child = gather_list_nested(list.child(), gd, nullify_out_of_bounds, mr, stream);
+
+      // return the final column
+      return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+    }
+
+    // it's a leaf.  do a regular gather
+    auto child = gather_list_leaf(list.child(), gd, nullify_out_of_bounds, mr, stream);
+
+    // assemble final column
+    return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+  }
+};
+
+
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
  * column. To be used with the cudf::type_dispatcher.
@@ -270,7 +488,7 @@ struct column_gatherer {
    * @tparam MapIterator Iterator type for the gather map
    * @param source_column View into the column to gather from
    * @param gather_map_begin Beginning of iterator range of integral values representing the gather
-   *map
+   * map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
    * @param mr Memory resource to use for all allocations
@@ -403,6 +621,24 @@ void gather_bitmask(table_view const& source,
   }
 }
 
+template <typename MapIterator>
+std::unique_ptr<column> gather(column_view const& source_column,
+                              MapIterator gather_map_begin,
+                              MapIterator gather_map_end,
+                              bool nullify_out_of_bounds          = false,
+                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+                              cudaStream_t stream                 = 0)
+{  
+  return cudf::experimental::type_dispatcher(source_column.type(),
+                                             column_gatherer{},
+                                              source_column,
+                                              gather_map_begin,
+                                              gather_map_end,
+                                              nullify_out_of_bounds,
+                                              mr,
+                                              stream);
+}
+
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
@@ -443,22 +679,18 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                               cudaStream_t stream                 = 0)
 {
-  auto num_destination_rows = std::distance(gather_map_begin, gather_map_end);
-
   std::vector<std::unique_ptr<column>> destination_columns;
 
   // TODO: Could be beneficial to use streams internally here
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(cudf::experimental::type_dispatcher(source_column.type(),
-                                                                      column_gatherer{},
-                                                                      source_column,
-                                                                      gather_map_begin,
-                                                                      gather_map_end,
-                                                                      nullify_out_of_bounds,
-                                                                      mr,
-                                                                      stream));
+    destination_columns.push_back(detail::gather(source_column,                                                               
+                                                gather_map_begin,
+                                                gather_map_end,
+                                                nullify_out_of_bounds,
+                                                mr,
+                                                stream));
   }
 
   auto const op =
