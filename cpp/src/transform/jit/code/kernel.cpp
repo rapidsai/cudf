@@ -21,10 +21,11 @@ namespace jit {
 namespace code {
 const char* kernel_header =
   R"***(
-#include <cudf/types.hpp>
-#include <simt/limits>
-#include <cudf/wrappers/timestamps.hpp>
-)***";
+    #include <cudf/types.hpp>
+    #include <simt/limits>
+
+    #include <cudf/wrappers/timestamps.hpp>
+  )***";
 
 const char* kernel =
   R"***(
@@ -44,7 +45,7 @@ const char* kernel =
           GENERIC_UNARY_OP(&out_data[i], in_data[i]);  
         }
     }
-)***";
+  )***";
 
 }  // namespace code
 }  // namespace jit
