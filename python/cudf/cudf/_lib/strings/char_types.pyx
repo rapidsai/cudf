@@ -8,7 +8,11 @@ from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
-    string_character_types as string_character_types
+    string_character_types as string_character_types,
+    is_integer as cpp_is_integer,
+    all_integer as cpp_all_integer,
+    is_float as cpp_is_float,
+    all_float as cpp_all_float
 )
 
 
@@ -158,3 +162,59 @@ def is_space(Column source_strings):
         ))
 
     return Column.from_unique_ptr(move(c_result))
+
+
+def is_integer(Column source_strings):
+    """
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_integer(
+            source_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def all_integer(Column source_strings):
+    """
+    """
+    cdef bool c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_all_integer(
+            source_view
+        ))
+
+    return c_result
+
+
+def is_float(Column source_strings):
+    """
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_float(
+            source_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def all_float(Column source_strings):
+    """
+    """
+    cdef bool c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_all_float(
+            source_view
+        ))
+
+    return c_result
