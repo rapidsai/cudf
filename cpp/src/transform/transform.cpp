@@ -89,9 +89,9 @@ std::unique_ptr<column> transform(column_view const& input,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  CUDF_EXPECTS(is_numeric(input.type()), "Unexpected non-numeric type.");
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
-  std::unique_ptr<column> output = make_numeric_column(
+  std::unique_ptr<column> output = make_fixed_width_column(
     output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   if (input.size() == 0) { return output; }
