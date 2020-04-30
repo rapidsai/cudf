@@ -1033,19 +1033,6 @@ def test_csv_reader_prefix():
         assert column_names[col] == prefix_str + str(col)
 
 
-# Category is not yet supported from libcudf
-@pytest.mark.xfail()
-def test_csv_reader_category_hash():
-
-    lines = ["HBM0676", "KRC0842", "ILM1441", "EJV0094", "ILM1441"]
-    buffer = "\n".join(lines)
-
-    df = read_csv(StringIO(buffer), names=["user"], dtype=["category"])
-
-    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
-    assert list(df["user"]) == hash_ref
-
-
 def test_csv_reader_delim_whitespace():
     buffer = "1    2  3\n4  5 6"
 

@@ -4,7 +4,7 @@ import cudf
 
 import collections.abc as abc
 import errno
-from io import BytesIO, IOBase, StringIO
+from io import BytesIO, StringIO
 import os
 
 from enum import IntEnum
@@ -25,16 +25,12 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.io.utils cimport make_source_info
 from cudf._lib.move cimport move
-from cudf._lib.nvtx import annotate
 from cudf._lib.table cimport Table
 
 ctypedef int32_t underlying_type_t_compression
 
 
 class Compression(IntEnum):
-    NONE = (
-        <underlying_type_t_compression> compression_type.NONE
-    )
     INFER = (
         <underlying_type_t_compression> compression_type.AUTO
     )
@@ -59,38 +55,38 @@ class Compression(IntEnum):
 
 
 cdef read_csv_args make_read_csv_args(
-    filepath_or_buffer,
+    object filepath_or_buffer,
     object lineterminator,
     object quotechar,
     int quoting,
     bool doublequote,
-    header,
+    object header,
     bool mangle_dupe_cols,
-    usecols,
+    object usecols,
     object sep,
     object delimiter,
     bool delim_whitespace,
     bool skipinitialspace,
-    names,
-    dtype,
+    object names,
+    object dtype,
     int skipfooter,
     int skiprows,
     bool dayfirst,
-    compression,
-    thousands,
-    decimal,
-    true_values,
-    false_values,
-    nrows,
-    byte_range,
+    object compression,
+    object thousands,
+    object decimal,
+    object true_values,
+    object false_values,
+    object nrows,
+    object byte_range,
     bool skip_blank_lines,
-    parse_dates,
-    comment,
-    na_values,
+    object parse_dates,
+    object comment,
+    object na_values,
     bool keep_default_na,
     bool na_filter,
     object prefix,
-    index_col,
+    object index_col,
 ) except +:
 
     if delim_whitespace:
@@ -121,11 +117,13 @@ cdef read_csv_args make_read_csv_args(
     cdef read_csv_args read_csv_args_c = read_csv_args(c_source_info)
 
     # Reader settings
-    compression = 'none' if compression is None else compression
-    compression = Compression[compression.upper()]
-    read_csv_args_c.compression = <compression_type> (
-        <underlying_type_t_compression> compression
-    )
+    if compression is None:
+        read_csv_args_c.compression = compression_type.NONE
+    else:
+        compression = Compression[compression.upper()]
+        read_csv_args_c.compression = <compression_type> (
+            <underlying_type_t_compression> compression
+        )
 
     if names is not None:
         # explicitly mentioned name, so don't check header
@@ -152,13 +150,13 @@ cdef read_csv_args make_read_csv_args(
 
     # Filter settings
     if usecols is not None:
-        all_int = all([isinstance(col, int) for col in usecols])
+        all_int = all(isinstance(col, int) for col in usecols)
         if all_int:
             read_csv_args_c.use_cols_indexes.reserve(len(usecols))
             read_csv_args_c.use_cols_indexes = usecols
         else:
+            read_csv_args_c.use_cols_names.reserve(len(usecols))
             for col_name in usecols:
-                read_csv_args_c.use_cols_names.reserve(len(usecols))
                 read_csv_args_c.use_cols_names.push_back(
                     str(col_name).encode()
                 )
@@ -197,16 +195,19 @@ cdef read_csv_args make_read_csv_args(
 
     if parse_dates is not None:
         if isinstance(parse_dates, abc.Mapping):
-            raise TypeError("`parse_dates`: dictionaries are unsupported")
+            raise NotImplementedError(
+                "`parse_dates`: dictionaries are unsupported")
         if not isinstance(parse_dates, abc.Iterable):
-            raise TypeError("`parse_dates`: non-lists are unsupported")
+            raise NotImplementedError(
+                "`parse_dates`: non-lists are unsupported")
         for col in parse_dates:
             if isinstance(col, str):
                 read_csv_args_c.infer_date_names.push_back(str(col).encode())
             elif isinstance(col, int):
                 read_csv_args_c.infer_date_indexes.push_back(col)
             else:
-                raise TypeError("`parse_dates`: Nesting is unsupported")
+                raise NotImplementedError(
+                    "`parse_dates`: Nesting is unsupported")
 
     read_csv_args_c.lineterminator = ord(lineterminator)
     read_csv_args_c.quotechar = ord(quotechar)
@@ -219,11 +220,13 @@ cdef read_csv_args make_read_csv_args(
     # Conversion settings
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
+            read_csv_args_c.dtype.reserve(len(dtype))
             for k, v in dtype.items():
                 read_csv_args_c.dtype.push_back(
                     str(str(k)+":"+str(v)).encode()
                 )
         elif isinstance(dtype, abc.Iterable):
+            read_csv_args_c.dtype.reserve(len(dtype))
             for col_dtype in dtype:
                 read_csv_args_c.dtype.push_back(str(col_dtype).encode())
         else:
@@ -326,12 +329,12 @@ def read_csv(
     ))
 
     if names is not None and isinstance(names[0], (int)):
-        df.columns = [int(x) for x in df.columns]
+        df.columns = [int(x) for x in df._data]
 
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
-            df = df.set_index(df.columns[index_col])
+            df = df.set_index(df._data.get_by_index(index_col).names[0])
         else:
             df = df.set_index(index_col)
 
