@@ -184,8 +184,8 @@ std::unique_ptr<column> allocate_like(
  * @param[in] size The desired number of elements that the new column should have capacity for
  * @param[in] mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the
- * specified number of elements as `input` of the same type as `input.type()`
+ * @return A column with sufficient uninitialized capacity to hold the specified number of elements
+ * as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(
   column_view const& input,
@@ -222,8 +222,9 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * variable width types).
  * @throws cudf::logic_error for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_end > @p source.size(), @p target_begin < 0,
- * or @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
  * @throws cudf::logic_error if @p target and @p source have different types.
  * @throws cudf::logic_error if @p source has null values and @p target is not
  * nullable.
@@ -234,7 +235,6 @@ std::unique_ptr<table> empty_like(table_view const& input_table);
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @return void
  */
 void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
@@ -257,8 +257,9 @@ void copy_range_in_place(column_view const& source,
  *
  * @throws cudf::logic_error for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_end > @p source.size(), @p target_begin < 0,
- * or @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
+ * @p target_begin < 0, target_begin >= @p target.size(), or
+ * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
  * @throws cudf::logic_error if @p target and @p source have different types.
  *
  * @param source The column to copy from inside the range.
@@ -478,10 +479,10 @@ std::vector<contiguous_split_result> contiguous_split(
  * @throws cudf::logic_error if lhs and rhs are not of the same length
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs and rhs
- * @param[in] left-hand column_view
- * @param[in] right-hand column_view
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand column_view
+ * @param[in] rhs right-hand column_view
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -539,10 +540,10 @@ std::unique_ptr<column> shift(column_view const& input,
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as rhs
- * @param[in] left-hand scalar
- * @param[in] right-hand column_view
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand column_view
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -563,10 +564,10 @@ std::unique_ptr<column> copy_if_else(
  * @throws cudf::logic_error if lhs and rhs are not of the same type
  * @throws cudf::logic_error if boolean mask is not of type bool
  * @throws cudf::logic_error if boolean mask is not of the same length as lhs
- * @param[in] left-hand column_view
- * @param[in] right-hand scalar
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand column_view
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. Null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
@@ -585,10 +586,10 @@ std::unique_ptr<column> copy_if_else(
  * rule: `output[i] = (boolean_mask.valid(i) and boolean_mask[i]) ? lhs : rhs`
  *
  * @throws cudf::logic_error if boolean mask is not of type bool
- * @param[in] left-hand scalar
- * @param[in] right-hand scalar
- * @param[in] column of `BOOL8` representing "left (true) / right (false)" boolean for each element
- * and null element represents false.
+ * @param[in] lhs left-hand scalar
+ * @param[in] rhs right-hand scalar
+ * @param[in] boolean_mask column of `BOOL8` representing "left (true) / right (false)" boolean for
+ * each element. null element represents false.
  * @param[in] mr resource for allocating device memory
  *
  * @returns new column with the selected elements
