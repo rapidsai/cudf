@@ -315,12 +315,14 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                                             complement_indices.second.begin(),
                                                             complement_indices.second.end(),
                                                             nullify_out_of_bounds,
-                                                            mr);
+                                                            mr,
+                                                            stream);
       auto common_from_left  = experimental::detail::gather(left.select(left_common_col),
                                                            joined_indices.first.begin(),
                                                            joined_indices.first.end(),
                                                            nullify_out_of_bounds,
-                                                           mr);
+                                                           mr,
+                                                           stream);
       common_table =
         experimental::concatenate({common_from_right->view(), common_from_left->view()});
     }
@@ -331,7 +333,8 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                                   joined_indices.first.begin(),
                                                   joined_indices.first.end(),
                                                   nullify_out_of_bounds,
-                                                  mr);
+                                                  mr,
+                                                  stream);
     }
   }
 
@@ -341,14 +344,16 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                  joined_indices.first.begin(),
                                  joined_indices.first.end(),
                                  nullify_out_of_bounds,
-                                 mr);
+                                 mr,
+                                 stream);
 
   std::unique_ptr<experimental::table> right_table =
     experimental::detail::gather(right.select(right_noncommon_col),
                                  joined_indices.second.begin(),
                                  joined_indices.second.end(),
                                  nullify_out_of_bounds,
-                                 mr);
+                                 mr,
+                                 stream);
 
   return std::make_unique<experimental::table>(combine_join_columns(left_table->release(),
                                                                     left_noncommon_col,
