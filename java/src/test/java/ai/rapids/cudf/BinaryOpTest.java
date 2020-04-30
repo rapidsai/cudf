@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Collector;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
@@ -1096,6 +1097,19 @@ public class BinaryOpTest extends CudfTestBase {
              .map(n -> Math.log(n) / Math.log(2))
              .toArray(Double[]::new))) {
       assertColumnsAreEqual(expected, answer, "log2");
+    }
+  }
+
+  @Test
+  public void testArctan2() {
+    Double[] xValues = TestUtils.getDoubles(20342309423423L, 10, false);
+    Double[] yValues = TestUtils.getDoubles(33244345234423L, 10, false);
+    try (ColumnVector y = ColumnVector.fromBoxedDoubles(yValues);
+         ColumnVector x = ColumnVector.fromBoxedDoubles(xValues);
+         ColumnVector result = y.arctan2(x);
+         ColumnVector expected = ColumnVector.fromDoubles(IntStream.range(0,xValues.length)
+             .mapToDouble(n -> Math.atan2(yValues[n], xValues[n])).toArray())) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 }
