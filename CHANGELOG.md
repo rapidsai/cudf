@@ -15,7 +15,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
-- PR #5066 Add Java bindings for arctan2
+- PR #5068 Add Java bindings for arctan2
 
 ## Improvements
 
