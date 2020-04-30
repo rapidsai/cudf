@@ -22,7 +22,6 @@ import java.util.Random;
 import java.util.stream.IntStream;
 
 class TestUtils {
-  private static Random r = new Random();
 
   /**
    * A convenience method for generating a fixed set of Double values. This is by no means uniformly
@@ -32,10 +31,10 @@ class TestUtils {
    * @param size number of values to be generated
    */
   static Double[] getDoubles(final long seed, final int size, boolean nullsAllowed) {
-    r.setSeed(seed);
+    Random r = new Random(seed);
     Double[] result = new Double[size];
     IntStream.range(0, size).forEach(index -> {
-      switch (r.nextInt(4)) {
+      switch (r.nextInt(nullsAllowed ? 5 : 4)) {
         case 0:
           result[index] = Double.MAX_VALUE * r.nextDouble();
           break;
