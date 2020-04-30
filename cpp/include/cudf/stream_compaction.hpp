@@ -21,7 +21,14 @@
 namespace cudf {
 namespace experimental {
 /**
- * @brief Filters a table to remove null elements.
+ * @ingroup column_apis
+ * @addtogroup column_compact Stream Compaction
+ * Stream Compaction APIs
+ * @{
+ */
+
+/**
+ * @brief Filters a table to remove null elements with threshold count.
  *
  * Filters the rows of the `input` considering specified columns indicated in
  * `keys` for validity / null values.
@@ -54,7 +61,7 @@ namespace experimental {
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * @return Table containing all rows of the `input` with at least @p
  * keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
@@ -65,6 +72,9 @@ std::unique_ptr<experimental::table> drop_nulls(
 
 /**
  * @brief Filters a table to remove null elements.
+ *
+ * Filters the rows of the `input` considering specified columns indicated in
+ * `keys` for validity / null values.
  *
  * @code{.pseudo}
  *          input   {col1: {1, 2,    3,    null},
@@ -77,15 +87,13 @@ std::unique_ptr<experimental::table> drop_nulls(
  *                  col3: {7}}
  * @endcode
  *
- * @overload drop_nulls
- *
  * Same as drop_nulls but defaults keep_threshold to the number of columns in
  * @p keys.
  *
  * @param[in] input The input `table_view` to filter.
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns
+ * @return Table containing all rows of the `input` without nulls in the columns
  * of @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
@@ -177,5 +185,6 @@ cudf::size_type unique_count(column_view const& input,
                              bool const& nan_as_null,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

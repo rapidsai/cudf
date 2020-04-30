@@ -69,4 +69,8 @@ class dictionary_column_view : private column_view {
   size_type keys_size() const noexcept;
 };
 
+//! Dictionary column APIs.
+namespace dictionary {  // defined here for doxygen output
+}
+
 }  // namespace cudf

@@ -35,8 +35,18 @@
 namespace cudf {
 //! In-development features
 namespace experimental {
-//! IO interfaces
+/**
+ * @brief IO APIs
+ * @defgroup cudf_io IO APIs
+ */
 namespace io {
+/**
+ * @ingroup cudf_io
+ * @addtogroup cudf_io_readers Readers
+ * Readers APIs
+ * @{
+ */
+
 /**
  * @brief Settings to use for `read_avro()`
  */
@@ -78,7 +88,7 @@ table_with_metadata read_avro(
   read_avro_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_json` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
@@ -87,17 +97,21 @@ table_with_metadata read_avro(
  * used as the equivalent.
  *
  * Parameters in PANDAS that are unavailable or in cudf:
- *  `orient`                - currently fixed-format
- *  `typ`                   - data is always returned as a cudf::table
- *  `convert_axes`          - use column functions for axes operations instead
- *  `convert_dates`         - dates are detected automatically
- *  `keep_default_dates`    - dates are detected automatically
- *  `numpy`                 - data is always returned as a cudf::table
- *  `precise_float`         - there is only one converter
- *  `date_unit`             - only millisecond units are supported
- *  `encoding`              - only ASCII-encoded data is supported
- *  `chunksize`             - use `byte_range_xxx` for chunking instead
- *---------------------------------------------------------------------------**/
+ *
+ * | Name | Description |
+ * | ---- | ----------- |
+ * | `orient`             | currently fixed-format |
+ * | `typ`                | data is always returned as a cudf::table |
+ * | `convert_axes`       | use column functions for axes operations instead |
+ * | `convert_dates`      | dates are detected automatically |
+ * | `keep_default_dates` | dates are detected automatically |
+ * | `numpy`              | data is always returned as a cudf::table |
+ * | `precise_float`      | there is only one converter |
+ * | `date_unit`          | only millisecond units are supported |
+ * | `encoding`           | only ASCII-encoded data is supported |
+ * | `chunksize`          | use `byte_range_xxx` for chunking instead |
+ *
+ */
 struct read_json_args {
   source_info source;
 
@@ -122,7 +136,24 @@ struct read_json_args {
   explicit read_json_args(const source_info& src) : source(src) {}
 };
 
-// Freeform API wraps the detail reader class API
+/**
+ * @brief Reads a JSON dataset into a set of columns
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.json";
+ *  cudf::read_json_args args{cudf::source_info(filepath)};
+ *  ...
+ *  auto result = cudf::read_json(args);
+ * @endcode
+ *
+ * @param args Settings for controlling reading behavior
+ * @param mr Optional resource to use for device memory allocation
+ *
+ * @return The set of columns along with metadata
+ */
 table_with_metadata read_json(
   read_json_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -298,6 +329,69 @@ table_with_metadata read_orc(read_orc_args const& args,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Settings to use for `read_parquet()`
+ */
+struct read_parquet_args {
+  source_info source;
+
+  /// Names of column to read; empty is all
+  std::vector<std::string> columns;
+
+  /// Row group to read; -1 is all
+  size_type row_group = -1;
+  /// Number of row groups to read starting from row_group; default is one if row_group >= 0
+  size_type row_group_count = -1;
+  /// List of individual row groups to read (ignored if empty)
+  std::vector<size_type> row_group_list;
+  /// Rows to skip from the start; -1 is none
+  size_type skip_rows = -1;
+  /// Rows to read; -1 is all
+  size_type num_rows = -1;
+
+  /// Whether to store string data as categorical type
+  bool strings_to_categorical = false;
+  /// Whether to use PANDAS metadata to load columns
+  bool use_pandas_metadata = true;
+  /// Cast timestamp columns to a specific type
+  data_type timestamp_type{EMPTY};
+
+  explicit read_parquet_args() = default;
+
+  explicit read_parquet_args(source_info const& src) : source(src) {}
+};
+
+/**
+ * @brief Reads a Parquet dataset into a set of columns
+ *
+ * The following code snippet demonstrates how to read a dataset from a file:
+ * @code
+ *  #include <cudf.h>
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::read_parquet_args args{cudf::source_info(filepath)};
+ *  ...
+ *  auto result = cudf::read_parquet(args);
+ * @endcode
+ *
+ * @param args Settings for controlling reading behavior
+ * @param mr Optional resource to use for device memory allocation
+ *
+ * @return The set of columns along with metadata
+ */
+table_with_metadata read_parquet(
+  read_parquet_args const& args,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/** @} */  // end of Readers group
+
+/**
+ * @ingroup cudf_io
+ * @addtogroup cudf_io_writers Writers
+ * Writers APIs
+ * @{
+ */
+
+/**
  * @brief Settings to use for `write_orc()`
  */
 struct write_orc_args {
@@ -431,60 +525,6 @@ void write_orc_chunked(table_view const& table,
 void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& state);
 
 /**
- * @brief Settings to use for `read_parquet()`
- */
-struct read_parquet_args {
-  source_info source;
-
-  /// Names of column to read; empty is all
-  std::vector<std::string> columns;
-
-  /// Row group to read; -1 is all
-  size_type row_group = -1;
-  /// Number of row groups to read starting from row_group; default is one if row_group >= 0
-  size_type row_group_count = -1;
-  /// List of individual row groups to read (ignored if empty)
-  std::vector<size_type> row_group_list;
-  /// Rows to skip from the start; -1 is none
-  size_type skip_rows = -1;
-  /// Rows to read; -1 is all
-  size_type num_rows = -1;
-
-  /// Whether to store string data as categorical type
-  bool strings_to_categorical = false;
-  /// Whether to use PANDAS metadata to load columns
-  bool use_pandas_metadata = true;
-  /// Cast timestamp columns to a specific type
-  data_type timestamp_type{EMPTY};
-
-  explicit read_parquet_args() = default;
-
-  explicit read_parquet_args(source_info const& src) : source(src) {}
-};
-
-/**
- * @brief Reads a Parquet dataset into a set of columns
- *
- * The following code snippet demonstrates how to read a dataset from a file:
- * @code
- *  #include <cudf.h>
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::read_parquet_args args{cudf::source_info(filepath)};
- *  ...
- *  auto result = cudf::read_parquet(args);
- * @endcode
- *
- * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
- *
- * @return The set of columns along with metadata
- */
-table_with_metadata read_parquet(
-  read_parquet_args const& args,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-/**
  * @brief Settings to use for `write_parquet()`
  */
 struct write_parquet_args {
@@ -599,7 +639,7 @@ struct pq_chunked_state;
  *  ...
  *  std::string filepath = "dataset.parquet";
  *  cudf::experimental::io::write_parquet_chunked_args args{cudf::sink_info(filepath),
- * table->view()};
+ *                                                          table->view()};
  *  ...
  *  auto state = cudf::write_parquet_chunked_begin(args);
  *    cudf::write_parquet_chunked(table0, state);
@@ -639,6 +679,7 @@ void write_parquet_chunked(table_view const& table,
  */
 void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
 
+/** @} */  // end of Writers group
 }  // namespace io
 }  // namespace experimental
 }  // namespace cudf

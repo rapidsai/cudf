@@ -20,9 +20,19 @@
 #include <memory>
 
 namespace cudf {
+/**
+ * @ingroup column_apis
+ * @addtogroup column_replace Replace
+ * Replace APIs
+ * @{
+ */
+
 namespace experimental {
+
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
+ *
+ * @ingroup column_replace
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
  * `input` and `replacement` must be of the same type and size.
@@ -43,6 +53,8 @@ std::unique_ptr<column> replace_nulls(
 /**
  * @brief Replaces all null values in a column with a scalar.
  *
+ * @ingroup column_replace
+ *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
  * `input` and `replacement` must have the same type.
  * a cudf::scalar of the same data type as the column.
@@ -60,15 +72,15 @@ std::unique_ptr<column> replace_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
- * @brief Replace elements from `input_col` according to the mapping `old_values` to
- *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
+ * @brief Return a copy of `input_col` replacing any `values_to_replace[i]`
+ * found with `replacement_values[i]`.
  *
  * @param input_col The column to find and replace values in.
  * @param values_to_replace The values to replace
  * @param replacement_values The values to replace with
  * @param mr Optional device_memory_resource to use for allocations.
  *
- * @returns Copy of `input` with specified values replaced.
+ * @returns Copy of `input_col` with specified values replaced.
  */
 std::unique_ptr<column> find_and_replace_all(
   column_view const& input_col,
@@ -79,6 +91,8 @@ std::unique_ptr<column> find_and_replace_all(
 /**
  * @brief Replaces values less than `lo` in `input` with `lo_replace`,
  * and values greater than `hi` with `hi_replace`.
+ *
+ * @ingroup column_replace
  *
  * if `lo` is invalid, then lo will not be considered while
  * evaluating the input (Essentially considered minimum value of that type).
@@ -133,6 +147,8 @@ std::unique_ptr<column> clamp(
 /**
  * @brief Replaces values less than `lo` in `input` with `lo`,
  * and values greater than `hi` with `hi`.
+ *
+ * @ingroup column_replace
  *
  * if `lo` is invalid, then lo will not be considered while
  * evaluating the input (Essentially considered minimum value of that type).
@@ -206,4 +222,6 @@ std::unique_ptr<column> normalize_nans_and_zeros(
  * @param[in, out] Column of floating-point elements to normalize
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out);
+
+/** @} */  // end of group
 }  // namespace cudf

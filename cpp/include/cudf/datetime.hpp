@@ -23,6 +23,13 @@
 namespace cudf {
 //! `datetime` APIs
 namespace datetime {
+/**
+ * @ingroup column_apis
+ * @addtogroup column_datetime DateTime
+ * DateTime APIs
+ * @{
+ */
+
 namespace detail {
 enum class datetime_component {
   INVALID = 0,
@@ -168,5 +175,6 @@ std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf
