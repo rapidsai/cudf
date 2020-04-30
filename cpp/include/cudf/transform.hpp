@@ -51,7 +51,7 @@ std::unique_ptr<column> transform(
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
  *
- * @throws `cudf::logic_error` if `input.type()` is a non-floating type
+ * @throws cudf::logic_error if `input.type()` is a non-floating type
  *
  * @param input         An immutable view of the input column of floating-point type
  * @param mr            The memory resource to use for for all device allocations
@@ -68,7 +68,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * if element `i` is `false` or null, bit `i` is unset (`0`).
  *
  *
- * @throws `cudf::logic_error` if `input.type()` is a non-boolean type
+ * @throws cudf::logic_error if `input.type()` is a non-boolean type
  *
  * @param input        Boolean elements to convert to a bitmask.
  * @param mr            The memory resource used to allocate the returned bitmask.

@@ -106,8 +106,8 @@ void set_null_mask(bitmask_type* bitmask,
  *
  * Returns `0` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `start > stop`
- * @throws `cudf::logic_error` if `start < 0`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param start_bit Index of the first bit to count (inclusive)
@@ -122,8 +122,8 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, siz
  *
  * Returns `0` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `start > stop`
- * @throws `cudf::logic_error` if `start < 0`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param start_bit Index of the first bit to count (inclusive)
@@ -176,8 +176,8 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  *
  * Returns empty `device_buffer` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `begin_bit > end_bit`
- * @throws `cudf::logic_error` if `begin_bit < 0`
+ * @throws cudf::logic_error if `begin_bit > end_bit`
+ * @throws cudf::logic_error if `begin_bit < 0`
  *
  * @param mask Bitmask residing in device memory whose bits will be copied
  * @param begin_bit Index of the first bit to be copied (inclusive)

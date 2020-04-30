@@ -35,9 +35,9 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * If the column is empty, the member `is_valid()` of the output scalar
  * will contain `false`.
  *
- * @throws `cudf::logic_error` if reduction is called for non-arithmetic output
+ * @throws cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
- * @throws `cudf::logic_error` if input column data type is not convertible to
+ * @throws cudf::logic_error if input column data type is not convertible to
  * output data type.
  * If the input column has arithmetic type, output_dtype can be any arithmetic
  * type. For `mean`, `var` and `std` ops, a floating point output type must be
@@ -63,7 +63,7 @@ std::unique_ptr<scalar> reduce(
  * The null values are skipped for the operation, and if an input element
  * at `i` is null, then the output element at `i` will also be null.
  *
- * @throws `cudf::logic_error` if column datatype is not numeric type.
+ * @throws cudf::logic_error if column datatype is not numeric type.
  *
  * @param[in] input The input column view for the scan
  * @param[in] agg unique_ptr to aggregation operator applied by the scan

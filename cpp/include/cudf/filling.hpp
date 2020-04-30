@@ -33,13 +33,13 @@ namespace experimental {
  * returning std::unique_ptr<column> for use cases requiring memory
  * reallocation.
  *
- * @throws `cudf::logic_error` if memory reallocation is required (e.g. for
+ * @throws cudf::logic_error if memory reallocation is required (e.g. for
  * variable width types).
- * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
+ * @throws cudf::logic_error for invalid range (if @p begin < 0,
  * @p begin > @p end, or @p end > @p destination.size()).
- * @throws `cudf::logic_error` if @p destination and @p value have different
+ * @throws cudf::logic_error if @p destination and @p value have different
  * types.
- * @throws `cudf::logic_error` if @p value is invalid but @p destination is not
+ * @throws cudf::logic_error if @p value is invalid but @p destination is not
  * nullable.
  *
  * @param destination The preallocated column to fill into
@@ -61,9 +61,9 @@ void fill_in_place(mutable_column_view& destination,
  * i.e. it is as if a copy of @p input was created first and then the elements
  * indicated by the indices [@p begin, @p end) were overwritten by @p value.
  *
- * @throws `cudf::logic_error` for invalid range (if @p begin < 0,
+ * @throws cudf::logic_error for invalid range (if @p begin < 0,
  * @p begin > @p end, or @p end > @p destination.size()).
- * @throws `cudf::logic_error` if @p destination and @p value have different
+ * @throws cudf::logic_error if @p destination and @p value have different
  * types.
  *
  * @param input The input column used to create a new column. The new column
@@ -98,11 +98,11 @@ std::unique_ptr<column> fill(column_view const& input,
  * It is undefined behavior if @p count has negative values or the sum overflows
  * and @p check_count is set to false.
  *
- * @throws `cudf::logic_error` if the data type of @p count is not size_type.
- * @throws `cudf::logic_error` if @p input_table and @p count have different
+ * @throws cudf::logic_error if the data type of @p count is not size_type.
+ * @throws cudf::logic_error if @p input_table and @p count have different
  * number of rows.
- * @throws `cudf::logic_error` if @p count has null values.
- * @throws `cudf::logic_error` if @p check_count is set to true and @p count
+ * @throws cudf::logic_error if @p count has null values.
+ * @throws cudf::logic_error if @p check_count is set to true and @p count
  * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
@@ -127,9 +127,9 @@ std::unique_ptr<table> repeat(
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * @throws `cudf::logic_error` if the data type of @p count is not size_type.
- * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
- * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
+ * @throws cudf::logic_error if the data type of @p count is not size_type.
+ * @throws cudf::logic_error if @p count is invalid or @p count is negative.
+ * @throws cudf::logic_error if @p input_table.num_rows() * @p count overflows
  * size_type.
  *
  * @param input_table Input table
@@ -155,9 +155,9 @@ std::unique_ptr<table> repeat(
  * step = 2
  * return = [0, 2, 4]
  * ```
- * @throws `cudf::logic_error` if @p init and @p @step are not the same type.
- * @throws `cudf::logic_error` if scalar types are not numeric.
- * @throws `cudf::logic_error` if @p size is < 0.
+ * @throws cudf::logic_error if @p init and @p @step are not the same type.
+ * @throws cudf::logic_error if scalar types are not numeric.
+ * @throws cudf::logic_error if @p size is < 0.
  *
  * @param size Size of the output column
  * @param init First value in the sequence
@@ -183,8 +183,8 @@ std::unique_ptr<column> sequence(
  * init = 0
  * return = [0, 1, 2]
  * ```
- * @throws `cudf::logic_error` if @p init is not numeric.
- * @throws `cudf::logic_error` if @p size is < 0.
+ * @throws cudf::logic_error if @p init is not numeric.
+ * @throws cudf::logic_error if @p size is < 0.
  *
  * @param size Size of the output column
  * @param init First value in the sequence

@@ -113,7 +113,7 @@ std::unique_ptr<table> sort(table_view input,
  * Creates a new table that reorders the rows of `values` according to the
  * lexicographic ordering of the rows of `keys`.
  *
- * @throws `cudf::logic_error` if `values.num_rows() != keys.num_rows()`.
+ * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
  *
  * @param values The table to reorder
  * @param keys The table that determines the ordering

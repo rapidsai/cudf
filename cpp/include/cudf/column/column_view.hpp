@@ -146,7 +146,7 @@ class column_view_base {
    * will recompute the count of null elements indicated by the `null_mask` in
    * the range [begin, end).
    *
-   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * @throws cudf::logic_error for invalid range (if `begin < 0`,
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param[in] begin The starting index of the range (inclusive).
@@ -167,7 +167,7 @@ class column_view_base {
    * @brief Indicates if the column contains null elements in the range
    * [begin, end), i.e., `null_count(begin, end) > 0`
    *
-   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * @throws cudf::logic_error for invalid range (if `begin < 0`,
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param begin The starting index of the range (inclusive).
@@ -223,12 +223,12 @@ class column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
@@ -295,12 +295,12 @@ class column_view : public detail::column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
@@ -380,12 +380,12 @@ class mutable_column_view : public detail::column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements

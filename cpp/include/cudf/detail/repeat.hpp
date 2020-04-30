@@ -40,11 +40,11 @@ namespace detail {
  * It is undefined behavior if @p count has negative values or the sum overflows
  * and @p check_count is set to false.
  *
- * @throws `cudf::logic_error` if the data type of @p count is not size_type.
- * @throws `cudf::logic_error` if @p input_table and @p count have different
+ * @throws cudf::logic_error if the data type of @p count is not size_type.
+ * @throws cudf::logic_error if @p input_table and @p count have different
  * number of rows.
- * @throws `cudf::logic_error` if @p count has null values.
- * @throws `cudf::logic_error` if @p check_count is set to true and @p count
+ * @throws cudf::logic_error if @p count has null values.
+ * @throws cudf::logic_error if @p check_count is set to true and @p count
  * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
@@ -70,9 +70,9 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * count = 2
  * return = [4,4,5,5,6,6]
  * ```
- * @throws `cudf::logic_error` if the data type of @p count is not size_type.
- * @throws `cudf::logic_error` if @p count is invalid or @p count is negative.
- * @throws `cudf::logic_error` if @p input_table.num_rows() * @p count overflows
+ * @throws cudf::logic_error if the data type of @p count is not size_type.
+ * @throws cudf::logic_error if @p count is invalid or @p count is negative.
+ * @throws cudf::logic_error if @p input_table.num_rows() * @p count overflows
  * size_type.
  *
  * @param input_table Input table
