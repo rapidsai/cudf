@@ -72,6 +72,8 @@ cdef extern from "<utility>" namespace "std" nogil:
         pair[unique_ptr[table], vector[aggregation_result]]
     )
     cdef cudf_io_types.source_info move(cudf_io_types.source_info)
+    cdef unique_ptr[cudf_io_types.sink_info] move(
+        unique_ptr[cudf_io_types.sink_info])
     cdef cudf_io_types.table_with_metadata move(
         cudf_io_types.table_with_metadata)
     cdef pair[unique_ptr[column], table_view] move(
