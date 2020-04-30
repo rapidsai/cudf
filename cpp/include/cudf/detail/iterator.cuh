@@ -198,15 +198,24 @@ struct scalar_value_accessor {
   }
 
   CUDA_DEVICE_CALLABLE
-  const Element operator()(size_type i) const { return dscalar.value(); }
+  const Element operator()(size_type i) const
+  {
+#if defined(__CUDA_ARCH__)
+    return dscalar.value();
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
+  }
 };
 
 /**
- * @brief Constructs a constant iterator over a scalar's value.
+ * @brief Constructs a constant device iterator over a scalar's value.
  *
  * Dereferencing the returned iterator returns a `Element`.
  *
  * For `p = *(iter + i)`, `p` is the value stored in the scalar.
+ *
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  * @throws `cudf::logic_error` if scalar is null.
@@ -235,17 +244,23 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  */
 template <typename Element>
 struct scalar_pair_accessor : public scalar_value_accessor<Element> {
-  using value_class = scalar_value_accessor<Element>;
+  using super_t    = scalar_value_accessor<Element>;
+  using value_type = thrust::pair<Element, bool>;
   scalar_pair_accessor(scalar const& scalar_value) : scalar_value_accessor<Element>(scalar_value) {}
-  CUDA_DEVICE_CALLABLE
-  const thrust::pair<Element, bool> operator()(size_type i) const
+
+  CUDA_HOST_DEVICE_CALLABLE
+  const value_type operator()(size_type i) const
   {
-    return {value_class::dscalar.value(), value_class::dscalar.is_valid()};
+#if defined(__CUDA_ARCH__)
+    return {super_t::dscalar.value(), super_t::dscalar.is_valid()};
+#else
+    CUDF_FAIL("unsupported device scalar iterator operation");
+#endif
   }
 };
 
 /**
- * @brief Constructs a constant pair iterator over a scalar's value and its validity.
+ * @brief Constructs a constant device pair iterator over a scalar's value and its validity.
  *
  * Dereferencing the returned iterator returns a `thrust::pair<Element, bool>`.
  *
@@ -253,6 +268,8 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
  * the value of the scalar and `p.second == true`.
  *
  * Else, if the scalar is null, then the value of `p.first` is undefined and `p.second == false`.
+ *
+ * The behavior is undefined if the scalar is destroyed before iterator dereferencing.
  *
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  *
