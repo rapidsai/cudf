@@ -604,6 +604,17 @@ inline __device__ uint32_t make_short_row_context(uint32_t id0,
 
 /**
  * @brief Merge a short row context to keep track of bitmasks where new rows occur
+ * Merges a single-character "block" row context at position pos with the current
+ * block's row context (the current block contains 32-pos characters)
+ *
+ * @param ctx Current block context and new row bitmaps
+ * @param ctx_short state transitions associated with new character
+ * @param pos Position within the current 32-character block
+ *
+ * NOTE: This is probably the most performance-critical piece of the row gathering kernel.
+ * The ctx_short value should be created via make_short_row_context, and its value should
+ * have been evaluated at compile-time.
+ *
  **/
 inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, uint32_t pos)
 {
@@ -796,7 +807,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
         }
       } else if (c == quotechar) {
         if (c_prev == delimiter || c_prev == quotechar) {
-          // Quoted string after delimiter or quoted string ending in delimiter
+          // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
           ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
         } else {
           // Closing or ignored quote
