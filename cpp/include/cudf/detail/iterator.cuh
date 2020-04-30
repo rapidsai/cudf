@@ -197,8 +197,15 @@ struct scalar_value_accessor {
                  "the data type mismatch");
   }
 
+  /**
+   * @brief returns the value of the scalar.
+   *
+   * @throw `cudf::logic_error` if this function is called in host.
+   *
+   * @return value of the scalar.
+   */
   CUDA_DEVICE_CALLABLE
-  const Element operator()(size_type i) const
+  const Element operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return dscalar.value();
@@ -248,8 +255,15 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
   using value_type = thrust::pair<Element, bool>;
   scalar_pair_accessor(scalar const& scalar_value) : scalar_value_accessor<Element>(scalar_value) {}
 
+  /**
+   * @brief returns a pair with value and validity of the scalar.
+   * 
+   * @throw `cudf::logic_error` if this function is called in host.
+   * 
+   * @return a pair with value and validity of the scalar.
+   */
   CUDA_HOST_DEVICE_CALLABLE
-  const value_type operator()(size_type i) const
+  const value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return {super_t::dscalar.value(), super_t::dscalar.is_valid()};
