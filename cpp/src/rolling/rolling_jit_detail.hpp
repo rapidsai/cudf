@@ -17,6 +17,8 @@
 #ifndef ROLLING_JIT_DETAIL_HPP
 #define ROLLING_JIT_DETAIL_HPP
 
+#include <cudf/types.hpp>
+
 namespace cudf {
 
 namespace detail {
