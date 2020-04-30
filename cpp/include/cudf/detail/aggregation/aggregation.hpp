@@ -126,12 +126,12 @@ constexpr size_type ARGMAX_SENTINEL{-1};
  */
 constexpr size_type ARGMIN_SENTINEL{-1};
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and aggregation.
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- *---------------------------------------------------------------------------**/
+ **/
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;

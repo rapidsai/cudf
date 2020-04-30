@@ -30,7 +30,7 @@
  */
 
 struct DispatcherTest : public GdfTest {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Lists every gdf_dtype that the type_dispatcher supports.
    *
    * This vector *must* list every gdf_dtype supported by the type_dispatcher.
@@ -38,7 +38,7 @@ struct DispatcherTest : public GdfTest {
    * If a new type gdf_dtype is added, but this list is not updated, then the
    * tests will fail.
    *
-   *---------------------------------------------------------------------------**/
+   **/
   std::vector<gdf_dtype> supported_dtypes{GDF_INT8,
                                           GDF_INT16,
                                           GDF_INT32,

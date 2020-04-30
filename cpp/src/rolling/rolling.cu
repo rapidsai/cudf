@@ -446,8 +446,7 @@ struct rolling_window_launcher {
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table =
         detail::gather(table_view{{input}}, output->view(), false, true, false, mr, stream);
-      return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-      ;
+      output = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
     }
 
     return output;

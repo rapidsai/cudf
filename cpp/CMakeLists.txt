@@ -633,6 +633,7 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
             src/strings/split/split.cu
+            src/strings/split/split_record.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
@@ -652,6 +653,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu

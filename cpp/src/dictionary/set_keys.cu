@@ -49,9 +49,8 @@ struct dispatch_compute_indices {
     auto dictionary_itr  = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), [d_dictionary] __device__(size_type idx) {
         if (d_dictionary.is_null(idx)) return Element{};
-        column_device_view d_indices = d_dictionary.child(0);
-        column_device_view d_keys    = d_dictionary.child(1);
-        auto index                   = d_indices.element<int32_t>(idx + d_dictionary.offset());
+        column_device_view d_keys = d_dictionary.child(1);
+        size_type index           = static_cast<size_type>(d_dictionary.element<dictionary32>(idx));
         return d_keys.template element<Element>(index);
       });
     auto new_keys_view = column_device_view::create(new_keys, stream);

@@ -1806,12 +1806,16 @@ class DataFrame(Frame):
             raise NameError("column {!r} does not exist".format(name))
         del self._data[name]
 
-    def drop_duplicates(self, subset=None, keep="first", inplace=False):
+    def drop_duplicates(
+        self, subset=None, keep="first", inplace=False, ignore_index=False
+    ):
         """
         Return DataFrame with duplicate rows removed, optionally only
         considering certain subset of columns.
         """
-        outdf = super().drop_duplicates(subset=subset, keep=keep)
+        outdf = super().drop_duplicates(
+            subset=subset, keep=keep, ignore_index=ignore_index
+        )
 
         return self._mimic_inplace(outdf, inplace=inplace)
 
@@ -2480,7 +2484,9 @@ class DataFrame(Frame):
                     lhs[name] = _set_categories(lhs[name], cats)
                 elif how in ["inner", "outer"]:
                     cats = column.as_column(lcats).append(rcats)
-                    cats = Series(cats).drop_duplicates()._column
+                    cats = (
+                        Series(cats).drop_duplicates(ignore_index=True)._column
+                    )
 
                     lhs[name] = _set_categories(lhs[name], cats)
                     lhs[name] = lhs[name]._column.as_numerical
@@ -2557,7 +2563,12 @@ class DataFrame(Frame):
                 DeprecationWarning,
             )
         return DataFrameGroupBy(
-            self, by=by, level=level, as_index=as_index, dropna=dropna
+            self,
+            by=by,
+            level=level,
+            as_index=as_index,
+            dropna=dropna,
+            sort=sort,
         )
 
     @copy_docstring(Rolling)
@@ -2657,14 +2668,7 @@ class DataFrame(Frame):
             }
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
-
-            selected = Series(boolmask)
-            newdf = DataFrame()
-            for col_name in self._data.names:
-                newseries = self[col_name][selected]
-                newdf[col_name] = newseries
-            result = newdf
-            return result
+            return self._apply_boolean_mask(boolmask)
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -3161,24 +3165,30 @@ class DataFrame(Frame):
 
         df = cls()
         # Set columns
-        for i, colk in enumerate(dataframe.columns):
-            vals = dataframe[colk].values
+        for col_name, col_value in dataframe.iteritems():
             # necessary because multi-index can return multiple
             # columns for a single key
-            if len(vals.shape) == 1:
-                df[i] = Series(vals, nan_as_null=nan_as_null)
+            if len(col_value.shape) == 1:
+                df[col_name] = column.as_column(
+                    col_value.array, nan_as_null=nan_as_null
+                )
             else:
-                vals = vals.T
+                vals = col_value.values.T
                 if vals.shape[0] == 1:
-                    df[i] = Series(vals.flatten(), nan_as_null=nan_as_null)
+                    df[col_name] = column.as_column(
+                        vals.flatten(), nan_as_null=nan_as_null
+                    )
                 else:
-                    if isinstance(colk, tuple):
-                        colk = str(colk)
+                    if isinstance(col_name, tuple):
+                        col_name = str(col_name)
                     for idx in range(len(vals.shape)):
-                        df[i] = Series(vals[idx], nan_as_null=nan_as_null)
+                        df[col_name] = column.as_column(
+                            vals[idx], nan_as_null=nan_as_null
+                        )
 
-        # Set columns
-        df.columns = dataframe.columns
+        # Set columns only if it is a MultiIndex
+        if isinstance(dataframe.columns, pd.MultiIndex):
+            df.columns = dataframe.columns
 
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
@@ -4829,6 +4839,8 @@ def from_pandas(obj):
         )
     elif isinstance(obj, pd.Index):
         return cudf.Index.from_pandas(obj)
+    elif isinstance(obj, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(obj)
     else:
         raise TypeError(
             "from_pandas only accepts Pandas Dataframes, Series, "

@@ -42,7 +42,8 @@
 
 namespace cudf {
 namespace binops {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Computes bitwise AND of two input valid masks
  *
  * This is just a wrapper on apply_bitmask_to_bitmask that can also handle
@@ -56,7 +57,7 @@ namespace binops {
  * @param valid_right input mask 2
  * @param num_values number of values in each input mask valid_left and
  *valid_right
- *---------------------------------------------------------------------------**/
+ **/
 void binary_valid_mask_and(cudf::size_type& out_null_count,
                            cudf::valid_type* valid_out,
                            const cudf::valid_type* valid_left,
@@ -102,7 +103,7 @@ void binary_valid_mask_and(cudf::size_type& out_null_count,
   out_null_count = num_values - non_nulls;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param out_null_coun[out] number of nulls in output
@@ -110,7 +111,7 @@ void binary_valid_mask_and(cudf::size_type& out_null_count,
  * @param valid_col input mask of column
  * @param valid_scalar bool indicating if scalar is valid
  * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
+ **/
 void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
                                cudf::valid_type* valid_out,
                                cudf::valid_type* valid_col,
