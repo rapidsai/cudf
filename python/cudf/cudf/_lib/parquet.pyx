@@ -231,15 +231,14 @@ cpdef write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[cudf_io_types.sink_info] sink
     cdef unique_ptr[cudf_io_types.table_metadata] tbl_meta = \
         make_unique[cudf_io_types.table_metadata]()
 
     cdef vector[string] column_names
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
-
-    sink = move(make_sink_info(path))
+    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
+    cdef cudf_io_types.sink_info sink = make_sink_info(path, &_data_sink)
 
     if index is not False:
         tv = table.view()
@@ -271,7 +270,7 @@ cpdef write_parquet(
 
     # Perform write
     with nogil:
-        args = write_parquet_args(dereference(sink.get()),
+        args = write_parquet_args(sink,
                                   tv,
                                   tbl_meta.get(),
                                   comp_type,
@@ -303,14 +302,15 @@ cdef class ParquetWriter:
     cudf.io.parquet.write_parquet
     """
     cdef shared_ptr[pq_chunked_state] state
-    cdef unique_ptr[cudf_io_types.sink_info] sink
+    cdef cudf_io_types.sink_info sink
+    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
 
     def __cinit__(self, object path, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
-        self.sink = move(make_sink_info(path))
+        self.sink = make_sink_info(path, &self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
@@ -353,7 +353,7 @@ cdef class ParquetWriter:
         # call write_parquet_chunked_begin
         cdef write_parquet_chunked_args args
         with nogil:
-            args = write_parquet_chunked_args(dereference(self.sink.get()),
+            args = write_parquet_chunked_args(self.sink,
                                               tbl_meta.get(),
                                               self.comp_type, self.stat_freq)
             self.state = write_parquet_chunked_begin(args)
