@@ -654,6 +654,40 @@ TYPED_TEST(IteratorTest, scalar_iterator)
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
 }
 
+TEST_F(StringIteratorTest, string_scalar_iterator)
+{
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data array
+  std::vector<std::string> host_values(100, zero);
+
+  thrust::device_vector<char> dev_chars;
+  thrust::host_vector<T> all_array(host_values.size());
+  std::tie(dev_chars, all_array) = strings_to_string_views(host_values);
+
+  // calculate the expected value by CPU.
+  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  std::transform(all_array.begin(), all_array.end(), value_and_validity.begin(), [](auto v) {
+    return thrust::pair<T, bool>{v, true};
+  });
+
+  // create a scalar
+  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  std::unique_ptr<cudf::scalar> s(new ScalarType{zero, true});
+
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_scalar_iterator<T>(*s);
+  this->iterator_test_thrust(all_array, it_dev, host_values.size());
+
+  auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
+  this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
+}
+
 TYPED_TEST(IteratorTest, null_scalar_iterator)
 {
   using T = TypeParam;
