@@ -22,7 +22,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import sorting
+from dask_cudf import sorting, scheduler
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -65,7 +65,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    __dask_scheduler__ = staticmethod(dask.get)
+    __dask_scheduler__ = staticmethod(scheduler.get_sync)
     __dask_optimize__ = staticmethod(optimize)
 
     def __dask_postcompute__(self):
@@ -103,6 +103,10 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     def to_dask_dataframe(self):
         """Create a dask.dataframe object from a dask_cudf object"""
         return self.map_partitions(M.to_pandas)
+
+    def persist(self, **kwargs):
+        (ret,) = dask.persist(self, traverse=False, **kwargs)
+        return ret
 
 
 concat = dd.concat
