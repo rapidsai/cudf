@@ -22,7 +22,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import sorting, scheduler
+from dask_cudf import scheduler, sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 

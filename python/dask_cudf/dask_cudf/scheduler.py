@@ -1,4 +1,7 @@
 """
+This is a copy of the scheduler in Dask with modifications that targets cuDF
+<https://github.com/dask/dask/blob/2.15.0/dask/local.py>
+
 Asynchronous Shared-Memory Scheduler for Dask Graphs.
 
 This scheduler coordinates several workers to execute tasks in a dask graph in
@@ -104,24 +107,22 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
-import os
-from queue import Queue, Empty
+from queue import Queue
 
 from dask import config
+from dask.callbacks import local_callbacks, unpack_callbacks
 from dask.core import (
-    flatten,
-    reverse_dict,
-    get_dependencies,
-    has_tasks,
     _execute_task,
+    flatten,
+    get_dependencies,
 )
-from .order import order
-from dask.callbacks import unpack_callbacks, local_callbacks
+
+# We import the scheduler from Dask and overwrite the functions
+# we want to change.
+from dask.local import *  # noga: F403
 from dask.utils_test import add, inc  # noqa: F401
 
-# Let's import the scheduler from Dask and overwrite the functions
-# we want to change.
-from dask.local import *
+from .order import order
 
 
 """
