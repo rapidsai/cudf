@@ -5,24 +5,26 @@ from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
-from tlz import partition_all
+from tlz import keymap, partition_all
 
 import dask
 import dask.dataframe as dd
+from dask import config
 from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
-from dask.core import flatten
+from dask.core import flatten, get_dependencies
 from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
+from distributed.utils import tokey
 
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import scheduler, sorting
+from dask_cudf import order, scheduler, sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -89,6 +91,38 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+        # __dask_scheduler__ is ignored when running on a cluster, which
+        # uses the "dask.distributed" scheduler. In order to inject the
+        # use of order.order(), we overwrite client._graph_to_futures()
+        # with a wrapper that sets priority=order.order().
+        if config.get("scheduler", "").lower() in (
+            "dask.distributed",
+            "distributed",
+        ):
+            try:
+                from distributed.client import default_client
+            except ImportError:
+                pass
+            else:
+                try:
+                    client = default_client()
+                except ValueError:
+                    pass
+                else:
+                    _graph_to_futures = client._graph_to_futures
+
+                    def wrapper(*args, **kwargs):
+                        dsk = args[0]
+                        dependencies = {
+                            k: get_dependencies(dsk, k) for k in dsk
+                        }
+                        priority = order.order(dsk, dependencies=dependencies)
+                        priority = keymap(tokey, priority)
+                        kwargs["priority"] = priority
+                        return _graph_to_futures(*args, **kwargs)
+
+                    client._graph_to_futures = wrapper
 
     def __getstate__(self):
         return (self.dask, self._name, self._meta, self.divisions)
