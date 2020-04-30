@@ -107,7 +107,7 @@ gdf_column upper_bound(table const& t,
  * @throws cudf::logic_error
  * If dtype of `column` and `value` doesn't match
  *
- * @example:
+ * Example:
  *
  *  Single Column:
  *      idx      0   1   2   3   4

@@ -902,6 +902,27 @@ TEST_F(BinaryOperationIntegrationTest, LogBase_Vector_Vector_double_SI64_SI32)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
 
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI64_SI32)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = int64_t;
+  using TypeRhs = int32_t;
+
+  using SHIFT_RIGHT_UNSIGNED =
+    cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-12);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::experimental::binary_operation(lhs,
+                                         rhs,
+                                         cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+                                         data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
