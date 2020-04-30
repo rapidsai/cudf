@@ -15,6 +15,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #4881 Support row_number in rolling_window
 
 ## Improvements
 
@@ -219,6 +220,8 @@
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5031 grouped_time_range_rolling_window assumes ASC sort order 
+- PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
 
 
 # cuDF 0.13.0 (31 Mar 2020)
