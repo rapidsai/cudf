@@ -220,6 +220,7 @@
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 
 
