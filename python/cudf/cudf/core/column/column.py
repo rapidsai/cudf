@@ -421,9 +421,7 @@ class ColumnBase(Column):
         if index > len(self) - 1:
             raise IndexError
 
-        val = libcudf.copying.get_element(self, index)
-
-        return val.value
+        return libcudf.copying.get_element(self, index).value
 
     def __getitem__(self, arg):
         from cudf.core.column import column
