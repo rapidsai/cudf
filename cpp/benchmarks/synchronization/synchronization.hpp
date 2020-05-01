@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-/**---------------------------------------------------------------------------*
- * @file synchroniazation.hpp
+/**
+ * @file synchronization.hpp
  * @brief This is the header file for `cuda_event_timer`.
- *---------------------------------------------------------------------------**/
+ **/
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  This class serves as a wrapper for using `cudaEvent_t` as the user
  * defined timer within the framework of google benchmark
  * (https://github.com/google/benchmark).
@@ -54,7 +54,7 @@
     BENCHMARK(sample_cuda_benchmark)->UseManualTime();
 
 
- *---------------------------------------------------------------------------**/
+ **/
 
 #ifndef CUDF_BENCH_SYNCHRONIZATION_H
 #define CUDF_BENCH_SYNCHRONIZATION_H
@@ -66,7 +66,7 @@
 
 class cuda_event_timer {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief This c'tor clears the L2$ by cudaMemset'ing a buffer of L2$ size
    * and starts the timer.
    *
@@ -75,10 +75,10 @@ class cuda_event_timer {
    * @param[in] flush_l2_cache_ whether or not to flush the L2 cache before
    *                            every iteration.
    * @param[in] stream_ The CUDA stream we are measuring time on.
-   *---------------------------------------------------------------------------**/
+   **/
   cuda_event_timer(benchmark::State& state, bool flush_l2_cache, cudaStream_t stream_ = 0);
 
-  // The user will HAVE to provide a benchmark::State object to set
+  // The user must provide a benchmark::State object to set
   // the timer so we disable the default c'tor.
   cuda_event_timer() = delete;
 

@@ -44,6 +44,9 @@ cdef extern from "cudf/io/functions.hpp" \
     cdef cppclass read_csv_args:
         cudf_io_types.source_info source
 
+        read_csv_args() except +
+        read_csv_args(cudf_io_types.source_info src) except +
+
         # Reader settings
         cudf_io_types.compression_type compression
         size_t byte_range_offset
@@ -54,11 +57,11 @@ cdef extern from "cudf/io/functions.hpp" \
 
         # Filter settings
         vector[string] use_cols_names
-        vector[int] use_col_indexes
-        size_t nrows
-        size_t skiprows
-        size_t skipfooter
-        size_t header
+        vector[int] use_cols_indexes
+        size_type nrows
+        size_type skiprows
+        size_type skipfooter
+        size_type header
 
         # Parsing settings
         char lineterminator
