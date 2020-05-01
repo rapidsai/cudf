@@ -63,6 +63,18 @@ std::unique_ptr<column> replace_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  column_view const& replacement,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  scalar const& replacement,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  *  @brief Replace all `old_values[i]` present in `input_col` with `new_values[i]`.
  *        with `new_values[i]`.

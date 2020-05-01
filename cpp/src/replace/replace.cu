@@ -40,6 +40,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
@@ -57,6 +58,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <cub/cub.cuh>
+
 namespace {  // anonymous
 
 static constexpr int BLOCK_SIZE = 256;
@@ -858,6 +860,49 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_FUNC_RANGE();
   return cudf::detail::replace_nulls(input, replacement, mr, 0);
 }
+}  // namespace experimental
+}  // namespace cudf
+
+namespace cudf {
+namespace experimental {
+namespace detail {
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     column_view const& replacement,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  auto nan_mask = is_nan(input, mr, stream);
+  return copy_if_else(input, replacement, nan_mask->view(), mr, stream);
+}
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     scalar const& replacement,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  auto nan_mask = is_nan(input, mr, stream);
+  return copy_if_else(input, replacement, nan_mask->view(), mr, stream);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     column_view const& replacement,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_nans(input, replacement, 0, mr);
+}
+
+std::unique_ptr<column> replace_nans(column_view const& input,
+                                     scalar const& replacement,
+                                     rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::replace_nans(input, replacement, 0, mr);
+}
+
 }  // namespace experimental
 }  // namespace cudf
 

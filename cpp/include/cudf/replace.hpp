@@ -59,6 +59,16 @@ std::unique_ptr<column> replace_nulls(
   scalar const& replacement,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  column_view const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  * @brief Replace elements from `input_col` according to the mapping `old_values` to
  *  @brief Return a copy of `input_col` replacing all `old_values[i]` present with `new_values[i]`.
