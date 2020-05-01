@@ -29,13 +29,13 @@
 #include <random>
 
 namespace {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Return last odd index in a container containing `size` items
- *---------------------------------------------------------------------------**/
+ **/
 auto constexpr last_odd_index(cudf::size_type size) { return size - (size + 1) % 2; }
-/**---------------------------------------------------------------------------*
+/**
  * @brief Return last even index in a container containing `size` items
- *---------------------------------------------------------------------------**/
+ **/
 auto constexpr last_even_index(cudf::size_type size) { return (size - 1) - ((size - 1) % 2); }
 }  // namespace
 

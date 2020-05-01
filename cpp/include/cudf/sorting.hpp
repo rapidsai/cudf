@@ -35,7 +35,8 @@ enum class rank_method {
 };
 
 namespace experimental {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.
  *
@@ -48,7 +49,7 @@ namespace experimental {
  * If empty, all columns will be sorted in `null_order::BEFORE`.
  * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
@@ -68,7 +69,7 @@ std::unique_ptr<column> stable_sorted_order(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
  *        order.
  *
@@ -83,7 +84,7 @@ std::unique_ptr<column> stable_sorted_order(
  *                              `null_order::BEFORE` is assumed for all columns.
  *
  * @returns bool                true if sorted as expected, false if not.
- *---------------------------------------------------------------------------**/
+ **/
 bool is_sorted(cudf::table_view const& table,
                std::vector<order> const& column_order,
                std::vector<null_order> const& null_precedence);
