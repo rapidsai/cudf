@@ -6,8 +6,8 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
-from cudf._lib.scalar import Scalar
 from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils

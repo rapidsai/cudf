@@ -655,4 +655,4 @@ def get_element(Column input_column, int index):
             cpp_copying.get_element(col_view, c_index)
         )
 
-    return Scalar.from_unique_ptr(move(c_output)) 
+    return Scalar.from_unique_ptr(move(c_output))

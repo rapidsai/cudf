@@ -1918,7 +1918,9 @@ class StringColumn(column.ColumnBase):
 
                 # Shift the chars offset by the new first element of the
                 # offsets column
-                chars_size = libcudf.copying.get_element(offsets_column, self.size)
+                chars_size = libcudf.copying.get_element(
+                    offsets_column, self.size
+                )
                 chars_column = column.build_column(
                     data=chars_column.base_data,
                     dtype=chars_column.dtype,
