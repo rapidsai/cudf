@@ -76,7 +76,7 @@ __inline__ __device__ constexpr int32_t daysSinceEpoch(int year, int month, int 
 __inline__ __device__ constexpr int64_t secondsSinceEpoch(
   int year, int month, int day, int hour, int minute, int second);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Simplified parsing function for use by date and time parsing
  *
  * This helper function is only intended to handle positive integers. The input
@@ -87,7 +87,7 @@ __inline__ __device__ constexpr int64_t secondsSinceEpoch(
  * @param[in] end The end index within data to end parsing
  *
  * @return The parsed and converted value
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 __inline__ __device__ T convertStrToInteger(const char *data, long start, long end)
 {

@@ -30,7 +30,7 @@ namespace test {
 using time_point_ms =
   simt::std::chrono::time_point<simt::std::chrono::system_clock, simt::std::chrono::milliseconds>;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a `thrust::device_vector` with ascending timestamps in the
  * range `[start, stop)`.
  *
@@ -43,7 +43,7 @@ using time_point_ms =
  * @param count The number of timestamps to create
  * @param start The first timestamp as a simt::std::chrono::time_point
  * @param stop The last timestamp as a simt::std::chrono::time_point
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T, bool nullable = false>
 inline cudf::test::fixed_width_column_wrapper<T> generate_timestamps(int32_t count,
                                                                      time_point_ms start,

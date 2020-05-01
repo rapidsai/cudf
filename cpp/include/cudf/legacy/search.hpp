@@ -21,7 +21,8 @@
 #include "cudf/types.hpp"
 
 namespace cudf {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
  *
@@ -55,13 +56,13 @@ namespace cudf {
  *
  * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as
  *values.
- *---------------------------------------------------------------------------**/
+ **/
 gdf_column lower_bound(table const& t,
                        table const& values,
                        std::vector<bool> const& desc_flags,
                        bool nulls_as_largest = true);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find largest indices in a sorted table where values should be
  *  inserted to maintain order
  *
@@ -94,13 +95,13 @@ gdf_column lower_bound(table const& t,
  *
  * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as
  *values.
- *---------------------------------------------------------------------------**/
+ **/
 gdf_column upper_bound(table const& t,
                        table const& values,
                        std::vector<bool> const& desc_flags,
                        bool nulls_as_largest = true);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Find if the `value` is present in the `column` and dtype of both
  * `value` and `column` should match.
  *
@@ -120,6 +121,6 @@ gdf_column upper_bound(table const& t,
  * @param value    A scalar value to search for in `column`
  *
  * @return bool    If `value` is found in `column` true, else false.
- *---------------------------------------------------------------------------**/
+ **/
 bool contains(gdf_column const& column, gdf_scalar const& value);
 }  // namespace cudf
