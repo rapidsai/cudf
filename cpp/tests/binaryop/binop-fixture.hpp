@@ -48,17 +48,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
       0, [mod_base](auto row) { return (row % mod_base) > 0; });
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  auto make_random_wrapped_column(size_type size)
-  {
-    cudf::test::UniformRandomGenerator<long> rand_gen(r_min, r_max);
-    auto data_iter     = make_data_iter(rand_gen);
-    auto validity_iter = make_validity_iter();
-
-    return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
-  }
-
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   auto make_random_wrapped_column(size_type size)
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
@@ -68,15 +58,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
     return cudf::test::fixed_width_column_wrapper<T>(data_iter, data_iter + size, validity_iter);
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
-  auto make_random_wrapped_scalar()
-  {
-    cudf::test::UniformRandomGenerator<long> rand_gen(
-      r_min, r_max, detail::random_generator_incrementing_seed());
-    return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
-  }
-
-  template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
+  template <typename T>
   auto make_random_wrapped_scalar()
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
