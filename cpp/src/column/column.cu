@@ -125,7 +125,7 @@ mutable_column_view column::mutable_view()
                              size(),
                              _data.data(),
                              static_cast<bitmask_type *>(_null_mask.data()),
-                             cudf::UNKNOWN_NULL_COUNT,
+                             current_null_count,
                              0,
                              child_views};
 }
