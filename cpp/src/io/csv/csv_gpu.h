@@ -66,7 +66,7 @@ typedef uint64_t packed_rowctx_t;
  **/
 inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
 {
-  return row_count * 4 + out_ctx;
+  return (row_count << 2) + out_ctx;
 }
 
 /**
