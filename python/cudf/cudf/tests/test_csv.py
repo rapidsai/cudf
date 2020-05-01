@@ -351,8 +351,6 @@ def test_csv_reader_strings(tmpdir):
     assert df["text"][3] == "d"
 
 
-# Quoting not yet supported
-@pytest.mark.xfail()
 def test_csv_reader_strings_quotechars(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file8.csv")
 
@@ -846,11 +844,10 @@ def test_csv_reader_empty_dataframe():
     assert df.shape == (0, 2)
     assert all(df.dtypes == ["float64", "int64"])
 
-    # BUG - EMPTY_DATAFRAME
     # should default to string columns without dtypes
-    # df = read_csv(StringIO(buffer))
-    # assert df.shape == (0, 2)
-    # assert all(df.dtypes == ["object", "object"])
+    df = read_csv(StringIO(buffer))
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["object", "object"])
 
 
 def test_csv_reader_filenotfound(tmpdir):
@@ -1149,8 +1146,6 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     assert np.count_nonzero(df["zeros"].to_pandas().values) == 0
 
 
-# Hex is not working
-@pytest.mark.xfail()
 @pytest.mark.parametrize(
     "pdf_dtype, gdf_dtype",
     [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
@@ -1175,8 +1170,6 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         assert_eq(pdf, gdf)
 
 
-# Quoting not yet supported
-@pytest.mark.xfail()
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
 def test_csv_reader_pd_consistent_quotes(quoting):
     names = ["text"]
