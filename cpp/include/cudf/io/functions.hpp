@@ -213,6 +213,7 @@ struct read_csv_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
+  read_csv_args() = default;
   explicit read_csv_args(source_info const& src) : source(src) {}
 };
 

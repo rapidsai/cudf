@@ -106,21 +106,23 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
 
   CUDF_FUNC_RANGE();
   csv::reader_options options{};
-  options.compression      = args.compression;
-  options.lineterminator   = args.lineterminator;
-  options.delimiter        = args.delimiter;
-  options.decimal          = args.decimal;
-  options.thousands        = args.thousands;
-  options.comment          = args.comment;
-  options.dayfirst         = args.dayfirst;
-  options.delim_whitespace = args.delim_whitespace;
-  options.skipinitialspace = args.skipinitialspace;
-  options.skip_blank_lines = args.skip_blank_lines;
-  options.header           = args.header;
-  options.names            = args.names;
-  options.dtype            = args.dtype;
-  options.use_cols_indexes = args.use_cols_indexes;
-  options.use_cols_names   = args.use_cols_names;
+  options.compression        = args.compression;
+  options.lineterminator     = args.lineterminator;
+  options.delimiter          = args.delimiter;
+  options.decimal            = args.decimal;
+  options.thousands          = args.thousands;
+  options.comment            = args.comment;
+  options.dayfirst           = args.dayfirst;
+  options.delim_whitespace   = args.delim_whitespace;
+  options.skipinitialspace   = args.skipinitialspace;
+  options.skip_blank_lines   = args.skip_blank_lines;
+  options.header             = args.header;
+  options.infer_date_names   = args.infer_date_names;
+  options.infer_date_indexes = args.infer_date_indexes;
+  options.names              = args.names;
+  options.dtype              = args.dtype;
+  options.use_cols_indexes   = args.use_cols_indexes;
+  options.use_cols_names     = args.use_cols_names;
   options.true_values.insert(
     options.true_values.end(), args.true_values.begin(), args.true_values.end());
   options.false_values.insert(
