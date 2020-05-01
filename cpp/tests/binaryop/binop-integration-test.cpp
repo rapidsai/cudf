@@ -525,8 +525,7 @@ TEST_F(BinaryOperationIntegrationTest, Greater_Vector_Vector_B8_TSMS_TSS)
 
   using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
 
-  cudf::test::UniformRandomGenerator<long> rand_gen(
-    1, 10, detail::random_generator_incrementing_seed());
+  cudf::test::UniformRandomGenerator<long> rand_gen(1, 10);
   auto itr = cudf::test::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate() * 1000; });
 
@@ -1013,6 +1012,27 @@ TEST_F(BinaryOperationIntegrationTest, CastAdd_Vector_Vector_SI32_float_float)
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ADD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI64_SI32)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = int64_t;
+  using TypeRhs = int32_t;
+
+  using SHIFT_RIGHT_UNSIGNED =
+    cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-12);
+  // this generates values in the range 1-10 which should be reasonable for the shift
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out =
+    cudf::experimental::binary_operation(lhs,
+                                         rhs,
+                                         cudf::experimental::binary_operator::SHIFT_RIGHT_UNSIGNED,
+                                         data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
 
 }  // namespace binop

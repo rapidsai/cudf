@@ -36,11 +36,7 @@ template <typename T>
 class RepeatTypedTestFixture : public cudf::test::BaseFixture,
                                cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
-  RepeatTypedTestFixture()
-    : cudf::test::UniformRandomGenerator<cudf::size_type>{
-        0, 10, cudf::test::detail::random_generator_incrementing_seed()}
-  {
-  }
+  RepeatTypedTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
   cudf::size_type repeat_count() { return this->generate(); }
 };
@@ -178,11 +174,7 @@ TYPED_TEST(RepeatTypedTestFixture, ZeroSizeInput)
 class RepeatStringTestFixture : public cudf::test::BaseFixture,
                                 cudf::test::UniformRandomGenerator<cudf::size_type> {
  public:
-  RepeatStringTestFixture()
-    : cudf::test::UniformRandomGenerator<cudf::size_type>{
-        0, 10, cudf::test::detail::random_generator_incrementing_seed()}
-  {
-  }
+  RepeatStringTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
 
   cudf::size_type repeat_count() { return this->generate(); }
 };

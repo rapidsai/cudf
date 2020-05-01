@@ -22,13 +22,13 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask >=2.12.0
-    - distributed >=2.12.0
+    - dask >=2.15.0
+    - distributed >=2.15.0
   run:
     - python
     - cudf {{ version }}
-    - dask >=2.12.0
-    - distributed >=2.12.0
+    - dask >=2.15.0
+    - distributed >=2.15.0
 test:
   imports:
     - dask_cudf

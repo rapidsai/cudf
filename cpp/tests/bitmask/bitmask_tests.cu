@@ -358,11 +358,7 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSingleBit)
 }
 
 struct CopyBitmaskTest : public cudf::test::BaseFixture, cudf::test::UniformRandomGenerator<int> {
-  CopyBitmaskTest()
-    : cudf::test::UniformRandomGenerator<int>{
-        0, 1, cudf::test::detail::random_generator_incrementing_seed()}
-  {
-  }
+  CopyBitmaskTest() : cudf::test::UniformRandomGenerator<int>{0, 1} {}
 };
 
 void cleanEndWord(rmm::device_buffer &mask, int begin_bit, int end_bit)

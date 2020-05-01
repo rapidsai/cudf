@@ -63,7 +63,7 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
     window[0],
     window[0],
     1,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -99,7 +99,7 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
     window[0],
     window[0],
     1,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -135,7 +135,7 @@ TEST_F(RollingStringTest, MinPeriods)
     window[0],
     window[0],
     4,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -224,7 +224,7 @@ class RollingTest : public cudf::test::BaseFixture {
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+                 cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
     run_test_col(input,
                  preceding_window,
                  following_window,
@@ -732,8 +732,7 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(
-    0, max_window_size, cudf::test::detail::random_generator_incrementing_seed());
+  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
   auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<size_type> preceding_window(num_rows);
@@ -761,8 +760,7 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   fixed_width_column_wrapper<TypeParam> input(col_data.begin(), col_data.end(), col_valid.begin());
 
   // random parameters
-  cudf::test::UniformRandomGenerator<size_type> window_rng(
-    0, max_window_size, cudf::test::detail::random_generator_incrementing_seed());
+  cudf::test::UniformRandomGenerator<size_type> window_rng(0, max_window_size);
   auto generator = [&]() { return window_rng.generate(); };
 
   std::vector<size_type> preceding_window(num_rows);

@@ -42,8 +42,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
 
   auto make_validity_iter()
   {
-    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(
-      r_min, r_max, detail::random_generator_incrementing_seed());
+    cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
     uint8_t mod_base = rand_gen.generate();
     return cudf::test::make_counting_transform_iterator(
       0, [mod_base](auto row) { return (row % mod_base) > 0; });
@@ -52,8 +51,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   auto make_random_wrapped_column(size_type size)
   {
-    cudf::test::UniformRandomGenerator<long> rand_gen(
-      r_min, r_max, detail::random_generator_incrementing_seed());
+    cudf::test::UniformRandomGenerator<long> rand_gen(r_min, r_max);
     auto data_iter     = make_data_iter(rand_gen);
     auto validity_iter = make_validity_iter();
 
@@ -63,8 +61,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   auto make_random_wrapped_column(size_type size)
   {
-    cudf::test::UniformRandomGenerator<T> rand_gen(
-      r_min, r_max, detail::random_generator_incrementing_seed());
+    cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     auto data_iter     = make_data_iter(rand_gen);
     auto validity_iter = make_validity_iter();
 
@@ -82,8 +79,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
   auto make_random_wrapped_scalar()
   {
-    cudf::test::UniformRandomGenerator<T> rand_gen(
-      r_min, r_max, detail::random_generator_incrementing_seed());
+    cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     return cudf::experimental::scalar_type_t<T>(rand_gen.generate());
   }
 };

@@ -21,16 +21,17 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Sort types for the sort method.
- *---------------------------------------------------------------------------**/
+ **/
 enum sort_type {
   none   = 0,  ///< no sorting
   length = 1,  ///< sort by string length
   name   = 2   ///< sort by characters code-points
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a new strings column that is a sorted version of the
  * strings in this instance.
  *
@@ -41,7 +42,7 @@ enum sort_type {
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<cudf::column> sort(
   strings_column_view strings,
   sort_type stype,
