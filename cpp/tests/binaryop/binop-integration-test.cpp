@@ -29,7 +29,7 @@ struct BinaryOperationIntegrationTest : public BinaryOperationTest {
 
 // This comparator can be used to compare two values that are within a certain threshold.
 // This is typically used to compare floating point values computed on CPU and GPU which is
-// expected to be *near* equal, or when large numbers can yield ULP errors
+// expected to be *near* equal, or when computing large numbers can yield ULP errors
 template <typename TypeOut>
 struct NearEqualComparator {
   double tolerance_;
