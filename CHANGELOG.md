@@ -226,6 +226,7 @@
 - PR #5043 Remove invalid examples page libcudf doxygen
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
+- PR #5076 Fix JNI code for null_policy enum change
 
 
 # cuDF 0.13.0 (31 Mar 2020)
