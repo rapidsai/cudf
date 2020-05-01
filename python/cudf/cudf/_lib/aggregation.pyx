@@ -10,11 +10,11 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from cudf.utils import cudautils
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, IncludeNulls
+from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
 from cudf._lib.move cimport move
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_include_nulls
+    underlying_type_t_null_policy
 )
 from cudf._lib.types import Interpolation
 
@@ -132,8 +132,8 @@ cdef class _AggregationFactory:
     def size(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
-            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(
-                IncludeNulls.YES
+            <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                NullHandling.INCLUDE
             )
         ))
         return agg
