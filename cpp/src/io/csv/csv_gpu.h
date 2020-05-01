@@ -38,13 +38,33 @@ constexpr uint32_t rowofs_block_dim = 512;
 constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadblock
 
 /**
+ * Row parsing context with row count
+ * Format: row_count * 4 + id, where `row_count` is the number of rows
+ * in a character block, and `id` is the row parser state at the end of the block.
+ **/
+typedef uint32_t rowctx32_t;
+typedef uint64_t rowctx64_t;
+
+/**
+ * Packed row context format
+ *
+ * Pack four rowctx32_t values, where each value represents the output row context
+ * for one of four possible input contexts when parsing a character block.
+ * Each rowctx32_t value is truncated to 20-bit (limiting the max number of rows
+ * to 18-bit) and concatenated to form a 80-bit value, whose upper 16 bits are
+ * always zero (EOF input state implies a zero row count) and therefore
+ * stored as 64-bit.
+ **/
+typedef uint64_t packed_rowctx_t;
+
+/**
  * @brief return a row context from a {count, id} pair
  *
  * The 32-bit row context consists of the 2-bit parser state stored in the lower 2-bits
  * and a 30-bit row count in the upper 30 bits.
  *
  **/
-inline __host__ __device__ uint32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
+inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
 {
   return row_count * 4 + out_ctx;
 }
@@ -62,7 +82,9 @@ inline __host__ __device__ uint32_t make_row_context(uint32_t row_count, uint32_
  * states are included as parameters, and the EOF->EOF state transition is hardcoded)
  *
  **/
-inline __host__ __device__ uint64_t pack_row_contexts(uint32_t ctx0, uint32_t ctx1, uint32_t ctx2)
+inline __host__ __device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0,
+                                                             rowctx32_t ctx1,
+                                                             rowctx32_t ctx2)
 {
   return (ctx0) | (static_cast<uint64_t>(ctx1) << 20) | (static_cast<uint64_t>(ctx2) << 40) |
          (static_cast<uint64_t>(ROW_CTX_EOF) << 60);
@@ -71,26 +93,27 @@ inline __host__ __device__ uint64_t pack_row_contexts(uint32_t ctx0, uint32_t ct
 /**
  * @brief Unpack a row context  (select one of the 4 contexts in packed form)
  **/
-inline __host__ __device__ uint32_t get_row_context(uint64_t packed_ctx, uint32_t ctxid)
+inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx, uint32_t ctxid)
 {
-  return static_cast<uint32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
+  return static_cast<rowctx32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
 }
 
 /**
  * @brief Select the output row context from a given input context and a packed row
  * context corresponding to a block of characters, and return the new output context with
  * updated total row count.
- * The input context here is a 64-bit version of the 32-bit single row context as returned
+ * The input context is a 64-bit version of the 32-bit single row context as returned
  * by make_row_context(), so the maximum row rount here is a 62-bit value.
  *
  * @param sel_ctx input context (2-bit context id, 62-bit row count)
  * @param packed_ctx row context of character block
  * @return total_row_count * 4 + output context id
  **/
-inline __host__ __device__ uint64_t select_row_context(uint64_t sel_ctx, uint64_t packed_ctx)
+inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
+                                                         packed_rowctx_t packed_ctx)
 {
   uint32_t ctxid = static_cast<uint32_t>(sel_ctx & 3);
-  uint32_t ctx   = get_row_context(packed_ctx, ctxid);
+  rowctx32_t ctx = get_row_context(packed_ctx, ctxid);
   return sel_ctx - ctxid + ctx;
 }
 

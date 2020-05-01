@@ -575,7 +575,8 @@ __global__ void convertCsvToGdf(const char *raw_csv,
  * @brief merge two packed row contexts (each corresponding to a block of characters)
  * and returns the packed row context corresponding to the merged character block
  **/
-inline __device__ uint64_t merge_row_contexts(uint64_t first_ctx, uint64_t second_ctx)
+inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
+                                                     packed_rowctx_t second_ctx)
 {
   uint32_t id0 = get_row_context(first_ctx, ROW_CTX_NONE) & 3;
   uint32_t id1 = get_row_context(first_ctx, ROW_CTX_QUOTE) & 3;
@@ -650,7 +651,7 @@ inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, u
  *
  **/
 static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
-                                                     uint64_t ctxb,
+                                                     packed_rowctx_t ctxb,
                                                      uint32_t t)
 {
   uint64_t tmp;
@@ -693,11 +694,12 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
  *
  * @return Final row context and count (row_position*4 + context_id format)
  **/
-static inline __device__ uint32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024], uint32_t t)
+static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxtree[1024],
+                                                                   uint32_t t)
 {
-  uint32_t ctx   = ctxtree[0] & 3;  // Starting input context
-  uint32_t brow4 = 0;               // output row in block *4
-  uint32_t ctxb_left, ctxb_right, ctxb_sum;
+  uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
+  rowctx32_t brow4 = 0;               // output row in block *4
+  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
 
 #define CTX_UNMERGE(rmask, base)                                      \
   ctxb_sum   = get_row_context(ctxtree[base], ctx);                   \
@@ -859,7 +861,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     __syncthreads();
 
     // Walk back the transform tree with the initial row context
-    uint32_t ctx               = rowctx_inverse_merge_transform(ctxtree, t);
+    rowctx32_t ctx             = rowctx_inverse_merge_transform(ctxtree, t);
     uint64_t row               = (ctxtree[0] >> 2) + (ctx >> 2);
     uint32_t rows_out_of_range = 0;
     uint32_t rowmap =
