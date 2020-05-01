@@ -54,6 +54,7 @@
 - PR #4688 Add Java count aggregation to include null values
 - PR #4331 Improved test for double that considers an epsilon
 - PR #4731 Avoid redundant host->device copies when reading the entire CSV/JSON file
+- PR #4739 Add missing aggregations for cudf::experimental::reduce
 - PR #4738 Remove stop-gaps in StringMethods and enable related tests
 - PR #4745 Fix `fsspec` related issue and upgrade `fsspec` version
 - PR #4779 Allow reading arbitrary stripes/rowgroup lists in CPP columnar readers
@@ -130,6 +131,7 @@
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
+- PR #5047 Add Cython binding for libcudf++ CSV reader
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
@@ -220,6 +222,7 @@
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
+- PR #5040 Fix `make_scalar_iterator()` and `make_pair_iterator(scalar)` to not copy values to host
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
