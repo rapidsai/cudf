@@ -608,7 +608,7 @@ inline __device__ uint32_t make_short_row_context(uint32_t id0,
  * Merges a single-character "block" row context at position pos with the current
  * block's row context (the current block contains 32-pos characters)
  *
- * @param ctx Current block context and new row bitmaps
+ * @param ctx Current block context and new rows bitmaps
  * @param ctx_short state transitions associated with new character
  * @param pos Position within the current 32-character block
  *
@@ -860,7 +860,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     if (t == 0) { ctxtree[0] = row_ctx[blockIdx.x]; }
     __syncthreads();
 
-    // Walk back the transform tree with the initial row context
+    // Walk back the transform tree with the known initial parser state
     rowctx32_t ctx             = rowctx_inverse_merge_transform(ctxtree, t);
     uint64_t row               = (ctxtree[0] >> 2) + (ctx >> 2);
     uint32_t rows_out_of_range = 0;
@@ -889,7 +889,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       if (t == 0) { row_ctx[blockIdx.x] = rows_out_of_range; }
     }
   } else {
-    // Just store the row counts
+    // Just store the row counts and output contexts
     if (t == 0) { row_ctx[blockIdx.x] = ctxtree[1]; }
   }
 }
