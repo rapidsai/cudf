@@ -347,12 +347,12 @@ std::unique_ptr<experimental::table> copy_if(
                                   grid.num_blocks,
                                   stream);
 
-    cudaStreamSynchronize(stream);
+    CUDA_TRY(cudaStreamSynchronize(stream));
     // As it is InclusiveSum, last value in block_offsets will be output_size
     output_size = block_counts.back();
   } else {
     // With num_blocks <= 1, block_offsets will always be `0`
-    cudaStreamSynchronize(stream);
+    CUDA_TRY(cudaStreamSynchronize(stream));
     output_size = block_counts[grid.num_blocks - 1];
   }
 
