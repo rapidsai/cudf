@@ -792,50 +792,50 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   c_prev                            = (cur > start) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
-    uint32_t state;
+    uint32_t ctx;
     if (cur < end) {
       c = cur[0];
       if (c_prev == terminator) {
         if (c == commentchar ||
             (skipblanklines && (c == terminator || (c == '\r' && terminator == '\n')))) {
           // Start of a new comment or empty row
-          state = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 0, 0, 0);
+          ctx = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 0, 0, 0);
         } else if (c == quotechar) {
           // Quoted string on newrow, or quoted string ending in terminator
-          state = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
+          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
         } else {
           // Start of a new row unless within a quote
-          state = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
+          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
         if (c_prev == delimiter || c_prev == quotechar) {
           // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
-          state = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
         } else {
           // Closing or ignored quote
-          state = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
       } else if (c == delimiter_esc && c_prev != escapechar) {
         // Escapable delimiter ends quoted string
-        state = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
       } else {
         // Neutral character
-        state = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
       }
     } else {
       const char *data_end = start + data_size - start_offset;
       if (cur >= data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         uint32_t eof_row = (cur == data_end && cur <= end) ? 1 : 0;
-        state =
+        ctx =
           make_short_row_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
       } else {
         // Pass-through context (beyond chunk_size but before data_size)
-        state = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
       }
     }
     // Merge with current context, keeping track of where new rows occur
-    merge_short_row_context(ctx_map, state, pos);
+    merge_short_row_context(ctx_map, ctx, pos);
   }
 
   // Eliminate rows that start before byte_range_start

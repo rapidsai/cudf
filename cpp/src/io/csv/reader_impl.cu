@@ -522,7 +522,7 @@ size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
   size_t header_end   = 0;
   size_t data_start   = 0;
   cudf::size_type row = 0;
-  int ctx             = ROW_CTX_NONE;
+  int state           = ROW_CTX_NONE;
   int commentchar     = (opts.comment != '\0') ? opts.comment : 0x100;
   int quotechar       = (opts.quotechar != '\0') ? opts.quotechar : 0x100;
   int escapechar      = 0x100;  // FIXME: Add escapechar to API
@@ -532,9 +532,9 @@ size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
 
   for (size_t pos = 0; pos < h_size; pos++) {
     int ch = h_data[pos];
-    if ((ch == opts.terminator && ctx != ROW_CTX_QUOTE) || pos + 1 == h_size) {
-      if (ctx == ROW_CTX_COMMENT) {
-        ctx = ROW_CTX_NONE;
+    if ((ch == opts.terminator && state != ROW_CTX_QUOTE) || pos + 1 == h_size) {
+      if (state == ROW_CTX_COMMENT) {
+        state = ROW_CTX_NONE;
       } else if (opts.skipblanklines &&
                  (pos == header_start ||
                   (pos == header_start + 1 && opts.terminator == '\n' && prev_ch == '\r'))) {
@@ -546,15 +546,17 @@ size_t reader::impl::parse_csv_header(const char *h_data, size_t h_size)
         row++;
       }
       header_start = header_end = pos + 1;
-    } else if (ctx == ROW_CTX_NONE) {
+    } else if (state == ROW_CTX_NONE) {
       if (prev_ch == opts.terminator && ch == commentchar) {
-        ctx = ROW_CTX_COMMENT;
+        state = ROW_CTX_COMMENT;
       } else if (ch == quotechar && (prev_ch == opts.terminator || prev_ch == opts.delimiter ||
                                      prev_ch == quotechar)) {
-        ctx = ROW_CTX_QUOTE;
+        state = ROW_CTX_QUOTE;
       }
-    } else if (ctx == ROW_CTX_QUOTE) {
-      if (ch == quotechar || (ch == esc_delimiter && prev_ch != escapechar)) { ctx = ROW_CTX_NONE; }
+    } else if (state == ROW_CTX_QUOTE) {
+      if (ch == quotechar || (ch == esc_delimiter && prev_ch != escapechar)) {
+        state = ROW_CTX_NONE;
+      }
     }
     prev_ch = ch;
   }
