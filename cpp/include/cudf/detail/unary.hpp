@@ -90,6 +90,26 @@ std::unique_ptr<column> cast(column_view const& input,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                              cudaStream_t stream                 = 0);
 
+/**
+ * @copydoc cudf::experimental::is_nan
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::unique_ptr<column> is_nan(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::experimental::is_not_nan
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::unique_ptr<column> is_not_nan(
+  cudf::column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace detail
 }  // namespace experimental
 }  // namespace cudf
