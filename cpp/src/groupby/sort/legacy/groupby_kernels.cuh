@@ -25,10 +25,10 @@ namespace cudf {
 namespace groupby {
 namespace sort {
 
-/**---------------------------------------------------------------------------*
- @brief  Compute the aggregation(s) of corresponding rows in the `values` input 
+/**
+ @brief  Compute the aggregation(s) of corresponding rows in the `values` input
  * table using the key sorted order and the group labels.
- * 
+ *
  * The aggregations(s) is computed  by  performing elementwise aggregation
  * operations between a target (the corresponding output value row for group_id)
  * and source   (the corresponding input value row using the current keys sorted
@@ -40,8 +40,8 @@ namespace sort {
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam values_have_nulls Indicates if rows in `input_values` contain null
  * values
- * @param input_values The table whose rows will be aggregated in the 
- * output values table 
+ * @param input_values The table whose rows will be aggregated in the
+ * output values table
  * @param output_values Table that stores the results of aggregating rows of
  * `input_values`.
  * @param key_sorted_order The sorted order of the `keys` in sort-based groupby
@@ -53,7 +53,7 @@ namespace sort {
  * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
  * `true` and skip_null_keys option is true.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool skip_rows_with_nulls, bool values_have_nulls>
 __global__ void aggregate_all_rows(device_table input_values,
                                    device_table output_values,
@@ -61,7 +61,8 @@ __global__ void aggregate_all_rows(device_table input_values,
                                    cudf::size_type const* group_labels,
                                    bool skip_null_keys,
                                    operators* ops,
-                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+                                   bit_mask::bit_mask_t const* const __restrict__ row_bitmask)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_values.num_rows()) {

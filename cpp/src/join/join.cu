@@ -27,12 +27,10 @@
 #include <join/join_common_utils.hpp>
 
 namespace cudf {
-
 namespace experimental {
-
 namespace detail {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
@@ -42,9 +40,10 @@ namespace detail {
  * excluded from `[0, num_columns)`
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- *---------------------------------------------------------------------------**/
+ **/
 auto non_common_column_indices(size_type num_columns,
-                               std::vector<size_type> const& common_column_indices) {
+                               std::vector<size_type> const& common_column_indices)
+{
   CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
                "Too many columns in common");
   std::vector<size_type> all_column_indices(num_columns);
@@ -63,7 +62,8 @@ auto non_common_column_indices(size_type num_columns,
 std::unique_ptr<experimental::table> get_empty_joined_table(
   table_view const& left,
   table_view const& right,
-  std::vector<std::pair<size_type, size_type>> const& columns_in_common) {
+  std::vector<std::pair<size_type, size_type>> const& columns_in_common)
+{
   std::vector<size_type> right_columns_in_common(columns_in_common.size());
   std::transform(columns_in_common.begin(),
                  columns_in_common.end(),
@@ -78,7 +78,8 @@ std::unique_ptr<experimental::table> get_empty_joined_table(
   return std::make_unique<experimental::table>(tmp_table);
 }
 
-VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b) {
+VectorPair concatenate_vector_pairs(VectorPair& a, VectorPair& b)
+{
   CUDF_EXPECTS((a.first.size() == a.second.size()),
                "Mismatch between sizes of vectors in vector pair");
   CUDF_EXPECTS((b.first.size() == b.second.size()),
@@ -101,66 +102,68 @@ struct valid_range {
   T start, stop;
   __host__ __device__ valid_range(const T begin, const T end) : start(begin), stop(end) {}
 
-  __host__ __device__ __forceinline__ bool operator()(const T index) {
+  __host__ __device__ __forceinline__ bool operator()(const T index)
+  {
     return ((index >= start) && (index < stop));
   }
 };
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Creates a table containing the complement of left join indices.
-* This table has two columns. The first one is filled with JoinNoneValue(-1)
-* and the second one contains values from 0 to right_table_row_count - 1
-* excluding those found in the right_indices column.
-*
-* @Param right_indices Vector of indices
-* @Param left_table_row_count Number of rows of left table
-* @Param right_table_row_count Number of rows of right table
-* @param stream Optional, stream on which all memory allocations and copies
-* will be performed
-*
-* @Returns  Pair of vectors containing the left join indices complement
-*/
+ * @brief  Creates a table containing the complement of left join indices.
+ * This table has two columns. The first one is filled with JoinNoneValue(-1)
+ * and the second one contains values from 0 to right_table_row_count - 1
+ * excluding those found in the right_indices column.
+ *
+ * @Param right_indices Vector of indices
+ * @Param left_table_row_count Number of rows of left table
+ * @Param right_table_row_count Number of rows of right table
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
+ *
+ * @Returns  Pair of vectors containing the left join indices complement
+ */
 /* ----------------------------------------------------------------------------*/
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
                                  size_type left_table_row_count,
                                  size_type right_table_row_count,
-                                 cudaStream_t stream) {
-  //Get array of indices that do not appear in right_indices
+                                 cudaStream_t stream)
+{
+  // Get array of indices that do not appear in right_indices
 
-  //Vector allocated for unmatched result
+  // Vector allocated for unmatched result
   rmm::device_vector<size_type> right_indices_complement(right_table_row_count);
 
-  //If left table is empty in a full join call then all rows of the right table
-  //should be represented in the joined indices. This is an optimization since
-  //if left table is empty and full join is called all the elements in
-  //right_indices will be JoinNoneValue, i.e. -1. This if path should
-  //produce exactly the same result as the else path but will be faster.
+  // If left table is empty in a full join call then all rows of the right table
+  // should be represented in the joined indices. This is an optimization since
+  // if left table is empty and full join is called all the elements in
+  // right_indices will be JoinNoneValue, i.e. -1. This if path should
+  // produce exactly the same result as the else path but will be faster.
   if (left_table_row_count == 0) {
     thrust::sequence(rmm::exec_policy(stream)->on(stream),
                      right_indices_complement.begin(),
                      right_indices_complement.end(),
                      0);
   } else {
-    //Assume all the indices in invalid_index_map are invalid
+    // Assume all the indices in invalid_index_map are invalid
     rmm::device_vector<size_type> invalid_index_map(right_table_row_count, 1);
-    //Functor to check for index validity since left joins can create invalid indices
+    // Functor to check for index validity since left joins can create invalid indices
     valid_range<size_type> valid(0, right_table_row_count);
 
-    //invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
-    //Thus specifying that those locations are valid
+    // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
+    // Thus specifying that those locations are valid
     thrust::scatter_if(rmm::exec_policy(stream)->on(stream),
                        thrust::make_constant_iterator(0),
                        thrust::make_constant_iterator(0) + right_indices.size(),
-                       right_indices.begin(),      //Index locations
-                       right_indices.begin(),      //Stencil - Check if index location is valid
-                       invalid_index_map.begin(),  //Output indices
-                       valid);                     //Stencil Predicate
+                       right_indices.begin(),      // Index locations
+                       right_indices.begin(),      // Stencil - Check if index location is valid
+                       invalid_index_map.begin(),  // Output indices
+                       valid);                     // Stencil Predicate
     size_type begin_counter = static_cast<size_type>(0);
     size_type end_counter   = static_cast<size_type>(right_table_row_count);
 
-    //Create list of indices that have been marked as invalid
+    // Create list of indices that have been marked as invalid
     size_type indices_count = thrust::copy_if(rmm::exec_policy(stream)->on(stream),
                                               thrust::make_counting_iterator(begin_counter),
                                               thrust::make_counting_iterator(end_counter),
@@ -198,7 +201,8 @@ get_left_join_indices_complement(rmm::device_vector<size_type>& right_indices,
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base_join_indices(
-  table_view const& left, table_view const& right, cudaStream_t stream) {
+  table_view const& left, table_view const& right, cudaStream_t stream)
+{
   CUDF_EXPECTS(0 != left.num_columns(), "Selected left dataset is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Selected right dataset is empty");
   CUDF_EXPECTS(std::equal(std::cbegin(left),
@@ -215,29 +219,30 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> get_base
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Combines the non common left, common left and non common right
-* columns in the correct order to form the join output table.
-*
-* @param left_noncommon_cols Columns obtained by gathering non common left
-* columns.
-* @param left_noncommon_col_indices Output locations of non common left columns
-* in the final table output
-* @param left_common_cols Columns obtained by gathering common left
-* columns.
-* @param left_common_col_indices Output locations of common left columns in the
-* final table output
-* @param right_noncommon_cols Table obtained by gathering non common right
-* columns.
-*
-* @Returns  Table containing rearranged columns.
-*/
+ * @brief  Combines the non common left, common left and non common right
+ * columns in the correct order to form the join output table.
+ *
+ * @param left_noncommon_cols Columns obtained by gathering non common left
+ * columns.
+ * @param left_noncommon_col_indices Output locations of non common left columns
+ * in the final table output
+ * @param left_common_cols Columns obtained by gathering common left
+ * columns.
+ * @param left_common_col_indices Output locations of common left columns in the
+ * final table output
+ * @param right_noncommon_cols Table obtained by gathering non common right
+ * columns.
+ *
+ * @Returns  Table containing rearranged columns.
+ */
 /* ----------------------------------------------------------------------------*/
 std::vector<std::unique_ptr<column>> combine_join_columns(
   std::vector<std::unique_ptr<column>>&& left_noncommon_cols,
   std::vector<size_type> const& left_noncommon_col_indices,
   std::vector<std::unique_ptr<column>>&& left_common_cols,
   std::vector<size_type> const& left_common_col_indices,
-  std::vector<std::unique_ptr<column>>&& right_noncommon_cols) {
+  std::vector<std::unique_ptr<column>>&& right_noncommon_cols)
+{
   std::vector<std::unique_ptr<column>> combined_cols(left_noncommon_cols.size() +
                                                      left_common_cols.size());
   for (size_t i = 0; i < left_noncommon_cols.size(); ++i) {
@@ -254,27 +259,27 @@ std::vector<std::unique_ptr<column>> combine_join_columns(
 
 /* --------------------------------------------------------------------------*/
 /**
-* @brief  Gathers rows from `left` and `right` table and combines them into a
-* single table.
-*
-* @param left Left input table
-* @param right Right input table
-* @param joined_indices Pair of vectors containing row indices from which
-* `left` and `right` tables are gathered. If any row index is out of bounds,
-* the contribution in the output `table` will be NULL.
-* @param columns_in_common is a vector of pairs of column indices
-* from tables `left` and `right` respectively, that are "in common".
-* For "common" columns, only a single output column will be produced.
-* For an inner or left join, the result will be gathered from the column in
-* `left`. For a full join, the result will be gathered from both common
-* columns in `left` and `right` and concatenated to form a single column.
-*
-* @Returns `table` containing the concatenation of rows from `left` and
-* `right` specified by `joined_indices`.
-* For any columns indicated by `columns_in_common`, only the corresponding
-* column in `left` will be included in the result. Final form would look like
-* `left(including common columns)+right(excluding common columns)`.
-*/
+ * @brief  Gathers rows from `left` and `right` table and combines them into a
+ * single table.
+ *
+ * @param left Left input table
+ * @param right Right input table
+ * @param joined_indices Pair of vectors containing row indices from which
+ * `left` and `right` tables are gathered. If any row index is out of bounds,
+ * the contribution in the output `table` will be NULL.
+ * @param columns_in_common is a vector of pairs of column indices
+ * from tables `left` and `right` respectively, that are "in common".
+ * For "common" columns, only a single output column will be produced.
+ * For an inner or left join, the result will be gathered from the column in
+ * `left`. For a full join, the result will be gathered from both common
+ * columns in `left` and `right` and concatenated to form a single column.
+ *
+ * @Returns `table` containing the concatenation of rows from `left` and
+ * `right` specified by `joined_indices`.
+ * For any columns indicated by `columns_in_common`, only the corresponding
+ * column in `left` will be included in the result. Final form would look like
+ * `left(including common columns)+right(excluding common columns)`.
+ */
 /* ----------------------------------------------------------------------------*/
 template <join_kind JoinKind>
 std::unique_ptr<experimental::table> construct_join_output_df(
@@ -283,7 +288,8 @@ std::unique_ptr<experimental::table> construct_join_output_df(
   VectorPair& joined_indices,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   std::vector<size_type> left_common_col;
   left_common_col.reserve(columns_in_common.size());
   std::vector<size_type> right_common_col;
@@ -399,7 +405,8 @@ std::unique_ptr<experimental::table> join_call_compute_df(
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
   rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream = 0) {
+  cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
   CUDF_EXPECTS(left.num_rows() < MAX_JOIN_SIZE, "Left column size is too big");
@@ -438,7 +445,8 @@ std::unique_ptr<experimental::table> inner_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::INNER_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
@@ -450,7 +458,8 @@ std::unique_ptr<experimental::table> left_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::LEFT_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
@@ -462,12 +471,13 @@ std::unique_ptr<experimental::table> full_join(
   std::vector<size_type> const& left_on,
   std::vector<size_type> const& right_on,
   std::vector<std::pair<size_type, size_type>> const& columns_in_common,
-  rmm::mr::device_memory_resource* mr) {
+  rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::join_call_compute_df<::cudf::experimental::detail::join_kind::FULL_JOIN>(
     left, right, left_on, right_on, columns_in_common, mr);
 }
 
-}  //namespace experimental
+}  // namespace experimental
 
-}  //namespace cudf
+}  // namespace cudf

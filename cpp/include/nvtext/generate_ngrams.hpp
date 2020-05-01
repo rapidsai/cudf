@@ -20,6 +20,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace nvtext {
+/**
+ * @ingroup nvtext_apis
+ * @addtogroup nvtext_ngrams NGrams
+ * APIs to produce ngrams from strings columns
+ * @{
+ */
 
 /**
  * @brief Returns a single column of strings by generating ngrams from
@@ -27,11 +33,12 @@ namespace nvtext {
  *
  * An ngram is a grouping of 2 or more strings with a separator. For example,
  * generating bigrams groups all adjacent pairs of strings.
+ *
  * ```
  * ["a", "bb", "ccc"] would generate bigrams as ["a_bb", "bb_ccc"]
  * and trigrams as ["a_bb_ccc"]
  * ```
- * 
+ *
  * The size of the output column will be the total number of ngrams generated from
  * the input strings column.
  *
@@ -51,4 +58,5 @@ std::unique_ptr<cudf::column> generate_ngrams(
   cudf::string_scalar const& separator = cudf::string_scalar{"_"},
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace nvtext

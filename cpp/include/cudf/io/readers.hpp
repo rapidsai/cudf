@@ -46,10 +46,8 @@ namespace experimental {
 namespace io {
 //! Inner interfaces and implementations
 namespace detail {
-
 //! Avro format
 namespace avro {
-
 /**
  * @brief Options for the Avro reader.
  */
@@ -143,8 +141,8 @@ class reader {
 //! JSON format
 namespace json {
 /**
-   * @brief Options for the JSON reader.
-   */
+ * @brief Options for the JSON reader.
+ */
 struct reader_options {
   bool lines = false;
   /// Specify the compression format of the source or infer from file extension
@@ -157,22 +155,24 @@ struct reader_options {
   reader_options(reader_options const &) = default;
 
   /**---------------------------------------------------------------------------*
-     * @brief Constructor to populate reader options.
-     *
-     * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
-     * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
-     * @param[in] dtype Ordered list of data types; deduced from dataset if empty
-     *---------------------------------------------------------------------------**/
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
+   * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
+   * @param[in] dtype Ordered list of data types; deduced from dataset if empty
+   *---------------------------------------------------------------------------**/
   reader_options(bool lines,
                  compression_type compression,
                  std::vector<std::string> dtype,
                  bool dayfirst)
-    : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst) {}
+    : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst)
+  {
+  }
 };
 
 /**
-   * @brief Class to read JSON dataset data into columns.
-   */
+ * @brief Class to read JSON dataset data into columns.
+ */
 class reader {
  private:
   class impl;
@@ -180,64 +180,64 @@ class reader {
 
  public:
   /**
-     * @brief Constructor for a filepath to dataset.
-     *
-     * @param filepath Path to whole dataset
-     * @param options Settings for controlling reading behavior
-     * @param mr Optional resource to use for device memory allocation
-     */
+   * @brief Constructor for a filepath to dataset.
+   *
+   * @param filepath Path to whole dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
   explicit reader(std::string filepath,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-     * @brief Constructor for a memory buffer to dataset.
-     *
-     * @param buffer Pointer to whole dataset
-     * @param length Host buffer size in bytes
-     * @param options Settings for controlling reading behavior
-     * @param mr Optional resource to use for device memory allocation
-     */
+   * @brief Constructor for a memory buffer to dataset.
+   *
+   * @param buffer Pointer to whole dataset
+   * @param length Host buffer size in bytes
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
   explicit reader(const char *buffer,
                   size_t length,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-     * @brief Constructor for an Arrow file to dataset.
-     *
-     * @param file Arrow file object of dataset
-     * @param options Settings for controlling reading behavior
-     * @param mr Optional resource to use for device memory allocation
-     */
+   * @brief Constructor for an Arrow file to dataset.
+   *
+   * @param file Arrow file object of dataset
+   * @param options Settings for controlling reading behavior
+   * @param mr Optional resource to use for device memory allocation
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
-     * @brief Destructor explicitly-declared to avoid inlined in header
-     */
+   * @brief Destructor explicitly-declared to avoid inlined in header
+   */
   ~reader();
 
-  /**---------------------------------------------------------------------------*
-     * @brief Reads and returns the entire data set.
-     *
-     * @return cudf::table object that contains the array of gdf_columns.
-     *---------------------------------------------------------------------------**/
+  /*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table object that contains the array of gdf_columns.
+   */
   table_with_metadata read_all(cudaStream_t stream = 0);
 
-  /**---------------------------------------------------------------------------*
-     * @brief Reads and returns all the rows within a byte range.
-     *
-     * The returned data includes the row that straddles the end of the range.
-     * In other words, a row is included as long as the row begins within the byte
-     * range.
-     *
-     * @param[in] offset Byte offset from the start
-     * @param[in] size Number of bytes from the offset; set to 0 for all remaining
-     *
-     * @return cudf::table object that contains the array of gdf_columns
-     *---------------------------------------------------------------------------**/
+  /*
+   * @brief Reads and returns all the rows within a byte range.
+   *
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
+   *
+   * @param[in] offset Byte offset from the start
+   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
+   *
+   * @return cudf::table object that contains the array of gdf_columns
+   */
   table_with_metadata read_byte_range(size_t offset, size_t size, cudaStream_t stream = 0);
 };
 
@@ -245,7 +245,6 @@ class reader {
 
 //! CSV format
 namespace csv {
-
 /**
  * @brief Options for the CSV reader.
  */
@@ -426,7 +425,6 @@ class reader {
 
 //! ORC format
 namespace orc {
-
 /**
  * @brief Options for the ORC reader.
  */
@@ -460,7 +458,9 @@ struct reader_options {
       use_np_dtypes(np_compat),
       timestamp_type(timestamp_type),
       decimals_as_float(decimals_as_float_),
-      forced_decimals_scale(forced_decimals_scale_) {}
+      forced_decimals_scale(forced_decimals_scale_)
+  {
+  }
 };
 
 /**
@@ -565,7 +565,6 @@ class reader {
 
 //! Parquet format
 namespace parquet {
-
 /**
  * @brief Options for the Parquet reader.
  */
@@ -593,7 +592,9 @@ struct reader_options {
     : columns(std::move(columns)),
       strings_to_categorical(strings_to_categorical),
       use_pandas_metadata(use_pandas_metadata),
-      timestamp_type(timestamp_type) {}
+      timestamp_type(timestamp_type)
+  {
+  }
 };
 
 /**

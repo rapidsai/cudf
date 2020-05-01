@@ -19,18 +19,17 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/legacy/scalar_wrapper.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/cudf.h>
-
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/scalar_wrapper.cuh>
 
 template <typename T>
-struct ReplaceNullsTest : GdfTest {};
+struct ReplaceNullsTest : GdfTest {
+};
 
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(ReplaceNullsTest, test_types);
 
@@ -59,28 +58,26 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
   constexpr cudf::size_type column_size{10};
 
   ReplaceNullsColumn<TypeParam>(
-    cudf::test::column_wrapper<TypeParam> {column_size,
+    cudf::test::column_wrapper<TypeParam>{
+      column_size,
       [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return (row < column_size/2) ? false : true; }},
-    cudf::test::column_wrapper<TypeParam> {column_size,
-      [](cudf::size_type row) { return 1; },
-      false},
-    cudf::test::column_wrapper<TypeParam> {column_size,
-      [](cudf::size_type row) { return (row < column_size/2) ? 1 : row; },
-      false});
+      [](cudf::size_type row) { return (row < column_size / 2) ? false : true; }},
+    cudf::test::column_wrapper<TypeParam>{
+      column_size, [](cudf::size_type row) { return 1; }, false},
+    cudf::test::column_wrapper<TypeParam>{
+      column_size, [](cudf::size_type row) { return (row < column_size / 2) ? 1 : row; }, false});
 }
-
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
   constexpr cudf::size_type column_size{10};
 
   ReplaceNullsScalar<TypeParam>(
-    cudf::test::column_wrapper<TypeParam> {column_size,
+    cudf::test::column_wrapper<TypeParam>{
+      column_size,
       [](cudf::size_type row) { return row; },
-      [](cudf::size_type row) { return (row < column_size/2) ? false : true; }},
-    cudf::test::scalar_wrapper<TypeParam> {1, true},
-    cudf::test::column_wrapper<TypeParam> {column_size,
-      [](cudf::size_type row) { return (row < column_size/2) ? 1 : row; },
-      false});
+      [](cudf::size_type row) { return (row < column_size / 2) ? false : true; }},
+    cudf::test::scalar_wrapper<TypeParam>{1, true},
+    cudf::test::column_wrapper<TypeParam>{
+      column_size, [](cudf::size_type row) { return (row < column_size / 2) ? 1 : row; }, false});
 }

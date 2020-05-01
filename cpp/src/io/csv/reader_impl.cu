@@ -49,11 +49,10 @@ namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
-
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
  *
@@ -63,8 +62,9 @@ using namespace cudf::io;
  * @param[in] num_columns Number of columns in the CSV file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- *---------------------------------------------------------------------------**/
-constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
+ **/
+constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
+{
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
   constexpr size_t column_bytes  = 64;
   constexpr size_t base_padding  = 1024;  // 1KB
@@ -87,7 +87,8 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
  *
  * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
  */
-std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype) {
+std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dtype)
+{
   if (dtype == "hex" || dtype == "hex64") {
     return std::make_tuple(data_type{cudf::type_id::INT64}, column_parse::as_hexadecimal);
   }
@@ -101,7 +102,8 @@ std::tuple<data_type, column_parse::flags> get_dtype_info(const std::string &dty
 /**
  * @brief Removes the first and Last quote in the string
  */
-string removeQuotes(string str, char quotechar) {
+string removeQuotes(string str, char quotechar)
+{
   // Exclude first and last quotation char
   const size_t first_quote = str.find(quotechar);
   if (first_quote != string::npos) { str.erase(first_quote, 1); }
@@ -118,7 +120,8 @@ string removeQuotes(string str, char quotechar) {
 std::vector<std::string> setColumnNames(std::vector<char> const &header,
                                         ParseOptions const &opts,
                                         int header_row,
-                                        std::string prefix) {
+                                        std::string prefix)
+{
   std::vector<std::string> col_names;
 
   // If there is only a single character then it would be the terminator
@@ -182,7 +185,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
                                        int skip_rows,
                                        int skip_end_rows,
                                        int num_rows,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata metadata;
 
@@ -231,8 +235,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_size = h_uncomp_data_owner.size();
     }
     // None of the parameters for row selection is used, we are parsing the entire file
-    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows == 0 &&
-                                 skip_end_rows == 0 && num_rows == -1;
+    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
+                                 skip_end_rows <= 0 && num_rows == -1;
 
     // Preload the intput data to device
     if (load_whole_file) data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
@@ -378,7 +382,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                       size_t h_size,
                                       size_t range_offset,
                                       cudaStream_t stream,
-                                      const rmm::device_buffer *d_data) {
+                                      const rmm::device_buffer *d_data)
+{
   // Account for the start and end of row region offsets
   const bool require_first_line_start = (range_offset == 0);
   const bool require_last_line_end    = (h_data[h_size - 1] != opts.terminator);
@@ -426,7 +431,8 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
                                                         cudf::size_type skip_rows,
                                                         cudf::size_type skip_end_rows,
                                                         cudf::size_type num_rows,
-                                                        cudaStream_t stream) {
+                                                        cudaStream_t stream)
+{
   thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
   auto it_begin                               = h_row_offsets.begin();
   auto it_end                                 = h_row_offsets.end();
@@ -468,7 +474,7 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
+  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
 
   // Exclude the rows outside of requested range
   if (range_size != 0) {
@@ -505,7 +511,7 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
     it_end -= skip_end_rows;
   }
 
@@ -530,7 +536,8 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   return std::make_pair(offset_start, offset_end);
 }
 
-std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream) {
+std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
+{
   std::vector<data_type> dtypes;
 
   if (args_.dtype.empty()) {
@@ -649,7 +656,8 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream) {
 
 void reader::impl::decode_data(const std::vector<data_type> &column_types,
                                std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream) {
+                               cudaStream_t stream)
+{
   thrust::host_vector<void *> h_data(num_active_cols);
   thrust::host_vector<bitmask_type *> h_valid(num_active_cols);
 
@@ -682,7 +690,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : source_(std::move(source)), mr_(mr), filepath_(filepath), args_(options) {
+  : source_(std::move(source)), mr_(mr), filepath_(filepath), args_(options)
+{
   num_actual_cols = args_.names.size();
   num_active_cols = args_.names.size();
 
@@ -740,7 +749,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 reader::reader(std::string filepath,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr)) {
+  : _impl(std::make_unique<impl>(nullptr, filepath, options, mr))
+{
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
 }
@@ -750,24 +760,30 @@ reader::reader(const char *buffer,
                size_t length,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(buffer, length), "", options, mr))
+{
+}
 
 // Forward to implementation
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr)) {}
+  : _impl(std::make_unique<impl>(datasource::create(file), "", options, mr))
+{
+}
 
 // Destructor within this translation unit
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read_all(cudaStream_t stream) {
+table_with_metadata reader::read_all(cudaStream_t stream)
+{
   return _impl->read(0, 0, 0, 0, -1, stream);
 }
 
 // Forward to implementation
-table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream) {
+table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStream_t stream)
+{
   return _impl->read(offset, size, 0, 0, -1, stream);
 }
 
@@ -775,7 +791,8 @@ table_with_metadata reader::read_byte_range(size_t offset, size_t size, cudaStre
 table_with_metadata reader::read_rows(size_type num_skip_header,
                                       size_type num_skip_footer,
                                       size_type num_rows,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream)
+{
   CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
                "Cannot use both `num_rows` and `num_skip_footer`");
 

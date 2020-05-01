@@ -5,6 +5,8 @@ project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
+
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
@@ -13,9 +15,8 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
+    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
-
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------

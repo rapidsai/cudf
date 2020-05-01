@@ -21,19 +21,19 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Returns a new strings column created from a subset of
  * of the strings column. The subset of strings selected is between
  * start (inclusive) and end (exclusive) with incrememnts of step.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s1 = ["a", "b", "c", "d", "e", "f"]
  * s2 = slice( s1, 2 )
  * s2 is ["c", "d", "e", "f"]
  * s3 = slice( s1, 1, 2 )
  * s3 is ["b", "d", "f"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param start Index to first string to select in the column (inclusive).

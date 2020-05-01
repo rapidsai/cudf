@@ -22,7 +22,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Returns a single column by vertically concatenating the given vector of
  * strings columns.

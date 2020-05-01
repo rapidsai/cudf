@@ -1156,11 +1156,13 @@ class Series(Frame):
         """
         return super().dropna(subset=[self.name])
 
-    def drop_duplicates(self, keep="first", inplace=False):
+    def drop_duplicates(self, keep="first", inplace=False, ignore_index=False):
         """
         Return Series with duplicate values removed
         """
-        result = super().drop_duplicates(subset=[self.name], keep=keep)
+        result = super().drop_duplicates(
+            subset=[self.name], keep=keep, ignore_index=ignore_index
+        )
 
         return self._mimic_inplace(result, inplace=inplace)
 
@@ -1805,20 +1807,6 @@ class Series(Frame):
         else:
             res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
-
-    # Find / Search
-
-    def find_first_value(self, value):
-        """
-        Returns offset of first value that matches
-        """
-        return self._column.find_first_value(value)
-
-    def find_last_value(self, value):
-        """
-        Returns offset of last value that matches
-        """
-        return self._column.find_last_value(value)
 
     #
     # Stats
@@ -2816,11 +2804,7 @@ class Series(Frame):
             The sequence of values to test. Passing in a single string will
             raise a TypeError. Instead, turn a single string into a list
             of one element.
-        use_name : bool
-            If ``True`` then combine hashed column values
-            with hashed column name. This is useful for when the same
-            values in different columns should be encoded
-            with different hashed values.
+
         Returns
         -------
         result: Series
@@ -3175,7 +3159,9 @@ class Series(Frame):
                     "The 'method' argument is deprecated and will be unused",
                     DeprecationWarning,
                 )
-            return SeriesGroupBy(self, by=by, level=level, dropna=dropna)
+            return SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
 
     @copy_docstring(Rolling)
     def rolling(

@@ -21,6 +21,12 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_modify Modify
+ * APIs to modify from strings.
+ * @{
+ */
 
 /**
  * @brief Pad types for the pad method specify where the pad
@@ -40,11 +46,12 @@ enum class pad_side {
  *
  * Null string entries result in null entries in the output column.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ['aa','bbb','cccc','ddddd']
  * r = pad(s,4)
  * r is now ['aa  ','bbb ','cccc','ddddd']
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param width The minimum number of characters for each string.
@@ -71,11 +78,12 @@ std::unique_ptr<column> pad(strings_column_view const& strings,
  *
  * Null string entries result in null entries in the output column.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ['1234','-9876','+0.34','-342567']
  * r = zfill(s,6)
  * r is now ['001234','0-9876','0+0.34','-342567']
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param width The minimum number of characters for each string.
@@ -87,5 +95,6 @@ std::unique_ptr<column> zfill(
   size_type width,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

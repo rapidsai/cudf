@@ -25,7 +25,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Create an offsets column to be a child of a strings column.
  * This will set the offsets values by executing scan on the provided
@@ -43,7 +42,8 @@ std::unique_ptr<column> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0) {
+  cudaStream_t stream                 = 0)
+{
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
   auto count = thrust::distance(begin, end);
   auto offsets_column =

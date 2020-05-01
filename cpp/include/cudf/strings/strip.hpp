@@ -21,7 +21,16 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_modify Modify
+ * APIs to modify from strings.
+ * @{
+ */
 
+/**
+ * @brief Direction identifier for strip() function.
+ */
 enum class strip_type {
   LEFT,   //<< strip characters from the beginning of the string
   RIGHT,  //<< strip characters from the end of the string
@@ -41,17 +50,18 @@ enum class strip_type {
  *
  * Any null string entries return corresponding null output column entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = [" aaa ", "_bbbb ", "__cccc  ", "ddd", " ee _ff gg_"]
  * r = strip(s,both," _")
  * r is now ["aaa", "bbbb", "cccc", "ddd", "ee _ff gg"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if `to_strip` is invalid.
  *
  * @param strings Strings column for this operation.
- * @param stype Indicates characters are to be stripped from the beginning, end, or both of each string.
- *        Default is both.
+ * @param stype Indicates characters are to be stripped from the beginning, end, or both of each
+ * string. Default is both.
  * @param to_strip UTF-8 encoded characters to strip from each string.
  *        Default is empty string which indicates strip whitespace characters.
  * @param mr Resource for allocating device memory.
@@ -63,5 +73,6 @@ std::unique_ptr<column> strip(
   string_scalar const& to_strip       = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

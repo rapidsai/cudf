@@ -21,7 +21,6 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
-
 // Minimal thrift implementation for parsing page headers
 
 static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
@@ -51,16 +50,19 @@ struct byte_stream_s {
   ColumnChunkDesc ck;
 };
 
-inline __device__ unsigned int getb(byte_stream_s *bs) {
+inline __device__ unsigned int getb(byte_stream_s *bs)
+{
   return (bs->cur < bs->end) ? *bs->cur++ : 0;
 }
 
-inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt) {
+inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt)
+{
   bytecnt = min(bytecnt, (size_t)(bs->end - bs->cur));
   bs->cur += bytecnt;
 }
 
-__device__ uint32_t get_u32(byte_stream_s *bs) {
+__device__ uint32_t get_u32(byte_stream_s *bs)
+{
   uint32_t v = 0, l = 0, c;
   do {
     c = getb(bs);
@@ -70,12 +72,14 @@ __device__ uint32_t get_u32(byte_stream_s *bs) {
   return v;
 }
 
-inline __device__ int32_t get_i32(byte_stream_s *bs) {
+inline __device__ int32_t get_i32(byte_stream_s *bs)
+{
   uint32_t u = get_u32(bs);
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
-__device__ void skip_struct_field(byte_stream_s *bs, int t) {
+__device__ void skip_struct_field(byte_stream_s *bs, int t)
+{
   int struct_depth = 0;
   int rep_cnt      = 0;
 
@@ -117,16 +121,17 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t) {
   } while (rep_cnt || struct_depth);
 }
 
-#define PARQUET_BEGIN_STRUCT(fn)          \
-  __device__ bool fn(byte_stream_s *bs) { \
-    int fld = 0;                          \
-    for (;;) {                            \
-      int c, t, f;                        \
-      c = getb(bs);                       \
-      if (!c) break;                      \
-      f   = c >> 4;                       \
-      t   = c & 0xf;                      \
-      fld = (f) ? fld + f : get_i32(bs);  \
+#define PARQUET_BEGIN_STRUCT(fn)         \
+  __device__ bool fn(byte_stream_s *bs)  \
+  {                                      \
+    int fld = 0;                         \
+    for (;;) {                           \
+      int c, t, f;                       \
+      c = getb(bs);                      \
+      if (!c) break;                     \
+      f   = c >> 4;                      \
+      t   = c & 0xf;                     \
+      fld = (f) ? fld + f : get_i32(bs); \
       switch (fld) {
 #define PARQUET_FLD_ENUM(id, m, mt)    \
   case id:                             \
@@ -189,7 +194,8 @@ PARQUET_END_STRUCT()
  **/
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks) {
+  gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
+{
   __shared__ byte_stream_s bs_g[4];
 
   int t                   = threadIdx.x & 0x1f;
@@ -233,8 +239,10 @@ extern "C" __global__ void __launch_bounds__(128)
         if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case DATA_PAGE:
-              // TODO: Unless the file only uses V2 page headers or has no complex nesting (num_rows == num_values), we can't infer num_rows at this time
-              // -> we'll need another pass after decompression to parse the definition and repetition levels to infer the correct value of num_rows
+              // TODO: Unless the file only uses V2 page headers or has no complex nesting (num_rows
+              // == num_values), we can't infer num_rows at this time
+              // -> we'll need another pass after decompression to parse the definition and
+              // repetition levels to infer the correct value of num_rows
               bs->page.num_rows = bs->page.num_values;  // Assumes num_rows == num_values
                                                         // Fall-through to V2
             case DATA_PAGE_V2:
@@ -286,7 +294,8 @@ extern "C" __global__ void __launch_bounds__(128)
  **/
 // blockDim {128,1,1}
 extern "C" __global__ void __launch_bounds__(128)
-  gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks) {
+  gpuBuildStringDictionaryIndex(ColumnChunkDesc *chunks, int32_t num_chunks)
+{
   __shared__ ColumnChunkDesc chunk_g[4];
 
   int t                     = threadIdx.x & 0x1f;
@@ -327,7 +336,8 @@ extern "C" __global__ void __launch_bounds__(128)
 
 cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
                                        int32_t num_chunks,
-                                       cudaStream_t stream) {
+                                       cudaStream_t stream)
+{
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
@@ -336,7 +346,8 @@ cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
 
 cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
                                                 int32_t num_chunks,
-                                                cudaStream_t stream) {
+                                                cudaStream_t stream)
+{
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
   gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);

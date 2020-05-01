@@ -22,21 +22,22 @@
 
 namespace cudf {
 namespace io {
-
 /**
  * @brief Implementation class for storing data into a local file.
- * 
+ *
  */
 class file_sink : public data_sink {
  public:
-  explicit file_sink(std::string const& filepath) {
+  explicit file_sink(std::string const& filepath)
+  {
     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
   }
 
   virtual ~file_sink() { flush(); }
 
-  void host_write(void const* data, size_t size) override {
+  void host_write(void const* data, size_t size) override
+  {
     outfile_.write(reinterpret_cast<char const*>(data), size);
   }
 
@@ -50,7 +51,7 @@ class file_sink : public data_sink {
 
 /**
  * @brief Implementation class for storing data into a std::vector.
- * 
+ *
  */
 class host_buffer_sink : public data_sink {
  public:
@@ -58,7 +59,8 @@ class host_buffer_sink : public data_sink {
 
   virtual ~host_buffer_sink() { flush(); }
 
-  void host_write(void const* data, size_t size) override {
+  void host_write(void const* data, size_t size) override
+  {
     char const* char_array = reinterpret_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
   }
@@ -73,7 +75,7 @@ class host_buffer_sink : public data_sink {
 
 /**
  * @brief Implementation class for voiding data (no io performed)
- * 
+ *
  */
 class void_sink : public data_sink {
  public:
@@ -85,7 +87,8 @@ class void_sink : public data_sink {
 
   bool supports_device_write() const override { return true; }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  {
     bytes_written_ += size;
   }
 
@@ -107,7 +110,8 @@ class user_sink_wrapper : public data_sink {
 
   bool supports_device_write() const override { return user_sink->supports_device_write(); }
 
-  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override {
+  void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
+  {
     CUDF_EXPECTS(user_sink->supports_device_write(),
                  "device_write() being called on a data_sink that doesn't support it");
     user_sink->device_write(gpu_data, size, stream);
@@ -121,17 +125,20 @@ class user_sink_wrapper : public data_sink {
   cudf::io::data_sink* const user_sink;
 };
 
-std::unique_ptr<data_sink> data_sink::create(const std::string& filepath) {
+std::unique_ptr<data_sink> data_sink::create(const std::string& filepath)
+{
   return std::make_unique<file_sink>(filepath);
 }
 
-std::unique_ptr<data_sink> data_sink::create(std::vector<char>* buffer) {
+std::unique_ptr<data_sink> data_sink::create(std::vector<char>* buffer)
+{
   return std::make_unique<host_buffer_sink>(buffer);
 }
 
 std::unique_ptr<data_sink> data_sink::create() { return std::make_unique<void_sink>(); }
 
-std::unique_ptr<data_sink> data_sink::create(cudf::io::data_sink* const user_sink) {
+std::unique_ptr<data_sink> data_sink::create(cudf::io::data_sink* const user_sink)
+{
   return std::make_unique<user_sink_wrapper>(user_sink);
 }
 

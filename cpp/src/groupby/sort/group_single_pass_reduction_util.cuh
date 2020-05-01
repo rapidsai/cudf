@@ -33,11 +33,11 @@ namespace cudf {
 namespace experimental {
 namespace groupby {
 namespace detail {
-
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
-  static constexpr bool is_supported() {
+  static constexpr bool is_supported()
+  {
     if (K == aggregation::SUM)
       return cudf::is_numeric<T>();
     else if (K == aggregation::MIN or K == aggregation::MAX)
@@ -54,7 +54,8 @@ struct reduce_functor {
     size_type num_groups,
     rmm::device_vector<cudf::size_type> const& group_labels,
     rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream) {
+    cudaStream_t stream)
+  {
     using OpType     = cudf::experimental::detail::corresponding_operator_t<K>;
     using ResultType = cudf::experimental::detail::target_type_t<T, K>;
 
@@ -87,7 +88,8 @@ struct reduce_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args) {
+  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args)
+  {
     CUDF_FAIL("Unsupported type-agg combination");
   }
 };

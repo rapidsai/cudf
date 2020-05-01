@@ -47,14 +47,15 @@ namespace cudf {
  * @param[in] buffer_length Amount of memory to be allocated
  * @param[in] value The value to be filled into the buffer
  * @tparam data_type The data type to be used for the buffer
- * 
+ *
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type>
 gdf_error allocValueBuffer(data_type** buffer,
                            const cudf::size_type buffer_length,
-                           const data_type value) {
+                           const data_type value)
+{
   RMM_TRY(RMM_ALLOC((void**)buffer, buffer_length * sizeof(data_type), 0));
   thrust::fill(thrust::device, *buffer, *buffer + buffer_length, value);
   return GDF_SUCCESS;
@@ -67,25 +68,26 @@ gdf_error allocValueBuffer(data_type** buffer,
  * @param[in,out] buffer Address of the buffer to be allocated
  * @param[in] buffer_length Amount of memory to be allocated
  * @tparam data_type The data type to be used for the buffer
- * 
+ *
  * @returns GDF_SUCCESS upon succesful completion
  */
 /* ----------------------------------------------------------------------------*/
 template <typename data_type>
-gdf_error allocSequenceBuffer(data_type** buffer, const cudf::size_type buffer_length) {
+gdf_error allocSequenceBuffer(data_type** buffer, const cudf::size_type buffer_length)
+{
   RMM_TRY(RMM_ALLOC((void**)buffer, buffer_length * sizeof(data_type), 0));
   thrust::sequence(thrust::device, *buffer, *buffer + buffer_length);
   return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Trivially computes full join of two tables if one of the tables
  * are empty
  *
  * @throws cudf::logic_error
  * "Dataset is empty" if both left_table and right_table are empty
- * 
+ *
  * @param[in] left_size The size of the left table
  * @param[in] right_size The size of the right table
  * @param[in] rightcol The right set of columns to join
@@ -96,7 +98,8 @@ gdf_error allocSequenceBuffer(data_type** buffer, const cudf::size_type buffer_l
 void trivial_full_join(const cudf::size_type left_size,
                        const cudf::size_type right_size,
                        gdf_column* left_result,
-                       gdf_column* right_result) {
+                       gdf_column* right_result)
+{
   // Deduce the type of the output gdf_columns
   gdf_dtype dtype;
   switch (sizeof(output_index_type)) {
@@ -142,7 +145,7 @@ void trivial_full_join(const cudf::size_type left_size,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Computes the join operation between two sets of columns
  *
  * @throws cudf::logic_error
@@ -150,7 +153,7 @@ void trivial_full_join(const cudf::size_type left_size,
  * If number of rows in table is too big
  * If it has in-valid join context
  * If method is sort based and number of columns to join are more than `1`
- * 
+ *
  * @param[in] left  Table of left columns to join
  * @param[in] right Table of right  columns to join
  * @param[out] left_result The join computed indices of the `left` table
@@ -165,7 +168,8 @@ void join_call(cudf::table const& left,
                cudf::table const& right,
                gdf_column* left_result,
                gdf_column* right_result,
-               gdf_context* join_context) {
+               gdf_context* join_context)
+{
   CUDF_EXPECTS(0 != left.num_columns(), "Left Dataset is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right Dataset is empty");
   CUDF_EXPECTS(nullptr != join_context, "Invalid join context");
@@ -240,7 +244,7 @@ void join_call(cudf::table const& left,
   nvtx::range_pop();
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
@@ -250,10 +254,11 @@ void join_call(cudf::table const& left,
  * excluded from `[0, num_columns)`
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- *---------------------------------------------------------------------------**/
+ **/
 
 auto non_common_column_indices(cudf::size_type num_columns,
-                               std::vector<cudf::size_type> const& common_column_indices) {
+                               std::vector<cudf::size_type> const& common_column_indices)
+{
   CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
                "Too many columns in common");
   std::vector<cudf::size_type> all_column_indices(num_columns);
@@ -271,7 +276,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Gathers rows indicated by `left_indices` and `right_indices` from
  * tables `left` and `right`, respectively, into a single `table`.
  *
@@ -282,7 +287,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
  *
  * @throws cudf::logic_error
  * If call to nvcategory_gather_table fails
- * 
+ *
  * @param[in] left   The left table
  * @param[in] right  the right table
  * @param[in] columns_in_common is a vector of pairs of column indices
@@ -295,7 +300,7 @@ auto non_common_column_indices(cudf::size_type num_columns,
  * is out of bounds, the contribution in the output `table` will be NULL.
  * @param[in] right_indicess  Row indices from `right` to gather. If any row
  * index is out of bounds, the contribution in the output `table` will be NULL.
- * 
+ *
  * @returns `table` containing the concatenation of rows from `left` and
  * `right` specified by `left_indices` and `right_indices`, respectively.
  * For any columns indicated by `columns_in_common`, only the corresponding
@@ -310,9 +315,10 @@ cudf::table construct_join_output_df(
   cudf::table const& right,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   gdf_column* left_indices,
-  gdf_column* right_indices) {
+  gdf_column* right_indices)
+{
   nvtx::range_push("CUDF_JOIN_OUTPUT", nvtx::JOIN_COLOR);
-  //create left and right input table with columns not joined on
+  // create left and right input table with columns not joined on
   std::vector<cudf::size_type> left_columns_in_common(columns_in_common.size());
   std::vector<cudf::size_type> right_columns_in_common(columns_in_common.size());
 
@@ -406,7 +412,7 @@ cudf::table construct_join_output_df(
 }
 
 /* --------------------------------------------------------------------------*/
-/** 
+/**
  * @brief  Performs join on the columns provided in `left` and `right` as per
  * the joining indices given in `left_on` and `right_on` and creates a single
  * table.
@@ -419,7 +425,7 @@ cudf::table construct_join_output_df(
  * @param[in] left_on The column's indices from `left` to join on.
  * Column `i` from `left_on` will be compared against column `i` of `right_on`.
  * @param[in] right_on The column's indices from `right` to join on.
- * Column `i` from `right_on` will be compared with column `i` of `left_on`. 
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`.
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
@@ -450,7 +456,8 @@ cudf::table join_call_compute_df(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   cudf::table* joined_indices,
-  gdf_context* join_context) {
+  gdf_context* join_context)
+{
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
   CUDF_EXPECTS(nullptr != join_context, "Join context is invalid");
@@ -482,9 +489,9 @@ cudf::table join_call_compute_df(
     return tmp_table;
   }
 
-  // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
-  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
-  // If the inputs are empty, immediately return
+  // Even though the resulting table might be empty, but the column should match the expected dtypes
+  // and other necessary information So, there is a possibility that there will be lesser number of
+  // right columns, so the tmp_table. If the inputs are empty, immediately return
   if ((0 == left.num_rows()) && (0 == right.num_rows())) { return tmp_table; }
 
   // If left join and the left table is empty, return immediately
@@ -495,7 +502,7 @@ cudf::table join_call_compute_df(
     return cudf::empty_like(tmp_table);
   }
 
-  //if the inputs are nvcategory we need to make the dictionaries comparable
+  // if the inputs are nvcategory we need to make the dictionaries comparable
   bool at_least_one_category_column = std::any_of(cbegin(left_on), cend(left_on), [&](auto index) {
     return (left.get_column(index)->dtype == GDF_STRING_CATEGORY);
   });
@@ -604,7 +611,7 @@ cudf::table join_call_compute_df(
     right_index_out  = right_index_temp.get();
   }
 
-  //get column pointers to join on
+  // get column pointers to join on
   join_call<join_type>(updated_left_table.select(left_on),
                        updated_right_table.select(right_on),
                        left_index_out,
@@ -616,7 +623,7 @@ cudf::table join_call_compute_df(
   left_index_temp.reset(nullptr);
   right_index_temp.reset(nullptr);
 
-  //freeing up the temp column used to synch categories between columns
+  // freeing up the temp column used to synch categories between columns
   for (unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size();
        column_to_free++) {
     gdf_column_free(temp_columns_to_free[column_to_free]);
@@ -635,7 +642,8 @@ cudf::table left_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   cudf::table* joined_indices,
-  gdf_context* join_context) {
+  gdf_context* join_context)
+{
   return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
     left, right, left_on, right_on, columns_in_common, joined_indices, join_context);
 }
@@ -647,7 +655,8 @@ cudf::table inner_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   cudf::table* joined_indices,
-  gdf_context* join_context) {
+  gdf_context* join_context)
+{
   return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
     left, right, left_on, right_on, columns_in_common, joined_indices, join_context);
 }
@@ -659,7 +668,8 @@ cudf::table full_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
   cudf::table* joined_indices,
-  gdf_context* join_context) {
+  gdf_context* join_context)
+{
   return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(
     left, right, left_on, right_on, columns_in_common, joined_indices, join_context);
 }

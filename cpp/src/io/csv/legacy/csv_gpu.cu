@@ -21,7 +21,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
-
 /**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
@@ -42,7 +41,8 @@ __global__ void dataTypeDetection(const char *raw_csv,
                                   int num_columns,
                                   column_parse::flags *flags,
                                   const uint64_t *recStart,
-                                  column_parse::stats *d_columnData) {
+                                  column_parse::stats *d_columnData)
+{
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
   long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
@@ -155,18 +155,18 @@ __global__ void dataTypeDetection(const char *raw_csv,
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor for converting CSV data to cuDF data type value.
- *---------------------------------------------------------------------------**/
+ **/
 struct ConvertFunctor {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Template specialization for operator() for types whose values can be
    * convertible to a 0 or 1 to represent false/true. The converting is done by
    * checking against the default and user-specified true/false values list.
    *
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *csvData,
                                                       void *gdfColumnData,
@@ -174,7 +174,8 @@ struct ConvertFunctor {
                                                       long start,
                                                       long end,
                                                       const ParseOptions &opts,
-                                                      column_parse::flags flags) {
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
 
     // Check for user-specified true/false values first, where the output is
@@ -193,10 +194,10 @@ struct ConvertFunctor {
     }
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *csvData,
                                                       void *gdfColumnData,
@@ -204,13 +205,14 @@ struct ConvertFunctor {
                                                       long start,
                                                       long end,
                                                       const ParseOptions &opts,
-                                                      column_parse::flags flags) {
+                                                      column_parse::flags flags)
+  {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
     value = convertStrToValue<T>(csvData, start, end, opts);
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -225,7 +227,7 @@ struct ConvertFunctor {
  * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void convertCsvToGdf(const char *raw_csv,
                                 const ParseOptions opts,
                                 cudf::size_type num_records,
@@ -235,7 +237,8 @@ __global__ void convertCsvToGdf(const char *raw_csv,
                                 gdf_dtype *dtype,
                                 void **data,
                                 cudf::valid_type **valid,
-                                cudf::size_type *num_valid) {
+                                cudf::size_type *num_valid)
+{
   // thread IDs range per block, so also need the block id
   long rec_id =
     threadIdx.x + (blockDim.x * blockIdx.x);  // this is entry into the field array - tid is
@@ -317,7 +320,8 @@ cudaError_t __host__ DetectCsvDataTypes(const char *data,
                                         const ParseOptions &options,
                                         column_parse::flags *flags,
                                         column_parse::stats *stats,
-                                        cudaStream_t stream) {
+                                        cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection));
@@ -341,7 +345,8 @@ cudaError_t __host__ DecodeCsvColumnData(const char *data,
                                          void **columns,
                                          cudf::valid_type **valids,
                                          cudf::size_type *num_valid,
-                                         cudaStream_t stream) {
+                                         cudaStream_t stream)
+{
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));

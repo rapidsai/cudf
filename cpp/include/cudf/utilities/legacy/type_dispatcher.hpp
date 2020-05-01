@@ -121,26 +121,26 @@ class NVStrings;
  * specializing for a set of types that share some property. For example, a
  * functor that prints `integral` or `floating point` for integral or floating
  * point types:
- * 
+ *
  * ```
  * struct integral_or_floating_point {
  *   template <typename ColumnType,
  *             std::enable_if_t<not std::is_integral<ColumnType>::value and
  *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "neither integral nor floating point\n"; }
- * 
+ *
  *   template <typename ColumnType,
  *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "integral\n"; }
- * 
+ *
  *   template < typename ColumnType,
  *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "floating point\n"; }
  * };
  * ```
- * 
- * For more info on SFINAE and `std::enable_if`, see 
- * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/ 
+ *
+ * For more info on SFINAE and `std::enable_if`, see
+ * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/
  *
  * The return type for all template instantiations of the functor's "operator()"
  * lambda must be the same, else there will be a compiler error as you would be
@@ -160,7 +160,6 @@ class NVStrings;
  */
 /* ----------------------------------------------------------------------------*/
 namespace cudf {
-
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma hd_warning_disable
@@ -168,7 +167,8 @@ namespace cudf {
 template <class functor_t, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dtype,
                                                                    functor_t f,
-                                                                   Ts&&... args) {
+                                                                   Ts&&... args)
+{
   switch (dtype) {
     // The .template is known as a "template disambiguator"
     // See here for more information:
@@ -233,7 +233,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a C++ type to it's corresponding gdf_dtype.
  *
  * When explicitly passed a template argument of a given type, returns the
@@ -246,74 +246,88 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
  * ```
  *
  * @tparam T The type to map to a `gdf_dtype`
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
-inline constexpr gdf_dtype gdf_dtype_of() {
+inline constexpr gdf_dtype gdf_dtype_of()
+{
   return GDF_invalid;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<int8_t>() {
+inline constexpr gdf_dtype gdf_dtype_of<int8_t>()
+{
   return GDF_INT8;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<int16_t>() {
+inline constexpr gdf_dtype gdf_dtype_of<int16_t>()
+{
   return GDF_INT16;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<int32_t>() {
+inline constexpr gdf_dtype gdf_dtype_of<int32_t>()
+{
   return GDF_INT32;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<int64_t>() {
+inline constexpr gdf_dtype gdf_dtype_of<int64_t>()
+{
   return GDF_INT64;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<float>() {
+inline constexpr gdf_dtype gdf_dtype_of<float>()
+{
   return GDF_FLOAT32;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<double>() {
+inline constexpr gdf_dtype gdf_dtype_of<double>()
+{
   return GDF_FLOAT64;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::bool8>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::bool8>()
+{
   return GDF_BOOL8;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::date32>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::date32>()
+{
   return GDF_DATE32;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::date64>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::date64>()
+{
   return GDF_DATE64;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::timestamp>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::timestamp>()
+{
   return GDF_TIMESTAMP;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::category>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::category>()
+{
   return GDF_CATEGORY;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<cudf::nvstring_category>() {
+inline constexpr gdf_dtype gdf_dtype_of<cudf::nvstring_category>()
+{
   return GDF_STRING_CATEGORY;
 };
 
 template <>
-inline constexpr gdf_dtype gdf_dtype_of<NVStrings>() {
+inline constexpr gdf_dtype gdf_dtype_of<NVStrings>()
+{
   return GDF_STRING;
 };
 

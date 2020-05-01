@@ -22,6 +22,12 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_combine Combine
+ * APIs to combine strings row-wise.
+ * @{
+ */
 
 /**
  * @brief Row-wise concatenates the given list of strings columns and
@@ -36,14 +42,15 @@ namespace strings {
  *
  * The number of strings in the columns provided must be the same.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s1 = ['aa', null, '', 'aa']
  * s2 = ['', 'bb', 'bb', null]
  * r1 = concatenate([s1,s2])
  * r1 is ['aa', null, 'bb', null]
  * r2 = concatenate([s1,s2],':','_')
  * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
  * @throw cudf::logic_error if separator is not valid.
@@ -70,11 +77,12 @@ std::unique_ptr<column> concatenate(
  * This returns a column with one string. Any null entries are ignored unless
  * the narep parameter specifies a replacement string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ['aa', null, '', 'zz' ]
  * r = join_strings(s,':','_')
  * r is ['aa:_::zz']
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if separator is not valid.
  *
@@ -92,5 +100,6 @@ std::unique_ptr<column> join_strings(
   string_scalar const& narep          = string_scalar("", false),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

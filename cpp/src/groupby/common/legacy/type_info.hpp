@@ -19,10 +19,10 @@
 
 #include <cudf/legacy/groupby.hpp>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file type_info.hpp
  * @brief Type info traits used in hash-based groupby.
-*---------------------------------------------------------------------------**/
+ **/
 namespace cudf {
 // forward decls
 struct DeviceMin;
@@ -30,12 +30,12 @@ struct DeviceMax;
 struct DeviceSum;
 
 namespace groupby {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
  *
  * @tparam op The enum to map to its corresponding functor
- *---------------------------------------------------------------------------**/
+ **/
 template <operators op>
 struct corresponding_functor {
   using type = void;
@@ -59,13 +59,13 @@ struct corresponding_functor<COUNT> {
 template <operators op>
 using corresponding_functor_t = typename corresponding_functor<op>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and operation.
  *
  * @tparam InputType The type of the input to the aggregation operation
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, operators op, typename dummy = void>
 struct target_type {
   using type = void;
@@ -122,13 +122,14 @@ struct target_type<SourceType, SUM, std::enable_if_t<std::is_floating_point<Sour
 template <typename SourceType, operators op>
 using target_type_t = typename target_type<SourceType, op>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor that uses the target_type trait to map the combination of a
  * dispatched SourceType and aggregation operation to required target gdf_dtype.
- *---------------------------------------------------------------------------**/
+ **/
 struct target_type_mapper {
   template <typename SourceType>
-  gdf_dtype operator()(operators op) const noexcept {
+  gdf_dtype operator()(operators op) const noexcept
+  {
     switch (op) {
       case MIN: return gdf_dtype_of<target_type_t<SourceType, operators::MIN>>();
       case MAX: return gdf_dtype_of<target_type_t<SourceType, operators::MAX>>();

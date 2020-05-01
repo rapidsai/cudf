@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <strings/regex/regcomp.h>
 #include <cudf/utilities/error.hpp>
@@ -25,7 +25,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 namespace {
-
 // Bitmask of all operators
 #define OPERATOR_MASK 0200
 enum OperatorType {
@@ -60,7 +59,8 @@ const std::array<char, 33> escapable_chars{
 
 }  // namespace
 
-int32_t reprog::add_inst(int32_t t) {
+int32_t reprog::add_inst(int32_t t)
+{
   reinst inst;
   inst.type        = t;
   inst.u2.left_id  = 0;
@@ -68,12 +68,14 @@ int32_t reprog::add_inst(int32_t t) {
   return add_inst(inst);
 }
 
-int32_t reprog::add_inst(reinst inst) {
+int32_t reprog::add_inst(reinst inst)
+{
   _insts.push_back(inst);
   return static_cast<int>(_insts.size() - 1);
 }
 
-int32_t reprog::add_class(reclass cls) {
+int32_t reprog::add_class(reclass cls)
+{
   _classes.push_back(cls);
   return static_cast<int>(_classes.size() - 1);
 }
@@ -100,7 +102,9 @@ const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
-// Converts pattern into regex classes
+/**
+ * @brief Converts pattern into regex classes
+ */
 class regex_parser {
   reprog& m_prog;
   const char32_t* pattern;
@@ -133,7 +137,8 @@ class regex_parser {
     return false;
   }
 
-  int bldcclass() {
+  int bldcclass()
+  {
     int type = CCLASS;
     std::vector<char32_t> cls;
     int builtins = 0;
@@ -245,7 +250,8 @@ class regex_parser {
     return type;
   }
 
-  int lex(int dot_type) {
+  int lex(int dot_type)
+  {
     int quoted = nextc(yy);
     if (quoted) {
       // treating all quoted numbers as Octal, since we are not supporting backreferences
@@ -454,6 +460,9 @@ class regex_parser {
   }
 
  public:
+  /**
+   * @brief Single parsed pattern element.
+   */
   struct Item {
     int t;
     union {
@@ -470,7 +479,8 @@ class regex_parser {
   bool m_has_counted;
 
   regex_parser(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), pattern(pattern), exprp(pattern), lexdone(false), m_has_counted(false) {
+    : m_prog(prog), pattern(pattern), exprp(pattern), lexdone(false), m_has_counted(false)
+  {
     int token = 0;
     while ((token = lex(dot_type)) != END) {
       Item item;
@@ -515,9 +525,10 @@ class regex_compiler {
 
   inline void pushand(int f, int l) { andstack.push_back({f, l}); }
 
-  inline Node popand(int op) {
+  inline Node popand(int op)
+  {
     if (andstack.size() < 1) {
-      //missing operand for op
+      // missing operand for op
       int inst_id = m_prog.add_inst(NOP);
       pushand(inst_id, inst_id);
     }
@@ -526,20 +537,23 @@ class regex_compiler {
     return node;
   }
 
-  inline void pushator(int t) {
+  inline void pushator(int t)
+  {
     Ator ator;
     ator.t     = t;
     ator.subid = pushsubid;
     atorstack.push_back(ator);
   }
 
-  inline Ator popator() {
+  inline Ator popator()
+  {
     Ator ator = atorstack[atorstack.size() - 1];
     atorstack.pop_back();
     return ator;
   }
 
-  void evaluntil(int pri) {
+  void evaluntil(int pri)
+  {
     Node op1;
     Node op2;
     int id_inst1 = -1;
@@ -553,11 +567,11 @@ class regex_compiler {
         case LBRA: /* must have been RBRA */
           op1                                    = popand('(');
           id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  //subidstack[subidstack.size()-1];
+          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  // subidstack[subidstack.size()-1];
           m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
           id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;  //subidstack[subidstack.size() - 1];
-          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
+          m_prog.inst_at(id_inst1).u1.subid   = ator.subid;  // subidstack[subidstack.size() - 1];
+          m_prog.inst_at(id_inst1).u2.next_id = op1.id_first;
           pushand(id_inst1, id_inst2);
           return;
         case OR:
@@ -631,9 +645,10 @@ class regex_compiler {
     }
   }
 
-  void Operator(int t) {
+  void Operator(int t)
+  {
     if (t == RBRA && --nbra < 0)
-      //unmatched right paren
+      // unmatched right paren
       return;
     if (t == LBRA) {
       nbra++;
@@ -645,7 +660,8 @@ class regex_compiler {
                   t == PLUS_LAZY || t == RBRA);
   }
 
-  void Operand(int t) {
+  void Operand(int t)
+  {
     if (lastwasand) Operator(CAT); /* catenate is implicit */
     int inst_id = m_prog.add_inst(t);
     if (t == CCLASS || t == NCCLASS)
@@ -660,7 +676,8 @@ class regex_compiler {
   int yyclass_id;
 
   void expand_counted(const std::vector<regex_parser::Item>& in,
-                      std::vector<regex_parser::Item>& out) {
+                      std::vector<regex_parser::Item>& out)
+  {
     std::vector<int> lbra_stack;
     int rep_start = -1;
 
@@ -746,7 +763,8 @@ class regex_compiler {
 
  public:
   regex_compiler(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0), yyclass_id(0), yy(0) {
+    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0), yyclass_id(0), yy(0)
+  {
     // Parse
     std::vector<regex_parser::Item> items;
     {
@@ -800,15 +818,17 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern) {
+reprog reprog::create_from(const char32_t* pattern)
+{
   reprog rtn;
   regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
-  //rtn->print();
+  // rtn->print();
   return rtn;
 }
 
 //
-void reprog::optimize1() {
+void reprog::optimize1()
+{
   // Treat non-capturing LBRAs/RBRAs as NOOP
   for (int i = 0; i < static_cast<int>(_insts.size()); i++) {
     if (_insts[i].type == LBRA || _insts[i].type == RBRA) {
@@ -864,7 +884,8 @@ void reprog::optimize1() {
 }
 
 // expand leading ORs to multiple startinst_ids
-void reprog::optimize2() {
+void reprog::optimize2()
+{
   _startinst_ids.clear();
   std::vector<int> stack;
   stack.push_back(_startinst_id);
@@ -884,7 +905,8 @@ void reprog::optimize2() {
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
-void reprog::print() {
+void reprog::print()
+{
   printf("Instructions:\n");
   for (int i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];

@@ -21,6 +21,12 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_find Find
+ * APIs to locate for substrings within strings.
+ * @{
+ */
 
 /**
  * @brief Returns a column of character position values where the target
@@ -137,5 +143,6 @@ std::unique_ptr<column> ends_with(
   string_scalar const& target,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

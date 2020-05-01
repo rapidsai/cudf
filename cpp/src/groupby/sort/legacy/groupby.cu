@@ -46,17 +46,16 @@
 namespace cudf {
 namespace groupby {
 namespace sort {
-
 using index_vector = rmm::device_vector<cudf::size_type>;
 
 namespace {
 
-/**---------------------------------------------------------------------------*
- * @brief Computes the ordered aggregation requests which were skipped 
+/**
+ * @brief Computes the ordered aggregation requests which were skipped
  * in a previous process (`compound_to_simple`). These ordered aggregations
  * were skipped because they can't be compound to simple aggregation.
- * 
- * Then combine these results with  the set of output aggregation columns 
+ *
+ * Then combine these results with  the set of output aggregation columns
  * corresponding to not ordered aggregation requests.
  *
  * @param groupby[in] The object for computing sort-based groupby
@@ -68,13 +67,14 @@ namespace {
  * not ordered aggregation requests
  * @param stream[in] CUDA stream on which to execute
  * @return vector of columns satisfying each of the original aggregation requests
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<gdf_column*> compute_ordered_aggregations(
   detail::helper& groupby,
   std::vector<AggRequestType> const& original_requests,
   std::vector<operation_args*> const& input_ops_args,
   cudf::table& current_output_values,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   std::vector<gdf_column*> output_value(original_requests.size());
   std::copy(current_output_values.begin(), current_output_values.end(), output_value.begin());
 
@@ -139,7 +139,7 @@ std::vector<gdf_column*> compute_ordered_aggregations(
   return output_value;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Prepare input parameters for invoking the `aggregate_all_rows` kernel
  * which compute the simple aggregation(s) of corresponding rows in the output
  * `values` table.
@@ -149,18 +149,19 @@ std::vector<gdf_column*> compute_ordered_aggregations(
  * @param simple_values_columns The list of simple values columns
  * @param simple_operators The list of simple aggregation operations
  * @param stream[in] CUDA stream on which to execute
- * @return output value table with the aggregation(s) computed 
- *---------------------------------------------------------------------------**/
+ * @return output value table with the aggregation(s) computed
+ **/
 template <bool keys_have_nulls, bool values_have_nulls>
 cudf::table compute_simple_aggregations(const cudf::table& input_keys,
                                         const Options& options,
                                         detail::helper& groupby,
                                         const std::vector<gdf_column*>& simple_values_columns,
                                         const std::vector<operators>& simple_operators,
-                                        cudaStream_t& stream) {
+                                        cudaStream_t& stream)
+{
   const gdf_column& key_sorted_order = groupby.key_sort_order();
 
-  //group_labels
+  // group_labels
   const index_vector& group_labels = groupby.group_labels();
   const cudf::size_type num_groups = groupby.num_groups();
 
@@ -190,7 +191,8 @@ cudf::table compute_simple_aggregations(const cudf::table& input_keys,
 
   cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
-  //Aggregate all rows for simple requests using the key sorted order (indices) and the group labels
+  // Aggregate all rows for simple requests using the key sorted order (indices) and the group
+  // labels
   cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls>
     <<<grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
       *d_input_values,
@@ -219,7 +221,8 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(
   std::vector<operators> const& input_ops,
   std::vector<operation_args*> const& input_ops_args,
   Options options,
-  cudaStream_t stream) {
+  cudaStream_t stream)
+{
   auto include_nulls = not options.ignore_null_keys;
   auto groupby =
     detail::helper(input_keys, include_nulls, options.null_sort_behavior, options.input_sorted);
@@ -287,15 +290,16 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(
   return std::make_pair(groupby.unique_keys(), std::move(final_output_values));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns appropriate callable instantiation of `compute_sort_groupby`
  * based on presence of null values in keys and values.
  *
  * @param keys The groupby key columns
  * @param values The groupby value columns
  * @return Instantiated callable of compute_sort_groupby
- *---------------------------------------------------------------------------**/
-auto groupby_null_specialization(table const& keys, table const& values) {
+ **/
+auto groupby_null_specialization(table const& keys, table const& values)
+{
   if (cudf::has_nulls(keys)) {
     if (cudf::has_nulls(values)) {
       return compute_sort_groupby<true, true>;
@@ -314,8 +318,8 @@ auto groupby_null_specialization(table const& keys, table const& values) {
 
 namespace detail {
 
-/**---------------------------------------------------------------------------*
- * @brief Verifies the requested aggregation is valid for the arguments of the 
+/**
+ * @brief Verifies the requested aggregation is valid for the arguments of the
  * operator.
  *
  * @throw cudf::logic_error if an invalid combination of argument and operator
@@ -323,9 +327,10 @@ namespace detail {
  *
  * @param ops The aggregation operators
  * @param ops The aggregation arguments
- *---------------------------------------------------------------------------**/
+ **/
 static void verify_operators_with_arguments(std::vector<operators> const& ops,
-                                            std::vector<operation_args*> const& args) {
+                                            std::vector<operation_args*> const& args)
+{
   CUDF_EXPECTS(ops.size() == args.size(), "Size mismatch between ops and args");
   for (size_t i = 0; i < ops.size(); i++) {
     if (ops[i] == QUANTILE) {
@@ -341,7 +346,8 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
                                                          cudf::table const& values,
                                                          std::vector<operation> const& ops,
                                                          Options options,
-                                                         cudaStream_t stream = 0) {
+                                                         cudaStream_t stream = 0)
+{
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
   std::vector<operators> optype_list(ops.size());
@@ -379,7 +385,8 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                                          cudf::table const& values,
                                                          std::vector<operation> const& ops,
-                                                         Options options) {
+                                                         Options options)
+{
   return detail::groupby(keys, values, ops, options);
 }
 

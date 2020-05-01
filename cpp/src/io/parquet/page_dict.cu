@@ -21,7 +21,6 @@ namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
-
 struct dict_state_s {
   uint32_t row_cnt;
   PageFragment *cur_fragment;
@@ -42,11 +41,13 @@ struct dict_state_s {
  **/
 inline __device__ uint32_t uint32_hash16(uint32_t v) { return (v + (v >> 16)) & 0xffff; }
 
-inline __device__ uint32_t uint64_hash16(uint64_t v) {
+inline __device__ uint32_t uint64_hash16(uint64_t v)
+{
   return uint32_hash16((uint32_t)(v + (v >> 32)));
 }
 
-inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len) {
+inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
+{
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);
@@ -71,14 +72,16 @@ inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len) {
  * @brief Fetch a page fragment and its dictionary entries in row-ascending order
  *
  * @param[in,out] s dictionary state
- * @param[in,out] dict_data fragment dictionary data for the current column (zeroed out after fetching)
+ * @param[in,out] dict_data fragment dictionary data for the current column (zeroed out after
+ *fetching)
  * @param[in] frag_start_row row position of current fragment
  * @param[in] t thread id
  **/
 __device__ void FetchDictionaryFragment(dict_state_s *s,
                                         uint32_t *dict_data,
                                         uint32_t frag_start_row,
-                                        uint32_t t) {
+                                        uint32_t t)
+{
   if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
     reinterpret_cast<uint32_t *>(&s->frag)[t] =
       reinterpret_cast<const uint32_t *>(s->cur_fragment)[t];
@@ -99,7 +102,8 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
 }
 
 /// Generate dictionary indices in ascending row order
-__device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t) {
+__device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
+{
   uint32_t *dict_index      = s->col.dict_index;
   uint32_t *dict_data       = s->col.dict_data + s->ck.start_row;
   const uint32_t *valid_map = s->col.valid_map_base;
@@ -128,9 +132,12 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t) {
     }
     __syncthreads();
     if (is_valid && !is_unique) {
-      // NOTE: Should have at most 3 iterations (once for early duplicate elimination, once for final dictionary duplicate elimination and once for re-ordering)
-      // (If something went wrong building the dictionary, it will likely hang or crash right here)
-      do { dict_idx = dict_index[dict_idx & 0x7fffffff]; } while (dict_idx > 0x7fffffff);
+      // NOTE: Should have at most 3 iterations (once for early duplicate elimination, once for
+      // final dictionary duplicate elimination and once for re-ordering) (If something went wrong
+      // building the dictionary, it will likely hang or crash right here)
+      do {
+        dict_idx = dict_index[dict_idx & 0x7fffffff];
+      } while (dict_idx > 0x7fffffff);
       dict_index[row] = dict_idx;
     }
   }
@@ -138,7 +145,8 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t) {
 
 // blockDim(1024, 1, 1)
 __global__ void __launch_bounds__(1024, 1)
-  gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch) {
+  gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
+{
   __shared__ __align__(8) dict_state_s state_g;
 
   dict_state_s *const s = &state_g;
@@ -286,7 +294,7 @@ __global__ void __launch_bounds__(1024, 1)
     num_dict_entries = s->num_dict_entries;
     frag_dict_size   = s->frag_dict_size;
     if (s->total_dict_entries + num_dict_entries > 65536 ||
-        s->dictionary_size + frag_dict_size > 512 * 1024) {
+        (s->dictionary_size != 0 && s->dictionary_size + frag_dict_size > 512 * 1024)) {
       break;
     }
     __syncthreads();
@@ -326,7 +334,8 @@ cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
                                    uint32_t *dev_scratch,
                                    size_t scratch_size,
                                    uint32_t num_chunks,
-                                   cudaStream_t stream) {
+                                   cudaStream_t stream)
+{
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
     CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
     gpuBuildChunkDictionaries<<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);

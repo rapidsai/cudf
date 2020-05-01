@@ -1,18 +1,18 @@
 /*
-* Copyright (c) 2019, NVIDIA CORPORATION.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef __IO_ORC_H__
 #define __IO_ORC_H__
@@ -30,7 +30,6 @@
 namespace cudf {
 namespace io {
 namespace orc {
-
 struct PostScript {
   uint64_t footerLength         = 0;           // the length of the footer section in bytes
   CompressionKind compression   = NONE;        // the kind of generic compression used
@@ -117,17 +116,20 @@ class ProtobufReader {
  public:
   ProtobufReader() { m_base = m_cur = m_end = nullptr; }
   ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len) {
+  void init(const uint8_t *base, size_t len)
+  {
     m_base = m_cur = base;
     m_end          = base + len;
   }
   ptrdiff_t bytecount() const { return m_cur - m_base; }
   unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
-  void skip_bytes(size_t bytecnt) {
+  void skip_bytes(size_t bytecnt)
+  {
     bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
     m_cur += bytecnt;
   }
-  uint32_t get_u32() {
+  uint32_t get_u32()
+  {
     uint32_t v = 0;
     for (uint32_t l = 0;; l += 7) {
       uint32_t c = getb();
@@ -135,7 +137,8 @@ class ProtobufReader {
       if (c < 0x80) return v;
     }
   }
-  uint64_t get_u64() {
+  uint64_t get_u64()
+  {
     uint64_t v = 0;
     for (uint64_t l = 0;; l += 7) {
       uint64_t c = getb();
@@ -143,11 +146,13 @@ class ProtobufReader {
       if (c < 0x80) return v;
     }
   }
-  int32_t get_i32() {
+  int32_t get_i32()
+  {
     uint32_t u = get_u32();
     return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
   }
-  int64_t get_i64() {
+  int64_t get_i64()
+  {
     uint64_t u = get_u64();
     return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
   }
@@ -184,7 +189,8 @@ class ProtobufWriter {
   ProtobufWriter() { m_buf = nullptr; }
   ProtobufWriter(std::vector<uint8_t> *output) { m_buf = output; }
   void putb(uint8_t v) { m_buf->push_back(v); }
-  uint32_t put_uint(uint64_t v) {
+  uint32_t put_uint(uint64_t v)
+  {
     int l = 1;
     while (v > 0x7f) {
       putb(static_cast<uint8_t>(v | 0x80));
@@ -194,7 +200,8 @@ class ProtobufWriter {
     putb(static_cast<uint8_t>(v));
     return l;
   }
-  uint32_t put_int(int64_t v) {
+  uint32_t put_int(int64_t v)
+  {
     int64_t s = (v < 0);
     return put_uint(((v ^ -s) << 1) + s);
   }
@@ -234,7 +241,8 @@ class OrcDecompressor {
   ~OrcDecompressor();
   const uint8_t *Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen);
   uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
-  uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const {
+  uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
+  {
     return (block_len < (m_blockSize >> m_log2MaxRatio)) ? block_len << m_log2MaxRatio
                                                          : m_blockSize;
   }

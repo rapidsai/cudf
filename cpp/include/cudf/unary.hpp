@@ -21,7 +21,6 @@
 
 namespace cudf {
 namespace experimental {
-
 enum class unary_op : int32_t {
   SIN,         // < Trigonometric sine
   COS,         // < Trigonometric cosine
@@ -68,7 +67,8 @@ std::unique_ptr<cudf::column> unary_operation(
  * @param input A `column_view` as input
  * @param mr Optional, The resource to use for all allocations
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true`
+ * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
@@ -81,7 +81,8 @@ std::unique_ptr<cudf::column> is_null(
  * @param input A `column_view` as input
  * @param mr Optional, The resource to use for all allocations
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false` representing `null` values.
+ * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false`
+ * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,

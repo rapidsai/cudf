@@ -22,7 +22,6 @@
 
 namespace cudf {
 namespace detail {
-
 /*
  *  Device view of the unordered multiset
  */
@@ -34,9 +33,12 @@ class unordered_multiset_device_view {
   unordered_multiset_device_view(size_type hash_size,
                                  const size_type *hash_begin,
                                  const Element *hash_data)
-    : hash_size{hash_size}, hash_begin{hash_begin}, hash_data{hash_data}, hasher(), equals() {}
+    : hash_size{hash_size}, hash_begin{hash_begin}, hash_data{hash_data}, hasher(), equals()
+  {
+  }
 
-  bool __device__ contains(Element e) const {
+  bool __device__ contains(Element e) const
+  {
     size_type loc = hasher(e) % (2 * hash_size);
 
     for (size_type i = hash_begin[loc]; i < hash_begin[loc + 1]; ++i) {
@@ -55,7 +57,7 @@ class unordered_multiset_device_view {
 };
 
 /*
- * Fixed size set on a device.  
+ * Fixed size set on a device.
  *
  */
 template <typename Element,
@@ -63,10 +65,11 @@ template <typename Element,
           typename Equality = equal_to<Element>>
 class unordered_multiset {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Factory to construct a new unordered_multiset
-   *---------------------------------------------------------------------------**/
-  static unordered_multiset<Element> create(column_view const &col, cudaStream_t stream) {
+   **/
+  static unordered_multiset<Element> create(column_view const &col, cudaStream_t stream)
+  {
     auto d_column = column_device_view::create(col, stream);
     auto d_col    = *d_column;
 
@@ -115,7 +118,8 @@ class unordered_multiset {
     return unordered_multiset(d_col.size(), std::move(hash_bins_start), std::move(hash_data));
   }
 
-  unordered_multiset_device_view<Element, Hasher, Equality> to_device() {
+  unordered_multiset_device_view<Element, Hasher, Equality> to_device()
+  {
     return unordered_multiset_device_view<Element, Hasher, Equality>(
       size, hash_bins.data().get(), hash_data.data().get());
   }
@@ -124,7 +128,9 @@ class unordered_multiset {
   unordered_multiset(size_type size,
                      rmm::device_vector<size_type> &&hash_bins,
                      rmm::device_vector<Element> &&hash_data)
-    : size{size}, hash_bins{std::move(hash_bins)}, hash_data{std::move(hash_data)} {}
+    : size{size}, hash_bins{std::move(hash_bins)}, hash_data{std::move(hash_data)}
+  {
+  }
 
   size_type size;
   rmm::device_vector<size_type> hash_bins;

@@ -23,7 +23,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Filters a table to remove null elements.
  *
@@ -38,7 +37,8 @@ namespace experimental {
  *
  * Any non-nullable column in the input is treated as all non-null.
  *
- * @example input   {col1: {1, 2,    3,    null},
+ * @code{.pseudo}
+ *          input   {col1: {1, 2,    3,    null},
  *                   col2: {4, 5,    null, null},
  *                   col3: {7, null, null, null}}
  *          keys = {0, 1, 2} // All columns
@@ -47,6 +47,7 @@ namespace experimental {
  *          output {col1: {1, 2}
  *                  col2: {4, 5}
  *                  col3: {7, null}}
+ * @endcode
  *
  * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
  * there is no error, and an empty `table` is returned
@@ -56,7 +57,8 @@ namespace experimental {
  * @param[in] keep_threshold The minimum number of non-null fields in a row
  *                           required to keep the row.
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` with at least @p keep_threshold non-null fields in @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` with at least @p
+ * keep_threshold non-null fields in @p keys.
  */
 std::unique_ptr<table> drop_nulls(
   table_view const& input,
@@ -67,7 +69,8 @@ std::unique_ptr<table> drop_nulls(
 /**
  * @brief Filters a table to remove null elements.
  *
- * @example input   {col1: {1, 2,    3,    null},
+ * @code{.pseudo}
+ *          input   {col1: {1, 2,    3,    null},
  *                   col2: {4, 5,    null, null},
  *                   col3: {7, null, null, null}}
  *          keys = {0, 1, 2} //All columns
@@ -75,6 +78,7 @@ std::unique_ptr<table> drop_nulls(
  *          output {col1: {1}
  *                  col2: {4}
  *                  col3: {7}}
+ * @endcode
  *
  * @overload drop_nulls
  *
@@ -84,7 +88,8 @@ std::unique_ptr<table> drop_nulls(
  * @param[in] input The input `table_view` to filter.
  * @param[in] keys  vector of indices representing key columns from `input`
  * @param[in] mr Optional, The resource to use for all allocations
- * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns of @p keys.
+ * @return unique_ptr<table> Table containing all rows of the `input` without nulls in the columns
+ * of @p keys.
  */
 std::unique_ptr<experimental::table> drop_nulls(
   table_view const& input,

@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -39,7 +39,7 @@ struct SerialTrieNode {
   explicit SerialTrieNode(char c, bool leaf = false) noexcept : character(c), is_leaf(leaf) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Create a serialized trie for cache-friendly string search
  *
  * The resulting trie is a compact array - children array size is equal to the
@@ -48,9 +48,10 @@ struct SerialTrieNode {
  * @param[in] keys Array of strings to insert into the trie
  *
  * @return A host vector of nodes representing the serialized trie
- *---------------------------------------------------------------------------**/
+ */
 inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
-  const std::vector<std::string> &keys) {
+  const std::vector<std::string> &keys)
+{
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
     using TrieNodePtr                 = std::unique_ptr<TreeTrieNode>;
@@ -113,7 +114,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
   return nodes;
 }
 
-/**---------------------------------------------------------------------------*
+/*
  * @brief Searches for a string in a serialized trie
  *
  * Can be executed on host or device, as long as the data is available
@@ -123,10 +124,11 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
  * @param[in] key_len Length of the string to find
  *
  * @return Boolean value, true if string is found, false otherwise
- *---------------------------------------------------------------------------**/
+ */
 __host__ __device__ inline bool serializedTrieContains(const SerialTrieNode *trie,
                                                        const char *key,
-                                                       size_t key_len) {
+                                                       size_t key_len)
+{
   if (trie == nullptr) return false;
   int curr_node = 0;
   for (size_t i = 0; i < key_len; ++i) {

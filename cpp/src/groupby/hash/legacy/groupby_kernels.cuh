@@ -23,7 +23,6 @@
 namespace cudf {
 namespace groupby {
 namespace hash {
-
 template <bool nullable = true>
 struct row_hasher {
   using result_type = hash_value_type;  // TODO Remove when aggregating
@@ -31,12 +30,13 @@ struct row_hasher {
   device_table table;
   row_hasher(device_table const& t) : table{t} {}
 
-  __device__ auto operator()(cudf::size_type row_index) const {
+  __device__ auto operator()(cudf::size_type row_index) const
+  {
     return hash_row<nullable>(table, row_index);
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Builds a hash map where the keys are the rows of a `keys` table, and
  * the values are the aggregation(s) of corresponding rows in a `values` table.
  *
@@ -85,14 +85,15 @@ struct row_hasher {
  * @param row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of `input_keys`. Only used if `skip_rows_with_nulls` is
  * `true`.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
 __global__ void build_aggregation_map(Map map,
                                       device_table input_keys,
                                       device_table input_values,
                                       device_table output_values,
                                       operators* ops,
-                                      bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+                                      bit_mask::bit_mask_t const* const __restrict__ row_bitmask)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < input_keys.num_rows()) {
@@ -108,7 +109,7 @@ __global__ void build_aggregation_map(Map map,
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Extracts the resulting keys and values of the groupby operation from a
  * hash map and sparse output table.
  *
@@ -133,14 +134,15 @@ __global__ void build_aggregation_map(Map map,
  * @param output_write_index[in/out] Global counter used for determining write
  * location for output keys/values. When kernel is complete, indicates the final
  * result size.
- *---------------------------------------------------------------------------**/
+ **/
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
 __global__ void extract_groupby_result(Map map,
                                        device_table const input_keys,
                                        device_table output_keys,
                                        device_table const sparse_output_values,
                                        device_table dense_output_values,
-                                       cudf::size_type* output_write_index) {
+                                       cudf::size_type* output_write_index)
+{
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   using pair_type = typename Map::value_type;

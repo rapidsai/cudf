@@ -34,12 +34,11 @@ template <typename T>
 class rmm_allocator;
 
 namespace cudf {
-
 class table;
 
 namespace groupby {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Top-level options for controlling behavior of the groupby operation.
  *
  * This structure defines all of the shared options between the hash and
@@ -47,13 +46,13 @@ namespace groupby {
  * defined by a new structure that inherits from this one inside the appropriate
  * namespace.
  *
- *---------------------------------------------------------------------------**/
+ */
 struct Options {
   Options(bool _ignore_null_keys) : ignore_null_keys{_ignore_null_keys} {}
 
   Options() = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * Determines whether key rows with null values are ignored.
    *
    * If `true`, any row in the `keys` table that contains a NULL value will be
@@ -71,26 +70,26 @@ struct Options {
    * @note The behavior for a SQL groupby operation is `ignore_null_keys ==
    *false`.
    *
-   *---------------------------------------------------------------------------**/
+   */
   bool const ignore_null_keys{true};
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Supported aggregation operations
  *
- *---------------------------------------------------------------------------**/
+ */
 enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE, VARIANCE, STD };
 
 namespace hash {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Options unique to the hash-based groupby
- *---------------------------------------------------------------------------**/
+ */
 struct Options : groupby::Options {
   Options(bool _ignore_null_keys = true) : groupby::Options(_ignore_null_keys) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs groupby operation(s) via a hash-based implementation
  *
  * Given a table of keys and corresponding table of values, equivalent keys will
@@ -109,7 +108,7 @@ struct Options : groupby::Options {
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the table of reduced output values
- *---------------------------------------------------------------------------**/
+ */
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
@@ -118,8 +117,8 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }  // namespace hash
 
 namespace sort {
-
-struct operation_args {};
+struct operation_args {
+};
 
 struct std_args : operation_args {
   int ddof;
@@ -132,7 +131,9 @@ struct quantile_args : operation_args {
   cudf::interpolation interpolation;
 
   quantile_args(const std::vector<double>& _quantiles, cudf::interpolation _interpolation)
-    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation} {}
+    : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {
+  }
 };
 
 struct operation {
@@ -142,11 +143,11 @@ struct operation {
 
 enum class null_order : bool { AFTER, BEFORE };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Options unique to the sort-based groupby
  * The priority of determining the sort flags:
  * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
- *---------------------------------------------------------------------------**/
+ */
 struct Options : groupby::Options {
   null_order null_sort_behavior;  ///< Indicates how nulls are treated
   bool input_sorted;              ///< Indicates if the input data is sorted.
@@ -156,10 +157,12 @@ struct Options : groupby::Options {
           bool _input_sorted             = false)
     : groupby::Options(_ignore_null_keys),
       input_sorted(_input_sorted),
-      null_sort_behavior(_null_sort_behavior) {}
+      null_sort_behavior(_null_sort_behavior)
+  {
+  }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs groupby operation(s) via a sort-based implementation
  *
  * Given a table of keys and corresponding table of values, equivalent keys will
@@ -178,7 +181,7 @@ struct Options : groupby::Options {
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
  * second member contains the reduced output values
- *---------------------------------------------------------------------------**/
+ */
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                                          cudf::table const& values,
                                                          std::vector<operation> const& ops,
@@ -196,7 +199,8 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
  * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
  * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
- * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
 gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 
@@ -219,7 +223,8 @@ gdf_column gdf_unique_indices(cudf::table const& input_table, gdf_context const&
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key
  * columns.
- *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
+ *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first
+ * occurrences of each unique row.
  */
 std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   cudf::table const& input_table,

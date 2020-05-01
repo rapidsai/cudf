@@ -2,7 +2,7 @@
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
-	 * you may not use this file except in compliance with the License.
+ * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -52,7 +52,8 @@ rmm::device_vector<int16_t> getBracketLevels(thrust::pair<uint64_t, char> *brack
  * @brief Sets the specified bit in a device memory bitmap.
  * Uses atomics for synchronization.
  */
-__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) {
+__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx)
+{
   constexpr int32_t bit_mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
   const auto address            = bitmap + bit_idx / 8;
 
@@ -66,7 +67,8 @@ __device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) 
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  */
-__device__ __inline__ bool isDigit(char c, bool is_hex = false) {
+__device__ __inline__ bool isDigit(char c, bool is_hex = false)
+{
   if (c >= '0' && c <= '9') return true;
   if (is_hex) {
     if (c >= 'A' && c <= 'F') return true;
@@ -81,7 +83,8 @@ __device__ __inline__ bool isDigit(char c, bool is_hex = false) {
  * For example, field "e.123-" would match the pattern.
  */
 __device__ __inline__ bool isLikeFloat(
-  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt) {
+  long len, long digit_cnt, long decimal_cnt, long dash_cnt, long exponent_cnt)
+{
   // Can't have more than one exponent and one decimal point
   if (decimal_cnt > 1) return false;
   if (exponent_cnt > 1) return false;
@@ -122,7 +125,8 @@ __device__ __inline__ bool isLikeFloat(
  * @return `true` if it is date-like, `false` otherwise
  */
 __device__ __inline__ bool isLikeDateTime(
-  long letter_count, long decimal_count, long colon_count, long dash_count, long slash_count) {
+  long letter_count, long decimal_count, long colon_count, long dash_count, long slash_count)
+{
   // Must not exceed count of longest month (September) plus `T` time indicator
   if (letter_count > 10) { return false; }
   // Must not exceed more than one decimals or more than two time separators
@@ -136,7 +140,7 @@ __device__ __inline__ bool isLikeDateTime(
   return false;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel iterates over the data until the end of the current field
  *
  * Also iterates over (one or more) delimiter characters after the field.
@@ -149,11 +153,12 @@ __device__ __inline__ bool isLikeDateTime(
  *
  * @return long position of the last character in the field, including the
  *  delimiter(s) following the field data
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ long seekFieldEnd(const char *data,
                                         const ParseOptions opts,
                                         long pos,
-                                        long stop) {
+                                        long stop)
+{
   bool quotation = false;
   while (true) {
     // Use simple logic to ignore control chars between any quote seq

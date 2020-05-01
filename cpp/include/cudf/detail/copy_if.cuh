@@ -38,7 +38,6 @@
 #include <cub/cub.cuh>
 
 namespace {
-
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
 __global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,

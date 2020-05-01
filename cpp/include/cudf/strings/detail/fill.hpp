@@ -22,7 +22,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
 /**
  * @brief Returns a strings column replacing a range of rows
  * with the specified string.

@@ -22,7 +22,7 @@
 namespace {
 
 // Returns true if the mask is true and valid (non-null) for index i. This is the filter functor for
-// apply_boolean_mask(). Note we use a functor here so we can cast to a bitmask_t __restrict__
+// apply_boolean_mask().Note we use a functor here so we can cast to a bitmask_t __restrict__
 // pointer on the host side, which we can't do with a lambda.
 template <bool has_data, bool has_nulls>
 struct boolean_mask_filter {
@@ -46,7 +46,6 @@ struct boolean_mask_filter {
 }  // namespace
 
 namespace cudf {
-
 /*
  * Filters a table using a column of boolean values as a mask.
  *
@@ -55,6 +54,7 @@ namespace cudf {
 table apply_boolean_mask(table const &input, gdf_column const &boolean_mask)
 {
   CUDF_FUNC_RANGE();
+
   if (boolean_mask.size == 0) return empty_like(input);
 
   CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");

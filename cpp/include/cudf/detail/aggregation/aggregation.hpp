@@ -25,17 +25,19 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
 struct quantile_aggregation : aggregation {
   quantile_aggregation(std::vector<double> const& q, experimental::interpolation i)
-    : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i} {}
+    : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
+  {
+  }
   std::vector<double> _quantiles;              ///< Desired quantile(s)
   experimental::interpolation _interpolation;  ///< Desired interpolation
 
-  bool operator==(quantile_aggregation const& other) const {
+  bool operator==(quantile_aggregation const& other) const
+  {
     return aggregation::operator==(other) and _interpolation == other._interpolation and
            std::equal(_quantiles.begin(), _quantiles.end(), other._quantiles.begin());
   }
@@ -48,7 +50,8 @@ struct std_var_aggregation : aggregation {
   std_var_aggregation(aggregation::Kind k, size_type ddof) : aggregation{k}, _ddof{ddof} {}
   size_type _ddof;  ///< Delta degrees of freedom
 
-  bool operator==(std_var_aggregation const& other) const {
+  bool operator==(std_var_aggregation const& other) const
+  {
     return aggregation::operator==(other) and _ddof == other._ddof;
   }
 };
@@ -58,10 +61,13 @@ struct std_var_aggregation : aggregation {
  */
 struct nunique_aggregation : aggregation {
   nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
-    : aggregation{k}, _include_nulls{_include_nulls} {}
+    : aggregation{k}, _include_nulls{_include_nulls}
+  {
+  }
   include_nulls _include_nulls;  ///< include or exclude nulls
 
-  bool operator==(nunique_aggregation const& other) const {
+  bool operator==(nunique_aggregation const& other) const
+  {
     return aggregation::operator==(other) and _include_nulls == other._include_nulls;
   }
 };
@@ -71,11 +77,14 @@ struct nunique_aggregation : aggregation {
  */
 struct nth_element_aggregation : aggregation {
   nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
-    : aggregation{k}, n{n}, _include_nulls{_include_nulls} {}
+    : aggregation{k}, n{n}, _include_nulls{_include_nulls}
+  {
+  }
   size_type n;                   ///< nth index to return
   include_nulls _include_nulls;  ///< include or exclude nulls
 
-  bool operator==(nth_element_aggregation const& other) const {
+  bool operator==(nth_element_aggregation const& other) const
+  {
     return aggregation::operator==(other) and n == other.n and
            _include_nulls == other._include_nulls;
   }
@@ -93,7 +102,9 @@ struct udf_aggregation : aggregation {
       _source{user_defined_aggregator},
       _operator_name{(type == aggregation::PTX) ? "rolling_udf_ptx" : "rolling_udf_cuda"},
       _function_name{"rolling_udf"},
-      _output_type{output_type} {}
+      _output_type{output_type}
+  {
+  }
   std::string const _source;
   std::string const _operator_name;
   std::string const _function_name;
@@ -116,12 +127,12 @@ constexpr size_type ARGMAX_SENTINEL{-1};
  */
 constexpr size_type ARGMIN_SENTINEL{-1};
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and aggregation.
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- *---------------------------------------------------------------------------**/
+ **/
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;
@@ -179,7 +190,8 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-constexpr bool is_sum_product_agg(aggregation::Kind k) {
+constexpr bool is_sum_product_agg(aggregation::Kind k)
+{
   return (k == aggregation::SUM) || (k == aggregation::PRODUCT) ||
          (k == aggregation::SUM_OF_SQUARES);
 }
@@ -302,7 +314,8 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kind k,
                                                                 F&& f,
-                                                                Ts&&... args) {
+                                                                Ts&&... args)
+{
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
@@ -364,7 +377,8 @@ template <typename Element>
 struct dispatch_aggregation {
 #pragma nv_exec_check_disable
   template <aggregation::Kind k, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept {
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept
+  {
     return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
 };
@@ -374,7 +388,8 @@ struct dispatch_source {
   template <typename Element, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(aggregation::Kind k,
                                                       F&& f,
-                                                      Ts&&... args) const noexcept {
+                                                      Ts&&... args) const noexcept
+  {
     return aggregation_dispatcher(
       k, dispatch_aggregation<Element>{}, std::forward<F>(f), std::forward<Ts>(args)...);
   }
@@ -398,7 +413,8 @@ struct dispatch_source {
 #pragma nv_exec_check_disable
 template <typename F, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_type_and_aggregation(
-  data_type type, aggregation::Kind k, F&& f, Ts&&... args) {
+  data_type type, aggregation::Kind k, F&& f, Ts&&... args)
+{
   return type_dispatcher(type, dispatch_source{}, k, std::forward<F>(f), std::forward<Ts>(args)...);
 }
 /**
@@ -420,7 +436,8 @@ data_type target_type(data_type source_type, aggregation::Kind k);
  * @tparam k The aggregation to perform
  */
 template <typename Source, aggregation::Kind k>
-constexpr inline bool is_valid_aggregation() {
+constexpr inline bool is_valid_aggregation()
+{
   return (not std::is_void<target_type_t<Source, k>>::value);
 }
 

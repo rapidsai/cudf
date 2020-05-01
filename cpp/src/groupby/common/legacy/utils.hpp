@@ -39,7 +39,7 @@
 namespace cudf {
 namespace groupby {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
  *
@@ -51,8 +51,9 @@ namespace groupby {
  *
  * @param values The table of columns
  * @param ops The aggregation operators
- *---------------------------------------------------------------------------**/
-static void verify_operators(table const& values, std::vector<operators> const& ops) {
+ **/
+static void verify_operators(table const& values, std::vector<operators> const& ops)
+{
   CUDF_EXPECTS(static_cast<cudf::size_type>(ops.size()) == values.num_columns(),
                "Size mismatch between ops and value columns");
   for (cudf::size_type i = 0; i < values.num_columns(); ++i) {
@@ -64,7 +65,7 @@ static void verify_operators(table const& values, std::vector<operators> const& 
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines target gdf_dtypes to use for combinations of source
  * gdf_dtypes and aggregation operations.
  *
@@ -75,9 +76,10 @@ static void verify_operators(table const& values, std::vector<operators> const& 
  * @param source_dtypes The source types
  * @param op The aggregation operations
  * @return Target gdf_dtypes to use for the target aggregation columns
- *---------------------------------------------------------------------------**/
+ **/
 inline std::vector<gdf_dtype> target_dtypes(std::vector<gdf_dtype> const& source_dtypes,
-                                            std::vector<operators> const& ops) {
+                                            std::vector<operators> const& ops)
+{
   std::vector<gdf_dtype> output_dtypes(source_dtypes.size());
 
   std::transform(source_dtypes.begin(),
@@ -94,13 +96,14 @@ inline std::vector<gdf_dtype> target_dtypes(std::vector<gdf_dtype> const& source
   return output_dtypes;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Dispatched functor to initialize a column with the identity of an
  *aggregation operation.
- *---------------------------------------------------------------------------**/
+ **/
 struct identity_initializer {
   template <typename T>
-  T get_identity(operators op) {
+  T get_identity(operators op)
+  {
     switch (op) {
       case SUM: return corresponding_functor_t<SUM>::identity<T>();
       case MIN: return corresponding_functor_t<MIN>::identity<T>();
@@ -111,7 +114,8 @@ struct identity_initializer {
   }
 
   template <typename T>
-  void operator()(gdf_column const& col, operators op, cudaStream_t stream = 0) {
+  void operator()(gdf_column const& col, operators op, cudaStream_t stream = 0)
+  {
     T* typed_data = static_cast<T*>(col.data);
     thrust::fill(
       rmm::exec_policy(stream)->on(stream), typed_data, typed_data + col.size, get_identity<T>(op));
@@ -124,7 +128,7 @@ struct identity_initializer {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Initializes each column in a table with a corresponding identity value
  * of an aggregation operation.
  *
@@ -137,10 +141,11 @@ struct identity_initializer {
  * @param table The table of columns to initialize.
  * @param operators The aggregation operations whose identity values will be
  *used to initialize the columns.
- *---------------------------------------------------------------------------**/
+ **/
 static void initialize_with_identity(cudf::table const& table,
                                      std::vector<operators> const& ops,
-                                     cudaStream_t stream = 0) {
+                                     cudaStream_t stream = 0)
+{
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (cudf::size_type i = 0; i < table.num_columns(); ++i) {
@@ -149,7 +154,7 @@ static void initialize_with_identity(cudf::table const& table,
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Compacts any GDF_STRING_CATEGORY columns in the output keys or values.
  *
  * After the groupby operation, any GDF_STRING_CATEGORY column in either the
@@ -162,11 +167,12 @@ static void initialize_with_identity(cudf::table const& table,
  * @param[in/out] output_keys The set of output key columns
  * @param[in] input_values The set of input value columns
  * @param[in/out] output_values The set of output value columns
- *---------------------------------------------------------------------------**/
+ **/
 static void update_nvcategories(table const& input_keys,
                                 table& output_keys,
                                 table const& input_values,
-                                table& output_values) {
+                                table& output_values)
+{
   gdf_error update_err = nvcategory_gather_table(input_keys, output_keys);
   CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for keys");
 

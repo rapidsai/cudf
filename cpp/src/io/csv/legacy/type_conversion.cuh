@@ -23,39 +23,40 @@
 
 #include <cudf/detail/utilities/trie.cuh>
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Checks whether the given character is a whitespace character.
- * 
+ *
  * @param[in] ch The character to check
- * 
+ *
  * @return True if the input is whitespace, False otherwise
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' '; }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
- * 
+ *
  * @param[in] data The character stream to scan
  * @param[in,out] start The start index to adjust
  * @param[in,out] end The end index to adjust
  * @param[in] quotechar The character used to denote quotes
- * 
+ *
  * @return Adjusted or unchanged start_idx and end_idx
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
                                                         long* start,
                                                         long* end,
-                                                        char quotechar = '\0') {
+                                                        char quotechar = '\0')
+{
   while ((*start < *end) && isWhitespace(data[*start])) { (*start)++; }
   if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
   while ((*start <= *end) && isWhitespace(data[*end])) { (*end)--; }
   if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes a 32-bit hash when given a byte stream and range.
- * 
+ *
  * MurmurHash3_32 implementation from
  * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
  *
@@ -65,22 +66,20 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
  * algorithms are optimized for their respective platforms. You can still
  * compile and run any of them on any platform, but your performance with the
  * non-native version will be less than optimal.
- * 
+ *
  * This is a modified version of what is used for hash-join. The change is at
  * accept a char * key and range (start and end) so that the large raw CSV data
  * pointer could be used
- * 
+ *
  * @param[in] key The input data to hash
  * @param[in] start The start index of the input data
  * @param[in] end The end index of the input data
  * @param[in] seed An initialization value
- * 
+ *
  * @return The hash value
- *---------------------------------------------------------------------------**/
-__inline__ __device__ int32_t convertStrToHash(const char* key,
-                                               long start,
-                                               long end,
-                                               uint32_t seed) {
+ **/
+__inline__ __device__ int32_t convertStrToHash(const char* key, long start, long end, uint32_t seed)
+{
   auto getblock32 = [] __device__(const uint32_t* p, int i) -> uint32_t {
     // Individual byte reads for possible unaligned accesses
     auto q = (const uint8_t*)(p + i);
@@ -139,10 +138,10 @@ __inline__ __device__ int32_t convertStrToHash(const char* key,
   return h1;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Structure for holding various options used when parsing and
  * converting CSV data to cuDF data type values.
- *---------------------------------------------------------------------------**/
+ **/
 struct ParseOptions {
   char delimiter;
   char terminator;
@@ -170,7 +169,8 @@ struct ParseOptions {
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
+__device__ __forceinline__ uint8_t decode_digit(char c)
+{
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
   if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -187,11 +187,12 @@ __device__ __forceinline__ uint8_t decode_digit(char c) {
  * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c) {
+__device__ __forceinline__ uint8_t decode_digit(char c)
+{
   return c - '0';
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Parses a character string and returns its numeric value.
  *
  * @param[in] data The character string for parse
@@ -201,10 +202,11 @@ __device__ __forceinline__ uint8_t decode_digit(char c) {
  * @param[in] base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 __inline__ __device__ T
-parse_numeric(const char* data, long start, long end, const ParseOptions& opts, int base = 10) {
+parse_numeric(const char* data, long start, long end, const ParseOptions& opts, int base = 10)
+{
   T value = 0;
 
   // Handle negative values if necessary
@@ -263,13 +265,15 @@ parse_numeric(const char* data, long start, long end, const ParseOptions& opts, 
 
 template <typename T, int base>
 __inline__ __device__ T
-convertStrToValue(const char* data, long start, long end, const ParseOptions& opts) {
+convertStrToValue(const char* data, long start, long end, const ParseOptions& opts)
+{
   return parse_numeric<T>(data, start, end, opts, base);
 }
 
 template <typename T>
 __inline__ __device__ T
-convertStrToValue(const char* data, long start, long end, const ParseOptions& opts) {
+convertStrToValue(const char* data, long start, long end, const ParseOptions& opts)
+{
   return parse_numeric<T>(data, start, end, opts);
 }
 
@@ -277,7 +281,8 @@ template <>
 __inline__ __device__ cudf::date32 convertStrToValue<cudf::date32>(const char* data,
                                                                    long start,
                                                                    long end,
-                                                                   const ParseOptions& opts) {
+                                                                   const ParseOptions& opts)
+{
   return cudf::date32{parseDateFormat(data, start, end, opts.dayfirst)};
 }
 
@@ -285,7 +290,8 @@ template <>
 __inline__ __device__ cudf::date64 convertStrToValue<cudf::date64>(const char* data,
                                                                    long start,
                                                                    long end,
-                                                                   const ParseOptions& opts) {
+                                                                   const ParseOptions& opts)
+{
   return cudf::date64{parseDateTimeFormat(data, start, end, opts.dayfirst)};
 }
 
@@ -293,7 +299,8 @@ template <>
 __inline__ __device__ cudf::category convertStrToValue<cudf::category>(const char* data,
                                                                        long start,
                                                                        long end,
-                                                                       const ParseOptions& opts) {
+                                                                       const ParseOptions& opts)
+{
   constexpr int32_t HASH_SEED = 33;
   return cudf::category{convertStrToHash(data, start, end + 1, HASH_SEED)};
 }
@@ -302,15 +309,17 @@ template <>
 __inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(const char* data,
                                                                          long start,
                                                                          long end,
-                                                                         const ParseOptions& opts) {
+                                                                         const ParseOptions& opts)
+{
   return cudf::timestamp{parse_numeric<int64_t>(data, start, end, opts)};
 }
 
-//The purpose of this is merely to allow compilation
-//It should NOT be used
+// The purpose of this is merely to allow compilation
+// It should NOT be used
 template <>
 __inline__ __device__ cudf::nvstring_category convertStrToValue<cudf::nvstring_category>(
-  const char* data, long start, long end, const ParseOptions& opts) {
+  const char* data, long start, long end, const ParseOptions& opts)
+{
   assert(false);
   return cudf::nvstring_category{0};
 }
@@ -319,7 +328,8 @@ template <>
 __inline__ __device__ cudf::bool8 convertStrToValue<cudf::bool8>(const char* data,
                                                                  long start,
                                                                  long end,
-                                                                 const ParseOptions& opts) {
+                                                                 const ParseOptions& opts)
+{
   cudf::bool8 return_value{cudf::false_v};
 
   // Check for user-specified true/false values first

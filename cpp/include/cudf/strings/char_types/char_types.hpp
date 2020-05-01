@@ -20,7 +20,6 @@
 
 namespace cudf {
 namespace strings {
-
 /**
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
@@ -31,26 +30,28 @@ namespace strings {
  * does not match to any explicitly named enumerator.
  */
 enum string_character_types : uint32_t {
-  DECIMAL    = 1 << 0,                             // binary 00000001
-  NUMERIC    = 1 << 1,                             // binary 00000010
-  DIGIT      = 1 << 2,                             // binary 00000100
-  ALPHA      = 1 << 3,                             // binary 00001000
-  SPACE      = 1 << 4,                             // binary 00010000
-  UPPER      = 1 << 5,                             // binary 00100000
-  LOWER      = 1 << 6,                             // binary 01000000
-  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  // binary 00001111
-  CASE_TYPES = UPPER | LOWER,
-  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE
+  DECIMAL    = 1 << 0,                             /// all decimal characters
+  NUMERIC    = 1 << 1,                             /// all numeric characters
+  DIGIT      = 1 << 2,                             /// all digit characters
+  ALPHA      = 1 << 3,                             /// all alphabetic characters
+  SPACE      = 1 << 4,                             /// all space characters
+  UPPER      = 1 << 5,                             /// all upper case characters
+  LOWER      = 1 << 6,                             /// all lower case characters
+  ALPHANUM   = DECIMAL | NUMERIC | DIGIT | ALPHA,  /// all alphanumeric characters
+  CASE_TYPES = UPPER | LOWER,                      /// all case-able characters
+  ALL_TYPES  = ALPHANUM | CASE_TYPES | SPACE       /// all character types
 };
 
 // OR operators for combining types
-string_character_types operator|(string_character_types lhs, string_character_types rhs) {
+string_character_types operator|(string_character_types lhs, string_character_types rhs)
+{
   return static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |
     static_cast<std::underlying_type_t<string_character_types>>(rhs));
 }
 
-string_character_types& operator|=(string_character_types& lhs, string_character_types rhs) {
+string_character_types& operator|=(string_character_types& lhs, string_character_types rhs)
+{
   lhs = static_cast<string_character_types>(
     static_cast<std::underlying_type_t<string_character_types>>(lhs) |
     static_cast<std::underlying_type_t<string_character_types>>(rhs));
@@ -66,18 +67,17 @@ string_character_types& operator|=(string_character_types& lhs, string_character
  * characters fit the type then true is set in that output row entry.
  *
  * To ignore all but specific types, set the `verify_types` to those types
- * which should be checked. Otherwise, the default ALL_TYPES will verify all
+ * which should be checked. Otherwise, the default `ALL_TYPES` will verify all
  * characters match `types`.
  *
- * ```
+ * @code{.pseudo}
  * Example:
  * s = ['ab', 'a b', 'a7', 'a B']
  * b1 = s.all_characters_of_type(s,LOWER)
  * b1 is [true, false, false, false]
  * b2 = s.all_characters_of_type(s,LOWER,LOWER|UPPER)
  * b2 is [true, true, true, false]
- *
- * ```
+ * @endcode
  *
  * Any null row results in a null entry for that row in the output column.
  *
@@ -102,13 +102,12 @@ std::unique_ptr<column> all_characters_of_type(
  * The output row entry will be set to `true` if the corresponding string element
  * has at least one character in [-+0-9].
  *
- * ```
+ * @code{.pseudo}
  * Example:
  * s = ['123', '-456', '', 'A', '+7']
  * b = s.is_integer(s)
  * b is [true, true, false, false, true]
- *
- * ```
+ * @endcode
  *
  * Any null row results in a null entry for that row in the output column.
  *
@@ -143,13 +142,12 @@ bool all_integer(strings_column_view const& strings,
  * The output row entry will be set to `true` if the corresponding string element
  * has at least one character in [-+0-9eE.].
  *
- * ```
+ * @code{.pseudo}
  * Example:
  * s = ['123', '-456', '', 'A', '+7', '8.9' '3.7e+5']
  * b = s.is_float(s)
  * b is [true, true, false, false, true, true, true]
- *
- * ```
+ * @endcode
  *
  * Any null row results in a null entry for that row in the output column.
  *

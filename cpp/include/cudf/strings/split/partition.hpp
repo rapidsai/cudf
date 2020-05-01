@@ -21,6 +21,12 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_split Split
+ * APIs to split strings into multiple columns of strings.
+ * @{
+ */
 
 /**
  * @brief Returns a set of 3 columns by splitting each string using the
@@ -34,13 +40,14 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
- * r = rpartition(s,"_")
+ * r = partition(s,"_")
  * r[0] is ["ab","def"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","g_h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
@@ -65,13 +72,14 @@ std::unique_ptr<experimental::table> partition(
  *
  * Any null string entries return corresponding null output columns.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["ab_cd","def_g_h"]
  * r = rpartition(s,"_")
  * r[0] is ["ab","def_g"]
  * r[1] is ["_","_"]
  * r[2] is ["cd","h"]
- * ```
+ * @endcode
  *
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
@@ -84,5 +92,6 @@ std::unique_ptr<experimental::table> rpartition(
   string_scalar const& delimiter      = string_scalar(""),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

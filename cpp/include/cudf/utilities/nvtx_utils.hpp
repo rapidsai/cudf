@@ -4,7 +4,6 @@
 
 namespace cudf {
 namespace nvtx {
-
 enum class color : uint32_t {
   GREEN      = 0xff00ff00,
   BLUE       = 0xff0000ff,
@@ -23,7 +22,7 @@ constexpr color BINARY_OP_COLOR = color::YELLOW;
 constexpr color PARTITION_COLOR = color::PURPLE;
 constexpr color READ_CSV_COLOR  = color::PURPLE;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Start an NVTX range.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
@@ -35,10 +34,10 @@ constexpr color READ_CSV_COLOR  = color::PURPLE;
  *
  * @param[in] name The name of the NVTX range
  * @param[in] color The color to use for the range
- *---------------------------------------------------------------------------**/
+ **/
 void range_push(const char* name, color color);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Start a NVTX range with a custom ARGB color code.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
@@ -50,16 +49,16 @@ void range_push(const char* name, color color);
  *
  * @param[in] name The name of the NVTX range
  * @param[in] color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
- *---------------------------------------------------------------------------**/
+ **/
 void range_push_hex(const char* name, uint32_t color);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Ends the inner-most NVTX range.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * will demarcate the end of the inner-most range, i.e., the most recent call to
  * range_push.
- *---------------------------------------------------------------------------**/
+ **/
 void range_pop();
 
 }  // namespace nvtx

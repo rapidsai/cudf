@@ -25,7 +25,7 @@ namespace cudf {
 namespace experimental {
 namespace detail {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.
  *
@@ -40,7 +40,7 @@ namespace detail {
  * @param[in] stream Optional CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> A non-nullable column of `size_type` elements
  * containing the permuted row indices of `input` if it were sorted
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},

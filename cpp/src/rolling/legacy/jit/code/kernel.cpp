@@ -18,7 +18,6 @@ namespace cudf {
 namespace rolling {
 namespace jit {
 namespace code {
-
 const char* kernel =
   R"***(
 #include <cudf/types.h>

@@ -34,9 +34,9 @@ class RandomAccessFile;
 
 namespace cudf {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input source info for `xxx_read_arg` arguments
- *---------------------------------------------------------------------------**/
+ **/
 struct source_info {
   gdf_input_type type = FILE_PATH;
   std::string filepath;
@@ -45,14 +45,18 @@ struct source_info {
 
   explicit source_info(const std::string& file_path) : type(FILE_PATH), filepath(file_path) {}
   explicit source_info(const char* host_buffer, size_t size)
-    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size))
+  {
+  }
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Output sink info for `xxx_write_arg` arguments
- *---------------------------------------------------------------------------**/
+ **/
 struct sink_info {
   gdf_input_type type = FILE_PATH;
   std::string filepath;
@@ -61,14 +65,18 @@ struct sink_info {
 
   explicit sink_info(const std::string& file_path) : type(FILE_PATH), filepath(file_path) {}
   explicit sink_info(const char* host_buffer, size_t size)
-    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+    : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size))
+  {
+  }
   explicit sink_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+    : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_avro` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct avro_read_arg {
   source_info source;  ///< Info on source of data
 
@@ -80,7 +88,7 @@ struct avro_read_arg {
   explicit avro_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_csv` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_csv` API.
@@ -109,7 +117,7 @@ struct avro_read_arg {
  *  `low_memory`            - use `byte_range_xxx` for chunking instead
  *  `memory_map`            - files are always memory-mapped
  *  `float_precision`       - there is only one converter
- *---------------------------------------------------------------------------**/
+ **/
 struct csv_read_arg {
   enum quote_style {
     QUOTE_MINIMAL = 0,  ///< Only quote those fields which contain special characters
@@ -120,8 +128,8 @@ struct csv_read_arg {
 
   source_info source;  ///< Info on source of data
 
-  std::string compression =
-    "infer";  ///< One of: `none`, `infer`, `bz2`, `gz`, `xz`, `zip`; default detects from file extension
+  std::string compression = "infer";  ///< One of: `none`, `infer`, `bz2`, `gz`, `xz`, `zip`;
+                                      ///< default detects from file extension
 
   char lineterminator         = '\n';   ///< Line terminator character
   char delimiter              = ',';    ///< Field separator; also known as `sep`
@@ -134,8 +142,7 @@ struct csv_read_arg {
   cudf::size_type nrows      = -1;  ///< Rows to read
   cudf::size_type skiprows   = -1;  ///< Rows to skip from the start
   cudf::size_type skipfooter = -1;  ///< Rows to skip from the end
-  cudf::size_type header =
-    0;  ///< Header row index, zero-based counting; default is no header reading
+  cudf::size_type header     = 0;   ///< Header row index, zero-based counting
 
   std::vector<std::string> names;  ///< Names of the columns
   std::vector<std::string> dtype;  ///< Data types of the column; empty to infer dtypes
@@ -145,17 +152,18 @@ struct csv_read_arg {
 
   std::vector<std::string> true_values;   ///< Values to recognize as boolean True; default empty
   std::vector<std::string> false_values;  ///< Values to recognize as boolean False; default empty
-  std::vector<std::string> na_values;     /**< Values to recognize as invalid; default values: 
-                                            '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
-                                            'NaN', 'n/a', 'nan', 'null'. */
-  bool keep_default_na = true;            ///< Keep the default NA values
-  bool na_filter =
-    true;  ///< Detect missing values (empty strings and the values in na_values); disabling can improve performance
+  std::vector<std::string>
+    na_values;                  /**< Values to recognize as invalid; default values:
+                                  '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND',
+                                  '1.#QNAN', 'N/A', 'NA', 'NULL',                  'NaN', 'n/a', 'nan', 'null'. */
+  bool keep_default_na = true;  ///< Keep the default NA values
+  bool na_filter = true;  ///< Detect missing values (empty strings and the values in na_values);
+                          ///< disabling can improve performance
 
   std::string
     prefix;  ///< If there is no header or names, prepend this to the column ID as the name
-  bool mangle_dupe_cols =
-    true;  ///< If true, duplicate columns get a suffix; if false, data will be overwritten if there are columns with duplicate names
+  bool mangle_dupe_cols = true;  ///< If true, duplicate columns get a suffix; if false, data will
+                                 ///< be overwritten if there are columns with duplicate names
 
   bool dayfirst = false;  ///< Is the first value in the date formatthe day?  DD/MM  versus MM/DD
 
@@ -177,7 +185,7 @@ struct csv_read_arg {
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_json` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
@@ -196,7 +204,7 @@ struct csv_read_arg {
  *  `date_unit`             - only millisecond units are supported
  *  `encoding`              - only ASCII-encoded data is supported
  *  `chunksize`             - use `byte_range_xxx` for chunking instead
- *---------------------------------------------------------------------------**/
+ **/
 struct json_read_arg {
   source_info source;  ///< Info on source of data
 
@@ -212,9 +220,9 @@ struct json_read_arg {
   explicit json_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_orc` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct orc_read_arg {
   source_info source;  ///< Info on source of data
 
@@ -233,9 +241,9 @@ struct orc_read_arg {
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `write_orc` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct orc_write_arg {
   sink_info sink;  ///< Info on sink of data
 
@@ -244,9 +252,9 @@ struct orc_write_arg {
   explicit orc_write_arg(sink_info const& snk, cudf::table const& tbl) : sink(snk), table(tbl) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_parquet` interface
- *---------------------------------------------------------------------------**/
+ **/
 struct parquet_read_arg {
   source_info source;  ///< Info on source of data
 

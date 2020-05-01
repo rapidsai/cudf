@@ -20,6 +20,12 @@
 
 namespace cudf {
 namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_convert Converters
+ * APIs to convert strings to and from other data-types.
+ * @{
+ */
 
 /**
  * @brief Returns a new timestamp column converting a strings column into
@@ -121,5 +127,6 @@ std::unique_ptr<column> from_timestamps(
   std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

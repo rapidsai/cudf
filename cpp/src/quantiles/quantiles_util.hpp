@@ -22,9 +22,9 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location) {
+CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type location)
+{
   T result;
 #if defined(__CUDA_ARCH__)
   result = devarr[location];
@@ -35,9 +35,9 @@ CUDA_HOST_DEVICE_CALLABLE Result get_array_value(T const* devarr, size_type loca
 }
 
 namespace interpolate {
-
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac) {
+CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac)
+{
   // TODO: safe operation to avoid overflow/underflow
   // double can fully represent int8-32 value range.
   // Since the fraction part of double is 52 bits,
@@ -52,7 +52,8 @@ CUDA_HOST_DEVICE_CALLABLE Result linear(T lhs, T rhs, double frac) {
 }
 
 template <typename Result, typename T>
-CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs) {
+CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs)
+{
   // TODO: try std::midpoint (C++20) if available
   double dlhs = static_cast<double>(lhs);
   double drhs = static_cast<double>(rhs);
@@ -60,7 +61,8 @@ CUDA_HOST_DEVICE_CALLABLE Result midpoint(T lhs, T rhs) {
 }
 
 template <typename Result>
-CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs) {
+CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs)
+{
   // caring to avoid integer overflow and underflow between int64_t and Result( double )
   int64_t half = lhs / 2 + rhs / 2;
   int64_t rest = lhs % 2 + rhs % 2;
@@ -68,7 +70,8 @@ CUDA_HOST_DEVICE_CALLABLE Result midpoint(int64_t lhs, int64_t rhs) {
 }
 
 template <>
-CUDA_HOST_DEVICE_CALLABLE int64_t midpoint(int64_t lhs, int64_t rhs) {
+CUDA_HOST_DEVICE_CALLABLE int64_t midpoint(int64_t lhs, int64_t rhs)
+{
   // caring to avoid integer overflow
   int64_t half   = lhs / 2 + rhs / 2;
   int64_t rest   = lhs % 2 + rhs % 2;
@@ -90,7 +93,8 @@ struct quantile_index {
   double fraction;
 
   CUDA_HOST_DEVICE_CALLABLE
-  quantile_index(size_type count, double quantile) {
+  quantile_index(size_type count, double quantile)
+  {
     quantile = std::min(std::max(quantile, 0.0), 1.0);
 
     double val = quantile * (count - 1);
@@ -120,7 +124,8 @@ struct quantile_index {
  */
 template <typename Result, typename ValueAccessor>
 CUDA_HOST_DEVICE_CALLABLE Result
-select_quantile(ValueAccessor get_value, size_type size, double q, interpolation interp) {
+select_quantile(ValueAccessor get_value, size_type size, double q, interpolation interp)
+{
   if (size < 2) { return get_value(0); }
 
   quantile_index idx(size, q);
@@ -150,7 +155,8 @@ select_quantile(ValueAccessor get_value, size_type size, double q, interpolation
 
 template <typename Result, typename Iterator>
 CUDA_HOST_DEVICE_CALLABLE Result
-select_quantile_data(Iterator begin, size_type size, double q, interpolation interp) {
+select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
+{
   quantile_index idx(size, q);
 
   switch (interp) {
@@ -179,7 +185,8 @@ template <typename Iterator>
 CUDA_HOST_DEVICE_CALLABLE bool select_quantile_validity(Iterator begin,
                                                         size_type size,
                                                         double q,
-                                                        interpolation interp) {
+                                                        interpolation interp)
+{
   quantile_index idx(size, q);
 
   switch (interp) {
