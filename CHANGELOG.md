@@ -134,6 +134,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 
 ## Bug Fixes
 
