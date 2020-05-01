@@ -15,10 +15,10 @@ cdef extern from "cudf/io/types.hpp" \
         namespace "cudf::experimental::io" nogil:
 
     ctypedef enum quote_style:
-        QUOTE_MINIMAL = 0,
-        QUOTE_ALL,
-        QUOTE_NONNUMERIC,
-        QUOTE_NONE,
+        QUOTE_MINIMAL "cudf::experimental::io::quote_style::MINIMAL"
+        QUOTE_ALL "cudf::experimental::io::quote_style::ALL"
+        QUOTE_NONNUMERIC "cudf::experimental::io::quote_style::NONNUMERIC"
+        QUOTE_NONE "cudf::experimental::io::quote_style::NONE"
 
     ctypedef enum compression_type:
         NONE "cudf::experimental::io::compression_type::NONE"

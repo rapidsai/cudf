@@ -60,15 +60,15 @@ struct std_var_aggregation : aggregation {
  * @brief Derived class for specifying a nunique aggregation
  */
 struct nunique_aggregation : aggregation {
-  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
-    : aggregation{k}, _include_nulls{_include_nulls}
+  nunique_aggregation(aggregation::Kind k, null_policy null_handling)
+    : aggregation{k}, null_handling{null_handling}
   {
   }
-  include_nulls _include_nulls;  ///< include or exclude nulls
+  null_policy null_handling;  ///< include or exclude nulls
 
   bool operator==(nunique_aggregation const& other) const
   {
-    return aggregation::operator==(other) and _include_nulls == other._include_nulls;
+    return aggregation::operator==(other) and null_handling == other.null_handling;
   }
 };
 
@@ -76,17 +76,16 @@ struct nunique_aggregation : aggregation {
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation : aggregation {
-  nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
-    : aggregation{k}, n{n}, _include_nulls{_include_nulls}
+  nth_element_aggregation(aggregation::Kind k, size_type n, null_policy null_handling)
+    : aggregation{k}, n{n}, null_handling{null_handling}
   {
   }
-  size_type n;                   ///< nth index to return
-  include_nulls _include_nulls;  ///< include or exclude nulls
+  size_type n;                ///< nth index to return
+  null_policy null_handling;  ///< include or exclude nulls
 
   bool operator==(nth_element_aggregation const& other) const
   {
-    return aggregation::operator==(other) and n == other.n and
-           _include_nulls == other._include_nulls;
+    return aggregation::operator==(other) and n == other.n and null_handling == other.null_handling;
   }
 };
 
