@@ -21,7 +21,7 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
@@ -326,7 +326,7 @@ class ColumnBase(Column):
         if is_categorical_dtype(self.dtype):
             return self._fill_categorical(fill_value, begin, end, inplace)
 
-        fill_scalar = Scalar(fill_value, self.dtype)
+        fill_scalar = as_scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudf.filling.fill(self, begin, end, fill_scalar)
@@ -347,7 +347,7 @@ class ColumnBase(Column):
 
     def _fill_categorical(self, fill_value, begin, end, inplace):
         fill_code = self._encode(fill_value)
-        fill_scalar = Scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 

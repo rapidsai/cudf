@@ -235,3 +235,13 @@ cdef _get_np_scalar_from_timestamp64(unique_ptr[scalar]& s):
         )
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
+
+
+def as_scalar(val, dtype=None):
+    if isinstance(val, Scalar):
+        if (dtype is None or dtype == val.dtype):
+            return val
+        else:
+            return Scalar(val.value, dtype)
+    else:
+        return Scalar(val, dtype)
