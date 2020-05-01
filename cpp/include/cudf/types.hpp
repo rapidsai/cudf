@@ -102,7 +102,26 @@ enum class order : bool {
 /**
  * @brief Enum to specify whether to include nulls or exclude nulls
  */
-enum class include_nulls : bool { NO, YES };
+enum class null_policy : bool {
+  EXCLUDE,  ///< exclude null elements
+  INCLUDE   ///< include null elements
+};
+
+/**
+ * @brief Enum to treat NaN floating point value as null or non-null element
+ */
+enum class nan_policy : bool {
+  NAN_IS_NULL,  ///< treat nans as null elements
+  NAN_IS_VALID  ///< treat nans as valid elements (non-null)
+};
+
+/**
+ * @brief
+ */
+enum class null_equality : bool {
+  EQUAL,   ///< nulls compare equal
+  UNEQUAL  ///< nulls compare unequal
+};
 
 /**
  * @brief Indicates how null values compare against all other values.

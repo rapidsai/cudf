@@ -94,7 +94,7 @@ class groupby {
    * data viewed by the `keys` `table_view`.
    *
    * @param keys Table whose rows act as the groupby keys
-   * @param include_nulls_keys Indicates whether rows in `keys` that contain
+   * @param null_handling Indicates whether rows in `keys` that contain
    * NULL values should be included
    * @param keys_are_sorted Indicates whether rows in `keys` are already sorted
    * @param column_order If `keys_are_sorted == YES`, indicates whether each
@@ -105,7 +105,7 @@ class groupby {
    * use `null_order::BEFORE`. Ignored if `keys_are_sorted == false`.
    */
   explicit groupby(table_view const& keys,
-                   include_nulls include_nulls_keys               = include_nulls::NO,
+                   null_policy null_handling                      = null_policy::EXCLUDE,
                    sorted keys_are_sorted                         = sorted::NO,
                    std::vector<order> const& column_order         = {},
                    std::vector<null_order> const& null_precedence = {});
@@ -196,15 +196,15 @@ class groupby {
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
  private:
-  table_view _keys;                                     ///< Keys that determine grouping
-  include_nulls _include_null_keys{include_nulls::NO};  ///< Include rows in keys
-                                                        ///< with NULLs
-  sorted _keys_are_sorted{sorted::NO};                  ///< Whether or not the keys are sorted
-  std::vector<order> _column_order{};                   ///< If keys are sorted, indicates
-                                                        ///< the order of each column
-  std::vector<null_order> _null_precedence{};           ///< If keys are sorted,
-                                                        ///< indicates null order
-                                                        ///< of each column
+  table_view _keys;                                      ///< Keys that determine grouping
+  null_policy _include_null_keys{null_policy::EXCLUDE};  ///< Include rows in keys
+                                                         ///< with NULLs
+  sorted _keys_are_sorted{sorted::NO};                   ///< Whether or not the keys are sorted
+  std::vector<order> _column_order{};                    ///< If keys are sorted, indicates
+                                                         ///< the order of each column
+  std::vector<null_order> _null_precedence{};            ///< If keys are sorted,
+                                                         ///< indicates null order
+                                                         ///< of each column
   std::unique_ptr<detail::sort::sort_groupby_helper>
     _helper;  ///< Helper object
               ///< used by sort based implementation

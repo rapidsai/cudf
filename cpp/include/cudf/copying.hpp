@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -652,7 +652,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  * Example:
  * input: {11}
  * boolean_mask: {true, false, false, false, true, true, false, true, true, false}
- * target:       {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
+ * target:      {{   2,     2,     3,     4,    4,     7,    7,    7,    8,    10}}
  *
  * output:       {{   11,    2,     3,     4,   11,    11,    7,   11,   11,    10}}
  * @endcode
@@ -673,6 +673,24 @@ std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<scalar>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Get the element at specified index from a column
+ *
+ * @warning This function is expensive (invokes a kernel launch). So, it is not
+ * recommended to be used in performance sensitive code or inside a loop.
+ *
+ * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
+ *
+ * @param input Column view to get the element from
+ * @param index Index into `input` to get the element at
+ * @param mr Optional, The resource to use for all returned allocations
+ * @return std::unique_ptr<scalar> Scalar containing the single value
+ */
+std::unique_ptr<scalar> get_element(
+  column_view const& input,
+  size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /** @} */  // end of group
