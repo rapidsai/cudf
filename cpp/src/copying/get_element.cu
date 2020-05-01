@@ -29,13 +29,13 @@ namespace detail {
 namespace {
 
 struct get_element_functor {
-  template <typename T>
-  std::enable_if_t<is_fixed_width<T>(), std::unique_ptr<scalar>>
-  operator()(
+  template <typename T, std::enable_if_t<is_fixed_width<T>()> *p = nullptr>
+  std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource()) {
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+  {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
 
     using ScalarType = cudf::experimental::scalar_type_t<T>;
@@ -53,13 +53,13 @@ struct get_element_functor {
     return s;
   }
 
-  template <typename T>
-  std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<scalar>>
-  operator()(
+  template <typename T, std::enable_if_t<std::is_same<T, string_view>::value> *p = nullptr>
+  std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource()) {
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+  {
     auto device_col = column_device_view::create(input, stream);
 
     rmm::device_scalar<string_view> temp_data;
@@ -78,13 +78,13 @@ struct get_element_functor {
     return std::make_unique<string_scalar>(temp_data, temp_valid.value(stream), stream, mr);
   }
 
-  template <typename T>
-  std::enable_if_t<std::is_same<T, dictionary32>::value, std::unique_ptr<scalar>>
-  operator()(
+  template <typename T, std::enable_if_t<std::is_same<T, dictionary32>::value> *p = nullptr>
+  std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
     cudaStream_t stream                 = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource()) {
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource())
+  {
     auto dict_view = dictionary_column_view(input);
     auto key_index_scalar =
       get_element_functor{}.operator()<int32_t>(dict_view.indices(), index, stream);
@@ -112,7 +112,8 @@ struct get_element_functor {
 std::unique_ptr<scalar> get_element(column_view const &input,
                                     size_type index,
                                     cudaStream_t stream,
-                                    rmm::mr::device_memory_resource *mr) {
+                                    rmm::mr::device_memory_resource *mr)
+{
   CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
   return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
 }
@@ -121,7 +122,8 @@ std::unique_ptr<scalar> get_element(column_view const &input,
 
 std::unique_ptr<scalar> get_element(column_view const &input,
                                     size_type index,
-                                    rmm::mr::device_memory_resource *mr) {
+                                    rmm::mr::device_memory_resource *mr)
+{
   return detail::get_element(input, index, 0, mr);
 }
 

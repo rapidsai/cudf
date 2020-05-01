@@ -30,6 +30,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <rolling/rolling_detail.hpp>
+#include <rolling/rolling_jit_detail.hpp>
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
@@ -37,6 +38,7 @@
 #include <rolling/jit/code/code.h>
 
 #include <bit.hpp.jit>
+#include <rolling_jit_detail.hpp.jit>
 #include <types.hpp.jit>
 
 #include <thrust/binary_search.h>
@@ -535,10 +537,13 @@ struct dispatch_rolling {
 }  // namespace
 
 // Applies a user-defined rolling window function to the values in a column.
-template <bool static_window, typename PrecedingWindowIterator, typename FollowingWindowIterator>
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window_udf(column_view const& input,
+
                                            PrecedingWindowIterator preceding_window,
+                                           std::string const& preceding_window_str,
                                            FollowingWindowIterator following_window,
+                                           std::string const& following_window_str,
                                            size_type min_periods,
                                            std::unique_ptr<aggregation> const& agg,
                                            rmm::mr::device_memory_resource* mr,
@@ -592,18 +597,21 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                                 "-w"};
 
   // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash,
-    cuda_source,
-    {cudf_types_hpp, cudf_utilities_bit_hpp, cudf::experimental::rolling::jit::code::operation_h},
-    compiler_flags,
-    nullptr,
-    stream)
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      {cudf_types_hpp,
+                       cudf_utilities_bit_hpp,
+                       cudf::experimental::rolling::jit::code::operation_h,
+                       ___src_rolling_rolling_jit_detail_hpp},
+                      compiler_flags,
+                      nullptr,
+                      stream)
     .set_kernel_inst("gpu_rolling_new",  // name of the kernel we are launching
                      {cudf::jit::get_type_name(input.type()),  // list of template arguments
                       cudf::jit::get_type_name(output->type()),
                       udf_agg->_operator_name,
-                      static_window ? "cudf::size_type" : "cudf::size_type*"})
+                      preceding_window_str.c_str(),
+                      following_window_str.c_str()})
     .launch(input.size(),
             cudf::jit::get_data_ptr(input),
             input.null_mask(),
@@ -675,8 +683,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
-    return cudf::experimental::detail::rolling_window_udf<true>(
-      input, preceding_window, following_window, min_periods, agg, mr, 0);
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          preceding_window,
+                                                          "cudf::size_type",
+                                                          following_window,
+                                                          "cudf::size_type",
+                                                          min_periods,
+                                                          agg,
+                                                          mr,
+                                                          0);
   } else {
     auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
     auto following_window_begin = thrust::make_constant_iterator(following_window);
@@ -705,14 +720,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                "preceding_window/following_window size must match input size");
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
-    return cudf::experimental::detail::rolling_window_udf<false>(
-      input,
-      preceding_window.begin<size_type>(),
-      following_window.begin<size_type>(),
-      min_periods,
-      agg,
-      mr,
-      0);
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          preceding_window.begin<size_type>(),
+                                                          "cudf::size_type*",
+                                                          following_window.begin<size_type>(),
+                                                          "cudf::size_type*",
+                                                          min_periods,
+                                                          agg,
+                                                          mr,
+                                                          0);
   } else {
     return cudf::experimental::detail::rolling_window(input,
                                                       preceding_window.begin<size_type>(),
@@ -785,15 +801,34 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
   };
 
-  return cudf::experimental::detail::rolling_window(
-    input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    following_calculator),
-    min_periods,
-    aggr,
-    mr);
+  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+    cudf::detail::preceding_window_wrapper grouped_preceding_window{
+      group_offsets.data().get(), group_labels.data().get(), preceding_window};
+
+    cudf::detail::following_window_wrapper grouped_following_window{
+      group_offsets.data().get(), group_labels.data().get(), following_window};
+
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          grouped_preceding_window,
+                                                          "cudf::detail::preceding_window_wrapper",
+                                                          grouped_following_window,
+                                                          "cudf::detail::following_window_wrapper",
+                                                          min_periods,
+                                                          aggr,
+                                                          mr,
+                                                          0);
+  } else {
+    return cudf::experimental::detail::rolling_window(
+      input,
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      preceding_calculator),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      following_calculator),
+      min_periods,
+      aggr,
+      mr,
+      0);
+  }
 }
 
 namespace {
@@ -868,17 +903,21 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
            1;
   };
 
-  return cudf::experimental::detail::rolling_window(
-    input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    following_calculator),
-    min_periods,
-    aggr,
-    mr);
+  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+    CUDF_FAIL("Time ranged rolling window does NOT (yet) support UDF.");
+  } else {
+    return cudf::experimental::detail::rolling_window(
+      input,
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      preceding_calculator),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      following_calculator),
+      min_periods,
+      aggr,
+      mr,
+      0);
+  }
 }
-
 }  // namespace
 
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
@@ -936,4 +975,5 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 }
 
 }  // namespace experimental
+
 }  // namespace cudf

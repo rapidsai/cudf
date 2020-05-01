@@ -60,13 +60,13 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
 }
 
 // Allocate storage for a single fixed width element
-std::unique_ptr<scalar> make_fixed_width_scalar(
-    data_type type, cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr) {
+std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
+                                                cudaStream_t stream,
+                                                rmm::mr::device_memory_resource* mr)
+{
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
 
-  return experimental::type_dispatcher(type, scalar_construction_helper{},
-                                       stream, mr);
+  return experimental::type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
 namespace {

@@ -671,7 +671,7 @@ std::unique_ptr<table> boolean_mask_scatter(
 /**
  * @brief Get the element at specified index from a column
  *
- * Note: This function is expensive (invokes a kernel launch). So, it is not
+ * @warning This function is expensive (invokes a kernel launch). So, it is not
  * recommended to be used in performance sensitive code or inside a loop.
  *
  * @throws cudf::logic_error if `index` is not within the range `[0, input.size())`
@@ -682,9 +682,9 @@ std::unique_ptr<table> boolean_mask_scatter(
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(
-    column_view const& input,
-    size_type index,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  column_view const& input,
+  size_type index,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf
