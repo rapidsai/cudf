@@ -70,4 +70,52 @@ TEST_F(ReplaceNaNsErrorTest, NonFloatType)
   EXPECT_THROW(cudf::experimental::replace_nans(input_column, replacement), cudf::logic_error);
 }
 
+namespace cudf {
+namespace test {
+
+template <typename T>
+struct ReplaceNaNsTest : public BaseFixture {
+};
+
+using test_types = Types<float, double>;
+
+TYPED_TEST_CASE(ReplaceNaNsTest, test_types);
+
+template <typename T>
+void ReplaceNullsColumn(fixed_width_column_wrapper<T> input,
+                        fixed_width_column_wrapper<T> replacement_values,
+                        fixed_width_column_wrapper<T> expected)
+{
+  std::unique_ptr<column> result;
+  ASSERT_NO_THROW(result = experimental::replace_nulls(input, replacement_values));
+  expect_columns_equal(expected, *result);
+}
+
+template <typename T>
+void ReplaceNullsScalar(fixed_width_column_wrapper<T> input,
+                        scalar const& replacement_value,
+                        fixed_width_column_wrapper<T> expected)
+{
+  std::unique_ptr<column> result;
+  ASSERT_NO_THROW(result = experimental::replace_nulls(input, replacement_value));
+  expect_columns_equal(expected, *result);
+}
+
+TYPED_TEST(ReplaceNaNsTest, ReplaceColumn)
+{
+  auto nan = std::numeric_limits<double>::quiet_NaN();
+  auto inputColumn =
+    make_type_param_vector<TypeParam>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
+  auto replacement =
+    make_type_param_vector<TypeParam>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
+
+  ReplaceNullsColumn<TypeParam>(
+    fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end()),
+    fixed_width_column_wrapper<TypeParam>(replacement.begin(), replacement.end()),
+    fixed_width_column_wrapper<TypeParam>(replacement.begin(), replacement.end()));
+}
+
+}  // namespace test
+}  // namespace cudf
+
 CUDF_TEST_PROGRAM_MAIN()
