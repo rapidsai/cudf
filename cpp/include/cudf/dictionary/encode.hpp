@@ -40,6 +40,7 @@ namespace dictionary {
  * The null_mask and null count are copied from the input column to the output column.
  *
  * @throw cudf::logic_error if indices type is not INT32
+ * @throw cudf::logic_error if the column to encode is already a DICTIONARY type.
  *
  * ```
  * c = [429,111,213,111,213,429,213]

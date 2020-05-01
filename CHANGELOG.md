@@ -26,6 +26,7 @@
 - PR #4479 Adding cuda 10.2 support via conda environment file addition
 - PR #4486 Remove explicit template parameter from detail::scatter.
 - PR #4471 Consolidate partitioning functionality into a single header.
+- PR #4483 Add support fill() on dictionary columns
 - PR #4498 Adds in support for chunked writers to java
 - PR #4073 Enable contiguous split java test
 - PR #4527 Add JNI and java bindings for matches_re
@@ -68,6 +69,7 @@
 - PR #4776 Improve doxygen comments for libcudf string/timestamp conversion formats
 - PR #4793 Add `cudf._cuda` to setup.py
 - PR #4790 Replace the use of deprecated rmm APIs in the test environment
+- PR #4809 Improve libcudf doc rendering and add a new main page
 - PR #4811 Add precision to subsecond specifier in timestamp/string conversion format
 - PR #4543 Add `inplace` parameter support for `Series.replace` & `DataFrame.replace`
 - PR #4816 Remove java API use of deprecated RMM APIs
@@ -126,10 +128,12 @@
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
+- PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
 - PR #5024 CSV reader input stage optimizations
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
+- PR #5045 Remove call to `unique()` in concat when `axis=1`
 
 ## Bug Fixes
 
@@ -216,6 +220,9 @@
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
+- PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
+- PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
@@ -270,6 +277,7 @@
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
 - PR #4363 Grouped Rolling Window support
+- PR #4798 Add UDF support to grouped rolling window
 - PR #3917 Add dictionary add_keys function
 - PR #3842 ORC writer: add support for column statistics
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
