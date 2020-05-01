@@ -351,7 +351,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
    * Specifically:
    *
    * Offsets        : [0, 2, 7]    The offsets for Level 1
-   * Base Offsets   : [0, 5]       The corresponding base offsets for Level 2
+   * Base Offsets   : [0, 5]       The corresponding base offsets from Level 0
    *
    * Using this we can create an iterator that generates the sequence which properly indexes the
    * final integer values we want to gather.
@@ -364,8 +364,24 @@ struct column_gatherer_impl<list_view, MapItRoot> {
    *
    * A concrete example:
    *
-   * {{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, {{15, 16}, {17, 18}, {17, 18}, {17,
-   * 18}, {17, 18}}} List<List<int32_t>>: Length : 3 Offsets : 0, 2, 5, 10 Children : List<int32_t>:
+   * "column of lists of lists of ints"
+   * {
+   *   {
+   *      {2, 3}, {4, 5}
+   *   },
+   *   {
+   *      {6, 7, 8}, {9, 10, 11}, {12, 13, 14}
+   *   },
+   *   {
+   *      {15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}
+   *   }
+   * }
+   *
+   * List<List<int32_t>>:
+   * Length : 3
+   * Offsets : 0, 2, 5, 10
+   * Children :
+   *    List<int32_t>:
    *    Length : 10
    *    Offsets : 0, 2, 4, 7, 10, 13, 15, 17, 19, 21, 23
    *       Children :
