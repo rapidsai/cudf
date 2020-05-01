@@ -301,7 +301,7 @@ class string_scalar : public scalar {
                 bool is_valid                       = true,
                 cudaStream_t stream                 = 0,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
-    : string_scalar(data.value(), is_valid, stream, mr)
+    : string_scalar(data.value(stream), is_valid, stream, mr)
   {
   }
 

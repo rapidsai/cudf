@@ -576,6 +576,7 @@ add_library(cudf
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
             src/copying/copy_range.cu
+            src/copying/get_element.cu
             src/filling/legacy/fill.cu
             src/filling/fill.cu
             src/filling/legacy/repeat.cu
