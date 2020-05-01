@@ -362,8 +362,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
         // during the conversion stage
         const std::string quotechar(1, opts.quotechar);
         const std::string dblquotechar(2, opts.quotechar);
-        std::unique_ptr<column> col =
-          make_strings_column(out_buffers[i]._strings, stream);
+        std::unique_ptr<column> col = make_strings_column(out_buffers[i]._strings, stream);
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
       } else {
