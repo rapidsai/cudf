@@ -222,6 +222,8 @@
 - PR #5030 Fix Groupby sort=True
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
+- PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 
 
 # cuDF 0.13.0 (31 Mar 2020)
@@ -276,6 +278,7 @@
 - PR #4602 Add Cython bindings for functions in `datetime.hpp`
 - PR #4670 Add java and JNI bindings for contains_re
 - PR #4363 Grouped Rolling Window support
+- PR #4798 Add UDF support to grouped rolling window
 - PR #3917 Add dictionary add_keys function
 - PR #3842 ORC writer: add support for column statistics
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
