@@ -31,23 +31,20 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/transform_scan.h>
-#include <thrust/binary_search.h>
-
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <algorithm>
 
+#include <thrust/binary_search.h>
 #include <thrust/functional.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/logical.h>
 #include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/logical.h>
+#include <thrust/transform_scan.h>
 
 #include <cub/cub.cuh>
-
-#include <../tests/utilities/column_utilities.hpp>
 
 namespace cudf {
 namespace experimental {
@@ -130,8 +127,6 @@ struct column_gatherer_impl {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    printf("GL : D\n");
-
     size_type num_destination_rows = std::distance(gather_map_begin, gather_map_end);
     cudf::experimental::mask_allocation_policy policy =
       cudf::experimental::mask_allocation_policy::NEVER;
@@ -265,11 +260,29 @@ struct column_gatherer_impl<dictionary32, MapItType> {
   }
 };
 
-// gather anything except a list!
-struct nonlist_column_gatherer {
-  template<typename Element, typename MapItType, 
-          std::enable_if_t<!std::is_same<Element, cudf::list_view>::value>* = nullptr>
-   std::unique_ptr<column> operator()(column_view const& source_column,
+/**
+ * @brief Function object for gathering a type-erased column as the leaf
+ * of a hierarchy of nested list columns. To be used with the cudf::type_dispatcher.
+ */
+struct leaf_column_gatherer {
+  /**
+   * @brief Type-dispatched function to gather from one column to another based
+   * on a `gather_map`.
+   *
+   * @tparam Element Dispatched type for the column being gathered
+   * @tparam MapIterator Iterator type for the gather map
+   * @param source_column View into the column to gather from
+   * @param gather_map_begin Beginning of iterator range of integral values representing the gather
+   * map
+   * @param gather_map_end End of iterator range of integral values representing the gather map
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
+   */
+  template <typename Element,
+            typename MapItType,
+            std::enable_if_t<!std::is_same<Element, cudf::list_view>::value>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
                                      bool nullify_out_of_bounds,
@@ -277,91 +290,250 @@ struct nonlist_column_gatherer {
                                      cudaStream_t stream)
   {
     column_gatherer_impl<Element, MapItType> gatherer{};
-
-    printf("GL : C\n");
-    return gatherer(source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, mr, stream);
+    return gatherer(
+      source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, mr, stream);
   }
 
-   template<typename Element, typename MapItType, 
+  // we should never be encountering a list_view as a leaf of a hierarchy. this specialization
+  // exists to break template recursion during compilation.
+  template <typename Element,
+            typename MapItType,
             std::enable_if_t<std::is_same<Element, cudf::list_view>::value>* = nullptr>
-   std::unique_ptr<column> operator()(column_view const& source_column,
+  std::unique_ptr<column> operator()(column_view const& source_column,
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
                                      bool nullify_out_of_bounds,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    CUDF_FAIL("Should never get here");
+    CUDF_FAIL("Invalid recursive invocation of list gather");
   }
 };
 
 /**
  * @brief Column gather specialization for list_view column type.
+ *
+ * @tparam MapItRoot Iterator type to access the incoming root column.
+ *
+ * This functor is invoked only on the root column of a hierarchy of list
+ * columns. Recursion is handled internally.
  */
-template <typename MapItType>
-struct column_gatherer_impl<list_view, MapItType> {  
-  
-  // create output offset data
-  template<typename MapItType2>
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> 
-                                                  make_offsets(lists_column_view const& source_column, MapItType2 gather_map, size_type output_count,
-                                                  rmm::mr::device_memory_resource* mr,
-                                                  cudaStream_t stream)
-  {    
-    // offsets
-    size_type const* src_offsets{source_column.offsets().data<size_type>()};
-    
+template <typename MapItRoot>
+struct column_gatherer_impl<list_view, MapItRoot> {
+  /**
+   * @brief Generates the data needed to create a `gather_map` for the next level of
+   * recursion in a hierarchy of list columns.
+   *
+   * Gathering from a single level of a list column is similar to gathering from
+   * a string column.  Each row represents a list bounded by offsets. Example:
+   *
+   * Level 0 : List<List<int>>
+   *           Size : 3
+   *           Offsets : [0, 2, 5, 10]
+   *
+   * This represents a column with 3 rows.
+   * Row 0 has 2 elements (bounded by offsets 0,2)
+   * Row 1 has 3 elements (bounded by offsets 2,5)
+   * Row 2 has 5 eleemnts (bounded by offsets 5,10)
+   *
+   * If we wanted to gather rows 0 and 2 the offsets for our outgoing column
+   * would be the compacted ranges (0,2) and (5,10). The level 1 column
+   * then looks like
+   *
+   * Level 1 : List<int>
+   *           Size : 2
+   *           Offsets : [0, 2, 7]
+   *
+   * However, we need to then gather one level further, because at the bottom we have
+   * a column of integers.  We cannot gather the elements in the ranges (0, 2) and (2, 7).
+   * Instead, we have to gather elements in the ranges from the Level 0 column (0, 2) and (5, 10).
+   * So our gather_map iterator will need to know these "base" offsets to index properly.
+   * Specifically:
+   *
+   * Offsets        : [0, 2, 7]    The offsets for Level 1
+   * Base Offsets   : [0, 5]       The corresponding base offsets for Level 2
+   *
+   * Using this we can create an iterator that generates the sequence which properly indexes the
+   * final integer values we want to gather.
+   *
+   * [0, 1, 5, 6, 7, 8, 9]
+   *
+   * Thinking generally, this means that to produce a gather_map for level N+1, we need to use the
+   * offsets from level N and the "base" offsets from level N-1. So we are always carrying along
+   * one extra buffer of these "base" offsets which keeps our memory usage well controlled.
+   *
+   * A concrete example:
+   *
+   * {{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, {{15, 16}, {17, 18}, {17, 18}, {17,
+   * 18}, {17, 18}}} List<List<int32_t>>: Length : 3 Offsets : 0, 2, 5, 10 Children : List<int32_t>:
+   *    Length : 10
+   *    Offsets : 0, 2, 4, 7, 10, 13, 15, 17, 19, 21, 23
+   *       Children :
+   *           2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 17, 18, 17, 18, 17, 18
+   *
+   * Final column, doing gather([0, 2])
+   *
+   * List<List<int32_t>>:
+   * Length : 2
+   * Offsets : 0, 2, 7
+   * Children :
+   *    List<int32_t>:
+   *    Length : 7
+   *    Offsets : 0, 2, 4, 6, 8, 10, 12, 14
+   *       Children :
+   *          2, 3, 4, 5, 15, 16, 17, 18, 17, 18, 17, 18, 17, 18
+   *
+   * @tparam MapItType Iterator type to access the incoming column.
+   * @param source_column View into the column to gather from
+   * @param gather_map Iterator access to the gather map for `source_column`
+   * map
+   * @param gather_map_size Size of the gather map.
+   * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
+   *
+   * @returns std::pair containing two columns of data.  the compacted offsets
+   *          for the child column and the base (original) offsets from the source
+   *          column that matches each of those new offsets.
+   *
+   */
+  template <typename MapItType>
+  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_gather_offsets(
+    lists_column_view const& source_column,
+    MapItType gather_map,
+    size_type gather_map_size,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+  {
+    // size of the gather map is the # of output rows
+    size_type output_count = gather_map_size;
     size_type offset_count = output_count + 1;
-    auto dst_offsets_c = cudf::make_fixed_width_column(data_type{INT32}, offset_count, mask_state::UNALLOCATED, stream, mr); 
-    mutable_column_view mcv = dst_offsets_c->mutable_view();    
-    size_type* dst_offsets = mcv.data<size_type>();
-    
-    // compact offsets.      
+
+    // offsets of the source column
+    size_type const* src_offsets{source_column.offsets().data<size_type>()};
+
+    // outgoing offsets.  these will persist as output from the entire gather operation
+    auto dst_offsets_c = cudf::make_fixed_width_column(
+      data_type{INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
+    mutable_column_view dst_offsets_v = dst_offsets_c->mutable_view();
+    size_type* dst_offsets            = dst_offsets_v.data<size_type>();
+
+    // generate the compacted outgoing offsets.
     auto count_iter = thrust::make_counting_iterator<size_type>(0);
     thrust::plus<size_type> sum;
-    thrust::transform_exclusive_scan(rmm::exec_policy(stream)->on(stream), count_iter, count_iter + offset_count, dst_offsets, 
-        [gather_map, output_count, src_offsets] __device__ (size_type index) -> size_type {
-          // last offset index is always the previous offset_index + 1, since each entry in the gather map represents
-          // a virtual pair of offsets
-          size_type offset_index = index < output_count ? gather_map[index] : gather_map[index-1] + 1;
-          // the length of this list
-          return src_offsets[offset_index + 1] - src_offsets[offset_index];
-        },
-        0,
-        sum);
+    thrust::transform_exclusive_scan(
+      rmm::exec_policy(stream)->on(stream),
+      count_iter,
+      count_iter + offset_count,
+      dst_offsets,
+      [gather_map, output_count, src_offsets] __device__(size_type index) -> size_type {
+        // last offset index is always the previous offset_index + 1, since each entry in the gather
+        // map represents a virtual pair of offsets
+        size_type offset_index =
+          index < output_count ? gather_map[index] : gather_map[index - 1] + 1;
+        // the length of this list
+        return src_offsets[offset_index + 1] - src_offsets[offset_index];
+      },
+      0,
+      sum);
 
-    // base offsets    
-    auto base_offsets = cudf::make_fixed_width_column(data_type{INT32}, output_count, mask_state::UNALLOCATED, stream, mr); 
-    mutable_column_view base_offsets_mcv = base_offsets->mutable_view();    
-    size_type* base_offsets_p = base_offsets_mcv.data<size_type>();
-    thrust::transform(rmm::exec_policy(stream)->on(stream), gather_map, gather_map + offset_count, base_offsets_p,
-      [src_offsets] __device__ (size_type index){
-        return src_offsets[index];
-      }
-    );
+    // for each span of offsets (each output row) we need to know the original offset value to build
+    // the gather map for the next level.  this data is temporary and will only persist until the
+    // next level of recursion is done using it.  This way, even if we have a hierarchy 1000 levels
+    // deep, we will only ever have at most 2 of these extra columns in memory.
+    auto base_offsets = cudf::make_fixed_width_column(
+      data_type{INT32}, output_count, mask_state::UNALLOCATED, stream, mr);
+    mutable_column_view base_offsets_mcv = base_offsets->mutable_view();
+    size_type* base_offsets_p            = base_offsets_mcv.data<size_type>();
+
+    // generate the base offsets
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      gather_map,
+                      gather_map + offset_count,
+                      base_offsets_p,
+                      [src_offsets] __device__(size_type index) { return src_offsets[index]; });
 
     return {std::move(dst_offsets_c), std::move(base_offsets)};
-  }  
+  }
 
-  #define LIST_GATHER_ITERATOR(__name, gather_data) \
-  auto __name##span_upper_bound = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), [offsets = gather_data.offsets] __device__ (size_type index){   \
-      return offsets[index+1]; \
-  }); \
-  column_view __name##base_offsets_v(*gather_data.base_offsets);  \
-  size_type const* __name##base_offsets = __name##base_offsets_v.data<size_type>(); \
-  auto __name = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), [span_upper_bound = __name##span_upper_bound, offset_count = __name##base_offsets_v.size(), offsets = gather_data.offsets, base_offsets = __name##base_offsets] __device__ (size_type index){ \
-      auto bound = thrust::upper_bound(thrust::device, span_upper_bound, span_upper_bound + offset_count, index); \
-      size_type offset_index = thrust::distance(span_upper_bound, bound); \
-      size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index]; \
-      return offset_subindex + base_offsets[offset_index]; \
-  });\
-
+  /**
+   * @brief The information needed to create an iterator to gather level N+1
+   *
+   * See documentation for make_gather_offsets for a detailed explanation.
+   */
   struct gather_data {
-    size_type const*          offsets;
-    std::unique_ptr<column>   base_offsets;    
+    size_type const* offsets;
+    std::unique_ptr<column> base_offsets;
   };
 
-  // we've reached a leaf. just do a regular gather
+/**
+ * @brief Macro for creating a gather map iterator to gather from level N+1.
+ *
+ * The iterator for each level is unique and we can't use templates because the
+ * operation is recursive.  There is a restriction in nvcc that prevents you
+ * from returning a __device__ lambda from a function, so this cannot be implemented
+ * as function.
+ *
+ * The iterator needed for gathering at level N+1 needs to reference the offsets
+ * from level N and the "base" offsets used from level N-1.  An example of
+ * the gather map needed for level N+1 (see documentation for make_gather_offsets for
+ * the full example)
+ *
+ * level N-1 offsets               : [0, 2, 5, 10], gather map[0, 2]
+ *
+ * level N offsets                 : [0, 2, 7]
+ * "base" offsets from level N-1   : [0, 5]
+ *
+ * desired output sequence from the level N+1 gather map
+ * [0, 1, 5, 6, 7, 8, 9]
+ *
+ * The generation of this sequence in this iterator works as follows
+ *
+ * step 1, generate row index sequence
+ * [0, 0, 1, 1, 1, 1, 1]
+ * step 2, generate row subindex sequence
+ * [0, 1, 0, 1, 2, 3, 4]
+ * step 3, add base offsets to get the final sequence
+ * [0, 1, 5, 6, 7, 8, 9]
+ *
+ * @param __name variable name of the resulting iterator
+ * @param gather_data the `gather_data` struct needed to generate the map sequence
+ *
+ * @returns an iterator that produces the gather map for level N+1
+ *
+ */
+#define LIST_GATHER_ITERATOR(__name, gather_data)                                                                      \
+  auto __name##span_upper_bound = thrust::make_transform_iterator(                                                     \
+    thrust::make_counting_iterator<size_type>(0),                                                                      \
+    [offsets = gather_data.offsets] __device__(size_type index) { return offsets[index + 1]; });                       \
+  column_view __name##base_offsets_v(*gather_data.base_offsets);                                                       \
+  size_type const* __name##base_offsets = __name##base_offsets_v.data<size_type>();                                    \
+  auto __name                           = thrust::make_transform_iterator(                                             \
+    thrust::make_counting_iterator<size_type>(0),                                            \
+    [span_upper_bound = __name##span_upper_bound,                                            \
+     offset_count     = __name##base_offsets_v.size(),                                       \
+     offsets          = gather_data.offsets,                                                 \
+     base_offsets     = __name##base_offsets] __device__(size_type index) {                      \
+      auto bound = thrust::upper_bound(                                                      \
+        thrust::device, span_upper_bound, span_upper_bound + offset_count, index);           \
+      size_type offset_index    = thrust::distance(span_upper_bound, bound);                 \
+      size_type offset_subindex = offset_index == 0 ? index : index - offsets[offset_index]; \
+      return offset_subindex + base_offsets[offset_index];                                   \
+    });
+
+  /**
+   * @brief Gather a leaf column from a hierarchy of list columns. The recursion
+   * terminates here.
+   *
+   * @param column View into the column to gather from
+   * @param gd The gather_data needed to construct a gather map iterator for this level
+   * @param nullify_out_of_bounds Nullify values in the gather map that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
+   *
+   * @returns column with elements gathered based on `gather_data`
+   *
+   */
   std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                            gather_data const& gd,
                                            bool nullify_out_of_bounds,
@@ -370,109 +542,155 @@ struct column_gatherer_impl<list_view, MapItType> {
   {
     // gather map for our child
     LIST_GATHER_ITERATOR(child_gather_map, gd);
-   
+
     // size of the child gather map
-    size_type child_gather_map_size;    
-    CUDA_TRY(cudaMemcpy(&child_gather_map_size, gd.offsets + gd.base_offsets->size(), sizeof(size_type), cudaMemcpyDeviceToHost));
-    printf("C gather map size : %d\n", child_gather_map_size);
+    size_type child_gather_map_size;
+    CUDA_TRY(cudaMemcpy(&child_gather_map_size,
+                        gd.offsets + gd.base_offsets->size(),
+                        sizeof(size_type),
+                        cudaMemcpyDeviceToHost));
 
     // otherwise, just call a regular gather
-    return cudf::experimental::type_dispatcher( column.type(),
-                                                nonlist_column_gatherer{},
-                                                column,
-                                                child_gather_map,
-                                                child_gather_map + child_gather_map_size,
-                                                nullify_out_of_bounds,
-                                                mr,
-                                                stream);
+    return cudf::experimental::type_dispatcher(column.type(),
+                                               leaf_column_gatherer{},
+                                               column,
+                                               child_gather_map,
+                                               child_gather_map + child_gather_map_size,
+                                               nullify_out_of_bounds,
+                                               mr,
+                                               stream);
   }
 
-  // nested list gather
+  /**
+   * @brief Gather a list column from a hierarchy of list columns. The recursion
+   * continues from here at least 1 level further
+   *
+   * @param list View into the list column to gather from
+   * @param gd The gather_data needed to construct a gather map iterator for this level
+   * @param nullify_out_of_bounds Nullify values in the gather map that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
+   *
+   * @returns column with elements gathered based on `gather_data`
+   *
+   */
   std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
-                                             gather_data &parent,
+                                             gather_data& parent,
                                              bool nullify_out_of_bounds,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
   {
-    printf("GL : B\n");
-        
     // build the gather map iterator
     LIST_GATHER_ITERATOR(gather_map_begin, parent);
 
     // size of the child gather map
-    size_type gather_map_size;    
-    CUDA_TRY(cudaMemcpy(&gather_map_size, parent.offsets + parent.base_offsets->size(), sizeof(size_type), cudaMemcpyDeviceToHost));
-    printf("B gather map size : %d\n", gather_map_size);
+    size_type gather_map_size;
+    CUDA_TRY(cudaMemcpy(&gather_map_size,
+                        parent.offsets + parent.base_offsets->size(),
+                        sizeof(size_type),
+                        cudaMemcpyDeviceToHost));
 
     // generate gather_data for this level
-    auto offset_result = make_offsets(list, gather_map_begin, gather_map_size, mr, stream);
-    test::print(*offset_result.first);
-    test::print(*offset_result.second);
+    auto offset_result = make_gather_offsets(list, gather_map_begin, gather_map_size, mr, stream);
     column_view offsets_v(*offset_result.first);
-    gather_data gd { offsets_v.data<size_type>(), std::move(offset_result.second) }; 
-                
+    gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
+
+    // memory optimization. now that we have generated the base offset data we need for level N+1,
+    // we are no longer going to be using gather_map_begin, so the base offset data it references
+    // from level N-1 above us can be released
+    parent.base_offsets.release();
+
     // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
     // templates, so we can't pass an iterator.  so instead call a function that can build it's own
     // iterator that does the same thing as -this- function.
-    if(list.child().type() == cudf::data_type{LIST}){
+    if (list.child().type() == cudf::data_type{LIST}) {
       // gather children
       auto child = gather_list_nested(list.child(), gd, nullify_out_of_bounds, mr, stream);
 
       // return the final column
-      return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+      return make_lists_column(
+        gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
     }
 
     // it's a leaf.  do a regular gather
     auto child = gather_list_leaf(list.child(), gd, nullify_out_of_bounds, mr, stream);
 
     // assemble final column
-    return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
-  }   
+    return make_lists_column(
+      gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+  }
 
-  // top level gather.    
-  std::unique_ptr<column> operator()(column_view const& source_column,
-                                     MapItType gather_map_begin,
-                                     MapItType gather_map_end,
+  /**
+   * @brief Gather a list column from a hierarchy of list columns. This is the start
+   * of the recursion - we will only ever get in here once.
+   *
+   * This function is almost identical to gather_list_nested() but this similarity
+   * is a necessary evil to handle the recursive nature of the operation. This functor
+   * is called in a templated way, but we can't continue doing that for the nesting.
+   * The tree of calls can be visualized like this:
+   *
+   * R :  this operator
+   * N :  gather_list_nested
+   * L :  gather_list_leaf
+   *
+   *        R
+   *       / \
+   *      L   N
+   *           \
+   *            N
+   *             \
+   *              ...
+   *               \
+   *                L
+   *
+   * We will only ever travel down the left branch or the right branch
+   *
+   * @param column View into the column to gather from
+   * @param gather_map_begin iterator representing the start of the range to gather from
+   * @param gather_map_end iterator representing the end of the range to gather from
+   * @param nullify_out_of_bounds Nullify values in the gather map that are out of bounds
+   * @param mr Memory resource to use for all allocations
+   * @param stream CUDA stream on which to execute kernels
+   *
+   * @returns column with elements gathered based on the gather map
+   *
+   */
+  std::unique_ptr<column> operator()(column_view const& column,
+                                     MapItRoot gather_map_begin,
+                                     MapItRoot gather_map_end,
                                      bool nullify_out_of_bounds,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    printf("GL : A\n");
-
-    lists_column_view list(source_column);
+    lists_column_view list(column);
     auto gather_map_size = std::distance(gather_map_begin, gather_map_end);
-    if (gather_map_size == 0){
-       return make_empty_column(data_type{LIST});
-    }
+    if (gather_map_size == 0) { return make_empty_column(data_type{LIST}); }
 
-    printf("Root gather map size : %lu\n", gather_map_size);
-    
-    // generate gather_data for this level 
-    auto offset_result = make_offsets(source_column, gather_map_begin, gather_map_size, mr, stream);
-    test::print(*offset_result.first);
-    test::print(*offset_result.second);
-    column_view offsets_v(*offset_result.first);      
-    gather_data gd { offsets_v.data<size_type>(), std::move(offset_result.second) };    
-                
+    // generate gather_data for this level
+    auto offset_result = make_gather_offsets(column, gather_map_begin, gather_map_size, mr, stream);
+    column_view offsets_v(*offset_result.first);
+    gather_data gd{offsets_v.data<size_type>(), std::move(offset_result.second)};
+
     // the nesting case.  we have to recurse through the hierarchy, but we can't do that via
     // templates, so we can't pass an iterator.  so instead call a function that can build it's own
     // iterator that does the same thing as -this- function.
-    if(list.child().type() == cudf::data_type{LIST}){
+    if (list.child().type() == cudf::data_type{LIST}) {
       // gather children
       auto child = gather_list_nested(list.child(), gd, nullify_out_of_bounds, mr, stream);
 
       // return the final column
-      return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+      return make_lists_column(
+        gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
     }
 
     // it's a leaf.  do a regular gather
     auto child = gather_list_leaf(list.child(), gd, nullify_out_of_bounds, mr, stream);
 
     // assemble final column
-    return make_lists_column(gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
+    return make_lists_column(
+      gather_map_size, std::move(offset_result.first), std::move(child), 0, rmm::device_buffer{});
   }
 };
-
 
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
@@ -622,21 +840,22 @@ void gather_bitmask(table_view const& source,
 }
 
 template <typename MapIterator>
-std::unique_ptr<column> gather(column_view const& source_column,
-                              MapIterator gather_map_begin,
-                              MapIterator gather_map_end,
-                              bool nullify_out_of_bounds          = false,
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
-{  
+std::unique_ptr<column> gather(
+  column_view const& source_column,
+  MapIterator gather_map_begin,
+  MapIterator gather_map_end,
+  bool nullify_out_of_bounds          = false,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
+{
   return cudf::experimental::type_dispatcher(source_column.type(),
                                              column_gatherer{},
-                                              source_column,
-                                              gather_map_begin,
-                                              gather_map_end,
-                                              nullify_out_of_bounds,
-                                              mr,
-                                              stream);
+                                             source_column,
+                                             gather_map_begin,
+                                             gather_map_end,
+                                             nullify_out_of_bounds,
+                                             mr,
+                                             stream);
 }
 
 /**
@@ -685,12 +904,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(detail::gather(source_column,                                                               
-                                                gather_map_begin,
-                                                gather_map_end,
-                                                nullify_out_of_bounds,
-                                                mr,
-                                                stream));
+    destination_columns.push_back(detail::gather(
+      source_column, gather_map_begin, gather_map_end, nullify_out_of_bounds, mr, stream));
   }
 
   auto const op =

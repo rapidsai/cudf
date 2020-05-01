@@ -34,7 +34,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   CUDF_EXPECTS(child_column != nullptr, "Must pass a valid child column");
 
   std::vector<std::unique_ptr<column>> children;
-  children.emplace_back(std::move(offsets_column));  
+  children.emplace_back(std::move(offsets_column));
   children.emplace_back(std::move(child_column));
   return std::make_unique<column>(cudf::data_type{LIST},
                                   num_rows,
