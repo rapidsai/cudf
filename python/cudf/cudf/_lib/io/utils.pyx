@@ -52,14 +52,11 @@ cdef cppclass iobase_data_sink(data_sink):
     iobase_data_sink(object buf_):
         this.buf = buf_
 
-    void host_write(const void * data, size_t size) nogil:
-        with gil:
-            buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
+    void host_write(const void * data, size_t size) with gil:
+        buf.write(PyMemoryView_FromMemory(<char*>data, size, PyBUF_READ))
 
-    void flush() nogil:
-        with gil:
-            buf.flush()
+    void flush() with gil:
+        buf.flush()
 
-    size_t bytes_written() nogil:
-        with gil:
-            return buf.tell()
+    size_t bytes_written() with gil:
+        return buf.tell()
