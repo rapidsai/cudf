@@ -425,7 +425,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
     data_.insert(data_.end(), h_data + buffer_pos + data_.size(), h_data + target_pos);
 
-    // Pass 1: Count the potential number of rows in each block
+    // Pass 1: Count the potential number of rows in each character block for each
+    // possible parser state at the beginning of the block.
     uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
                                                                  nullptr,
                                                                  data_.data().get(),
@@ -445,9 +446,9 @@ void reader::impl::gather_row_offsets(const char *h_data,
                              cudaMemcpyDeviceToHost,
                              stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    // Sum up the rows in each block, selecting the row count that corresponds to the
-    // current input context. Also stores the known input context per block that will
-    // be needed by the second pass.
+    // Sum up the rows in each character block, selecting the row count that
+    // corresponds to the current input context. Also stores the now known input
+    // context per character block that will be needed by the second pass.
     for (uint32_t i = 0; i < num_blocks; i++) {
       uint64_t ctx_next = cudf::io::csv::gpu::select_row_context(ctx, row_ctx[i]);
       row_ctx[i]        = ctx;
