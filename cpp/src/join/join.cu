@@ -315,16 +315,16 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                                             complement_indices.second.begin(),
                                                             complement_indices.second.end(),
                                                             nullify_out_of_bounds,
-                                                            mr,
+                                                            rmm::mr::get_default_resource(),
                                                             stream);
       auto common_from_left  = experimental::detail::gather(left.select(left_common_col),
                                                            joined_indices.first.begin(),
                                                            joined_indices.first.end(),
                                                            nullify_out_of_bounds,
-                                                           mr,
+                                                           rmm::mr::get_default_resource(),
                                                            stream);
       common_table =
-        experimental::concatenate({common_from_right->view(), common_from_left->view()});
+        experimental::concatenate({common_from_right->view(), common_from_left->view()}, mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
