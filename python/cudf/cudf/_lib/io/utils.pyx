@@ -11,8 +11,12 @@ import os
 # with the appropriate type and source values
 cdef source_info make_source_info(src) except*:
     cdef const unsigned char[::1] buf
+    empty_buffer = False
     if isinstance(src, bytes):
-        buf = src
+        if (len(src) > 0):
+            buf = src
+        else:
+            empty_buffer = True
     elif isinstance(src, io.BytesIO):
         buf = src.getbuffer()
     # Otherwise src is expected to be a numeric fd, string path, or PathLike.
@@ -26,4 +30,7 @@ cdef source_info make_source_info(src) except*:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), src)
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src)))
-    return source_info(<char*>&buf[0], buf.shape[0])
+    if empty_buffer is False:
+        return source_info(<char*>&buf[0], buf.shape[0])
+    else:
+        return source_info(<char*>NULL, 0)

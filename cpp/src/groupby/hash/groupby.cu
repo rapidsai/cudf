@@ -197,7 +197,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
  */
 template <bool keys_have_nulls>
 auto create_hash_map(table_device_view const& d_keys,
-                     include_nulls include_null_keys,
+                     null_policy include_null_keys,
                      cudaStream_t stream = 0)
 {
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
@@ -210,7 +210,7 @@ auto create_hash_map(table_device_view const& d_keys,
 
   using allocator_type = typename map_type::allocator_type;
 
-  bool const null_keys_are_equal{include_null_keys == include_nulls::YES};
+  bool const null_keys_are_equal{include_null_keys == null_policy::INCLUDE};
 
   row_hasher<default_hash, keys_have_nulls> hasher{d_keys};
   row_equality_comparator<keys_have_nulls> rows_equal{d_keys, d_keys, null_keys_are_equal};
@@ -235,7 +235,7 @@ void compute_single_pass_aggs(table_view const& keys,
                               std::vector<aggregation_request> const& requests,
                               experimental::detail::result_cache* sparse_results,
                               Map& map,
-                              include_nulls include_null_keys,
+                              null_policy include_null_keys,
                               cudaStream_t stream)
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
@@ -270,7 +270,7 @@ void compute_single_pass_aggs(table_view const& keys,
   auto d_values       = table_device_view::create(flattened_values);
   rmm::device_vector<aggregation::Kind> d_aggs(aggs);
 
-  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == include_nulls::NO;
+  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{bitmask_and(keys, rmm::mr::get_default_resource(), stream)};
@@ -362,7 +362,7 @@ template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               std::vector<aggregation_request> const& requests,
                                               experimental::detail::result_cache* cache,
-                                              include_nulls include_null_keys,
+                                              null_policy include_null_keys,
                                               cudaStream_t stream,
                                               rmm::mr::device_memory_resource* mr)
 {
@@ -419,7 +419,7 @@ bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_reques
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
   std::vector<aggregation_request> const& requests,
-  include_nulls include_null_keys,
+  null_policy include_null_keys,
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {

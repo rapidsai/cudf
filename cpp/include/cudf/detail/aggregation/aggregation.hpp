@@ -112,45 +112,45 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
  * @brief Derived class for specifying a nunique aggregation
  */
 struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
-  nunique_aggregation(aggregation::Kind k, include_nulls _include_nulls)
-    : derived_aggregation{k}, _include_nulls{_include_nulls}
+  nunique_aggregation(aggregation::Kind k, null_policy null_handling)
+    : derived_aggregation{k}, _null_handling{null_handling}
   {
   }
-  include_nulls _include_nulls;  ///< include or exclude nulls
+  null_policy _null_handling;  ///< include or exclude nulls
 
  protected:
   friend class derived_aggregation<nunique_aggregation>;
 
   bool operator==(nunique_aggregation const& other) const
   {
-    return _include_nulls == other._include_nulls;
+    return _null_handling == other._null_handling;
   }
 
-  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_include_nulls)); }
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
 };
 
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
-  nth_element_aggregation(aggregation::Kind k, size_type n, include_nulls _include_nulls)
-    : derived_aggregation{k}, n{n}, _include_nulls{_include_nulls}
+  nth_element_aggregation(aggregation::Kind k, size_type n, null_policy null_handling)
+    : derived_aggregation{k}, _n{n}, _null_handling{null_handling}
   {
   }
-  size_type n;                   ///< nth index to return
-  include_nulls _include_nulls;  ///< include or exclude nulls
+  size_type _n;                ///< nth index to return
+  null_policy _null_handling;  ///< include or exclude nulls
 
  protected:
   friend class derived_aggregation<nth_element_aggregation>;
 
   bool operator==(nth_element_aggregation const& other) const
   {
-    return n == other.n and _include_nulls == other._include_nulls;
+    return _n == other._n and _null_handling == other._null_handling;
   }
 
   size_t hash_impl() const
   {
-    return std::hash<size_type>{}(n) ^ std::hash<int>{}(static_cast<int>(_include_nulls));
+    return std::hash<size_type>{}(_n) ^ std::hash<int>{}(static_cast<int>(_null_handling));
   }
 };
 
@@ -206,12 +206,12 @@ constexpr size_type ARGMAX_SENTINEL{-1};
  */
 constexpr size_type ARGMIN_SENTINEL{-1};
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Determines accumulator type based on input type and aggregation.
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- *---------------------------------------------------------------------------**/
+ **/
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;
