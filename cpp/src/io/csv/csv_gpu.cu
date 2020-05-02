@@ -733,7 +733,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * The caller can then compute the actual parsing context at the beginning of each
  * individual block and total row count.
  * The second phase outputs the location of each row in the block, using the parsing
- * context and initial row counter resulting from the previous phase.
+ * context and initial row counter accumulated from the results of the previous phase.
  * Row parsing context will be updated after phase 2 such that the value contains
  * the number of rows starting at byte_range_end or beyond.
  *
@@ -782,7 +782,6 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   size_t block_pos =
     (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
   const char *cur = start + block_pos;
-  uint64_t ctxb;
   uint4 ctx_map;
   int c, c_prev;
 
@@ -848,14 +847,16 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   }
 
   // Convert the long-form {rowmap,outctx}[inctx] version into packed version
-  // {rowcount,ouctx}[inctx]
-  ctxb = pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
-                           make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
-                           make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3));
+  // {rowcount,ouctx}[inctx], then merge the row contexts of the 32-character blocks into
+  // a single 16K-character block context
+  rowctx_merge_transform(
+    ctxtree,
+    pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
+                      make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
+                      make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3)),
+    t);
 
-  // Merge the row contexts of the 32-character blocks into a single 16K-character block context
-  rowctx_merge_transform(ctxtree, ctxb, t);
-
+  // If this is the second phase, get the block's initial parser state and row counter
   if (offsets_out) {
     if (t == 0) { ctxtree[0] = row_ctx[blockIdx.x]; }
     __syncthreads();
@@ -880,6 +881,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       row++;
       rowmap >>= pos;
     }
+    // Return the number of rows out of range
     rows_out_of_range = WarpReduceSum16(rows_out_of_range);
     __syncthreads();
     if (!(t & 0xf)) { ctxtree[t >> 4] = rows_out_of_range; }
