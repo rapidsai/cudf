@@ -291,10 +291,12 @@ class StringMethods(object):
         if sep is None:
             sep = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if others is None:
-            data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
+            data = cpp_join(
+                self._column, as_scalar(sep), as_scalar(na_rep, "str")
+            )
         else:
             other_cols = _get_cols_list(others)
             all_cols = [self._column] + other_cols
@@ -302,8 +304,8 @@ class StringMethods(object):
                 DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
-                Scalar(sep),
-                Scalar(na_rep, "str"),
+                as_scalar(sep),
+                as_scalar(na_rep, "str"),
             )
 
         if len(data) == 1 and data.null_count == 1:
@@ -398,12 +400,12 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_contains_re(self._column, pat)
             if regex is True
-            else cpp_contains(self._column, Scalar(pat, "str")),
+            else cpp_contains(self._column, as_scalar(pat, "str")),
             **kwargs,
         )
 
@@ -471,14 +473,14 @@ class StringMethods(object):
         # Pandas treats 0 as all
         if n == 0:
             n = -1
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
+            cpp_replace_re(self._column, pat, as_scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
-                self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
+                self._column, as_scalar(pat, "str"), as_scalar(repl, "str"), n
             ),
             **kwargs,
         )
@@ -747,10 +749,10 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_slice_replace(self._column, start, stop, Scalar(repl)),
+            cpp_slice_replace(self._column, start, stop, as_scalar(repl)),
             **kwargs,
         )
 
@@ -778,10 +780,10 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
+            cpp_string_insert(self._column, start, as_scalar(repl)), **kwargs
         )
 
     def get(self, i=0, **kwargs):
@@ -839,9 +841,9 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
-        result_table = cpp_split(self._column, Scalar(pat, "str"), n)
+        result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._column):
                 result_table = []
@@ -886,9 +888,9 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
-        result_table = cpp_rsplit(self._column, Scalar(pat), n)
+        result_table = cpp_rsplit(self._column, as_scalar(pat), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -932,10 +934,10 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_partition(self._column, Scalar(sep)), **kwargs
+            cpp_partition(self._column, as_scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -973,10 +975,10 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, Scalar(sep)), **kwargs
+            cpp_rpartition(self._column, as_scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -1190,10 +1192,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_strip(self._column, Scalar(to_strip)), **kwargs
+            cpp_strip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def lstrip(self, to_strip=None, **kwargs):
@@ -1220,10 +1222,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_lstrip(self._column, Scalar(to_strip)), **kwargs
+            cpp_lstrip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def rstrip(self, to_strip=None, **kwargs):
@@ -1251,10 +1253,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_rstrip(self._column, Scalar(to_strip)), **kwargs
+            cpp_rstrip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -1439,9 +1441,9 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import Scalar
+            from cudf._lib.scalar import as_scalar
 
-            result_col = cpp_endswith(self._column, Scalar(pat, "str"))
+            result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1472,9 +1474,9 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import Scalar
+            from cudf._lib.scalar import as_scalar
 
-            result_col = cpp_startswith(self._column, Scalar(pat, "str"))
+            result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1504,12 +1506,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1539,12 +1541,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1575,12 +1577,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -1616,12 +1618,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -1767,12 +1769,12 @@ class StringMethods(object):
 
 
 def _massage_string_arg(value, name, allow_col=False):
-    from cudf._lib.scalar import Scalar
+    from cudf._lib.scalar import as_scalar, Scalar
     from cudf._lib.column import Column
     from cudf.utils.dtypes import is_string_dtype
 
     if isinstance(value, str):
-        return Scalar(value, dtype="str")
+        return as_scalar(value, dtype="str")
 
     if isinstance(value, Scalar) and is_string_dtype(value.dtype):
         return value
@@ -1913,20 +1915,23 @@ class StringColumn(column.ColumnBase):
                 # Now run a subtraction binary op to shift all of the offsets
                 # by the respective number of characters relative to the
                 # parent offset
-                chars_offset = offsets_column[0]
+                chars_offset = libcudf.copying.get_element(offsets_column, 0)
                 offsets_column = offsets_column.binary_operator(
-                    "sub", offsets_column.dtype.type(chars_offset)
+                    "sub", chars_offset
                 )
 
                 # Shift the chars offset by the new first element of the
                 # offsets column
-                chars_size = offsets_column[self.size]
+                chars_size = libcudf.copying.get_element(
+                    offsets_column, self.size
+                )
+
                 chars_column = column.build_column(
                     data=chars_column.base_data,
                     dtype=chars_column.dtype,
                     mask=chars_column.base_mask,
-                    size=chars_size,
-                    offset=chars_offset,
+                    size=chars_size.value,
+                    offset=chars_offset.value,
                 )
 
                 self._children = (offsets_column, chars_column)

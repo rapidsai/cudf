@@ -146,7 +146,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  *                      remaining bits may not be initialized.
  * @param valid_counts  Used to obtain the total number of valid bits for each
  *                      mask.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename InputIterator1,
           typename InputIterator2,
           typename BinaryPredicate,

@@ -37,7 +37,7 @@ namespace test {
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- */
+ **/
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
 
@@ -45,7 +45,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheritng from this fixture
-   */
+   **/
   rmm::mr::device_memory_resource *mr() { return _mr; }
 };
 
@@ -92,7 +92,7 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- */
+ **/
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
@@ -106,12 +106,12 @@ class UniformRandomGenerator {
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
-   */
+   **/
   UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
 
   /**
    * @brief Returns the next random number.
-   */
+   **/
   T generate() { return T{dist(rng)}; }
 
  private:
@@ -127,7 +127,7 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- */
+ **/
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;

@@ -186,7 +186,7 @@ __global__ void marking_bitmask_kernel(bit_mask_t* destination_mask,
 }
 
 struct scalar_scatterer {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Type-dispatched function to scatter from one scalar to a table based
    * on a `scatter_map`.
    *
@@ -196,7 +196,7 @@ struct scalar_scatterer {
    * elements
    * @param destination_column The column to gather into
    * @param stream Optional CUDA stream on which to execute kernels
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename ColumnType>
   void operator()(gdf_scalar const& source,
                   cudf::size_type const scatter_map[],
