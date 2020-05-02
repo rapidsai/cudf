@@ -889,12 +889,12 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
 }
 
 size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
-                                 rmm::device_vector<char> const& data,
+                                 rmm::device_vector<char> const &data,
                                  const cudf::experimental::io::ParseOptions &opts,
                                  cudaStream_t stream)
 {
-  const char *d_data = data.data().get();
-  size_t d_size = data.size();
+  const char *d_data  = data.data().get();
+  size_t d_size       = data.size();
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
@@ -909,16 +909,16 @@ size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets
 }
 
 void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
-                                rmm::device_vector<char> const& data,
+                                rmm::device_vector<char> const &data,
                                 const cudf::experimental::io::ParseOptions &opts,
                                 cudaStream_t stream)
 {
-  const char *d_data = data.data().get();
-  size_t d_size = data.size();
+  const char *d_data  = data.data().get();
+  size_t d_size       = data.size();
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
-  auto new_end = thrust::remove_if(
+  auto new_end        = thrust::remove_if(
     rmm::exec_policy(stream)->on(stream),
     row_offsets.begin(),
     row_offsets.end(),

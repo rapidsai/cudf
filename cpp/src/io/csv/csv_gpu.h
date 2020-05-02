@@ -171,7 +171,7 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
  *
  **/
 size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
-                        rmm::device_vector<char> const& d_data,
+                        rmm::device_vector<char> const &d_data,
                         const cudf::experimental::io::ParseOptions &options,
                         cudaStream_t stream = 0);
 
@@ -185,7 +185,7 @@ size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
  *
  **/
 void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
-                       rmm::device_vector<char> const& d_data,
+                       rmm::device_vector<char> const &d_data,
                        const cudf::experimental::io::ParseOptions &options,
                        cudaStream_t stream = 0);
 

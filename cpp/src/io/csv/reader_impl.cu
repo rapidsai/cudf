@@ -405,12 +405,13 @@ void reader::impl::gather_row_offsets(const char *h_data,
 {
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
   size_t buffer_size               = std::min(max_chunk_bytes, h_size);
-  size_t max_blocks                = std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
+  size_t max_blocks =
+    std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
   hostdevice_vector<uint64_t> row_ctx(max_blocks);
-  size_t buffer_pos = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
-  size_t pos        = std::min(range_begin, h_size);
+  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
+  size_t pos         = std::min(range_begin, h_size);
   size_t header_rows = (args_.header >= 0) ? args_.header + 1 : 0;
-  uint64_t ctx      = 0;
+  uint64_t ctx       = 0;
 
   data_.resize(0);
   row_offsets.resize(0);
@@ -495,8 +496,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
       // num_rows does not include blank rows
       if (num_rows > 0) {
         if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
-          size_t num_blanks = cudf::io::csv::gpu::count_blank_rows(
-            row_offsets, data_, opts, stream);
+          size_t num_blanks =
+            cudf::io::csv::gpu::count_blank_rows(row_offsets, data_, opts, stream);
           if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
@@ -516,18 +517,19 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
   // Eliminate blank rows
   if (row_offsets.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(
-      row_offsets, data_, opts, stream);
+    cudf::io::csv::gpu::remove_blank_rows(row_offsets, data_, opts, stream);
   }
   // Remove header rows and extract header
-  const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1; 
+  const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                           row_offsets.data().get() + header_rows - 1,
-                           2 * sizeof(uint64_t), cudaMemcpyDeviceToHost, stream));
+                             row_offsets.data().get() + header_rows - 1,
+                             2 * sizeof(uint64_t),
+                             cudaMemcpyDeviceToHost,
+                             stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
     const auto header_start = buffer_pos + row_offsets[0];
-    const auto header_end = buffer_pos + row_offsets[1];
+    const auto header_end   = buffer_pos + row_offsets[1];
     CUDF_EXPECTS(header_start <= header_end && header_end <= h_size, "Invalid csv header location");
     header.assign(h_data + header_start, h_data + header_end);
     if (header_rows > 0) {
