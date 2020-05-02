@@ -528,8 +528,8 @@ void reader::impl::gather_row_offsets(const char *h_data,
                              cudaMemcpyDeviceToHost,
                              stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    const auto header_start = buffer_pos + row_offsets[0];
-    const auto header_end   = buffer_pos + row_offsets[1];
+    const auto header_start = buffer_pos + row_ctx[0];
+    const auto header_end   = buffer_pos + row_ctx[1];
     CUDF_EXPECTS(header_start <= header_end && header_end <= h_size, "Invalid csv header location");
     header.assign(h_data + header_start, h_data + header_end);
     if (header_rows > 0) {
