@@ -630,6 +630,26 @@ inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, u
 }
 
 /**
+ * Convert the context-with-row-bitmaps version to a packed row context
+ **/
+inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
+{
+  return pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
+                           make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
+                           make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3));
+}
+
+/**
+ * Selects the row bitmap corresponding to the given parser state
+ **/
+inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
+{
+  return (ctxid == ROW_CTX_NONE)
+           ? ctx_map.x
+           : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
+}
+
+/**
  * @brief 512-wide row context merge transform
  *
  * Repeatingly merge row context blocks, keeping track of each merge operation
@@ -783,8 +803,9 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
 
   // Initial state is neutral context, zero rows
   ctx_map.x = ctx_map.y = ctx_map.z = 0;
-  ctx_map.w                         = (0 << 0) | (1 << 2) | (2 << 4) | (3 << 6);  // i << (2*i)
-  c_prev                            = (cur > start) ? cur[-1] : terminator;
+  ctx_map.w = (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) |
+              (ROW_CTX_EOF << 6);  // No state transitions (pass-through context)
+  c_prev = (cur > start) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
     uint32_t ctx;
@@ -841,12 +862,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   // Convert the long-form {rowmap,outctx}[inctx] version into packed version
   // {rowcount,ouctx}[inctx], then merge the row contexts of the 32-character blocks into
   // a single 16K-character block context
-  rowctx_merge_transform(
-    ctxtree,
-    pack_row_contexts(make_row_context(__popc(ctx_map.x), (ctx_map.w >> 0) & 3),
-                      make_row_context(__popc(ctx_map.y), (ctx_map.w >> 2) & 3),
-                      make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3)),
-    t);
+  rowctx_merge_transform(ctxtree, pack_rowmaps(ctx_map), t);
 
   // If this is the second phase, get the block's initial parser state and row counter
   if (offsets_out) {
@@ -857,10 +873,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     rowctx32_t ctx             = rowctx_inverse_merge_transform(ctxtree, t);
     uint64_t row               = (ctxtree[0] >> 2) + (ctx >> 2);
     uint32_t rows_out_of_range = 0;
-    uint32_t rowmap =
-      ((ctx & 3) == ROW_CTX_NONE)
-        ? ctx_map.x
-        : ((ctx & 3) == ROW_CTX_QUOTE) ? ctx_map.y : ((ctx & 3) == ROW_CTX_COMMENT) ? ctx_map.z : 0;
+    uint32_t rowmap            = select_rowmap(ctx_map, ctx & 3);
     // Output row positions
     while (rowmap != 0) {
       uint32_t pos = __ffs(rowmap);
