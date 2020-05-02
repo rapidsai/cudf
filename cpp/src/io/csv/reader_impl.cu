@@ -523,7 +523,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
   if (header_row_index + 1 < row_offsets.size()) {
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
-                             row_offsets.data().get() + header_rows - 1,
+                             row_offsets.data().get() + header_row_index,
                              2 * sizeof(uint64_t),
                              cudaMemcpyDeviceToHost,
                              stream));
