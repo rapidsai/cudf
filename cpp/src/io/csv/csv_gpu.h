@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/types.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
@@ -114,7 +115,7 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
 {
   uint32_t ctxid = static_cast<uint32_t>(sel_ctx & 3);
   rowctx32_t ctx = get_row_context(packed_ctx, ctxid);
-  return sel_ctx - ctxid + ctx;
+  return (sel_ctx & ~3) + ctx;
 }
 
 /**
@@ -159,6 +160,34 @@ uint32_t gather_row_offsets(uint64_t *row_ctx,
                             size_t num_row_offsets,
                             const cudf::experimental::io::ParseOptions &options,
                             cudaStream_t stream = 0);
+
+/**
+ * Count the number of blank rows in the given row offset array
+ *
+ * @param row_offsets Row offsets in the character data buffer
+ * @param d_data Character data buffer
+ * @param options Options that control parsing of individual fields
+ * @param stream CUDA stream to use, default 0
+ *
+ **/
+size_t count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
+                        rmm::device_vector<char> const& d_data,
+                        const cudf::experimental::io::ParseOptions &options,
+                        cudaStream_t stream = 0);
+
+/**
+ * Remove blank rows in the given row offset array
+ *
+ * @param row_offsets Row offsets in the character data buffer
+ * @param d_data Character data buffer
+ * @param options Options that control parsing of individual fields
+ * @param stream CUDA stream to use, default 0
+ *
+ **/
+void remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
+                       rmm::device_vector<char> const& d_data,
+                       const cudf::experimental::io::ParseOptions &options,
+                       cudaStream_t stream = 0);
 
 /**
  * @brief Launches kernel for detecting possible dtype of each column of data

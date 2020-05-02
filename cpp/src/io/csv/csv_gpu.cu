@@ -750,11 +750,9 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * @param num_row_offsets Number of entries in offsets_out array
  * @param terminator Line terminator character
  * @param delimiter Column delimiter character
- * @param delimiter_esc Escapable quote-terminating delimiter character
  * @param quotechar Quote character
  * @param escapechar Delimiter escape character
  * @param commentchar Comment line character (skip rows starting with this character)
- * @param skipblanklines Skip empty rows
  **/
 __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint64_t *row_ctx,
                                                                            uint64_t *offsets_out,
@@ -769,11 +767,9 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
                                                                            size_t num_row_offsets,
                                                                            int terminator,
                                                                            int delimiter,
-                                                                           int delimiter_esc,
                                                                            int quotechar,
                                                                            int escapechar,
-                                                                           int commentchar,
-                                                                           bool skipblanklines)
+                                                                           int commentchar)
 {
   __shared__ __align__(8) uint64_t ctxtree[rowofs_block_dim * 2];
 
@@ -795,10 +791,9 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     if (cur < end) {
       c = cur[0];
       if (c_prev == terminator) {
-        if (c == commentchar ||
-            (skipblanklines && (c == terminator || (c == '\r' && terminator == '\n')))) {
-          // Start of a new comment or empty row
-          ctx = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 0, 0, 0);
+        if (c == commentchar) {
+          // Start of a new comment row
+          ctx = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 1, 0, 1);
         } else if (c == quotechar) {
           // Quoted string on newrow, or quoted string ending in terminator
           ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
@@ -814,9 +809,6 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
           // Closing or ignored quote
           ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
-      } else if (c == delimiter_esc && c_prev != escapechar) {
-        // Escapable delimiter ends quoted string
-        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
       } else {
         // Neutral character
         ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
@@ -896,6 +888,47 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   }
 }
 
+size_t __host__ count_blank_rows(rmm::device_vector<uint64_t> const &row_offsets,
+                                 rmm::device_vector<char> const& data,
+                                 const cudf::experimental::io::ParseOptions &opts,
+                                 cudaStream_t stream)
+{
+  const char *d_data = data.data().get();
+  size_t d_size = data.size();
+  const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
+  const auto comment  = opts.comment != '\0' ? opts.comment : newline;
+  const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
+  return thrust::count_if(
+    rmm::exec_policy(stream)->on(stream),
+    row_offsets.begin(),
+    row_offsets.end(),
+    [d_data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
+      return ((pos != d_size) &&
+              (d_data[pos] == newline || d_data[pos] == comment || d_data[pos] == carriage));
+    });
+}
+
+void __host__ remove_blank_rows(rmm::device_vector<uint64_t> &row_offsets,
+                                rmm::device_vector<char> const& data,
+                                const cudf::experimental::io::ParseOptions &opts,
+                                cudaStream_t stream)
+{
+  const char *d_data = data.data().get();
+  size_t d_size = data.size();
+  const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
+  const auto comment  = opts.comment != '\0' ? opts.comment : newline;
+  const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
+  auto new_end = thrust::remove_if(
+    rmm::exec_policy(stream)->on(stream),
+    row_offsets.begin(),
+    row_offsets.end(),
+    [d_data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
+      return ((pos != d_size) &&
+              (d_data[pos] == newline || d_data[pos] == comment || d_data[pos] == carriage));
+    });
+  row_offsets.resize(new_end - row_offsets.begin());
+}
+
 cudaError_t __host__ DetectColumnTypes(const char *data,
                                        const uint64_t *row_starts,
                                        size_t num_rows,
@@ -969,11 +1002,9 @@ uint32_t __host__ gather_row_offsets(uint64_t *row_ctx,
     num_row_offsets,
     options.terminator,
     options.delimiter,
-    /*(options.escapechar) ? delimiter :*/ 0x100,
     (options.quotechar) ? options.quotechar : 0x100,
     /*(options.escapechar) ? options.escapechar :*/ 0x100,
-    (options.comment) ? options.comment : 0x100,
-    options.skipblanklines);
+    (options.comment) ? options.comment : 0x100);
 
   return dim_grid;
 }
