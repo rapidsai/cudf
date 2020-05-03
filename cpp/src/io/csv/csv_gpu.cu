@@ -881,7 +881,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       if (row >= skip_rows && row - skip_rows < num_row_offsets) {
         // Output byte offsets are relative to the base of the input buffer
         offsets_out[row - skip_rows] = block_pos - 1;
-        rows_out_of_range += (block_pos - 1 >= byte_range_end);
+        rows_out_of_range += (start_offset + block_pos - 1 >= byte_range_end);
       }
       row++;
       rowmap >>= pos;

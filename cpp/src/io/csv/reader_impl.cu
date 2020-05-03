@@ -415,7 +415,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
 
   // For compatibility with the previous parser, a row is considered in-range if the
   // previous row terminator is within the given range
-  range_end -= (range_end > 0 && range_end < h_size);
+  range_end += (range_end < h_size);
   data_.resize(0);
   row_offsets.resize(0);
   data_.reserve((load_whole_file) ? h_size : std::min(buffer_size * 2, h_size));
