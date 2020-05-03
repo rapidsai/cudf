@@ -413,6 +413,9 @@ void reader::impl::gather_row_offsets(const char *h_data,
   size_t header_rows = (args_.header >= 0) ? args_.header + 1 : 0;
   uint64_t ctx       = 0;
 
+  // For compatibility with the previous parser, a row is considered in-range if the
+  // previous row terminator is within the given range
+  range_end -= (range_end > 0 && range_end < h_size);
   data_.resize(0);
   row_offsets.resize(0);
   data_.reserve((load_whole_file) ? h_size : std::min(buffer_size * 2, h_size));
@@ -537,9 +540,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
     }
   }
   // Apply num_rows limit
-  if (num_rows > 0 && row_offsets.size() > static_cast<size_t>(num_rows)) {
-    row_offsets.resize(num_rows + 1);
-  }
+  if (num_rows > 0) { row_offsets.resize(std::min<size_t>(row_offsets.size(), num_rows + 1)); }
 }
 
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
