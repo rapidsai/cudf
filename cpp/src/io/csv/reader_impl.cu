@@ -497,7 +497,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
         }
       }
       // num_rows does not include blank rows
-      if (num_rows > 0) {
+      if (num_rows >= 0) {
         if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
             cudf::io::csv::gpu::count_blank_rows(row_offsets, data_, opts, stream);
@@ -540,7 +540,7 @@ void reader::impl::gather_row_offsets(const char *h_data,
     }
   }
   // Apply num_rows limit
-  if (num_rows > 0) { row_offsets.resize(std::min<size_t>(row_offsets.size(), num_rows + 1)); }
+  if (num_rows >= 0) { row_offsets.resize(std::min<size_t>(row_offsets.size(), num_rows + 1)); }
 }
 
 std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
