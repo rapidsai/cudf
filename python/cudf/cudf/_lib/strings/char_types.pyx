@@ -179,7 +179,7 @@ def is_integer(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def all_integer(Column source_strings):
+def all_integers(Column source_strings):
     """
     """
     cdef bool c_result
@@ -207,7 +207,7 @@ def is_float(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def all_float(Column source_strings):
+def all_floats(Column source_strings):
     """
     """
     cdef bool c_result

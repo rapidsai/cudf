@@ -39,12 +39,14 @@ from cudf._lib.strings.case import (
     to_upper as cpp_to_upper,
 )
 from cudf._lib.strings.char_types import (
-    all_float as cpp_all_float,
-    all_int as cpp_all_int,
+    all_floats as cpp_all_floats,
+    all_integers as cpp_all_integers,
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -2038,11 +2040,19 @@ class StringColumn(column.ColumnBase):
         kwargs.update(dtype=out_dtype)
 
         if str_dtype.kind in ("i"):
-            if not cpp_all_int(self):
-                raise ValueError("Cannot typecast to int")
+            if not cpp_all_integers(self):
+                bool_check = cpp_is_integer(self)
+                index = bool_check.astype("int8").find_first_value(0)
+                raise ValueError(
+                    "invalid literal for int() with base 10: " + self[index]
+                )
         if str_dtype.kind in ("f"):
-            if not cpp_all_float(self):
-                raise ValueError("Cannot typecast to float")
+            if not cpp_all_floats(self):
+                bool_check = cpp_is_float(self)
+                index = bool_check.astype("int8").find_first_value(0)
+                raise ValueError(
+                    "could not convert string to float: " + self[index]
+                )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 
