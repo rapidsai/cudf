@@ -2046,7 +2046,7 @@ class StringColumn(column.ColumnBase):
                 raise ValueError(
                     "invalid literal for int() with base 10: " + self[index]
                 )
-        if str_dtype.kind in ("f"):
+        elif str_dtype.kind in ("f"):
             if not cpp_all_floats(self):
                 bool_check = cpp_is_float(self)
                 index = bool_check.astype("int8").find_first_value(0)
