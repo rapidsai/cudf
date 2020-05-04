@@ -598,12 +598,12 @@ inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
  * 1-bit count (0 or 1) per context in the lower 4 bits
  * 2-bit output context id per input context in bits 8..15
  **/
-inline __device__ uint32_t make_char_context(uint32_t id0,
-                                             uint32_t id1,
-                                             uint32_t id2 = ROW_CTX_COMMENT,
-                                             uint32_t c0  = 0,
-                                             uint32_t c1  = 0,
-                                             uint32_t c2  = 0)
+constexpr __device__ uint32_t make_char_context(uint32_t id0,
+                                                uint32_t id1,
+                                                uint32_t id2 = ROW_CTX_COMMENT,
+                                                uint32_t c0  = 0,
+                                                uint32_t c1  = 0,
+                                                uint32_t c2  = 0)
 {
   return (id0 << 8) | (id1 << 10) | (id2 << 12) | (ROW_CTX_EOF << 14) | (c0) | (c1 << 1) |
          (c2 << 2);
