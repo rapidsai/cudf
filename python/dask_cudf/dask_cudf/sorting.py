@@ -54,14 +54,14 @@ class All2All:
 
         for stage in range(1, self.stages + 1):
 
-            for inp in self.inputs:
-                in_key = str((shuffle_combine_token, stage - 1, inp))
-                key = str((shuffle_group_token, stage, inp))
-                priorities[key] = priority
-                deps[key] = (in_key,)
-                tasks[key] = (
+            for i, inp in enumerate(self.inputs):
+                in_key_sg = str((shuffle_combine_token, stage - 1, inp))
+                key_sg = str((shuffle_group_token, stage, inp))
+                priorities[key_sg] = priority
+                deps[key_sg] = (in_key_sg,)
+                tasks[key_sg] = (
                     _shuffle_group,
-                    in_key,
+                    in_key_sg,
                     self.columns,
                     stage - 1,
                     self.k,
@@ -70,19 +70,17 @@ class All2All:
                     self.npartitions,
                 )
 
-            for inp in self.inputs:
-                for i in range(self.k):
-                    key1 = str((shuffle_split_token, stage, i, inp))
+                for k in range(self.k):
+                    key1 = str((shuffle_split_token, stage, k, inp))
                     key2 = str((shuffle_group_token, stage, inp))
                     priorities[
                         key1
                     ] = 0  # See <https://github.com/dask/dask/pull/6051>
                     deps[key1] = (key2,)
-                    tasks[key1] = (getitem, key2, i)
+                    tasks[key1] = (getitem, key2, k)
 
-            for inp in self.inputs:
-                out_key = str((shuffle_combine_token, stage, inp))
-                keys = tuple(
+                out_key_c = str((shuffle_combine_token, stage, inp))
+                keys_c = tuple(
                     str(
                         (
                             shuffle_split_token,
@@ -93,15 +91,14 @@ class All2All:
                     )
                     for j in range(self.k)
                 )
-                priorities[out_key] = priority
-                deps[out_key] = keys
-                tasks[out_key] = (_concat, keys, self.ignore_index)
+                priorities[out_key_c] = priority
+                deps[out_key_c] = keys_c
+                tasks[out_key_c] = (_concat, keys_c, self.ignore_index)
 
-            for i, inp in enumerate(self.inputs):
                 out_key = str((shuffle_token, i))
-                in_key = str((shuffle_combine_token, self.stages, inp))
-                deps[out_key] = (in_key,)
-                tasks[out_key] = in_key
+                in_key_c = str((shuffle_combine_token, self.stages, inp))
+                deps[out_key] = (in_key_c,)
+                tasks[out_key] = in_key_c
                 self.output_keys.append(out_key)
 
         return tasks, deps, priorities
