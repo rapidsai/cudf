@@ -134,8 +134,12 @@ class TempDirTestEnvironment : public ::testing::Environment {
 
   void SetUp()
   {
-    char tmp_format[] = "/tmp/gtest.XXXXXX";
-    tmpdir            = mkdtemp(tmp_format);
+    std::string tmp("/tmp");
+    if (const char *env_p = std::getenv("WORKSPACE")) tmp = env_p;
+    tmp += "/gtest.XXXXXX";
+    auto tmpdirptr = mkdtemp(const_cast<char *>(tmp.data()));
+    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + tmp);
+    tmpdir = tmpdirptr;
     tmpdir += "/";
   }
 
