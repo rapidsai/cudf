@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @brief Check character types of strings
+ * @ingroup strings_apis
+ * @addtogroup strings_chartype Character Types
+ * @{
+ */
+
+/**
  * @brief Character type values.
  * These types can be or'd to check for any combination of types.
  *
@@ -175,5 +182,6 @@ std::unique_ptr<column> is_float(
 bool all_float(strings_column_view const& strings,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
