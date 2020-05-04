@@ -881,7 +881,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto nan_mask = is_nan(input, mr, stream);
+  auto nan_mask = is_not_nan(input, mr, stream);
   return copy_if_else(input, replacement, nan_mask->view(), mr, stream);
 }
 

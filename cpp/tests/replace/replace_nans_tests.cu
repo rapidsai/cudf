@@ -154,6 +154,39 @@ TYPED_TEST(ReplaceNaNsTest, ReplaceColumn_Empty)
                                 fixed_width_column_wrapper<TypeParam>{});
 }
 
+TYPED_TEST(ReplaceNaNsTest, ReplaceScalar)
+{
+  using T = TypeParam;
+
+  auto nan         = std::numeric_limits<double>::quiet_NaN();
+  auto input_data  = make_type_param_vector<T>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
+  auto input_valid = std::vector<int>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto expect_data = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 1.0, 1.0, 7.0, 8.0, 9.0});
+  numeric_scalar<T> replacement(1);
+
+  ReplaceNullsScalar<T>(
+    fixed_width_column_wrapper<T>(input_data.begin(), input_data.end(), input_valid.begin()),
+    replacement,
+    fixed_width_column_wrapper<T>(expect_data.begin(), expect_data.end(), input_valid.begin()));
+}
+
+TYPED_TEST(ReplaceNaNsTest, ReplaceNullScalar)
+{
+  using T = TypeParam;
+
+  auto nan          = std::numeric_limits<double>::quiet_NaN();
+  auto input_data   = make_type_param_vector<T>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
+  auto input_valid  = std::vector<int>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto expect_data  = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 1.0, 1.0, 7.0, 8.0, 9.0});
+  auto expect_valid = std::vector<int>{0, 0, 0, 0, 0, 0, 0, 1, 1, 1};
+  numeric_scalar<T> replacement(1, false);
+
+  ReplaceNullsScalar<T>(
+    fixed_width_column_wrapper<T>(input_data.begin(), input_data.end(), input_valid.begin()),
+    replacement,
+    fixed_width_column_wrapper<T>(expect_data.begin(), expect_data.end(), expect_valid.begin()));
+}
+
 }  // namespace test
 }  // namespace cudf
 
