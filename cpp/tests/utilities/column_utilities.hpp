@@ -54,7 +54,7 @@ void expect_column_properties_equivalent(cudf::column_view const& lhs,
  * @param lhs                   The first column
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
- *---------------------------------------------------------------------------**/
+ **/
 void expect_columns_equal(cudf::column_view const& lhs,
                           cudf::column_view const& rhs,
                           bool print_all_differences = false);
@@ -68,7 +68,7 @@ void expect_columns_equal(cudf::column_view const& lhs,
  * @param lhs                   The first column
  * @param rhs                   The second column
  * @param print_all_differences If true display all differences
- *---------------------------------------------------------------------------**/
+ **/
 void expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
                                bool print_all_differences = false);
@@ -82,41 +82,41 @@ void expect_columns_equivalent(cudf::column_view const& lhs,
  */
 void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_bytes);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Displays a column view as a string
  *
  * @param col The column view
  * @param delimiter The delimiter to put between strings
- *---------------------------------------------------------------------------**/
+ **/
 std::string to_string(cudf::column_view const& col, std::string const& delimiter);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Convert column values to a host vector of strings
  *
  * @param col The column view
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<std::string> to_strings(cudf::column_view const& col);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Print a column view to an ostream
  *
  * @param os        The output stream
  * @param col       The column view
  * @param delimiter The delimiter to put between strings
- *---------------------------------------------------------------------------**/
+ **/
 void print(cudf::column_view const& col,
            std::ostream& os             = std::cout,
            std::string const& delimiter = ",");
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Copy the null bitmask from a column view to a host vector
  *
  * @param c      The column view
  * @returns      Vector of bitmask_type elements
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Validates bitmask situated in host as per `number_of_elements`
  *
  * This takes care of padded bits
@@ -126,7 +126,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  * @param        number_of_elements number of elements the mask represent
  *
  * @returns      true if both vector match till the `number_of_elements`
- *---------------------------------------------------------------------------**/
+ **/
 bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask_begin,
                          size_type number_of_elements);

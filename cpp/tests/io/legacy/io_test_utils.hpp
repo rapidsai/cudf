@@ -33,14 +33,14 @@
 class NVStrings;
 class NVCategory;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Checks if a file exists.
- *---------------------------------------------------------------------------**/
+ **/
 bool checkFile(std::string const &fname);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Check a string gdf_column, including the type and values.
- *---------------------------------------------------------------------------**/
+ **/
 void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs);
 
 /**
@@ -67,10 +67,10 @@ inline auto random_values(size_t size)
   return values;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Simple test internal helper class to transfer cudf column data
  * from device to host for test comparisons and debugging/development.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 class gdf_host_column {
  public:

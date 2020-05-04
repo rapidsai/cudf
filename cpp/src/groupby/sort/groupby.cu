@@ -357,7 +357,7 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(std::unique_ptr<aggr
                                       helper.group_labels(),
                                       helper.num_groups(),
                                       helper.group_offsets(),
-                                      nunique_agg->_include_nulls,
+                                      nunique_agg->null_handling,
                                       mr,
                                       stream);
   cache.add_result(col_idx, agg, std::move(result));
@@ -372,7 +372,7 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
   auto nth_element_agg =
     static_cast<experimental::detail::nth_element_aggregation const*>(agg.get());
 
-  auto count_agg = make_count_aggregation(nth_element_agg->_include_nulls);
+  auto count_agg = make_count_aggregation(nth_element_agg->null_handling);
   if (count_agg->kind == aggregation::COUNT_VALID)
     operator()<aggregation::COUNT_VALID>(count_agg);
   else if (count_agg->kind == aggregation::COUNT_ALL)
@@ -389,7 +389,7 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(
                                              helper.group_offsets(),
                                              helper.num_groups(),
                                              nth_element_agg->n,
-                                             nth_element_agg->_include_nulls,
+                                             nth_element_agg->null_handling,
                                              mr,
                                              stream));
 }

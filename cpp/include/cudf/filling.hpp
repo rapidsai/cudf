@@ -22,7 +22,8 @@
 
 namespace cudf {
 namespace experimental {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Fills a range of elements in-place in a column with a scalar value.
  *
  * Fills N elements of @p destination starting at @p begin with @p value, where
@@ -47,13 +48,13 @@ namespace experimental {
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @return void
- *---------------------------------------------------------------------------**/
+ **/
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Fills a range of elements in a column out-of-place with a scalar
  * value.
  *
@@ -74,14 +75,14 @@ void fill_in_place(mutable_column_view& destination,
  * @param value The scalar value to fill
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result output column
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Repeat rows of a Table.
  *
  * Creates a new table by repeating the rows of @p input_table. The number of
@@ -110,14 +111,14 @@ std::unique_ptr<column> fill(column_view const& input,
  * @param check_count Whether to check count (negative values and overflow)
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
   bool check_count                    = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Repeat rows of a Table.
  *
  * Creates a new table by repeating @p count times the rows of @p input_table.
@@ -136,7 +137,7 @@ std::unique_ptr<table> repeat(
  * @param count Non-null scalar of a integral type
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   scalar const& count,
