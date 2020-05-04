@@ -17,6 +17,7 @@
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 - PR #5072 Adding cython binding to `get_element`
+- PR #4881 Support row_number in rolling_window
 
 ## Improvements
 
@@ -232,6 +233,9 @@
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
+- PR #5031 grouped_time_range_rolling_window assumes ASC sort order 
+- PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
+
 
 # cuDF 0.13.0 (31 Mar 2020)
 
