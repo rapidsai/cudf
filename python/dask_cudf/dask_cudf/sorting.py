@@ -54,7 +54,7 @@ class All2All:
 
         for stage in range(1, self.stages + 1):
 
-            for i, inp in enumerate(self.inputs):
+            for inp in self.inputs:
                 in_key = str((shuffle_combine_token, stage - 1, inp))
                 key = str((shuffle_group_token, stage, inp))
                 priorities[key] = priority
@@ -70,15 +70,17 @@ class All2All:
                     self.npartitions,
                 )
 
-                for k in range(self.k):
-                    key1 = str((shuffle_split_token, stage, k, inp))
+            for inp in self.inputs:
+                for i in range(self.k):
+                    key1 = str((shuffle_split_token, stage, i, inp))
                     key2 = str((shuffle_group_token, stage, inp))
                     priorities[
                         key1
                     ] = 0  # See <https://github.com/dask/dask/pull/6051>
                     deps[key1] = (key2,)
-                    tasks[key1] = (getitem, key2, k)
+                    tasks[key1] = (getitem, key2, i)
 
+            for inp in self.inputs:
                 out_key = str((shuffle_combine_token, stage, inp))
                 keys = tuple(
                     str(
@@ -95,6 +97,7 @@ class All2All:
                 deps[out_key] = keys
                 tasks[out_key] = (_concat, keys)
 
+            for i, inp in enumerate(self.inputs):
                 out_key = str((shuffle_token, i))
                 in_key = str((shuffle_combine_token, self.stages, inp))
                 deps[out_key] = (in_key,)
@@ -283,7 +286,7 @@ def rearrange_by_hash(
 
     if dynamic_tasks and npartitions > 2 * max_branch:
         all2all = _all2all_task_generator(
-            df, columns, npartitions, k, n, stages, ignore_index
+            df, inputs, columns, npartitions, k, n, stages, token, ignore_index
         )
         dsk = toolz.merge(start, end, all2all)
     else:
