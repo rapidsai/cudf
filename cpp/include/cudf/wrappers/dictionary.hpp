@@ -23,7 +23,15 @@
  * @file dictionary.hpp
  * @brief Concrete type definition for dictionary columns.
  */
+
 namespace cudf {
+/**
+ * @brief Dictionary classes
+ * @ingroup dictionary_apis
+ * @addtogroup dictionary_classes Classes
+ * @{
+ */
+
 /**
  * @brief A strongly typed wrapper for indices in a DICTIONARY type column.
  *
@@ -34,7 +42,6 @@ namespace cudf {
  *
  * This wrapper provides common conversion and comparison operations for
  * the IndexType.
- *
  */
 template <typename IndexType>
 struct dictionary_wrapper {
@@ -104,4 +111,5 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(dictionary_wrapper<Integer> const& lhs,
 
 using dictionary32 = dictionary_wrapper<int32_t>;
 
+/** @} */  // end of group
 }  // namespace cudf
