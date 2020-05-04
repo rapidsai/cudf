@@ -103,16 +103,55 @@ void ReplaceNullsScalar(fixed_width_column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNaNsTest, ReplaceColumn)
 {
-  auto nan = std::numeric_limits<double>::quiet_NaN();
-  auto inputColumn =
-    make_type_param_vector<TypeParam>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
-  auto replacement =
-    make_type_param_vector<TypeParam>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
+  using T = TypeParam;
 
-  ReplaceNullsColumn<TypeParam>(
-    fixed_width_column_wrapper<TypeParam>(inputColumn.begin(), inputColumn.end()),
-    fixed_width_column_wrapper<TypeParam>(replacement.begin(), replacement.end()),
-    fixed_width_column_wrapper<TypeParam>(replacement.begin(), replacement.end()));
+  auto nan         = std::numeric_limits<double>::quiet_NaN();
+  auto inputColumn = make_type_param_vector<T>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
+  auto replacement = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
+
+  ReplaceNullsColumn<T>(fixed_width_column_wrapper<T>(inputColumn.begin(), inputColumn.end()),
+                        fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()),
+                        fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()));
+}
+
+TYPED_TEST(ReplaceNaNsTest, ReplaceColumnNullable)
+{
+  using T = TypeParam;
+
+  auto nan         = std::numeric_limits<double>::quiet_NaN();
+  auto inputColumn = make_type_param_vector<T>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
+  auto inputValid  = std::vector<int>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto replacement = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
+
+  // Nulls should be untouched as they are considered not nan.
+  ReplaceNullsColumn<T>(
+    fixed_width_column_wrapper<T>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
+    fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()),
+    fixed_width_column_wrapper<T>(replacement.begin(), replacement.end(), inputValid.begin()));
+}
+
+TYPED_TEST(ReplaceNaNsTest, ReplacementHasNulls)
+{
+  using T = TypeParam;
+
+  auto nan           = std::numeric_limits<double>::quiet_NaN();
+  auto input_column  = make_type_param_vector<T>({7.0, nan, 6.0, 3.0, nan, 2.0, 8.0, 4.0});
+  auto replace_data  = make_type_param_vector<T>({4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 0.0, 1.0});
+  auto replace_valid = std::vector<int>{1, 0, 1, 1, 1, 1, 1, 1};
+  auto result_data   = make_type_param_vector<T>({7.0, 5.0, 6.0, 3.0, 8.0, 2.0, 8.0, 4.0});
+  auto result_valid  = std::vector<int>{1, 0, 1, 1, 1, 1, 1, 1};
+
+  ReplaceNullsColumn<T>(
+    fixed_width_column_wrapper<T>(input_column.begin(), input_column.end()),
+    fixed_width_column_wrapper<T>(replace_data.begin(), replace_data.end(), replace_valid.begin()),
+    fixed_width_column_wrapper<T>(result_data.begin(), result_data.end(), result_valid.begin()));
+}
+
+TYPED_TEST(ReplaceNaNsTest, ReplaceColumn_Empty)
+{
+  ReplaceNullsColumn<TypeParam>(fixed_width_column_wrapper<TypeParam>{},
+                                fixed_width_column_wrapper<TypeParam>{},
+                                fixed_width_column_wrapper<TypeParam>{});
 }
 
 }  // namespace test
