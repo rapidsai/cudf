@@ -244,7 +244,11 @@ def rearrange_by_hash(
     elif isinstance(columns, tuple):
         columns = list(columns)
 
-    if max_branch and (npartitions or df.npartitions) <= max_branch:
+    if (
+        not dynamic_tasks
+        and max_branch
+        and (npartitions or df.npartitions) <= max_branch
+    ):
         # We are creating a small number of output partitions.
         # No need for staged shuffling
         return _simple_shuffle(
@@ -284,7 +288,7 @@ def rearrange_by_hash(
         end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
         inputs.append(inp)
 
-    if dynamic_tasks and npartitions > 2 * max_branch:
+    if dynamic_tasks:
         all2all = _all2all_task_generator(
             df, inputs, columns, npartitions, k, n, stages, token, ignore_index
         )
