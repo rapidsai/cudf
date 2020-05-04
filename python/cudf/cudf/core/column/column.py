@@ -418,8 +418,8 @@ class ColumnBase(Column):
         index = np.int32(index)
         if index < 0:
             index = len(self) + index
-        if index > len(self) - 1:
-            raise IndexError
+        if index > len(self) - 1 or index < 0:
+            raise IndexError("single positional indexer is out-of-bounds")
 
         return libcudf.copying.get_element(self, index).value
 
