@@ -87,7 +87,7 @@ void ReplaceNullsColumn(fixed_width_column_wrapper<T> input,
                         fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<column> result;
-  ASSERT_NO_THROW(result = experimental::replace_nulls(input, replacement_values));
+  ASSERT_NO_THROW(result = experimental::replace_nans(input, replacement_values));
   expect_columns_equal(expected, *result);
 }
 
