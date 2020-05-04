@@ -20,7 +20,7 @@
 #error "Don't include gtest/gtest.h directly, include cudf_gtest.hpp instead"
 #endif
 
-/**---------------------------------------------------------------------------*
+/**
  * @file GTest.hpp
  * @brief Work around for GTests emulation of variadic templates in
  * ::Testing::Types.
@@ -32,7 +32,7 @@
  *
  * Uses macros to rename GTests's emulated variadic template types and then
  * redefines them properly.
- *---------------------------------------------------------------------------**/
+ **/
 
 #define Types Types_NOT_USED
 #define Types0 Types0_NOT_USED

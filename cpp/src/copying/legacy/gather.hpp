@@ -24,7 +24,8 @@ namespace cudf {
 struct table;
 
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Gathers the rows (including null values) of a set of source columns
  * into a set of destination columns.
  *
@@ -68,7 +69,7 @@ namespace detail {
  * @param allow_negative_indices Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @return gdf_error
- *---------------------------------------------------------------------------**/
+ **/
 void gather(table const* source_table,
             gdf_column const& gather_map,
             table* destination_table,

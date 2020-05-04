@@ -10,7 +10,9 @@ from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
 
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport (
+    size_type, null_policy, nan_policy, null_equality
+)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -166,7 +168,11 @@ def drop_duplicates(Table source_table,
         )
     )
 
-    cdef bool cpp_nulls_are_equal = nulls_are_equal
+    cdef null_equality cpp_nulls_equal = (
+        null_equality.EQUAL
+        if nulls_are_equal
+        else null_equality.UNEQUAL
+    )
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view
     if ignore_index:
@@ -180,7 +186,7 @@ def drop_duplicates(Table source_table,
                 source_table_view,
                 cpp_keys,
                 cpp_keep_option,
-                cpp_nulls_are_equal
+                cpp_nulls_equal
             )
         )
 
@@ -210,15 +216,23 @@ def unique_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     Count of number of unique rows in `source_column`
     """
 
-    cdef bool cpp_ignore_nulls = ignore_nulls
-    cdef bool cpp_nan_as_null = nan_as_null
+    cdef null_policy cpp_null_handling = (
+        null_policy.EXCLUDE
+        if ignore_nulls
+        else null_policy.INCLUDE
+    )
+    cdef nan_policy cpp_nan_handling = (
+        nan_policy.NAN_IS_NULL
+        if nan_as_null
+        else nan_policy.NAN_IS_VALID
+    )
 
     cdef column_view source_column_view = source_column.view()
     with nogil:
         count = cpp_unique_count(
             source_column_view,
-            cpp_ignore_nulls,
-            cpp_nan_as_null
+            cpp_null_handling,
+            cpp_nan_handling
         )
 
     return count

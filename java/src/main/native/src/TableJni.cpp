@@ -228,9 +228,9 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op) {
     case 2: //MAX
       return cudf::experimental::make_max_aggregation();
     case 3: //COUNT_VALID
-      return cudf::experimental::make_count_aggregation(include_nulls::NO);
+      return cudf::experimental::make_count_aggregation(null_policy::EXCLUDE);
     case 4: //COUNT_ALL
-      return cudf::experimental::make_count_aggregation(include_nulls::YES);
+      return cudf::experimental::make_count_aggregation(null_policy::INCLUDE);
     case 5: //MEAN
       return cudf::experimental::make_mean_aggregation();
     case 6: //MEDIAN
@@ -252,13 +252,13 @@ std::unique_ptr<cudf::experimental::aggregation> map_jni_aggregation(jint op) {
     case 15: // ALL
       return cudf::experimental::make_all_aggregation();
     case 16: // FIRST_INCLUDE_NULLS
-      return cudf::experimental::make_nth_element_aggregation(0, include_nulls::YES);
+      return cudf::experimental::make_nth_element_aggregation(0, null_policy::INCLUDE);
     case 17: // FIRST_EXCLUDE_NULLS
-      return cudf::experimental::make_nth_element_aggregation(0, include_nulls::NO);
+      return cudf::experimental::make_nth_element_aggregation(0, null_policy::EXCLUDE);
     case 18: // LAST_INCLUDE_NULLS
-      return cudf::experimental::make_nth_element_aggregation(-1, include_nulls::YES);
+      return cudf::experimental::make_nth_element_aggregation(-1, null_policy::INCLUDE);
     case 19: // LAST_EXCLUDE_NULLS
-      return cudf::experimental::make_nth_element_aggregation(-1, include_nulls::NO);
+      return cudf::experimental::make_nth_element_aggregation(-1, null_policy::EXCLUDE);
     default:
       throw std::logic_error("Unsupported Aggregation Operation");
   }
@@ -1040,7 +1040,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
 
     cudf::table_view n_keys_table(n_keys_cols);
     cudf::experimental::groupby::groupby grouper(n_keys_table,
-            ignore_null_keys ? cudf::include_nulls::NO : cudf::include_nulls::YES);
+            ignore_null_keys ? cudf::null_policy::EXCLUDE : cudf::null_policy::INCLUDE);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
