@@ -588,23 +588,23 @@ inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
 }
 
 /**
- * @brief Short row context:
+ * @brief Per-character context:
  * 1-bit count (0 or 1) per context in the lower 4 bits
  * 2-bit output context id per input context in bits 8..15
  **/
-inline __device__ uint32_t make_short_row_context(uint32_t id0,
-                                                  uint32_t id1,
-                                                  uint32_t id2 = ROW_CTX_COMMENT,
-                                                  uint32_t c0  = 0,
-                                                  uint32_t c1  = 0,
-                                                  uint32_t c2  = 0)
+inline __device__ uint32_t make_char_context(uint32_t id0,
+                                             uint32_t id1,
+                                             uint32_t id2 = ROW_CTX_COMMENT,
+                                             uint32_t c0  = 0,
+                                             uint32_t c1  = 0,
+                                             uint32_t c2  = 0)
 {
   return (id0 << 8) | (id1 << 10) | (id2 << 12) | (ROW_CTX_EOF << 14) | (c0) | (c1 << 1) |
          (c2 << 2);
 }
 
 /**
- * @brief Merge a short row context to keep track of bitmasks where new rows occur
+ * @brief Merge a 1-character context to keep track of bitmasks where new rows occur
  * Merges a single-character "block" row context at position pos with the current
  * block's row context (the current block contains 32-pos characters)
  *
@@ -613,7 +613,7 @@ inline __device__ uint32_t make_short_row_context(uint32_t id0,
  * @param pos Position within the current 32-character block
  *
  * NOTE: This is probably the most performance-critical piece of the row gathering kernel.
- * The ctx_short value should be created via make_short_row_context, and its value should
+ * The ctx_short value should be created via make_char_context, and its value should
  * have been evaluated at compile-time.
  *
  **/
@@ -814,36 +814,35 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       if (c_prev == terminator) {
         if (c == commentchar) {
           // Start of a new comment row
-          ctx = make_short_row_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 1, 0, 1);
+          ctx = make_char_context(ROW_CTX_COMMENT, ROW_CTX_QUOTE, ROW_CTX_COMMENT, 1, 0, 1);
         } else if (c == quotechar) {
           // Quoted string on newrow, or quoted string ending in terminator
-          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE, ROW_CTX_QUOTE, 1, 0, 1);
         } else {
           // Start of a new row unless within a quote
-          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
         if (c_prev == delimiter || c_prev == quotechar) {
           // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
-          ctx = make_short_row_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
         } else {
           // Closing or ignored quote
-          ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
         }
       } else {
         // Neutral character
-        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
       }
     } else {
       const char *data_end = start + data_size - start_offset;
       if (cur >= data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         uint32_t eof_row = (cur == data_end && cur <= end) ? 1 : 0;
-        ctx =
-          make_short_row_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
+        ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, eof_row, eof_row, eof_row);
       } else {
         // Pass-through context (beyond chunk_size but before data_size)
-        ctx = make_short_row_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_COMMENT);
       }
     }
     // Merge with current context, keeping track of where new rows occur
