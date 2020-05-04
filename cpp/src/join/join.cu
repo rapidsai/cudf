@@ -29,7 +29,8 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
@@ -39,7 +40,7 @@ namespace detail {
  * excluded from `[0, num_columns)`
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- *---------------------------------------------------------------------------**/
+ **/
 auto non_common_column_indices(size_type num_columns,
                                std::vector<size_type> const& common_column_indices)
 {

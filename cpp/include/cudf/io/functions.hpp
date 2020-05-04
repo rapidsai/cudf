@@ -79,7 +79,7 @@ table_with_metadata read_avro(
   read_avro_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Input arguments to the `read_json` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
@@ -98,7 +98,7 @@ table_with_metadata read_avro(
  *  `date_unit`             - only millisecond units are supported
  *  `encoding`              - only ASCII-encoded data is supported
  *  `chunksize`             - use `byte_range_xxx` for chunking instead
- *---------------------------------------------------------------------------**/
+ **/
 struct read_json_args {
   source_info source;
 
@@ -159,7 +159,7 @@ struct read_csv_args {
   size_type nrows = -1;
   /// Rows to skip from the start; -1 is none
   size_type skiprows = -1;
-  /// Rows to skip from the end
+  /// Rows to skip from the end; -1 is none
   size_type skipfooter = -1;
   /// Header row index
   size_type header = 0;
@@ -214,6 +214,7 @@ struct read_csv_args {
   /// Cast timestamp columns to a specific type
   data_type timestamp_type{EMPTY};
 
+  read_csv_args() = default;
   explicit read_csv_args(source_info const& src) : source(src) {}
 };
 

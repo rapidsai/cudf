@@ -39,7 +39,7 @@ namespace experimental {
 namespace groupby {
 // Constructor
 groupby::groupby(table_view const& keys,
-                 include_nulls include_null_keys,
+                 null_policy include_null_keys,
                  sorted keys_are_sorted,
                  std::vector<order> const& column_order,
                  std::vector<null_order> const& null_precedence)
