@@ -82,9 +82,9 @@ using test_types = Types<float, double>;
 TYPED_TEST_CASE(ReplaceNaNsTest, test_types);
 
 template <typename T>
-void ReplaceNullsColumn(fixed_width_column_wrapper<T> input,
-                        fixed_width_column_wrapper<T> replacement_values,
-                        fixed_width_column_wrapper<T> expected)
+void ReplaceNaNsColumn(fixed_width_column_wrapper<T> input,
+                       fixed_width_column_wrapper<T> replacement_values,
+                       fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<column> result;
   ASSERT_NO_THROW(result = experimental::replace_nans(input, replacement_values));
@@ -92,12 +92,12 @@ void ReplaceNullsColumn(fixed_width_column_wrapper<T> input,
 }
 
 template <typename T>
-void ReplaceNullsScalar(fixed_width_column_wrapper<T> input,
-                        scalar const& replacement_value,
-                        fixed_width_column_wrapper<T> expected)
+void ReplaceNaNsScalar(fixed_width_column_wrapper<T> input,
+                       scalar const& replacement_value,
+                       fixed_width_column_wrapper<T> expected)
 {
   std::unique_ptr<column> result;
-  ASSERT_NO_THROW(result = experimental::replace_nulls(input, replacement_value));
+  ASSERT_NO_THROW(result = experimental::replace_nans(input, replacement_value));
   expect_columns_equal(expected, *result);
 }
 
@@ -109,9 +109,9 @@ TYPED_TEST(ReplaceNaNsTest, ReplaceColumn)
   auto inputColumn = make_type_param_vector<T>({nan, 1.0, nan, 3.0, 4.0, nan, nan, 7.0, 8.0, 9.0});
   auto replacement = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
 
-  ReplaceNullsColumn<T>(fixed_width_column_wrapper<T>(inputColumn.begin(), inputColumn.end()),
-                        fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()),
-                        fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()));
+  ReplaceNaNsColumn<T>(fixed_width_column_wrapper<T>(inputColumn.begin(), inputColumn.end()),
+                       fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()),
+                       fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()));
 }
 
 TYPED_TEST(ReplaceNaNsTest, ReplaceColumnNullable)
@@ -124,7 +124,7 @@ TYPED_TEST(ReplaceNaNsTest, ReplaceColumnNullable)
   auto replacement = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0});
 
   // Nulls should be untouched as they are considered not nan.
-  ReplaceNullsColumn<T>(
+  ReplaceNaNsColumn<T>(
     fixed_width_column_wrapper<T>(inputColumn.begin(), inputColumn.end(), inputValid.begin()),
     fixed_width_column_wrapper<T>(replacement.begin(), replacement.end()),
     fixed_width_column_wrapper<T>(replacement.begin(), replacement.end(), inputValid.begin()));
@@ -141,7 +141,7 @@ TYPED_TEST(ReplaceNaNsTest, ReplacementHasNulls)
   auto result_data   = make_type_param_vector<T>({7.0, 5.0, 6.0, 3.0, 8.0, 2.0, 8.0, 4.0});
   auto result_valid  = std::vector<int>{1, 0, 1, 1, 1, 1, 1, 1};
 
-  ReplaceNullsColumn<T>(
+  ReplaceNaNsColumn<T>(
     fixed_width_column_wrapper<T>(input_column.begin(), input_column.end()),
     fixed_width_column_wrapper<T>(replace_data.begin(), replace_data.end(), replace_valid.begin()),
     fixed_width_column_wrapper<T>(result_data.begin(), result_data.end(), result_valid.begin()));
@@ -149,9 +149,9 @@ TYPED_TEST(ReplaceNaNsTest, ReplacementHasNulls)
 
 TYPED_TEST(ReplaceNaNsTest, ReplaceColumn_Empty)
 {
-  ReplaceNullsColumn<TypeParam>(fixed_width_column_wrapper<TypeParam>{},
-                                fixed_width_column_wrapper<TypeParam>{},
-                                fixed_width_column_wrapper<TypeParam>{});
+  ReplaceNaNsColumn<TypeParam>(fixed_width_column_wrapper<TypeParam>{},
+                               fixed_width_column_wrapper<TypeParam>{},
+                               fixed_width_column_wrapper<TypeParam>{});
 }
 
 TYPED_TEST(ReplaceNaNsTest, ReplaceScalar)
@@ -164,7 +164,7 @@ TYPED_TEST(ReplaceNaNsTest, ReplaceScalar)
   auto expect_data = make_type_param_vector<T>({0.0, 1.0, 2.0, 3.0, 4.0, 1.0, 1.0, 7.0, 8.0, 9.0});
   numeric_scalar<T> replacement(1);
 
-  ReplaceNullsScalar<T>(
+  ReplaceNaNsScalar<T>(
     fixed_width_column_wrapper<T>(input_data.begin(), input_data.end(), input_valid.begin()),
     replacement,
     fixed_width_column_wrapper<T>(expect_data.begin(), expect_data.end(), input_valid.begin()));
@@ -181,7 +181,7 @@ TYPED_TEST(ReplaceNaNsTest, ReplaceNullScalar)
   auto expect_valid = std::vector<int>{0, 0, 0, 0, 0, 0, 0, 1, 1, 1};
   numeric_scalar<T> replacement(1, false);
 
-  ReplaceNullsScalar<T>(
+  ReplaceNaNsScalar<T>(
     fixed_width_column_wrapper<T>(input_data.begin(), input_data.end(), input_valid.begin()),
     replacement,
     fixed_width_column_wrapper<T>(expect_data.begin(), expect_data.end(), expect_valid.begin()));
