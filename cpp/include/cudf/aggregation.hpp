@@ -34,6 +34,13 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @brief Aggregation APIs
+ * @ingroup column_apis
+ * @addtogroup column_aggregation Aggregation
+ * @{
+ */
+
+/**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
@@ -190,5 +197,6 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
                                                   data_type output_type);
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf
