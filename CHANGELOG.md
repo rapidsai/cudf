@@ -134,11 +134,11 @@
 - PR #5047 Add Cython binding for libcudf++ CSV reader
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
-- PR #5028 Add Docker 19 support to local gpuci build
 - PR #5061 Add support for writing parquet to python file-like objects
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5028 Add Docker 19 support to local gpuci build
 
 ## Bug Fixes
 
