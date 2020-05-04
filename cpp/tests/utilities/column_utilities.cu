@@ -290,13 +290,17 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
   }
 }
 
-template <typename T>
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+static auto numeric_to_string_precise(T value)
+{
+  return std::to_string(value);
+}
+
+template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
 static auto numeric_to_string_precise(T value)
 {
   std::ostringstream o;
-
   o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
-
   return o.str();
 }
 
