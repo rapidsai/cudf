@@ -34,10 +34,7 @@ class All2All:
         self.output_keys = []
 
     def __repr__(self):
-        return (
-            f"All2All(input_keys={self.input_keys}, "
-            "output_keys={self.output_keys})"
-        )
+        return f"All2All(output_keys={self.output_keys})"
 
     def __call__(self):
         pass
