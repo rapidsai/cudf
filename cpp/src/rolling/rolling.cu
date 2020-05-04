@@ -30,6 +30,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/nvtx_utils.hpp>
 #include <rolling/rolling_detail.hpp>
+#include <rolling/rolling_jit_detail.hpp>
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
@@ -37,6 +38,7 @@
 #include <rolling/jit/code/code.h>
 
 #include <bit.hpp.jit>
+#include <rolling_jit_detail.hpp.jit>
 #include <types.hpp.jit>
 
 #include <thrust/binary_search.h>
@@ -99,7 +101,7 @@ process_rolling_window(column_device_view input,
                        size_type min_periods)
 {
   bool output_is_valid                      = ((end_index - start_index) >= min_periods);
-  output.element<OutputType>(current_index) = (current_index - start_index + 1);
+  output.element<OutputType>(current_index) = ((current_index - start_index) + 1);
 
   return output_is_valid;
 }
@@ -436,7 +438,6 @@ struct rolling_window_launcher {
                                                                following_window_begin,
                                                                min_periods,
                                                                agg,
-                                                               //  string_view{},
                                                                stream);
       else
         valid_count = kernel_launcher<T,
@@ -449,7 +450,6 @@ struct rolling_window_launcher {
                                                                following_window_begin,
                                                                min_periods,
                                                                agg,
-                                                               //  string_view{},
                                                                stream);
       output->set_null_count(output->size() - valid_count);
     }
@@ -549,10 +549,13 @@ struct dispatch_rolling {
 }  // namespace
 
 // Applies a user-defined rolling window function to the values in a column.
-template <bool static_window, typename PrecedingWindowIterator, typename FollowingWindowIterator>
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window_udf(column_view const& input,
+
                                            PrecedingWindowIterator preceding_window,
+                                           std::string const& preceding_window_str,
                                            FollowingWindowIterator following_window,
+                                           std::string const& following_window_str,
                                            size_type min_periods,
                                            std::unique_ptr<aggregation> const& agg,
                                            rmm::mr::device_memory_resource* mr,
@@ -606,18 +609,21 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                                 "-w"};
 
   // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash,
-    cuda_source,
-    {cudf_types_hpp, cudf_utilities_bit_hpp, cudf::experimental::rolling::jit::code::operation_h},
-    compiler_flags,
-    nullptr,
-    stream)
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      {cudf_types_hpp,
+                       cudf_utilities_bit_hpp,
+                       cudf::experimental::rolling::jit::code::operation_h,
+                       ___src_rolling_rolling_jit_detail_hpp},
+                      compiler_flags,
+                      nullptr,
+                      stream)
     .set_kernel_inst("gpu_rolling_new",  // name of the kernel we are launching
                      {cudf::jit::get_type_name(input.type()),  // list of template arguments
                       cudf::jit::get_type_name(output->type()),
                       udf_agg->_operator_name,
-                      static_window ? "cudf::size_type" : "cudf::size_type*"})
+                      preceding_window_str.c_str(),
+                      following_window_str.c_str()})
     .launch(input.size(),
             cudf::jit::get_data_ptr(input),
             input.null_mask(),
@@ -689,8 +695,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
-    return cudf::experimental::detail::rolling_window_udf<true>(
-      input, preceding_window, following_window, min_periods, agg, mr, 0);
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          preceding_window,
+                                                          "cudf::size_type",
+                                                          following_window,
+                                                          "cudf::size_type",
+                                                          min_periods,
+                                                          agg,
+                                                          mr,
+                                                          0);
   } else {
     auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
     auto following_window_begin = thrust::make_constant_iterator(following_window);
@@ -719,14 +732,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                "preceding_window/following_window size must match input size");
 
   if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
-    return cudf::experimental::detail::rolling_window_udf<false>(
-      input,
-      preceding_window.begin<size_type>(),
-      following_window.begin<size_type>(),
-      min_periods,
-      agg,
-      mr,
-      0);
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          preceding_window.begin<size_type>(),
+                                                          "cudf::size_type*",
+                                                          following_window.begin<size_type>(),
+                                                          "cudf::size_type*",
+                                                          min_periods,
+                                                          agg,
+                                                          mr,
+                                                          0);
   } else {
     return cudf::experimental::detail::rolling_window(input,
                                                       preceding_window.begin<size_type>(),
@@ -760,7 +774,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
 
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
   auto group_offsets{helper.group_offsets()};
   auto const& group_labels{helper.group_labels()};
 
@@ -801,15 +815,34 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
   };
 
-  return cudf::experimental::detail::rolling_window(
-    input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    following_calculator),
-    min_periods,
-    aggr,
-    mr);
+  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+    cudf::detail::preceding_window_wrapper grouped_preceding_window{
+      group_offsets.data().get(), group_labels.data().get(), preceding_window};
+
+    cudf::detail::following_window_wrapper grouped_following_window{
+      group_offsets.data().get(), group_labels.data().get(), following_window};
+
+    return cudf::experimental::detail::rolling_window_udf(input,
+                                                          grouped_preceding_window,
+                                                          "cudf::detail::preceding_window_wrapper",
+                                                          grouped_following_window,
+                                                          "cudf::detail::following_window_wrapper",
+                                                          min_periods,
+                                                          aggr,
+                                                          mr,
+                                                          0);
+  } else {
+    return cudf::experimental::detail::rolling_window(
+      input,
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      preceding_calculator),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      following_calculator),
+      min_periods,
+      aggr,
+      mr,
+      0);
+  }
 }
 
 namespace {
@@ -821,6 +854,10 @@ bool is_supported_range_frame_unit(cudf::data_type const& data_type)
          id == cudf::TIMESTAMP_NANOSECONDS;
 }
 
+/// Fetches multiplication factor to normalize window sizes, depending on the datatype of the
+/// timestamp column. Used for time-based rolling-window operations. E.g. If the timestamp column is
+/// in TIMESTAMP_SECONDS, and the window sizes are specified in DAYS, the window size needs to be
+/// multiplied by `24*60*60`, before comparisons with the timestamps.
 size_t multiplication_factor(cudf::data_type const& data_type)
 {
   // Assume timestamps.
@@ -843,18 +880,16 @@ size_t multiplication_factor(cudf::data_type const& data_type)
 template <typename TimestampImpl_t>
 std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               column_view const& timestamp_column,
-                                              TimestampImpl_t const& mult_factor,
-                                              size_type preceding_window_in_days,
-                                              size_type following_window_in_days,
+                                              TimestampImpl_t preceding_window,
+                                              TimestampImpl_t following_window,
                                               size_type min_periods,
                                               std::unique_ptr<aggregation> const& aggr,
                                               rmm::mr::device_memory_resource* mr)
 {
   auto preceding_calculator = [d_timestamps = timestamp_column.data<TimestampImpl_t>(),
-                               preceding_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               preceding_window] __device__(size_type idx) {
     auto group_start                = 0;
-    auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window_in_days * mult_factor;
+    auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window;
 
     return ((d_timestamps + idx) - thrust::lower_bound(thrust::seq,
                                                        d_timestamps + group_start,
@@ -865,10 +900,9 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
 
   auto following_calculator = [num_rows     = input.size(),
                                d_timestamps = timestamp_column.data<TimestampImpl_t>(),
-                               following_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               following_window] __device__(size_type idx) {
     auto group_end                   = num_rows;
-    auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days * mult_factor;
+    auto highest_timestamp_in_window = d_timestamps[idx] + following_window;
 
     return (thrust::upper_bound(thrust::seq,
                                 d_timestamps + idx,
@@ -894,11 +928,10 @@ template <typename TimestampImpl_t>
 std::unique_ptr<column> time_range_window_ASC(
   column_view const& input,
   column_view const& timestamp_column,
-  TimestampImpl_t const& mult_factor,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type preceding_window_in_days,
-  size_type following_window_in_days,
+  TimestampImpl_t preceding_window,
+  TimestampImpl_t following_window,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr)
@@ -906,11 +939,10 @@ std::unique_ptr<column> time_range_window_ASC(
   auto preceding_calculator = [d_group_offsets = group_offsets.data().get(),
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-                               preceding_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               preceding_window] __device__(size_type idx) {
     auto group_label                = d_group_labels[idx];
     auto group_start                = d_group_offsets[group_label];
-    auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window_in_days * mult_factor;
+    auto lowest_timestamp_in_window = d_timestamps[idx] - preceding_window;
 
     return ((d_timestamps + idx) - thrust::lower_bound(thrust::seq,
                                                        d_timestamps + group_start,
@@ -922,13 +954,12 @@ std::unique_ptr<column> time_range_window_ASC(
   auto following_calculator = [d_group_offsets = group_offsets.data().get(),
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-                               following_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               following_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_end =
       d_group_offsets[group_label +
                       1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
-    auto highest_timestamp_in_window = d_timestamps[idx] + following_window_in_days * mult_factor;
+    auto highest_timestamp_in_window = d_timestamps[idx] + following_window;
 
     return (thrust::upper_bound(thrust::seq,
                                 d_timestamps + idx,
@@ -956,18 +987,16 @@ std::unique_ptr<column> time_range_window_ASC(
 template <typename TimestampImpl_t>
 std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                                column_view const& timestamp_column,
-                                               TimestampImpl_t const& mult_factor,
-                                               size_type preceding_window_in_days,
-                                               size_type following_window_in_days,
+                                               TimestampImpl_t preceding_window,
+                                               TimestampImpl_t following_window,
                                                size_type min_periods,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   auto preceding_calculator = [d_timestamps = timestamp_column.data<TimestampImpl_t>(),
-                               preceding_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               preceding_window] __device__(size_type idx) {
     auto group_start                 = 0;
-    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days * mult_factor;
+    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window;
 
     return ((d_timestamps + idx) -
             thrust::lower_bound(thrust::seq,
@@ -980,11 +1009,10 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
 
   auto following_calculator = [num_rows     = input.size(),
                                d_timestamps = timestamp_column.data<TimestampImpl_t>(),
-                               following_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               following_window] __device__(size_type idx) {
     auto group_end =
       num_rows;  // Cannot fall off the end, since offsets is capped with `input.size()`.
-    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days * mult_factor;
+    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window;
 
     return (thrust::upper_bound(thrust::seq,
                                 d_timestamps + idx,
@@ -1011,11 +1039,10 @@ template <typename TimestampImpl_t>
 std::unique_ptr<column> time_range_window_DESC(
   column_view const& input,
   column_view const& timestamp_column,
-  TimestampImpl_t const& mult_factor,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  size_type preceding_window_in_days,
-  size_type following_window_in_days,
+  TimestampImpl_t preceding_window,
+  TimestampImpl_t following_window,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr)
@@ -1023,11 +1050,10 @@ std::unique_ptr<column> time_range_window_DESC(
   auto preceding_calculator = [d_group_offsets = group_offsets.data().get(),
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-                               preceding_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               preceding_window] __device__(size_type idx) {
     auto group_label                 = d_group_labels[idx];
     auto group_start                 = d_group_offsets[group_label];
-    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window_in_days * mult_factor;
+    auto highest_timestamp_in_window = d_timestamps[idx] + preceding_window;
 
     return ((d_timestamps + idx) -
             thrust::lower_bound(thrust::seq,
@@ -1041,13 +1067,12 @@ std::unique_ptr<column> time_range_window_DESC(
   auto following_calculator = [d_group_offsets = group_offsets.data().get(),
                                d_group_labels  = group_labels.data().get(),
                                d_timestamps    = timestamp_column.data<TimestampImpl_t>(),
-                               following_window_in_days,
-                               mult_factor] __device__(size_type idx) {
+                               following_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_end =
       d_group_offsets[group_label +
                       1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
-    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window_in_days * mult_factor;
+    auto lowest_timestamp_in_window = d_timestamps[idx] - following_window;
 
     return (thrust::upper_bound(thrust::seq,
                                 d_timestamps + idx,
@@ -1058,15 +1083,20 @@ std::unique_ptr<column> time_range_window_DESC(
            1;
   };
 
-  return cudf::experimental::detail::rolling_window(
-    input,
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    preceding_calculator),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    following_calculator),
-    min_periods,
-    aggr,
-    mr);
+  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+    CUDF_FAIL("Time ranged rolling window does NOT (yet) support UDF.");
+  } else {
+    return cudf::experimental::detail::rolling_window(
+      input,
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      preceding_calculator),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      following_calculator),
+      min_periods,
+      aggr,
+      mr,
+      0);
+  }
 }
 
 template <typename TimestampImpl_t>
@@ -1088,43 +1118,40 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
     return (group_offsets.size() == 0)
-             ? time_range_window_ASC<TimestampImpl_t>(input,
-                                                      timestamp_column,
-                                                      mult_factor,
-                                                      preceding_window_in_days,
-                                                      following_window_in_days,
-                                                      min_periods,
-                                                      aggr,
-                                                      mr)
+             ? time_range_window_ASC(input,
+                                     timestamp_column,
+                                     preceding_window_in_days * mult_factor,
+                                     following_window_in_days * mult_factor,
+                                     min_periods,
+                                     aggr,
+                                     mr)
              : time_range_window_ASC(input,
                                      timestamp_column,
-                                     mult_factor,
                                      group_offsets,
                                      group_labels,
-                                     preceding_window_in_days,
-                                     following_window_in_days,
+                                     preceding_window_in_days * mult_factor,
+                                     following_window_in_days * mult_factor,
                                      min_periods,
                                      aggr,
                                      mr);
   } else {
-    return (group_offsets.size() == 0) ? time_range_window_DESC(input,
-                                                                timestamp_column,
-                                                                mult_factor,
-                                                                preceding_window_in_days,
-                                                                following_window_in_days,
-                                                                min_periods,
-                                                                aggr,
-                                                                mr)
-                                       : time_range_window_DESC(input,
-                                                                timestamp_column,
-                                                                mult_factor,
-                                                                group_offsets,
-                                                                group_labels,
-                                                                preceding_window_in_days,
-                                                                following_window_in_days,
-                                                                min_periods,
-                                                                aggr,
-                                                                mr);
+    return (group_offsets.size() == 0)
+             ? time_range_window_DESC(input,
+                                      timestamp_column,
+                                      preceding_window_in_days * mult_factor,
+                                      following_window_in_days * mult_factor,
+                                      min_periods,
+                                      aggr,
+                                      mr)
+             : time_range_window_DESC(input,
+                                      timestamp_column,
+                                      group_offsets,
+                                      group_labels,
+                                      preceding_window_in_days * mult_factor,
+                                      following_window_in_days * mult_factor,
+                                      min_periods,
+                                      aggr,
+                                      mr);
   }
 }
 
@@ -1152,7 +1179,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 
   index_vector group_offsets, group_labels;
   if (group_keys.num_columns() > 0) {
-    sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+    sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
     group_offsets = helper.group_offsets();
     group_labels  = helper.group_labels();
   }
@@ -1185,4 +1212,5 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 }
 
 }  // namespace experimental
+
 }  // namespace cudf

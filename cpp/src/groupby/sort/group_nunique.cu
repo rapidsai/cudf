@@ -34,7 +34,7 @@ struct nunique_functor {
                                      rmm::device_vector<size_type> const& group_labels,
                                      size_type const num_groups,
                                      rmm::device_vector<size_type> const& group_offsets,
-                                     include_nulls _include_nulls,
+                                     null_policy null_handling,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
@@ -50,11 +50,12 @@ struct nunique_functor {
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,
          equal,
-         _include_nulls,
+         null_handling,
          group_offsets = group_offsets.data().get(),
          group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
-          bool is_input_countable = (_include_nulls == include_nulls::YES || v.is_valid_nocheck(i));
-          bool is_unique          = is_input_countable &&
+          bool is_input_countable =
+            (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
+          bool is_unique = is_input_countable &&
                            (group_offsets[group_labels[i]] == i ||  // first element or
                             (not equal.operator()<T>(i, i - 1)));   // new unique value in sorted
           return static_cast<size_type>(is_unique);
@@ -93,7 +94,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       rmm::device_vector<size_type> const& group_labels,
                                       size_type const num_groups,
                                       rmm::device_vector<size_type> const& group_offsets,
-                                      include_nulls _include_nulls,
+                                      null_policy null_handling,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream)
 {
@@ -107,7 +108,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                          group_labels,
                          num_groups,
                          group_offsets,
-                         _include_nulls,
+                         null_handling,
                          mr,
                          stream);
 }

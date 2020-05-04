@@ -60,7 +60,7 @@ std::unique_ptr<column> add_keys(
     experimental::detail::drop_duplicates(table_view{{*combined_keys}},
                                           std::vector<size_type>{0},  // only one key column
                                           experimental::duplicate_keep_option::KEEP_FIRST,
-                                          true,
+                                          null_equality::EQUAL,
                                           mr,
                                           stream)
       ->release();

@@ -28,9 +28,9 @@ typedef enum {
   ARROW_RANDOM_ACCESS_FILE,  ///< Source is specified as an arrow::io::RandomAccessFile
 } gdf_input_type;
 
-/**---------------------------------------------------------------------------*
+/*
  * @brief These are the arguments to the CSV writer function.
- *---------------------------------------------------------------------------**/
+ */
 typedef struct {
   const gdf_column* const* columns;  // columns to output
   int num_cols;                      // number of columns
