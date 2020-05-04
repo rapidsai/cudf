@@ -1267,3 +1267,20 @@ def test_typecast_on_join_indexes_matching_categorical():
     got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
 
     assert_eq(expect, got)
+
+@pytest.mark.parametrize('lhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4]})])
+@pytest.mark.parametrize('rhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4]})])
+@pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
+def test_series_dataframe_mixed_merging(lhs, rhs, how):
+    left_on = right_on = 'a'
+    check_lhs = lhs.copy()
+    check_rhs = rhs.copy()
+    if isinstance(lhs, Series):
+        check_lhs = lhs.to_frame()
+    if isinstance(rhs, Series):
+        check_rhs = rhs.to_frame()
+
+    expect = check_lhs.merge(check_rhs, how=how, left_on = 'a', right_on='a')
+    got = lhs.merge(rhs, how=how, left_on='a', right_on='a')
+
+    assert_eq(expect, got)
