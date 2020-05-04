@@ -232,8 +232,8 @@ TYPED_TEST(ColumnUtilitiesTestFloatingPoint, PrintColumnWithInvalids)
 {
   const char* delimiter = ",";
 
-  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col({10001523.25, 2.0, 3.75, 0.000000034, 5.3},
-                                                             {1, 0, 1, 0, 1});
+  cudf::test::fixed_width_column_wrapper<TypeParam> cudf_col(
+    {10001523.25, 2.0, 3.75, 0.000000034, 5.3}, {1, 0, 1, 0, 1});
 
   auto expected = std::is_same<TypeParam, double>::value
                     ? "10001523.25,NULL,3.75,NULL,5.2999999999999998"
