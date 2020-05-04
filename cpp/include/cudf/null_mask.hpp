@@ -24,6 +24,13 @@
 namespace cudf {
 
 /**
+ * @brief Null and validity mask APIs
+ * @ingroup column_apis
+ * @addtogroup column_nullmask NullMask
+ * @{
+ */
+
+/**
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.
  *
@@ -107,8 +114,8 @@ void set_null_mask(bitmask_type* bitmask,
  *
  * Returns `0` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `start > stop`
- * @throws `cudf::logic_error` if `start < 0`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param start_bit Index of the first bit to count (inclusive)
@@ -123,8 +130,8 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, siz
  *
  * Returns `0` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `start > stop`
- * @throws `cudf::logic_error` if `start < 0`
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param start_bit Index of the first bit to count (inclusive)
@@ -138,9 +145,9 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, s
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if indices.size() % 2 != 0
- * @throws cudf::logic_error if indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or
+ * indices[2*i] > indices[(2*i)+1]`
  *
  * @param[in] bitmask Bitmask residing in device memory whose bits will be
  * counted
@@ -157,9 +164,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if indices.size() % 2 != 0
- * @throws cudf::logic_error if indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or
+ * indices[2*i] > indices[(2*i)+1]`
  *
  * @param[in] bitmask Bitmask residing in device memory whose bits will be
  * counted
@@ -177,8 +184,8 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  *
  * Returns empty `device_buffer` if `bitmask == nullptr`.
  *
- * @throws `cudf::logic_error` if `begin_bit > end_bit`
- * @throws `cudf::logic_error` if `begin_bit < 0`
+ * @throws cudf::logic_error if `begin_bit > end_bit`
+ * @throws cudf::logic_error if `begin_bit < 0`
  *
  * @param mask Bitmask residing in device memory whose bits will be copied
  * @param begin_bit Index of the first bit to be copied (inclusive)
@@ -232,4 +239,5 @@ rmm::device_buffer bitmask_and(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/** @} */  // end of group
 }  // namespace cudf
