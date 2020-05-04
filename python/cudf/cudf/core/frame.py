@@ -1,5 +1,4 @@
 import functools
-import itertools
 import warnings
 from collections import OrderedDict
 
@@ -12,13 +11,11 @@ import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar
-from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_numerical_dtype,
     is_scalar,
-    is_string_dtype,
     min_scalar_type,
 )
 
@@ -1482,6 +1479,7 @@ class Frame(libcudf.table.Table):
         rhs = right
 
         from cudf.core.join import Merge
+
         mergeop = Merge(
             lhs,
             rhs,
@@ -1497,7 +1495,6 @@ class Frame(libcudf.table.Table):
             method,
             indicator,
             suffixes,
-            self.__class__
         )
         to_return = mergeop.perform_merge()
 

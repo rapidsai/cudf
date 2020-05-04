@@ -28,7 +28,6 @@ class Merge(object):
         method,
         indicator,
         suffixes,
-        parent_class,
     ):
         self.lhs = lhs
         self.rhs = rhs
@@ -50,10 +49,12 @@ class Merge(object):
             how,
             lsuffix,
             rsuffix,
+            suffixes,
         )
         self.how = how
-        self.preprocess_merge_params(on, left_on, right_on, lsuffix, rsuffix)
-        self.parent_class = parent_class
+        self.preprocess_merge_params(
+            on, left_on, right_on, lsuffix, rsuffix, suffixes
+        )
 
     def perform_merge(self):
         output_dtypes = self.compute_output_dtypes()
@@ -68,13 +69,22 @@ class Merge(object):
             left_index=self.left_index,
             right_index=self.right_index,
         )
-        result = self.parent_class()._from_table(libcudf_result)
+        result = self.out_class._from_table(libcudf_result)
         result = self.typecast_libcudf_to_output(result, output_dtypes)
         return result[
             self.compute_result_col_names(self.lhs, self.rhs, self.how)
         ]
 
-    def preprocess_merge_params(self, on, left_on, right_on, lsuffix, rsuffix):
+    def preprocess_merge_params(
+        self, on, left_on, right_on, lsuffix, rsuffix, suffixes
+    ):
+
+        if isinstance(self.lhs, cudf.Series):
+            self.lhs = self.lhs.to_frame()
+        if isinstance(self.rhs, cudf.Series):
+            self.rhs = self.rhs.to_frame()
+        self.out_class = cudf.DataFrame
+
         assert not (on and left_on) or (on and right_on)
         if on:
             on = [on] if isinstance(on, str) else list(on)
@@ -106,6 +116,8 @@ class Merge(object):
             ):
                 no_suffix_cols.append(name)
 
+        if suffixes:
+            lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name not in no_suffix_cols:
                 self.lhs.rename({name: f"{name}{lsuffix}"}, inplace=True)
@@ -132,6 +144,7 @@ class Merge(object):
         how,
         lsuffix,
         rsuffix,
+        suffixes,
     ):
         """
         Error for various combinations of merge input parameters
@@ -149,6 +162,12 @@ class Merge(object):
                 'Can only pass argument "on" OR "left_on" '
                 'and "right_on", not a combination of both.'
             )
+
+        # Can't merge on unnamed Series
+        if (isinstance(lhs, cudf.Series) and not lhs.name) or (
+            isinstance(rhs, cudf.Series) and not rhs.name
+        ):
+            raise ValueError("Can not merge on unnamed Series")
 
         # Keys need to be in their corresponding operands
         if on:
@@ -198,6 +217,8 @@ class Merge(object):
         ):
             raise ValueError("No common columns to perform merge on")
 
+        if suffixes:
+            lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name == left_on == right_on:
                 continue
