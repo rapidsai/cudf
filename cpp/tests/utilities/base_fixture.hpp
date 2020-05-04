@@ -129,7 +129,7 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template<typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
   UniformRandomGenerator(T lower,
                          T upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
@@ -144,7 +144,7 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  template<typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
   UniformRandomGenerator(long lower,
                          long upper,
                          uint64_t seed = detail::random_generator_incrementing_seed())
