@@ -219,7 +219,8 @@ def test_groupby_MI(nrows, ncols):
     pd.options.display.max_rows = nrows
     pd.options.display.max_columns = ncols
     assert gdg.__repr__() == pdg.__repr__()
-    # assert gdg.T.__repr__() == pdg.T.__repr__()
+    pd.options.display.max_columns = len(gdg._data.names) - 1
+    assert gdg.T.__repr__() == pdg.T.__repr__()
 
 
 numerical_categories = [

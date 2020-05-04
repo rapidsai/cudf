@@ -1475,7 +1475,7 @@ class DataFrame(Frame):
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
         if idx is not None:
-            idx = as_index(idx)
+            idx = idx if isinstance(idx, Index) else as_index(idx)
 
             if isinstance(idx, cudf.core.MultiIndex):
                 idx_dtype_match = (
