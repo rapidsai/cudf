@@ -24,9 +24,9 @@ namespace cudf {
 //! `datetime` APIs
 namespace datetime {
 /**
+ * @brief DateTime APIs
  * @ingroup column_apis
  * @addtogroup column_datetime DateTime
- * DateTime APIs
  * @{
  */
 

@@ -23,9 +23,9 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @brief Merge APIs
  * @ingroup column_apis
  * @addtogroup column_merge Merge
- * Merge APIs
  * @{
  */
 

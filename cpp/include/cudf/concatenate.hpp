@@ -27,9 +27,9 @@
  */
 namespace cudf {
 /**
+ * @brief APIs to concatenate columns and tables
  * @ingroup column_apis
  * @addtogroup column_concatenate Concatenate
- * APIs to concatenate columns and tables
  * @{
  */
 

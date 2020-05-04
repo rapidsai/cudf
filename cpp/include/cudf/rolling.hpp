@@ -23,9 +23,9 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @brief Rolling Windows APIs
  * @ingroup column_apis
  * @addtogroup column_rolling Rolling Window
- * Rolling Windows APIs
  * @{
  */
 

@@ -41,9 +41,9 @@ namespace experimental {
  */
 namespace io {
 /**
+ * @brief IO reader APIs
  * @ingroup cudf_io
  * @addtogroup cudf_io_readers Readers
- * Readers APIs
  * @{
  */
 
@@ -386,9 +386,9 @@ table_with_metadata read_parquet(
 /** @} */  // end of Readers group
 
 /**
+ * @brief IO writer APIs
  * @ingroup cudf_io
  * @addtogroup cudf_io_writers Writers
- * Writers APIs
  * @{
  */
 

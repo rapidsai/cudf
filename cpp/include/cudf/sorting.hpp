@@ -23,9 +23,9 @@
 
 namespace cudf {
 /**
+ * @brief Sort and rank column and table APIs
  * @ingroup column_apis
  * @addtogroup column_sort Sort
- * Sort APIs
  * @{
  */
 

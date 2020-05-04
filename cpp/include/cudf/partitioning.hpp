@@ -23,9 +23,9 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @brief Patition APIs
  * @ingroup column_apis
  * @addtogroup column_partition Partition
- * Patition APIs
  * @{
  */
 
