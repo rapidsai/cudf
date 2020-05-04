@@ -164,7 +164,6 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
   expect_column_data_equal(std::vector<TypeParam>(sequence, sequence + num_rows), view.column(0));
 }
 
-
 TEST_F(CsvReaderTest, MultiColumn)
 {
   constexpr auto num_rows = 10;
@@ -216,7 +215,6 @@ TEST_F(CsvReaderTest, MultiColumn)
   expect_column_data_equal(float64_values, view.column(9));
   expect_column_data_equal(float64_values, view.column(10));
 }
-
 
 TEST_F(CsvReaderTest, Booleans)
 {
@@ -281,7 +279,6 @@ TEST_F(CsvReaderTest, Dates)
                                                            2764800000},
                            view.column(0));
 }
-
 
 TEST_F(CsvReaderTest, DatesCastToTimestampSeconds)
 {
