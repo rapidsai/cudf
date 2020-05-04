@@ -1684,7 +1684,7 @@ class DataFrame(Frame):
                 self._index, how="right", sort=False
             )
 
-        value = column.as_column(value)
+        value = column.as_column(value, nan_as_null=True)
 
         self._data.insert(name, value, loc=loc)
 
