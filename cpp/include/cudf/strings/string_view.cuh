@@ -26,6 +26,12 @@
  */
 
 namespace cudf {
+/**
+ * @brief String column classes
+ * @ingroup strings_apis
+ * @addtogroup strings_classes Classes
+ * @{
+ */
 
 using char_utf8 = uint32_t;  //<< UTF-8 characters are 1-4 bytes
 
@@ -332,6 +338,7 @@ __host__ __device__ size_type characters_in_string(const char* str, size_type by
 
 }  // namespace detail
 }  // namespace strings
+/** @} */  // end of doxygen group
 }  // namespace cudf
 
 #include "./string_view.inl"

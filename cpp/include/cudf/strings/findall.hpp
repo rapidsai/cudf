@@ -23,7 +23,6 @@ namespace strings {
 /**
  * @ingroup strings_apis
  * @addtogroup strings_contains Contains
- * APIs to search for substrings/patterns within strings.
  * @{
  */
 

@@ -24,7 +24,6 @@ namespace strings {
 /**
  * @ingroup strings_apis
  * @addtogroup strings_replace Replace
- * APIs to replace substrings/patterns within strings.
  * @{
  */
 

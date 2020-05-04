@@ -22,9 +22,9 @@
 namespace cudf {
 namespace strings {
 /**
+ * @brief Split strings into multiple columns of strings
  * @ingroup strings_apis
  * @addtogroup strings_split Split
- * APIs to split strings into multiple columns of strings.
  * @{
  */
 

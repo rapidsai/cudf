@@ -25,9 +25,9 @@
  */
 namespace nvtext {
 /**
+ * @brief Tokenize strings column
  * @ingroup nvtext_apis
  * @addtogroup nvtext_tokenize Tokenize
- * APIs to tokenize strings column.
  * @{
  */
 
