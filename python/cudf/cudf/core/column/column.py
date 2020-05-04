@@ -1269,9 +1269,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                if nan_as_null:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-                else:
+                if nan_as_null is False:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
                     if new_dtype == np.dtype("object"):
@@ -1282,6 +1280,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         arbitrary = utils.scalar_broadcast_to(
                             np.nan, (len(arbitrary),), dtype=new_dtype
                         )
+                else:
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
