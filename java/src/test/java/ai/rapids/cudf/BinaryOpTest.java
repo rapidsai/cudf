@@ -1102,8 +1102,8 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testArctan2() {
-    Double[] xValues = TestUtils.getDoubles(20342309423423L, 10, false);
-    Double[] yValues = TestUtils.getDoubles(33244345234423L, 10, false);
+    Double[] xValues = TestUtils.getDoubles(20342309423423L, 50, false);
+    Double[] yValues = TestUtils.getDoubles(33244345234423L, 50, false);
     try (ColumnVector y = ColumnVector.fromBoxedDoubles(yValues);
          ColumnVector x = ColumnVector.fromBoxedDoubles(xValues);
          ColumnVector result = y.arctan2(x);
