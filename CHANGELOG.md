@@ -16,6 +16,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5072 Adding cython binding to `get_element`
 
 ## Improvements
 
@@ -227,6 +228,7 @@
 - PR #5043 Remove invalid examples page libcudf doxygen
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
+- PR #5076 Fix JNI code for null_policy enum change
 
 
 # cuDF 0.13.0 (31 Mar 2020)
