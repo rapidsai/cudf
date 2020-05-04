@@ -344,6 +344,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<column_buffer> out_buffers;
+  out_buffers.reserve(column_types.size());
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
       // Replace EMPTY dtype with STRING
@@ -356,6 +357,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
     }
   }
 
+  out_columns.reserve(column_types.size());
   if (num_records != 0) {
     decode_data(column_types, out_buffers, stream);
 

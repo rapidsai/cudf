@@ -37,6 +37,10 @@ namespace cudf {
 namespace io {
 namespace csv {
 namespace gpu {
+
+/// Block dimension for dtype detection and conversion kernels
+constexpr uint32_t csvparse_block_dim = 128;
+
 /**
  * @brief Checks whether the given character is a whitespace character.
  *
@@ -175,13 +179,14 @@ __device__ __inline__ bool is_floatingpoint(
  * @param recStart The start the CSV data of interest
  * @param d_columnData The count for each column data type
  */
-__global__ void dataTypeDetection(const char *raw_csv,
-                                  const ParseOptions opts,
-                                  size_t num_records,
-                                  int num_columns,
-                                  column_parse::flags *flags,
-                                  const uint64_t *recStart,
-                                  column_parse::stats *d_columnData)
+__global__ void __launch_bounds__(csvparse_block_dim)
+  dataTypeDetection(const char *raw_csv,
+                    const ParseOptions opts,
+                    size_t num_records,
+                    int num_columns,
+                    column_parse::flags *flags,
+                    const uint64_t *recStart,
+                    column_parse::stats *d_columnData)
 {
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
@@ -489,15 +494,16 @@ struct decode_op {
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
  **/
-__global__ void convertCsvToGdf(const char *raw_csv,
-                                const ParseOptions opts,
-                                size_t num_records,
-                                size_t num_columns,
-                                const column_parse::flags *flags,
-                                const uint64_t *recStart,
-                                cudf::data_type *dtype,
-                                void **data,
-                                cudf::bitmask_type **valid)
+__global__ void __launch_bounds__(csvparse_block_dim)
+  convertCsvToGdf(const char *raw_csv,
+                  const ParseOptions opts,
+                  size_t num_records,
+                  size_t num_columns,
+                  const column_parse::flags *flags,
+                  const uint64_t *recStart,
+                  cudf::data_type *dtype,
+                  void **data,
+                  cudf::bitmask_type **valid)
 {
   // thread IDs range per block, so also need the block id
   long rec_id =
@@ -951,10 +957,8 @@ cudaError_t __host__ DetectColumnTypes(const char *data,
                                        cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
-  int blockSize   = 0;  // suggested thread count to use
-  int minGridSize = 0;  // minimum block count required
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, dataTypeDetection));
-  const int gridSize = (num_rows + blockSize - 1) / blockSize;
+  const int blockSize = csvparse_block_dim;
+  const int gridSize  = (num_rows + blockSize - 1) / blockSize;
 
   dataTypeDetection<<<gridSize, blockSize, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, stats);
@@ -974,10 +978,8 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
                                          cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
-  int blockSize   = 0;  // suggested thread count to use
-  int minGridSize = 0;  // minimum block count required
-  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, convertCsvToGdf));
-  const int gridSize = (num_rows + blockSize - 1) / blockSize;
+  const int blockSize = csvparse_block_dim;
+  const int gridSize  = (num_rows + blockSize - 1) / blockSize;
 
   convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
