@@ -21,7 +21,7 @@
 
 constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Compute requisite size of hash table.
  *
  * Computes the number of entries required in a hash table to satisfy
@@ -33,7 +33,7 @@ constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
  * 50% occupancy
  * @return size_t The size of the hash table that will satisfy the desired
  * occupancy for the specified number of insertions
- *---------------------------------------------------------------------------**/
+ **/
 inline size_t compute_hash_table_size(cudf::size_type num_keys_to_insert,
                                       uint32_t desired_occupancy = DEFAULT_HASH_TABLE_OCCUPANCY)
 {

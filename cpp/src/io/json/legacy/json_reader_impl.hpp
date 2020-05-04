@@ -43,10 +43,10 @@ struct ColumnInfo {
   cudf::size_type null_count;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to parse Json input and convert it into gdf columns
  *
- *---------------------------------------------------------------------------**/
+ **/
 class reader::Impl {
  public:
  private:
@@ -79,7 +79,7 @@ class reader::Impl {
   rmm::device_vector<SerialTrieNode> d_false_trie_;
   rmm::device_vector<SerialTrieNode> d_na_trie_;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
    * Sets the source_, byte_range_offset_, and byte_range_size_ data members
@@ -88,28 +88,28 @@ class reader::Impl {
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void ingestRawInput(size_t range_offset, size_t range_size);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void decompressInput();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Finds all record starts in the file and stores them in rec_starts_
    *
    * Does not upload the entire file to the GPU
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setRecordStarts();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
    *
    * Sets the d_data_ data member.
@@ -117,47 +117,47 @@ class reader::Impl {
    * Also updates the array of record starts to match the device data offset.
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void uploadDataToDevice();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setColumnNames();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setDataTypes();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set up and launches JSON data type detect CUDA kernel.
    *
    * @param[out] column_infos The count for each column data type
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void detectDataTypes(ColumnInfo *column_infos);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the input data and store results in dsf columns
    *
    * Allocates columns in the column_names_ data member and populates them with
    * parsed data
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void convertDataToColumns();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Helper function to setup and launch JSON parsing CUDA kernel.
    *
    * @param[in] dtypes The data type of each column
@@ -166,7 +166,7 @@ class reader::Impl {
    * @param[out] num_valid_fields The numbers of valid fields in columns
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void convertJsonToColumns(gdf_dtype *const dtypes,
                             void *const *gdf_columns,
                             cudf::valid_type *const *valid_fields,

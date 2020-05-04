@@ -231,7 +231,7 @@ void rank_average(rmm::device_vector<size_type> const &group_keys,
 std::unique_ptr<column> rank(column_view const &input,
                              rank_method method,
                              order column_order,
-                             include_nulls _include_nulls,
+                             null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
                              rmm::mr::device_memory_resource *mr,
@@ -240,9 +240,9 @@ std::unique_ptr<column> rank(column_view const &input,
   data_type const output_type = (percentage or method == rank_method::AVERAGE)
                                   ? data_type(FLOAT64)
                                   : data_type(type_to_id<size_type>());
-  std::unique_ptr<column> rank_column = [&_include_nulls, &output_type, &input, &mr, &stream] {
+  std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &mr, &stream] {
     // na_option=keep assign NA to NA values
-    if (_include_nulls == include_nulls::NO)
+    if (null_handling == null_policy::EXCLUDE)
       return make_numeric_column(
         output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
     else
@@ -311,7 +311,7 @@ std::unique_ptr<column> rank(column_view const &input,
   if (percentage) {
     auto rank_iter = rank_mutable_view.begin<double>();
     size_type const count =
-      (_include_nulls == include_nulls::NO) ? input.size() - input.null_count() : input.size();
+      (null_handling == null_policy::EXCLUDE) ? input.size() - input.null_count() : input.size();
     auto drs            = dense_rank_sorted.data().get();
     bool const is_dense = (method == rank_method::DENSE);
     thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -329,12 +329,12 @@ std::unique_ptr<column> rank(column_view const &input,
 std::unique_ptr<column> rank(column_view const &input,
                              rank_method method,
                              order column_order,
-                             include_nulls _include_nulls,
+                             null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
                              rmm::mr::device_memory_resource *mr)
 {
-  return detail::rank(input, method, column_order, _include_nulls, null_precedence, percentage, mr);
+  return detail::rank(input, method, column_order, null_handling, null_precedence, percentage, mr);
 }
 }  // namespace experimental
 }  // namespace cudf
