@@ -46,6 +46,25 @@ using namespace cudf::io;
 
 /**
  * @brief Implementation for CSV reader
+ *
+ * The CSV reader is implemented in 4 stages:
+ * Stage 1: read and optionally decompress the input data in host memory
+ * (may be a memory-mapped view of the data on disk)
+ *
+ * Stage 2: gather the offset of each data row within the csv data.
+ * Since the number of rows in a given character block may depend on the
+ * initial parser state (like whether the block starts in a middle of a
+ * quote or not), a separate row count and output parser state is computed
+ * for every possible input parser state per 16KB character block.
+ * The result is then used to infer the parser state and starting row at
+ * the beginning of every character block.
+ * A second pass can then output the location of every row (which is needed
+ * for the subsequent parallel conversion of every row from csv text
+ * to cudf binary form)
+ *
+ * Stage 3: Optional stage to infer the data type of each CSV column.
+ *
+ * Stage 4: Convert every row from csv text form to cudf binary form.
  */
 class reader::impl {
  public:
@@ -87,8 +106,8 @@ class reader::impl {
    * @brief Finds row positions within the specified input data.
    *
    * This function scans the input data to record the row offsets (relative to
-   * the start of the input data) and the symbol or character that begins that
-   * row. A row is actually the data/offset between two termination symbols.
+   * the start of the input data).
+   * A row is actually the data/offset between two termination symbols.
    *
    * @param h_data Uncompressed input data in host memory
    * @param h_size Number of bytes of uncompressed input data
