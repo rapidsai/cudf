@@ -223,28 +223,28 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
   //                                      0  null,      value,          value,     null
   //                                      1  value,     value,          value,     null
   //                                      2  value,     null,           value,     out
-  //include_nulls::YES
+  //null_policy::INCLUDE
   fixed_width_column_wrapper<R> expect_nuls0{{-1, 1, 2, 4}, {0, 1, 1, 1}};
   fixed_width_column_wrapper<R> expect_nuls1{{3, 4, 2, -1}, {1, 1, 1, 0}};
   fixed_width_column_wrapper<R> expect_nuls2{{6, -1, 8, -1}, {1, 0, 1, 0}};
 
-  //include_nulls::NO
+  //null_policy::EXCLUDE
   fixed_width_column_wrapper<R> expect_vals0{{3, 1, 2, 4}};  //, {1,1,1,1}};
   fixed_width_column_wrapper<R> expect_vals1{{6, 4, 2, -1}, {1, 1, 1, 0}};
   fixed_width_column_wrapper<R> expect_vals2{{-1, 9, 8, -1}, {0, 1, 1, 0}};
 
-  auto agg = cudf::experimental::make_nth_element_aggregation(0, cudf::include_nulls::YES);
+  auto agg = cudf::experimental::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls0, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(1, cudf::include_nulls::YES);
+  agg = cudf::experimental::make_nth_element_aggregation(1, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls1, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(2, cudf::include_nulls::YES);
+  agg = cudf::experimental::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls2, std::move(agg));
 
-  agg = cudf::experimental::make_nth_element_aggregation(0, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(0, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(1, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(1, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(2, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(2, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
@@ -268,28 +268,28 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
   //                                      3  out,       value,          out,        out
   //                                      4  out,       null,           out,        out
 
-  //include_nulls::YES
+  //null_policy::INCLUDE
   fixed_width_column_wrapper<R> expect_nuls0{{6, -1, 8, -1}, {1, 0, 1, 0}};
   fixed_width_column_wrapper<R> expect_nuls1{{3, 9, 2, 4}};
   fixed_width_column_wrapper<R> expect_nuls2{{-1, -1, 2, -1}, {0, 0, 1, 0}};
 
-  //include_nulls::NO
+  //null_policy::EXCLUDE
   fixed_width_column_wrapper<R> expect_vals0{{6, 9, 8, 4}};
   fixed_width_column_wrapper<R> expect_vals1{{3, 4, 2, -1}, {1, 1, 1, 0}};
   fixed_width_column_wrapper<R> expect_vals2{{-1, 1, 2, -1}, {0, 1, 1, 0}};
 
-  auto agg = cudf::experimental::make_nth_element_aggregation(-1, cudf::include_nulls::YES);
+  auto agg = cudf::experimental::make_nth_element_aggregation(-1, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls0, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(-2, cudf::include_nulls::YES);
+  agg = cudf::experimental::make_nth_element_aggregation(-2, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls1, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(-3, cudf::include_nulls::YES);
+  agg = cudf::experimental::make_nth_element_aggregation(-3, cudf::null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_nuls2, std::move(agg));
 
-  agg = cudf::experimental::make_nth_element_aggregation(-1, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(-1, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals0, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(-2, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(-2, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg));
-  agg = cudf::experimental::make_nth_element_aggregation(-3, cudf::include_nulls::NO);
+  agg = cudf::experimental::make_nth_element_aggregation(-3, cudf::null_policy::EXCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 

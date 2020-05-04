@@ -32,12 +32,12 @@ if [ "$UPLOAD_LIBCUDF" == "1" ]; then
   test -e ${LIBNVSTRINGS_FILE}
   echo "Upload libNVStrings"
   echo ${LIBNVSTRINGS_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${LIBNVSTRINGS_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBNVSTRINGS_FILE}
 
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
   echo ${LIBCUDF_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${LIBCUDF_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${LIBCUDF_FILE}
 fi
 
 if [ "$UPLOAD_CUDF" == "1" ]; then
@@ -47,20 +47,20 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   test -e ${NVSTRINGS_FILE}
   echo "Upload nvstrings"
   echo ${NVSTRINGS_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${NVSTRINGS_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${NVSTRINGS_FILE}
 
   test -e ${CUDF_FILE}
   echo "Upload cudf"
   echo ${CUDF_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${CUDF_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUDF_FILE}
 
   test -e ${DASK_CUDF_FILE}
   echo "Upload dask-cudf"
   echo ${DASK_CUDF_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${DASK_CUDF_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${DASK_CUDF_FILE}
 
   test -e ${CUSTREAMZ_FILE}
   echo "Upload custreamz"
   echo ${CUSTREAMZ_FILE}
-  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${CUSTREAMZ_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --skip-existing ${CUSTREAMZ_FILE}
 fi

@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include <jit/cache.h>
+#include <cudf/utilities/error.hpp>
+
 #include <errno.h>
 #include <fcntl.h>
-#include <jit/cache.h>
 #include <pwd.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <boost/filesystem.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace jit {
@@ -30,7 +31,7 @@ boost::filesystem::path get_user_home_cache_dir()
 {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
-    return boost::filesystem::path(home_dir) / ".cudf" / std::string{CUDF_STRINGIFY(CUDF_VERSION)};
+    return boost::filesystem::path(home_dir) / ".cudf";
   } else {
     return boost::filesystem::path();
   }
@@ -66,9 +67,18 @@ boost::filesystem::path getCacheDir()
   auto kernel_cache_path_env = std::getenv("LIBCUDF_KERNEL_CACHE_PATH");
   auto kernel_cache_path     = boost::filesystem::path(
     kernel_cache_path_env != nullptr ? kernel_cache_path_env : LIBCUDF_KERNEL_CACHE_PATH);
+
+  // Cache path could be empty when env HOME is unset or LIBCUDF_KERNEL_CACHE_PATH is defined to be
+  // empty, to disallow use of file cache at runtime.
   if (not kernel_cache_path.empty()) {
-    // `mkdir -p` the kernel cache path if it doesn't exist
-    boost::filesystem::create_directories(kernel_cache_path);
+    kernel_cache_path /= std::string{CUDF_STRINGIFY(CUDF_VERSION)};
+    try {
+      // `mkdir -p` the kernel cache path if it doesn't exist
+      boost::filesystem::create_directories(kernel_cache_path);
+    } catch (const std::exception& e) {
+      // if directory creation fails for any reason, return empty path
+      return boost::filesystem::path();
+    }
   }
   return kernel_cache_path;
 }
@@ -150,8 +160,13 @@ std::string cudfJitCache::cacheFile::read()
     return std::string();
   }
 
-  // Lock the file descriptor. we the only ones now
-  if (lockf(fd, F_LOCK, 0) == -1) {
+  // Create args for file locking
+  flock fl{};
+  fl.l_type   = F_RDLCK;  // Shared lock for reading
+  fl.l_whence = SEEK_SET;
+
+  // Lock the file descriptor. Only reading is allowed now
+  if (fcntl(fd, F_SETLKW, &fl) == -1) {
     successful_read = false;
     return std::string();
   }
@@ -191,8 +206,13 @@ void cudfJitCache::cacheFile::write(std::string content)
     return;
   }
 
+  // Create args for file locking
+  flock fl{};
+  fl.l_type   = F_WRLCK;  // Exclusive lock for writing
+  fl.l_whence = SEEK_SET;
+
   // Lock the file descriptor. we the only ones now
-  if (lockf(fd, F_LOCK, 0) == -1) {
+  if (fcntl(fd, F_SETLKW, &fl) == -1) {
     successful_write = false;
     return;
   }

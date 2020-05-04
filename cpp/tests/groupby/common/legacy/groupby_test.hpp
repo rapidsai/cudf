@@ -32,7 +32,8 @@
 namespace cudf {
 namespace test {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Performs a sort-by-key on tables.
  *
  * Sorts the rows of `keys` into ascending order and reorders the corresponding
@@ -42,7 +43,7 @@ namespace detail {
  * @param values The values to reorder
  * @return std::pair<table, table> A pair whose first element contains the
  * sorted keys and second element contains reordered values.
- *---------------------------------------------------------------------------**/
+ **/
 inline std::pair<table, table> sort_by_key(cudf::table const& keys, cudf::table const& values)
 {
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(), "Size mismatch between keys and values");
@@ -78,12 +79,12 @@ struct column_equality {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Verifies the equality of two tables
  *
  * @param lhs The first table
  * @param rhs The second table
- *---------------------------------------------------------------------------**/
+ **/
 inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& rhs)
 {
   EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
@@ -94,12 +95,12 @@ inline void expect_tables_are_equal(cudf::table const& lhs, cudf::table const& r
     }));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Verifies the equality of two vectors of columns
  *
  * @param lhs The first array
  * @param rhs The second array
- *---------------------------------------------------------------------------**/
+ **/
 inline void expect_values_are_equal(std::vector<gdf_column*> lhs, std::vector<gdf_column*> rhs)
 {
   EXPECT_EQ(lhs.size(), rhs.size());
