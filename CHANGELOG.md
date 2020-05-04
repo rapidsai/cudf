@@ -137,6 +137,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5085 Print more precise numerical strings in unit tests
 
 ## Bug Fixes
 
