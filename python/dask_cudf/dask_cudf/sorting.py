@@ -95,7 +95,7 @@ class All2All:
                 )
                 priorities[out_key] = priority
                 deps[out_key] = keys
-                tasks[out_key] = (_concat, keys)
+                tasks[out_key] = (_concat, keys, self.ignore_index)
 
             for i, inp in enumerate(self.inputs):
                 out_key = str((shuffle_token, i))
