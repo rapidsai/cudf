@@ -320,7 +320,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, op>() and
-                     !cudf::detail::is_rolling_string_specialized<T, agg_op, op>(),
+                     !cudf::detail::is_rolling_string_specialization<T, agg_op, op>(),
                    std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,
@@ -359,7 +359,7 @@ struct rolling_window_launcher {
             aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<cudf::detail::is_rolling_string_specialized<T, agg_op, op>(),
+  std::enable_if_t<cudf::detail::is_rolling_string_specialization<T, agg_op, op>(),
                    std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,
@@ -425,7 +425,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, op>() and
-                     !cudf::detail::is_rolling_string_specialized<T, agg_op, op>(),
+                     !cudf::detail::is_rolling_string_specialization<T, agg_op, op>(),
                    std::unique_ptr<column>>
   launch(column_view const& input,
          PrecedingWindowIterator preceding_window_begin,

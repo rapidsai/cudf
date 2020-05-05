@@ -77,7 +77,7 @@ struct out_of_place_fill_range_dispatch {
   cudf::column_view const& input;
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
+  std::unique_ptr<cudf::column> operator()(
     cudf::size_type begin,
     cudf::size_type end,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
@@ -97,40 +97,40 @@ struct out_of_place_fill_range_dispatch {
 
     return p_ret;
   }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::string_view, T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type begin,
-             cudf::size_type end,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0)
-  {
-    using ScalarType = cudf::experimental::scalar_type_t<T>;
-    auto p_scalar    = static_cast<ScalarType const*>(&value);
-    return cudf::strings::detail::fill(
-      cudf::strings_column_view(input), begin, end, *p_scalar, mr, stream);
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::dictionary32, T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type begin,
-             cudf::size_type end,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0)
-  {
-    CUDF_FAIL("dictionary not supported yet");
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_same<cudf::list_view, T>::value, std::unique_ptr<cudf::column>>
-  operator()(cudf::size_type begin,
-             cudf::size_type end,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-             cudaStream_t stream                 = 0)
-  {
-    CUDF_FAIL("list_view not supported yet");
-  }
 };
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::string_view>(
+  cudf::size_type begin,
+  cudf::size_type end,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  using ScalarType = cudf::experimental::scalar_type_t<cudf::string_view>;
+  auto p_scalar    = static_cast<ScalarType const*>(&value);
+  return cudf::strings::detail::fill(
+    cudf::strings_column_view(input), begin, end, *p_scalar, mr, stream);
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::dictionary32>(
+  cudf::size_type begin,
+  cudf::size_type end,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("dictionary not supported yet");
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf::list_view>(
+  cudf::size_type begin,
+  cudf::size_type end,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("list_view not supported yet");
+}
 
 }  // namespace
 

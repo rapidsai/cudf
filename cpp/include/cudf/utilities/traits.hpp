@@ -85,12 +85,12 @@ constexpr inline bool is_relationally_comparable()
  * @brief Indicates whether objects of types `L` and `R` can be compared
  * for equality.
  *
- * Given two objects `L l`, and `R r`, returns true if `l == r` and `l > r` is a
+ * Given two objects `L l`, and `R r`, returns true if `l == r` is a
  * well-formed expression.
  *
  * @tparam L Type of the first object
  * @tparam R Type of the second object
- * @return true Objects of types `L` and `R` can be compared for equalirt
+ * @return true Objects of types `L` and `R` can be compared for equality
  * @return false Objects of types `L` and `R` cannot be compared
  */
 template <typename L, typename R>
