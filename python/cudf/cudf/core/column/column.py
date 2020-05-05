@@ -1463,7 +1463,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             buffer = Buffer(arbitrary)
             mask = None
-            if nan_as_null:
+            if nan_as_null is None or nan_as_null is True:
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
