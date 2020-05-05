@@ -10,6 +10,7 @@ from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 from cudf._lib.move cimport move
 from cudf._lib.replace import replace_nulls
+from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.types import np_to_cudf_types
 
@@ -175,10 +176,10 @@ def binaryop(lhs, rhs, op, dtype):
     cdef type_id tid = np_to_cudf_types[np.dtype(dtype)]
     cdef data_type c_dtype = data_type(tid)
 
-    if np.isscalar(lhs) or lhs is None:
+    if isinstance(lhs, Scalar) or np.isscalar(lhs) or lhs is None:
 
         is_string_col = is_string_dtype(rhs.dtype)
-        s_lhs = Scalar(lhs, dtype=rhs.dtype if lhs is None else None)
+        s_lhs = as_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
         result = binaryop_s_v(
             s_lhs,
             rhs,
@@ -186,9 +187,9 @@ def binaryop(lhs, rhs, op, dtype):
             c_dtype
         )
 
-    elif np.isscalar(rhs) or rhs is None:
+    elif isinstance(rhs, Scalar) or np.isscalar(rhs) or rhs is None:
         is_string_col = is_string_dtype(lhs.dtype)
-        s_rhs = Scalar(rhs, dtype=lhs.dtype if rhs is None else None)
+        s_rhs = as_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         result = binaryop_v_s(
             lhs,
             s_rhs,

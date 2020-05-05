@@ -155,18 +155,18 @@ __global__ void dataTypeDetection(const char *raw_csv,
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Functor for converting CSV data to cuDF data type value.
- *---------------------------------------------------------------------------**/
+ **/
 struct ConvertFunctor {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Template specialization for operator() for types whose values can be
    * convertible to a 0 or 1 to represent false/true. The converting is done by
    * checking against the default and user-specified true/false values list.
    *
    * It is handled here rather than within convertStrToValue() as that function
    * is used by other types (ex. timestamp) that aren't 'booleable'.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *csvData,
                                                       void *gdfColumnData,
@@ -194,10 +194,10 @@ struct ConvertFunctor {
     }
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Default template operator() dispatch specialization all data types
    * (including wrapper types) that is not covered by above.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T, typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(const char *csvData,
                                                       void *gdfColumnData,
@@ -212,7 +212,7 @@ struct ConvertFunctor {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -227,7 +227,7 @@ struct ConvertFunctor {
  * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void convertCsvToGdf(const char *raw_csv,
                                 const ParseOptions opts,
                                 cudf::size_type num_records,

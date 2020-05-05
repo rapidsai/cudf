@@ -233,7 +233,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
   }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a C++ type to it's corresponding gdf_dtype.
  *
  * When explicitly passed a template argument of a given type, returns the
@@ -246,7 +246,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
  * ```
  *
  * @tparam T The type to map to a `gdf_dtype`
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 inline constexpr gdf_dtype gdf_dtype_of()
 {
