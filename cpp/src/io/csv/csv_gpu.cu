@@ -26,8 +26,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <cuda_runtime.h>
-
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
@@ -957,10 +955,10 @@ cudaError_t __host__ DetectColumnTypes(const char *data,
                                        cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
-  const int blockSize = csvparse_block_dim;
-  const int gridSize  = (num_rows + blockSize - 1) / blockSize;
+  const int block_size = csvparse_block_dim;
+  const int grid_size  = (num_rows + block_size - 1) / block_size;
 
-  data_type_detection<<<gridSize, blockSize, 0, stream>>>(
+  data_type_detection<<<grid_size, block_size, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, stats);
 
   return cudaSuccess;
@@ -978,10 +976,10 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
                                          cudaStream_t stream)
 {
   // Calculate actual block count to use based on records count
-  const int blockSize = csvparse_block_dim;
-  const int gridSize  = (num_rows + blockSize - 1) / blockSize;
+  const int block_size = csvparse_block_dim;
+  const int grid_size  = (num_rows + block_size - 1) / block_size;
 
-  convert_csv_to_cudf<<<gridSize, blockSize, 0, stream>>>(
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
 
   return cudaSuccess;
