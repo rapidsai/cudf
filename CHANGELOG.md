@@ -141,6 +141,7 @@
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
+- PR #5094 Expose the HOST_BUFFER parquet sink to python
 
 ## Bug Fixes
 
