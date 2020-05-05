@@ -83,7 +83,8 @@ TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)
   auto out = cudf::experimental::binary_operation(
     lhs, rhs, ptx, data_type(experimental::type_to_id<TypeOut>()));
 
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, CADD);
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(
+    *out, lhs, rhs, CADD, NearEqualComparator<TypeOut>{1e-03});
 }
 
 TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32)

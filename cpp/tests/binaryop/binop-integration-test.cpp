@@ -27,20 +27,6 @@ namespace binop {
 struct BinaryOperationIntegrationTest : public BinaryOperationTest {
 };
 
-// This comparator can be used to compare two values that are within a certain threshold.
-// This is typically used to compare floating point values computed on CPU and GPU which is
-// expected to be *near* equal, or when computing large numbers can yield ULP errors
-template <typename TypeOut>
-struct NearEqualComparator {
-  double tolerance_;
-
-  NearEqualComparator(double max_diff) : tolerance_(max_diff) {}
-  bool operator()(TypeOut const& lhs, TypeOut const& rhs) const
-  {
-    return (std::fabs(lhs - rhs) < tolerance_);
-  }
-};
-
 TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
 {
   using TypeOut = int32_t;
