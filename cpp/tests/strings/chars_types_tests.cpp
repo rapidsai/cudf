@@ -242,9 +242,9 @@ TEST_F(StringsCharsTest, EmptyStringsColumn)
 TEST_F(StringsCharsTest, Integers)
 {
   cudf::test::strings_column_wrapper strings1(
-    {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10"});
+    {"+175", "-34", "9.8", "17+2", "+-14", "1234567890", "67de", "", "1e10", "-", "++", ""});
   auto results = cudf::strings::is_integer(cudf::strings_column_view(strings1));
-  cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<bool> expected1({1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0});
   cudf::test::expect_columns_equal(*results, expected1);
   EXPECT_FALSE(cudf::strings::all_integer(cudf::strings_column_view(strings1)));
 
@@ -259,22 +259,23 @@ TEST_F(StringsCharsTest, Integers)
 TEST_F(StringsCharsTest, Floats)
 {
   cudf::test::strings_column_wrapper strings1({"+175",
-                                               "-34",
-                                               "9.8",
-                                               "17+2",
-                                               "+-14",
-                                               "1234567890",
+                                               "-9.8",
+                                               "7+2",
+                                               "+-4",
                                                "6.7e17",
                                                "-1.2e-5",
                                                "e",
                                                ".e",
                                                "1.e+-2",
-                                               "000.000",
+                                               "00.00",
                                                "1.0e+1.0",
-                                               "1.2.3"});
+                                               "1.2.3",
+                                               "+",
+                                               "--",
+                                               ""});
   auto results = cudf::strings::is_float(cudf::strings_column_view(strings1));
   cudf::test::fixed_width_column_wrapper<bool> expected1(
-    {1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0});
+    {1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0});
   cudf::test::expect_columns_equal(*results, expected1);
   EXPECT_FALSE(cudf::strings::all_float(cudf::strings_column_view(strings1)));
 
