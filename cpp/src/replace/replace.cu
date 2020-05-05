@@ -878,6 +878,11 @@ struct replace_nans_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
+    CUDF_EXPECTS(input.type() == replacement.type(),
+                 "Input and replacement must be of the same type");
+
+    if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
+
     auto input_device_view = column_device_view::create(input);
     size_type size         = input.size();
 
@@ -948,13 +953,8 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.type() == replacement.type(),
-               "Input and replacement must be of the same type");
-
   CUDF_EXPECTS(input.size() == replacement.size(),
                "Input and replacement must be of the same size");
-
-  if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
 
   return type_dispatcher(input.type(),
                          replace_nans_functor{},
@@ -970,11 +970,6 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.type() == replacement.type(),
-               "Input and replacement must be of the same type");
-
-  if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
-
   return type_dispatcher(
     input.type(), replace_nans_functor{}, input, replacement, true, mr, stream);
 }
