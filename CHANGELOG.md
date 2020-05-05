@@ -16,6 +16,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
 
 ## Improvements
@@ -145,6 +146,7 @@
 
 ## Bug Fixes
 
+- PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
