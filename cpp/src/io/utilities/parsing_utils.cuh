@@ -139,9 +139,9 @@ __device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
  *
  * @return The parsed and converted value
  */
-template <typename T>
+template <typename T, int base = 10>
 __inline__ __device__ T
-parse_numeric(const char* data, long start, long end, ParseOptions const& opts, int base = 10)
+parse_numeric(const char* data, long start, long end, ParseOptions const& opts)
 {
   T value               = 0;
   bool all_digits_valid = true;
@@ -151,6 +151,11 @@ parse_numeric(const char* data, long start, long end, ParseOptions const& opts, 
   if (data[start] == '-') {
     sign = -1;
     start++;
+  }
+
+  // Skip over the "0x" prefix for hex notation
+  if (base == 16 && start + 2 <= end && data[start] == '0' && data[start + 1] == 'x') {
+    start += 2;
   }
 
   // Handle the whole part of the number

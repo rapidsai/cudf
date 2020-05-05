@@ -446,7 +446,7 @@ TEST_F(CsvReaderTest, Strings)
     view.column(1));
 }
 
-TEST_F(CsvReaderTest, DISABLED_StringsQuotes)
+TEST_F(CsvReaderTest, StringsQuotes)
 {
   std::vector<std::string> names{"line", "verse"};
 
@@ -620,6 +620,22 @@ TEST_F(CsvReaderTest, NoDataFile)
   EXPECT_EQ(0, view.num_columns());
 }
 
+TEST_F(CsvReaderTest, HeaderOnlyFile)
+{
+  auto filepath = temp_env->get_temp_dir() + "HeaderOnlyFile.csv";
+  {
+    std::ofstream outfile{filepath, std::ofstream::out};
+    outfile << "\"a\",\"b\",\"c\"\n\n";
+  }
+
+  cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
+  auto result = cudf_io::read_csv(in_args);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(0, view.num_rows());
+  EXPECT_EQ(3, view.num_columns());
+}
+
 TEST_F(CsvReaderTest, ArrowFileSource)
 {
   auto filepath = temp_env->get_temp_dir() + "ArrowFileSource.csv";
@@ -693,6 +709,24 @@ TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
   // only set skipfooter
   skipfooter_args.skipfooter = 0;
   EXPECT_NO_THROW(cudf_io::read_csv(skipfooter_args));
+}
+
+TEST_F(CsvReaderTest, HexTest)
+{
+  auto filepath = temp_env->get_temp_filepath("Hexadecimal.csv");
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << "0x0\n-0x1000\n0xfedcba\n0xABCDEF\n0xaBcDeF\n9512c20b\n";
+  }
+
+  cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
+  in_args.names  = {"A"};
+  in_args.dtype  = {"hex"};
+  in_args.header = -1;
+  auto result    = cudf_io::read_csv(in_args);
+
+  expect_column_data_equal(std::vector<int64_t>{0, -4096, 16702650, 11259375, 11259375, 2501034507},
+                           result.tbl->view().column(0));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

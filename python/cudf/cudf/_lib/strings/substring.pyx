@@ -12,6 +12,7 @@ from cudf._lib.cpp.strings.substring cimport (
     slice_strings as cpp_slice_strings
 )
 
+from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 
@@ -29,9 +30,9 @@ def slice_strings(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef Scalar start_scalar = Scalar(start, np.int32)
-    cdef Scalar end_scalar = Scalar(end, np.int32)
-    cdef Scalar step_scalar = Scalar(step, np.int32)
+    cdef Scalar start_scalar = as_scalar(start, np.int32)
+    cdef Scalar end_scalar = as_scalar(end, np.int32)
+    cdef Scalar step_scalar = as_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
         <numeric_scalar[size_type]*>(start_scalar.c_value.get())
@@ -89,9 +90,9 @@ def get(Column source_strings,
     else:
         next_index = index + 1
         step = 1
-    cdef Scalar start_scalar = Scalar(index, np.int32)
-    cdef Scalar end_scalar = Scalar(next_index, np.int32)
-    cdef Scalar step_scalar = Scalar(step, np.int32)
+    cdef Scalar start_scalar = as_scalar(index, np.int32)
+    cdef Scalar end_scalar = as_scalar(next_index, np.int32)
+    cdef Scalar step_scalar = as_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
         <numeric_scalar[size_type]*>(start_scalar.c_value.get())
