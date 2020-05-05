@@ -89,7 +89,7 @@ size_type sort_groupby_helper::num_keys(cudaStream_t stream)
 {
   if (_num_keys > -1) return _num_keys;
 
-  if (_include_null_keys == include_nulls::NO and has_nulls(_keys)) {
+  if (_include_null_keys == null_policy::EXCLUDE and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
     // in the row bitmask. When `_include_null_keys == NO`, then only rows `[0, n)`
     // in the sorted keys are considered for grouping.
@@ -127,7 +127,7 @@ column_view sort_groupby_helper::key_sort_order(cudaStream_t stream)
     return sliced_key_sorted_order();
   }
 
-  if (_include_null_keys == include_nulls::YES || !cudf::has_nulls(_keys)) {  // SQL style
+  if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
     _key_sorted_order = cudf::experimental::detail::sorted_order(
       _keys,
       {},

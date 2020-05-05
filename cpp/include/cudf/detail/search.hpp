@@ -75,6 +75,7 @@ std::unique_ptr<column> lower_bound(
  * For each row v in @p values, find the last index in @p t where
  *  inserting the row will maintain the sort order of @p t
  *
+ * @code{.pseudo}
  * Example:
  *
  *  Single Column:
@@ -84,14 +85,16 @@ std::unique_ptr<column> lower_bound(
  *   result = {  3 }
  *
  *  Multi Column:
- *    idx        0    1    2    3    4
+ *      idx        0    1    2    3    4
  *   t      = {{  10,  20,  20,  20,  20 },
  *             { 5.0,  .5,  .5,  .7,  .7 },
  *             {  90,  77,  78,  61,  61 }}
  *   values = {{ 20 },
  *             { .7 },
  *             { 61 }}
- *   result =  {  5  *   *
+ *   result =  {  5  }
+ * @endcode
+ *
  * @param column          Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
@@ -115,14 +118,14 @@ std::unique_ptr<column> upper_bound(
  * @throws cudf::logic_error
  * If `col.type() != values.type()`
  *
- * @example:
- *
+ * @code{.pseudo}
  *  Single Column:
  *      idx      0   1   2   3   4
  *      col = { 10, 20, 20, 30, 50 }
  *  Scalar:
  *   value = { 20 }
  *   result = true
+ * @endcode
  *
  * @param col      A column object
  * @param value    A scalar value to search for in `col`
@@ -145,12 +148,12 @@ bool contains(column_view const& col,
  * @throws cudf::logic_error
  * If `haystack.type() != needles.type()`
  *
- * @example:
- *
+ * @code{.pseudo}
  *   haystack = { 10, 20, 30, 40, 50 }
  *   needles  = { 20, 40, 60, 80 }
  *
  *   result = { false, true, false, true, false }
+ * @endcode
  *
  * @param haystack  A column object
  * @param needles   A column of values to search for in `col`

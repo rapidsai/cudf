@@ -19,17 +19,17 @@
 // file. Note the use of the @file for file descriptions DESCRIPTION: The text
 // on the same line as the @brief will show up in lists and summaries, whereas
 // the detailed text following on the next line is the detailed description.
-/**---------------------------------------------------------------------------*
+/**
  * @file example_documentation.cpp
  * @brief Example code documentation for libgdf.
  *
  * This file provides examples of how source files, classes, functions, and
  * variables should be documented in libgdf.
- *---------------------------------------------------------------------------**/
+ **/
 
 // DESCRIPTION: A brief description of the purpose and functionality of the
 // class
-/**---------------------------------------------------------------------------*
+/**
  * @brief  This class serves as an example of how classes in libgdf should
  * be documented.
  *
@@ -37,7 +37,7 @@
  * be documented.
  *
  * @tparam T Template parameter for this class is used for...
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 class example_class {
   // DESCRIPTION: Trivial class functions should be given names that make their
@@ -50,7 +50,7 @@ class example_class {
   // of the function as well as all of its parameters. Every parameter should be
   // decorated to indicate if it is an input or output parameter, or both with
   // @param[in], @param[out], and @param[in,out] respectively.
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief This is a complicated function that requires more detailed
    * documentation.
    *
@@ -64,7 +64,7 @@ class example_class {
    * @param[out] third_parameter This parameter is an output of the function
    *
    * @return The result of the complex function
-   *---------------------------------------------------------------------------**/
+   **/
   T complicated_function(int const first_parameter,
                          double* second_parameter,
                          float* third_parameter)
@@ -91,7 +91,7 @@ class example_class {
 // DESCRIPTION: Free functions should be commented in the same way as
 // non-trivial class member functions. If the function is templated, use @tparam
 // to describe the purpose of the template parameters.
-/**---------------------------------------------------------------------------*
+/**
  * @brief  An example of a free function (non-class member). This function
  * calls a functor on an input argument and returns the result.
  *
@@ -101,7 +101,7 @@ class example_class {
  * @param[in] functor The functor to be called on the input argument
  * @param[in] input_argument The input argument passed into the functor
  * @return The result of calling the functor on the input argument
- *---------------------------------------------------------------------------**/
+ **/
 template <class functor_type, typename input_type, typename return_type>
 return_type free_function(functor_type functor, input_type input_argument)
 {
@@ -112,11 +112,11 @@ return_type free_function(functor_type functor, input_type input_argument)
 
 // DESCRIPTION: Enumeration types should have a brief overall description of
 // the purpose of the enums, as well as a description of each enum member.
-/**---------------------------------------------------------------------------*
+/**
  * @brief  The purpose of these enumerations is to provide an example
  * of how enumerations should be documented.
  *
- *---------------------------------------------------------------------------**/
+ **/
 enum class example_enum {
   first_enum,   ///< Description of the first enum
   second_enum,  ///< Description of the second enum
