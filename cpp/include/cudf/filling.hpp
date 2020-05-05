@@ -80,7 +80,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @param mr Memory resource to allocate the result output column
- * @return std::unique_ptr<column> The result output column
+ * @return The result output column
  */
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
@@ -116,7 +116,7 @@ std::unique_ptr<column> fill(column_view const& input,
  * @param count Non-nullable column of a integral type
  * @param check_count Whether to check count (negative values and overflow)
  * @param mr Memory resource to allocate the result output table
- * @return std::unique_ptr<table> The result table containing the repetitions
+ * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
@@ -142,7 +142,7 @@ std::unique_ptr<table> repeat(
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
  * @param mr Memory resource to allocate the result output table
- * @return std::unique_ptr<table> The result table containing the repetitions
+ * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
