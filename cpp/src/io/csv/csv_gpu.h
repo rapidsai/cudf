@@ -73,8 +73,8 @@ inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint3
 /**
  * @brief pack multiple row contexts together
  *
- * The 64-bit packed row context format represents the four possible output row context state
- * from each of the four possible input row context state.
+ * The 64-bit packed row context format represents the four possible output row context states
+ * from each of the four possible input row context states.
  * Each output state consists of the 2-bit row context state along with a 18-bit row count
  * value (row count is assumed to be a local count that fits in 18-bit)
  * The four 20-bit values are concatenated to form a 80-bit value, truncated to 64-bit
@@ -104,7 +104,7 @@ inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx
  * context corresponding to a block of characters, and return the new output context with
  * updated total row count.
  * The input context is a 64-bit version of the 32-bit single row context as returned
- * by make_row_context(), so the maximum row rount here is a 62-bit value.
+ * by make_row_context(), so the maximum row count here is a 62-bit value.
  *
  * @param sel_ctx input context (2-bit context id, 62-bit row count)
  * @param packed_ctx row context of character block
