@@ -167,6 +167,8 @@ def is_space(Column source_strings):
 
 def is_integer(Column source_strings):
     """
+    Returns a Column of boolean values with True for `source_strings`
+    that have intergers.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -181,6 +183,8 @@ def is_integer(Column source_strings):
 
 def all_integers(Column source_strings):
     """
+    Returns `True` if all values in `source_strings` are intergers.
+    Else, returns `False`.
     """
     cdef bool c_result
     cdef column_view source_view = source_strings.view()
@@ -195,6 +199,8 @@ def all_integers(Column source_strings):
 
 def is_float(Column source_strings):
     """
+    Returns a Column of boolean values with True for `source_strings`
+    that have floats.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
@@ -209,6 +215,8 @@ def is_float(Column source_strings):
 
 def all_floats(Column source_strings):
     """
+    Returns `True` if all values in `source_strings` are floats.
+    Else, returns `False`.
     """
     cdef bool c_result
     cdef column_view source_view = source_strings.view()
