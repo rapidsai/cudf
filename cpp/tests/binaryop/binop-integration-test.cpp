@@ -1091,10 +1091,16 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
 
   using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs =
-    fixed_width_column_wrapper<TypeLhs>{{24854.55893, 79946.87288, -86099.68377, -86099.68377}};
-  auto rhs =
-    fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 36223.96138, -15456.4335}};
+  auto lhs = fixed_width_column_wrapper<TypeLhs>{
+    {24854.55893, 79946.87288, -86099.68377, -86099.68377, 1.0, 1.0, -1.0, -1.0}};
+  auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881,
+                                                  -15456.4335,
+                                                  36223.96138,
+                                                  -15456.4335,
+                                                  2.1336193413893147E307,
+                                                  -2.1336193413893147E307,
+                                                  2.1336193413893147E307,
+                                                  -2.1336193413893147E307}};
 
   auto out = cudf::experimental::binary_operation(lhs,
                                                   rhs,
@@ -1107,6 +1113,10 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
   EXPECT_TRUE(out_data[1] > 0);
   EXPECT_TRUE(out_data[2] > 0);
   EXPECT_TRUE(out_data[3] < 0);
+  EXPECT_TRUE(out_data[4] == 1);
+  EXPECT_TRUE(out_data[5] == 1);
+  EXPECT_TRUE(out_data[6] == 0);
+  EXPECT_TRUE(out_data[7] == 0);
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
 

@@ -411,16 +411,6 @@ const char* operation =
     };
 
     struct PMod {
-        template <typename TypeOut>
-        // Return a positive remainder value if only the dividend is negative
-        struct AbsoluteRemainderValue {
-            template <typename RemainderT, typename DividendT, typename DivisorT>
-            TypeOut operator()(RemainderT rem, DividendT num, DivisorT den) const {
-                if (rem < 0 && num < 0 && den > 0) rem += den;
-                return TypeOut{rem};
-            }
-        };
-
         // Ideally, these two specializations - one for integral types and one for non integral
         // types shouldn't be required, as std::fmod should promote integral types automatically
         // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
@@ -434,7 +424,8 @@ const char* operation =
             common_t xconv{x};
             common_t yconv{y};
             auto rem = xconv % yconv;
-            return AbsoluteRemainderValue<TypeOut>()(rem, xconv, yconv);
+            if (rem < 0) rem = (rem + yconv) % yconv;
+            return TypeOut{rem};
         }
 
         template <typename TypeOut,
@@ -446,7 +437,8 @@ const char* operation =
             common_t xconv{x};
             common_t yconv{y};
             auto rem = std::fmod(xconv, yconv);
-            return AbsoluteRemainderValue<TypeOut>()(rem, xconv, yconv);
+            if (rem < 0) rem = std::fmod(rem + yconv, yconv);
+            return TypeOut{rem};
         }
     };
 

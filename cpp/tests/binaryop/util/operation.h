@@ -213,7 +213,7 @@ struct PMod {
     CommonArgsT xconv{x};
     CommonArgsT yconv{y};
     auto rem = std::fmod(xconv, yconv);
-    if (rem < 0 && xconv < 0 && yconv > 0) rem += yconv;
+    if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return TypeOut{rem};
   }
 };

@@ -60,7 +60,7 @@ enum class binary_operator : int32_t {
 
   LOG_BASE,  ///< logarithm to the base
 
-  // If only the dividend is negative, this returns (dividend % divisor) + divisor
+  // If remainder is negative, this returns (remainder + divisor) % divisor
   // else, it returns (dividend % divisor)
   PMOD,  ///< positive modulo operator
 
