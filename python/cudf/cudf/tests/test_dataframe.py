@@ -3371,8 +3371,8 @@ def test_series_astype_null_cases():
 
     # string to other
     assert_eq(
-        gd.Series([1, 2, None, 3], dtype="int32"),
-        gd.Series(["1", "2", None, "3"]).astype("int32"),
+        gd.Series([1, 2, 3], dtype="int32"),
+        gd.Series(["1", "2", "3"]).astype("int32"),
     )
 
     assert_eq(
@@ -4148,8 +4148,9 @@ def test_df_astype_string_to_other(as_dtype):
     expect["foo"] = expect_data
     expect["bar"] = expect_data
 
-    got = gdf.astype(as_dtype, **kwargs)
-    assert_eq(expect, got)
+    # import pdb;pdb.set_trace()
+    got = gdf.dropna().astype(as_dtype, **kwargs)
+    assert_eq(expect.dropna(), got)
 
 
 @pytest.mark.parametrize(
