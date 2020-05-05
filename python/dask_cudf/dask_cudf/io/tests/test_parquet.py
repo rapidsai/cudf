@@ -285,7 +285,8 @@ def test_chunksize(tmpdir, chunksize, metadata):
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])
-def test_row_groups_per_part(tmpdir, row_groups):
+@pytest.mark.parametrize("index", [False, True])
+def test_row_groups_per_part(tmpdir, row_groups, index):
     nparts = 2
     df_size = 100
     row_group_size = 5
@@ -299,7 +300,9 @@ def test_row_groups_per_part(tmpdir, row_groups):
             "c": np.random.randint(1, 5, size=df_size),
             "index": np.arange(0, df_size),
         }
-    ).set_index("index")
+    )
+    if index:
+        df = df.set_index("index")
 
     ddf1 = dd.from_pandas(df, npartitions=nparts)
     ddf1.to_parquet(
@@ -307,13 +310,15 @@ def test_row_groups_per_part(tmpdir, row_groups):
         engine="pyarrow",
         row_group_size=row_group_size,
         write_metadata_file=True,
-        write_index=True,
+        write_index=index,
     )
 
     ddf2 = dask_cudf.read_parquet(
-        str(tmpdir), row_groups_per_part=row_groups, index="index"
+        str(tmpdir),
+        row_groups_per_part=row_groups,
+        index="index" if index else False,
     )
 
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
 
     assert ddf2.npartitions == npartitions_expected

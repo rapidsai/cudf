@@ -180,6 +180,10 @@ def read_parquet(
             "result in known divisions. Do not use `row_groups_per_part` "
             "if full support is needed."
         )
+        if kwargs.get("filters", None):
+            raise ValueError(
+                "Cannot use `filters` with `row_groups_per_part=True`."
+            )
         return parquet_reader(
             path,
             columns=columns,
