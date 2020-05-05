@@ -37,6 +37,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -866,14 +867,102 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 namespace cudf {
 namespace experimental {
 namespace detail {
+namespace {
 
+struct replace_nans_functor {
+  template <typename T, typename Replacement>
+  std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+    column_view const& input,
+    Replacement replacement,
+    bool replacement_nullable,
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream)
+  {
+    auto input_device_view = column_device_view::create(input);
+    size_type size         = input.size();
+
+    auto predicate = [dinput = *input_device_view] __device__(auto i) {
+      return dinput.is_null(i) or !std::isnan(dinput.element<T>(i));
+    };
+
+    if (input.has_nulls()) {
+      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
+      if (replacement_nullable) {
+        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
+        return copy_if_else<T>(input.type(),
+                               true,
+                               input_pair_iterator,
+                               input_pair_iterator + size,
+                               replacement_pair_iterator,
+                               predicate,
+                               mr,
+                               stream);
+      } else {
+        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
+        return copy_if_else<T>(input.type(),
+                               true,
+                               input_pair_iterator,
+                               input_pair_iterator + size,
+                               replacement_pair_iterator,
+                               predicate,
+                               mr,
+                               stream);
+      }
+    } else {
+      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
+      if (replacement_nullable) {
+        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
+        return copy_if_else<T>(input.type(),
+                               true,
+                               input_pair_iterator,
+                               input_pair_iterator + size,
+                               replacement_pair_iterator,
+                               predicate,
+                               mr,
+                               stream);
+      } else {
+        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
+        return copy_if_else<T>(input.type(),
+                               false,
+                               input_pair_iterator,
+                               input_pair_iterator + size,
+                               replacement_pair_iterator,
+                               predicate,
+                               mr,
+                               stream);
+      }
+    }
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
+    Args&&... args)
+  {
+    CUDF_FAIL("NAN is not supported in a Non-floating point type column");
+  }
+};
+
+}  // namespace
 std::unique_ptr<column> replace_nans(column_view const& input,
                                      column_view const& replacement,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto nan_mask = is_not_nan(input, rmm::mr::get_default_resource(), stream);
-  return copy_if_else(input, replacement, nan_mask->view(), mr, stream);
+  CUDF_EXPECTS(input.type() == replacement.type(),
+               "Input and replacement must be of the same type");
+
+  CUDF_EXPECTS(input.size() == replacement.size(),
+               "Input and replacement must be of the same size");
+
+  if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
+
+  return type_dispatcher(input.type(),
+                         replace_nans_functor{},
+                         input,
+                         *column_device_view::create(replacement),
+                         replacement.nullable(),
+                         mr,
+                         stream);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,
