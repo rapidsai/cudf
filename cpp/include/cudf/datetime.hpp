@@ -20,13 +20,21 @@
 
 #include <memory>
 
+/**
+ * @file datetime.hpp
+ * @brief DateTime column APIs.
+ */
+
 namespace cudf {
-//! `datetime` APIs
+/**
+ * @brief DateTime column APIs
+ * @defgroup datetime_apis DateTime column APIs
+ */
 namespace datetime {
 /**
- * @brief DateTime APIs
- * @ingroup column_apis
- * @addtogroup column_datetime DateTime
+ * @brief Extract APIs
+ * @ingroup datetime_apis
+ * @addtogroup datetime_extract Extract
  * @{
  */
 
@@ -148,6 +156,14 @@ std::unique_ptr<cudf::column> extract_minute(
 std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/** @} */  // end of group
+/**
+ * @brief Compute APIs
+ * @ingroup datetime_apis
+ * @addtogroup datetime_compute Compute
+ * @{
+ */
 
 /**
  * @brief  Computes the last day of the month in date time type and returns a TIMESTAMP_DAYS

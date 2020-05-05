@@ -26,8 +26,8 @@
 
 namespace cudf {
 /**
- * @brief Dictionary APIs
- * @defgroup dictionary_apis Dictionary APIs
+ * @brief Dictionary column APIs
+ * @defgroup dictionary_apis Dictionary column APIs
  */
 namespace dictionary {
 /**
