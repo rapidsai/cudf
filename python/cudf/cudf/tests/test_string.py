@@ -1840,19 +1840,18 @@ def test_string_str_decode_url(data):
         ["\n"],
         ["0.1", "-10.2", "10.876"],
         ["1", "-10.2", "10.876"],
-        # TODO: Enable following test after this issue
-        # is fixed: https://github.com/rapidsai/cudf/issues/5083
-        # ["+", "-"]
+        ["+", "-"],
         ["1++++", "--2"],
         ["++++1", "--2"],
     ],
 )
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
 @pytest.mark.parametrize(
     "dtype", ["int", "float", "int32", "float32", "int64"]
 )
-def test_string_typecast_error(data, dtype):
-    psr = pd.Series(data)
-    gsr = Series(data)
+def test_string_typecast_error(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
 
     try:
         expect = psr.astype(dtype=dtype)
