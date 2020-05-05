@@ -64,7 +64,7 @@ struct page_state_s {
   uint32_t str_len[NZ_BFRSZ];   // String length for plain encoding of strings
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes a 32-bit hash when given a byte stream and range.
  *
  * MurmurHash3_32 implementation from
@@ -78,7 +78,7 @@ struct page_state_s {
  * @param[in] seed An initialization value
  *
  * @return The hash value
- *---------------------------------------------------------------------------**/
+ **/
 __device__ uint32_t device_str2hash32(const char *key, size_t len, uint32_t seed = 33)
 {
   const uint8_t *p  = reinterpret_cast<const uint8_t *>(key);

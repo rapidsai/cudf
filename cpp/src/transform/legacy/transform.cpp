@@ -37,14 +37,15 @@
 
 namespace cudf {
 namespace transformation {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Computes output valid mask for op between a column and a scalar
  *
  * @param out_null_coun[out] number of nulls in output
  * @param valid_out preallocated output mask
  * @param valid_col input mask of column
  * @param num_values number of values in input mask valid_col
- *---------------------------------------------------------------------------**/
+ **/
 
 namespace jit {
 void unary_operation(gdf_column& output,
