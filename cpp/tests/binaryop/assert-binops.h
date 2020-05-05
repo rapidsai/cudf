@@ -31,17 +31,20 @@ namespace cudf {
 namespace test {
 namespace binop {
 
-// This comparator can be used to compare two values that are within a certain threshold.
+// This comparator can be used to compare two values that are within a max ULP error.
 // This is typically used to compare floating point values computed on CPU and GPU which is
 // expected to be *near* equal, or when computing large numbers can yield ULP errors
 template <typename TypeOut>
 struct NearEqualComparator {
-  double tolerance_;
+  double ulp_;
 
-  NearEqualComparator(double max_diff) : tolerance_(max_diff) {}
+  NearEqualComparator(double ulp) : ulp_(ulp) {}
+
   bool operator()(TypeOut const& lhs, TypeOut const& rhs) const
   {
-    return (std::fabs(lhs - rhs) < tolerance_);
+    return (std::fabs(lhs - rhs) <=
+              std::numeric_limits<TypeOut>::epsilon() * std::fabs(lhs + rhs) * ulp_ ||
+            std::fabs(lhs - rhs) < std::numeric_limits<TypeOut>::min());
   }
 };
 
