@@ -125,7 +125,7 @@ static void BM_concatenate_tables(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
-    auto result = cudf::experimental::concatenate(table_views);
+    auto result = cudf::concatenate(table_views);
   }
 
   state.SetBytesProcessed(state.iterations() * num_cols * num_rows * num_tables * sizeof(T));

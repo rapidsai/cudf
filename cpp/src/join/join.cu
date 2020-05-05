@@ -320,7 +320,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                                            joined_indices.first.end(),
                                                            nullify_out_of_bounds);
       common_table =
-        experimental::concatenate({common_from_right->view(), common_from_left->view()});
+        concatenate({common_from_right->view(), common_from_left->view()});
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
