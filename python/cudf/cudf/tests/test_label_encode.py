@@ -118,7 +118,8 @@ def test_label_encode_float_output():
 )
 def test_label_encode_dtype(ncats, cat_dtype):
     s = Series([str(i % ncats) for i in range(ncats + 1)])
-    encoded_col = s.label_encoding(cats=s.unique().astype(np.int64))
+    cats = s.unique().astype(s.dtype)
+    encoded_col = s.label_encoding(cats=cats)
     np.testing.assert_equal(encoded_col.dtype, cat_dtype)
 
 
