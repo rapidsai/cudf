@@ -23,11 +23,12 @@ from cudf._cuda.gpu cimport underlying_type_attribute as c_attr
 class CUDARuntimeError(RuntimeError):
 
     def __init__(self, cudaError_t status):
-        self.status = status
         cdef str name = cudaGetErrorName(status).decode()
         cdef str msg = cudaGetErrorString(status).decode()
         super(CUDARuntimeError, self).__init__(
             '%s: %s' % (name, msg))
+
+        self.status = status
 
     def __reduce__(self):
         return (type(self), (self.status,))
@@ -36,8 +37,6 @@ class CUDARuntimeError(RuntimeError):
 class CUDADriverError(RuntimeError):
 
     def __init__(self, CUresult status):
-        self.status = status
-
         cdef const char* name_cstr
         cdef CUresult name_status = cuGetErrorName(status, &name_cstr)
         if name_status != 0:
@@ -53,6 +52,8 @@ class CUDADriverError(RuntimeError):
 
         super(CUDADriverError, self).__init__(
             '%s: %s' % (name, msg))
+
+        self.status = status
 
     def __reduce__(self):
         return (type(self), (self.status,))
