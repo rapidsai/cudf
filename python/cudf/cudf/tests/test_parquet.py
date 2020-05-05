@@ -609,6 +609,18 @@ def test_parquet_writer_bytes_io(simple_gdf):
     assert_eq(cudf.read_parquet(output), cudf.concat([simple_gdf, simple_gdf]))
 
 
+def test_parquet_writer_host_buffer(tmpdir, simple_gdf):
+    buffer = cudf.io.HostBuffer()
+    simple_gdf.to_parquet(buffer)
+
+    assert_eq(cudf.read_parquet(buffer), simple_gdf)
+
+    gdf_fname = tmpdir.join("gdf.parquet")
+    with open(gdf_fname, "wb") as o:
+        o.write(buffer.read())
+    assert_eq(cudf.read_parquet(gdf_fname), simple_gdf)
+
+
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
 def test_parquet_write_partitioned(tmpdir_factory, cols):
     # Checks that write_to_dataset is wrapping to_parquet

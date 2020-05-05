@@ -13,3 +13,7 @@ from cudf.io.parquet import (
     read_parquet_metadata,
     write_to_dataset,
 )
+import cudf._lib.io.utils
+
+
+HostBuffer = cudf._lib.io.utils.HostBuffer
