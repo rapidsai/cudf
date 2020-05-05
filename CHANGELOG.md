@@ -142,6 +142,7 @@
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
+- PR #5093 Add `.cat.as_known` related test in `dask_cudf`
 
 ## Bug Fixes
 
