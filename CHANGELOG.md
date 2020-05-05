@@ -230,7 +230,7 @@
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
-- PR #5090 Fix loosing nulls while creating DataFrame from dictionary
+- PR #5090 Fix losing nulls while creating DataFrame from dictionary
 
 
 # cuDF 0.13.0 (31 Mar 2020)
