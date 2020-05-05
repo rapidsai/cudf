@@ -378,6 +378,7 @@ cdef extern from "cuda.h" nogil:
         cudaUUID_t  uuid
         int  warpSize
 
+    CUresult cuInit(unsigned int Flags)
     CUresult cuDeviceGetName(char* name, int length, int device)
 
     CUresult cuGetErrorName(CUresult error, const char** pStr)
