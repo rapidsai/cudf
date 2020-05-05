@@ -49,8 +49,8 @@ typedef uint64_t rowctx64_t;
 /**
  * Packed row context format
  *
- * Pack four rowctx32_t values, where each value represents the output row context
- * for one of four possible input contexts when parsing a character block.
+ * The 64-bit packed row context format represents the four possible output row context states
+ * from each of the four possible input row context states.
  * Each rowctx32_t value is truncated to 20-bit (limiting the max number of rows
  * to 18-bit) and concatenated to form a 80-bit value, whose upper 16 bits are
  * always zero (EOF input state implies a zero row count) and therefore
@@ -73,8 +73,8 @@ inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint3
 /**
  * @brief pack multiple row contexts together
  *
- * The 64-bit packed row context format represents the four possible output row context states
- * from each of the four possible input row context states.
+ * Pack four rowctx32_t values, where each value represents the output row context
+ * for one of four possible input contexts when parsing a character block.
  * Each output state consists of the 2-bit row context state along with a 18-bit row count
  * value (row count is assumed to be a local count that fits in 18-bit)
  * The four 20-bit values are concatenated to form a 80-bit value, truncated to 64-bit
@@ -83,9 +83,9 @@ inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint3
  * states are included as parameters, and the EOF->EOF state transition is hardcoded)
  *
  **/
-inline __host__ __device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0,
-                                                             rowctx32_t ctx1,
-                                                             rowctx32_t ctx2)
+constexpr __host__ __device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0,
+                                                                rowctx32_t ctx1,
+                                                                rowctx32_t ctx2)
 {
   return (ctx0) | (static_cast<uint64_t>(ctx1) << 20) | (static_cast<uint64_t>(ctx2) << 40) |
          (static_cast<uint64_t>(ROW_CTX_EOF) << 60);

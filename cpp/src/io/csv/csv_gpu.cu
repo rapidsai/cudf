@@ -613,24 +613,26 @@ constexpr __device__ uint32_t make_char_context(uint32_t id0,
  * block's row context (the current block contains 32-pos characters)
  *
  * @param ctx Current block context and new rows bitmaps
- * @param ctx_short state transitions associated with new character
+ * @param char_ctx state transitions associated with new character
  * @param pos Position within the current 32-character block
  *
  * NOTE: This is probably the most performance-critical piece of the row gathering kernel.
- * The ctx_short value should be created via make_char_context, and its value should
+ * The char_ctx value should be created via make_char_context, and its value should
  * have been evaluated at compile-time.
  *
  **/
-inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, uint32_t pos)
+inline __device__ void merge_char_context(uint4 &ctx, uint32_t char_ctx, uint32_t pos)
 {
   uint32_t id0 = (ctx.w >> 0) & 3;
   uint32_t id1 = (ctx.w >> 2) & 3;
   uint32_t id2 = (ctx.w >> 4) & 3;
-  ctx.x |= ((ctx_short >> id0) & 1) << pos;
-  ctx.y |= ((ctx_short >> id1) & 1) << pos;
-  ctx.z |= ((ctx_short >> id2) & 1) << pos;
-  ctx.w = ((ctx_short >> (8 + id0 * 2)) & 0x03) | ((ctx_short >> (6 + id1 * 2)) & 0x0c) |
-          ((ctx_short >> (4 + id2 * 2)) & 0x30) | (ROW_CTX_EOF << 6);
+  // Set the newrow bit in the bitmap at the corresponding position
+  ctx.x |= ((char_ctx >> id0) & 1) << pos;
+  ctx.y |= ((char_ctx >> id1) & 1) << pos;
+  ctx.z |= ((char_ctx >> id2) & 1) << pos;
+  // Update the output context ids
+  ctx.w = ((char_ctx >> (8 + id0 * 2)) & 0x03) | ((char_ctx >> (6 + id1 * 2)) & 0x0c) |
+          ((char_ctx >> (4 + id2 * 2)) & 0x30) | (ROW_CTX_EOF << 6);
 }
 
 /*
@@ -850,7 +852,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
       }
     }
     // Merge with current context, keeping track of where new rows occur
-    merge_short_row_context(ctx_map, ctx, pos);
+    merge_char_context(ctx_map, ctx, pos);
   }
 
   // Eliminate rows that start before byte_range_start
