@@ -41,7 +41,7 @@ namespace gpu {
 /// Block dimension for dtype detection and conversion kernels
 constexpr uint32_t csvparse_block_dim = 128;
 
-/**
+/*
  * @brief Checks whether the given character is a whitespace character.
  *
  * @param ch The character to check
@@ -50,7 +50,7 @@ constexpr uint32_t csvparse_block_dim = 128;
  */
 __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' '; }
 
-/**
+/*
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
  *
@@ -72,7 +72,7 @@ __device__ __inline__ void trim_field_start_end(const char *data,
   if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
 }
 
-/**
+/*
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
@@ -93,7 +93,7 @@ __device__ __inline__ bool is_digit(char c, bool is_hex = false)
   return false;
 }
 
-/**
+/*
  * @brief Checks whether the given character counters indicate a potentially
  * valid date and/or time field.
  *
@@ -130,7 +130,7 @@ __device__ __inline__ bool is_datetime(
   return false;
 }
 
-/**
+/*
  * @brief Returns true if the counters indicate a potentially valid float.
  * False positives are possible because positions are not taken into account.
  * For example, field "e.123-" would match the pattern.
@@ -165,7 +165,7 @@ __device__ __inline__ bool is_floatingpoint(
   return true;
 }
 
-/**
+/*
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed in one row/record at a time, so the number of total
@@ -180,13 +180,13 @@ __device__ __inline__ bool is_floatingpoint(
  * @param d_columnData The count for each column data type
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
-  dataTypeDetection(const char *raw_csv,
-                    const ParseOptions opts,
-                    size_t num_records,
-                    int num_columns,
-                    column_parse::flags *flags,
-                    const uint64_t *recStart,
-                    column_parse::stats *d_columnData)
+  data_type_detection(const char *raw_csv,
+                      const ParseOptions opts,
+                      size_t num_records,
+                      int num_columns,
+                      column_parse::flags *flags,
+                      const uint64_t *recStart,
+                      column_parse::stats *d_columnData)
 {
   // ThreadIds range per block, so also need the blockId
   // This is entry into the fields; threadId is an element within `num_records`
@@ -495,15 +495,15 @@ struct decode_op {
  * @param[out] num_valid The numbers of valid fields in columns
  **/
 __global__ void __launch_bounds__(csvparse_block_dim)
-  convertCsvToGdf(const char *raw_csv,
-                  const ParseOptions opts,
-                  size_t num_records,
-                  size_t num_columns,
-                  const column_parse::flags *flags,
-                  const uint64_t *recStart,
-                  cudf::data_type *dtype,
-                  void **data,
-                  cudf::bitmask_type **valid)
+  convert_csv_to_cudf(const char *raw_csv,
+                      const ParseOptions opts,
+                      size_t num_records,
+                      size_t num_columns,
+                      const column_parse::flags *flags,
+                      const uint64_t *recStart,
+                      cudf::data_type *dtype,
+                      void **data,
+                      cudf::bitmask_type **valid)
 {
   // thread IDs range per block, so also need the block id
   long rec_id =
@@ -577,7 +577,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
   }
 }
 
-/**
+/*
  * @brief Merge two packed row contexts (each corresponding to a block of characters)
  * and return the packed row context corresponding to the merged character block
  **/
@@ -593,7 +593,7 @@ inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
                            get_row_context(second_ctx, id2));
 }
 
-/**
+/*
  * @brief Per-character context:
  * 1-bit count (0 or 1) per context in the lower 4 bits
  * 2-bit output context id per input context in bits 8..15
@@ -609,7 +609,7 @@ constexpr __device__ uint32_t make_char_context(uint32_t id0,
          (c2 << 2);
 }
 
-/**
+/*
  * @brief Merge a 1-character context to keep track of bitmasks where new rows occur
  * Merges a single-character "block" row context at position pos with the current
  * block's row context (the current block contains 32-pos characters)
@@ -635,7 +635,7 @@ inline __device__ void merge_short_row_context(uint4 &ctx, uint32_t ctx_short, u
           ((ctx_short >> (4 + id2 * 2)) & 0x30) | (ROW_CTX_EOF << 6);
 }
 
-/**
+/*
  * Convert the context-with-row-bitmaps version to a packed row context
  **/
 inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
@@ -645,7 +645,7 @@ inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
                            make_row_context(__popc(ctx_map.z), (ctx_map.w >> 4) & 3));
 }
 
-/**
+/*
  * Selects the row bitmap corresponding to the given parser state
  **/
 inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
@@ -655,7 +655,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
            : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
 }
 
-/**
+/*
  * @brief 512-wide row context merge transform
  *
  * Repeatingly merge row context blocks, keeping track of each merge operation
@@ -708,7 +708,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
 #undef CTX_MERGE
 }
 
-/**
+/*
  * @brief 512-wide row context inverse merge transform
  *
  * Walks the context tree starting from the root node (index 1) using
@@ -960,7 +960,7 @@ cudaError_t __host__ DetectColumnTypes(const char *data,
   const int blockSize = csvparse_block_dim;
   const int gridSize  = (num_rows + blockSize - 1) / blockSize;
 
-  dataTypeDetection<<<gridSize, blockSize, 0, stream>>>(
+  data_type_detection<<<gridSize, blockSize, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, stats);
 
   return cudaSuccess;
@@ -981,7 +981,7 @@ cudaError_t __host__ DecodeRowColumnData(const char *data,
   const int blockSize = csvparse_block_dim;
   const int gridSize  = (num_rows + blockSize - 1) / blockSize;
 
-  convertCsvToGdf<<<gridSize, blockSize, 0, stream>>>(
+  convert_csv_to_cudf<<<gridSize, blockSize, 0, stream>>>(
     data, options, num_rows, num_columns, flags, row_starts, dtypes, columns, valids);
 
   return cudaSuccess;
