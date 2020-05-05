@@ -323,8 +323,8 @@ std::unique_ptr<experimental::table> construct_join_output_df(
                                                            nullify_out_of_bounds,
                                                            rmm::mr::get_default_resource(),
                                                            stream);
-      common_table =
-        cudf::detail::concatenate({common_from_right->view(), common_from_left->view()}, mr, stream);
+      common_table           = cudf::detail::concatenate(
+        {common_from_right->view(), common_from_left->view()}, mr, stream);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {

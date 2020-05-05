@@ -338,8 +338,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
 }
 
 std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
+                                                 rmm::mr::device_memory_resource* mr,
+                                                 cudaStream_t stream)
 {
   if (tables_to_concat.size() == 0) { return std::make_unique<experimental::table>(); }
 
@@ -394,7 +394,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
 }
 
 std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                   rmm::mr::device_memory_resource* mr)
+                                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(tables_to_concat, mr, 0);

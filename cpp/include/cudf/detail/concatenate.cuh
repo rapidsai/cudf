@@ -25,8 +25,9 @@
 namespace cudf {
 namespace detail {
 /**
- * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,rmm::mr::device_memory_resource*)
- * 
+ * @copydoc cudf::concatenate_masks(std::vector<column_view>
+ * const&,rmm::mr::device_memory_resource*)
+ *
  * @param stream stream on which all memory allocations and copies will be performed
  */
 void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
@@ -37,7 +38,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
 
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
- * 
+ *
  * @param stream stream on which all memory allocations and copies will be performed
  */
 void concatenate_masks(std::vector<column_view> const& views,
