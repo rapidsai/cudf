@@ -128,6 +128,7 @@
 - PR #4994 clang-format "cpp/tests" directory
 - PR #4993 Remove Java memory prediction code
 - PR #4985 Add null_count to Python Column ctors and use already computed null_count when possible
+- PR #4998 Clean up dispatch of aggregation methods in result_cache
 - PR #5000 Performance improvements in `isin` and dask_cudf backend
 - PR #5002 Fix Column.__reduce__ to accept `null_count`
 - PR #5006 Add Java bindings for strip, lstrip and rstrip
@@ -139,6 +140,9 @@
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5049 Add grouping of libcudf apis into doxygen modules
+- PR #5085 Print more precise numerical strings in unit tests
+- PR #5028 Add Docker 19 support to local gpuci build
+- PR #5093 Add `.cat.as_known` related test in `dask_cudf`
 
 ## Bug Fixes
 
@@ -190,6 +194,7 @@
 - PR #4826 Move memory resource from RmmTestEnvironment to the custom gtest main() scope
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
+- PR #4854 Fix several cases of incorrect downcasting of operands in binops
 - PR #4834 Fix bug in transform in handling single line UDFs
 - PR #4857 Change JIT cache default directory to $HOME/.cudf
 - PR #4807 Fix `categories` duplication in `dask_cudf`
@@ -221,6 +226,7 @@
 - PR #4977 Fix compilation of cuDF benchmarks with build.sh
 - PR #5018 Fix crash when JIT cache dir inaccessible. Fix inter version cache clash for custom cache path.
 - PR #5005 Fix CSV reader error when only one of the row selection parameters is set
+- PR #5022 Add timestamp header to transform
 - PR #5021 Fix bug with unsigned right shift and scalar lhs
 - PR #5020 Fix `conda install pre_commit` not found when setting up dev environment
 - PR #5030 Fix Groupby sort=True
@@ -231,7 +237,7 @@
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
-
+- PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 
 # cuDF 0.13.0 (31 Mar 2020)
 

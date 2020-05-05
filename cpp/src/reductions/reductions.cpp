@@ -88,7 +88,7 @@ struct reduce_dispatch_functor {
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
-          detail::unique_count(col, nunique_agg->null_handling, nan_policy::NAN_IS_VALID, stream),
+          detail::unique_count(col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
           stream,
           mr);
       } break;
