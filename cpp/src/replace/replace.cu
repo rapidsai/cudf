@@ -873,7 +873,7 @@ struct replace_nans_functor {
   template <typename T, typename Replacement>
   std::enable_if_t<std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
     column_view const& input,
-    Replacement replacement,
+    Replacement const& replacement,
     bool replacement_nullable,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
@@ -970,8 +970,13 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto nan_mask = is_not_nan(input, rmm::mr::get_default_resource(), stream);
-  return copy_if_else(input, replacement, nan_mask->view(), mr, stream);
+  CUDF_EXPECTS(input.type() == replacement.type(),
+               "Input and replacement must be of the same type");
+
+  if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
+
+  return type_dispatcher(
+    input.type(), replace_nans_functor{}, input, replacement, true, mr, stream);
 }
 
 }  // namespace detail
