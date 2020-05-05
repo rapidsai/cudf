@@ -234,6 +234,7 @@
 - PR #5040 Fix `make_scalar_iterator()` and `make_pair_iterator(scalar)` to not copy values to host
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5060 Fix unsigned char limits issue in JIT by updating Jitify
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
@@ -241,6 +242,7 @@
 - PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
 
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+
 
 # cuDF 0.13.0 (31 Mar 2020)
 
