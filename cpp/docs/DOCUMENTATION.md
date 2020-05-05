@@ -43,7 +43,14 @@ There are almost 200 commands (also called tags in the document) that doxygen re
 
 The doxygen process can be customized using the many, many configuration options in the [Doxyfile](../doxygen/Doxyfile).
 
-TODO - list some of the custom options
+Here are some of the custom options in the Doxyfile.
+| Option | Setting | Description |
+| ------ | ------- | ----------- |
+| PROJECT_NAME | libcudf | Title used on the main page |
+| PROJECT_NUMBER | 0.14 | Version number |
+| EXTENSION_MAPPING | cu=C++ cuh=C++ | Process `cu` and `cuh` as C++ |
+| INPUT | main_page.md regex.md unicode.md ../src ../include | Embedded markdown files and source code directories to process |
+| FILE_PATTERNS | *.cpp *.hpp *.h *.c *.cu *.cuh | File extensions to process |
 
 ## Block Comments
 
@@ -66,23 +73,23 @@ Use `@` to prefix doxygen commands (e.g. `@brief`, `@code`, etc.)
 
 ## Markdown
 
-The doxygen tool supports a limited set of markdown format in the comment block including links, tables, lists, etc. 
+The doxygen tool supports a limited set of markdown format in the comment block including links, tables, lists, etc.
 
 In some cases a trade-off may be required for readability in the source text file versus the readability in the doxygen formatted web pages.
 
 For example, there are some limitations on readability with '%' character and pipe character '|' within a table.
 TODO: show examples here
 
-Also, try to avoid using direct html tags. Although doxygen supports markdown and markdown supports html, the html support for doxygen's markdown is also limited.
+Also, try to avoid using direct html tags. Although doxygen supports markdown and markdown supports html tags, the html support for doxygen's markdown is also limited.
 
 ### Including markdown file
 
-TODO: describe including markdown file with @include or in Doxyfile
+TODO: describe including markdown file with `@include` or in Doxyfile
 
 ## The Example
 
 The following example will cover most of the doxygen block comment and tag styles
-for documenting code in libcudf.
+for documenting C++ code in libcudf.
 
 ```c++
 /**
@@ -180,25 +187,58 @@ enum class example_enum {
 
 ## Descriptions
 
-TODO
+The comment description should clearly define how the output(s) are
+created from any inputs. 
+Don't forget to include how nulls are handled.
+Also, try to include a short example if possible.
+If you wish to use pseudo-code in your example, use the following:
+
+```c++
+/**
+ * Sometimes pseudo-code is clearer.
+ * @code{.pseudo}
+ * s = int column of [ 1, 2, null, 4 ]
+ * r = fill( s, [1, 2], 0 )
+ * r is now [ 1, 0, 0, 4 ]
+ * @endcode
+ */
+```
 
 ### brief
 
-TODO
+The `@brief` text should be a short, one sentence description. Doxygen does not provide much space to show this text. Always follow the `@brief` line with a blank comment line.
+
+The longer description is the remainder of the comment text that is not tagged as
+a doxygen command.
 
 ### copydoc
 
-TODO
+Documentation for declarations in headers is expected to be clear and complete. There is no reason to duplicate the comment block for a function definition.
 
-### param/tparam/return/throw
+TODO: show example
 
-TODO
+Also, this is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
+
+TODO: show example
+
+Note, you must include the whole signature of the function so that doxygen will be able to locate it.
+
+### Function parameters (throw/tparam/param/return)
+
+The following tags normally appear near the end of comment block in the following order:
+
+| Command | Description |
+| ------- | ----------- |
+| @throw | Include the name of the exception without tick marks |
+| @tparam | Template parameter |
+| @param | Function parameter names must match. Also include `[in]`, `[out]` or `[in|out]` if it is not clear from the declaration and the name |
+| @return | Short description of object returned |
 
 ## Inline Examples
 
-It is usually helpful to include an source code example inside your comment block when documenting a function or other declaration.
+It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
 
-Use the `@code / @endcode` pair to include inline examples.
+Use the `@code/@endcode` pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
 By default, the @code tag will use syntax highlighting based on the source code where it was found.
