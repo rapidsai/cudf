@@ -36,7 +36,6 @@ namespace experimental {
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
  * `input` and `replacement` must be of the same type and size.
- * must be of the same type and same size as the first.
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement A cudf::column whose values will replace null values in input
@@ -57,8 +56,6 @@ std::unique_ptr<column> replace_nulls(
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
  * `input` and `replacement` must have the same type.
- * a cudf::scalar of the same data type as the column.
- *
  *
  * @param[in] input A column whose null values will be replaced
  * @param[in] replacement Scalar used to replace null values in `input`.
