@@ -46,7 +46,7 @@ def parse_args():
     argparser.add_argument("-inplace", default=False, action="store_true",
                            help="Replace the source files itself.")
     argparser.add_argument("-regex", type=str,
-                           default=r"[.](cu|cuh|h|hpp|cpp)$",
+                           default=r"[.](cu|cuh|h|hpp|cpp|inl)$",
                            help="Regex string to filter in sources")
     argparser.add_argument("-ignore", type=str, default=r"cannylab/bh[.]cu$",
                            help="Regex used to ignore files from matched list")
