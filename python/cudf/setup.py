@@ -39,7 +39,7 @@ except Exception:
     nthreads = 0
 
 ARROW_HOME = os.environ.get("ARROW_HOME")
-DLPACK_HOME = os.environ.get("DLPACK_HOME")
+DLPACK_INCLUDE = os.environ.get("DLPACK_INCLUDE")
 
 extensions = [
     Extension(
@@ -53,7 +53,7 @@ extensions = [
             "../../thirdparty/libcudacxx/include",
             ARROW_HOME + "/include",
             "/include",
-            DLPACK_HOME + "/include",
+            DLPACK_INCLUDE,
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
             cuda_include_dir,
