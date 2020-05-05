@@ -17,6 +17,7 @@
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 - PR #5036 Add positive remainder binary op functionality
+- PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
 
 ## Improvements
@@ -142,9 +143,11 @@
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
+- PR #5093 Add `.cat.as_known` related test in `dask_cudf`
 
 ## Bug Fixes
 
+- PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
@@ -233,10 +236,12 @@
 - PR #5040 Fix `make_scalar_iterator()` and `make_pair_iterator(scalar)` to not copy values to host
 - PR #5041 Fix invalid java test for shift right unsigned
 - PR #5043 Remove invalid examples page libcudf doxygen
+- PR #5060 Fix unsigned char limits issue in JIT by updating Jitify
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+
 
 # cuDF 0.13.0 (31 Mar 2020)
 
