@@ -759,7 +759,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
   auto const& group_labels{helper.group_labels()};
@@ -939,7 +939,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   CUDF_EXPECTS((min_periods > 0), "min_periods must be positive");
 
   using sort_groupby_helper = cudf::experimental::groupby::detail::sort::sort_groupby_helper;
-  sort_groupby_helper helper{group_keys, cudf::include_nulls::YES, cudf::sorted::YES};
+  sort_groupby_helper helper{group_keys, cudf::null_policy::INCLUDE, cudf::sorted::YES};
 
   auto group_offsets{helper.group_offsets()};
   auto const& group_labels{helper.group_labels()};

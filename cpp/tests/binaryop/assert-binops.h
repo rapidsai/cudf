@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -30,6 +30,21 @@
 namespace cudf {
 namespace test {
 namespace binop {
+
+// This comparator can be used to compare two values that are within a certain threshold.
+// This is typically used to compare floating point values computed on CPU and GPU which is
+// expected to be *near* equal, or when computing large numbers can yield ULP errors
+template <typename TypeOut>
+struct NearEqualComparator {
+  double tolerance_;
+
+  NearEqualComparator(double max_diff) : tolerance_(max_diff) {}
+  bool operator()(TypeOut const& lhs, TypeOut const& rhs) const
+  {
+    return (std::fabs(lhs - rhs) < tolerance_);
+  }
+};
+
 template <typename TypeOut,
           typename TypeLhs,
           typename TypeRhs,
@@ -75,7 +90,7 @@ void ASSERT_BINOP(column_view const& out,
       }
     }
   }
-}
+}  // namespace binop
 
 template <typename TypeOut,
           typename TypeLhs,
@@ -122,7 +137,7 @@ void ASSERT_BINOP(column_view const& out,
       }
     }
   }
-}
+}  // namespace test
 
 template <typename TypeOut,
           typename TypeLhs,
