@@ -578,8 +578,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 }
 
 /**
- * @brief merge two packed row contexts (each corresponding to a block of characters)
- * and returns the packed row context corresponding to the merged character block
+ * @brief Merge two packed row contexts (each corresponding to a block of characters)
+ * and return the packed row context corresponding to the merged character block
  **/
 inline __device__ packed_rowctx_t merge_row_contexts(packed_rowctx_t first_ctx,
                                                      packed_rowctx_t second_ctx)
