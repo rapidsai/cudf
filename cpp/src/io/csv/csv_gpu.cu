@@ -804,7 +804,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
   size_t block_pos =
     (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
   const char *cur = start + block_pos;
-  
+
   // Initial state is neutral context (no state transitions), zero rows
   uint4 ctx_map = {
     .x = 0,
