@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import cudf._lib.io.utils
 from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.dlpack import from_dlpack
@@ -13,7 +14,5 @@ from cudf.io.parquet import (
     read_parquet_metadata,
     write_to_dataset,
 )
-import cudf._lib.io.utils
-
 
 HostBuffer = cudf._lib.io.utils.HostBuffer
