@@ -19,5 +19,9 @@ repos:
                 name: flake8-cython
                 args: ["--config=python/cudf/.flake8.cython"]
                 types: [cython]
+      - repo: git://github.com/doublify/pre-commit-clang-format
+        rev: master
+        hooks:
+              -   id: clang-format
 default_language_version:
       python: python3
