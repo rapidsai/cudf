@@ -37,6 +37,10 @@ class CUDARuntimeError(RuntimeError):
 class CUDADriverError(RuntimeError):
 
     def __init__(self, CUresult status):
+        cdef CUresult init_status = cuInit(0)
+        if init_status != 0:
+            raise CUDADriverError(init_status)
+
         cdef const char* name_cstr
         cdef CUresult name_status = cuGetErrorName(status, &name_cstr)
         if name_status != 0:
@@ -368,12 +372,17 @@ def deviceGetName(int device):
     and status code.
     """
 
+    cdef CUresult init_status = cuInit(0)
+    if init_status != 0:
+        raise CUDADriverError(init_status)
+
     cdef char[256] device_name
-    cdef CUresult status = cuDeviceGetName(
+    cdef CUresult device_name_status = cuDeviceGetName(
         device_name,
         sizeof(device_name),
         device
     )
-    if status != 0:
-        raise CUDADriverError(status)
+    if device_name_status != 0:
+        raise CUDADriverError(device_name_status)
+
     return device_name.decode()
