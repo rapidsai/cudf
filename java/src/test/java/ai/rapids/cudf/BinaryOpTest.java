@@ -1102,14 +1102,24 @@ public class BinaryOpTest extends CudfTestBase {
 
   @Test
   public void testArctan2() {
-    Double[] xValues = TestUtils.getDoubles(20342309423423L, 50, false);
-    Double[] yValues = TestUtils.getDoubles(33244345234423L, 50, false);
-    try (ColumnVector y = ColumnVector.fromBoxedDoubles(yValues);
-         ColumnVector x = ColumnVector.fromBoxedDoubles(xValues);
-         ColumnVector result = y.arctan2(x);
-         ColumnVector expected = ColumnVector.fromDoubles(IntStream.range(0,xValues.length)
-             .mapToDouble(n -> Math.atan2(yValues[n], xValues[n])).toArray())) {
-      assertColumnsAreEqual(expected, result);
+    Integer[] xInt = {7, 1, 2, 10};
+    Integer[] yInt = {4, 10, 8, 2};
+
+    Double[] xDouble = TestUtils.getDoubles(98234234523432423L, 50, false);
+    Double[] yDouble = TestUtils.getDoubles(23623274238423532L, 50, false);
+
+    try (ColumnVector yDoubleCV = ColumnVector.fromBoxedDoubles(yDouble);
+         ColumnVector xDoubleCV = ColumnVector.fromBoxedDoubles(xDouble);
+         ColumnVector yIntCV = ColumnVector.fromBoxedInts(yInt);
+         ColumnVector xIntCV = ColumnVector.fromBoxedInts(xInt);
+         ColumnVector resultDouble = yDoubleCV.arctan2(xDoubleCV);
+         ColumnVector resultInt = yIntCV.arctan2(xIntCV, DType.FLOAT64);
+         ColumnVector expectedInt = ColumnVector.fromDoubles(IntStream.range(0,xInt.length)
+             .mapToDouble(n -> Math.atan2(yInt[n], xInt[n])).toArray());
+         ColumnVector expectedDouble = ColumnVector.fromDoubles(IntStream.range(0,xDouble.length)
+             .mapToDouble(n -> Math.atan2(yDouble[n], xDouble[n])).toArray())) {
+      assertColumnsAreEqual(expectedInt, resultInt);
+      assertColumnsAreEqual(expectedDouble, resultDouble);
     }
   }
 }
