@@ -4148,7 +4148,6 @@ def test_df_astype_string_to_other(as_dtype):
     expect["foo"] = expect_data
     expect["bar"] = expect_data
 
-    # import pdb;pdb.set_trace()
     got = gdf.dropna().astype(as_dtype, **kwargs)
     assert_eq(expect.dropna(), got)
 
