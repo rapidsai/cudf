@@ -102,7 +102,9 @@ const int32_t* reprog::starts_data() const { return _startinst_ids.data(); }
 
 int32_t reprog::starts_count() const { return static_cast<int>(_startinst_ids.size()); }
 
-// Converts pattern into regex classes
+/**
+ * @brief Converts pattern into regex classes
+ */
 class regex_parser {
   reprog& m_prog;
   const char32_t* pattern;
@@ -458,6 +460,9 @@ class regex_parser {
   }
 
  public:
+  /**
+   * @brief Single parsed pattern element.
+   */
   struct Item {
     int t;
     union {

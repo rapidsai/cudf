@@ -1,10 +1,15 @@
+import cupy as cp
 import numpy as np
+import pandas as pd
+import pyarrow as pa
 
+from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype
+from cudf.utils.dtypes import is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -30,7 +35,7 @@ def _nonempty_index(idx):
         categories = idx._data[key[0]].categories
         codes = [0, 0]
         ordered = idx._data[key[0]].ordered
-        values = column.build_categorical_column(
+        values = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
         return cudf.core.index.CategoricalIndex(values, name=idx.name)
@@ -50,24 +55,35 @@ def _nonempty_index(idx):
     )
 
 
-@meta_nonempty.register(cudf.Series)
-def _nonempty_series(s, idx=None):
-    if idx is None:
-        idx = _nonempty_index(s.index)
-    dtype = s.dtype
-    if is_categorical_dtype(dtype):
+def _get_non_empty_data(s):
+    if isinstance(s._column, cudf.core.column.CategoricalColumn):
         categories = (
-            s._column.categories if len(s._column.categories) else ["a"]
+            s._column.categories
+            if len(s._column.categories)
+            else [UNKNOWN_CATEGORIES]
         )
-        codes = [0, 0]
+        codes = cp.zeros(2, dtype="int32")
         ordered = s._column.ordered
         data = column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
-    elif is_string_dtype(dtype):
-        data = ["cat", "dog"]
+    elif is_string_dtype(s.dtype):
+        data = pa.array(["cat", "dog"])
     else:
-        data = np.arange(start=0, stop=2, dtype=dtype)
+        if pd.api.types.is_numeric_dtype(s.dtype):
+            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+        else:
+            data = column.as_column(
+                cp.arange(start=0, stop=2, dtype="int64")
+            ).astype(s.dtype)
+    return data
+
+
+@meta_nonempty.register(cudf.Series)
+def _nonempty_series(s, idx=None):
+    if idx is None:
+        idx = _nonempty_index(s.index)
+    data = _get_non_empty_data(s)
 
     return cudf.Series(data, name=s.name, index=idx)
 
@@ -75,16 +91,15 @@ def _nonempty_series(s, idx=None):
 @meta_nonempty.register(cudf.DataFrame)
 def meta_nonempty_cudf(x):
     idx = meta_nonempty(x.index)
-    dt_s_dict = dict()
-    data = dict()
-    for i, c in enumerate(x.columns):
-        series = x[c]
-        dt = str(series.dtype)
-        if dt not in dt_s_dict:
-            dt_s_dict[dt] = _nonempty_series(series, idx=idx)
-        data[i] = dt_s_dict[dt]
-    res = cudf.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
-    res.columns = x.columns
+    columns_with_dtype = dict()
+    res = cudf.DataFrame(index=idx)
+    for col in x._data.names:
+        dtype = str(x._data[col].dtype)
+        if dtype not in columns_with_dtype:
+            columns_with_dtype[dtype] = cudf.core.column.as_column(
+                _get_non_empty_data(x[col])
+            )
+        res._data[col] = columns_with_dtype[dtype]
     return res
 
 
@@ -110,6 +125,11 @@ def concat_cudf(
 ):
     assert join == "outer"
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
+
+
+@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def categorical_dtype_cudf(categories=None, ordered=None):
+    return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
 try:

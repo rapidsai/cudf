@@ -21,6 +21,13 @@
 namespace cudf {
 namespace strings {
 /**
+ * @ingroup strings_apis
+ * @addtogroup strings_case Case
+ * APIs to convert the upper/lower case of strings characters.
+ * @{
+ */
+
+/**
  * @brief Converts a column of strings to lower case.
  *
  * Only upper case alphabetical characters are converted. All other characters are copied.
@@ -72,5 +79,6 @@ std::unique_ptr<column> swapcase(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

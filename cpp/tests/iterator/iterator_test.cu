@@ -135,7 +135,10 @@ struct IteratorTest : public cudf::test::BaseFixture {
       thrust::device,
       thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
       thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
-      [] __device__(auto it) { return (thrust::get<0>(it)) == T_output(thrust::get<1>(it)); },
+      [] __device__(auto it) {
+        return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) ==
+               T_output(thrust::get<1>(it));
+      },
       true,
       thrust::logical_and<bool>());
 #ifndef NDEBUG
@@ -196,10 +199,10 @@ TYPED_TEST(IteratorTest, non_null_iterator)
   thrust::host_vector<T> replaced_array(host_array);
 
   // driven by iterator as a pointer of device array.
-  // FIXME: compilation error for cudf::experimental::bool8
-  // auto it_dev = dev_array.begin();
-  // this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
-  // this->iterator_test_cub(expected_value, it_dev, dev_array.size());
+  auto it_dev      = dev_array.begin();
+  T expected_value = *std::min_element(replaced_array.begin(), replaced_array.end());
+  this->iterator_test_thrust(replaced_array, it_dev, dev_array.size());
+  this->iterator_test_cub(expected_value, it_dev, dev_array.size());
 
   // test column input
   cudf::test::fixed_width_column_wrapper<T> w_col(host_array.begin(), host_array.end());
@@ -649,6 +652,40 @@ TYPED_TEST(IteratorTest, scalar_iterator)
   // GPU test
   auto it_dev = cudf::experimental::detail::make_scalar_iterator<T>(*s);
   this->iterator_test_thrust(host_values, it_dev, host_values.size());
+
+  auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
+  this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());
+}
+
+TEST_F(StringIteratorTest, string_scalar_iterator)
+{
+  using T = cudf::string_view;
+  // T init = T{"", 0};
+  std::string zero("zero");
+  // the char data has to be in GPU
+  thrust::device_vector<char> initmsg(zero.begin(), zero.end());
+  T init = T{initmsg.data().get(), int(initmsg.size())};
+
+  // data array
+  std::vector<std::string> host_values(100, zero);
+
+  thrust::device_vector<char> dev_chars;
+  thrust::host_vector<T> all_array(host_values.size());
+  std::tie(dev_chars, all_array) = strings_to_string_views(host_values);
+
+  // calculate the expected value by CPU.
+  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  std::transform(all_array.begin(), all_array.end(), value_and_validity.begin(), [](auto v) {
+    return thrust::pair<T, bool>{v, true};
+  });
+
+  // create a scalar
+  using ScalarType = cudf::experimental::scalar_type_t<T>;
+  std::unique_ptr<cudf::scalar> s(new ScalarType{zero, true});
+
+  // GPU test
+  auto it_dev = cudf::experimental::detail::make_scalar_iterator<T>(*s);
+  this->iterator_test_thrust(all_array, it_dev, host_values.size());
 
   auto it_pair_dev = cudf::experimental::detail::make_pair_iterator<T>(*s);
   this->iterator_test_thrust(value_and_validity, it_pair_dev, host_values.size());

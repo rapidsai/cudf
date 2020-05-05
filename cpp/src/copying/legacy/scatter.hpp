@@ -63,7 +63,7 @@ namespace detail {
  * i.e., setting both to `true` is undefined.
  * @param allow_negative_indices Interpret each negative index `i` in the
  * scattermap as the positive index `i+num_destination_rows`.
- *---------------------------------------------------------------------------**/
+ **/
 void scatter(table const* source_table,
              gdf_column const& scatter_map,
              table* destination_table,

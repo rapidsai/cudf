@@ -43,6 +43,17 @@ public class ColumnVectorTest extends CudfTestBase {
 
   public static final double PERCENTAGE = 0.0001;
 
+  // IEEE 754 NaN values
+  static final float POSITIVE_FLOAT_NAN_LOWER_RANGE = Float.intBitsToFloat(0x7f800001);
+  static final float POSITIVE_FLOAT_NAN_UPPER_RANGE = Float.intBitsToFloat(0x7fffffff);
+  static final float NEGATIVE_FLOAT_NAN_LOWER_RANGE = Float.intBitsToFloat(0xff800001);
+  static final float NEGATIVE_FLOAT_NAN_UPPER_RANGE = Float.intBitsToFloat(0xffffffff);
+
+  static final double POSITIVE_DOUBLE_NAN_LOWER_RANGE = Double.longBitsToDouble(0x7ff0000000000001L);
+  static final double POSITIVE_DOUBLE_NAN_UPPER_RANGE = Double.longBitsToDouble(0x7fffffffffffffffL);
+  static final double NEGATIVE_DOUBLE_NAN_LOWER_RANGE = Double.longBitsToDouble(0xfff0000000000001L);
+  static final double NEGATIVE_DOUBLE_NAN_UPPER_RANGE = Double.longBitsToDouble(0xffffffffffffffffL);
+
   // c = a * a - a
   static String ptx = "***(" +
       "      .func _Z1fPii(" +
@@ -997,12 +1008,73 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testTrimStrings() {
+  void testTrimStringsWhiteSpace() {
     try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
          ColumnVector trimmed = cv.strip();
          ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "123")) {
       TableTest.assertColumnsAreEqual(expected, trimmed);
     }
+  }
+
+  @Test
+  void testTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+         ColumnVector trimmed = cv.strip(Scalar.fromString("1"));
+         ColumnVector expected = ColumnVector.fromStrings("23", "23 ", null, "23", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testLeftTrimStringsWhiteSpace() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.lstrip();
+         ColumnVector expected = ColumnVector.fromStrings("123", "123 ", null, "123 ", "123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testLeftTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", " 123 ", null, "1231", "\t\t123\n\n");
+         ColumnVector trimmed = cv.lstrip(Scalar.fromString(" 1"));
+         ColumnVector expected = ColumnVector.fromStrings("23", "23 ", null, "231", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testRightTrimStringsWhiteSpace() {
+    try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.rstrip();
+         ColumnVector expected = ColumnVector.fromStrings(" 123", "123", null, " 123", "\t\t123")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testRightTrimStrings() {
+    try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231 ", "\t\t123\n\n");
+         ColumnVector trimmed = cv.rstrip(Scalar.fromString(" 1"));
+         ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "\t\t123\n\n")) {
+      TableTest.assertColumnsAreEqual(expected, trimmed);
+    }
+  }
+
+  @Test
+  void testTrimStringsThrowsException() {
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector trimmed = cv.strip(Scalar.fromString(null))) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector trimmed = cv.strip(Scalar.fromInt(1))) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromStrings("123", "123 ", null, "1231", "\t\t123\n\n");
+           ColumnVector result = cv.strip(null)) {}
+    });
   }
 
   @Test
@@ -2001,6 +2073,37 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = cv.toTitle();
          ColumnVector expected = ColumnVector.fromStrings("Spark", "Sql", "Lowercase", null, "", "Uppercase")) {
       assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testNansToNulls() {
+    Float[] floats = new Float[]{1.2f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, null,
+        Float.NaN, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f, POSITIVE_FLOAT_NAN_LOWER_RANGE,
+        POSITIVE_FLOAT_NAN_UPPER_RANGE, NEGATIVE_FLOAT_NAN_LOWER_RANGE,
+        NEGATIVE_FLOAT_NAN_UPPER_RANGE};
+
+    Float[] expectedFloats = new Float[]{1.2f, Float.POSITIVE_INFINITY,
+        Float.NEGATIVE_INFINITY, null, null, Float.MAX_VALUE, Float.MIN_VALUE, 435243.2323f,
+        null, null, null, null};
+
+    Double[] doubles = new Double[]{1.2d, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null,
+        Double.NaN, Double.MAX_VALUE, Double.MIN_VALUE, 435243.2323d, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
+        POSITIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
+        NEGATIVE_DOUBLE_NAN_UPPER_RANGE};
+
+   Double[] expectedDoubles = new Double[]{1.2d, Double.POSITIVE_INFINITY,
+        Double.NEGATIVE_INFINITY, null, null, Double.MAX_VALUE, Double.MIN_VALUE,
+        435243.2323d, null, null, null, null};
+
+    try (ColumnVector cvFloat = ColumnVector.fromBoxedFloats(floats);
+         ColumnVector cvDouble = ColumnVector.fromBoxedDoubles(doubles);
+         ColumnVector resultFloat = cvFloat.nansToNulls();
+         ColumnVector resultDouble = cvDouble.nansToNulls();
+         ColumnVector expectedFloat = ColumnVector.fromBoxedFloats(expectedFloats);
+         ColumnVector expectedDouble = ColumnVector.fromBoxedDoubles(expectedDoubles)) {
+      assertColumnsAreEqual(expectedFloat, resultFloat);
+      assertColumnsAreEqual(expectedDouble, resultDouble);
     }
   }
 }

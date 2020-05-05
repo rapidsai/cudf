@@ -18,6 +18,9 @@
  *
  * CUDA-based brotli decompression
  *
+ * Brotli Compressed Data Format
+ * https://tools.ietf.org/html/rfc7932
+ *
  * Portions of this file are derived from Google's Brotli project at
  * https://github.com/google/brotli, original license text below.
  **/
@@ -303,7 +306,7 @@ static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
   s->heap_limit  = (uint16_t)heap_limit;
 }
 
-/// Alloc memory from the fixed-size heap shared between all blocks
+/// Alloc memory from the fixed-size heap shared between all blocks (thread0-only)
 static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
                                           uint8_t *ext_heap_base,
                                           uint32_t ext_heap_size)
@@ -316,6 +319,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
+      // Wait a bit in a attempt to make the spin less resource-hungry
       NANOSLEEP(100);
       continue;
     }
@@ -374,7 +378,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
   return nullptr;
 }
 
-/// Free a memory block
+/// Free a memory block (thread0-only)
 static __device__ void ext_heap_free(void *ptr,
                                      uint32_t bytes,
                                      uint8_t *ext_heap_base,
@@ -595,6 +599,7 @@ static __device__ int NextTableBitSize(const uint16_t *const count, int len, int
   return len - root_bits;
 }
 
+// Build a huffman lookup table (currently thread0-only)
 static __device__ uint32_t BuildHuffmanTable(uint16_t *root_lut,
                                              int root_bits,
                                              const uint16_t *const symbol_lists,
@@ -844,6 +849,7 @@ invalid.
 
 **/
 
+// Decode Huffman tree (thread0-only)
 static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
                                              uint32_t alphabet_size,
                                              uint32_t max_symbol,
@@ -1865,6 +1871,7 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
   debrotli_state_s *const s = &state_g;
 
   if (z >= count) { return; }
+  // Thread0: initializes shared state and decode stream header
   if (!t) {
     uint8_t *src    = (uint8_t *)inputs[z].srcDevice;
     size_t src_size = inputs[z].srcSize;
@@ -1888,15 +1895,18 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
   }
   __syncthreads();
   if (!s->error) {
+    // Main loop: decode meta-blocks
     do {
       __syncthreads();
       if (!t) {
+        // Thread0: Decode meta-block header
         DecodeMetaBlockHeader(s);
         if (!s->error && s->meta_block_len > s->bytes_left) { s->error = 2; }
       }
       __syncthreads();
       if (!s->error && s->meta_block_len != 0) {
         if (s->is_uncompressed) {
+          // Uncompressed block
           const uint8_t *src = s->cur + ((s->bitpos + 7) >> 3);
           uint8_t *dst       = s->out;
           if (!t) {
@@ -1910,10 +1920,13 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
           }
           __syncthreads();
           if (!s->error) {
+            // Simple block-wide memcpy
             for (int32_t i = t; i < s->meta_block_len; i += NUMTHREADS) { dst[i] = src[i]; }
           }
         } else {
+          // Compressed block
           if (!t) {
+            // Thread0: Reset local heap, decode huffman tables
             s->heap_used  = 0;
             s->heap_limit = (uint16_t)(sizeof(s->heap) / sizeof(s->heap[0]));
             s->fb_base    = nullptr;
@@ -1923,6 +1936,7 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
           }
           __syncthreads();
           if (!s->error) {
+            // Warp0: Decode compressed block, warps 1..7 are all idle (!)
             if (t < 32) ProcessCommands(s, (brotli_dictionary_s *)(scratch + scratch_size), t);
             __syncthreads();
           }
@@ -1932,6 +1946,7 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
             __syncthreads();
           }
         }
+        // Update output byte count and position
         if (!t) {
           s->bytes_left -= s->meta_block_len;
           s->out += s->meta_block_len;
@@ -1941,13 +1956,36 @@ extern "C" __global__ void __launch_bounds__(NUMTHREADS, 2)
     } while (!s->error && !s->is_last && s->bytes_left != 0);
   }
   __syncthreads();
+  // Output decompression status
   if (!t) {
     outputs[z].bytes_written = s->out - s->outbase;
     outputs[z].status        = s->error;
-    outputs[z].reserved      = s->fb_size;
+    outputs[z].reserved      = s->fb_size;  // Return ext heap used by last block (statistics)
   }
 }
 
+/**
+ * @brief Computes the size of temporary memory for Brotli decompression
+ *
+ * In most case, a brotli metablock will require in the order of ~10KB
+ * to ~40KB of scratch space for various lookup tables (mainly context maps
+ * and Huffman lookup tables), as well as temporary scratch space to decode
+ * the header. However, because the syntax allows for a huge number of unique
+ * tables, the theoretical worst case is quite large at ~1.3MB per threadblock,
+ * which would scale with gpu occupancy.
+ *
+ * This is solved by a custom memory allocator that first allocates from a local
+ * heap in shared mem (with the end of the heap being used as a stack for
+ * intermediate small allocations). Once this is exhausted, the 'external'
+ * heap is used, allocating from a single scratch surface shared between all
+ * the threadblocks, such that allocation can't fail, but may cause serialization
+ * between threadblocks should more than one threadblock ever allocate the worst
+ * case size.
+ *
+ * @param[in] max_num_inputs The maximum number of compressed input chunks
+ *
+ * @return The size in bytes of required temporary memory
+ **/
 size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
   int sm_count = 0;

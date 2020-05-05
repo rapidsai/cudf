@@ -30,7 +30,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf::experimental" nogil:
         column_view input_view,
         rank_method method,
         libcudf_types.order column_order,
-        libcudf_types.include_nulls _include_nulls,
+        libcudf_types.null_policy null_handling,
         libcudf_types.null_order null_precedence,
         bool percentage) except +
 

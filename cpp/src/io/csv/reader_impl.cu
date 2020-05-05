@@ -27,15 +27,9 @@
 #include <tuple>
 #include <unordered_map>
 
-#include "legacy/datetime_parser.cuh"
-#include "legacy/type_conversion.cuh"
-
-#include <utilities/legacy/cudf_utils.h>
-#include <cudf/legacy/unary.hpp>
+#include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <nvstrings/NVStrings.h>
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>
@@ -52,7 +46,7 @@ namespace csv {
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
  *
@@ -62,7 +56,7 @@ using namespace cudf::io;
  * @param[in] num_columns Number of columns in the CSV file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- *---------------------------------------------------------------------------**/
+ **/
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
@@ -235,8 +229,8 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_size = h_uncomp_data_owner.size();
     }
     // None of the parameters for row selection is used, we are parsing the entire file
-    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows == 0 &&
-                                 skip_end_rows == 0 && num_rows == -1;
+    const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
+                                 skip_end_rows <= 0 && num_rows == -1;
 
     // Preload the intput data to device
     if (load_whole_file) data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
@@ -346,35 +340,42 @@ table_with_metadata reader::impl::read(size_t range_offset,
   std::vector<column_buffer> out_buffers;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
+      // Replace EMPTY dtype with STRING
+      if (column_types[active_col].id() == type_id::EMPTY) {
+        column_types[active_col] = data_type{STRING};
+      }
       out_buffers.emplace_back(column_types[active_col], num_records, true, stream, mr_);
       metadata.column_names.emplace_back(col_names[col]);
       active_col++;
     }
   }
 
-  if (num_records != 0) { decode_data(column_types, out_buffers, stream); }
+  if (num_records != 0) {
+    decode_data(column_types, out_buffers, stream);
 
-  for (size_t i = 0; i < column_types.size(); ++i) {
-    out_columns.emplace_back(make_column(column_types[i], num_records, out_buffers[i]));
-  }
-
-  // TODO: String columns need to be reworked to actually copy characters in
-  // kernel to allow skipping quotation characters
-  /*for (auto &column : columns) {
-    column.finalize();
-
-    // PANDAS' default behavior of enabling doublequote for two consecutive
-    // quotechars in quoted fields results in reduction to a single quotechar
-    if (column->dtype == GDF_STRING &&
-        (opts.quotechar != '\0' && opts.doublequote == true)) {
-      const std::string quotechar(1, opts.quotechar);
-      const std::string dblquotechar(2, opts.quotechar);
-      auto str_data = static_cast<NVStrings *>(column->data);
-      column->data = str_data->replace(dblquotechar.c_str(), quotechar.c_str());
-      NVStrings::destroy(str_data);
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
+          opts.doublequote == true) {
+        // PANDAS' default behavior of enabling doublequote for two consecutive
+        // quotechars in quoted fields results in reduction to a single quotechar
+        // TODO: Would be much more efficient to perform this operation in-place
+        // during the conversion stage
+        const std::string quotechar(1, opts.quotechar);
+        const std::string dblquotechar(2, opts.quotechar);
+        std::unique_ptr<column> col = make_strings_column(out_buffers[i]._strings, stream);
+        out_columns.emplace_back(
+          cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
+      } else {
+        out_columns.emplace_back(
+          make_column(column_types[i], num_records, out_buffers[i], stream, mr_));
+      }
     }
-  }*/
-
+  } else {
+    // Create empty columns
+    for (size_t i = 0; i < column_types.size(); ++i) {
+      out_columns.emplace_back(make_empty_column(column_types[i]));
+    }
+  }
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
@@ -474,7 +475,7 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
+  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
 
   // Exclude the rows outside of requested range
   if (range_size != 0) {
@@ -511,7 +512,7 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
     it_end -= skip_end_rows;
   }
 

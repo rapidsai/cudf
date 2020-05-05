@@ -36,22 +36,7 @@
 #include "compiled/binary_ops.hpp"
 
 #include <bit.hpp.jit>
-#include <libcudacxx/details/__config.jit>
-#include <libcudacxx/libcxx/include/__config.jit>
-#include <libcudacxx/libcxx/include/__undef_macros.jit>
-#include <libcudacxx/libcxx/include/cfloat.jit>
-#include <libcudacxx/libcxx/include/chrono.jit>
-#include <libcudacxx/libcxx/include/ctime.jit>
-#include <libcudacxx/libcxx/include/limits.jit>
-#include <libcudacxx/libcxx/include/ratio.jit>
-#include <libcudacxx/libcxx/include/type_traits.jit>
-#include <libcudacxx/simt/cfloat.jit>
-#include <libcudacxx/simt/chrono.jit>
-#include <libcudacxx/simt/ctime.jit>
-#include <libcudacxx/simt/limits.jit>
-#include <libcudacxx/simt/ratio.jit>
-#include <libcudacxx/simt/type_traits.jit>
-#include <libcudacxx/simt/version.jit>
+#include <jit/common_headers.hpp>
 #include <string>
 #include <timestamps.hpp.jit>
 #include <types.hpp.jit>
@@ -85,53 +70,8 @@ namespace jit {
 
 const std::string hash = "prog_binop.experimental";
 
-const std::vector<std::string> compiler_flags{
-  "-std=c++14",
-  // Have jitify prune unused global variables
-  "-remove-unused-globals",
-  // suppress all NVRTC warnings
-  "-w",
-  // force libcudacxx to not include system headers
-  "-D__CUDACC_RTC__",
-  // __CHAR_BIT__ is from GCC, but libcxx uses it
-  "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
-  // enable temporary workarounds to compile libcudacxx with nvrtc
-  "-D_LIBCUDACXX_HAS_NO_CTIME",
-  "-D_LIBCUDACXX_HAS_NO_WCHAR",
-  "-D_LIBCUDACXX_HAS_NO_CFLOAT",
-  "-D_LIBCUDACXX_HAS_NO_STDINT",
-  "-D_LIBCUDACXX_HAS_NO_CSTDDEF",
-  "-D_LIBCUDACXX_HAS_NO_CLIMITS",
-  "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
-};
 const std::vector<std::string> header_names{
   "operation.h", "traits.h", cudf_types_hpp, cudf_utilities_bit_hpp, cudf_wrappers_timestamps_hpp};
-
-const std::unordered_map<std::string, char const*> stringified_headers{
-  {"details/../../libcxx/include/__config", libcxx_config},
-  {"../libcxx/include/__undef_macros", libcxx_undef_macros},
-  {"simt/../../libcxx/include/cfloat", libcxx_cfloat},
-  {"simt/../../libcxx/include/chrono", libcxx_chrono},
-  {"simt/../../libcxx/include/ctime", libcxx_ctime},
-  {"simt/../../libcxx/include/limits", libcxx_limits},
-  {"simt/../../libcxx/include/ratio", libcxx_ratio},
-  {"simt/../../libcxx/include/type_traits", libcxx_type_traits},
-  {"simt/../details/__config", libcudacxx_details_config},
-  {"simt/cfloat", libcudacxx_simt_cfloat},
-  {"simt/chrono", libcudacxx_simt_chrono},
-  {"simt/ctime", libcudacxx_simt_ctime},
-  {"simt/limits", libcudacxx_simt_limits},
-  {"simt/ratio", libcudacxx_simt_ratio},
-  {"simt/type_traits", libcudacxx_simt_type_traits},
-  {"simt/version", libcudacxx_simt_version},
-};
-
-std::istream* send_stringified_header(std::iostream& stream, char const* header)
-{
-  // skip the filename line added by stringify
-  stream << (std::strchr(header, '\n') + 1);
-  return &stream;
-}
 
 std::istream* headers_code(std::string filename, std::iostream& stream)
 {
@@ -143,8 +83,10 @@ std::istream* headers_code(std::string filename, std::iostream& stream)
     stream << code::traits;
     return &stream;
   }
-  auto it = stringified_headers.find(filename);
-  if (it != stringified_headers.end()) { return send_stringified_header(stream, it->second); }
+  auto it = cudf::jit::stringified_headers.find(filename);
+  if (it != cudf::jit::stringified_headers.end()) {
+    return cudf::jit::send_stringified_header(stream, it->second);
+  }
   return nullptr;
 }
 
@@ -155,7 +97,8 @@ void binary_operation(mutable_column_view& out,
                       cudaStream_t stream)
 {
   if (null_using_binop(op)) {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -171,7 +114,8 @@ void binary_operation(mutable_column_view& out,
               rhs.offset(),
               lhs.is_valid());
   } else {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -192,7 +136,8 @@ void binary_operation(mutable_column_view& out,
                       cudaStream_t stream)
 {
   if (null_using_binop(op)) {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -208,7 +153,8 @@ void binary_operation(mutable_column_view& out,
               lhs.offset(),
               rhs.is_valid());
   } else {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -229,7 +175,8 @@ void binary_operation(mutable_column_view& out,
                       cudaStream_t stream)
 {
   if (null_using_binop(op)) {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -246,7 +193,8 @@ void binary_operation(mutable_column_view& out,
               rhs.null_mask(),
               rhs.offset());
   } else {
-    cudf::jit::launcher(hash, code::kernel, header_names, compiler_flags, headers_code, stream)
+    cudf::jit::launcher(
+      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
       .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
                                                                // launching
                        {cudf::jit::get_type_name(out.type()),  // list of template arguments
@@ -274,7 +222,8 @@ void binary_operation(mutable_column_view& out,
     "\n#include <cudf/types.hpp>\n" +
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name) + code::kernel;
 
-  cudf::jit::launcher(ptx_hash, cuda_source, header_names, compiler_flags, headers_code, stream)
+  cudf::jit::launcher(
+    ptx_hash, cuda_source, header_names, cudf::jit::compiler_flags, headers_code, stream)
     .set_kernel_inst("kernel_v_v",       // name of the kernel
                                          // we are launching
                      {output_type_name,  // list of template arguments

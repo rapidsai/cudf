@@ -27,47 +27,48 @@
 namespace cudf {
 namespace io {
 namespace orc {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Supported compression algorithms for the ORC writer
- *---------------------------------------------------------------------------**/
+ **/
 enum class compression_type { none, snappy };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the ORC writer
- *---------------------------------------------------------------------------**/
+ **/
 struct writer_options {
   compression_type compression = compression_type::none;
 
   writer_options()                       = default;
   writer_options(writer_options const &) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor to populate writer options.
    *
    * @param[in] comp Compression codec to use
-   *---------------------------------------------------------------------------**/
+   **/
   explicit writer_options(compression_type comp) : compression(comp) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class to write ORC data into cuDF columns
- *---------------------------------------------------------------------------**/
+ **/
 class writer {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   **/
   explicit writer(std::string filepath, writer_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Writes the entire data set.
    *
    * @param[in] table Object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
+   **/
   void write_all(const cudf::table &table);
 
   ~writer();
