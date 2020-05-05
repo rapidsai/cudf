@@ -894,47 +894,43 @@ struct replace_nans_functor {
       auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
       if (replacement_nullable) {
         auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else<T>(input.type(),
-                               true,
-                               input_pair_iterator,
-                               input_pair_iterator + size,
-                               replacement_pair_iterator,
-                               predicate,
-                               mr,
-                               stream);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else<T>(input.type(),
-                               true,
-                               input_pair_iterator,
-                               input_pair_iterator + size,
-                               replacement_pair_iterator,
-                               predicate,
-                               mr,
-                               stream);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
       }
     } else {
       auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
       if (replacement_nullable) {
         auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else<T>(input.type(),
-                               true,
-                               input_pair_iterator,
-                               input_pair_iterator + size,
-                               replacement_pair_iterator,
-                               predicate,
-                               mr,
-                               stream);
+        return copy_if_else(true,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else<T>(input.type(),
-                               false,
-                               input_pair_iterator,
-                               input_pair_iterator + size,
-                               replacement_pair_iterator,
-                               predicate,
-                               mr,
-                               stream);
+        return copy_if_else(false,
+                            input_pair_iterator,
+                            input_pair_iterator + size,
+                            replacement_pair_iterator,
+                            predicate,
+                            mr,
+                            stream);
       }
     }
   }

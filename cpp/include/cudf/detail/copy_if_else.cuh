@@ -116,9 +116,8 @@ __launch_bounds__(block_size) __global__
 
 }  // anonymous namespace
 
-template <typename Element, typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(data_type type,
-                                     bool nullable,
+template <typename FilterFn, typename LeftIter, typename RightIter>
+std::unique_ptr<column> copy_if_else(bool nullable,
                                      LeftIter lhs_begin,
                                      LeftIter lhs_end,
                                      RightIter rhs,
@@ -126,13 +125,19 @@ std::unique_ptr<column> copy_if_else(data_type type,
                                      rmm::mr::device_memory_resource *mr,
                                      cudaStream_t stream)
 {
+  using Element = std::decay_t<decltype(thrust::get<0>(*lhs_begin))>;
+
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;
   cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
 
-  std::unique_ptr<column> out = make_fixed_width_column(
-    type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
+  std::unique_ptr<column> out =
+    make_fixed_width_column(data_type(type_to_id<Element>()),
+                            size,
+                            nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
+                            stream,
+                            mr);
 
   auto out_v = mutable_column_device_view::create(*out);
 
