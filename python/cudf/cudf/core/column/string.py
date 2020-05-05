@@ -2044,14 +2044,15 @@ class StringColumn(column.ColumnBase):
                 bool_check = cpp_is_integer(self)
                 index = bool_check.astype("int8").find_first_value(0)
                 raise ValueError(
-                    "invalid literal for int() with base 10: " + self[index]
+                    "invalid literal for int() with base 10: "
+                    + str(self[index])
                 )
         elif str_dtype.kind in ("f"):
             if not cpp_all_floats(self):
                 bool_check = cpp_is_float(self)
                 index = bool_check.astype("int8").find_first_value(0)
                 raise ValueError(
-                    "could not convert string to float: " + self[index]
+                    "could not convert string to float: " + str(self[index])
                 )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
