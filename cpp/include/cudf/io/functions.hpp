@@ -464,13 +464,13 @@ struct write_orc_chunked_args {
   }
 };
 
+namespace detail {
+namespace orc {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace orc {
 struct orc_chunked_state;
-};
+};  // namespace orc
 };  // namespace detail
 
 /**
@@ -618,13 +618,13 @@ struct write_parquet_chunked_args {
   }
 };
 
+namespace detail {
+namespace parquet {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace parquet {
 struct pq_chunked_state;
-};
+};  // namespace parquet
 };  // namespace detail
 
 /**
