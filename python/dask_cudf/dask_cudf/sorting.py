@@ -280,7 +280,10 @@ def rearrange_by_hash(
         start[(shuffle_combine_token, 0, inp)] = (
             (df._name, i) if i < df.npartitions else df._meta
         )
-        end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
+        if dynamic_tasks:
+            end[(shuffle_token, i)] = ("all2all-" + token)
+        else:
+            end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
         inputs.append(inp)
 
     if dynamic_tasks:
