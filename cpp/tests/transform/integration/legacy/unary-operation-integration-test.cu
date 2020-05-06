@@ -43,11 +43,7 @@ void test_cuda_and_ptx_udf(
     gdf_column cpp_output_col;
     // false means the string is a piece of CUDA code
     CUDF_EXPECT_NO_THROW(cpp_output_col =
-                           cudf::transform(
-                             *in.get(), 
-                             cuda, 
-                             gdf_dtype_of<dtype>(), 
-                             false));
+                           cudf::transform(*in.get(), cuda, gdf_dtype_of<dtype>(), false));
 
     auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
     ASSERT_UNARY(cpp_out, in, op);
