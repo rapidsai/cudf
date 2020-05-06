@@ -60,8 +60,8 @@ enum class binary_operator : int32_t {
   ATAN2,                 ///< 2-argument arctangent
   // If remainder is negative, this returns (remainder + divisor) % divisor
   // else, it returns (dividend % divisor)
-  PMOD,  ///< positive modulo operator
-  INVALID_BINARY         ///< invalid operation
+  PMOD,           ///< positive modulo operator
+  INVALID_BINARY  ///< invalid operation
 };
 
 /**
