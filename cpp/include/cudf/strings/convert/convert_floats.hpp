@@ -22,7 +22,7 @@ namespace cudf {
 namespace strings {
 /**
  * @ingroup strings_apis
- * @addtogroup strings_convert Converters
+ * @addtogroup strings_convert Converting
  * @{
  */
 

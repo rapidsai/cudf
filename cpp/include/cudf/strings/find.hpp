@@ -24,7 +24,7 @@ namespace strings {
 /**
  * @brief Locate substrings within strings
  * @ingroup strings_apis
- * @addtogroup strings_find Find
+ * @addtogroup strings_find Finding
  * @{
  */
 

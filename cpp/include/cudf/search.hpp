@@ -28,7 +28,7 @@ namespace experimental {
 /**
  * @brief Search column and table APIs
  * @ingroup column_apis
- * @addtogroup column_search Search
+ * @addtogroup column_search Searching
  * @{
  */
 

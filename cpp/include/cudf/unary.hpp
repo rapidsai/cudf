@@ -22,9 +22,9 @@
 namespace cudf {
 namespace experimental {
 /**
- * @brief UnaryOps APIs
+ * @brief Unary operations APIs
  * @ingroup column_apis
- * @addtogroup column_unaryops UnaryOps
+ * @addtogroup column_unaryops Unary Operations
  * @{
  */
 

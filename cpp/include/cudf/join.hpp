@@ -26,7 +26,7 @@ namespace experimental {
 /**
  * @brief Join APIs
  * @ingroup column_apis
- * @addtogroup column_join Join
+ * @addtogroup column_join Joining
  * @{
  */
 

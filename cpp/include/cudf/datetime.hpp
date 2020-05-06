@@ -34,7 +34,7 @@ namespace datetime {
 /**
  * @brief Extract APIs
  * @ingroup datetime_apis
- * @addtogroup datetime_extract Extract
+ * @addtogroup datetime_extract Extracting
  * @{
  */
 
@@ -161,7 +161,7 @@ std::unique_ptr<cudf::column> extract_second(
 /**
  * @brief Compute APIs
  * @ingroup datetime_apis
- * @addtogroup datetime_compute Compute
+ * @addtogroup datetime_compute Compute Day
  * @{
  */
 

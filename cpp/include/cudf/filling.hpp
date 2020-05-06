@@ -25,7 +25,7 @@ namespace experimental {
 /**
  * @brief Fill columns APIs
  * @ingroup column_apis
- * @addtogroup column_fill Fill
+ * @addtogroup column_fill Filling
  * @{
  */
 

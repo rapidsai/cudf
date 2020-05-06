@@ -26,7 +26,7 @@ namespace experimental {
 /**
  * @brief Reshape APIs
  * @ingroup column_apis
- * @addtogroup column_reshape Reshape
+ * @addtogroup column_reshape Reshaping
  * @{
  */
 

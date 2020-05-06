@@ -26,7 +26,7 @@ namespace experimental {
 /**
  * @brief Binary operations APIs
  * @ingroup column_apis
- * @addtogroup column_binaryop BinaryOp
+ * @addtogroup column_binaryop Binary Operations
  * @{
  */
 

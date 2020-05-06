@@ -24,7 +24,7 @@ namespace strings {
 /**
  * @brief Replace substrings/patterns within strings
  * @ingroup strings_apis
- * @addtogroup strings_replace Replace
+ * @addtogroup strings_replace Replacing
  * @{
  */
 

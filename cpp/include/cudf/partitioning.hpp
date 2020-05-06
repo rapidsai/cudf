@@ -25,7 +25,7 @@ namespace experimental {
 /**
  * @brief Patition APIs
  * @ingroup column_apis
- * @addtogroup column_partition Partition
+ * @addtogroup column_partition Partitioning
  * @{
  */
 
