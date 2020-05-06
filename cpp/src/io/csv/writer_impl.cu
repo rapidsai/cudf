@@ -403,7 +403,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
   }
 }
 
-void writer::impl::write_chunked(strings_column_view const& strings_column,
+void writer::impl::write_chunked(strings_column_view const& str_column_view,
                                  const table_metadata* metadata,
                                  cudaStream_t stream)
 {
@@ -414,8 +414,15 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
   //               auto host_buffer = str_row.host_buffer();
   //               sink->host_write(host_buffer_.data(), host_buffer_.size());
   //           });//or...sink->device_write(device_buffer,...);
+  //
+  // added line_terminator functionality
+  //
 
-  CUDF_EXPECTS(strings_column.size() > 0, "Unexpected empty strings column.");
+  CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
+
+  cudf::string_scalar newline{options_.line_terminator()};
+  auto p_str_col_w_nl = cudf::strings::join_strings(str_column_view, newline);
+  strings_column_view strings_column{std::move(p_str_col_w_nl->view())};
 
   auto total_num_bytes      = strings_column.chars_size();
   char const* ptr_all_bytes = strings_column.chars().data<char>();
@@ -425,6 +432,9 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
     // is a device_write taking a device buffer;
     //
     out_sink_->device_write(ptr_all_bytes, total_num_bytes, stream);
+    out_sink_->device_write(newline.data(),
+                            newline.size(),
+                            stream);  // needs newline at the end, to separate from next chunk
   } else {
     // no device write possible;
     //
@@ -444,6 +454,9 @@ void writer::impl::write_chunked(strings_column_view const& strings_column,
     //
     char const* ptr_h_bytes = h_bytes.data();
     out_sink_->host_write(ptr_h_bytes, total_num_bytes);
+    out_sink_->host_write(
+      options_.line_terminator().data(),
+      options_.line_terminator().size());  // needs newline at the end, to separate from next chunk
   }
 }
 
@@ -498,9 +511,9 @@ void writer::impl::write(table_view const& table,
 
   // convert each chunk to CSV:
   //
+  column_to_strings_fn converter{options_, mr_};
   for (auto&& sub_view : vector_views) {
     std::vector<std::unique_ptr<column>> str_column_vec;
-    column_to_strings_fn converter{options_, mr_};
 
     // populate vector of string-converted columns:
     //
@@ -525,6 +538,7 @@ void writer::impl::write(table_view const& table,
       cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
 
     strings_column_view strings_converted{std::move(*str_concat_col)};
+
     write_chunked(strings_converted, metadata, stream);
   }
 
