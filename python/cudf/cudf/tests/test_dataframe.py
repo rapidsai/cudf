@@ -4130,7 +4130,7 @@ def test_df_astype_string_to_other(as_dtype):
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
         kwargs = {"format": "%Y-%m-%d"}
     elif as_dtype == "int32":
-        data = [1, 2, 3, None]
+        data = [1, 2, 3]
         kwargs = {}
     elif as_dtype == "category":
         data = ["1", "2", "3", None]
@@ -4151,8 +4151,8 @@ def test_df_astype_string_to_other(as_dtype):
     expect["foo"] = expect_data
     expect["bar"] = expect_data
 
-    got = gdf.dropna().astype(as_dtype, **kwargs)
-    assert_eq(expect.dropna(), got)
+    got = gdf.astype(as_dtype, **kwargs)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
