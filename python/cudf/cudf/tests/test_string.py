@@ -1878,6 +1878,7 @@ def test_string_typecast_error(data, obj_type, dtype):
 
     try:
         psr.astype(dtype=dtype)
+        raise TypeError("Was expecting `psr.astype` to fail")
     except Exception as e:
         exception_type = type(e)
 
