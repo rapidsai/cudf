@@ -16,11 +16,13 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
 - PR #4881 Support row_number in rolling_window
 
 ## Improvements
 
+- PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
 - PR #4825 Update the iloc exp in dataframe.py
@@ -143,9 +145,13 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5104 Add missing `.inl` files to clang-format and git commit hook
+- PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
+- PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 
 ## Bug Fixes
 
+- PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
 - PR #4402 Fix `cudf::strings::join_strings` logic with all-null strings and null narep
@@ -241,6 +247,8 @@
 - PR #5031 grouped_time_range_rolling_window assumes ASC sort order 
 - PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
 
+- PR #5103 Fix `read_csv` issue with names and header
+- PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 
 
