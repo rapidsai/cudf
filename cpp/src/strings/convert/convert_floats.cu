@@ -316,7 +316,7 @@ struct ftos_converter {
       return 3;
     }
     bool bneg = false;
-    if (value < 0.0) {
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
@@ -379,7 +379,7 @@ struct ftos_converter {
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
-    if (value < 0.0) {
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
