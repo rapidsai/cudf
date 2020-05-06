@@ -259,6 +259,11 @@ def test_dataframe_basic():
     pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
     assert_eq(df, pdf)
 
+    gdf = DataFrame({"id": [0, 1], "val": [None, None]})
+    gdf["val"] = gdf["val"].astype("int")
+
+    assert all(gdf["val"].isnull())
+
 
 def test_dataframe_drop_method():
     df = DataFrame()
@@ -1684,7 +1689,11 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000, 100000])
 def test_series_hash_encode(nrows):
     data = np.asarray(range(nrows))
-    s = Series(data, name="x1")
+    # Python hash returns different value which sometimes
+    # results in enc_with_name_arr and enc_arr to be same.
+    # And there is no other better way to make hash return same value.
+    # So using an integer name to get constant value back from hash.
+    s = Series(data, name=1)
     num_features = 1000
 
     encoded_series = s.hash_encode(num_features)
