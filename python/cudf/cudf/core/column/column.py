@@ -846,6 +846,17 @@ class ColumnBase(Column):
             ordered = False
 
         sr = cudf.Series(self)
+
+        # Re-label self w.r.t. the provided categories
+        if is_categorical_dtype(dtype) and hasattr(dtype, "categories"):
+            labels = sr.label_encoding(cats=dtype.categories)
+            return build_categorical_column(
+                categories=dtype.categories,
+                codes=labels._column,
+                mask=self.mask,
+                ordered=ordered,
+            ).astype(dtype)
+
         labels, cats = sr.factorize()
 
         # columns include null index in factorization; remove:
