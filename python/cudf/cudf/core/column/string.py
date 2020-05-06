@@ -186,29 +186,18 @@ class StringMethods(object):
         This converts hex strings to integers
         """
 
-        from cudf.core.series import Series
-
         out = str_cast.htoi(self._column)
-        if isinstance(self._parent, Series):
-            out = Series(
-                out, index=self._parent.index, name=self._parent.name,
-            )
 
-        return out
+        return self._return_or_inplace(out, inplace=False)
 
     def ip2int(self):
         """
         This converts ip strings to integers
         """
-        from cudf.core.series import Series
 
         out = str_cast.ip2int(self._column)
-        if isinstance(self._parent, Series):
-            out = Series(
-                out, index=self._parent.index, name=self._parent.name,
-            )
 
-        return out
+        return self._return_or_inplace(out, inplace=False)
 
     def _return_or_inplace(self, new_col, **kwargs):
         """
