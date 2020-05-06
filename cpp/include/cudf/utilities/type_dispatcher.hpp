@@ -161,7 +161,7 @@ struct type_to_scalar_type_impl<cudf::dictionary32> {
 
 template <>  // TODO: this is to get compilation working. list scalars will be implemented at a
              // later time.
-             struct type_to_scalar_type_impl<cudf::list_view> {
+struct type_to_scalar_type_impl<cudf::list_view> {
   using ScalarType = cudf::list_scalar;
   // using ScalarDeviceType = cudf::list_scalar_device_view;
 };
