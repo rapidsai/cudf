@@ -190,7 +190,7 @@ The comment description should clearly detail how the output(s) are created from
 Include any performance and any boundary considerations.
 Also include any limits on parameter values and if any default values that are declared.
 Don't forget to specify how nulls are handled or produced.
-Also, try to include a short [example](#inline-example) if possible.
+Also, try to include a short [example](#inline-examples) if possible.
 
 ### @brief
 
