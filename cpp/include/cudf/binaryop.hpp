@@ -57,7 +57,7 @@ enum class binary_operator : int32_t {
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
   LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< atan2 operator
+  ATAN2,                 ///< 2-argument arctangent
   INVALID_BINARY         ///< invalid operation
 };
 
