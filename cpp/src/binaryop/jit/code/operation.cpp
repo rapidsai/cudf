@@ -479,6 +479,22 @@ const char* operation =
                                                                output_valid);
         }
     };
+
+    struct ATan2 {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{std::atan2(double{x}, double{y})};
+        }
+    };
+
+    struct RATan2 {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{ATan2::operate<TypeOut, TypeRhs, TypeLhs>(y, x)};
+        }
+    };
 )***";
 
 }  // namespace code

@@ -204,6 +204,14 @@ struct LogBase {
   }
 };
 
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct ATan2 {
+  TypeOut operator()(TypeLhs x, TypeRhs y) const
+  {
+    return static_cast<TypeOut>(std::atan2(static_cast<double>(x), static_cast<double>(y)));
+  }
+};
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
