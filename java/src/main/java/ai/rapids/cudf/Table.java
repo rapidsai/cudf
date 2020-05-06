@@ -1552,14 +1552,14 @@ public final class Table implements AutoCloseable {
       for (Map.Entry<Integer, ColumnWindowOps> entry : groupedOps.entrySet()) {
         int columnIndex = entry.getKey();
         for (WindowAggregateOp operation : entry.getValue().operations()) {
-          aggColumnIndexes[opIndex]       = columnIndex;
-          aggOperationIds[opIndex]        = operation.getAggregateOp().nativeId;
-          aggPrecedingWindows[opIndex]    = operation.getWindowOptions().getPreceding();
-          aggFollowingWindows[opIndex]    = operation.getWindowOptions().getFollowing();
-          aggMinPeriods[opIndex]          = operation.getWindowOptions().getMinPeriods();
+          aggColumnIndexes[opIndex] = columnIndex;
+          aggOperationIds[opIndex] = operation.getAggregateOp().nativeId;
+          aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
+          aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+          aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
           assert(operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
           timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-          isTimestampOrderAscending[opIndex]= operation.getWindowOptions().isTimestampOrderAscending();
+          isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
           opIndex++;
         }
       }
