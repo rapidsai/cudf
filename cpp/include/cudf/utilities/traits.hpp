@@ -323,6 +323,17 @@ struct is_simple_impl {
  **/
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
+/**
+ * @brief Indicates whether `T` is a nesting type.
+ *
+ * "Nesting" types are distinct from compound types in that they
+ * can have an arbitrarily deep list of descendants of the same
+ * type. Strings are not a nested type, but lists are.
+ *
+ * @param T The type to verify
+ * @return true T is a nested type
+ * @return false T is not a nested type
+ **/
 template <typename T>
 constexpr inline bool is_nested()
 {
@@ -337,6 +348,17 @@ struct is_nested_impl {
   }
 };
 
+/**
+ * @brief Indicates whether `type` is a nesting type
+ *
+ * "Nesting" types are distinct from compound types in that they
+ * can have an arbitrarily deep list of descendants of the same
+ * type. Strings are not a nested type, but lists are.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a nested type
+ * @return false `type` is not a nested type
+ **/
 constexpr inline bool is_nested(data_type type)
 {
   return cudf::experimental::type_dispatcher(type, is_nested_impl{});

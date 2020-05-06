@@ -64,6 +64,7 @@ static constexpr bool is_rolling_supported()
   return false;
 }
 
+// return true if this Op is specialized for strings.
 template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind Op>
 static constexpr bool is_rolling_string_specialization()
 {
