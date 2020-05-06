@@ -1186,6 +1186,27 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     assert_eq(pd_df, gd_df)
 
 
+def test_read_csv_names_header_combination():
+    pdf = pd.DataFrame(
+        {
+            "firstname": ["Emma", "Ava", "Sophia"],
+            "lastname": ["Olivia", "Isabella", "Charlotte"],
+            "gender": ["F", "F", "F"],
+        }
+    )
+    buffer = pdf.to_csv(header=True, index=False)
+    names = pdf.columns
+
+    gdf = read_csv(StringIO(buffer), names=names, header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer), header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer))
+    assert_eq(pdf, gdf)
+
+
 def test_csv_reader_scientific_type_detection():
     buffer = """1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1
                 +1.1,1E+1,1e+1,+1e1,+1e-1,1e-1,+1.1e1,1.1e+1,+1.1e+1,+1.1e1"""

@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -71,7 +72,14 @@ class aggregation {
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+
+  virtual std::unique_ptr<aggregation> clone() const
+  {
+    return std::make_unique<aggregation>(*this);
+  }
 
   virtual ~aggregation() = default;
 };
