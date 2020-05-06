@@ -64,8 +64,9 @@ static constexpr bool is_rolling_supported()
   return false;
 }
 
+// return true if this Op is specialized for strings.
 template <typename ColumnType, class AggOp, cudf::experimental::aggregation::Kind Op>
-static constexpr bool is_rolling_string_specialized()
+static constexpr bool is_rolling_string_specialization()
 {
   return std::is_same<ColumnType, cudf::string_view>::value and
          ((cudf::experimental::aggregation::MIN == Op and std::is_same<AggOp, DeviceMin>::value) or

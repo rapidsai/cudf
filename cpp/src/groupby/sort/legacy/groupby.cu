@@ -49,7 +49,8 @@ namespace sort {
 using index_vector = rmm::device_vector<cudf::size_type>;
 
 namespace {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Computes the ordered aggregation requests which were skipped
  * in a previous process (`compound_to_simple`). These ordered aggregations
  * were skipped because they can't be compound to simple aggregation.
@@ -66,7 +67,7 @@ namespace {
  * not ordered aggregation requests
  * @param stream[in] CUDA stream on which to execute
  * @return vector of columns satisfying each of the original aggregation requests
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<gdf_column*> compute_ordered_aggregations(
   detail::helper& groupby,
   std::vector<AggRequestType> const& original_requests,
@@ -138,7 +139,7 @@ std::vector<gdf_column*> compute_ordered_aggregations(
   return output_value;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Prepare input parameters for invoking the `aggregate_all_rows` kernel
  * which compute the simple aggregation(s) of corresponding rows in the output
  * `values` table.
@@ -149,7 +150,7 @@ std::vector<gdf_column*> compute_ordered_aggregations(
  * @param simple_operators The list of simple aggregation operations
  * @param stream[in] CUDA stream on which to execute
  * @return output value table with the aggregation(s) computed
- *---------------------------------------------------------------------------**/
+ **/
 template <bool keys_have_nulls, bool values_have_nulls>
 cudf::table compute_simple_aggregations(const cudf::table& input_keys,
                                         const Options& options,
@@ -289,14 +290,14 @@ std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(
   return std::make_pair(groupby.unique_keys(), std::move(final_output_values));
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns appropriate callable instantiation of `compute_sort_groupby`
  * based on presence of null values in keys and values.
  *
  * @param keys The groupby key columns
  * @param values The groupby value columns
  * @return Instantiated callable of compute_sort_groupby
- *---------------------------------------------------------------------------**/
+ **/
 auto groupby_null_specialization(table const& keys, table const& values)
 {
   if (cudf::has_nulls(keys)) {
@@ -316,7 +317,8 @@ auto groupby_null_specialization(table const& keys, table const& values)
 }  // anonymous namespace
 
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Verifies the requested aggregation is valid for the arguments of the
  * operator.
  *
@@ -325,7 +327,7 @@ namespace detail {
  *
  * @param ops The aggregation operators
  * @param ops The aggregation arguments
- *---------------------------------------------------------------------------**/
+ **/
 static void verify_operators_with_arguments(std::vector<operators> const& ops,
                                             std::vector<operation_args*> const& args)
 {

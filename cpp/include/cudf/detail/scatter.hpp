@@ -59,7 +59,7 @@ namespace detail {
  * @param mr The resource to use for all allocations
  * @param stream The stream to use for CUDA operations
  * @return Result of scattering values from source to target
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
@@ -99,7 +99,7 @@ std::unique_ptr<table> scatter(
  * @param mr The resource to use for all allocations
  * @param stream The stream to use for CUDA operations
  * @return Result of scattering values from source to target
- *---------------------------------------------------------------------------**/
+ **/
 std::unique_ptr<table> scatter(
   std::vector<std::unique_ptr<scalar>> const& source,
   column_view const& indices,

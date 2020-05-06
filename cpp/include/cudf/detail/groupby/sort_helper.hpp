@@ -59,14 +59,14 @@ struct sort_groupby_helper {
    *                        optimizations to help skip re-sorting keys.
    */
   sort_groupby_helper(table_view const& keys,
-                      include_nulls include_null_keys = include_nulls::NO,
-                      sorted keys_pre_sorted          = sorted::NO)
+                      null_policy include_null_keys = null_policy::EXCLUDE,
+                      sorted keys_pre_sorted        = sorted::NO)
     : _keys(keys),
       _num_keys(-1),
       _include_null_keys(include_null_keys),
       _keys_pre_sorted(keys_pre_sorted)
   {
-    if (keys_pre_sorted == sorted::YES and include_null_keys == include_nulls::NO and
+    if (keys_pre_sorted == sorted::YES and include_null_keys == null_policy::EXCLUDE and
         has_nulls(keys)) {
       _keys_pre_sorted = sorted::NO;
     }
@@ -227,7 +227,7 @@ struct sort_groupby_helper {
 
   size_type _num_keys;      ///< Number of effective rows in _keys (adjusted for _include_null_keys)
   sorted _keys_pre_sorted;  ///< Whether _keys are pre-sorted
-  include_nulls _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
+  null_policy _include_null_keys;  ///< Whether to use rows with nulls in _keys for grouping
 };
 
 }  // namespace sort
