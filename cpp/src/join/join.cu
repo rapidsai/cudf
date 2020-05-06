@@ -29,7 +29,8 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Returns a vector with non-common indices which is set difference
  * between `[0, num_columns)` and index values in common_column_indices
  *
@@ -39,7 +40,7 @@ namespace detail {
  * excluded from `[0, num_columns)`
  * @return vector A vector containing only the indices which are not present in
  * `common_column_indices`
- *---------------------------------------------------------------------------**/
+ **/
 auto non_common_column_indices(size_type num_columns,
                                std::vector<size_type> const& common_column_indices)
 {
@@ -313,13 +314,17 @@ std::unique_ptr<experimental::table> construct_join_output_df(
       auto common_from_right = experimental::detail::gather(right.select(right_common_col),
                                                             complement_indices.second.begin(),
                                                             complement_indices.second.end(),
-                                                            nullify_out_of_bounds);
+                                                            nullify_out_of_bounds,
+                                                            rmm::mr::get_default_resource(),
+                                                            stream);
       auto common_from_left  = experimental::detail::gather(left.select(left_common_col),
                                                            joined_indices.first.begin(),
                                                            joined_indices.first.end(),
-                                                           nullify_out_of_bounds);
+                                                           nullify_out_of_bounds,
+                                                           rmm::mr::get_default_resource(),
+                                                           stream);
       common_table =
-        experimental::concatenate({common_from_right->view(), common_from_left->view()});
+        experimental::concatenate({common_from_right->view(), common_from_left->view()}, mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
@@ -327,7 +332,9 @@ std::unique_ptr<experimental::table> construct_join_output_df(
       common_table = experimental::detail::gather(left.select(left_common_col),
                                                   joined_indices.first.begin(),
                                                   joined_indices.first.end(),
-                                                  nullify_out_of_bounds);
+                                                  nullify_out_of_bounds,
+                                                  mr,
+                                                  stream);
     }
   }
 
@@ -336,13 +343,17 @@ std::unique_ptr<experimental::table> construct_join_output_df(
     experimental::detail::gather(left.select(left_noncommon_col),
                                  joined_indices.first.begin(),
                                  joined_indices.first.end(),
-                                 nullify_out_of_bounds);
+                                 nullify_out_of_bounds,
+                                 mr,
+                                 stream);
 
   std::unique_ptr<experimental::table> right_table =
     experimental::detail::gather(right.select(right_noncommon_col),
                                  joined_indices.second.begin(),
                                  joined_indices.second.end(),
-                                 nullify_out_of_bounds);
+                                 nullify_out_of_bounds,
+                                 mr,
+                                 stream);
 
   return std::make_unique<experimental::table>(combine_join_columns(left_table->release(),
                                                                     left_noncommon_col,

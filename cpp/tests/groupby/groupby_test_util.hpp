@@ -64,7 +64,7 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& expect_vals,
                             std::unique_ptr<experimental::aggregation>&& agg,
                             force_use_sort_impl use_sort           = force_use_sort_impl::NO,
-                            include_nulls include_null_keys        = include_nulls::NO,
+                            null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})

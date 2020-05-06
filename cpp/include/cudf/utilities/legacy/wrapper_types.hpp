@@ -26,7 +26,6 @@
 #include <limits>
 #include <type_traits>
 
-/* --------------------------------------------------------------------------*/
 /**
  * @file wrapper_types.hpp
  * @brief  Wrapper structs for for the non-fundamental gdf_dtype types.
@@ -56,7 +55,6 @@
  * of a fundamental type will return a reference to that instance (effectively a no-op).
  *
  */
-/* ----------------------------------------------------------------------------*/
 namespace cudf {
 namespace detail {
 /**
@@ -300,7 +298,7 @@ CUDA_HOST_DEVICE_CALLABLE
   return value;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Trait to use to get underlying type of wrapped object
  *
  * This struct can be used with either a fundamental type or a wrapper type and
@@ -321,13 +319,13 @@ CUDA_HOST_DEVICE_CALLABLE
  * ```
  *
  * @tparam T Either wrapped object type or fundamental type
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 struct unwrapped_type {
   using type = std::decay_t<decltype(unwrap(std::declval<T &>()))>;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Helper type for `unwrapped_type`
  *
  * Example:
@@ -337,7 +335,7 @@ struct unwrapped_type {
  * ```
  *
  * @tparam T Either wrapped object type or fundamental type
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 using unwrapped_type_t = typename unwrapped_type<T>::type;
 
@@ -468,42 +466,42 @@ CUDA_HOST_DEVICE_CALLABLE cudf::bool8 operator!(wrapper<T, type_id> const &me)
 }  // namespace cudf
 
 namespace std {
-/**---------------------------------------------------------------------------*
+/*
  * @brief Specialization of std::numeric_limits for wrapper types
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T, gdf_dtype type_id>
 struct numeric_limits<cudf::detail::wrapper<T, type_id>> {
   using wrapper_t = cudf::detail::wrapper<T, type_id>;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the maximum finite value representable by the numeric type T
-   *---------------------------------------------------------------------------**/
+   **/
   static constexpr wrapper_t max() noexcept { return wrapper_t{std::numeric_limits<T>::max()}; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the lowest finite value representable by the numeric type T
    *
    * Returns a finite value x such that there is no other finite value y where y < x
-   *---------------------------------------------------------------------------**/
+   **/
   static constexpr wrapper_t lowest() noexcept
   {
     return wrapper_t{std::numeric_limits<T>::lowest()};
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the minimum finite value representable by the numeric type T
    *
    * For floating-point types with denormalization, min returns the minimum
    * positive normalized value.
-   *---------------------------------------------------------------------------**/
+   **/
   static constexpr wrapper_t min() noexcept { return wrapper_t{std::numeric_limits<T>::min()}; }
 };
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief Specialization of std::numeric_limits for cudf::bool8
  *
  * Required since the underlying type, int8_t, has different limits than bool
- * --------------------------------------------------------------------------**/
+ **/
 template <>
 struct numeric_limits<cudf::bool8> {
   static constexpr cudf::bool8 max() noexcept
