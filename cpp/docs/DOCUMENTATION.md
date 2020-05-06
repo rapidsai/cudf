@@ -223,16 +223,62 @@ TODO: show example
 
 Note, you must include the whole signature of the function so that doxygen will be able to locate it.
 
-### Function parameters (@throw/@tparam/@param/@return)
+### Function parameters
 
-The following tags normally appear near the end of comment block in the following order:
+The following tags normally appear near the end of comment block for a function comment block in the following order:
 
 | Command | Description |
 | ------- | ----------- |
-| @throw | Include the name of the exception without tick marks |
-| @tparam | Template parameter |
-| @param | Function parameter names must match. Also include `[in]`, `[out]` or `[in|out]` if it is not clear from the declaration and the name |
+| @throw | Specify conditions which the function may throw an exception |
+| @tparam | Description for each template parameter |
+| @param | Description for each function parameter |
 | @return | Short description of object returned |
+
+#### @throw
+
+Add an `@throw` comment line in the comment block for each exception that the function may throw. You only need to include exception thrown by the function itself. If the function calls another function that may throw an exception, you do not need to document that exception here.
+
+Include the name of the exception without tick marks so doxygen can add reference links.
+
+```c++
+ *
+ * @throw cudf::logic_error if `input_argument` is negative or zero
+ *
+```
+
+Using `@throws` is also acceptable but vs-code and other editors only do syntax highlighting on `@throw`.
+
+#### @tparam
+
+Add a `@tparam` comment line for each template parameter declared by this function. The name of the parameter in the comment must match exactly to the template parameter name.
+
+```c++
+ *
+ * @tparam functor_type The type of the functor
+ * @tparam input_type The datatype of the input argument
+ *
+```
+
+#### @param
+
+Add a `@param` comment line for each function parameter passed to this function. The name of the parameter in the comment must match the function's parameter name. Also include `[in]`, `[out]` or `[in,out]` if it is not clear from the declaration and the parameter name itself.
+
+```c++
+ *
+ * @param[in] functor The functor to be called on the input argument
+ * @param[in] input_argument The input argument passed into the functor
+ * 
+```
+
+#### @return
+
+Add a single `@return` comment line at the end of the comment block if the function returns an object or value. Include a brief description of what is returned. Do not include the type of the object returned with the `@return` comment.
+
+```c++
+ *
+ * @return A new column of type INT32 and no nulls
+ */
+```
 
 ## Inline Examples
 
@@ -266,16 +312,29 @@ Do not use the `@example` tag in the comments for a declaration.
 Doxygen will interpret the entire source file as example source code when it encounters this tag.
 The source file is then published under the 'Examples' tab in the output pages.
 
+## Namespaces
+
+A doxygen comment block should be included for only once for each unique namespace declaration.
+If more than one is found, doxygen will concatenate the descriptions in an arbitrary order in the output pages.
+
+TODO: example
+
 ## Groups/Modules
 
-TODO
+Grouping declarations into modules helps users to find APIs in the doxygen pages.
+Generally, common functions are already grouped logically into header files but not easily reflected in the doxygen output.
+Doxygen output includes a _Namespaces_ tab that groups functions by namespace.
+But the `cudf` namespace and even the `cudf::strings` namespace still include a large number of APIs and classes.
+Using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html) allows grouping of common functions across header files, source files, and even namespaces. Groups can also be nested by defining new groups within existing groups.
 
-## Build Output
-
-The doxygen tool can be installed using the instructions on their [Installation](http://www.doxygen.nl/manual/install.html) page.
 
 
-Building the output is simply running the `doxygen` command while in the `cpp/doxygen` directory containing the Doxyfile. The tool will read and process all appropriate source files under the `cpp/` directory. The output will be created in the `cpp/doxygen/html/` directory. You can load the `index.html` file generated there into any web browser to view the result.
+
+## Build Doxygen Output
+
+The doxygen tool can be installed using the instructions on its [Installation](http://www.doxygen.nl/manual/install.html) page.
+
+Building the output is simply running the `doxygen` command while in the `cpp/doxygen` directory containing the `Doxyfile`. The tool will read and process all appropriate source files under the `cpp/` directory. The output will be created in the `cpp/doxygen/html/` directory. You can load the local `index.html` file generated there into any web browser to view the result.
 
 By default, doxygen also employs the `graphviz dot` tool to build some diagrams of the class, namespace, and module relationships. If the `dot` tool cannot be found then the output will be generated without diagrams.
 
