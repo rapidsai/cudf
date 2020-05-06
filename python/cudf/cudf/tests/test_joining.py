@@ -1268,11 +1268,26 @@ def test_typecast_on_join_indexes_matching_categorical():
 
     assert_eq(expect, got)
 
-@pytest.mark.parametrize('lhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4]})])
-@pytest.mark.parametrize('rhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4]})])
-@pytest.mark.parametrize('how', ['left', 'inner', 'outer'])
-def test_series_dataframe_mixed_merging(lhs, rhs, how):
-    left_on = right_on = 'a'
+@pytest.mark.parametrize('lhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4], 'b':[4,5,6]})])
+@pytest.mark.parametrize('rhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4], 'b':[4,5,6]})])
+@pytest.mark.parametrize('how', ['left', 'inner', 'outer', 'leftanti', 'leftsemi'])
+@pytest.mark.parametrize('left_index', [True, False])
+@pytest.mark.parametrize('right_index', [True, False])
+def test_series_dataframe_mixed_merging(lhs, rhs, how, left_index, right_index):
+
+    if left_index:
+        left_on = None
+        right_on = 'a'
+    else:
+        left_on = 'a'
+
+    if right_index:
+        right_on = None
+        left_on = 'a'
+    else:
+        right_on = 'a'
+
+
     check_lhs = lhs.copy()
     check_rhs = rhs.copy()
     if isinstance(lhs, Series):
