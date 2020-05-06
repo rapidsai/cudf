@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/table/table.hpp>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
+
+#include <cudf/stream_compaction.hpp>
+#include <cudf/table/table.hpp>
 #include <tests/utilities/column_wrapper.hpp>
 
 #include <benchmark/benchmark.h>
