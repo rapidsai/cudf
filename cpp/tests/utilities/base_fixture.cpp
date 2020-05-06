@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
-#define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
+#include <cudf/cudf.h>
 
 namespace cudf {
-namespace experimental {
-namespace transformation {
-namespace jit {
-namespace code {
-extern const char* kernel_header;
-extern const char* kernel;
-extern const char* traits;
-extern const char* operation;
+namespace test {
+namespace detail {
 
-}  // namespace code
-}  // namespace jit
-}  // namespace transformation
-}  // namespace experimental
+/**
+ * @copydoc cudf::test::detail::random_generator_incrementing_seed()
+ */
+uint64_t random_generator_incrementing_seed()
+{
+  static uint64_t seed = 0;
+  return ++seed;
+}
+
+}  // namespace detail
+}  // namespace test
 }  // namespace cudf
-
-#endif

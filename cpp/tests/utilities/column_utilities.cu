@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,6 +244,20 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
   }
 }
 
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+static auto numeric_to_string_precise(T value)
+{
+  return std::to_string(value);
+}
+
+template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+static auto numeric_to_string_precise(T value)
+{
+  std::ostringstream o;
+  o << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
+  return o.str();
+}
+
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
   void operator()(cudf::column_view const& col, std::vector<std::string>& out)
@@ -258,13 +272,13 @@ struct column_view_printer {
                      out.begin(),
                      [&h_data](auto idx) {
                        return bit_is_set(h_data.second.data(), idx)
-                                ? std::to_string(h_data.first[idx])
+                                ? numeric_to_string_precise(h_data.first[idx])
                                 : std::string("NULL");
                      });
 
     } else {
       std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-        return std::to_string(el);
+        return numeric_to_string_precise(el);
       });
     }
   }
