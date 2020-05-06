@@ -2038,7 +2038,12 @@ class StringColumn(column.ColumnBase):
         kwargs.update(dtype=out_dtype)
 
         if str_dtype.kind in ("i"):
-            if not cpp_all_integers(self):
+            if self.null_count > 0:
+                string_col = self.dropna()
+            else:
+                string_col = self
+
+            if not cpp_all_integers(string_col):
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
