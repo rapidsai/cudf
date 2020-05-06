@@ -90,8 +90,11 @@ __device__ inline double stod(string_view const& d_str)
     char ch = *in_ptr++;
     if (ch == 'e' || ch == 'E') {
       if (in_ptr < end) {
-        ch = *in_ptr++;
-        if (ch == '-' || ch == '+') exp_sign = (ch == '-' ? -1 : 1);
+        ch = *in_ptr;
+        if (ch == '-' || ch == '+') {
+          exp_sign = (ch == '-' ? -1 : 1);
+          ++in_ptr;
+        }
         while (in_ptr < end) {
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
