@@ -35,6 +35,12 @@ struct strong_typedef {
 };
 /** \endcond */
 
+/**
+ * @brief Fixed Point and supporting types
+ * @addtogroup numeric_fixed_point Fixed Point
+ * @{
+ */
+
 using scale_type = strong_typedef<int32_t>;
 
 /**
@@ -597,4 +603,5 @@ std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp)
   return os << static_cast<double>(fp);
 }
 
+/** @} */  // end of group
 }  // namespace numeric
