@@ -58,7 +58,8 @@ The following block comment style should be used for all C++ doxygen comments.
 
 ```c++
 /**
- * ... text ...
+ * description text and
+ * doxygen tags go here
  */
 ```
 
@@ -66,6 +67,8 @@ The block should start with `/**` and end with `*/` only and with nothing else o
 (e.g. do not add dashes `-----` or extra asterisks `*****` in these lines).
 The block must be placed immediately before the source code line in which it is referring.
 The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#the_example) section below.
+
+Each line in the comment block between the `/**` and `*/` lines should start with a space followed by an asterisk. Any text on these lines, including tag declarations, should start after a single space after the asterisk.
 
 ## Tag/Command names
 
@@ -81,10 +84,6 @@ For example, there are some limitations on readability with '%' character and pi
 TODO: show examples here
 
 Also, try to avoid using direct html tags. Although doxygen supports markdown and markdown supports html tags, the html support for doxygen's markdown is also limited.
-
-### Including markdown file
-
-TODO: describe including markdown file with `@include` or in Doxyfile
 
 ## The Example
 
@@ -187,58 +186,66 @@ enum class example_enum {
 
 ## Descriptions
 
-The comment description should clearly define how the output(s) are
-created from any inputs. 
-Don't forget to include how nulls are handled.
-Also, try to include a short example if possible.
-If you wish to use pseudo-code in your example, use the following:
-
-```c++
-/**
- * Sometimes pseudo-code is clearer.
- * @code{.pseudo}
- * s = int column of [ 1, 2, null, 4 ]
- * r = fill( s, [1, 2], 0 )
- * r is now [ 1, 0, 0, 4 ]
- * @endcode
- */
-```
+The comment description should clearly detail how the output(s) are created from any inputs.
+Include any performance and any boundary considerations.
+Also include any limits on parameter values and if any default values that are declared.
+Don't forget to specify how nulls are handled or produced.
+Also, try to include a short [example](#inline_example) if possible.
 
 ### @brief
 
-The `@brief` text should be a short, one sentence description. Doxygen does not provide much space to show this text. Always follow the `@brief` line with a blank comment line.
+The `@brief` text should be a short, one sentence description.
+Doxygen does not provide much space to show this text in the output pages.
+Always follow the `@brief` line with a blank comment line.
 
-The longer description is the remainder of the comment text that is not tagged as
-a doxygen command.
+The longer description is the rest of the comment text that is not tagged with any doxygen command.
 
 ### @copydoc
 
-Documentation for declarations in headers is expected to be clear and complete. There is no reason to duplicate the comment block for a function definition.
+Documentation for declarations in headers is expected to be clear and complete.
+You can use the `@copydoc` tag to avoid duplicating the comment block for a function definition for example.
 
-TODO: show example
+```c++
+  /**
+   * @copydoc complicated_function(int,double*,float*)
+   *
+   * Any extra documentation.
+   */
+```
 
-Also, this is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
+Also, the `@copydoc` is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
 
-TODO: show example
+```c++
+/**
+ * @copydoc cudf::segmented_count_set_bits(bitmask_type const*,std::vector<size_type> const&)
+ *
+ * @param[in] stream Optional CUDA stream on which to execute kernels
+ */
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                std::vector<size_type> const& indices,
+                                                cudaStream_t stream = 0);
+```
 
-Note, you must include the whole signature of the function so that doxygen will be able to locate it.
+Note, you must specify the whole signature of the function, including optional parameters, so that doxygen will be able to locate it.
 
 ### Function parameters
 
-The following tags normally appear near the end of comment block for a function comment block in the following order:
+The following tags normally appear near the end of function comment block in the following order:
 
 | Command | Description |
 | ------- | ----------- |
-| @throw | Specify conditions which the function may throw an exception |
+| @throw | Specify the conditions which the function may throw an exception |
 | @tparam | Description for each template parameter |
 | @param | Description for each function parameter |
-| @return | Short description of object returned |
+| @return | Short description of object or value returned |
 
 #### @throw
 
-Add an `@throw` comment line in the comment block for each exception that the function may throw. You only need to include exception thrown by the function itself. If the function calls another function that may throw an exception, you do not need to document that exception here.
+Add an `@throw` comment line in the comment block for each exception that the function may throw.
+You only need to include exception thrown by the function itself.
+If the function calls another function that may throw an exception, you do not need to document that exception here.
 
-Include the name of the exception without tick marks so doxygen can add reference links.
+Include the name of the exception without tick marks so doxygen can add reference links correctly.
 
 ```c++
  *
@@ -246,11 +253,12 @@ Include the name of the exception without tick marks so doxygen can add referenc
  *
 ```
 
-Using `@throws` is also acceptable but vs-code and other editors only do syntax highlighting on `@throw`.
+Using `@throws` is also acceptable but vs-code and other tools only do syntax highlighting on `@throw`.
 
 #### @tparam
 
-Add a `@tparam` comment line for each template parameter declared by this function. The name of the parameter in the comment must match exactly to the template parameter name.
+Add a `@tparam` comment line for each template parameter declared by this function.
+The name of the parameter in the comment must match exactly to the template parameter name.
 
 ```c++
  *
@@ -259,20 +267,26 @@ Add a `@tparam` comment line for each template parameter declared by this functi
  *
 ```
 
+The definition should detail the requirements of parameter.
+For example, if the template is for a functor or predicate, then describe the expected input types and output.
+
 #### @param
 
-Add a `@param` comment line for each function parameter passed to this function. The name of the parameter in the comment must match the function's parameter name. Also include `[in]`, `[out]` or `[in,out]` if it is not clear from the declaration and the parameter name itself.
+Add a `@param` comment line for each function parameter passed to this function.
+The name of the parameter in the comment must match the function's parameter name.
+Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not clear from the declaration and the parameter name itself.
 
 ```c++
  *
  * @param[in] functor The functor to be called on the input argument
  * @param[in] input_argument The input argument passed into the functor
- * 
+ *
 ```
 
 #### @return
 
-Add a single `@return` comment line at the end of the comment block if the function returns an object or value. Include a brief description of what is returned. Do not include the type of the object returned with the `@return` comment.
+Add a single `@return` comment line at the end of the comment block if the function returns an object or value.
+Include a brief description of what is returned.
 
 ```c++
  *
@@ -280,21 +294,22 @@ Add a single `@return` comment line at the end of the comment block if the funct
  */
 ```
 
-## Inline Examples
+Do not include the type of the object returned with the `@return` comment.
+
+### Inline Examples
 
 It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
-
 Use the `@code/@endcode` pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
-By default, the @code tag will use syntax highlighting based on the source code where it was found.
+By default, the `@code` tag will use syntax highlighting based on the source code where it was found.
 
 ```c++
 /**
  * @code
  * auto result = cudf::make_column( );
  * @endcode
-*/
+ */
 ```
 
 You can specify a different language by indicating the file extension in the tag:
@@ -308,24 +323,43 @@ You can specify a different language by indicating the file extension in the tag
  */
 ```
 
+If you wish to use pseudo-code in your example, use the following:
+
+```c++
+/**
+ * Sometimes pseudo-code is clearer.
+ * @code{.pseudo}
+ * s = int column of [ 1, 2, null, 4 ]
+ * r = fill( s, [1, 2], 0 )
+ * r is now [ 1, 0, 0, 4 ]
+ * @endcode
+ */
+```
+
 Do not use the `@example` tag in the comments for a declaration.
 Doxygen will interpret the entire source file as example source code when it encounters this tag.
 The source file is then published under the 'Examples' tab in the output pages.
 
 ## Namespaces
 
-A doxygen comment block should be included for only once for each unique namespace declaration.
-If more than one is found, doxygen will concatenate the descriptions in an arbitrary order in the output pages.
+Doxygen output includes a _Namespaces_ page that shows all the namespaces declared with comment blocks in the processed files.
+Here is an example of doxygen description comment for a namespace declaration.
 
-TODO: example
+```c++
+//! cuDF interfaces
+namespace cudf {
+```
+
+A description comment should be included for only once for each unique namespace declaration.
+Otherwise, if more than one description is found, doxygen will aggregate the descriptions in an arbitrary order in the output pages.
 
 ## Groups/Modules
 
 Grouping declarations into modules helps users to find APIs in the doxygen pages.
 Generally, common functions are already grouped logically into header files but not easily reflected in the doxygen output.
-Doxygen output includes a _Namespaces_ tab that groups functions by namespace.
-But the `cudf` namespace and even the `cudf::strings` namespace still include a large number of APIs and classes.
-Using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html) allows grouping of common functions across header files, source files, and even namespaces. Groups can also be nested by defining new groups within existing groups.
+Doxygen output includes a _Modules_ page that organizes items into groups using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html)
+These commands can group common functions across header files, source files, and even namespaces.
+Groups can also be nested by defining new groups within existing groups.
 
 
 
@@ -336,6 +370,6 @@ The doxygen tool can be installed using the instructions on its [Installation](h
 
 Building the output is simply running the `doxygen` command while in the `cpp/doxygen` directory containing the `Doxyfile`. The tool will read and process all appropriate source files under the `cpp/` directory. The output will be created in the `cpp/doxygen/html/` directory. You can load the local `index.html` file generated there into any web browser to view the result.
 
-By default, doxygen also employs the `graphviz dot` tool to build some diagrams of the class, namespace, and module relationships. If the `dot` tool cannot be found then the output will be generated without diagrams.
+By default, doxygen also uses the `graphviz dot` tool to build some diagrams of the class, namespace, and module relationships. If the `dot` tool cannot be found then the output will be generated without diagrams.
 
 The doxygen installation page does not include instructions for downloading and installing `graphviz dot`.
