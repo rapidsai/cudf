@@ -22,7 +22,7 @@ namespace dictionary {
 /**
  * @brief Dictionary Search APIs
  * @ingroup dictionary_apis
- * @addtogroup dictionary_search Search
+ * @addtogroup dictionary_search Searching
  * @{
  */
 

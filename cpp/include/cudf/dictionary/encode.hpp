@@ -33,7 +33,7 @@ namespace dictionary {
 /**
  * @brief Encoding and decoding dictionary columns
  * @ingroup dictionary_apis
- * @addtogroup dictionary_encode Encode/Decode
+ * @addtogroup dictionary_encode Encoding
  * @{
  */
 

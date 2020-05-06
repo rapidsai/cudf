@@ -23,7 +23,7 @@ namespace dictionary {
 /**
  * @brief Add, remove, and setting keys in a dictionary column
  * @ingroup dictionary_apis
- * @addtogroup dictionary_update_keys Update Keys
+ * @addtogroup dictionary_update_keys Updating Keys
  * @{
  */
 
