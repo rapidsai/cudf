@@ -2048,11 +2048,17 @@ class StringColumn(column.ColumnBase):
                     + str(self[index])
                 )
         elif str_dtype.kind in ("f"):
-            if not cpp_all_floats(self):
-                bool_check = cpp_is_float(self)
+            if self.null_count > 0:
+                string_col = self.dropna()
+            else:
+                string_col = self
+
+            if not cpp_all_floats(string_col):
+                bool_check = cpp_is_float(string_col)
                 index = bool_check.astype("int8").find_first_value(0)
                 raise ValueError(
-                    "could not convert string to float: " + str(self[index])
+                    "could not convert string to float: "
+                    + str(string_col[index])
                 )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
