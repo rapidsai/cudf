@@ -145,6 +145,7 @@
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
+- PR #5112 Adding `htoi` and `ip2int` support to `StringMethods`
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 
 ## Bug Fixes
