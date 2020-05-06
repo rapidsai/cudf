@@ -103,9 +103,9 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
     columns.emplace_back(data.cbegin(), data.cend(), validity.cbegin());
   }
 
-  auto mask_iter = cudf::test::make_counting_transform_iterator(
-    0, [&](auto i) { return random_int(0, 100) < percent_true; });
-  mask_wrapper mask(mask_iter, mask_iter + column_size);
+  std::vector<bool> mask_data(num_columns);
+  std::generate_n(mask_data.begin(), column_size, [&]() { return random_int(0, 100) < percent_true; });
+  mask_wrapper mask(mask_data. begin(), mask_data.end());
 
   std::vector<cudf::column_view> column_views(num_columns);
 
