@@ -246,6 +246,7 @@
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+- PR #5111 Fix header not being included in legacy jit transform.
 
 
 # cuDF 0.13.0 (31 Mar 2020)
