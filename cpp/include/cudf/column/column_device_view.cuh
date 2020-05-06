@@ -28,6 +28,7 @@
 
 namespace cudf {
 namespace detail {
+
 /**
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable in CUDA device code.
@@ -87,7 +88,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**
-   * @brief Returns the number of elements in the column
+   * @brief Returns the number of elements in the column.
    */
   __host__ __device__ size_type size() const noexcept { return _size; }
 
@@ -107,7 +108,7 @@ class alignas(16) column_device_view_base {
    */
   __host__ __device__ bool nullable() const noexcept { return nullptr != _null_mask; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
    *
    * @note This function does *not* account for the `offset()`.
@@ -299,7 +300,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
-   * @brief Return an iterator to the element following the last element of the column.
+   * @brief Returns an iterator to the element following the last element of the column.
    *
    * This iterator only supports columns where `has_nulls() == false`. Using it
    * with columns where `has_nulls() == true` will result in undefined behavior

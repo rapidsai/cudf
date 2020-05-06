@@ -84,7 +84,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
     std::move(device_view_owners), std::move(d_views), std::move(d_offsets), output_size);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
@@ -94,7 +94,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
  * @param dest_mask The output buffer to copy null masks into
  * @param number_of_mask_bits The total number of null masks bits that are being
  * copied
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_t const* output_offsets,
                                          size_type number_of_views,
@@ -289,7 +289,8 @@ struct concatenate_dispatch {
   rmm::mr::device_memory_resource* mr;
   cudaStream_t stream;
 
-  template <typename T, std::enable_if_t<is_fixed_width<T>()>* = nullptr>
+  // fixed width
+  template <typename T>
   std::unique_ptr<column> operator()()
   {
     bool const has_nulls =
@@ -302,25 +303,25 @@ struct concatenate_dispatch {
       return for_each_concatenate<T>(views, has_nulls, mr, stream);
     }
   }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  std::unique_ptr<column> operator()()
-  {
-    CUDF_FAIL("dictionary concatenate not yet supported");
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()()
-  {
-    return cudf::strings::detail::concatenate(views, mr, stream);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
-  std::unique_ptr<column> operator()()
-  {
-    return cudf::lists::detail::concatenate(views, mr, stream);
-  }
 };
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::dictionary32>()
+{
+  CUDF_FAIL("dictionary concatenate not yet supported");
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
+{
+  return cudf::strings::detail::concatenate(views, mr, stream);
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
+{
+  return cudf::lists::detail::concatenate(views, mr, stream);
+}
 
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat,

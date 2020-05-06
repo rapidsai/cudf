@@ -1072,16 +1072,6 @@ public class BinaryOpTest extends CudfTestBase {
                (b, l, r, i) -> b.append(((long)(l.getInt(i) >>> r))))) {
         assertColumnsAreEqual(expected, answer, "int32 >>> scalar = int64");
       }
-
-      try (Scalar s = Scalar.fromShort((short) 0x0000FFFF);
-           ColumnVector answer = s.shiftRightUnsigned(shiftBy, DType.INT16);
-           ColumnVector expected = forEachS(DType.INT16, (short) 0x0000FFFF,  shiftBy,
-               (b, l, r, i) -> {
-                 int shifted = l >>> r.getInt(i);
-                 b.append((short) shifted);
-               })) {
-        assertColumnsAreEqual(expected, answer, "scalar short >>> int32 = int16");
-      }
     }
   }
 

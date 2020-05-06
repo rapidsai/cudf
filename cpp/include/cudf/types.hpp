@@ -27,15 +27,15 @@
 #include <cstddef>
 #include <cstdint>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file types.hpp
  * @brief Type declarations for libcudf.
  *
- *---------------------------------------------------------------------------**/
+ **/
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Forward declaration of cudaStream_t
- *---------------------------------------------------------------------------**/
+ **/
 using cudaStream_t = struct CUstream_st*;
 
 namespace bit_mask {
@@ -86,17 +86,17 @@ using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates an unknown null count.
  *
  * Use this value when constructing any column-like object to indicate that
  * the null count should be computed on the first invocation of `null_count()`.
- *---------------------------------------------------------------------------**/
+ **/
 static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates the order in which elements should be sorted.
- *---------------------------------------------------------------------------**/
+ **/
 enum class order : bool {
   ASCENDING,  ///< Elements ordered from small to large
   DESCENDING  ///< Elements ordered from large to small
@@ -105,33 +105,52 @@ enum class order : bool {
 /**
  * @brief Enum to specify whether to include nulls or exclude nulls
  */
-enum class include_nulls : bool { NO, YES };
+enum class null_policy : bool {
+  EXCLUDE,  ///< exclude null elements
+  INCLUDE   ///< include null elements
+};
 
-/**---------------------------------------------------------------------------*
+/**
+ * @brief Enum to treat NaN floating point value as null or non-null element
+ */
+enum class nan_policy : bool {
+  NAN_IS_NULL,  ///< treat nans as null elements
+  NAN_IS_VALID  ///< treat nans as valid elements (non-null)
+};
+
+/**
+ * @brief
+ */
+enum class null_equality : bool {
+  EQUAL,   ///< nulls compare equal
+  UNEQUAL  ///< nulls compare unequal
+};
+
+/**
  * @brief Indicates how null values compare against all other values.
- *---------------------------------------------------------------------------**/
+ **/
 enum class null_order : bool {
   AFTER,  ///< NULL values ordered *after* all other values
   BEFORE  ///< NULL values ordered *before* all other values
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates whether a collection of values is known to be sorted.
- *---------------------------------------------------------------------------**/
+ */
 enum class sorted : bool { NO, YES };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates how a collection of values has been ordered.
- *---------------------------------------------------------------------------**/
+ **/
 struct order_info {
   sorted is_sorted;
   order ordering;
   null_order null_ordering;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Controls the allocation/initialization of a null mask.
- *---------------------------------------------------------------------------**/
+ **/
 enum class mask_state : int32_t {
   UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
   UNINITIALIZED,  ///< Null mask allocated, but not initialized
@@ -155,9 +174,9 @@ enum class interpolation : int32_t {
 
 }  // namespace experimental
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Identifies a column's logical element type
- *---------------------------------------------------------------------------**/
+ **/
 enum type_id {
   EMPTY = 0,               ///< Always null with no underlying data
   INT8,                    ///< 1 byte signed integer
@@ -179,12 +198,12 @@ enum type_id {
   NUM_TYPE_IDS  ///< Total number of type ids
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicator for the logical data type of an element in a column.
  *
  * Simple types can be be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
- *---------------------------------------------------------------------------**/
+ **/
 class data_type {
  public:
   data_type()                 = default;
@@ -194,16 +213,16 @@ class data_type {
   data_type& operator=(data_type const&) = default;
   data_type& operator=(data_type&&) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a new `data_type` object
    *
    * @param id The type's identifier
-   *---------------------------------------------------------------------------**/
+   **/
   explicit constexpr data_type(type_id id) : _id{id} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the type identifier
-   *---------------------------------------------------------------------------**/
+   **/
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
  private:
@@ -212,7 +231,7 @@ class data_type {
   // scale, etc.
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Compares two `data_type` objects for equality.
  *
  * // TODO Define exactly what it means for two `data_type`s to be equal. e.g.,
@@ -223,7 +242,7 @@ class data_type {
  * @param rhs The second `data_type` to compare
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
- *---------------------------------------------------------------------------**/
+ */
 inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
 
 /**

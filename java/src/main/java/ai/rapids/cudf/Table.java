@@ -1047,6 +1047,26 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Returns first aggregation.
+   * @param index Column on which first aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return first aggregation of column `index`
+   */
+  public static Aggregate first(int index, boolean includeNulls) {
+    return Aggregate.first(index, includeNulls);
+  }
+
+  /**
+   * Returns last aggregation.
+   * @param index Column on which last aggregation is to be performed.
+   * @param includeNulls Specifies whether null values are included in the aggregate operation.
+   * @return last aggregation of column `index`
+   */
+  public static Aggregate last(int index, boolean includeNulls) {
+    return Aggregate.last(index, includeNulls);
+  }
+
+  /**
    * Returns aggregate operations grouped by columns provided in indices
    * @param groupByOptions Options provided in the builder
    * @param indices columnns to be considered for groupBy

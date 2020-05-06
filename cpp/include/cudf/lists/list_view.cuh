@@ -25,18 +25,12 @@
 
 namespace cudf {
 
+/**
+ * @brief A non-owning, immutable view of device data that represents
+ * a list of elements of arbitrary type (including further nested lists).
+ *
+ */
 class list_view {
- public:
-  /**
-   * @brief Default constructor represents an empty list.
-   */
-  __host__ __device__ list_view() {}
-
-  list_view(const list_view&) = default;
-  list_view(list_view&&)      = default;
-  ~list_view()                = default;
-  list_view& operator=(const list_view&) = default;
-  list_view& operator=(list_view&&) = default;
 };
 
 }  // namespace cudf

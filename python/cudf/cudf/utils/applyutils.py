@@ -4,13 +4,20 @@ import functools
 
 import cupy
 from numba import cuda
-from numba.utils import pysignature
 
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    # Numba >= 0.49
+    from numba.core.utils import pysignature
+except ImportError:
+    # Numba <= 0.49
+    from numba.utils import pysignature
+
 
 _doc_applyparams = """
 df : DataFrame

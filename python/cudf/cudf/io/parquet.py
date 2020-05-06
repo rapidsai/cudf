@@ -19,7 +19,7 @@ def _get_partition_groups(df, partition_cols, preserve_index=False):
     df = df.sort_values(partition_cols)
     if not preserve_index:
         df = df.reset_index(drop=True)
-    divisions = df[partition_cols].drop_duplicates()
+    divisions = df[partition_cols].drop_duplicates(ignore_index=True)
     splits = df[partition_cols].searchsorted(divisions, side="left")
     splits = splits.tolist() + [len(df[partition_cols])]
     return [

@@ -50,7 +50,8 @@ using std::vector;
 namespace cudf {
 namespace io {
 namespace csv {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Estimates the maximum expected length or a row, based on the number
  * of columns
  *
@@ -60,7 +61,7 @@ namespace csv {
  * @param[in] num_columns Number of columns in the CSV file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- *---------------------------------------------------------------------------**/
+ **/
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
@@ -458,7 +459,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
+  if (skip_rows > 0 && skip_rows < std::distance(it_begin, it_end)) { it_begin += skip_rows; }
 
   // Exclude the rows outside of requested range
   if (range_size != 0) {
@@ -495,7 +496,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+  if (skip_end_rows > 0 && skip_end_rows < std::distance(it_begin, it_end)) {
     it_end -= skip_end_rows;
   }
 

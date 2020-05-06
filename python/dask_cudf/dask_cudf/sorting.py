@@ -61,9 +61,22 @@ def _shuffle_group_2(df, cols, ignore_index, nparts):
 def _simple_shuffle(df, columns, npartitions, ignore_index=True):
 
     token = tokenize(df, columns)
+    simple_shuffle_group_token = "simple-shuffle-group-" + token
+    simple_shuffle_split_token = "simple-shuffle-split-" + token
+    simple_shuffle_combine_token = "simple-shuffle-combine-" + token
 
-    group = {  # Convert partition into dict of dataframe pieces
-        ("simple-shuffle-group-" + token, i): (
+    # Pre-Materialize tuples with max number of values
+    # to be iterated upon in this function and
+    # loop using slicing later.
+    iter_tuples = tuple(range(max(df.npartitions, npartitions)))
+
+    group = {}
+    split = {}
+    combine = {}
+
+    for i in iter_tuples[: df.npartitions]:
+        # Convert partition into dict of dataframe pieces
+        group[(simple_shuffle_group_token, i)] = (
             _shuffle_group,
             (df._name, i),
             columns,
@@ -73,43 +86,36 @@ def _simple_shuffle(df, columns, npartitions, ignore_index=True):
             ignore_index,
             npartitions,
         )
-        for i in range(df.npartitions)
-    }
 
-    split = {  # Get out each individual dataframe piece from the dicts
-        ("simple-shuffle-split-" + token, i, j): (
-            getitem,
-            ("simple-shuffle-group-" + token, i),
-            j,
-        )
-        for i in range(df.npartitions)
-        for j in range(npartitions)
-    }
+    for j in iter_tuples[:npartitions]:
+        _concat_list = []
+        for i in iter_tuples[: df.npartitions]:
+            # Get out each individual dataframe piece from the dicts
+            split[(simple_shuffle_split_token, i, j)] = (
+                getitem,
+                (simple_shuffle_group_token, i),
+                j,
+            )
 
-    combine = {  # concatenate those pieces together, with their friends
-        ("simple-shuffle-combine-" + token, j): (
+            _concat_list.append((simple_shuffle_split_token, i, j))
+
+        # concatenate those pieces together, with their friends
+        combine[(simple_shuffle_combine_token, j)] = (
             _concat,
-            [
-                ("simple-shuffle-split-" + token, i, j)
-                for i in range(df.npartitions)
-            ],
+            _concat_list,
             ignore_index,
         )
-        for j in range(npartitions)
-    }
 
     dsk = toolz.merge(group, split, combine)
     graph = HighLevelGraph.from_collections(
-        "simple-shuffle-combine-" + token, dsk, dependencies=[df]
+        simple_shuffle_combine_token, dsk, dependencies=[df]
     )
     if df.npartitions == npartitions:
         divisions = df.divisions
     else:
         divisions = (None,) * (npartitions + 1)
 
-    return df.__class__(
-        graph, "simple-shuffle-combine-" + token, df, divisions
-    )
+    return df.__class__(graph, simple_shuffle_combine_token, df, divisions)
 
 
 def rearrange_by_hash(
@@ -146,26 +152,36 @@ def rearrange_by_hash(
     groups = []
     splits = []
     combines = []
+    inputs = []
 
-    inputs = [
-        tuple(digit(i, j, k) for j in range(stages))
-        for i in range(k ** stages)
-    ]
+    start = {}
+    end = {}
 
     token = tokenize(df, columns, max_branch)
+    shuffle_combine_token = "shuffle-combine-" + token
+    shuffle_token = "shuffle-" + token
 
-    start = {
-        ("shuffle-combine-" + token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
-        for i, inp in enumerate(inputs)
-    }
+    for i in range(k ** stages):
+        inp = tuple(digit(i, j, k) for j in range(stages))
+
+        start[(shuffle_combine_token, 0, inp)] = (
+            (df._name, i) if i < df.npartitions else df._meta
+        )
+        end[(shuffle_token, i)] = (shuffle_combine_token, stages, inp)
+        inputs.append(inp)
+
+    shuffle_group_token = "shuffle-group-" + token
+    shuffle_split_token = "shuffle-split-" + token
 
     for stage in range(1, stages + 1):
-        group = {  # Convert partition into dict of dataframe pieces
-            ("shuffle-group-" + token, stage, inp): (
+        group = {}
+        split = {}
+        combine = {}
+        for inp in inputs:
+            # Convert partition into dict of dataframe pieces
+            group[(shuffle_group_token, stage, inp)] = (
                 _shuffle_group,
-                ("shuffle-combine-" + token, stage - 1, inp),
+                (shuffle_combine_token, stage - 1, inp),
                 columns,
                 stage - 1,
                 k,
@@ -173,56 +189,48 @@ def rearrange_by_hash(
                 ignore_index,
                 npartitions,
             )
-            for inp in inputs
-        }
 
-        split = {  # Get out each individual dataframe piece from the dicts
-            ("shuffle-split-" + token, stage, i, inp): (
-                getitem,
-                ("shuffle-group-" + token, stage, inp),
-                i,
-            )
-            for i in range(k)
-            for inp in inputs
-        }
+            _concat_list = []
+            for i in range(k):
+                # Get out each individual dataframe piece from the dicts
+                split[(shuffle_split_token, stage, i, inp)] = (
+                    getitem,
+                    (shuffle_group_token, stage, inp),
+                    i,
+                )
 
-        combine = {  # concatenate those pieces together, with their friends
-            ("shuffle-combine-" + token, stage, inp): (
-                _concat,
-                [
+                _concat_list.append(
                     (
-                        "shuffle-split-" + token,
+                        shuffle_split_token,
                         stage,
                         inp[stage - 1],
-                        insert(inp, stage - 1, j),
+                        insert(inp, stage - 1, i),
                     )
-                    for j in range(k)
-                ],
+                )
+
+            # concatenate those pieces together, with their friends
+            combine[(shuffle_combine_token, stage, inp)] = (
+                _concat,
+                _concat_list,
                 ignore_index,
             )
-            for inp in inputs
-        }
+
         groups.append(group)
         splits.append(split)
         combines.append(combine)
 
-    end = {
-        ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
-        for i, inp in enumerate(inputs)
-    }
-
     dsk = toolz.merge(start, end, *(groups + splits + combines))
     graph = HighLevelGraph.from_collections(
-        "shuffle-" + token, dsk, dependencies=[df]
+        shuffle_token, dsk, dependencies=[df]
     )
-    df2 = df.__class__(graph, "shuffle-" + token, df, df.divisions)
+    df2 = df.__class__(graph, shuffle_token, df, df.divisions)
 
     if npartitions is not None and npartitions != df.npartitions:
-        parts = [i % df.npartitions for i in range(npartitions)]
         token = tokenize(df2, npartitions)
 
+        repartition_group_token = "repartition-group-" + token
         dsk = {
-            ("repartition-group-" + token, i): (
+            (repartition_group_token, i): (
                 _shuffle_group_2,
                 k,
                 columns,
@@ -231,18 +239,19 @@ def rearrange_by_hash(
             )
             for i, k in enumerate(df2.__dask_keys__())
         }
+        repartition_get_token = "repartition-get-" + token
         for p in range(npartitions):
-            dsk[("repartition-get-" + token, p)] = (
+            dsk[(repartition_get_token, p)] = (
                 shuffle_group_get,
-                ("repartition-group-" + token, parts[p]),
+                (repartition_group_token, p % df.npartitions),
                 p,
             )
 
         graph2 = HighLevelGraph.from_collections(
-            "repartition-get-" + token, dsk, dependencies=[df2]
+            repartition_get_token, dsk, dependencies=[df2]
         )
         df3 = df2.__class__(
-            graph2, "repartition-get-" + token, df2, [None] * (npartitions + 1)
+            graph2, repartition_get_token, df2, [None] * (npartitions + 1)
         )
     else:
         df3 = df2

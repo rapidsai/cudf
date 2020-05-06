@@ -50,7 +50,7 @@ struct packed<sizeof(uint32_t)> {
 template <typename pair_type>
 using packed_t = typename packed<sizeof(pair_type)>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Indicates if a pair type can be packed.
  *
  * When the size of the key,value pair being inserted into the hash table is
@@ -64,7 +64,7 @@ using packed_t = typename packed<sizeof(pair_type)>::type;
  * @tparam pair_type The pair type in question
  * @return true If the pair type can be packed
  * @return false  If the pair type cannot be packed
- *---------------------------------------------------------------------------**/
+ **/
 template <typename pair_type,
           typename key_type   = typename pair_type::first_type,
           typename value_type = typename pair_type::second_type>
@@ -74,12 +74,12 @@ constexpr bool is_packable()
          not std::is_void<packed_t<pair_type>>::value;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Allows viewing a pair in a packed representation
  *
  * Used as an optimization for inserting when a pair can be inserted with a
  * single atomicCAS
- *---------------------------------------------------------------------------**/
+ **/
 template <typename pair_type, typename Enable = void>
 union pair_packer;
 
@@ -125,7 +125,7 @@ class concurrent_unordered_map {
   using const_iterator = const cycle_iterator_adapter<value_type*>;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Factory to construct a new concurrent unordered map.
    *
    * Returns a `std::unique_ptr` to a new concurrent unordered map object. The
@@ -152,7 +152,7 @@ class concurrent_unordered_map {
    * @param allocator The allocator to use for allocation the hash table's
    * storage
    * @param stream CUDA stream to use for device operations.
-   *---------------------------------------------------------------------------**/
+   **/
   static auto create(size_type capacity,
                      const mapped_type unused_element = std::numeric_limits<key_type>::max(),
                      const key_type unused_key        = std::numeric_limits<key_type>::max(),
@@ -239,10 +239,10 @@ class concurrent_unordered_map {
   __host__ __device__ size_type capacity() const { return m_capacity; }
 
  private:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Enumeration of the possible results of attempting to insert into
    *a hash bucket
-   *---------------------------------------------------------------------------**/
+   **/
   enum class insert_result {
     CONTINUE,  ///< Insert did not succeed, continue trying to insert
                ///< (collision)
@@ -250,13 +250,13 @@ class concurrent_unordered_map {
     DUPLICATE  ///< Insert did not succeed, key is already present
   };
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Specialization for value types that can be packed.
    *
    * When the size of the key,value pair being inserted is equal in size to
    *a type where atomicCAS is natively supported, this optimization path
    *will insert the pair in a single atomicCAS operation.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename pair_type = value_type>
   __device__ std::enable_if_t<is_packable<pair_type>(), insert_result> attempt_insert(
     value_type* insert_location, value_type const& insert_pair)
@@ -274,13 +274,13 @@ class concurrent_unordered_map {
     return insert_result::CONTINUE;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Atempts to insert a key,value pair at the specified hash bucket.
    *
    * @param[in] insert_location Pointer to hash bucket to attempt insert
    * @param[in] insert_pair The pair to insert
    * @return Enum indicating result of insert attempt.
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename pair_type = value_type>
   __device__ std::enable_if_t<not is_packable<pair_type>(), insert_result> attempt_insert(
     value_type* const __restrict__ insert_location, value_type const& insert_pair)
@@ -300,7 +300,7 @@ class concurrent_unordered_map {
   }
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Attempts to insert a key, value pair into the map.
    *
    * Returns an iterator, boolean pair.
@@ -317,7 +317,7 @@ class concurrent_unordered_map {
    * @return Iterator, Boolean pair. Iterator is to the location of the
    *newly inserted pair, or the existing pair that prevented the insert.
    *Boolean indicates insert success.
-   *---------------------------------------------------------------------------**/
+   **/
   __device__ thrust::pair<iterator, bool> insert(value_type const& insert_pair)
   {
     const size_type key_hash{m_hf(insert_pair.first)};
@@ -339,7 +339,7 @@ class concurrent_unordered_map {
       iterator(m_hashtbl_values, m_hashtbl_values + m_capacity, current_bucket), insert_success);
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Searches the map for the specified key.
    *
    * @note `find` is not threadsafe with `insert`. I.e., it is not safe to
@@ -347,7 +347,7 @@ class concurrent_unordered_map {
    *
    * @param k The key to search for
    * @return An iterator to the key if it exists, else map.end()
-   *---------------------------------------------------------------------------**/
+   **/
   __device__ const_iterator find(key_type const& k) const
   {
     size_type const key_hash = m_hf(k);
@@ -369,7 +369,7 @@ class concurrent_unordered_map {
     }
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Searches the map for the specified key.
    *
    * This version of the find function specifies a hashing function and an
@@ -389,7 +389,7 @@ class concurrent_unordered_map {
    * @param f_equal   The equality function to use to compare this key with the
    *                  contents of the hash table
    * @return An iterator to the key if it exists, else map.end()
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename find_hasher, typename find_key_equal>
   __device__ const_iterator find(key_type const& k,
                                  find_hasher f_hash,
@@ -462,14 +462,14 @@ class concurrent_unordered_map {
     return GDF_SUCCESS;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Frees the contents of the map and destroys the map object.
    *
    * This function is invoked as the deleter of the `std::unique_ptr` returned
    * from the `create()` factory function.
    *
    * @param stream CUDA stream to use for device operations.
-   *---------------------------------------------------------------------------**/
+   **/
   void destroy(cudaStream_t stream = 0)
   {
     m_allocator.deallocate(m_hashtbl_values, m_capacity, stream);
@@ -492,7 +492,7 @@ class concurrent_unordered_map {
   size_type m_capacity;
   value_type* m_hashtbl_values;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Private constructor used by `create` factory function.
    *
    * @param capacity The desired m_capacity of the hash table
@@ -504,7 +504,7 @@ class concurrent_unordered_map {
    * @param allocator The allocator to use for allocation the hash table's
    * storage
    * @param stream CUDA stream to use for device operations.
-   *---------------------------------------------------------------------------**/
+   **/
   concurrent_unordered_map(size_type capacity,
                            const mapped_type unused_element,
                            const key_type unused_key,
