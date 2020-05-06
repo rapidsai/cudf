@@ -355,9 +355,9 @@ TEST_F(BinaryOperationIntegrationTest, Mod_Vector_Vector_FP64)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
 
-TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64)
+TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP64_SI64_SI64)
 {
-  using TypeOut = int64_t;
+  using TypeOut = double;
   using TypeLhs = int64_t;
   using TypeRhs = int64_t;
 
@@ -370,7 +370,34 @@ TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_SI64)
                                                   cudf::experimental::binary_operator::POW,
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW());
+  /**
+   * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
+   * Mathematical Standard Library Functions with Maximum ULP Error'
+   * The pow function has 2 (full range) maximum ulp error.
+   */
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
+}
+
+TEST_F(BinaryOperationIntegrationTest, Pow_Vector_Vector_FP32)
+{
+  using TypeOut = float;
+  using TypeLhs = float;
+  using TypeRhs = float;
+
+  using POW = cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = make_random_wrapped_column<TypeRhs>(100);
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::POW,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+  /**
+   * According to CUDA Programming Guide, 'E.1. Standard Functions', 'Table 7 - Double-Precision
+   * Mathematical Standard Library Functions with Maximum ULP Error'
+   * The pow function has 2 (full range) maximum ulp error.
+   */
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
 }
 
 TEST_F(BinaryOperationIntegrationTest, And_Vector_Vector_SI16_SI64_SI32)
@@ -1137,6 +1164,86 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, ATan2_Scalar_Vector_FP32)
+{
+  using TypeOut = float;
+  using TypeLhs = float;
+  using TypeRhs = float;
+
+  using ATAN2 = cudf::library::operation::ATan2<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_scalar<TypeLhs>();
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::ATAN2,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  // atan2 has a max ULP error of 2 per CUDA programming guide
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Scalar_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = double;
+  using TypeRhs = double;
+
+  using ATAN2 = cudf::library::operation::ATan2<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_scalar<TypeRhs>();
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::ATAN2,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  // atan2 has a max ULP error of 2 per CUDA programming guide
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_FP32_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = float;
+  using TypeRhs = double;
+
+  using ATAN2 = cudf::library::operation::ATan2<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::ATAN2,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  // atan2 has a max ULP error of 2 per CUDA programming guide
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
+}
+
+TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
+{
+  using TypeOut = double;
+  using TypeLhs = int32_t;
+  using TypeRhs = int64_t;
+
+  using ATAN2 = cudf::library::operation::ATan2<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::ATAN2,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  // atan2 has a max ULP error of 2 per CUDA programming guide
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
 }
 
 }  // namespace binop

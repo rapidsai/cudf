@@ -53,18 +53,15 @@ enum class binary_operator : int32_t {
                    ///< ptx code
   SHIFT_LEFT,      ///< operator <<
   SHIFT_RIGHT,     ///< operator >>
-
   // Logical right shift. Casts to an unsigned value before shifing.
   // approximates >>> from Java.
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
-
-  LOG_BASE,  ///< logarithm to the base
-
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
   // If remainder is negative, this returns (remainder + divisor) % divisor
   // else, it returns (dividend % divisor)
   PMOD,  ///< positive modulo operator
-
-  INVALID_BINARY  ///< invalid operation
+  INVALID_BINARY         ///< invalid operation
 };
 
 /**
