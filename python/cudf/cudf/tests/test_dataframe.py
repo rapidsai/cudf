@@ -3378,12 +3378,6 @@ def test_series_astype_null_cases():
         ),
     )
 
-    # string to other
-    assert_eq(
-        gd.Series([1, 2, 3], dtype="int32"),
-        gd.Series(["1", "2", "3"]).astype("int32"),
-    )
-
     assert_eq(
         gd.Series(
             ["2001-01-01", "2001-02-01", None, "2001-03-01"],
