@@ -953,7 +953,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
       JNI_NULL_CHECK(env, tables[i], "input table included a null", NULL);
       to_concat.push_back(*tables[i]);
     }
-    std::unique_ptr<cudf::experimental::table> table_result = cudf::experimental::concatenate(to_concat);
+    std::unique_ptr<cudf::experimental::table> table_result = cudf::concatenate(to_concat);
     return cudf::jni::convert_table_for_return(env, table_result);
   }
   CATCH_STD(env, NULL);

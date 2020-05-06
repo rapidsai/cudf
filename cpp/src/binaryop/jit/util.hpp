@@ -66,6 +66,7 @@ std::string inline get_operator_name(binary_operator op, OperatorType type)
     case binary_operator::SHIFT_RIGHT: operator_name = "ShiftRight"; break;
     case binary_operator::SHIFT_RIGHT_UNSIGNED: operator_name = "ShiftRightUnsigned"; break;
     case binary_operator::LOG_BASE: operator_name = "LogBase"; break;
+    case binary_operator::ATAN2: operator_name = "ATan2"; break;
     default: operator_name = "None"; break;
   }
   if (type == OperatorType::Direct) {

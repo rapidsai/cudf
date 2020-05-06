@@ -179,7 +179,7 @@ TEST_F(TableTest, ConcatenateTables)
   cols_table2.push_back(col3_table2.release());
   Table t2(std::move(cols_table2));
 
-  auto concat_table = cudf::experimental::concatenate({t1.view(), t2.view()});
+  auto concat_table = cudf::concatenate({t1.view(), t2.view()});
 
   cudf::test::expect_tables_equal(*concat_table, gold_table);
 }
@@ -209,7 +209,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[1]);
     std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::experimental::concatenate(table_views_to_concat);
+      cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13}};
     cudf::test::strings_column_wrapper exp2_1(
@@ -222,7 +222,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     table_views_to_concat.push_back(partitioned1[0]);
     table_views_to_concat.push_back(partitioned2[1]);
     std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::experimental::concatenate(table_views_to_concat);
+      cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 4, 3, 6, 15, 14, 13}};
     cudf::test::strings_column_wrapper exp2_1(
@@ -235,7 +235,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsets)
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[0]);
     std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::experimental::concatenate(table_views_to_concat);
+      cudf::concatenate(table_views_to_concat);
 
     column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 5, 8, 5}};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"});
@@ -271,7 +271,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[1]);
     std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::experimental::concatenate(table_views_to_concat);
+      cudf::concatenate(table_views_to_concat);
 
     cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{{5, 8, 5, 6, 6, 15, 14, 13},
                                                            {1, 1, 1, 1, 1, 1, 1, 0}};
@@ -285,7 +285,7 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
     table_views_to_concat.push_back(partitioned1[1]);
     table_views_to_concat.push_back(partitioned2[0]);
     std::unique_ptr<cudf::experimental::table> concatenated_tables =
-      cudf::experimental::concatenate(table_views_to_concat);
+      cudf::concatenate(table_views_to_concat);
 
     cudf::test::fixed_width_column_wrapper<int32_t> exp1_1{5, 8, 5, 6, 5, 8, 5};
     cudf::test::strings_column_wrapper exp2_1({"dada", "kite", "dog", "ln", "dada", "kite", "dog"},
