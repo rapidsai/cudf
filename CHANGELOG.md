@@ -16,6 +16,7 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
 
