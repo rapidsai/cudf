@@ -181,6 +181,35 @@ class StringMethods(object):
         else:
             raise AttributeError(attr)
 
+    def htoi(self):
+        """
+        This converts hex strings to integers
+        """
+
+        from cudf.core.series import Series
+
+        out = str_cast.htoi(self._column)
+        if isinstance(self._parent, Series):
+            out = Series(
+                out, index=self._parent.index, name=self._parent.name,
+            )
+
+        return out
+
+    def ip2int(self):
+        """
+        This converts ip strings to integers
+        """
+        from cudf.core.series import Series
+
+        out = str_cast.ip2int(self._column)
+        if isinstance(self._parent, Series):
+            out = Series(
+                out, index=self._parent.index, name=self._parent.name,
+            )
+
+        return out
+
     def _return_or_inplace(self, new_col, **kwargs):
         """
         Returns an object of the type of the column owner or updates the column

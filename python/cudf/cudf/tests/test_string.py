@@ -1828,3 +1828,31 @@ def test_string_str_decode_url(data):
     got = gs.str.url_decode()
     expected = pd.Series([urllib.parse.unquote(url) for url in data])
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["f0:18:98:22:c2:e4", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"],
+        ["f0189822c2e4", "000000000000", "ffffffffffff"],
+        # ['0xf0189822c2e4', '0x000000000000', '0xffffffffffff'],
+        # ['0Xf0189822c2e4', '0X000000000000', '0Xffffffffffff'],
+    ],
+)
+def test_string_hex_to_int(data):
+
+    gsr = Series(data)
+
+    got = gsr.str.htoi()
+    expected = Series([263988422296292, 0, 281474976710655])
+
+    assert_eq(expected, got)
+
+
+def test_string_ip_to_int():
+    gsr = Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
+    expected = Series([0, None, 0, 698875905, 2130706433, 700776449])
+
+    got = gsr.str.ip2int()
+
+    assert_eq(expected, got)
