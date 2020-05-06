@@ -66,7 +66,6 @@ std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-namespace experimental {
 /**
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
  * single table_view
@@ -93,11 +92,10 @@ namespace experimental {
  * @param mr Optional The resource to use for all allocations
  * @return Unique pointer to a single table having all the rows from the
  * elements of `tables_to_concat` respectively in the same order.
- */
-std::unique_ptr<table> concatenate(
+ **/
+std::unique_ptr<experimental::table> concatenate(
   std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
 /** @} */  // end of group
 }  // namespace cudf
