@@ -19,5 +19,15 @@ repos:
                 name: flake8-cython
                 args: ["--config=python/cudf/.flake8.cython"]
                 types: [cython]
+      - repo: local
+        hooks:
+              - id: clang-format
+                name: clang-format
+                description: Format files with ClangFormat.
+                entry: clang-format -i
+                language: system
+                files: \.(cu|cuh|h|hpp|cpp|inl)$
+                args: ['-fallback-style=none']
+
 default_language_version:
       python: python3
