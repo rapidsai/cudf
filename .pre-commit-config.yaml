@@ -26,7 +26,7 @@ repos:
                 description: Format files with ClangFormat.
                 entry: clang-format -i
                 language: system
-                files: \.(cu|cuh|h|hpp|cpp)$
+                files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
 
 default_language_version:
