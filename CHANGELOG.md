@@ -143,6 +143,7 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 
 ## Bug Fixes
 
