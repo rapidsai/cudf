@@ -20,7 +20,7 @@ from cudf._lib.cpp.sorting cimport(
     rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
 )
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.cpp.types cimport order, null_order, include_nulls
+from cudf._lib.cpp.types cimport order, null_order, null_policy
 
 
 def is_sorted(
@@ -247,10 +247,10 @@ def rank_columns(Table source_table, object method, str na_option,
             null_precedence = null_order.AFTER
         else:
             null_precedence = null_order.BEFORE
-    cdef include_nulls _include_nulls = (
-        include_nulls.NO
+    cdef null_policy c_null_handling = (
+        null_policy.EXCLUDE
         if na_option == 'keep'
-        else include_nulls.YES
+        else null_policy.INCLUDE
     )
     cdef bool percentage = True if pct else False
 
@@ -265,7 +265,7 @@ def rank_columns(Table source_table, object method, str na_option,
                     c_view,
                     c_rank_method,
                     column_order,
-                    _include_nulls,
+                    c_null_handling,
                     null_precedence,
                     percentage
                 )

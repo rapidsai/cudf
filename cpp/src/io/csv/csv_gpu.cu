@@ -288,7 +288,7 @@ template <typename T, int base>
 __inline__ __device__ T
 decode_value(const char *data, long start, long end, ParseOptions const &opts)
 {
-  return cudf::experimental::io::gpu::parse_numeric<T>(data, start, end, opts, base);
+  return cudf::experimental::io::gpu::parse_numeric<T, base>(data, start, end, opts);
 }
 
 template <typename T>
@@ -481,7 +481,7 @@ struct decode_op {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief CUDA kernel that parses and converts CSV data into cuDF column data.
  *
  * Data is processed one record at a time
@@ -496,7 +496,7 @@ struct decode_op {
  * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void convertCsvToGdf(const char *raw_csv,
                                 const ParseOptions opts,
                                 size_t num_records,

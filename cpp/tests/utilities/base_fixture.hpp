@@ -37,7 +37,7 @@ namespace test {
  * ```
  * class MyTestFixture : public cudf::test::BaseFixture {};
  * ```
- */
+ **/
 class BaseFixture : public ::testing::Test {
   rmm::mr::device_memory_resource *_mr{rmm::mr::get_default_resource()};
 
@@ -45,7 +45,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheritng from this fixture
-   */
+   **/
   rmm::mr::device_memory_resource *mr() { return _mr; }
 };
 
@@ -77,6 +77,28 @@ struct uniform_distribution_impl<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
 template <typename T>
 using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
 
+namespace detail {
+
+/**
+ * @brief Returns an incrementing seed value for use with UniformRandomGenerator.
+ *
+ *  The intent behind this is to handle the following case:
+ *
+ * auto lhs = make_random_wrapped_column<TypeLhs>(10000);
+ * auto rhs = make_random_wrapped_column<TypeRhs>(10000);
+ *
+ * Previously, the binops test framework had a persistent UniformRandomGenerator
+ * that would produce unique values across two calls to make_random_wrapped_column()
+ * like this.  However that code has been changed and each call to make_random_wrapped_column()
+ * now uses a local UniformRandomGenerator object.  If we didn't generate an incrementing seed
+ * for each one, every call to make_random_wrapped_column() would return the same values. This
+ * fixes that case and also leaves results across multiple test runs deterministic.
+ *
+ */
+uint64_t random_generator_incrementing_seed();
+
+}  // namespace detail
+
 /**
  * @brief Provides uniform random number generation.
  *
@@ -92,13 +114,13 @@ using uniform_distribution_t = typename uniform_distribution_impl<T>::type;
  * ```
  *
  * @tparam T The type of values that will be generated.
- */
+ **/
 template <typename T = cudf::size_type, typename Engine = std::default_random_engine>
 class UniformRandomGenerator {
  public:
   using uniform_distribution = uniform_distribution_t<T>;
 
-  UniformRandomGenerator() = default;
+  UniformRandomGenerator() : rng{std::mt19937_64{detail::random_generator_incrementing_seed()}()} {}
 
   /**
    * @brief Construct a new Uniform Random Generator to generate uniformly
@@ -107,16 +129,37 @@ class UniformRandomGenerator {
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
    */
-  UniformRandomGenerator(T lower, T upper) : dist{lower, upper} {}
+  template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()> * = nullptr>
+  UniformRandomGenerator(T lower,
+                         T upper,
+                         uint64_t seed = detail::random_generator_incrementing_seed())
+    : dist{lower, upper}, rng{std::mt19937_64{seed}()}
+  {
+  }
+
+  /**
+   * @brief Construct a new Uniform Random Generator to generate uniformly
+   * random numbers in the range `[upper,lower]`
+   *
+   * @param lower Lower bound of the range
+   * @param upper Upper bound of the desired range
+   */
+  template <typename TL = T, std::enable_if_t<cudf::is_timestamp<TL>()> * = nullptr>
+  UniformRandomGenerator(long lower,
+                         long upper,
+                         uint64_t seed = detail::random_generator_incrementing_seed())
+    : dist{lower, upper}, rng{std::mt19937_64{seed}()}
+  {
+  }
 
   /**
    * @brief Returns the next random number.
-   */
+   **/
   T generate() { return T{dist(rng)}; }
 
  private:
-  uniform_distribution dist{};         ///< Distribution
-  Engine rng{std::random_device{}()};  ///< Random generator
+  uniform_distribution dist{};  ///< Distribution
+  Engine rng;                   ///< Random generator
 };
 
 /**
@@ -127,15 +170,19 @@ class UniformRandomGenerator {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- */
+ **/
 class TempDirTestEnvironment : public ::testing::Environment {
  public:
   std::string tmpdir;
 
   void SetUp()
   {
-    char tmp_format[] = "/tmp/gtest.XXXXXX";
-    tmpdir            = mkdtemp(tmp_format);
+    std::string tmp("/tmp");
+    if (const char *env_p = std::getenv("WORKSPACE")) tmp = env_p;
+    tmp += "/gtest.XXXXXX";
+    auto tmpdirptr = mkdtemp(const_cast<char *>(tmp.data()));
+    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + tmp);
+    tmpdir = tmpdirptr;
     tmpdir += "/";
   }
 

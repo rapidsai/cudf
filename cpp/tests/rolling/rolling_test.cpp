@@ -63,7 +63,7 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
     window[0],
     window[0],
     1,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -99,7 +99,7 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
     window[0],
     window[0],
     1,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -135,7 +135,7 @@ TEST_F(RollingStringTest, MinPeriods)
     window[0],
     window[0],
     4,
-    cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+    cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
 
   cudf::test::expect_columns_equal(expected_min, got_min->view());
   cudf::test::expect_columns_equal(expected_max, got_max->view());
@@ -224,7 +224,7 @@ class RollingTest : public cudf::test::BaseFixture {
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::experimental::make_count_aggregation(cudf::include_nulls::YES));
+                 cudf::experimental::make_count_aggregation(cudf::null_policy::INCLUDE));
     run_test_col(input,
                  preceding_window,
                  following_window,

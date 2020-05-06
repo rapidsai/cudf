@@ -24,7 +24,8 @@
 namespace cudf {
 namespace experimental {
 namespace detail {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Internal API to fill a range of elements in-place in a column with a
  * scalar value.
  *
@@ -52,14 +53,14 @@ namespace detail {
  * @param value The scalar value to fill
  * @param stream CUDA stream to run this function
  * @return void
- *---------------------------------------------------------------------------**/
+ */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
                    scalar const& value,
                    cudaStream_t stream = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Internal API to fill a range of elements in a column out-of-place with
  a scalar value.
  *
@@ -82,7 +83,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param mr Memory resource to allocate the result output column
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result output column
- *---------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,

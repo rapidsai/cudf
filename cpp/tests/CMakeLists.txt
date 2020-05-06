@@ -28,6 +28,7 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/nvcategory_utils.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/base_fixture.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
@@ -187,21 +188,21 @@ ConfigureTest(LEGACY_GROUPBY_WO_AGG_TEST "${LEGACY_GROUPBY_WO_AGG_TEST_SRC}")
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cpp")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
@@ -343,7 +344,7 @@ set(LEGACY_REDUCTION_TEST_SRC
 ConfigureTest(LEGACY_REDUCTION_TEST "${LEGACY_REDUCTION_TEST_SRC}")
 
 set(REDUCTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cpp")
 
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
@@ -562,6 +563,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
@@ -879,9 +881,11 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/fill_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/search_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

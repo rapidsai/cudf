@@ -19,7 +19,8 @@
 
 namespace cudf {
 namespace groupby {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief This functor is used by elementwise_aggregator to do in-place update
  * operations.
  * Base case for invalid SourceType and op combinations.
@@ -31,7 +32,7 @@ namespace groupby {
  *
  * @note A struct is used instead of a function to allow for partial
  * specialization.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, operators op, bool values_have_nulls, typename Enable = void>
 struct update_target_element {
   __device__ inline void operator()(gdf_column const& target,
@@ -43,21 +44,21 @@ struct update_target_element {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Specialization for valid SourceType and op combinations.
  *
  * @tparam SourceType Type of the source element
  * @tparam op The operation to perform
  * @tparama values_have_nulls Indicates the potential for null values in the
  * source
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, operators op, bool source_has_nulls>
 struct update_target_element<
   SourceType,
   op,
   source_has_nulls,
   std::enable_if_t<not std::is_void<target_type_t<SourceType, op>>::value>> {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Performs in-place update of a target element via a binary operation
    * with a source element.
    *
@@ -76,7 +77,7 @@ struct update_target_element<
    * @param target_index Index of target element
    * @param source Column containing source element
    * @param source_index Index of source element
-   *---------------------------------------------------------------------------**/
+   **/
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const& source,
@@ -107,23 +108,23 @@ struct update_target_element<
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Specialization for COUNT.
- *---------------------------------------------------------------------------**/
+ **/
 template <typename SourceType, bool source_has_nulls>
 struct update_target_element<
   SourceType,
   COUNT,
   source_has_nulls,
   std::enable_if_t<not std::is_void<target_type_t<SourceType, COUNT>>::value>> {
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Increments the target_element by 1.
    *
    * @note Assumes the target element is never NULL, and was intialized to 0.
    *
    * @param target Column containing target element
    * @param target_index Index of target element
-   *---------------------------------------------------------------------------**/
+   **/
   __device__ inline void operator()(gdf_column const& target,
                                     cudf::size_type target_index,
                                     gdf_column const&,
@@ -172,7 +173,7 @@ struct elementwise_aggregator {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Performs an in-place update by performing elementwise aggregation
  * operations between a target and source row.
  *
@@ -199,7 +200,7 @@ struct elementwise_aggregator {
  * @param source_index Index of the source row
  * @param ops Array of operators to perform between the elements of the
  * target and source rows
- *---------------------------------------------------------------------------**/
+ **/
 template <bool values_have_nulls = true>
 __device__ inline void aggregate_row(device_table const& target,
                                      cudf::size_type target_index,

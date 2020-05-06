@@ -19,7 +19,18 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+/**
+ * @brief NVText APIs
+ * @defgroup nvtext_apis NVText APIs
+ */
 namespace nvtext {
+/**
+ * @ingroup nvtext_apis
+ * @addtogroup nvtext_tokenize Tokenize
+ * APIs to tokenize strings column.
+ * @{
+ */
+
 /**
  * @brief Returns a single column of strings by tokenizing the input strings
  * column using the provided characters as delimiters.
@@ -34,12 +45,12 @@ namespace nvtext {
  * to build the output column. That is, tokens found in input row[i] will be placed in
  * the output column directly before tokens found in input row[i+1].
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a", "b c", "d  e f "]
  * t = tokenize(s)
  * t is now ["a", "b", "c", "d", "e", "f"]
- * ```
+ * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
@@ -66,13 +77,13 @@ std::unique_ptr<cudf::column> tokenize(
  * to build the output column. That is, tokens found in input row[i] will be placed in
  * the output column directly before tokens found in input row[i+1].
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a", "b c", "d.e:f;"]
  * d = [".", ":", ";"]
  * t = tokenize(s,d)
  * t is now ["a", "b c", "d", "e", "f"]
- * ```
+ * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
  *
@@ -96,12 +107,12 @@ std::unique_ptr<cudf::column> tokenize(
  * Also, any consecutive delimiters found in a string are ignored.
  * This means that only empty strings or null rows will result in a token count of 0.
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a", "b c", " ", "d e f"]
  * t = count_tokens(s)
  * t is now [1, 2, 0, 3]
- * ```
+ * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
@@ -124,13 +135,13 @@ std::unique_ptr<cudf::column> count_tokens(
  * Also, any consecutive delimiters found in a string are ignored.
  * This means that only empty strings or null rows will result in a token count of 0.
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a", "b c", "d.e:f;"]
  * d = [".", ":", ";"]
  * t = count_tokens(s,d)
  * t is now [1, 1, 3]
- * ```
+ * @endcode
  *
  * All null row entries are ignored and the output contains all valid rows.
  * The number of tokens for a null element is set to 0 in the output column.
@@ -147,4 +158,5 @@ std::unique_ptr<cudf::column> count_tokens(
   cudf::strings_column_view const& delimiters,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of tokenize group
 }  // namespace nvtext

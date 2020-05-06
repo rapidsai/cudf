@@ -83,7 +83,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
     std::move(device_view_owners), std::move(d_views), std::move(d_offsets), output_size);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
@@ -93,7 +93,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
  * @param dest_mask The output buffer to copy null masks into
  * @param number_of_mask_bits The total number of null masks bits that are being
  * copied
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_t const* output_offsets,
                                          size_type number_of_views,
