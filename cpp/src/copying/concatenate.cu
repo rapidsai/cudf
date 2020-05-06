@@ -341,11 +341,11 @@ std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& 
                                                  rmm::mr::device_memory_resource* mr,
                                                  cudaStream_t stream)
 {
-  if (tables_to_concat.size() == 0) { return std::make_unique<experimental::table>(); }
+  if (tables_to_concat.empty()) { return std::make_unique<experimental::table>(); }
 
   table_view const first_table = tables_to_concat.front();
-  CUDF_EXPECTS(std::all_of(tables_to_concat.begin(),
-                           tables_to_concat.end(),
+  CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
+                           tables_to_concat.cend(),
                            [&first_table](auto const& t) {
                              return t.num_columns() == first_table.num_columns() &&
                                     have_same_types(first_table, t);
@@ -355,7 +355,10 @@ std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& 
   std::vector<std::unique_ptr<column>> concat_columns;
   for (size_type i = 0; i < first_table.num_columns(); ++i) {
     std::vector<column_view> cols;
-    for (auto& t : tables_to_concat) { cols.emplace_back(t.column(i)); }
+    std::transform(tables_to_concat.cbegin(),
+                   tables_to_concat.cend(),
+                   std::back_inserter(cols),
+                   [i](auto const& t) { return t.column(i); });
     concat_columns.emplace_back(detail::concatenate(cols, mr, stream));
   }
   return std::make_unique<experimental::table>(std::move(concat_columns));
