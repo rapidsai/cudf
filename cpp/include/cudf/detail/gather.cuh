@@ -413,10 +413,6 @@ void gather_bitmask(table_view const& source,
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
- *
  * tparam MapIterator Iterator type for the gather map
  * @param[in] source_table View into the table containing the input columns whose rows will be
  * gathered
@@ -424,12 +420,7 @@ void gather_bitmask(table_view const& source,
  * the source columns to rows in the destination columns
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
- * @param[in] check_bounds Optionally perform bounds checking on the values of `gather_map` and
- * throw an error if any of its values are out of bounds.
- * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds. Currently
- * incompatible with `allow_negative_indices`, i.e., setting both to `true` is undefined.
- * @param[in] allow_negative_indices Interpret each negative index `i` in the gathermap as the
- * positive index `i+num_source_rows`.
+ * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
  * @param[in] mr The resource to use for all allocations
  * @param[in] stream The CUDA stream on which to execute kernels
  * @return cudf::table Result of the gather
