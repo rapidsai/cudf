@@ -1876,8 +1876,10 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    with pytest.raises(ValueError):
+    try:
         psr.astype(dtype=dtype)
+    except Exception as e:
+        exception_type = type(e)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(exception_type):
         gsr.astype(dtype=dtype)
