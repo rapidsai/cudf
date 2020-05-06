@@ -80,10 +80,17 @@ TEST_F(StringsConvertTest, ToFloats32)
 
 TEST_F(StringsConvertTest, FromFloats32)
 {
-  std::vector<float> h_floats{
-    100, 654321.25, -12761.125, 0, 5, -4, std::numeric_limits<float>::quiet_NaN(), 839542223232.79};
+  std::vector<float> h_floats{100,
+                              654321.25,
+                              -12761.125,
+                              0,
+                              5,
+                              -4,
+                              std::numeric_limits<float>::quiet_NaN(),
+                              839542223232.79,
+                              -0.0};
   std::vector<const char*> h_expected{
-    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11"};
+    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<float> floats(
     h_floats.begin(),
@@ -159,9 +166,10 @@ TEST_F(StringsConvertTest, FromFloats64)
                                5,
                                -4,
                                std::numeric_limits<double>::quiet_NaN(),
-                               839542223232.794248339};
+                               839542223232.794248339,
+                               -0.0};
   std::vector<const char*> h_expected{
-    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11"};
+    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<double> floats(
     h_floats.begin(),
