@@ -1015,6 +1015,10 @@ def test_out_of_bounds_indexing():
         a[[0, 1, 9]] = 2
     with pytest.raises(IndexError):
         a[[0, 1, -4]] = 2
+    with pytest.raises(IndexError):
+        a[4:6].iloc[-1] = 2
+    with pytest.raises(IndexError):
+        a[4:6].iloc[1] = 2
 
 
 def test_sliced_indexing():
