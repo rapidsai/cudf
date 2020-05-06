@@ -1831,33 +1831,53 @@ def test_string_str_decode_url(data):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data,dtype",
     [
-        ["abc", "1", "2", " "],
-        [" ", "0.1", "2"],
-        [""],
-        [" "],
-        ["\n"],
-        ["0.1", "-10.2", "10.876"],
-        ["0.1", "-10.2", "10.876", None],
-        ["1", "-10.2", "10.876"],
-        ["+", "-"],
-        ["1++++", "--2"],
-        ["++++1", "--2"],
+        (["0.1", "10.2", "10.876"], "float"),
+        (["-0.1", "10.2", "+10.876"], "float"),
+        (["1", "10.2", "10.876"], "float32"),
+        (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "float"),
+        (["0.1", "-10.2", "10.876", None], "float"),
     ],
 )
 @pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
+
+    expect = psr.astype(dtype=dtype)
+    actual = gsr.astype(dtype=dtype)
+    assert_eq(expect, actual)
+
+
 @pytest.mark.parametrize(
-    "dtype", ["int", "float", "int32", "float32", "int64"]
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "int"),
+        (["1", "10.2", "+10.876"], "int"),
+        (["abc", "1", "2", " "], "int"),
+        ([" ", "0.1", "2"], "float"),
+        ([""], "int"),
+        ([" "], "float"),
+        (["\n"], "int"),
+        (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None, "ab"], "float"),
+        (["+", "-"], "float"),
+        (["+", "-"], "int"),
+        (["1++++", "--2"], "float"),
+        (["1++++", "--2"], "int"),
+        (["++++1", "--2"], "float"),
+        (["++++1", "--2"], "int"),
+    ],
 )
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
 def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    try:
-        expect = psr.astype(dtype=dtype)
-        actual = gsr.astype(dtype=dtype)
-        assert_eq(expect, actual)
-    except ValueError:
-        with pytest.raises(ValueError):
-            gsr.astype(dtype=dtype)
+    with pytest.raises(ValueError):
+        psr.astype(dtype=dtype)
+
+    with pytest.raises(ValueError):
+        gsr.astype(dtype=dtype)
