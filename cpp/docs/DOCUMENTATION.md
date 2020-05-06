@@ -66,7 +66,7 @@ The following block comment style should be used for all C++ doxygen comments.
 The block should start with `/**` and end with `*/` only and with nothing else on those lines.
 (e.g. do not add dashes `-----` or extra asterisks `*****` in these lines).
 The block must be placed immediately before the source code line in which it is referring.
-The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#the_example) section below.
+The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#the-example) section below.
 
 Each line in the comment block between the `/**` and `*/` lines should start with a space followed by an asterisk. Any text on these lines, including tag declarations, should start after a single space after the asterisk.
 
@@ -190,7 +190,7 @@ The comment description should clearly detail how the output(s) are created from
 Include any performance and any boundary considerations.
 Also include any limits on parameter values and if any default values that are declared.
 Don't forget to specify how nulls are handled or produced.
-Also, try to include a short [example](#inline_example) if possible.
+Also, try to include a short [example](#inline-example) if possible.
 
 ### @brief
 
@@ -234,14 +234,14 @@ The following tags normally appear near the end of function comment block in the
 
 | Command | Description |
 | ------- | ----------- |
-| @throw | Specify the conditions which the function may throw an exception |
-| @tparam | Description for each template parameter |
-| @param | Description for each function parameter |
-| @return | Short description of object or value returned |
+| [@throw](#throw) | Specify the conditions which the function may throw an exception |
+| [@tparam](#tparam) | Description for each template parameter |
+| [@param](#param) | Description for each function parameter |
+| [@return](#return) | Short description of object or value returned |
 
 #### @throw
 
-Add an `@throw` comment line in the comment block for each exception that the function may throw.
+Add an [@throw](http://www.doxygen.nl/manual/commands.html#cmdthrow) comment line in the comment block for each exception that the function may throw.
 You only need to include exception thrown by the function itself.
 If the function calls another function that may throw an exception, you do not need to document that exception here.
 
@@ -257,7 +257,7 @@ Using `@throws` is also acceptable but vs-code and other tools only do syntax hi
 
 #### @tparam
 
-Add a `@tparam` comment line for each template parameter declared by this function.
+Add a [@tparam](http://www.doxygen.nl/manual/commands.html#cmdtparam) comment line for each template parameter declared by this function.
 The name of the parameter in the comment must match exactly to the template parameter name.
 
 ```c++
@@ -272,7 +272,7 @@ For example, if the template is for a functor or predicate, then describe the ex
 
 #### @param
 
-Add a `@param` comment line for each function parameter passed to this function.
+Add a [@param](http://www.doxygen.nl/manual/commands.html#cmdparam) comment line for each function parameter passed to this function.
 The name of the parameter in the comment must match the function's parameter name.
 Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not clear from the declaration and the parameter name itself.
 
@@ -285,7 +285,7 @@ Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not c
 
 #### @return
 
-Add a single `@return` comment line at the end of the comment block if the function returns an object or value.
+Add a single [@return](http://www.doxygen.nl/manual/commands.html#cmdreturn) comment line at the end of the comment block if the function returns an object or value.
 Include a brief description of what is returned.
 
 ```c++
@@ -299,7 +299,7 @@ Do not include the type of the object returned with the `@return` comment.
 ### Inline Examples
 
 It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
-Use the `@code/@endcode` pair to include inline examples.
+Use the [@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and `@endcode` pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
 By default, the `@code` tag will use syntax highlighting based on the source code where it was found.
