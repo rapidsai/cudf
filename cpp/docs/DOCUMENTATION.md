@@ -26,7 +26,7 @@ The following is the license header comment that should appear at the beginning 
  */
 ```
 
-The comment should start with `\*` and not `\**` so it is not processed by doxygen.
+The comment should start with `/*` and not `/**` so it is not processed by doxygen.
 
 Also, here are the rules for the year copyright year.
 
@@ -62,10 +62,10 @@ The following block comment style should be used for all C++ doxygen comments.
  */
 ```
 
-The block should start with `/**` and end with `*/` only with nothing else on those lines.
-(e.g. do not use extend dashes '-----' in these lines).
+The block should start with `/**` and end with `*/` only and with nothing else on those lines.
+(e.g. do not add dashes `-----` or extra asterisks `*****` in these lines).
 The block must be placed immediately before the source code line in which it is referring.
-The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#example) section below.
+The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#the_example) section below.
 
 ## Tag/Command names
 
@@ -204,14 +204,14 @@ If you wish to use pseudo-code in your example, use the following:
  */
 ```
 
-### brief
+### @brief
 
 The `@brief` text should be a short, one sentence description. Doxygen does not provide much space to show this text. Always follow the `@brief` line with a blank comment line.
 
 The longer description is the remainder of the comment text that is not tagged as
 a doxygen command.
 
-### copydoc
+### @copydoc
 
 Documentation for declarations in headers is expected to be clear and complete. There is no reason to duplicate the comment block for a function definition.
 
@@ -223,7 +223,7 @@ TODO: show example
 
 Note, you must include the whole signature of the function so that doxygen will be able to locate it.
 
-### Function parameters (throw/tparam/param/return)
+### Function parameters (@throw/@tparam/@param/@return)
 
 The following tags normally appear near the end of comment block in the following order:
 
