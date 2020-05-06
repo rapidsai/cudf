@@ -19,6 +19,7 @@
 - PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
+- PR #5068 Add Java bindings for arctan2
 
 ## Improvements
 
@@ -145,6 +146,7 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5106 Add detail API for `cudf::concatenate` with tables
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
