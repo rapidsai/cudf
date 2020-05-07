@@ -28,7 +28,8 @@ VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 # the cudf repo
 DEFAULT_DIRS = [
     "cpp/benchmarks",
-    "cpp/custrings" "cpp/include",
+    "cpp/custrings",
+    "cpp/include",
     "cpp/include/cudf",
     "cpp/include/nvtext",
     "cpp/include/nvstrings",
@@ -119,7 +120,7 @@ def list_all_src_files(file_regex, ignore_regex, srcdirs, dstdir, inplace):
     return allFiles
 
 
-def run_clang_format(src, dst, exe, verbose):
+def run_clang_format(src, dst, exe, verbose, inplace):
     dstdir = os.path.dirname(dst)
     if not os.path.exists(dstdir):
         os.makedirs(dstdir)
@@ -134,7 +135,11 @@ def run_clang_format(src, dst, exe, verbose):
         print("Failed to run clang-format! Maybe your env is not proper?")
         raise
     # run the diff to check if there are any formatting issues
-    cmd = "diff -q %s %s >/dev/null" % (src, dst)
+    if inplace:
+        cmd = "diff -q %s %s >/dev/null" % (src, dst)
+    else:
+        cmd = "diff %s %s" % (src, dst)
+
     try:
         subprocess.check_call(cmd, shell=True)
         if verbose:
@@ -164,7 +169,9 @@ def main():
     # actual format checker
     status = True
     for src, dst in all_files:
-        if not run_clang_format(src, dst, args.exe, args.verbose):
+        if not run_clang_format(
+            src, dst, args.exe, args.verbose, args.inplace
+        ):
             status = False
     if not status:
         print("clang-format failed! You have 2 options:")
