@@ -27,7 +27,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @brief Copy APIs (e.g. gather, scatter, copy, slice, split)
+ * @brief Copying APIs (e.g. gather, scatter, copy, slice, split)
  * @ingroup column_apis
  * @addtogroup column_copy Copying
  * @{

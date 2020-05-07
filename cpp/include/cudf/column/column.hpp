@@ -26,6 +26,11 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @brief Column and Table APIs
+ * @defgroup column_apis Column and Table APIs
+ */
+
 namespace cudf {
 class column {
  public:

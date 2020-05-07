@@ -22,6 +22,13 @@
 
 namespace cudf {
 /**
+ * @brief APIs to create columns
+ * @ingroup column_apis
+ * @addtogroup column_factories Factories
+ * @{
+ */
+
+/**
  * @brief Creates an empty column of the specified @p type
  *
  * An empty column does not contain any elements or a validity mask.
@@ -409,4 +416,5 @@ std::unique_ptr<column> make_column_from_scalar(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/** @} */  // end of group
 }  // namespace cudf
