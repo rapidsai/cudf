@@ -1,3 +1,6 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
+import math
 import os
 
 import numpy as np
@@ -281,3 +284,43 @@ def test_chunksize(tmpdir, chunksize, metadata):
         remainder = (df_byte_size % parse_bytes(chunksize)) > 0
         expected += int(remainder) * nparts
         assert ddf2.npartitions == max(nparts, expected)
+
+
+@pytest.mark.parametrize("row_groups", [1, 3, 10, 12])
+@pytest.mark.parametrize("index", [False, True])
+def test_row_groups_per_part(tmpdir, row_groups, index):
+    nparts = 2
+    df_size = 100
+    row_group_size = 5
+    file_row_groups = 10  # Known apriori
+    npartitions_expected = math.ceil(file_row_groups / row_groups) * 2
+
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
+        }
+    )
+    if index:
+        df = df.set_index("index")
+
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        row_group_size=row_group_size,
+        write_metadata_file=True,
+        write_index=index,
+    )
+
+    ddf2 = dask_cudf.read_parquet(
+        str(tmpdir),
+        row_groups_per_part=row_groups,
+        index="index" if index else False,
+    )
+
+    assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
+
+    assert ddf2.npartitions == npartitions_expected

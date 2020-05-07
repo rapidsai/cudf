@@ -23,6 +23,7 @@
 
 namespace cudf {
 // helper functions - used in the rolling window implementation and tests
+
 namespace detail {
 // return true if ColumnType is arithmetic type or
 // AggOp is min_op/max_op/count_op for wrapper (non-arithmetic) types
@@ -36,13 +37,14 @@ static constexpr bool is_supported()
   constexpr bool is_operation_supported =
     (op == experimental::aggregation::SUM) or (op == experimental::aggregation::MIN) or
     (op == experimental::aggregation::MAX) or (op == experimental::aggregation::COUNT_VALID) or
-    (op == experimental::aggregation::COUNT_ALL) or (op == experimental::aggregation::MEAN);
+    (op == experimental::aggregation::COUNT_ALL) or (op == experimental::aggregation::MEAN) or
+    (op == experimental::aggregation::ROW_NUMBER);
 
   constexpr bool is_valid_timestamp_agg =
     cudf::is_timestamp<ColumnType>() and
     (op == experimental::aggregation::MIN or op == experimental::aggregation::MAX or
      op == experimental::aggregation::COUNT_VALID or op == experimental::aggregation::COUNT_ALL or
-     op == experimental::aggregation::MEAN);
+     op == experimental::aggregation::MEAN or op == experimental::aggregation::ROW_NUMBER);
 
   constexpr bool is_valid_numeric_agg =
     (cudf::is_numeric<ColumnType>() or is_comparable_countable_op) and is_operation_supported;
@@ -63,7 +65,8 @@ static constexpr bool is_string_supported()
           (cudf::experimental::aggregation::COUNT_VALID == Op and
            std::is_same<AggOp, DeviceCount>::value) or
           (cudf::experimental::aggregation::COUNT_ALL == Op and
-           std::is_same<AggOp, DeviceCount>::value));
+           std::is_same<AggOp, DeviceCount>::value) or
+          (cudf::experimental::aggregation::ROW_NUMBER == Op));
 }
 
 // store functor
