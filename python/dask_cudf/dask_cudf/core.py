@@ -313,7 +313,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         npartitions=None,
         max_branch=None,
         ignore_index=True,
-        dynamic_tasks=None,
+        dynamic_tasks=False,
         **kwargs,
     ):
         """Repartition a dask_cudf DataFrame by hashing.
