@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import warnings
 from functools import partial
 

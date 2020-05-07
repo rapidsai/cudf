@@ -1,3 +1,5 @@
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import math
 import os
 

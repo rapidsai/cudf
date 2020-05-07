@@ -1,4 +1,5 @@
-import json
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import warnings
 
 import pyarrow.parquet as pq
@@ -17,6 +18,11 @@ import cudf
 from cudf.core.column import as_column
 
 from dask_cudf import DataFrame
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 
 def _get_dataset_and_parts(data_path, fs, row_groups_per_part):
