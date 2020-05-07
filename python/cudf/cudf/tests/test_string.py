@@ -1835,8 +1835,8 @@ def test_string_str_decode_url(data):
     [
         ["f0:18:98:22:c2:e4", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"],
         ["f0189822c2e4", "000000000000", "ffffffffffff"],
-        # ['0xf0189822c2e4', '0x000000000000', '0xffffffffffff'],
-        # ['0Xf0189822c2e4', '0X000000000000', '0Xffffffffffff'],
+        ["0xf0189822c2e4", "0x000000000000", "0xffffffffffff"],
+        ["0Xf0189822c2e4", "0X000000000000", "0Xffffffffffff"],
     ],
 )
 def test_string_hex_to_int(data):
