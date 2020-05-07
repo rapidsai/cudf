@@ -737,7 +737,7 @@ numeric_category<T>* numeric_category<T>::set_keys(const T* items, size_t count,
                           d_indexes + both_count,
                           d_xvals,
                           unique_update_keys_fn<T>{d_both_keys, kcount, include_null, nulls});
-  size_t unique_count = d_unique_end.second - d_xvals;  // both_count - matched;
+  size_t unique_count         = d_unique_end.second - d_xvals;  // both_count - matched;
   numeric_category<T>* result = new numeric_category<T>;
   result->pImpl->init_keys(d_both_keys, d_indexes, unique_count);
   // done with keys, remap the values

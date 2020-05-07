@@ -1621,7 +1621,8 @@ __host__ __device__ inline unsigned int custring_view::chars_in_string(const cha
   // unsigned int align = (unsigned long)str & 3;
   // str = str - align;                                                // these are
   // pre-byte-swapped: unsigned int m1 = ((unsigned int)0xFFFFFFFF) << (align*8);        //
-  // 0xFFFFFFFF, 0xFFFFFF00, 0xFFFF0000, 0xFF000000 unsigned int m2 = (unsigned int)(0x0080808080L >>
+  // 0xFFFFFFFF, 0xFFFFFF00, 0xFFFF0000, 0xFF000000 unsigned int m2 = (unsigned int)(0x0080808080L
+  // >>
   // ((4-align)*8)); // 0x00000000, 0x00000080, 0x00008080, 0x00808080 bytes += align; // adjust for
   // alignment for( unsigned int idx=0; idx < bytes/4; idx++ ) // read 4 bytes at a time
   //{

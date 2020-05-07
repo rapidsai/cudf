@@ -24,8 +24,8 @@ enum InstType_Internal {
   START = 0200, /* Start, used for marker on stack */
   // RBRA = 0201,
   // LBRA = 0202,
-  LBRA_NC = 0203,  // non-capturing group
-                   // OR = 0204,
+  LBRA_NC = 0203,      // non-capturing group
+                       // OR = 0204,
   CAT          = 0205, /* Concatentation, implicit operator */
   STAR         = 0206, /* Closure, * */
   STAR_LAZY    = 0207,
@@ -522,12 +522,12 @@ class RegCompiler {
           // unknown operator in evaluntil
           break;
         case LBRA: /* must have been RBRA */
-          op1      = popand('(');
-          id_inst2 = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid = ator.subid;  // subidstack[subidstack.size()-1];
+          op1                                    = popand('(');
+          id_inst2                               = m_prog.add_inst(RBRA);
+          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  // subidstack[subidstack.size()-1];
           m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
           id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid = ator.subid;  // subidstack[subidstack.size() - 1];
+          m_prog.inst_at(id_inst1).u1.subid   = ator.subid;  // subidstack[subidstack.size() - 1];
           m_prog.inst_at(id_inst1).u2.next_id = op1.id_first;
           pushand(id_inst1, id_inst2);
           return;

@@ -507,8 +507,8 @@ NVCategory* NVCategory::create_from_categories(std::vector<NVCategory*>& cats)
   // rmm::device_vector<int> nidxs(kcount);
   // thrust::counting_iterator<int> citr(0);
   // thrust::copy_if( execpol->on(0), citr, citr + count, nidxs.data().get(), [d_y] __device__
-  // (const int& idx) { return (idx==0 || d_y[idx]); }); rmm::device_vector<custring_view*>* pNewList
-  // = new rmm::device_vector<custring_view*>(kcount,nullptr); custring_view_array d_keys =
+  // (const int& idx) { return (idx==0 || d_y[idx]); }); rmm::device_vector<custring_view*>*
+  // pNewList = new rmm::device_vector<custring_view*>(kcount,nullptr); custring_view_array d_keys =
   // pNewList->data().get(); // this will hold the merged keyset thrust::gather( execpol->on(0),
   // nidxs.begin(), nidxs.end(), d_w, d_keys );
   thrust::unique(
