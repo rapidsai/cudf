@@ -24,8 +24,7 @@
 
 using cudf::test::fixed_width_column_wrapper;
 
-static void BM_transpose(benchmark::State& state)
-{
+static void BM_transpose(benchmark::State& state) {
   auto count = state.range(0);
 
   auto data     = std::vector<int>(count, 0);
