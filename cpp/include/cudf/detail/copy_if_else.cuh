@@ -117,14 +117,15 @@ __launch_bounds__(block_size) __global__
 }  // anonymous namespace
 
 template <typename Element, typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(data_type type,
-                                     bool nullable,
-                                     LeftIter lhs_begin,
-                                     LeftIter lhs_end,
-                                     RightIter rhs,
-                                     FilterFn filter,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream)
+std::unique_ptr<column> copy_if_else(
+  data_type type,
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
 {
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
