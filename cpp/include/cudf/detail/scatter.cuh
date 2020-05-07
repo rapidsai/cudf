@@ -119,7 +119,8 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     // first combine keys so both dictionaries have the same set
     auto target_matched    = dictionary::detail::add_keys(target, source.keys(), mr, stream);
     auto const target_view = dictionary_column_view(target_matched->view());
-    auto source_matched    = dictionary::detail::set_keys(source, target_view.keys(), mr, stream);
+    auto source_matched    = dictionary::detail::set_keys(
+      source, target_view.keys(), rmm::mr::get_default_resource(), stream);
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
@@ -137,7 +138,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                                    rmm::device_buffer{},
                                                    0);
 
-    // take the keys from either matched column
+    // take the keys from the matched column allocated using mr
     std::unique_ptr<column> keys_column(std::move(target_matched->release().children.back()));
 
     // create column with keys_column and indices_column

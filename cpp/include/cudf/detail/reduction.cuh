@@ -69,7 +69,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -100,7 +100,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto binary_op      = sop.get_binary_op();
   OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
+  rmm::device_scalar<OutputType> dev_result(identity, stream);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -113,7 +113,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -177,7 +177,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto binary_op            = cop.get_binary_op();
   IntermediateType identity = cop.template get_identity<IntermediateType>();
-  rmm::device_scalar<IntermediateType> intermediate_result{identity, stream, mr};
+  rmm::device_scalar<IntermediateType> intermediate_result(identity, stream);
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -190,7 +190,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             identity,
                             stream);
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream, mr};
+  d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),

@@ -395,12 +395,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   }
 
   // Create new offsets column to use in kernel
-  std::unique_ptr<cudf::column> sizes =
-    cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                              input_col.size(),
-                              cudf::mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(
+    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
   std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
 

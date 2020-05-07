@@ -253,7 +253,7 @@ struct scatter_gather_functor {
       cudf::experimental::detail::elements_per_thread(scatter, input.size(), block_size);
     cudf::experimental::detail::grid_1d grid{input.size(), block_size, per_thread};
 
-    rmm::device_scalar<cudf::size_type> null_count{0, stream, mr};
+    rmm::device_scalar<cudf::size_type> null_count(0, stream);
     if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
@@ -328,7 +328,7 @@ std::unique_ptr<experimental::table> copy_if(
     size_t temp_storage_bytes = 0;
     cub::DeviceScan::InclusiveSum(
       nullptr, temp_storage_bytes, &block_counts[0], &block_offsets[1], grid.num_blocks, stream);
-    rmm::device_buffer d_temp_storage(temp_storage_bytes, stream, mr);
+    rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
 
     // Run exclusive prefix sum
     cub::DeviceScan::InclusiveSum(d_temp_storage.data(),
@@ -350,7 +350,7 @@ std::unique_ptr<experimental::table> copy_if(
   CHECK_CUDA(stream);
 
   if (output_size == input.num_rows()) {
-    return std::make_unique<experimental::table>(input);
+    return std::make_unique<experimental::table>(input, stream, mr);
   } else if (output_size > 0) {
     std::vector<std::unique_ptr<column>> out_columns(input.num_columns());
     std::transform(input.begin(), input.end(), out_columns.begin(), [&](auto col_view) {
