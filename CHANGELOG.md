@@ -14,6 +14,7 @@
 - PR #4900 Add `get_element` to obtain scalar from a column given an index
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 - PR #5036 Add positive remainder binary op functionality
@@ -145,6 +146,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
@@ -152,6 +154,7 @@
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
+- PR #5123 Display more useful info on `clang-format` CI Failure
 
 ## Bug Fixes
 
