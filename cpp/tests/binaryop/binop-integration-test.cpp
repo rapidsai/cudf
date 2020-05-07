@@ -1166,6 +1166,44 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
 }
 
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_SI32_SI64)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = int32_t;
+  using TypeRhs = int64_t;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(1000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(1000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_FP64_FP64)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = double;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(1000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(1000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
 TEST_F(BinaryOperationIntegrationTest, ATan2_Scalar_Vector_FP32)
 {
   using TypeOut = float;

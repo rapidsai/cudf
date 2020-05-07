@@ -214,7 +214,7 @@ struct PMod {
     CommonArgsT yconv{y};
     auto rem = std::fmod(xconv, yconv);
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
-    return TypeOut{rem};
+    return static_cast<TypeOut>(rem);
   }
 };
 
