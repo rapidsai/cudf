@@ -1652,7 +1652,16 @@ class Series(Frame):
         if dtype is None:
             dtype = min_scalar_type(len(cats), 8)
 
-        cats = Series(cats).astype(self.dtype)
+        cats = Series(cats)
+        try:
+            # Where there is a type-cast from string to numeric types,
+            # there is a possibility for ValueError when strings
+            # are having non-numeric values, hence we will have
+            # to catch the exception and fill in with zeros.
+            cats = cats.astype(self.dtype)
+        except ValueError:
+            cats = Series(cupy.zeros(len(cats), dtype=self.dtype))
+
         order = Series(cupy.arange(len(self)))
         codes = Series(cupy.arange(len(cats), dtype=dtype))
 
