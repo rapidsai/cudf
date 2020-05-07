@@ -60,10 +60,10 @@ struct hex_to_integer_fn {
       if (ch >= '0' && ch <= '9') {
         result += static_cast<int64_t>(ch - 48) * base;
         base *= 16;
-      } else if (ch >= 'A' && ch <= 'Z') {
+      } else if (ch >= 'A' && ch <= 'F') {
         result += static_cast<int64_t>(ch - 55) * base;
         base *= 16;
-      } else if (ch >= 'a' && ch <= 'z') {
+      } else if (ch >= 'a' && ch <= 'f') {
         result += static_cast<int64_t>(ch - 87) * base;
         base *= 16;
       }

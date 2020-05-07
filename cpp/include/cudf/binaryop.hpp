@@ -23,6 +23,7 @@
 
 namespace cudf {
 namespace experimental {
+
 /**
  * @brief Binary operations APIs
  * @ingroup column_apis
@@ -65,7 +66,14 @@ enum class binary_operator : int32_t {
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
   LOG_BASE,              ///< logarithm to the base
   ATAN2,                 ///< 2-argument arctangent
-  INVALID_BINARY         ///< invalid operation
+  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
+                         ///< result of equality when both are non-null
+  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+
+  INVALID_BINARY  ///< invalid operation
 };
 
 /**
