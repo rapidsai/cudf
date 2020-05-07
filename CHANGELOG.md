@@ -258,6 +258,7 @@
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
 - PR #5118 Fix naming for java string length operators
+- PR #5129 Fix missed reference in tests from 5118
 - PR #5122 Fix `clang-format` `custrings` bug
 
 
