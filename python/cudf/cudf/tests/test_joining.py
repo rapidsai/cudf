@@ -1138,10 +1138,8 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
     join_data_r = Series([1, 2, 3, 4, 6], dtype=dtype_r)
     if dtype_l == "category":
         exp_dtype = join_data_l.dtype.categories.dtype
-        exp_categories = join_data_l.astype(int)._column
     elif dtype_r == "category":
         exp_dtype = join_data_r.dtype.categories.dtype
-        exp_categories = join_data_r.astype(int)._column
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = DataFrame({"join_col": join_data_r, "B": other_data})
@@ -1175,7 +1173,6 @@ def test_typecast_on_join_indexes():
 
     exp_join_data = [1, 2, 3, 4]
     exp_other_data = ["a", "b", "c", "d"]
-    exp_join_col = Series(exp_join_data, dtype="int32")
 
     expect = DataFrame(
         {
@@ -1255,7 +1252,6 @@ def test_typecast_on_join_indexes_matching_categorical():
 
     exp_join_data = ["a", "b", "c", "d", "e"]
     exp_other_data = [1, 2, 3, 4, 5]
-    exp_join_col = Series(exp_join_data, dtype="category")
 
     expect = DataFrame(
         {

@@ -336,17 +336,19 @@ class Merge(object):
 
         merge_return_type = None
         # we  currently only need to do this for categorical variables
-        if (is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r)):
+        if is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 if how in ["inner", "left"]:
                     merge_return_type = dtype_l
                 elif how == "outer":
-                    new_cats = cudf.concat(dtype_l.categories, dtype_r.categories)
+                    new_cats = cudf.concat(
+                        dtype_l.categories, dtype_r.categories
+                    )
                     merge_return_type = cudf.core.dtypes.CategoricalDtype(
                         categories=new_cats
                     )
             else:
-                merge_return_type = 'category'
+                merge_return_type = "category"
         return merge_return_type
 
     def compute_output_dtypes(self):
@@ -409,20 +411,25 @@ class Merge(object):
             ):
                 index_dtype = index_dtypes[i]
                 if index_dtype:
-                    output._index._data[index_col_lbl] = self._build_output_col(index_col, index_dtype)
+                    output._index._data[
+                        index_col_lbl
+                    ] = self._build_output_col(index_col, index_dtype)
         for data_col_lbl, data_col in output._data.items():
             data_dtype = data_dtypes[data_col_lbl]
             if data_dtype:
-                output._data[data_col_lbl] = self._build_output_col(data_col, data_dtype)
+                output._data[data_col_lbl] = self._build_output_col(
+                    data_col, data_dtype
+                )
         return output
 
     def _build_output_col(self, col, dtype):
-        if is_categorical_dtype(dtype) and dtype is not 'category':
-            outcol = cudf.core.column.build_categorical_column(categories=dtype.categories, codes=col)
+        if is_categorical_dtype(dtype) and dtype != "category":
+            outcol = cudf.core.column.build_categorical_column(
+                categories=dtype.categories, codes=col
+            )
         else:
             outcol = col.astype(dtype)
         return outcol
-
 
     @staticmethod
     def compute_result_col_names(lhs, rhs, how):
