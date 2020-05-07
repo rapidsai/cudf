@@ -15,7 +15,6 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] concatenate_columns "cudf::concatenate"(
         const vector[column_view] columns
     ) except +
-    cdef unique_ptr[table] concatenate_tables \
-        "cudf::experimental::concatenate"(
+    cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
         const vector[table_view] tables
     ) except +

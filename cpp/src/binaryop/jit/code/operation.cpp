@@ -22,6 +22,7 @@ namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
+
 const char* operation =
   R"***(
     #pragma once
@@ -406,7 +407,92 @@ const char* operation =
     struct RLogBase {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return LogBase::operate<TypeOut, TypeLhs,TypeRhs>(y, x);
+            return LogBase::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
+    struct NullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) return true;
+            if (lhs_valid && rhs_valid) return x == y;
+            return false;
+        }
+    };
+
+    struct RNullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            return NullEquals::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                                  output_valid);
+        }
+    };
+
+    struct NullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} > TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMax::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct NullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} < TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMin::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct ATan2 {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{std::atan2(double{x}, double{y})};
+        }
+    };
+
+    struct RATan2 {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{ATan2::operate<TypeOut, TypeRhs, TypeLhs>(y, x)};
         }
     };
 )***";

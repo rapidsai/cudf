@@ -35,6 +35,7 @@
 
 namespace cudf {
 namespace test {
+
 // Property comparison
 template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs)
@@ -165,6 +166,7 @@ class corresponding_rows_not_equivalent {
 };
 
 namespace {
+
 template <bool check_exact_equality>
 void column_comparison(cudf::column_view const& lhs,
                        cudf::column_view const& rhs,

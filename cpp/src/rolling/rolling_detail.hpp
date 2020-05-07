@@ -23,6 +23,7 @@
 
 namespace cudf {
 // helper functions - used in the rolling window implementation and tests
+
 namespace detail {
 // return true the aggregation is valid for the specified ColumnType
 // valid aggregations may still be further specialized (eg, is_string_specialized)
@@ -39,7 +40,8 @@ static constexpr bool is_rolling_supported()
     constexpr bool is_operation_supported =
       (op == experimental::aggregation::SUM) or (op == experimental::aggregation::MIN) or
       (op == experimental::aggregation::MAX) or (op == experimental::aggregation::COUNT_VALID) or
-      (op == experimental::aggregation::COUNT_ALL) or (op == experimental::aggregation::MEAN);
+      (op == experimental::aggregation::COUNT_ALL) or (op == experimental::aggregation::MEAN) or
+      (op == experimental::aggregation::ROW_NUMBER);
 
     constexpr bool is_valid_numeric_agg =
       (cudf::is_numeric<ColumnType>() or is_comparable_countable_op) and is_operation_supported;
@@ -47,18 +49,21 @@ static constexpr bool is_rolling_supported()
     return is_valid_numeric_agg;
 
   } else if (cudf::is_timestamp<ColumnType>()) {
-    return op == experimental::aggregation::MIN or op == experimental::aggregation::MAX or
-           op == experimental::aggregation::COUNT_VALID or
-           op == experimental::aggregation::COUNT_ALL or op == experimental::aggregation::MEAN;
+    return (op == experimental::aggregation::MIN) or (op == experimental::aggregation::MAX) or
+           (op == experimental::aggregation::COUNT_VALID) or
+           (op == experimental::aggregation::COUNT_ALL) or
+           (op == experimental::aggregation::MEAN) or (op == experimental::aggregation::ROW_NUMBER);
 
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
-    return op == experimental::aggregation::MIN or op == experimental::aggregation::MAX or
-           op == experimental::aggregation::COUNT_VALID or
-           op == experimental::aggregation::COUNT_ALL;
+    return (op == experimental::aggregation::MIN) or (op == experimental::aggregation::MAX) or
+           (op == experimental::aggregation::COUNT_VALID) or
+           (op == experimental::aggregation::COUNT_ALL) or
+           (op == experimental::aggregation::ROW_NUMBER);
 
   } else if (std::is_same<ColumnType, cudf::list_view>()) {
-    return op == experimental::aggregation::COUNT_VALID or
-           op == experimental::aggregation::COUNT_ALL;
+    return (op == experimental::aggregation::COUNT_VALID) or
+           (op == experimental::aggregation::COUNT_ALL) or
+           (op == experimental::aggregation::ROW_NUMBER);
   }
 
   return false;
