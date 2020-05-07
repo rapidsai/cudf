@@ -18,10 +18,138 @@
 
 package ai.rapids.cudf;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
+import java.lang.Double;
+
+import static java.lang.Double.NEGATIVE_INFINITY;
+import static java.lang.Double.POSITIVE_INFINITY;
 
 class TestUtils {
+
+  static int NULL = 0x00000001;
+  static int ZERO = 0x00000002;
+  static int INF = 0x00000004;
+  static int NAN = 0x00000008;
+  static int NEG_ZERO = 0x00000010;
+  static int ALL = NULL|ZERO|INF|NAN;
+  static int NONE = 0;
+
+  private static boolean hasZero(int v) {
+    return (v & ZERO) > 0;
+  }
+
+  private static boolean hasNegativeZero(int v) {
+    return (v & NEG_ZERO) > 0;
+  }
+
+  private static boolean hasNan(int v) {
+    return (v & NAN) > 0;
+  }
+
+  private static boolean hasNull(int v) {
+    return (v & NULL) > 0;
+  }
+
+  private static boolean hasInf(int v) {
+    return (v & INF) > 0;
+  }
+
+  static Long[] getLongs(final long seed, final int size) {
+    return getLongs(seed, size, ALL);
+  }
+
+  static Double[] getDoubles(final long seed, final int size) {
+    return getDoubles(seed, size, ALL);
+  }
+
+  static Integer[] getIntegers(final long seed, final int size) {
+    return getIntegers(seed, size, ALL);
+  }
+
+  /**
+   * A convenience method for generating a fixed set of Integer values. This is by no means uniformly
+   * distributed. i.e. some values have more probability of occurrence than others.
+   *
+   * @param seed seed to be used to generate values
+   * @param size number of values to be generated
+   * @param flags values to include {@link TestUtils#ALL}
+   */
+  static Long[] getLongs(final long seed, final int size, int flags) {
+    Random r = new Random(seed);
+    Long[] result = new Long[size];
+    List<Long> v = new ArrayList();
+    if (hasZero(flags)) v.add(0L);
+    if (hasNull(flags)) v.add(null);
+
+    Long[] v_arr = v.stream().toArray(Long[]::new);
+
+    IntStream.range(0, size).forEach(index -> {
+      switch (r.nextInt(v_arr.length + 4)) {
+        case 0:
+          result[index] = (long) (Long.MAX_VALUE * r.nextDouble());
+          break;
+        case 1:
+          result[index] = (long) (Long.MIN_VALUE * r.nextDouble());
+          break;
+        case 2:
+          result[index] = Long.MIN_VALUE;
+          break;
+        case 3:
+          result[index] = Long.MAX_VALUE;
+          break;
+        case 4:
+          result[index] = v_arr[0];
+          break;
+        default:
+          result[index] = v_arr[1];
+      }
+    });
+    return result;
+  }
+
+  /**
+   * A convenience method for generating a fixed set of Integer values. This is by no means uniformly
+   * distributed. i.e. some values have more probability of occurrence than others.
+   *
+   * @param seed seed to be used to generate values
+   * @param size number of values to be generated
+   * @param flags values to include {@link TestUtils#ALL}
+   */
+  static Integer[] getIntegers(final long seed, final int size, int flags) {
+    Random r = new Random(seed);
+    Integer[] result = new Integer[size];
+    List<Integer> v = new ArrayList();
+    if (hasZero(flags)) v.add(0);
+    if (hasNull(flags)) v.add(null);
+
+    Integer[] v_arr = v.stream().toArray(Integer[]::new);
+
+    IntStream.range(0, size).forEach(index -> {
+      switch (r.nextInt(v_arr.length + 4)) {
+        case 0:
+          result[index] = (int) (Integer.MAX_VALUE * r.nextDouble());
+          break;
+        case 1:
+          result[index] = (int) (Integer.MIN_VALUE * r.nextDouble());
+          break;
+        case 2:
+          result[index] = Integer.MIN_VALUE;
+          break;
+        case 3:
+          result[index] = Integer.MAX_VALUE;
+          break;
+        case 4:
+          result[index] = v_arr[0];
+          break;
+        default:
+          result[index] = v_arr[1];
+      }
+    });
+    return result;
+  }
 
   /**
    * A convenience method for generating a fixed set of Double values. This is by no means uniformly
@@ -29,27 +157,54 @@ class TestUtils {
    *
    * @param seed seed to be used to generate values
    * @param size number of values to be generated
-   * @param nullsAllowed if true the result array will have nulls
+   * @param flags values to include {@link TestUtils#ALL}
    */
-  static Double[] getDoubles(final long seed, final int size, boolean nullsAllowed) {
+  static Double[] getDoubles(final long seed, final int size, int flags) {
     Random r = new Random(seed);
     Double[] result = new Double[size];
+    List<Double> v = new ArrayList();
+    if (hasZero(flags)) v.add(0.0);
+    if (hasNegativeZero(flags)) v.add(-0.0);
+    if (hasInf(flags)) {
+      v.add(POSITIVE_INFINITY);
+      v.add(NEGATIVE_INFINITY);
+    }
+    if (hasNan(flags)) v.add(Double.NaN);
+    if (hasNull(flags)) v.add(null);
+
+    Double[] v_arr = v.stream().toArray(Double[]::new);
+
     IntStream.range(0, size).forEach(index -> {
-      switch (r.nextInt(nullsAllowed ? 5 : 4)) {
+      switch (r.nextInt(v_arr.length + 4)) {
         case 0:
-          result[index] = Double.MAX_VALUE * r.nextDouble();
+          result[index] = 1 + (Double.MAX_VALUE * r.nextDouble() - 2);
           break;
         case 1:
-          result[index] = Double.MIN_VALUE * r.nextDouble();
+          result[index] = 1 + (Double.MIN_VALUE * r.nextDouble() - 2);
           break;
         case 2:
-          result[index] = Double.NaN;
+          result[index] = Double.MIN_VALUE;
           break;
         case 3:
-          result[index] = r.nextBoolean() ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY;
+          result[index] = Double.MAX_VALUE;
+          break;
+        case 4:
+          result[index] = v_arr[0];
+          break;
+        case 5:
+          result[index] = v_arr[1];
+          break;
+        case 6:
+          result[index] = v_arr[2];
+          break;
+        case 7:
+          result[index] = v_arr[3];
+          break;
+        case 8:
+          result[index] = v_arr[4];
           break;
         default:
-          result[index] = null;
+          result[index] = v_arr[5];
       }
     });
     return result;

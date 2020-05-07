@@ -453,6 +453,30 @@ public interface BinaryOperable {
   }
 
   /**
+   * Returns the positive value of lhs mod rhs.
+   *
+   * r = lhs % rhs
+   * if r < 0 then (r + rhs) % rhs
+   * else r
+   *
+   */
+  default ColumnVector pmod(BinaryOperable rhs, DType outputType) {
+    return binaryOp(BinaryOp.PMOD, rhs, outputType);
+  }
+
+  /**
+   * Returns the positive value of lhs mod rhs.
+   *
+   * r = lhs % rhs
+   * if r < 0 then (r + rhs) % rhs
+   * else r
+   *
+   */
+   default ColumnVector pmod(BinaryOperable rhs) {
+    return binaryOp(BinaryOp.PMOD, rhs, implicitConversion(this, rhs));
+  }
+
+  /**
    * Calculate the log with the specified base, output is the same type as input.
    */
   default ColumnVector log(Scalar base) {
