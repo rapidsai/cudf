@@ -203,6 +203,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *
  * @param[in] group_keys The (pre-sorted) grouping columns
  * @param[in] timestamp_column The (pre-sorted) timestamps for each row
+ * @param[in] timestamp_order  The order (ASCENDING/DESCENDING) in which the timestamps are sorted
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding_window_in_days The rolling window time-interval in the backward direction.
  * @param[in] following_window_in_days The rolling window time-interval in the forward direction.
@@ -215,6 +216,7 @@ std::unique_ptr<column> grouped_rolling_window(
 std::unique_ptr<column> grouped_time_range_rolling_window(
   table_view const& group_keys,
   column_view const& timestamp_column,
+  cudf::order const& timestamp_order,
   column_view const& input,
   size_type preceding_window_in_days,
   size_type following_window_in_days,
