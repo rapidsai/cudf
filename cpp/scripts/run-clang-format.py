@@ -134,7 +134,8 @@ def run_clang_format(src, dst, exe, verbose):
         print("Failed to run clang-format! Maybe your env is not proper?")
         raise
     # run the diff to check if there are any formatting issues
-    cmd = "diff -q %s %s >/dev/null" % (src, dst)
+    cmd = "diff %s %s " % (src, dst)
+
     try:
         subprocess.check_call(cmd, shell=True)
         if verbose:
