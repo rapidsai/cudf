@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -242,7 +243,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -251,7 +252,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -260,7 +261,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -269,7 +270,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, mr);
 }
 
 }  // namespace experimental
