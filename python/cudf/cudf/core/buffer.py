@@ -59,7 +59,8 @@ class Buffer:
             self._init_from_array_like(np.asarray(data), owner)
 
     def __reduce__(self):
-        return self.__class__, (self.to_host_array(),)
+        data = self.to_host_array()
+        return self.__class__, (data,)
 
     def __len__(self):
         return self.size
