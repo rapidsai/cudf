@@ -179,7 +179,7 @@ def test_dataframe_join_cats():
     rhs["a"] = pd.Categorical(list("abcac"), categories=list("abc"))
     rhs["c"] = cc = np.arange(len(rhs))
     rhs = rhs.set_index("a")
-    
+
     got = lhs.join(rhs)
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
@@ -246,17 +246,17 @@ def test_dataframe_join_mismatch_cats(how):
     # AssertionError: Categorical Expected type <class
     # 'pandas.core.arrays.categorical.Categorical'>, found <class
     # 'numpy.ndarray'> instead
-    #expect.index = pd.Categorical(expect.index)
-    #pd.util.testing.assert_frame_equal(
+    # expect.index = pd.Categorical(expect.index)
+    # pd.util.testing.assert_frame_equal(
     #    got,
     #    expect,
     #    check_names=False,
     #    check_index_type=False,
-        # For inner joins, pandas returns
-        # weird categories.
+    # For inner joins, pandas returns
+    # weird categories.
     #    check_categorical=how != "inner",
-    #)
-    #assert list(got.index) == list(expect.index)
+    # )
+    # assert list(got.index) == list(expect.index)
 
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
@@ -1241,9 +1241,10 @@ def test_typecast_on_join_multiindices():
 
     assert_eq(expect, got)
 
+
 def test_typecast_on_join_indexes_matching_categorical():
-    join_data_l = Series(['a', 'b', 'c', 'd', 'e'], dtype="category")
-    join_data_r = Series(['a', 'b', 'c', 'd', 'e'], dtype="str")
+    join_data_l = Series(["a", "b", "c", "d", "e"], dtype="category")
+    join_data_r = Series(["a", "b", "c", "d", "e"], dtype="str")
     other_data = [1, 2, 3, 4, 5]
 
     gdf_l = DataFrame({"join_col": join_data_l, "B": other_data})
@@ -1252,7 +1253,7 @@ def test_typecast_on_join_indexes_matching_categorical():
     gdf_l = gdf_l.set_index("join_col")
     gdf_r = gdf_r.set_index("join_col")
 
-    exp_join_data = ['a', 'b', 'c', 'd', 'e']
+    exp_join_data = ["a", "b", "c", "d", "e"]
     exp_other_data = [1, 2, 3, 4, 5]
     exp_join_col = Series(exp_join_data, dtype="category")
 
@@ -1268,25 +1269,45 @@ def test_typecast_on_join_indexes_matching_categorical():
 
     assert_eq(expect, got)
 
-@pytest.mark.parametrize('lhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4], 'b':[4,5,6]})])
-@pytest.mark.parametrize('rhs', [cudf.Series([1,2,3], name = 'a'), cudf.DataFrame({'a':[2,3,4], 'b':[4,5,6]})])
-@pytest.mark.parametrize('how', ['left', 'inner', 'outer', 'leftanti', 'leftsemi'])
-@pytest.mark.parametrize('left_index', [True, False])
-@pytest.mark.parametrize('right_index', [True, False])
-def test_series_dataframe_mixed_merging(lhs, rhs, how, left_index, right_index):
 
-    if left_index:
-        left_on = None
-        right_on = 'a'
-    else:
-        left_on = 'a'
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        cudf.Series([1, 2, 3], name="a"),
+        cudf.DataFrame({"a": [2, 3, 4], "c": [4, 5, 6]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "rhs",
+    [
+        cudf.Series([1, 2, 3], name="b"),
+        cudf.DataFrame({"b": [2, 3, 4], "c": [4, 5, 6]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "how", ["left", "inner", "outer", "leftanti", "leftsemi"]
+)
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"left_on": "a", "right_on": "b"},
+        {"left_index": True, "right_on": "b"},
+        {"left_on": "a", "right_index": True},
+        {"left_index": True, "right_index": True},
+        {
+            "left_on": "a",
+            "right_on": "b",
+            "left_index": True,
+            "right_index": True,
+        },
+    ],
+)
+def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
 
-    if right_index:
-        right_on = None
-        left_on = 'a'
-    else:
-        right_on = 'a'
-
+    if how in ("leftsemi", "leftanti") and (
+        kwargs.get("left_index") or kwargs.get("right_index")
+    ):
+        pytest.skip("Index joins not compatible with leftsemi and leftanti")
 
     check_lhs = lhs.copy()
     check_rhs = rhs.copy()
@@ -1295,7 +1316,7 @@ def test_series_dataframe_mixed_merging(lhs, rhs, how, left_index, right_index):
     if isinstance(rhs, Series):
         check_rhs = rhs.to_frame()
 
-    expect = check_lhs.merge(check_rhs, how=how, left_on = 'a', right_on='a')
-    got = lhs.merge(rhs, how=how, left_on='a', right_on='a')
+    expect = check_lhs.merge(check_rhs, how=how, **kwargs)
+    got = lhs.merge(rhs, how=how, **kwargs)
 
     assert_eq(expect, got)
