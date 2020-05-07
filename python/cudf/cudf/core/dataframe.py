@@ -1903,8 +1903,8 @@ class DataFrame(Frame):
                     else:
                         out[key] = col
             elif callable(columns):
-                for col in self._data.names:
-                    out[columns(col)] = self[col]
+                for key, col in self._data.items():
+                    out[columns(key)] = col
         else:
             out._data = self._data
 
