@@ -349,6 +349,12 @@ struct target_type_impl<Source, aggregation::NTH_ELEMENT> {
   using type = Source;
 };
 
+// Always use size_type accumulator for ROW_NUMBER
+template <typename Source>
+struct target_type_impl<Source, aggregation::ROW_NUMBER> {
+  using type = cudf::size_type;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -432,6 +438,8 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::NUNIQUE>(std::forward<Ts>(args)...);
     case aggregation::NTH_ELEMENT:
       return f.template operator()<aggregation::NTH_ELEMENT>(std::forward<Ts>(args)...);
+    case aggregation::ROW_NUMBER:
+      return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

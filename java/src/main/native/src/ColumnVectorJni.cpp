@@ -360,7 +360,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_split(JNIEnv *env,
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lengths(JNIEnv *env, jclass clazz,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_charLengths(JNIEnv *env, jclass clazz,
                                                                  jlong view_handle) {
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
   try {
