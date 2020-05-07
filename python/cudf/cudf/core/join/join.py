@@ -336,16 +336,17 @@ class Merge(object):
 
         merge_return_type = None
         # we  currently only need to do this for categorical variables
-        if (
-            is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r)
-        ) and pd.api.types.is_dtype_equal(dtype_l, dtype_r):
-            if how in ["inner", "left"]:
-                merge_return_type = dtype_l
-            elif how == "outer":
-                new_cats = cudf.concat(dtype_l.categories, dtype_r.categories)
-                merge_return_type = cudf.core.dtypes.CategoricalDtype(
-                    categories=new_cats
-                )
+        if (is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r)):
+            if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
+                if how in ["inner", "left"]:
+                    merge_return_type = dtype_l
+                elif how == "outer":
+                    new_cats = cudf.concat(dtype_l.categories, dtype_r.categories)
+                    merge_return_type = cudf.core.dtypes.CategoricalDtype(
+                        categories=new_cats
+                    )
+            else:
+                merge_return_type = 'category'
         return merge_return_type
 
     def compute_output_dtypes(self):
@@ -406,8 +407,10 @@ class Merge(object):
             for i, (idx_col_lbl, index_col) in enumerate(
                 output._index._data.items()
             ):
-                if index_dtypes[i]:
-                    if is_categorical_dtype(index_dtypes[i]):
+                index_dtype = index_dtypes[i]
+                if index_dtype:
+                    if is_categorical_dtype(index_dtypes) and index_dtype is not 'category':
+                        # actually a CategoricalDtype object, pandas or cuDF
                         output._index._data[
                             idx_col_lbl
                         ] = cudf.core.column.build_categorical_column(
@@ -419,8 +422,9 @@ class Merge(object):
                             index_dtypes[i]
                         )
         for data_col_lbl, data_col in output._data.items():
-            if data_dtypes[data_col_lbl]:
-                if is_categorical_dtype(data_dtypes[data_col_lbl]):
+            data_dtype = data_dtypes[data_col_lbl]
+            if data_dtype:
+                if is_categorical_dtype(data_dtype) and data_dtype is not 'category':
                     output._data[
                         data_col_lbl
                     ] = cudf.core.column.build_categorical_column(
