@@ -1876,11 +1876,14 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
+    exception_type = None
     try:
         psr.astype(dtype=dtype)
-        raise TypeError("Was expecting `psr.astype` to fail")
     except Exception as e:
         exception_type = type(e)
+
+    if exception_type is None:
+        raise TypeError("Was expecting `psr.astype` to fail")
 
     with pytest.raises(exception_type):
         gsr.astype(dtype=dtype)
