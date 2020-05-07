@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,21 @@
  * limitations under the License.
  */
 
-#include "./numeric_category.inl"
+#include <cudf/cudf.h>
 
-// see cudf/cpp/include/cudf/types.h for reference
-// these are the integer types
-template <>
-const char* numeric_category<long>::get_type_name()
+namespace cudf {
+namespace test {
+namespace detail {
+
+/**
+ * @copydoc cudf::test::detail::random_generator_incrementing_seed()
+ */
+uint64_t random_generator_incrementing_seed()
 {
-  return "int64";
-};
-template class numeric_category<long>;
+  static uint64_t seed = 0;
+  return ++seed;
+}
+
+}  // namespace detail
+}  // namespace test
+}  // namespace cudf

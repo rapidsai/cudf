@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -64,6 +65,7 @@ class aggregation {
     ARGMIN,          ///< Index of min element
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
+    ROW_NUMBER,      ///< get row-number of element
     PTX,             ///< PTX UDF based reduction
     CUDA             ///< CUDA UDf based reduction
   };
@@ -71,7 +73,14 @@ class aggregation {
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
+
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+
+  virtual std::unique_ptr<aggregation> clone() const
+  {
+    return std::make_unique<aggregation>(*this);
+  }
 
   virtual ~aggregation() = default;
 };
@@ -176,6 +185,9 @@ std::unique_ptr<aggregation> make_nunique_aggregation(
  */
 std::unique_ptr<aggregation> make_nth_element_aggregation(
   size_type n, null_policy null_handling = null_policy::INCLUDE);
+
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA
