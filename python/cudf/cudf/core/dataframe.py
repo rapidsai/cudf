@@ -29,7 +29,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import Index, RangeIndex, StringIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
@@ -1831,23 +1831,39 @@ class DataFrame(Frame):
         del self[item]
         return popped
 
-    def rename(self, mapper=None, columns=None, copy=True, inplace=False):
-        """
-        Alter column labels.
+    def rename(
+        self,
+        mapper=None,
+        columns=None,
+        index=None,
+        copy=True,
+        inplace=False,
+        axis=1,
+    ):
+        """Alter column and index labels.
 
         Function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
+        DataFrame.rename supports two calling conventions
+
+        `(index=index_mapper, columns=columns_mapper, ...)`
+        `(mapper, axis={0 or 1}, ...)`
+
+        We highly recommend using keyword arguments to clarify your intent.
+
         Parameters
         ----------
-        mapper, columns : dict-like or function, optional
+        mapper, columns, index : dict-like or function, optional
             dict-like or functions transformations to apply to
             the column axis' values.
         copy : boolean, default True
             Also copy underlying data
         inplace: boolean, default False
             Return new DataFrame.  If True, assign columns without copy
+        axis: int, default 0
+            Axis to rename with mapper. 0 for index, 1 for columns
 
         Returns
         -------
@@ -1856,36 +1872,53 @@ class DataFrame(Frame):
         Notes
         -----
         Difference from pandas:
-          * Support axis='columns' only.
-          * Not supporting: index, level
+            * Not supporting: level
 
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
-        # Pandas defaults to using columns over mapper
-        if columns:
-            mapper = columns
+        if mapper:
+            if axis == 0:
+                index = mapper
+            elif axis == 1:
+                columns = mapper
 
         out = DataFrame(index=self.index)
-        if isinstance(mapper, Mapping):
+
+        if columns:
             postfix = 1
-            # It is possible for DataFrames with a MultiIndex columns object
-            # to have columns with the same name. The followig use of
-            # _cols.items and ("_1", "_2"... allows the use of
-            # rename in this case
-            for key, col in self._data.items():
-                if key in mapper:
-                    if mapper[key] in out.columns:
-                        out_column = mapper[key] + "_" + str(postfix)
-                        postfix += 1
+            if isinstance(columns, Mapping):
+                # It is possible for DataFrames with a MultiIndex columns
+                # object to have columns with the same name. The followig
+                # use of _cols.items and ("_1", "_2"... allows the use of
+                # rename in this case
+                for key, col in self._data.items():
+                    if key in columns:
+                        if columns[key] in out.columns:
+                            out_column = columns[key] + "_" + str(postfix)
+                            postfix += 1
+                        else:
+                            out_column = columns[key]
+                        out[out_column] = col
                     else:
-                        out_column = mapper[key]
-                    out[out_column] = col
-                else:
-                    out[key] = col
-        elif callable(mapper):
-            for col in self._data.names:
-                out[mapper(col)] = self[col]
+                        out[key] = col
+            elif callable(columns):
+                for col in self._data.names:
+                    out[columns(col)] = self[col]
+        else:
+            out._data = self._data
+
+        if index:
+            out_idx = list(self.index)
+            if isinstance(index, Mapping):
+                for key, value in enumerate(out_idx):
+                    if value in index.keys():
+                        out_idx[key] = index[value]
+            elif callable(index):
+                for key, value in enumerate(out_idx):
+                    if value in index.keys():
+                        out_idx[key] = index(index[value])
+            out.index = StringIndex(out_idx)
 
         if inplace:
             self._data = out._data
