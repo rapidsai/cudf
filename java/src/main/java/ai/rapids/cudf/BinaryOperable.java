@@ -356,6 +356,22 @@ public interface BinaryOperable {
   }
 
   /**
+   * The function arctan2(y,x) or atan2(y,x) is defined as the angle in the Euclidean plane, given
+   * in radians, between the positive x axis and the ray to the point (x, y) ≠ (0, 0).
+   */
+  default ColumnVector arctan2(BinaryOperable xCoordinate, DType outType) {
+    return binaryOp(BinaryOp.ATAN2, xCoordinate, outType);
+  }
+
+  /**
+   * The function arctan2(y,x) or atan2(y,x) is defined as the angle in the Euclidean plane, given
+   * in radians, between the positive x axis and the ray to the point (x, y) ≠ (0, 0).
+   */
+  default ColumnVector arctan2(BinaryOperable xCoordinate) {
+    return arctan2(xCoordinate, implicitConversion(this, xCoordinate));
+  }
+
+  /**
    * Bitwise left shifts the values of this vector by shiftBy.
    *
    * If "this" and shiftBy are both vectors then, this[i] << shiftBy[i]
