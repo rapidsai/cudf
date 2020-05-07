@@ -58,7 +58,7 @@ class Buffer:
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
 
-    def __reduce__(self):
+    def __reduce_ex__(self, protocol):
         data = self.to_host_array()
         return self.__class__, (data,)
 
