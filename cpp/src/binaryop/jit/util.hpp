@@ -22,6 +22,7 @@ namespace cudf {
 namespace experimental {
 namespace binops {
 namespace jit {
+
 /**
  * @brief Orientation of lhs and rhs in operator
  */
@@ -66,6 +67,10 @@ std::string inline get_operator_name(binary_operator op, OperatorType type)
     case binary_operator::SHIFT_RIGHT: operator_name = "ShiftRight"; break;
     case binary_operator::SHIFT_RIGHT_UNSIGNED: operator_name = "ShiftRightUnsigned"; break;
     case binary_operator::LOG_BASE: operator_name = "LogBase"; break;
+    case binary_operator::ATAN2: operator_name = "ATan2"; break;
+    case binary_operator::NULL_EQUALS: operator_name = "NullEquals"; break;
+    case binary_operator::NULL_MAX: operator_name = "NullMax"; break;
+    case binary_operator::NULL_MIN: operator_name = "NullMin"; break;
     default: operator_name = "None"; break;
   }
   if (type == OperatorType::Direct) {

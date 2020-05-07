@@ -349,9 +349,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
    */
-  public ColumnVector getLengths() {
-    assert DType.STRING == type : "length only available for String type";
-    return new ColumnVector(lengths(getNativeView()));
+  public ColumnVector getCharLengths() {
+    assert DType.STRING == type : "char length only available for String type";
+    return new ColumnVector(charLengths(getNativeView()));
   }
 
   /**
@@ -2312,7 +2312,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
-  private static native long lengths(long viewHandle) throws CudfException;
+  private static native long charLengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 

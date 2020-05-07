@@ -46,7 +46,8 @@ public enum BinaryOp {
   SHIFT_LEFT(22), // bitwise shift left (<<)
   SHIFT_RIGHT(23), // bitwise shift right (>>)
   SHIFT_RIGHT_UNSIGNED(24), // bitwise shift right (>>>)
-  LOG_BASE(25); // logarithm to the base
+  LOG_BASE(25), // logarithm to the base
+  ATAN2(26); // atan2
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
