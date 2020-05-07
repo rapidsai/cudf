@@ -16,8 +16,11 @@
 - PR #4923 Add Java and JNI bindings for string split
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
+- PR #4881 Support row_number in rolling_window
+- PR #5068 Add Java bindings for arctan2
 
 ## Improvements
 
@@ -144,6 +147,7 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5106 Add detail API for `cudf::concatenate` with tables
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
@@ -243,10 +247,14 @@
 - PR #5070 Fix libcudf++ csv reader support for hex dtypes, doublequotes and empty columns
 - PR #5057 Fix metadata_out parameter not reaching parquet `write_all`
 - PR #5076 Fix JNI code for null_policy enum change
+- PR #5031 grouped_time_range_rolling_window assumes ASC sort order 
+- PR #5032 grouped_time_range_rolling_window should permit invocation without specifying grouping_keys
+
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 - PR #5124 `DataFrame.rename` support for renaming indexes w/ default for `index`
+- PR #5118 Fix naming for java string length operators
 
 
 # cuDF 0.13.0 (31 Mar 2020)
