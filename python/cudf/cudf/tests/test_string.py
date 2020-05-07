@@ -1856,3 +1856,30 @@ def test_string_ip4_to_int():
     got = gsr.str.ip2int()
 
     assert_eq(expected, got)
+
+
+def test_string_int_to_ipv4():
+    gsr = Series([0, None, 0, 698875905, 2130706433, 700776449])
+    expected = Series(
+        ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
+
+    got = Series(gsr._column.int2ip())
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("int8"),
+        np.dtype("int16"),
+        np.dtype("int32"),
+        np.dtype("float32"),
+        np.dtype("float64"),
+    ],
+)
+def test_string_int_to_ipv4_dtype_fail(dtype):
+    gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
+    with pytest.raises(TypeError):
+        gsr._column.int2ip()
