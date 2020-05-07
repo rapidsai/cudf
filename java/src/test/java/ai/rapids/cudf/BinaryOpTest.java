@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.function.Function;
 import java.util.stream.Collector;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
@@ -1096,6 +1097,29 @@ public class BinaryOpTest extends CudfTestBase {
              .map(n -> Math.log(n) / Math.log(2))
              .toArray(Double[]::new))) {
       assertColumnsAreEqual(expected, answer, "log2");
+    }
+  }
+
+  @Test
+  public void testArctan2() {
+    Integer[] xInt = {7, 1, 2, 10};
+    Integer[] yInt = {4, 10, 8, 2};
+
+    Double[] xDouble = TestUtils.getDoubles(98234234523432423L, 50, false);
+    Double[] yDouble = TestUtils.getDoubles(23623274238423532L, 50, false);
+
+    try (ColumnVector yDoubleCV = ColumnVector.fromBoxedDoubles(yDouble);
+         ColumnVector xDoubleCV = ColumnVector.fromBoxedDoubles(xDouble);
+         ColumnVector yIntCV = ColumnVector.fromBoxedInts(yInt);
+         ColumnVector xIntCV = ColumnVector.fromBoxedInts(xInt);
+         ColumnVector resultDouble = yDoubleCV.arctan2(xDoubleCV);
+         ColumnVector resultInt = yIntCV.arctan2(xIntCV, DType.FLOAT64);
+         ColumnVector expectedInt = ColumnVector.fromDoubles(IntStream.range(0,xInt.length)
+             .mapToDouble(n -> Math.atan2(yInt[n], xInt[n])).toArray());
+         ColumnVector expectedDouble = ColumnVector.fromDoubles(IntStream.range(0,xDouble.length)
+             .mapToDouble(n -> Math.atan2(yDouble[n], xDouble[n])).toArray())) {
+      assertColumnsAreEqual(expectedInt, resultInt);
+      assertColumnsAreEqual(expectedDouble, resultDouble);
     }
   }
 }
