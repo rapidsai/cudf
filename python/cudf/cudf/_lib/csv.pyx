@@ -127,7 +127,11 @@ cdef read_csv_args make_read_csv_args(
 
     if names is not None:
         # explicitly mentioned name, so don't check header
-        read_csv_args_c.header = -1
+        if header is None or header == 'infer':
+            read_csv_args_c.header = -1
+        else:
+            read_csv_args_c.header = header
+
         read_csv_args_c.names.reserve(len(names))
         for name in names:
             read_csv_args_c.names.push_back(str(name).encode())

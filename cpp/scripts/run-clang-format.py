@@ -14,46 +14,73 @@
 #
 
 from __future__ import print_function
-import sys
-import re
-import os
-import subprocess
-import argparse
-import tempfile
 
+import argparse
+import os
+import re
+import subprocess
+import sys
+import tempfile
 
 EXPECTED_VERSION = "8.0.1"
 VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
-# NOTE: populate this list with more top-level dirs as we add more of them to the cudf repo
-DEFAULT_DIRS = ["cpp/benchmarks",
-                "cpp/custrings"
-                "cpp/include",
-                "cpp/include/cudf",
-                "cpp/include/nvtext",
-                "cpp/include/nvstrings",
-                "cpp/src",
-                "cpp/tests"]
+# NOTE: populate this list with more top-level dirs as we add more of them to
+# the cudf repo
+DEFAULT_DIRS = [
+    "cpp/benchmarks",
+    "cpp/custrings",
+    "cpp/include",
+    "cpp/include/cudf",
+    "cpp/include/nvtext",
+    "cpp/include/nvstrings",
+    "cpp/src",
+    "cpp/tests",
+]
 
 
 def parse_args():
     argparser = argparse.ArgumentParser("Runs clang-format on a project")
-    argparser.add_argument("-dstdir", type=str, default=None,
-                           help="Directory to store the temporary outputs of"
-                           " clang-format. If nothing is passed for this, then"
-                           " a temporary dir will be created using `mkdtemp`")
-    argparser.add_argument("-exe", type=str, default="clang-format",
-                           help="Path to clang-format exe")
-    argparser.add_argument("-inplace", default=False, action="store_true",
-                           help="Replace the source files itself.")
-    argparser.add_argument("-regex", type=str,
-                           default=r"[.](cu|cuh|h|hpp|cpp)$",
-                           help="Regex string to filter in sources")
-    argparser.add_argument("-ignore", type=str, default=r"cannylab/bh[.]cu$",
-                           help="Regex used to ignore files from matched list")
-    argparser.add_argument("-v", dest="verbose", action="store_true",
-                           help="Print verbose messages")
-    argparser.add_argument("dirs", type=str, nargs="*",
-                           help="List of dirs where to find sources")
+    argparser.add_argument(
+        "-dstdir",
+        type=str,
+        default=None,
+        help="Directory to store the temporary outputs of"
+        " clang-format. If nothing is passed for this, then"
+        " a temporary dir will be created using `mkdtemp`",
+    )
+    argparser.add_argument(
+        "-exe",
+        type=str,
+        default="clang-format",
+        help="Path to clang-format exe",
+    )
+    argparser.add_argument(
+        "-inplace",
+        default=False,
+        action="store_true",
+        help="Replace the source files itself.",
+    )
+    argparser.add_argument(
+        "-regex",
+        type=str,
+        default=r"[.](cu|cuh|h|hpp|cpp|inl)$",
+        help="Regex string to filter in sources",
+    )
+    argparser.add_argument(
+        "-ignore",
+        type=str,
+        default=r"cannylab/bh[.]cu$",
+        help="Regex used to ignore files from matched list",
+    )
+    argparser.add_argument(
+        "-v",
+        dest="verbose",
+        action="store_true",
+        help="Print verbose messages",
+    )
+    argparser.add_argument(
+        "dirs", type=str, nargs="*", help="List of dirs where to find sources"
+    )
     args = argparser.parse_args()
     args.regex_compiled = re.compile(args.regex)
     args.ignore_compiled = re.compile(args.ignore)
@@ -66,8 +93,10 @@ def parse_args():
         raise Exception("Failed to figure out clang-format version!")
     version = version.group(1)
     if version != EXPECTED_VERSION:
-        raise Exception("clang-format exe must be v%s found '%s'" % \
-                        (EXPECTED_VERSION, version))
+        raise Exception(
+            "clang-format exe must be v%s found '%s'"
+            % (EXPECTED_VERSION, version)
+        )
     if len(args.dirs) == 0:
         args.dirs = DEFAULT_DIRS
     return args
@@ -112,8 +141,10 @@ def run_clang_format(src, dst, exe, verbose):
         if verbose:
             print("%s passed" % os.path.basename(src))
     except subprocess.CalledProcessError:
-        print("%s failed! 'diff %s %s' will show formatting violations!" % \
-              (os.path.basename(src), src, dst))
+        print(
+            "%s failed! 'diff %s %s' will show formatting violations!"
+            % (os.path.basename(src), src, dst)
+        )
         return False
     return True
 
@@ -124,8 +155,13 @@ def main():
     if not os.path.exists(".git"):
         print("Error!! This needs to always be run from the root of repo")
         sys.exit(-1)
-    all_files = list_all_src_files(args.regex_compiled, args.ignore_compiled,
-                                   args.dirs, args.dstdir, args.inplace)
+    all_files = list_all_src_files(
+        args.regex_compiled,
+        args.ignore_compiled,
+        args.dirs,
+        args.dstdir,
+        args.inplace,
+    )
     # actual format checker
     status = True
     for src, dst in all_files:
@@ -136,8 +172,10 @@ def main():
         print(" 1. Look at formatting differences above and fix them manually")
         print(" 2. Or run the below command to bulk-fix all these at once")
         print("Bulk-fix command: ")
-        print("  python cpp/scripts/run-clang-format.py %s -inplace" % \
-              " ".join(sys.argv[1:]))
+        print(
+            "  python cpp/scripts/run-clang-format.py %s -inplace"
+            % " ".join(sys.argv[1:])
+        )
         sys.exit(-1)
     return
 
