@@ -848,7 +848,7 @@ class ColumnBase(Column):
         sr = cudf.Series(self)
 
         # Re-label self w.r.t. the provided categories
-        if is_categorical_dtype(dtype) and hasattr(dtype, "categories"):
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             labels = sr.label_encoding(cats=dtype.categories)
             return build_categorical_column(
                 categories=dtype.categories,
