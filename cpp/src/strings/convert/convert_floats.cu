@@ -110,7 +110,7 @@ __device__ inline double stod(string_view const& d_str)
                     : -std::numeric_limits<double>::infinity();
   else if (exp10 < -308)
     return 0.0;
-  double value = (double)digits * pow(10.0, (double)exp10);
+  double value = static_cast<double>(digits) * std::pow(10.0, exp10);
   return (value * sign);
 }
 
