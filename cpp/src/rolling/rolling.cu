@@ -410,7 +410,7 @@ struct rolling_window_launcher {
                                                DeviceMax::template identity<T>(),
                                                stream);
     } else {
-      CUDF_FAIL("MIN and MAX are the only supported aggregation types here");
+      CUDF_FAIL("MIN and MAX are the only supported aggregation types for string columns");
     }
 
     // The rows that represent null elements will be having negative values in gather map,

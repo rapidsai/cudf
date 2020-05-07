@@ -348,6 +348,7 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *data,
 }
 
 // The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::string_view decode_value(const char *data,
                                                      long start,
@@ -356,6 +357,8 @@ __inline__ __device__ cudf::string_view decode_value(const char *data,
 {
   return cudf::string_view{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
                                                       long start,
@@ -364,6 +367,9 @@ __inline__ __device__ cudf::dictionary32 decode_value(const char *data,
 {
   return cudf::dictionary32{};
 }
+
+// The purpose of this is merely to allow compilation ONLY
+// TODO : make this work for csv
 template <>
 __inline__ __device__ cudf::list_view decode_value(const char *data,
                                                    long start,

@@ -324,9 +324,9 @@ struct is_simple_impl {
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 /**
- * @brief Indicates whether `T` is a nesting type.
+ * @brief Indicates whether `T` is a nested type.
  *
- * "Nesting" types are distinct from compound types in that they
+ * "Nested" types are distinct from compound types in that they
  * can have an arbitrarily deep list of descendants of the same
  * type. Strings are not a nested type, but lists are.
  *
@@ -349,9 +349,9 @@ struct is_nested_impl {
 };
 
 /**
- * @brief Indicates whether `type` is a nesting type
+ * @brief Indicates whether `type` is a nested type
  *
- * "Nesting" types are distinct from compound types in that they
+ * "Nested" types are distinct from compound types in that they
  * can have an arbitrarily deep list of descendants of the same
  * type. Strings are not a nested type, but lists are.
  *
