@@ -1849,7 +1849,7 @@ def test_string_hex_to_int(data):
     assert_eq(expected, got)
 
 
-def test_string_ip_to_int():
+def test_string_ip4_to_int():
     gsr = Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
     expected = Series([0, None, 0, 698875905, 2130706433, 700776449])
 
