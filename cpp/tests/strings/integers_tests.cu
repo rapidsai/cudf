@@ -170,7 +170,7 @@ TEST_F(StringsConvertTest, HexToInteger)
       if (*itr == nullptr)
         h_expected.push_back(0);
       else
-        h_expected.push_back((int)std::stol(std::string(*itr), 0, 16));
+        h_expected.push_back(static_cast<int>(std::stol(std::string(*itr), 0, 16)));
     }
 
     auto results = cudf::strings::hex_to_integers(cudf::strings_column_view(strings),
