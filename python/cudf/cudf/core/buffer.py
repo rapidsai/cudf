@@ -60,6 +60,8 @@ class Buffer:
 
     def __reduce_ex__(self, protocol):
         data = self.to_host_array()
+        if protocol >= 5:
+            data = pickle.PickleBuffer(data)
         return self.__class__, (data,)
 
     def __len__(self):
