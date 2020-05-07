@@ -14,6 +14,7 @@
 - PR #4900 Add `get_element` to obtain scalar from a column given an index
 - PR #4938 Add Java bindings for strip
 - PR #4923 Add Java and JNI bindings for string split
+- PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
 - PR #5055 Add atan2 binary op
