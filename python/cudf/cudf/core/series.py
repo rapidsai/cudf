@@ -1657,10 +1657,17 @@ class Series(Frame):
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
             # are having non-numeric values, hence we will have
-            # to catch the exception and fill in with zeros.
+            # to catch the exception and return a encoded labels
+            # with na_sentinel values
             cats = cats.astype(self.dtype)
         except ValueError:
-            cats = Series(cupy.zeros(len(cats), dtype=self.dtype))
+            return Series(
+                utils.scalar_broadcast_to(
+                    na_sentinel, size=len(self), dtype=dtype
+                ),
+                index=self.index,
+                name=None,
+            )
 
         order = Series(cupy.arange(len(self)))
         codes = Series(cupy.arange(len(cats), dtype=dtype))
@@ -1673,7 +1680,6 @@ class Series(Frame):
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
         cats.name = None  # because it was mutated above
-
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
