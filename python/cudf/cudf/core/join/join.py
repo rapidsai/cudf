@@ -128,13 +128,9 @@ class Merge(object):
         """
         Translate a valid configuration of user input parameters into
         the subset of input configurations handled by the cython layer. 
-        Apply suffixes to columns. 
+        Apply suffixes to columns.
         """
 
-        if isinstance(self.lhs, cudf.Series):
-            self.lhs = self.lhs.to_frame()
-        if isinstance(self.rhs, cudf.Series):
-            self.rhs = self.rhs.to_frame()
         self.out_class = cudf.DataFrame
 
         assert not (on and left_on) or (on and right_on)
