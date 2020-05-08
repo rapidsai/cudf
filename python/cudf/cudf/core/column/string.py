@@ -183,6 +183,24 @@ class StringMethods(object):
         else:
             raise AttributeError(attr)
 
+    def htoi(self):
+        """
+        This converts hex strings to integers
+        """
+
+        out = str_cast.htoi(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
+
+    def ip2int(self):
+        """
+        This converts ip strings to integers
+        """
+
+        out = str_cast.ip2int(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
+
     def _return_or_inplace(self, new_col, **kwargs):
         """
         Returns an object of the type of the column owner or updates the column
