@@ -25,6 +25,7 @@ import cudf._lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf._lib.nvtx import annotate
 from cudf.core import column
+from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
@@ -87,7 +88,7 @@ def _reverse_op(fn):
     }[fn]
 
 
-class DataFrame(Frame):
+class DataFrame(Serializable, Frame):
     """
     A GPU Dataframe object.
 
@@ -1630,9 +1631,6 @@ class DataFrame(Frame):
         if memo is None:
             memo = {}
         return self.copy(deep=True)
-
-    def __reduce__(self):
-        return (DataFrame, (self._data, self.index))
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):

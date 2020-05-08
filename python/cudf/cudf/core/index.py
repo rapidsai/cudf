@@ -12,6 +12,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._lib.nvtx import annotate
+from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -57,7 +58,7 @@ def _to_frame(this_index, index=True, name=None):
     )
 
 
-class Index(Frame):
+class Index(Serializable, Frame):
     """The root interface for all Series indexes.
     """
 
@@ -646,9 +647,6 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
-    def __reduce__(self):
-        return (RangeIndex, (self._start, self._stop, self.name))
-
     def equals(self, other):
         if self is other:
             return True
@@ -828,13 +826,6 @@ class GenericIndex(Index):
 
     def __sizeof__(self):
         return self._values.__sizeof__()
-
-    def __reduce__(self):
-        _maker = functools.partial(
-            self.__class__, self._values, name=self.name
-        )
-
-        return _maker, ()
 
     def __len__(self):
         return len(self._values)

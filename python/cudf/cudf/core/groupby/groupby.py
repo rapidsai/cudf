@@ -7,11 +7,12 @@ import pickle
 import pandas as pd
 
 import cudf
+from cudf.core.abc import Serializable
 import cudf._lib.groupby as libgroupby
 from cudf._lib.nvtx import annotate
 
 
-class GroupBy(object):
+class GroupBy(Serializable):
     """
     Group a DataFrame or Series by a set of columns.
 
@@ -510,7 +511,7 @@ class Grouper(object):
         self.level = level
 
 
-class _Grouping(object):
+class _Grouping(Serializable):
     def __init__(self, obj, by=None, level=None):
         self._obj = obj
         self._key_columns = []

@@ -7,8 +7,10 @@ import numpy as np
 import rmm
 from rmm import DeviceBuffer, _DevicePointer
 
+from cudf.core.abc import Serializable
 
-class Buffer:
+
+class Buffer(Serializable):
     def __init__(self, data=None, size=None, owner=None):
         """
         A Buffer represents a device memory allocation.
@@ -57,9 +59,6 @@ class Buffer:
             except TypeError:
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
-
-    def __reduce__(self):
-        return self.__class__, (self.to_host_array(),)
 
     def __len__(self):
         return self.size
