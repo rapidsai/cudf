@@ -1656,9 +1656,10 @@ class Series(Frame):
         try:
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
-            # are having non-numeric values, hence we will have
+            # are having non-numeric values, in such cases we have
             # to catch the exception and return a encoded labels
-            # with na_sentinel values
+            # with na_sentinel values as there would be no corresponding
+            # encoded values of cats in self.
             cats = cats.astype(self.dtype)
         except ValueError:
             return Series(
