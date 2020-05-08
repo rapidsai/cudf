@@ -1087,6 +1087,34 @@ def test_typecast_on_join_no_float_round():
 
 
 @pytest.mark.parametrize(
+    "dtypes",
+    [
+        (np.dtype("int8"), np.dtype("int16")),
+        (np.dtype("int16"), np.dtype("int32")),
+        (np.dtype("int32"), np.dtype("int64")),
+        (np.dtype("float32"), np.dtype("float64")),
+        (np.dtype("int32"), np.dtype("float32")),
+    ],
+)
+def test_typecast_on_join_overflow_unsafe(dtypes):
+    dtype_l, dtype_r = dtypes
+    if dtype_l.kind == "i":
+        dtype_l_max = np.iinfo(dtype_l).max
+    elif dtype_l.kind == "f":
+        dtype_l_max = np.finfo(dtype_r).max
+
+    lhs = cudf.DataFrame({"a": [1, 2, 3, 4, 5]}, dtype=dtype_l)
+    rhs = cudf.DataFrame({"a": [1, 2, 3, 4, dtype_l_max + 1]}, dtype=dtype_r)
+
+    with pytest.warns(
+        UserWarning,
+        match=(f"can't safely cast column"
+               f" from right with type {dtype_r} to {dtype_l}"),
+    ):
+        merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
+
+
+@pytest.mark.parametrize(
     "dtype_l",
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
 )

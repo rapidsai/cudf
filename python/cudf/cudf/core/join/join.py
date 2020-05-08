@@ -265,10 +265,14 @@ class Merge(object):
                 )
 
     def input_to_libcudf_casting_rules(self, lcol, rcol, how):
-        cast_warn = "can't safely cast column {} from {} with type \
-                        {} to {}, upcasting to {}"
-        ctgry_err = "can't implicitly cast column {0} to categories \
-                        from {1} during {1} join"
+        cast_warn = (
+            "can't safely cast column from {} with type"
+            " {} to {}, upcasting to {}"
+        )
+        ctgry_err = (
+            "can't implicitly cast column {0} to categories"
+            " from {1} during {1} join"
+        )
 
         dtype_l = lcol.dtype
         dtype_r = rcol.dtype
@@ -287,7 +291,7 @@ class Merge(object):
                 )
                 warnings.warn(
                     cast_warn.format(
-                        rcol, "right", dtype_r, dtype_l, libcudf_join_type
+                        "right", dtype_r, dtype_l, libcudf_join_type
                     )
                 )
             else:
@@ -300,7 +304,7 @@ class Merge(object):
                 )
                 warnings.warn(
                     cast_warn.format(
-                        lcol, "left", dtype_l, dtype_r, libcudf_join_type
+                        "left", dtype_l, dtype_r, libcudf_join_type
                     )
                 )
             else:
