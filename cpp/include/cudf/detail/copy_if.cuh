@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
@@ -202,12 +203,13 @@ __launch_bounds__(block_size) __global__
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
-  // There are two operator functions, one for fixed width column type and
-  // other for columns that can have childrens such as string_view. fixed width
-  // column gatherer is simpler and kernel is specifically designed for only that
-  // to achieve better performance compared to generic gather used for string.
-  template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
+  // There are two operator functions, one for fixed-width column types and another for columns that
+  // can have children such as string_view. fixed-width column gatherer is simpler and the kernel is
+  // specifically designed for better performance compared to the generic gather used for strings.
+
+  // operator for non-fixed-width types.
+  template <typename T, std::enable_if_t<not cudf::is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
@@ -231,8 +233,9 @@ struct scatter_gather_functor {
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
   }
 
-  template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
+  // operator template for fixed-width types
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
     cudf::size_type const* block_offsets,
@@ -302,6 +305,8 @@ std::unique_ptr<experimental::table> copy_if(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0)
 {
+  CUDF_FUNC_RANGE();
+
   if (0 == input.num_rows() || 0 == input.num_columns()) { return experimental::empty_like(input); }
 
   constexpr int block_size = 256;
@@ -310,9 +315,9 @@ std::unique_ptr<experimental::table> copy_if(
   cudf::experimental::detail::grid_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
-  // TODO: use an uninitialized buffer to avoid the initialization kernel
-  rmm::device_vector<cudf::size_type> block_counts(grid.num_blocks);
-  rmm::device_vector<cudf::size_type> block_offsets(grid.num_blocks + 1, 0);
+  // TODO: use an uninitialized vector to avoid the initialization kernel
+  rmm::device_vector<cudf::size_type> block_counts(2 * grid.num_blocks + 1, 0);
+  auto block_offsets = &block_counts[grid.num_blocks];
 
   // 1. Find the count of elements in each block that "pass" the mask
   compute_block_counts<Filter, block_size><<<grid.num_blocks, block_size, 0, stream>>>(
@@ -340,11 +345,11 @@ std::unique_ptr<experimental::table> copy_if(
 
     CUDA_TRY(cudaStreamSynchronize(stream));
     // As it is InclusiveSum, last value in block_offsets will be output_size
-    output_size = block_offsets.back();
+    output_size = block_counts.back();
   } else {
     // With num_blocks <= 1, block_offsets will always be `0`
     CUDA_TRY(cudaStreamSynchronize(stream));
-    output_size = block_counts.back();
+    output_size = block_counts[grid.num_blocks - 1];
   }
 
   CHECK_CUDA(stream);
@@ -358,14 +363,13 @@ std::unique_ptr<experimental::table> copy_if(
                                                  scatter_gather_functor<Filter, block_size>{},
                                                  col_view,
                                                  output_size,
-                                                 thrust::raw_pointer_cast(block_offsets.data()),
+                                                 thrust::raw_pointer_cast(block_offsets),
                                                  filter,
                                                  mr,
                                                  stream);
     });
 
     return std::make_unique<experimental::table>(std::move(out_columns));
-
   } else {
     return experimental::empty_like(input);
   }
