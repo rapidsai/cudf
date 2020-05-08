@@ -96,6 +96,29 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
           std::get<0>(arg) < std::get<1>(arg) + tolerance);
 }
 
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+
+// temporary method to verify the float columns until
+// cudf::test::expect_columns_equal supports floating point
+template <typename T, typename valid_t>
+void check_float_column(cudf::column_view const& col_lhs,
+                        cudf::column_view const& col_rhs,
+                        T tol,
+                        valid_t const& validity)
+{
+  auto h_data = cudf::test::to_host<T>(col_rhs).first;
+
+  std::vector<T> data(h_data.size());
+  std::copy(h_data.begin(), h_data.end(), data.begin());
+
+  cudf::test::expect_column_properties_equivalent(col_lhs,
+                                                  wrapper<T>{data.begin(), data.end(), validity});
+  CUDF_EXPECTS(col_lhs.null_count() == 0, "All elements should be valid");
+  EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
+              ::testing::Pointwise(FloatNearPointwise(tol), data));
+}
+
 // Helper function to compare two floating-point column contents
 template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
@@ -780,7 +803,7 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
   cudf::test::expect_tables_equivalent(input_table, result_table);
 }
 
-TEST_F(CsvReaderTest, DISABLED_MultiColumnWithWriter)
+TEST_F(CsvReaderTest, MultiColumnWithWriter)
 {
   constexpr auto num_rows = 10;
   auto int8_column        = []() {
@@ -841,7 +864,16 @@ TEST_F(CsvReaderTest, DISABLED_MultiColumnWithWriter)
   auto result    = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(input_table, result_table);
+
+  std::vector<cudf::size_type> non_float64s{0, 1, 2, 3, 4, 5, 6, 7, 8};
+  const auto input_sliced_view  = input_table.select(non_float64s);
+  const auto result_sliced_view = result_table.select(non_float64s);
+  cudf::test::expect_tables_equivalent(input_sliced_view, result_sliced_view);
+
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  double tol{1.0e-6};
+  check_float_column(input_table.column(9), result_table.column(9), tol, validity);
+  check_float_column(input_table.column(10), result_table.column(10), tol, validity);
 }
 
 TEST_F(CsvReaderTest, DISABLED_DatesWithWriter)
