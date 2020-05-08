@@ -18,6 +18,9 @@
 
 #include <cudf/types.hpp>
 
+#include <memory>
+#include <vector>
+
 namespace cudf {
 namespace experimental {
 /**
@@ -64,7 +67,7 @@ namespace experimental {
  * @return Table containing all rows of the `input` with at least @p
  * keep_threshold non-null fields in @p keys.
  */
-std::unique_ptr<experimental::table> drop_nulls(
+std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
