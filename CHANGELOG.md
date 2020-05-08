@@ -25,6 +25,7 @@
 
 ## Improvements
 
+- PR #5147 Use logging_resource_adaptor from RMM in the JNI code
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
