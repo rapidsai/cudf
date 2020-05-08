@@ -111,16 +111,19 @@ std::unique_ptr<column> is_integer(
 }
 
 bool all_integer(strings_column_view const& strings,
+                 null_policy null_handling           = null_policy::EXCLUDE,
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                  cudaStream_t stream                 = 0)
 {
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  auto transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [d_column] __device__(size_type idx) {
-      if (d_column.is_null(idx)) return false;
-      return string::is_integer(d_column.element<string_view>(idx));
-    });
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  auto transformer_itr =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    [d_column, null_handling] __device__(size_type idx) {
+                                      if (d_column.is_null(idx))
+                                        return null_handling == null_policy::INCLUDE;
+                                      return string::is_integer(d_column.element<string_view>(idx));
+                                    });
   return thrust::all_of(rmm::exec_policy(stream)->on(stream),
                         transformer_itr,
                         transformer_itr + strings.size(),
@@ -156,16 +159,19 @@ std::unique_ptr<column> is_float(
 }
 
 bool all_float(strings_column_view const& strings,
+               null_policy null_handling           = null_policy::EXCLUDE,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
                cudaStream_t stream                 = 0)
 {
-  auto strings_column  = column_device_view::create(strings.parent(), stream);
-  auto d_column        = *strings_column;
-  auto transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [d_column] __device__(size_type idx) {
-      if (d_column.is_null(idx)) return false;
-      return string::is_float(d_column.element<string_view>(idx));
-    });
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  auto transformer_itr =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                    [d_column, null_handling] __device__(size_type idx) {
+                                      if (d_column.is_null(idx))
+                                        return null_handling == null_policy::INCLUDE;
+                                      return string::is_float(d_column.element<string_view>(idx));
+                                    });
   return thrust::all_of(rmm::exec_policy(stream)->on(stream),
                         transformer_itr,
                         transformer_itr + strings.size(),
@@ -199,16 +205,20 @@ std::unique_ptr<column> is_float(strings_column_view const& strings,
   return detail::is_float(strings, mr);
 }
 
-bool all_integer(strings_column_view const& strings, rmm::mr::device_memory_resource* mr)
+bool all_integer(strings_column_view const& strings,
+                 null_policy null_handling,
+                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_integer(strings, mr);
+  return detail::all_integer(strings, null_handling, mr);
 }
 
-bool all_float(strings_column_view const& strings, rmm::mr::device_memory_resource* mr)
+bool all_float(strings_column_view const& strings,
+               null_policy null_handling,
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_float(strings, mr);
+  return detail::all_float(strings, null_handling, mr);
 }
 
 }  // namespace strings

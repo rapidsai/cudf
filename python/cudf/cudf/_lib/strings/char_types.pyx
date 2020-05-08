@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+
 from libcpp cimport bool
 from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -15,6 +16,8 @@ from cudf._lib.cpp.strings.char_types cimport (
     is_float as cpp_is_float,
     all_float as cpp_all_float
 )
+
+cimport cudf._lib.cpp.types as libcudf_types
 
 
 def is_decimal(Column source_strings):
@@ -191,7 +194,8 @@ def all_integers(Column source_strings):
 
     with nogil:
         c_result = cpp_all_integer(
-            source_view
+            source_view,
+            libcudf_types.null_policy.INCLUDE
         )
 
     return c_result
@@ -223,7 +227,8 @@ def all_floats(Column source_strings):
 
     with nogil:
         c_result = cpp_all_float(
-            source_view
+            source_view,
+            libcudf_types.null_policy.INCLUDE
         )
 
     return c_result

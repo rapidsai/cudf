@@ -133,6 +133,7 @@ std::unique_ptr<column> is_integer(
  * @return true if all string are valid
  */
 bool all_integer(strings_column_view const& strings,
+                 null_policy null_handling           = null_policy::EXCLUDE,
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -173,6 +174,7 @@ std::unique_ptr<column> is_float(
  * @return true if all string are valid
  */
 bool all_float(strings_column_view const& strings,
+               null_policy null_handling           = null_policy::EXCLUDE,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace strings
