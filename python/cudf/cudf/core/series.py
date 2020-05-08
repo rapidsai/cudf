@@ -1675,7 +1675,7 @@ class Series(Frame):
 
         value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame(
-            {"value": self.copy(deep=False)._data.columns[0], "order": order}
+            {"value": self._data.columns[0].copy(deep=False), "order": order}
         )
         codes = codes.merge(value, on="value", how="left")
 
