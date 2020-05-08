@@ -119,7 +119,7 @@ else
     fi
 
     # Install contextvars on Python 3.6
-    py_ver=$(python -c "import sys; print('.'.join(sys.version_info[:2]))")
+    py_ver=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
     if [ "$py_ver" == "3.6" ];then
         conda install contextvars
     fi
