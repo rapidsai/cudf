@@ -237,26 +237,6 @@ def test_dataframe_join_mismatch_cats(how):
     expect.data_col_left = expect.data_col_left.astype(np.int64)
 
     assert_eq(expect, got)
-    # Expect has the wrong index type. Quick fix to get index type working
-    # again I think this implies that CategoricalIndex.to_pandas() is not
-    # working correctly, since the below corrects it. Remove this line for
-    # an annoying error. TODO: Make CategoricalIndex.to_pandas() work
-    # correctly for the below case.
-    # Error:
-    # AssertionError: Categorical Expected type <class
-    # 'pandas.core.arrays.categorical.Categorical'>, found <class
-    # 'numpy.ndarray'> instead
-    # expect.index = pd.Categorical(expect.index)
-    # pd.util.testing.assert_frame_equal(
-    #    got,
-    #    expect,
-    #    check_names=False,
-    #    check_index_type=False,
-    # For inner joins, pandas returns
-    # weird categories.
-    #    check_categorical=how != "inner",
-    # )
-    # assert list(got.index) == list(expect.index)
 
 
 @pytest.mark.parametrize("on", ["key1", ["key1", "key2"], None])
