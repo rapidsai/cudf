@@ -78,6 +78,10 @@ public enum DType {
     return nativeId;
   }
 
+  public int getSizeInBytes() {
+    return sizeInBytes;
+  }
+
   public static DType fromNative(int nativeId) {
     for (DType type : D_TYPES) {
       if (type.nativeId == nativeId) {
