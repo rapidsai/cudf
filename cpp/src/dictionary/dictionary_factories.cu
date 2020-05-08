@@ -46,7 +46,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
   return std::make_unique<column>(data_type{DICTIONARY32},
                                   indices_column.size(),
                                   rmm::device_buffer{},
-                                  null_mask,
+                                  std::move(null_mask),
                                   null_count,
                                   std::move(children));
 }
