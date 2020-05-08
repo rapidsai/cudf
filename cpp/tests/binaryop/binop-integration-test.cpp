@@ -1857,12 +1857,9 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
                                                   cudf::experimental::binary_operator::PMOD,
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
-  auto out_h    = cudf::test::to_host<TypeOut>(*out);
-  auto out_data = out_h.first;
-  EXPECT_TRUE(out_data[0] > 0);
-  EXPECT_TRUE(out_data[1] < 0);
-  EXPECT_TRUE(out_data[2] > 0);
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+  auto expected_result =
+    fixed_width_column_wrapper<TypeOut>{{4671.0625, -8817.51953125, 10539.974609375}};
+  expect_columns_equal(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
@@ -1881,12 +1878,9 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
                                                   cudf::experimental::binary_operator::PMOD,
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
-  auto out_h    = cudf::test::to_host<TypeOut>(*out);
-  auto out_data = out_h.first;
-  EXPECT_TRUE(out_data[0] > 0);
-  EXPECT_TRUE(out_data[1] < 0);
-  EXPECT_TRUE(out_data[2] > 0);
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+  auto expected_result = fixed_width_column_wrapper<TypeOut>{
+    {4671.0650400000013178, -15456.433499999999185, 32213.221190000000206}};
+  expect_columns_equal(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
@@ -1913,17 +1907,15 @@ TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
                                                   cudf::experimental::binary_operator::PMOD,
                                                   data_type(experimental::type_to_id<TypeOut>()));
 
-  auto out_h    = cudf::test::to_host<TypeOut>(*out);
-  auto out_data = out_h.first;
-  EXPECT_TRUE(out_data[0] > 0);
-  EXPECT_TRUE(out_data[1] > 0);
-  EXPECT_TRUE(out_data[2] > 0);
-  EXPECT_TRUE(out_data[3] < 0);
-  EXPECT_TRUE(out_data[4] == 1);
-  EXPECT_TRUE(out_data[5] == 1);
-  EXPECT_TRUE(out_data[6] == 0);
-  EXPECT_TRUE(out_data[7] == 0);
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+  auto expected_result = fixed_width_column_wrapper<TypeOut>{{24854.55859375,
+                                                              2664.7075000000040745,
+                                                              22572.196640000001935,
+                                                              -8817.5200000000040745,
+                                                              1.0,
+                                                              1.0,
+                                                              0.0,
+                                                              0.0}};
+  expect_columns_equal(*out, expected_result);
 }
 
 TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
