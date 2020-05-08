@@ -12,6 +12,48 @@ from cudf.utils.dtypes import is_categorical_dtype, is_datetime_dtype
 
 
 class Merge(object):
+    """
+    Manage the merging of two Frames.
+
+    Parameters
+    ----------
+    lhs : Series or DataFrame
+        The left operand of the merge
+    rhs : Series or DataFrame
+        The right operand of the merge
+    on : string or list like
+        A set of key columns in the left and right operands
+        elements must be common to both frames
+    left_on : string or list like
+        A set of key columns in the left operand. Must be
+        specified with right_on or right_index concurrently
+    right_on : string or list like
+        A set of key columns in the right operand. Must be
+        specified with left_on or left_index concurrently
+    left_index : bool
+        Boolean flag indicating the left index column or columns
+        are to be used as join keys in order.
+    right_index : bool
+        Boolean flag indicating the right index column or coumns
+        are to be used as join keys in order.
+    how : string
+        The type of join. Possible values are 
+        'inner', 'outer', 'left', 'leftsemi' and 'leftanti'
+    sort : bool
+        Boolean flag indicating if the output Frame is to be
+        sorted on the output's join keys, in left to right order.
+    lsuffix : string
+        The suffix to be appended to left hand column names that
+        are found to exist in the right frame, but are not specified
+        as join keys themselves.
+    rsuffix : string
+        The suffix to be appended to right hand column names that
+        are found to exist in the left frame, but are not specified
+        as join keys themselves.
+    suffixes : list like
+        Left and right suffixes specified together, unpacked into lsuffix
+        and rsuffix.
+    """
     def __init__(
         self,
         lhs,
@@ -57,6 +99,11 @@ class Merge(object):
         )
 
     def perform_merge(self):
+        """
+        Call libcudf to perform a merge between the operands. If
+        necessary, cast the input key columns to compatible types.
+        Potentially also cast the output back to categorical. 
+        """
         output_dtypes = self.compute_output_dtypes()
         self.typecast_input_to_libcudf()
         libcudf_result = libcudf.join.join(
@@ -76,6 +123,11 @@ class Merge(object):
         ]
 
     def preprocess_merge_params(
+        """
+        Translate a valid configuration of user input parameters into
+        the subset of input configurations handled by the cython layer. 
+        Apply suffixes to columns. 
+        """
         self, on, left_on, right_on, lsuffix, rsuffix, suffixes
     ):
 
@@ -147,7 +199,7 @@ class Merge(object):
         suffixes,
     ):
         """
-        Error for various combinations of merge input parameters
+        Error for various invalid combinations of merge input parameters
         """
 
         # must actually support the requested merge type
@@ -235,7 +287,11 @@ class Merge(object):
                     )
 
     def typecast_input_to_libcudf(self):
-
+        """
+        Check each pair of join keys in the left and right hand 
+        operands and apply casting rules to match their types 
+        before passing the result to libcudf.
+        """
         lhs_keys, rhs_keys, lhs_cols, rhs_cols = [], [], [], []
         if self.left_index:
             lhs_keys.append(self.lhs.index._data.keys())
@@ -265,6 +321,12 @@ class Merge(object):
                 )
 
     def input_to_libcudf_casting_rules(self, lcol, rcol, how):
+        """
+        Determine what dtype the left and right hand 
+        input columns must be cast to for a libcudf
+        join to proceed. 
+        """
+
         cast_warn = (
             "can't safely cast column from {} with type"
             " {} to {}, upcasting to {}"
@@ -334,6 +396,11 @@ class Merge(object):
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):
+        """
+        Determine what dtype an output merge key column should be
+        cast to after it has been processed by libcudf. Determine 
+        if a column should be promoted to a categorical datatype. 
+        """
 
         dtype_l = lcol.dtype
         dtype_r = rcol.dtype
@@ -356,6 +423,11 @@ class Merge(object):
         return merge_return_type
 
     def compute_output_dtypes(self):
+        """
+        Determine what datatypes should be applied to the result
+        of a libcudf join, baesd on the original left and right
+        frames.
+        """
         index_dtypes = []
         data_dtypes = {}
         for name, col in itertools.chain(
@@ -408,6 +480,10 @@ class Merge(object):
         return (index_dtypes, data_dtypes)
 
     def typecast_libcudf_to_output(self, output, output_dtypes):
+        """
+        Apply precomputed output index and data column data types
+        to the output of a libcudf join.
+        """
         index_dtypes, data_dtypes = output_dtypes
         if output._index and len(index_dtypes) > 0:
             for i, (index_col_lbl, index_col) in enumerate(
@@ -437,6 +513,11 @@ class Merge(object):
 
     @staticmethod
     def compute_result_col_names(lhs, rhs, how):
+        """
+        Determine the names of the data columns in the result of 
+        a libcudf join, based on the original left and right frames
+        as well as the type of join performed. 
+        """
         if how in ("left", "inner", "outer"):
             # the result cols are all the left columns (incl. common ones)
             # + all the right columns (excluding the common ones)
