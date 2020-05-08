@@ -27,7 +27,7 @@ from cudf._lib.cpp.io.types cimport (
     quote_style,
     sink_info,
     source_info,
-    table_metadata
+    table_metadata,
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info
