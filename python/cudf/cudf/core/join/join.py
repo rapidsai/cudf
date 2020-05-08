@@ -155,13 +155,9 @@ class Merge(object):
             left_on = right_on = list(same_named_columns)
 
         no_suffix_cols = []
-        for name in same_named_columns:
-            if (
-                (left_on and right_on)
-                and (name in left_on and name in right_on)
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                no_suffix_cols.append(name)
+        if left_on and right_on:
+            no_suffix_cols = [left_name for left_name, right_name in zip(left_on, right_on) if left_name == right_name and left_name in same_named_columns]
+        
 
         if suffixes:
             lsuffix, rsuffix = suffixes
