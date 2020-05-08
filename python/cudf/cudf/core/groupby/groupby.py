@@ -265,7 +265,7 @@ class GroupBy(object):
             # Can't do set arithmetic here as sets are
             # not ordered
             if isinstance(self, SeriesGroupBy):
-                columns = [col_name for col_name in self.obj._data]
+                columns = [self.obj.name]
             else:
                 columns = [
                     col_name
