@@ -616,7 +616,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::experimental::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate({*table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -637,7 +637,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   auto table1 = create_random_fixed_table<int>(512, 4096, true);
   auto table2 = create_random_fixed_table<int>(512, 8192, true);
 
-  auto full_table = cudf::experimental::concatenate({*table1, *table2});
+  auto full_table = cudf::concatenate({*table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -664,7 +664,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
     tables.push_back(std::move(tbl));
   }
 
-  auto expected = cudf::experimental::concatenate(table_views);
+  auto expected = cudf::concatenate(table_views);
 
   auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -696,7 +696,7 @@ TEST_F(ParquetChunkedWriterTest, Strings)
   cols.push_back(strings2.release());
   cudf::experimental::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -745,7 +745,7 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
   auto table1 = create_random_fixed_table<int>(5, 5, true);
   auto table2 = create_random_fixed_table<int>(5, 5, true);
 
-  auto full_table = cudf::experimental::concatenate({*table2, *table1, *table2});
+  auto full_table = cudf::concatenate({*table2, *table1, *table2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedRowGroups.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -812,7 +812,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   cols.push_back(c2b_w.release());
   cudf::experimental::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
@@ -860,7 +860,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   cols.push_back(c2b_w.release());
   cudf::experimental::table tbl2(std::move(cols));
 
-  auto expected = cudf::experimental::concatenate({tbl1, tbl2});
+  auto expected = cudf::concatenate({tbl1, tbl2});
 
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.parquet");
   cudf_io::write_parquet_chunked_args args{cudf_io::sink_info{filepath}};
