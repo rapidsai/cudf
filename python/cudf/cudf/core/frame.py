@@ -1508,7 +1508,7 @@ class Frame(libcudf.table.Table):
             if left_index and right_index:
                 by = list(to_return._index._data.columns)
                 if left_on and right_on:
-                    by += list(to_return[mergeop.left_on]._data.columns)
+                    by.extend(to_return[mergeop.left_on]._data.columns)
             elif left_index:
                 by = list(to_return[mergeop.right_on]._data.columns)
             elif right_index:

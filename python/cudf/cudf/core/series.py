@@ -3296,7 +3296,7 @@ class Series(Frame):
         suffixes=("_x", "_y"),
     ):
 
-        if left_on not in [self.name, None]:
+        if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
             )
