@@ -6,6 +6,8 @@ from abc import abstractmethod
 
 import rmm
 
+import cudf
+
 
 class Serializable(abc.ABC):
     @abstractmethod
