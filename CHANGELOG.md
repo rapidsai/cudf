@@ -152,6 +152,7 @@
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
 - PR #5106 Add detail API for `cudf::concatenate` with tables
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
+- PR #5112 Adding `htoi` and `ip2int` support to `StringMethods`
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5123 Display more useful info on `clang-format` CI Failure
