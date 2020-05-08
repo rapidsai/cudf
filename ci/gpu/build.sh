@@ -118,6 +118,13 @@ else
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
+    # Install contextvars on Python 3.6
+    py_ver=$(python -c "import sys; print('.'.join(sys.version_info[:2]))")
+    if [ "$py_ver" == "3.6" ];then
+        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+	conda install contextvars
+    fi
+
     cd $WORKSPACE/python/nvstrings
     logger "Python py.test for nvstrings..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
