@@ -20,6 +20,7 @@
 - PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
+- PR #5092 Add `cudf::replace_nans`
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 
