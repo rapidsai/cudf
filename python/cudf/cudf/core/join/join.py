@@ -166,9 +166,9 @@ class Merge(object):
                 self.lhs.rename({name: f"{name}{lsuffix}"}, inplace=True)
                 self.rhs.rename({name: f"{name}{rsuffix}"}, inplace=True)
                 if left_on and name in left_on:
-                    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                    left_on[left_on.index(name)] = f"{name}{lsuffix}"
                 if right_on and name in right_on:
-                    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
+                    right_on[right_on.index(name)] = f"{name}{rsuffix}"
 
         self.left_on = left_on if left_on is not None else []
         self.right_on = right_on if right_on is not None else []
