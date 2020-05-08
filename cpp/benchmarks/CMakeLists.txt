@@ -110,9 +110,18 @@ ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cpp")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
+
+
+###################################################################################################
+# - legacy apply_boolean_mask benchmark ------------------------------------------------------------------
+
+set(LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy_apply_boolean_mask_benchmark.cu")
+
+ConfigureBench(LEGACY_APPLY_BOOLEAN_MASK_BENCH "${LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------

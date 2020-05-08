@@ -205,6 +205,7 @@
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4821 Port apply_boolean_mask_benchmark to new cudf::column types
 - PR #4826 Move memory resource from RmmTestEnvironment to the custom gtest main() scope
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
