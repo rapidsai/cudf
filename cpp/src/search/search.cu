@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/legacy/copying.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -211,7 +212,7 @@ struct multi_contains_dispatch {
     std::unique_ptr<column> result =
       make_numeric_column(data_type{experimental::type_to_id<bool>()},
                           haystack.size(),
-                          copy_bitmask(haystack),
+                          cudf::detail::copy_bitmask(haystack, stream, mr),
                           haystack.null_count(),
                           stream,
                           mr);

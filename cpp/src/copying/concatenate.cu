@@ -378,7 +378,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
       });
 
     rmm::device_buffer null_mask =
-      create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+      create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
     detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), 0);
 

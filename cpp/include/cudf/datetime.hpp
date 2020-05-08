@@ -34,21 +34,6 @@ enum class datetime_component {
   MINUTE,
   SECOND,
 };
-
-/**
- * @brief  Extracts the supplied datetime component from any date time type
- * and returns an int16_t cudf::column.
- *
- * @param[in] cudf::column_view of the input datetime values
- * @returns cudf::column of the extracted int16_t datetime component
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- */
-
-template <datetime_component Component>
-std::unique_ptr<column> extract_component(
-  column_view const& column,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
 
 /**

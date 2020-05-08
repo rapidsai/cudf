@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -172,7 +173,7 @@ std::unique_ptr<column> to_floats(
   // create float output column copying the strings null-mask
   auto results      = make_numeric_column(output_type,
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -463,7 +464,7 @@ struct dispatch_from_floats_fn {
     auto d_column           = *column;
 
     // copy the null mask
-    rmm::device_buffer null_mask = copy_bitmask(floats, stream, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(floats, stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0), float_to_string_size_fn<FloatType>{d_column});

@@ -17,8 +17,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -81,7 +81,7 @@ std::unique_ptr<column> contains_util(
   // create the output column
   auto results   = make_numeric_column(data_type{BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -202,7 +202,7 @@ std::unique_ptr<column> count_re(
   // create the output column
   auto results   = make_numeric_column(data_type{INT32},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);

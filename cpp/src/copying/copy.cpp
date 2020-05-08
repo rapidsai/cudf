@@ -19,8 +19,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -64,7 +64,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   return std::make_unique<column>(input.type(),
                                   size,
                                   rmm::device_buffer(size * size_of(input.type()), stream, mr),
-                                  create_null_mask(size, allocate_mask, stream, mr),
+                                  cudf::detail::create_null_mask(size, allocate_mask, stream, mr),
                                   state_null_count(allocate_mask, input.size()),
                                   std::move(children));
 }

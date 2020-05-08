@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -87,7 +88,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // copy bitmask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // create offsets by calculating size of each string for output
   auto offsets_transformer_itr =

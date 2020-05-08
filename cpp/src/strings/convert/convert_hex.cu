@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -130,7 +131,7 @@ std::unique_ptr<column> hex_to_integers(
   // create integer output column copying the strings null-mask
   auto results      = make_numeric_column(output_type,
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);

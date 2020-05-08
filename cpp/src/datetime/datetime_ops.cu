@@ -18,8 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -169,7 +169,7 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto null_mask = copy_bitmask(column, stream, mr);
+  auto null_mask = cudf::detail::copy_bitmask(column, stream, mr);
   auto output =
     make_fixed_width_column(output_col_type, size, null_mask, column.null_count(), stream, mr);
   auto launch = launch_functor<TransformFunctor,

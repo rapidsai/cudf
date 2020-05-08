@@ -38,10 +38,10 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -414,7 +414,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
 
   rmm::device_buffer valid_bits =
-    cudf::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
+    cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::experimental::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};
@@ -697,7 +697,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
   auto device_replacement = cudf::column_device_view::create(replacement);
 
   rmm::device_buffer valid_bits =
-    cudf::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
+    cudf::detail::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::experimental::detail::grid_1d grid{input.size(), BLOCK_SIZE, 1};

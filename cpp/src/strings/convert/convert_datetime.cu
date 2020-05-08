@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -398,7 +399,7 @@ std::unique_ptr<cudf::column> to_timestamps(
 
   auto results      = make_timestamp_column(timestamp_type,
                                        strings_count,
-                                       copy_bitmask(strings.parent(), stream, mr),
+                                       cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                        strings.null_count(),
                                        stream,
                                        mr);
@@ -732,7 +733,7 @@ std::unique_ptr<column> from_timestamps(
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(timestamps, stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(timestamps, stream, mr);
   // Each string will be the same number of bytes which can be determined
   // directly from the format string.
   auto d_str_bytes = compiler.template_bytes();  // size in bytes of each string

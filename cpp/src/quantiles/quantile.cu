@@ -19,6 +19,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/table/table_view.hpp>
@@ -58,7 +59,7 @@ struct quantile_functor {
     if (output->size() == 0) { return output; }
 
     if (input.size() == 0) {
-      auto mask = create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
+      auto mask = cudf::detail::create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
       output->set_null_mask(std::move(mask), output->size());
       return output;
     }

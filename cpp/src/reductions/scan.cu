@@ -5,14 +5,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 
 #include <rmm/rmm.h>
-#include <cudf/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
 
 namespace cudf {
@@ -51,7 +50,8 @@ struct ScanDispatcher {
     auto output_column   = experimental::detail::allocate_like(
       input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(cudf::detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     }
     mutable_column_view output = output_column->mutable_view();
     auto d_input               = column_device_view::create(input_view, stream);
@@ -93,17 +93,20 @@ struct ScanDispatcher {
                                          cudaStream_t stream)
   {
     rmm::device_buffer mask =
-      create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
+      cudf::detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
     auto d_input = column_device_view::create(input_view, stream);
     auto v       = experimental::detail::make_validity_iterator(*d_input);
     auto first_null_position =
       thrust::find_if_not(
         rmm::exec_policy(stream)->on(stream), v, v + input_view.size(), thrust::identity<bool>{}) -
       v;
-    cudf::set_null_mask(
-      static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
-    cudf::set_null_mask(
-      static_cast<cudf::bitmask_type*>(mask.data()), first_null_position, input_view.size(), false);
+    cudf::detail::set_null_mask(
+      static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true, stream);
+    cudf::detail::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()),
+                                first_null_position,
+                                input_view.size(),
+                                false,
+                                stream);
     return mask;
   }
 
@@ -118,7 +121,8 @@ struct ScanDispatcher {
     auto output_column   = experimental::detail::allocate_like(
       input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(cudf::detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),
@@ -168,7 +172,8 @@ struct ScanDispatcher {
 
     auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(cudf::detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),

@@ -19,6 +19,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/scatter.hpp>
@@ -108,7 +109,8 @@ void scatter_scalar_bitmask(std::vector<std::unique_ptr<scalar>> const& source,
     if (target[i]->nullable() or not source_is_valid) {
       if (not target[i]->nullable()) {
         // Target must have a null mask if the source is not valid
-        auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
+        auto mask =
+          cudf::detail::create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
         target[i]->set_null_mask(std::move(mask), 0);
       }
 

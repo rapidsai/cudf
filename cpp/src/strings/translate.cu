@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -92,7 +93,7 @@ std::unique_ptr<column> translate(
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // create offsets column
   auto offsets_transformer_itr =
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),

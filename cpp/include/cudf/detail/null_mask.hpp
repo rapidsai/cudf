@@ -21,6 +21,34 @@
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Creates a `device_buffer` for use as a null value indicator bitmask of
+ * a `column`.
+ *
+ * @param size The number of elements to be represented by the mask
+ * @param state The desired state of the mask
+ * @param stream Optional, stream on which all memory allocations/operations
+ * will be submitted
+ * @param mr Device memory resource to use for device memory allocation
+ * @return rmm::device_buffer A `device_buffer` for use as a null bitmask
+ * satisfying the desired size and state
+ **/
+rmm::device_buffer create_null_mask(
+  size_type size,
+  mask_state state,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copydoc cudf::set_null_mask
+ *
+ * @param stream Optional, stream on which all memory allocations/operations
+ * will be submitted
+ **/
+void set_null_mask(
+  bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid, cudaStream_t stream);
+
 /**
  * @copydoc cudf::segmented_count_set_bits
  *
@@ -38,6 +66,41 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   std::vector<size_type> const& indices,
                                                   cudaStream_t stream = 0);
+
+/**
+ * @copydoc cudf::copy_bitmask(bitmask_type
+ *const*,size_type,size_type,rmm::mr::device_memory_resource*)
+ *
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
+ **/
+rmm::device_buffer copy_bitmask(
+  bitmask_type const* mask,
+  size_type begin_bit,
+  size_type end_bit,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief cudf::copy_bitmask(column_view const&,cudaStream_t,rmm::mr::device_memory_resource*)
+ *
+ * @param stream Optional, stream on which all memory allocations and copies
+ * will be performed
+ **/
+rmm::device_buffer copy_bitmask(
+  column_view const& view,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @copydoc cudf::bitmask_and(table_view const&,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream on which to execute kernels
+ */
+rmm::device_buffer bitmask_and(
+  table_view const& view,
+  cudaStream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace detail
 

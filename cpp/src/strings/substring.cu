@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -123,7 +124,7 @@ std::unique_ptr<column> slice_strings(
   auto d_step         = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
   // copy the null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(

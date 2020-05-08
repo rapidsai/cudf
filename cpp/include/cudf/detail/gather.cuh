@@ -16,12 +16,12 @@
 #pragma once
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -356,7 +356,7 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = cudf::detail::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
@@ -80,7 +81,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
                                 std::move(indices_column),
-                                copy_bitmask(input_column, stream, mr),
+                                cudf::detail::copy_bitmask(input_column, stream, mr),
                                 input_column.null_count());
 }
 

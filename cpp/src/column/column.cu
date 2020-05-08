@@ -192,7 +192,7 @@ struct create_column_from_view {
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{},
-                                    cudf::copy_bitmask(view, stream, mr),
+                                    cudf::detail::copy_bitmask(view, stream, mr),
                                     view.null_count(),
                                     std::move(children));
   }
@@ -213,7 +213,7 @@ struct create_column_from_view {
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
-      cudf::copy_bitmask(view, stream, mr),
+      cudf::detail::copy_bitmask(view, stream, mr),
       view.null_count(),
       std::move(children));
   }

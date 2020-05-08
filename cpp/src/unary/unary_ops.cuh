@@ -19,6 +19,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -39,12 +40,13 @@ struct launcher {
 
         return std::make_unique<column>(type,
                                         size,
-                                        rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                        copy_bitmask(input, 0, mr),
+                                        rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                                        cudf::detail::copy_bitmask(input, stream, mr),
                                         input.null_count());
 
       } else {
-        return cudf::experimental::allocate_like(input);
+        return cudf::experimental::allocate_like(
+          input, experimental::mask_allocation_policy::RETAIN, mr);
       }
     }();
 

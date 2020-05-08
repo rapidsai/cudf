@@ -22,7 +22,7 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/null_mask.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -76,7 +76,9 @@ struct column_buffer {
     } else {
       _data = create_data(type, size, stream, mr);
     }
-    if (is_nullable) { _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr); }
+    if (is_nullable) {
+      _null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    }
     _null_count = 0;
   }
 

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -211,7 +212,7 @@ std::unique_ptr<column> join_strings(
   size_type null_count = 0;
   rmm::device_buffer null_mask;  // init to null null-mask
   if (strings.null_count() == strings_count && !narep.is_valid()) {
-    null_mask  = create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
+    null_mask  = cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
     null_count = 1;
   }
   auto chars_column =

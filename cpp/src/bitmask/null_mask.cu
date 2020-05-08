@@ -67,6 +67,7 @@ size_type num_bitmask_words(size_type number_of_bits)
                                                      detail::size_in_bits<bitmask_type>());
 }
 
+namespace detail {
 // Create a device_buffer for a null mask
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
@@ -86,6 +87,14 @@ rmm::device_buffer create_null_mask(size_type size,
   }
 
   return mask;
+}
+}  // namespace detail
+
+rmm::device_buffer create_null_mask(size_type size,
+                                    mask_state state,
+                                    rmm::mr::device_memory_resource *mr)
+{
+  return detail::create_null_mask(size, state, 0, mr);
 }
 
 __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
@@ -117,6 +126,7 @@ __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
   }
 }
 
+namespace detail {
 // Set pre-allocated null mask of given bit range [begin_bit, end_bit)
 // to valid, if valid==true,
 // or null, otherwise;
@@ -134,6 +144,13 @@ void set_null_mask(
       static_cast<bitmask_type *>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
     CHECK_CUDA(stream);
   }
+}
+}  //  namespace detail
+
+void set_null_mask(bitmask_type *bitmask, size_type begin_bit, size_type end_bit, bool valid)
+{
+  CUDF_FUNC_RANGE();
+  detail::set_null_mask(bitmask, begin_bit, end_bit, valid, 0);
 }
 
 namespace {
@@ -340,43 +357,6 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
 
     destination[destination_word_index] = destination_word;
   }
-}
-
-// Bitwise AND of the masks
-rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
-                               std::vector<size_type> const &begin_bits,
-                               size_type mask_size,
-                               cudaStream_t stream,
-                               rmm::mr::device_memory_resource *mr)
-{
-  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
-               "Invalid range.");
-  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
-  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
-               "Mask pointer cannot be null");
-
-  rmm::device_buffer dest_mask{};
-  auto num_bytes = bitmask_allocation_size_bytes(mask_size);
-
-  auto number_of_mask_words = num_bitmask_words(mask_size);
-
-  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
-
-  rmm::device_vector<bitmask_type const *> d_masks(masks);
-  rmm::device_vector<size_type> d_begin_bits(begin_bits);
-
-  cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
-  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-    static_cast<bitmask_type *>(dest_mask.data()),
-    d_masks.data().get(),
-    d_begin_bits.data().get(),
-    d_masks.size(),
-    mask_size,
-    number_of_mask_words);
-
-  CHECK_CUDA(stream);
-
-  return dest_mask;
 }
 
 // convert [first_bit_index,last_bit_index) to
@@ -602,6 +582,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
   return detail::segmented_count_unset_bits(bitmask, indices, 0);
 }
 
+namespace detail {
 // Create a bitmask from a specific range
 rmm::device_buffer copy_bitmask(bitmask_type const *mask,
                                 size_type begin_bit,
@@ -639,16 +620,55 @@ rmm::device_buffer copy_bitmask(column_view const &view,
 {
   rmm::device_buffer null_mask{};
   if (view.nullable()) {
-    null_mask =
-      copy_bitmask(view.null_mask(), view.offset(), view.offset() + view.size(), stream, mr);
+    null_mask = detail::copy_bitmask(
+      view.null_mask(), view.offset(), view.offset() + view.size(), stream, mr);
   }
   return null_mask;
 }
 
+namespace {
+// Bitwise AND of the masks
+rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
+                               std::vector<size_type> const &begin_bits,
+                               size_type mask_size,
+                               cudaStream_t stream,
+                               rmm::mr::device_memory_resource *mr)
+{
+  CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
+               "Invalid range.");
+  CUDF_EXPECTS(mask_size > 0, "Invalid bit range.");
+  CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
+               "Mask pointer cannot be null");
+
+  rmm::device_buffer dest_mask{};
+  auto num_bytes = bitmask_allocation_size_bytes(mask_size);
+
+  auto number_of_mask_words = num_bitmask_words(mask_size);
+
+  dest_mask = rmm::device_buffer{num_bytes, stream, mr};
+
+  rmm::device_vector<bitmask_type const *> d_masks(masks);
+  rmm::device_vector<size_type> d_begin_bits(begin_bits);
+
+  cudf::experimental::detail::grid_1d config(number_of_mask_words, 256);
+  offset_bitmask_and<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+    static_cast<bitmask_type *>(dest_mask.data()),
+    d_masks.data().get(),
+    d_begin_bits.data().get(),
+    d_masks.size(),
+    mask_size,
+    number_of_mask_words);
+
+  CHECK_CUDA(stream);
+
+  return dest_mask;
+}
+}  // namespace
+
 // Returns the bitwise AND of the null masks of all columns in the table view
 rmm::device_buffer bitmask_and(table_view const &view,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+                               cudaStream_t stream,
+                               rmm::mr::device_memory_resource *mr)
 {
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{};
@@ -666,6 +686,26 @@ rmm::device_buffer bitmask_and(table_view const &view,
   if (masks.size() > 0) { return bitmask_and(masks, offsets, view.num_rows(), stream, mr); }
 
   return null_mask;
+}
+}  // namespace detail
+
+rmm::device_buffer copy_bitmask(bitmask_type const *mask,
+                                size_type begin_bit,
+                                size_type end_bit,
+                                rmm::mr::device_memory_resource *mr)
+{
+  return detail::copy_bitmask(mask, begin_bit, end_bit, 0, mr);
+}
+
+// Create a bitmask from a column view
+rmm::device_buffer copy_bitmask(column_view const &view, rmm::mr::device_memory_resource *mr)
+{
+  return detail::copy_bitmask(view, 0, mr);
+}
+
+rmm::device_buffer bitmask_and(table_view const &view, rmm::mr::device_memory_resource *mr)
+{
+  return detail::bitmask_and(view, 0, mr);
 }
 
 }  // namespace cudf

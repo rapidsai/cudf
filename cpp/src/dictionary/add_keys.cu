@@ -16,6 +16,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -100,10 +101,11 @@ std::unique_ptr<column> add_keys(
                                                  0);
 
   // create new dictionary column with keys_column and indices_column
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                copy_bitmask(dictionary_column.parent(), stream, mr),  // nulls have
-                                dictionary_column.null_count());  // not changed
+  return make_dictionary_column(
+    std::move(keys_column),
+    std::move(indices_column),
+    cudf::detail::copy_bitmask(dictionary_column.parent(), stream, mr),  // nulls have
+    dictionary_column.null_count());                                     // not changed
 }
 
 }  // namespace detail

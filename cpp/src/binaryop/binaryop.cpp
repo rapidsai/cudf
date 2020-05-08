@@ -19,8 +19,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -57,9 +57,9 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
   if (col.size() == 0) { return rmm::device_buffer{}; }
 
   if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
+    return cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
   } else if (s.is_valid() && col.nullable()) {
-    return copy_bitmask(col, stream, mr);
+    return cudf::detail::copy_bitmask(col, stream, mr);
   } else {
     return rmm::device_buffer{};
   }
@@ -330,7 +330,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (binops::null_using_binop(op)) {
     out = make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     out           = make_fixed_width_column(
       output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
@@ -361,7 +361,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+  auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
   auto out      = make_fixed_width_column(
     output_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
 

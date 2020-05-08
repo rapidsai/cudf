@@ -27,6 +27,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
@@ -273,7 +274,7 @@ void compute_single_pass_aggs(table_view const& keys,
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   if (skip_key_rows_with_nulls) {
-    auto row_bitmask{bitmask_and(keys, rmm::mr::get_default_resource(), stream)};
+    auto row_bitmask{cudf::detail::bitmask_and(keys, stream)};
     thrust::for_each_n(
       rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -67,7 +68,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{INT32},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -185,7 +186,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   {
     auto true_scalar = make_fixed_width_scalar<bool>(true, stream, mr);
     auto results     = make_column_from_scalar(*true_scalar, strings.size(), mr, stream);
-    results->set_null_mask(copy_bitmask(strings.parent(), stream, mr), strings.null_count());
+    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                           strings.null_count());
     return results;
   }
 
@@ -195,7 +197,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);

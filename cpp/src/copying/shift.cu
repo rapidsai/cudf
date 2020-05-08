@@ -109,19 +109,31 @@ struct shift_functor {
 
 }  // anonymous namespace
 
+namespace detail {
+
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                              cudaStream_t stream,
+                              rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
                "shift requires each fill value type to match the corrosponding column type.");
 
   if (input.size() == 0) { return empty_like(input); }
 
   return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> shift(column_view const& input,
+                              size_type offset,
+                              scalar const& fill_value,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::shift(input, offset, fill_value, 0, mr);
 }
 
 }  // namespace experimental

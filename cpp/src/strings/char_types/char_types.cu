@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -47,7 +48,7 @@ std::unique_ptr<column> all_characters_of_type(
   // create output column
   auto results      = make_numeric_column(data_type{BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -93,7 +94,7 @@ std::unique_ptr<column> is_integer(
   // create output column
   auto results   = make_numeric_column(data_type{BOOL8},
                                      strings.size(),
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -137,7 +138,7 @@ std::unique_ptr<column> is_float(
   // create output column
   auto results   = make_numeric_column(data_type{BOOL8},
                                      strings.size(),
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);

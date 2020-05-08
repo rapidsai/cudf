@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -51,7 +52,7 @@ std::unique_ptr<column> to_booleans(
   // create output column copying the strings' null-mask
   auto results      = make_numeric_column(data_type{BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -107,7 +108,7 @@ std::unique_ptr<column> from_booleans(
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(booleans, stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
   // build offsets column
   auto offsets_transformer_itr =
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),

@@ -69,8 +69,6 @@ size_type num_bitmask_words(size_type number_of_bits);
  *
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
- * @param stream Optional, stream on which all memory allocations/operations
- * will be submitted
  * @param mr Device memory resource to use for device memory allocation
  * @return rmm::device_buffer A `device_buffer` for use as a null bitmask
  * satisfying the desired size and state
@@ -78,7 +76,6 @@ size_type num_bitmask_words(size_type number_of_bits);
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -92,14 +89,8 @@ rmm::device_buffer create_null_mask(
  * @param begin_bit Index of the first bit to set (inclusive)
  * @param end_bit Index of the last bit to set (exclusive)
  * @param valid If true set all entries to valid; otherwise, set all to null.
- * @param stream Optional, stream on which all memory allocations/operations
- * will be submitted
  **/
-void set_null_mask(bitmask_type* bitmask,
-                   size_type begin_bit,
-                   size_type end_bit,
-                   bool valid,
-                   cudaStream_t stream = 0);
+void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid);
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in the range
@@ -183,8 +174,6 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
  * @param mask Bitmask residing in device memory whose bits will be copied
  * @param begin_bit Index of the first bit to be copied (inclusive)
  * @param end_bit Index of the last bit to be copied (exclusive)
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
  * @param mr Optional, the memory resource that will be used for allocating
  * the device memory for the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bits
@@ -194,7 +183,6 @@ rmm::device_buffer copy_bitmask(
   bitmask_type const* mask,
   size_type begin_bit,
   size_type end_bit,
-  cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -204,17 +192,13 @@ rmm::device_buffer copy_bitmask(
  * Returns empty `device_buffer` if the column is not nullable
  *
  * @param view Column view whose bitmask needs to be copied
- * @param stream Optional, stream on which all memory allocations and copies
- * will be performed
  * @param mr Optional, the memory resource that will be used for allocating
  * the device memory for the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bits
  * `[view.offset(), view.offset() + view.size())` from `view`'s bitmask.
  **/
 rmm::device_buffer copy_bitmask(
-  column_view const& view,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& view, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a bitwise AND of the bitmasks of columns of a table
@@ -223,13 +207,10 @@ rmm::device_buffer copy_bitmask(
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
- * @param stream CUDA stream on which to execute kernels
  * @param mr Memory resource for allocating output bitmask
  * @return rmm::device_buffer Output bitmask
  */
 rmm::device_buffer bitmask_and(
-  table_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  table_view const& view, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace cudf

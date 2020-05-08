@@ -17,8 +17,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -186,7 +186,7 @@ std::unique_ptr<column> replace_with_backrefs(
   string_view d_repl_template{repl_scalar.data(), repl_scalar.size()};
 
   // copy null mask
-  auto null_mask  = copy_bitmask(strings.parent());
+  auto null_mask  = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   auto null_count = strings.null_count();
 
   // create child columns

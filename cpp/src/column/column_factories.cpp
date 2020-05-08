@@ -16,8 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/fill.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
@@ -67,7 +67,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -85,7 +85,7 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -128,7 +128,7 @@ struct column_from_scalar_dispatch {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const
   {
-    auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+    auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     if (!value.is_valid())
       return std::make_unique<column>(
         value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);

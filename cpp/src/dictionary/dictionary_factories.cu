@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
 namespace cudf {
@@ -38,7 +39,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
   auto indices_copy = std::make_unique<column>(indices_view, stream, mr);
   rmm::device_buffer null_mask;
   auto null_count = indices_column.null_count();
-  if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
+  if (null_count) null_mask = cudf::detail::copy_bitmask(indices_column, stream, mr);
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_copy));

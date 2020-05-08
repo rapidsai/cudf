@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -139,7 +140,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             std::move(copy_bitmask(input.parent())),
+                             std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)),
                              stream,
                              mr);
 }
@@ -157,7 +158,9 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   auto output =
     detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
   // mask will not change
-  if (input.nullable()) { output->set_null_mask(copy_bitmask(input), input.null_count()); }
+  if (input.nullable()) {
+    output->set_null_mask(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
+  }
 
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);

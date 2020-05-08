@@ -16,9 +16,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -91,8 +91,13 @@ std::unique_ptr<column> transform(column_view const& input,
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
-  std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  std::unique_ptr<column> output =
+    make_fixed_width_column(output_type,
+                            input.size(),
+                            cudf::detail::copy_bitmask(input, stream, mr),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            stream,
+                            mr);
 
   if (input.size() == 0) { return output; }
 

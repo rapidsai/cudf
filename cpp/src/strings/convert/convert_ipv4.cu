@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -80,7 +81,7 @@ std::unique_ptr<column> ipv4_to_integers(
   // create output column copying the strings' null-mask
   auto results   = make_numeric_column(data_type{INT64},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -168,7 +169,7 @@ std::unique_ptr<column> integers_to_ipv4(
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(integers, stream, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(integers, stream, mr);
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<int32_t>(0), [d_column] __device__(size_type idx) {
