@@ -133,7 +133,6 @@ class Merge(object):
 
         self.out_class = cudf.DataFrame
 
-        assert not (on and left_on) or (on and right_on)
         if on:
             on = [on] if isinstance(on, str) else list(on)
             left_on = right_on = on
