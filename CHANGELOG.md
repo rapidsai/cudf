@@ -158,6 +158,7 @@
 
 ## Bug Fixes
 
+- PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
