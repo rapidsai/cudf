@@ -123,13 +123,13 @@ class Merge(object):
         ]
 
     def preprocess_merge_params(
+        self, on, left_on, right_on, lsuffix, rsuffix, suffixes
+    ):
         """
         Translate a valid configuration of user input parameters into
         the subset of input configurations handled by the cython layer. 
         Apply suffixes to columns. 
         """
-        self, on, left_on, right_on, lsuffix, rsuffix, suffixes
-    ):
 
         if isinstance(self.lhs, cudf.Series):
             self.lhs = self.lhs.to_frame()
@@ -516,7 +516,7 @@ class Merge(object):
         """
         Determine the names of the data columns in the result of 
         a libcudf join, based on the original left and right frames
-        as well as the type of join performed. 
+        as well as the type of join that was performed. 
         """
         if how in ("left", "inner", "outer"):
             # the result cols are all the left columns (incl. common ones)
