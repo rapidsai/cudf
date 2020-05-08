@@ -20,8 +20,8 @@ cpdef join(Table lhs,
            Table rhs,
            object how,
            object method,
-           object left_on=[],
-           object right_on=[],
+           object left_on=None,
+           object right_on=None,
            bool left_index=False,
            bool right_index=False
            ):
