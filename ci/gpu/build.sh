@@ -121,8 +121,7 @@ else
     # Install contextvars on Python 3.6
     py_ver=$(python -c "import sys; print('.'.join(sys.version_info[:2]))")
     if [ "$py_ver" == "3.6" ];then
-        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
-	conda install contextvars
+        conda install contextvars
     fi
 
     cd $WORKSPACE/python/nvstrings
