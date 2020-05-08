@@ -1677,7 +1677,14 @@ class Series(Frame):
             {"value": self.copy(deep=False)._data.columns[0], "order": order}
         )
         codes = codes.merge(value, on="value", how="left")
-        codes = codes.sort_values("order")["code"].fillna(na_sentinel)
+
+        # If the `code` column is full of nulls
+        # there is no need of sorting by `order`
+        if codes._data["code"].null_count == len(codes):
+            codes = codes["code"]
+        else:
+            codes = codes.sort_values("order")["code"]
+        codes = codes.fillna(na_sentinel)
 
         cats.name = None  # because it was mutated above
         return codes._copy_construct(name=None, index=self.index)
