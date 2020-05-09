@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <tests/strings/utilities.h>
@@ -60,7 +60,7 @@ TEST_F(StringsConcatenateTest, Concatenate)
   strings_columns.push_back(strings2);
   strings_columns.push_back(strings3);
 
-  auto results = cudf::strings::detail::concatenate(strings_columns, 0/*todo default stream*/);
+  auto results = cudf::concatenate(strings_columns);
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
   cudf::test::expect_columns_equal(*results, expected);
@@ -73,7 +73,7 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsColumns)
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
   strings_columns.push_back(zero_size_strings_column);
-  auto results = cudf::strings::detail::concatenate(strings_columns, 0/*todo default stream*/);
+  auto results = cudf::concatenate(strings_columns);
   cudf::test::expect_strings_empty(results->view());
 }
 
@@ -105,6 +105,6 @@ TEST_F(StringsConcatenateTest, ZeroSizeStringsPlusNormal)
                                               h_strings.data() + h_strings.size());
   strings_columns.push_back(strings1);
 
-  auto results = cudf::strings::detail::concatenate(strings_columns, 0/*todo default stream*/);
+  auto results = cudf::concatenate(strings_columns);
   cudf::test::expect_columns_equal(*results, strings1);
 }

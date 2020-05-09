@@ -42,7 +42,7 @@ std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  cudaStream_t stream                 = 0/*todo default stream*/,
+  stream_t stream                     = stream_t{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto num_columns = strings_columns.num_columns();
@@ -156,7 +156,7 @@ std::unique_ptr<column> join_strings(
   strings_column_view const& strings,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  cudaStream_t stream                 = 0/*todo default stream*/,
+  stream_t stream                     = stream_t{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto strings_count = strings.size();
@@ -256,7 +256,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns, separator, narep, 0/*todo default stream*/, mr);
+  return detail::concatenate(strings_columns, separator, narep, stream_t{}, mr);
 }
 
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
@@ -265,7 +265,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, 0/*todo default stream*/, mr);
+  return detail::join_strings(strings, separator, narep, stream_t{}, mr);
 }
 
 }  // namespace strings

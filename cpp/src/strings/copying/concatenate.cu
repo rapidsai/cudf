@@ -61,7 +61,7 @@ struct chars_size_transform {
   }
 };
 
-auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
+auto create_strings_device_views(std::vector<column_view> const& views, stream_t stream)
 {
   // Create device views for each input view
   using CDViewPtr =
@@ -213,7 +213,7 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
 }
 
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
-                                    cudaStream_t stream,
+                                    stream_t stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   // Compute output sizes
