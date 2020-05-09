@@ -265,11 +265,14 @@ class GroupBy(Serializable):
 
             # Can't do set arithmetic here as sets are
             # not ordered
-            columns = [
-                col_name
-                for col_name in self.obj._data
-                if col_name not in self.grouping._named_columns
-            ]
+            if isinstance(self, SeriesGroupBy):
+                columns = [self.obj.name]
+            else:
+                columns = [
+                    col_name
+                    for col_name in self.obj._data
+                    if col_name not in self.grouping._named_columns
+                ]
             out = dict.fromkeys(columns, aggs)
         else:
             out = aggs.copy()
