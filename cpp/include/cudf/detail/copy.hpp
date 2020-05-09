@@ -72,7 +72,7 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
  */
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
-                               cudaStream_t stream = 0);
+                               stream_t stream);
 
 /**
  * @copydoc cudf::experimental::contiguous_split
@@ -82,8 +82,8 @@ std::vector<column_view> slice(column_view const& input,
 std::vector<contiguous_split_result> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
@@ -100,9 +100,9 @@ std::vector<contiguous_split_result> contiguous_split(
 std::unique_ptr<column> allocate_like(
   column_view const& input,
   size_type size,
-  mask_allocation_policy mask_alloc   = mask_allocation_policy::RETAIN,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  mask_allocation_policy mask_alloc,
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Creates a new column by shifting all values by an offset.
@@ -141,7 +141,7 @@ std::unique_ptr<column> shift(
   column_view const& input,
   size_type offset,
   scalar const& fill_value,
-  cudaStream_t stream,
+  stream_t stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -167,8 +167,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -192,8 +192,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   column_view const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -217,8 +217,8 @@ std::unique_ptr<column> copy_if_else(
   column_view const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or
@@ -240,8 +240,8 @@ std::unique_ptr<column> copy_if_else(
   scalar const& lhs,
   scalar const& rhs,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  stream_t stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace detail
 }  // namespace experimental

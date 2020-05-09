@@ -18,7 +18,7 @@
 #define UNARY_OPS_H
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
@@ -45,8 +45,8 @@ struct launcher {
                                         input.null_count());
 
       } else {
-        return cudf::experimental::allocate_like(
-          input, experimental::mask_allocation_policy::RETAIN, mr);
+        return cudf::experimental::detail::allocate_like(
+          input, input.size(), experimental::mask_allocation_policy::RETAIN, stream, mr);
       }
     }();
 

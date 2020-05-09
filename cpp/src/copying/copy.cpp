@@ -50,8 +50,8 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      stream_t stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
@@ -60,7 +60,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   std::vector<std::unique_ptr<column>> children{};
   children.reserve(input.num_children());
   for (size_type index = 0; index < input.num_children(); index++) {
-    children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
+    children.emplace_back(allocate_like(input.child(index), size, mask_alloc, stream, mr));
   }
 
   return std::make_unique<column>(input.type(),
@@ -100,7 +100,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, input.size(), mask_alloc, mr);
+  return detail::allocate_like(input, input.size(), mask_alloc, stream_t{}, mr);
 }
 
 std::unique_ptr<column> allocate_like(column_view const& input,
@@ -109,7 +109,7 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::allocate_like(input, size, mask_alloc, mr);
+  return detail::allocate_like(input, size, mask_alloc, stream_t{}, mr);
 }
 
 }  // namespace experimental

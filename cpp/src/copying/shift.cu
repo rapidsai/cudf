@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar.hpp>
@@ -60,7 +60,7 @@ struct shift_functor {
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input  = column_device_view::create(input);
-    auto output        = allocate_like(input, mask_allocation_policy::NEVER);
+    auto output        = detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
     auto device_output = mutable_column_device_view::create(*output);
 
     auto size        = input.size();
@@ -114,7 +114,7 @@ namespace detail {
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              cudaStream_t stream,
+                              stream_t stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.type() == fill_value.type(),
@@ -133,7 +133,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::shift(input, offset, fill_value, 0/*todo default stream*/, mr);
+  return detail::shift(input, offset, fill_value, stream_t{}, mr);
 }
 
 }  // namespace experimental

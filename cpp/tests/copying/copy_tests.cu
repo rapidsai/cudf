@@ -71,8 +71,7 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::mr::device_memory_resource* mr)
   {
     // output
     std::unique_ptr<cudf::column> out = cudf::experimental::allocate_like(
@@ -88,7 +87,7 @@ struct copy_if_else_tiny_grid_functor {
     // call the kernel with an artificially small grid
     cudf::experimental::detail::
       copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
-      <<<1, 32, 0, stream>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
+      <<<1, 32>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
 
     return out;
   }
@@ -97,8 +96,7 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unexpected test execution");
   }
@@ -118,8 +116,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                              lhs,
                                              rhs,
                                              filter,
-                                             rmm::mr::get_default_resource(),
-                                             (cudaStream_t)0);
+                                             rmm::mr::get_default_resource());
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)

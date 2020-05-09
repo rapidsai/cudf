@@ -126,7 +126,7 @@ struct column_gatherer_impl {
     cudf::experimental::mask_allocation_policy policy =
       cudf::experimental::mask_allocation_policy::NEVER;
     std::unique_ptr<column> destination_column = cudf::experimental::detail::allocate_like(
-      source_column, num_destination_rows, policy, mr, stream);
+      source_column, num_destination_rows, policy, stream, mr);
     Element const* source_data{source_column.data<Element>()};
     Element* destination_data{destination_column->mutable_view().data<Element>()};
 

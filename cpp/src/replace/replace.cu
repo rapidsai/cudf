@@ -326,11 +326,11 @@ struct replace_kernel_forwarder {
         input_col,
         input_col.size(),
         cudf::experimental::mask_allocation_policy::ALWAYS,
-        mr,
-        stream);
+        stream,
+        mr);
     } else {
       output = cudf::experimental::detail::allocate_like(
-        input_col, input_col.size(), cudf::experimental::mask_allocation_policy::NEVER, mr, stream);
+        input_col, input_col.size(), cudf::experimental::mask_allocation_policy::NEVER, stream, mr);
     }
 
     cudf::mutable_column_view outputView = output->mutable_view();
@@ -635,10 +635,10 @@ struct replace_nulls_column_kernel_forwarder {
     std::unique_ptr<cudf::column> output;
     if (replacement.has_nulls())
       output = cudf::experimental::detail::allocate_like(
-        input, input.size(), cudf::experimental::mask_allocation_policy::ALWAYS, mr, stream);
+        input, input.size(), cudf::experimental::mask_allocation_policy::ALWAYS, stream, mr);
     else
       output = cudf::experimental::detail::allocate_like(
-        input, input.size(), cudf::experimental::mask_allocation_policy::NEVER, mr, stream);
+        input, input.size(), cudf::experimental::mask_allocation_policy::NEVER, stream, mr);
     auto output_view = output->mutable_view();
 
     auto replace = replace_nulls<col_type, false>;
@@ -763,8 +763,8 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
   {
-    std::unique_ptr<cudf::column> output = cudf::experimental::allocate_like(
-      input, cudf::experimental::mask_allocation_policy::NEVER, mr);
+    std::unique_ptr<cudf::column> output = cudf::experimental::detail::allocate_like(
+      input, input.size(), cudf::experimental::mask_allocation_policy::NEVER, stream, mr);
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::experimental::scalar_type_t<col_type>;

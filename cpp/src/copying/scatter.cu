@@ -349,7 +349,7 @@ std::unique_ptr<column> boolean_mask_scatter(scalar const& input,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  return detail::copy_if_else(input, target, boolean_mask, mr, stream);
+  return detail::copy_if_else(input, target, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,

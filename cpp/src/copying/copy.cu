@@ -176,8 +176,8 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     stream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs and rhs columns");
@@ -194,8 +194,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     stream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column");
@@ -211,8 +211,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     stream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column");
@@ -228,8 +228,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     stream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   return copy_if_else(lhs, rhs, !lhs.is_valid(), !rhs.is_valid(), boolean_mask, mr, stream);
 }
@@ -242,7 +242,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream_t{}, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -251,7 +251,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream_t{}, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -260,7 +260,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream_t{}, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -269,7 +269,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_if_else(lhs, rhs, boolean_mask, mr, (cudaStream_t)0);
+  return detail::copy_if_else(lhs, rhs, boolean_mask, stream_t{}, mr);
 }
 
 }  // namespace experimental

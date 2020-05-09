@@ -48,7 +48,7 @@ struct ScanDispatcher {
   {
     const size_type size = input_view.size();
     auto output_column   = experimental::detail::allocate_like(
-      input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
+      input_view, size, experimental::mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(cudf::detail::copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());
@@ -119,7 +119,7 @@ struct ScanDispatcher {
   {
     const size_type size = input_view.size();
     auto output_column   = experimental::detail::allocate_like(
-      input_view, size, experimental::mask_allocation_policy::NEVER, mr, stream);
+      input_view, size, experimental::mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
       output_column->set_null_mask(cudf::detail::copy_bitmask(input_view, stream, mr),
                                    input_view.null_count());
