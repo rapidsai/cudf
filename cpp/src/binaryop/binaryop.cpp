@@ -245,11 +245,11 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
   }
 
   // Check for datatype
@@ -278,11 +278,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
   }
 
   // Check for datatype
@@ -311,13 +311,13 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, mr, stream);
+    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
   }
 
   // Check for datatype
@@ -347,8 +347,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          std::string const& ptx,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // Check for datatype
   auto is_type_supported_ptx = [](data_type type) -> bool {
@@ -382,7 +382,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, 0/*todo default stream*/, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
@@ -392,7 +392,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, 0/*todo default stream*/, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
@@ -402,7 +402,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, op, output_type, mr);
+  return detail::binary_operation(lhs, rhs, op, output_type, 0/*todo default stream*/, mr);
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
@@ -412,7 +412,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::binary_operation(lhs, rhs, ptx, output_type, mr);
+  return detail::binary_operation(lhs, rhs, ptx, output_type, 0/*todo default stream*/, mr);
 }
 
 }  // namespace experimental

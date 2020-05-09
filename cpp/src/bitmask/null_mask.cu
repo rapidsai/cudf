@@ -94,7 +94,7 @@ rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::create_null_mask(size, state, 0, mr);
+  return detail::create_null_mask(size, state, 0/*todo default stream*/, mr);
 }
 
 __global__ void set_null_mask_kernel(bitmask_type *__restrict__ destination,
@@ -150,7 +150,7 @@ void set_null_mask(
 void set_null_mask(bitmask_type *bitmask, size_type begin_bit, size_type end_bit, bool valid)
 {
   CUDF_FUNC_RANGE();
-  detail::set_null_mask(bitmask, begin_bit, end_bit, valid, 0);
+  detail::set_null_mask(bitmask, begin_bit, end_bit, valid, 0/*todo default stream*/);
 }
 
 namespace {
@@ -391,7 +391,7 @@ namespace detail {
 cudf::size_type count_set_bits(bitmask_type const *bitmask,
                                size_type start,
                                size_type stop,
-                               cudaStream_t stream = 0)
+                               cudaStream_t stream)
 {
   if (nullptr == bitmask) { return 0; }
 
@@ -418,7 +418,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
 cudf::size_type count_unset_bits(bitmask_type const *bitmask,
                                  size_type start,
                                  size_type stop,
-                                 cudaStream_t stream = 0)
+                                 cudaStream_t stream)
 {
   if (nullptr == bitmask) { return 0; }
   auto num_bits = (stop - start);
@@ -556,14 +556,14 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
 cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start, size_type stop)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_set_bits(bitmask, start, stop);
+  return detail::count_set_bits(bitmask, start, stop, 0/*todo default stream*/);
 }
 
 // Count zero bits in the specified range
 cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start, size_type stop)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_unset_bits(bitmask, start, stop);
+  return detail::count_unset_bits(bitmask, start, stop, 0/*todo default stream*/);
 }
 
 // Count non-zero bits in the specified ranges
@@ -571,7 +571,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
                                                 std::vector<size_type> const &indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_count_set_bits(bitmask, indices, 0);
+  return detail::segmented_count_set_bits(bitmask, indices, 0/*todo default stream*/);
 }
 
 // Count zero bits in the specified ranges
@@ -579,7 +579,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
                                                   std::vector<size_type> const &indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_count_unset_bits(bitmask, indices, 0);
+  return detail::segmented_count_unset_bits(bitmask, indices, 0/*todo default stream*/);
 }
 
 namespace detail {
@@ -694,18 +694,18 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
                                 size_type end_bit,
                                 rmm::mr::device_memory_resource *mr)
 {
-  return detail::copy_bitmask(mask, begin_bit, end_bit, 0, mr);
+  return detail::copy_bitmask(mask, begin_bit, end_bit, 0/*todo default stream*/, mr);
 }
 
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const &view, rmm::mr::device_memory_resource *mr)
 {
-  return detail::copy_bitmask(view, 0, mr);
+  return detail::copy_bitmask(view, 0/*todo default stream*/, mr);
 }
 
 rmm::device_buffer bitmask_and(table_view const &view, rmm::mr::device_memory_resource *mr)
 {
-  return detail::bitmask_and(view, 0, mr);
+  return detail::bitmask_and(view, 0/*todo default stream*/, mr);
 }
 
 }  // namespace cudf

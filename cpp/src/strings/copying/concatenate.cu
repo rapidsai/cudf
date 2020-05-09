@@ -213,8 +213,8 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
 }
 
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   // Compute output sizes
   auto const device_views         = create_strings_device_views(columns, stream);

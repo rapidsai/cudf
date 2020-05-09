@@ -427,8 +427,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
@@ -449,8 +449,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");
@@ -470,8 +470,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         cudaStream_t stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::STRING, "Invalid/Unsupported lhs datatype");

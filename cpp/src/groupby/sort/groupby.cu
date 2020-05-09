@@ -258,8 +258,8 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
     count_result,
     binary_operator::DIV,
     cudf::experimental::detail::target_type(values.type(), aggregation::MEAN),
-    mr,
-    stream);
+    stream,
+    mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
