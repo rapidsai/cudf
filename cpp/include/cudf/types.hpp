@@ -182,18 +182,18 @@ class stream_t {
   stream_t& operator=(stream_t&&) = default;
 
   // prevent casting from 0 and nullptr
-  stream_t(int) = delete;
+  stream_t(int)            = delete;
   stream_t(std::nullptr_t) = delete;
 
   /**
    * @brief Construct a default cudaStream_t.
    */
-  constexpr explicit stream_t() = default; // TODO maybe remove explicit
+  constexpr explicit stream_t() = default;  // TODO maybe remove explicit
 
   /**
    * @brief Implicitly convert from cudaStream_t.
    */
-  stream_t(cudaStream_t stream): _stream{stream} {}
+  stream_t(cudaStream_t stream) : _stream{stream} {}
 
   /**
    * @brief Implicitly convert to cudaStream_t.
@@ -201,7 +201,7 @@ class stream_t {
   operator cudaStream_t() const { return _stream; }
 
  private:
-  cudaStream_t _stream{0}; // TODO get_default_stream()
+  cudaStream_t _stream{0};  // TODO get_default_stream()
 };
 
 /**

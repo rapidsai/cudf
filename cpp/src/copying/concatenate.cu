@@ -263,7 +263,8 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
   using mask_policy = cudf::experimental::mask_allocation_policy;
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto col = cudf::experimental::detail::allocate_like(views.front(), total_element_count, policy, stream, mr);
+  auto col          = cudf::experimental::detail::allocate_like(
+    views.front(), total_element_count, policy, stream, mr);
 
   col->set_null_count(0);             // prevent null count from being materialized...
   auto m_view = col->mutable_view();  // ...when we take a mutable view

@@ -59,8 +59,9 @@ struct shift_functor {
     using ScalarType = cudf::experimental::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
-    auto device_input  = column_device_view::create(input);
-    auto output        = detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
+    auto device_input = column_device_view::create(input);
+    auto output =
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
     auto device_output = mutable_column_device_view::create(*output);
 
     auto size        = input.size();
