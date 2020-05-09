@@ -362,6 +362,22 @@ def test_groupby_column_name():
     pxx = p["xx"].sum()
     assert_eq(pxx, gxx)
 
+    gxx = g["xx"].count()
+    pxx = p["xx"].count()
+    assert_eq(pxx, gxx, check_dtype=False)
+
+    gxx = g["xx"].min()
+    pxx = p["xx"].min()
+    assert_eq(pxx, gxx)
+
+    gxx = g["xx"].max()
+    pxx = p["xx"].max()
+    assert_eq(pxx, gxx)
+
+    gxx = g["xx"].mean()
+    pxx = p["xx"].mean()
+    assert_eq(pxx, gxx)
+
 
 def test_groupby_column_numeral():
     pdf = pd.DataFrame({0: [1.0, 2.0, 3.0], 1: [1, 2, 3]})
