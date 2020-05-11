@@ -20,17 +20,14 @@
 #include <memory>
 
 namespace cudf {
+namespace experimental {
 /**
  * @ingroup transformation_replace
  * @{
  */
 
-namespace experimental {
-
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
- *
- * @ingroup column_replace
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
  * `input` and `replacement` must be of the same type and size.
@@ -50,8 +47,6 @@ std::unique_ptr<column> replace_nulls(
 
 /**
  * @brief Replaces all null values in a column with a scalar.
- *
- * @ingroup column_replace
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement`.
  * `input` and `replacement` must have the same type.
@@ -141,8 +136,6 @@ std::unique_ptr<column> find_and_replace_all(
  * @brief Replaces values less than `lo` in `input` with `lo_replace`,
  * and values greater than `hi` with `hi_replace`.
  *
- * @ingroup column_replace
- *
  * if `lo` is invalid, then lo will not be considered while
  * evaluating the input (Essentially considered minimum value of that type).
  * if `hi` is invalid, then hi will not be considered while
@@ -197,8 +190,6 @@ std::unique_ptr<column> clamp(
  * @brief Replaces values less than `lo` in `input` with `lo`,
  * and values greater than `hi` with `hi`.
  *
- * @ingroup column_replace
- *
  * if `lo` is invalid, then lo will not be considered while
  * evaluating the input (Essentially considered minimum value of that type).
  * if `hi` is invalid, then hi will not be considered while
@@ -240,7 +231,12 @@ std::unique_ptr<column> clamp(
   scalar const& hi,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
+/**
+ * @ingroup transformation_replace
+ * @{
+ */
 
 /**
  * @brief Copies from a column of floating-point elements and replaces `-NaN` and `-0.0` with `+NaN`
