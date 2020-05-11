@@ -264,6 +264,7 @@
 - PR #5103 Fix `read_csv` issue with names and header
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
+- PR #5111 Fix header not being included in legacy jit transform.
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
 - PR #5118 Fix naming for java string length operators
 - PR #5129 Fix missed reference in tests from 5118
