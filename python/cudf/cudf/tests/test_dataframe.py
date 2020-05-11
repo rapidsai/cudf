@@ -1947,10 +1947,45 @@ def test_series_all_valid_nan(num_elements):
     np.testing.assert_equal(sr.null_count, 0)
 
 
-def test_dataframe_rename():
+@pytest.mark.parametrize("axis", [0, "index"])
+def test_dataframe_index_rename(axis):
     pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
     gdf = DataFrame.from_pandas(pdf)
 
+    expect = pdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+    got = gdf.rename(mapper={1: 5, 2: 6}, axis=axis)
+
+    assert_eq(expect, got)
+
+    # `pandas` can support indexes with mixed values. We automatically convert
+    # an index with mixed values to a `StringIndex`. Breaking the comparison.
+    expect = pdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+    got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    expect = pdf.rename(index={1: "x", 2: "y"})
+    got = gdf.rename(index={1: "x", 2: "y"})
+
+    assert_eq([str(item) for item in expect.index], list(got.index))
+
+    # Have not set rename default to axis=0 yet.
+    # expect = pdf.rename({1 : "x", 2: "y"})
+    # got = gdf.rename({1 : "x", 2: "y"})
+
+    # assert_eq([str(item) for item in expect.index], list(got.index))
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_dataframe_column_rename(axis):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expect = pdf.rename(mapper=lambda name: 2 * name, axis=axis)
+    got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)
+
+    assert_eq(expect, got)
+    
     expect = pdf.rename(columns=lambda name: 2 * name)
     got = gdf.rename(columns=lambda name: 2 * name)
 

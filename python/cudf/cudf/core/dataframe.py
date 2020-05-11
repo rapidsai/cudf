@@ -29,7 +29,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import Index, RangeIndex, StringIndex, as_index
+from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
@@ -1849,21 +1849,27 @@ class DataFrame(Frame):
         DataFrame.rename supports two calling conventions
 
         `(index=index_mapper, columns=columns_mapper, ...)`
-        `(mapper, axis={0 or 1}, ...)`
+        `(mapper, axis={0/'index' or 1/'column'}, ...)`
 
         We highly recommend using keyword arguments to clarify your intent.
 
         Parameters
         ----------
-        mapper, columns, index : dict-like or function, optional
-            dict-like or functions transformations to apply to
-            the column axis' values.
+        mapper : dict-like or function, optional dict-like or functions
+            transformations to apply to the index/column values depending
+            on selected `axis`.
+        columns : dict-like or function, optional dict-like or functions
+            transformations to apply to the columns axis' values.
+        index : dict-like or function, optional dict-like or functions
+            transformations to apply to the index axis' values.
         copy : boolean, default True
             Also copy underlying data
         inplace: boolean, default False
             Return new DataFrame.  If True, assign columns without copy
         axis: int, default 0
-            Axis to rename with mapper. 0 for index, 1 for columns
+            Axis to rename with mapper.
+            0 or 'index' for index
+            1  or 'columns' for columns
 
         Returns
         -------
@@ -1877,13 +1883,20 @@ class DataFrame(Frame):
         Rename will not overwite column names. If a list with duplicates is
         passed, column names will be postfixed with a number.
         """
-        if mapper:
-            if axis == 0:
-                index = mapper
-            elif axis == 1:
-                columns = mapper
+        if mapper is None and index is None and columns is None:
+            return self.copy(deep=copy)
 
-        out = DataFrame(index=self.index)
+        index = mapper if index is None and axis in (0, "index") else index
+        columns = (
+            mapper if columns is None and axis in (1, "columns") else columns
+        )
+
+        if index:
+            out = DataFrame(
+                index=[index.get(item, item) for item in self.index]
+            )
+        else:
+            out = DataFrame(index=self.index)
 
         if columns:
             postfix = 1
@@ -1907,18 +1920,6 @@ class DataFrame(Frame):
                     out[columns(col)] = self[col]
         else:
             out._data = self._data
-
-        if index:
-            out_idx = list(self.index)
-            if isinstance(index, Mapping):
-                for key, value in enumerate(out_idx):
-                    if value in index.keys():
-                        out_idx[key] = index[value]
-            elif callable(index):
-                for key, value in enumerate(out_idx):
-                    if value in index.keys():
-                        out_idx[key] = index(index[value])
-            out.index = StringIndex(out_idx)
 
         if inplace:
             self._data = out._data
