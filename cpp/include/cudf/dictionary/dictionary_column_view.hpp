@@ -22,6 +22,8 @@ namespace cudf {
 /**
  * @brief A wrapper class for operations on a dictionary column.
  *
+ * @ingroup dictionary_classes
+ *
  * A dictionary column contains a set of keys and a column of indices.
  * The keys are a sorted set of unique values for the column.
  * The indices represent the corresponding positions of each element's

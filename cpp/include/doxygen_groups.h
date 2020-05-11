@@ -18,8 +18,10 @@
 // not need to be included in any source file.
 // Below are the main groups that doxygen uses to build
 // the Modules page in the specified order.
-// Only add a group if it should appear in the root of
-// Modules page's tree.
+//
+// To add a new API to an existing group, just use the
+// @ingroup tag to the API's doxygen comment.
+// Add a new group by first specifying in the hierarchy below.
 
 /**
  * @defgroup cudf_classes Classes

@@ -22,9 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @brief Convert strings to and from other column data-types
- * @ingroup strings_apis
- * @addtogroup strings_convert Converting
+ * @ingroup strings_convert
  * @{
  */
 

@@ -24,9 +24,7 @@
 namespace cudf {
 
 /**
- * @brief Null and validity mask APIs
- * @ingroup column_apis
- * @addtogroup column_nullmask Null Mask
+ * @ingroup column_nullmask
  * @{
  */
 

@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @brief Check character types of strings
- * @ingroup strings_apis
- * @addtogroup strings_chartype Character Types
+ * @ingroup strings_types
  * @{
  */
 

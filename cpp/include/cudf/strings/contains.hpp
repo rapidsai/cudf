@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @brief Search for substrings/patterns within strings
- * @ingroup strings_apis
- * @addtogroup strings_contains Contains
+ * @ingroup strings_contains
  * @{
  */
 

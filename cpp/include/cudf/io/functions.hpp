@@ -35,15 +35,10 @@
 namespace cudf {
 //! In-development features
 namespace experimental {
-/**
- * @brief IO APIs
- * @defgroup cudf_io IO APIs
- */
 namespace io {
 /**
- * @brief IO reader APIs
- * @ingroup cudf_io
- * @addtogroup cudf_io_readers Readers
+ * @ingroup io_apis
+ * @addtogroup io_apis_readers Readers
  * @{
  */
 
@@ -386,9 +381,8 @@ table_with_metadata read_parquet(
 /** @} */  // end of Readers group
 
 /**
- * @brief IO writer APIs
- * @ingroup cudf_io
- * @addtogroup cudf_io_writers Writers
+ * @ingroup io_apis
+ * @addtogroup io_apis_writers Writers
  * @{
  */
 

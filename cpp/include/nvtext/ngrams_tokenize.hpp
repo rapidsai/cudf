@@ -21,7 +21,6 @@
 
 namespace nvtext {
 /**
- * @brief Produce ngrams from strings columns
  * @ingroup nvtext_apis
  * @addtogroup nvtext_ngrams NGrams
  * @{

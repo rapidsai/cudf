@@ -35,12 +35,6 @@ struct strong_typedef {
 };
 /** \endcond */
 
-/**
- * @brief Fixed Point and supporting types
- * @addtogroup numeric_fixed_point Fixed Point
- * @{
- */
-
 using scale_type = strong_typedef<int32_t>;
 
 /**
@@ -196,6 +190,12 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
 }
 
 }  // namespace detail
+
+/**
+ * @ingroup cudf_classes
+ * @addtogroup numeric_fixed_point Fixed Point
+ * @{
+ */
 
 /**
  * @brief Helper struct for constructing `fixed_point` when value is already shifted

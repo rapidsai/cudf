@@ -22,9 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @brief Replace substrings/patterns within strings
- * @ingroup strings_apis
- * @addtogroup strings_replace Replacing
+ * @ingroup strings_replace
  * @{
  */
 

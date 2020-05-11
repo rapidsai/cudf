@@ -22,8 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_split Splitting
+ * @ingroup strings_split
  * @{
  */
 

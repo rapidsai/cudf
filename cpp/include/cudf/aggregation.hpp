@@ -29,21 +29,16 @@
  *
  * @note Not all aggregation APIs support all aggregation operations. See
  * individual function documentation to see what aggregations are supported.
- *
  */
 
 namespace cudf {
 namespace experimental {
-/**
- * @brief Aggregation APIs
- * @ingroup column_apis
- * @addtogroup column_aggregation Aggregation
- * @{
- */
 
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
+ *
+ * @ingroup column_aggregation
  *
  * Other kinds of aggregations may derive from this class to encapsulate
  * additional information needed to compute the aggregation.
@@ -93,6 +88,11 @@ class aggregation {
 };
 
 enum class udf_type : bool { CUDA, PTX };
+
+/**
+ * @ingroup aggregation_factories
+ * @{
+ */
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();

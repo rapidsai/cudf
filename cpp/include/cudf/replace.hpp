@@ -21,9 +21,7 @@
 
 namespace cudf {
 /**
- * @brief Replace APIs
- * @ingroup column_apis
- * @addtogroup column_replace Replacing
+ * @ingroup transformation_replace
  * @{
  */
 

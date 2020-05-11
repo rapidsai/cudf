@@ -35,9 +35,7 @@ class sort_groupby_helper;
 }  // namespace detail
 
 /**
- * @brief GroupBy APIs
- * @ingroup column_apis
- * @addtogroup column_groupby GroupBy
+ * @ingroup aggregation_groupby
  * @{
  */
 

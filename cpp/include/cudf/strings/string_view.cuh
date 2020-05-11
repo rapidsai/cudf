@@ -26,22 +26,19 @@
  */
 
 namespace cudf {
-/**
- * @brief String column classes
- * @ingroup strings_apis
- * @addtogroup strings_classes Classes
- * @{
- */
 
 using char_utf8 = uint32_t;  //<< UTF-8 characters are 1-4 bytes
 
 /**
  * @brief A non-owning, immutable view of device data that is a variable length
- * char array representing a UTF-8 string. The caller must maintain the
- * device memory for the lifetime of this instance.
+ * char array representing a UTF-8 string.
+ *
+ * @ingroup strings_classes
+ *
+ * The caller must maintain the device memory for the lifetime of this instance.
  *
  * It provides a simple wrapper and string operations for an individual string
- * with a column of strings.
+ * within a column of strings.
  */
 class string_view {
  public:
@@ -338,7 +335,6 @@ __host__ __device__ size_type characters_in_string(const char* str, size_type by
 
 }  // namespace detail
 }  // namespace strings
-/** @} */  // end of doxygen group
 }  // namespace cudf
 
 #include "./string_view.inl"

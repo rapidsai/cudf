@@ -24,9 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @brief Stream Compaction APIs (e.g. drop_nulls, drop_duplicates, unique)
- * @ingroup column_apis
- * @addtogroup column_compact Stream Compaction
+ * @ingroup reorder_compact
  * @{
  */
 

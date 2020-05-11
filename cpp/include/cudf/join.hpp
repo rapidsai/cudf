@@ -24,9 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @brief Join APIs
- * @ingroup column_apis
- * @addtogroup column_join Joining
+ * @ingroup column_join
  * @{
  */
 

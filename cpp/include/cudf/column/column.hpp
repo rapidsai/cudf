@@ -26,12 +26,13 @@
 #include <utility>
 #include <vector>
 
+namespace cudf {
+
 /**
- * @brief Column and Table APIs
- * @defgroup column_apis Column and Table APIs
+ * @addtogroup column_classes Column
+ * @{
  */
 
-namespace cudf {
 class column {
  public:
   column()        = default;
@@ -316,4 +317,5 @@ class column {
                                                       ///< columns may contain additional data
 };
 
+/** @} */  // end of group
 }  // namespace cudf

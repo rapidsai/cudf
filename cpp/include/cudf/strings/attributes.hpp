@@ -20,11 +20,11 @@
 
 namespace cudf {
 /**
- * @brief Strings column APIs.
- *
- * @defgroup strings_apis Strings APIs
+ * @addtogroup strings_apis Strings column APIs
  * @{
  */
+
+//! Strings column APIs
 namespace strings {
 /**
  * @brief Returns an integer numeric column containing the length of each string in

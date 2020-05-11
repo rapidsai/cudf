@@ -25,9 +25,7 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @brief Binary operations APIs
- * @ingroup column_apis
- * @addtogroup column_binaryop Binary Operations
+ * @ingroup transformation_binaryops
  * @{
  */
 

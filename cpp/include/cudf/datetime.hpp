@@ -26,18 +26,7 @@
  */
 
 namespace cudf {
-/**
- * @brief DateTime column APIs
- * @defgroup datetime_apis DateTime column APIs
- */
 namespace datetime {
-/**
- * @brief Extract APIs
- * @ingroup datetime_apis
- * @addtogroup datetime_extract Extracting
- * @{
- */
-
 namespace detail {
 enum class datetime_component {
   INVALID = 0,
@@ -65,6 +54,12 @@ std::unique_ptr<column> extract_component(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
+
+/**
+ * @ingroup datetime_apis
+ * @addtogroup datetime_extract Extracting
+ * @{
+ */
 
 /**
  * @brief  Extracts year from any date time type and returns an int16_t
@@ -159,7 +154,6 @@ std::unique_ptr<cudf::column> extract_second(
 
 /** @} */  // end of group
 /**
- * @brief Compute APIs
  * @ingroup datetime_apis
  * @addtogroup datetime_compute Compute Day
  * @{
