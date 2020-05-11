@@ -77,6 +77,6 @@ class NullOrder(IntEnum):
     AFTER = <underlying_type_t_order> libcudf_types.null_order.AFTER
 
 
-class IncludeNulls(IntEnum):
-    YES = <underlying_type_t_include_nulls> libcudf_types.include_nulls.YES
-    NO = <underlying_type_t_include_nulls> libcudf_types.include_nulls.NO
+class NullHandling(IntEnum):
+    INCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.INCLUDE
+    EXCLUDE = <underlying_type_t_null_policy> libcudf_types.null_policy.EXCLUDE

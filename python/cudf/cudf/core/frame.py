@@ -11,7 +11,7 @@ from pandas.api.types import is_dtype_equal
 import cudf
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -184,7 +184,7 @@ class Frame(libcudf.table.Table):
         # order. This strips the given index/column names and replaces the
         # names with their integer positions in the `cols` list
         tables = []
-        for i, cols in enumerate(columns):
+        for cols in columns:
             table_cols = cols[first_data_column_position:]
             table_names = indices[first_data_column_position:]
             table = cls(data=dict(zip(table_names, table_cols)))
@@ -1012,7 +1012,7 @@ class Frame(libcudf.table.Table):
 
     def _repeat(self, count):
         if is_scalar(count):
-            count = Scalar(count)
+            count = as_scalar(count)
         else:
             count = as_column(count)
 

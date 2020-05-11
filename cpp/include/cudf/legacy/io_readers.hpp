@@ -35,62 +35,62 @@ class RandomAccessFile;
 namespace cudf {
 namespace io {
 namespace avro {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the Avro reader
- *---------------------------------------------------------------------------**/
+ **/
 struct reader_options {
   std::vector<std::string> columns;
 
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor to populate reader options.
    *
    * @param[in] columns List of columns to read. If empty, all columns are read
-   *---------------------------------------------------------------------------**/
+   **/
   reader_options(std::vector<std::string> cols) : columns(std::move(cols)) {}
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class to read Apache Avro data into cuDF columns
- *---------------------------------------------------------------------------**/
+ **/
 class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   **/
   explicit reader(std::string filepath, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an existing memory buffer source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(const char *buffer, size_t length, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an Arrow file source
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns the entire data set.
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   **/
   table read_all();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a range of rows.
    *
    * @param[in] skip_rows Number of rows to skip from the start
    * @param[in] num_rows Number of rows to read; use `0` for all remaining data
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_rows(size_t skip_rows, size_t num_rows);
 
   ~reader();
@@ -99,9 +99,9 @@ class reader {
 }  // namespace avro
 
 namespace json {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the JSON reader
- *---------------------------------------------------------------------------**/
+ */
 struct reader_options {
   bool lines              = false;
   std::string compression = "infer";
@@ -110,51 +110,51 @@ struct reader_options {
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor to populate reader options.
    *
    * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
    * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
    * @param[in] dtype Ordered list of data types; deduced from dataset if empty
-   *---------------------------------------------------------------------------**/
+   */
   reader_options(bool lines, std::string compression, std::vector<std::string> dtype)
     : lines(lines), compression(compression), dtype(std::move(dtype))
   {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to parse JSON input and convert it into a cudf::table.
- *---------------------------------------------------------------------------**/
+ */
 class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::string filepath, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an existing memory buffer source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(const char *buffer, size_t length, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an Arrow file source
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns the entire data set.
    *
    * @return cudf::table object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns all the rows within a byte range.
    *
    * The returned data includes the row that straddles the end of the range.
@@ -165,7 +165,7 @@ class reader {
    * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
    * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
+   */
   table read_byte_range(size_t offset, size_t size);
 
   ~reader();
@@ -174,9 +174,9 @@ class reader {
 }  // namespace json
 
 namespace csv {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Quoting behavior for CSV readers/writers
- *---------------------------------------------------------------------------**/
+ */
 enum quote_style {
   QUOTE_MINIMAL = 0,  ///< Only quote those fields which contain special characters; enable
                       ///< quotation when parsing.
@@ -185,13 +185,13 @@ enum quote_style {
   QUOTE_NONE          ///< Never quote fields; disable quotation when parsing.
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the CSV reader
  *
  * TODO: Clean-up the parameters, as it is decoupled from the `read_csv`
  * interface. That interface allows it to be more closely aligned with PANDAS'
  * for user-friendliness.
- *---------------------------------------------------------------------------**/
+ */
 struct reader_options {
   std::string compression =
     "none";  ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default
@@ -258,38 +258,38 @@ struct reader_options {
   reader_options() = default;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to parse CSV input and convert it into gdf columns.
- *---------------------------------------------------------------------------**/
+ **/
 class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   **/
   explicit reader(std::string filepath, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an existing memory buffer source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(const char *buffer, size_t length, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an Arrow file source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns the entire data set.
    *
    * @return cudf::table object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns all the rows within a byte range.
    *
    * The returned data includes the row that straddles the end of the range.
@@ -300,10 +300,10 @@ class reader {
    * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
    * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
+   */
   table read_byte_range(size_t offset, size_t size);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a range of rows.
    *
    * Set num_skip_footer to zero when using num_rows parameter.
@@ -313,7 +313,7 @@ class reader {
    * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows
    *
    * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
+   */
   table read_rows(cudf::size_type num_skip_header,
                   cudf::size_type num_skip_footer,
                   cudf::size_type num_rows = -1);
@@ -324,9 +324,9 @@ class reader {
 }  // namespace csv
 
 namespace orc {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the ORC reader
- *---------------------------------------------------------------------------**/
+ */
 struct reader_options {
   std::vector<std::string> columns;
   bool use_index               = true;
@@ -338,14 +338,14 @@ struct reader_options {
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor to populate reader options.
    *
    * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
    * @param[in] np_compat Whether to use numpy-compatible dtypes
    * @param[in] timestamp_time_unit Resolution of timestamps; none for default
-   *---------------------------------------------------------------------------**/
+   */
   reader_options(std::vector<std::string> cols,
                  bool use_index_lookup,
                  bool np_compat,
@@ -362,54 +362,54 @@ struct reader_options {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class to read Apache ORC data into cuDF columns
- *---------------------------------------------------------------------------**/
+ */
 class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::string filepath, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an existing memory buffer source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(const char *buffer, size_t length, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an Arrow file source
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns the entire data set.
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_all();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a specific stripe.
    *
    * @param[in] stripe Index of the stripe
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_stripe(size_t stripe);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a range of rows.
    *
    * @param[in] skip_rows Number of rows to skip from the start
    * @param[in] num_rows Number of rows to read; use `0` for all remaining data
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_rows(size_t skip_rows, size_t num_rows);
 
   ~reader();
@@ -418,9 +418,9 @@ class reader {
 }  // namespace orc
 
 namespace parquet {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Options for the Parquet reader
- *---------------------------------------------------------------------------**/
+ */
 struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical  = false;
@@ -430,14 +430,14 @@ struct reader_options {
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor to populate reader options.
    *
    * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
    * @param[in] read_pandas_indexes Whether to always load PANDAS index columns
    * @param[in] timestamp_time_unit Resolution of timestamps; none for default
-   *---------------------------------------------------------------------------**/
+   */
   reader_options(std::vector<std::string> cols,
                  bool strings_as_category,
                  bool read_pandas_indexes,
@@ -450,61 +450,61 @@ struct reader_options {
   }
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class to read Apache Parquet data into cuDF columns
- *---------------------------------------------------------------------------**/
+ **/
 class reader {
  private:
   class Impl;
   std::unique_ptr<Impl> impl_;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for a file path source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::string filepath, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an existing memory buffer source.
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(const char *buffer, size_t length, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructor for an Arrow file source
-   *---------------------------------------------------------------------------**/
+   */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file, reader_options const &options);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
    * @return std::string Name of the column if it exists.
-   *---------------------------------------------------------------------------**/
+   */
   std::string get_index_column();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns the entire data set.
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_all();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a specific row group.
    *
    * @param[in] row_group Index of the row group
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_row_group(size_t row_group);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Reads and returns a range of rows.
    *
    * @param[in] skip_rows Number of rows to skip from the start
    * @param[in] num_rows Number of rows to read; use `0` for all remaining data
    *
    * @return cudf::table Object that contains the array of gdf_columns.
-   *---------------------------------------------------------------------------**/
+   */
   table read_rows(size_t skip_rows, size_t num_rows);
 
   ~reader();

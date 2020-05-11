@@ -1639,7 +1639,7 @@ class Series(Frame):
         values : sequence of input values
         dtype: numpy.dtype; optional
                Specifies the output dtype.  If `None` is given, the
-               smallest possible integer dtype (starting with np.int32)
+               smallest possible integer dtype (starting with np.int8)
                is used.
         na_sentinel : number
             Value to indicate missing category.
@@ -1650,7 +1650,7 @@ class Series(Frame):
         from cudf import DataFrame
 
         if dtype is None:
-            dtype = min_scalar_type(len(cats), 32)
+            dtype = min_scalar_type(len(cats), 8)
 
         cats = Series(cats).astype(self.dtype)
         order = Series(cupy.arange(len(self)))

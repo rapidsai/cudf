@@ -20,7 +20,7 @@
 #include <cudf/cudf.h>
 #include <utilities/legacy/cudf_utils.h>
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Returns true if the specified bit in a validity bit mask is set.
  *
  * @param valid The validity bitmask. If equal to `nullptr`, this function
@@ -28,7 +28,7 @@
  * @param pos The specified bit
  * @return true If the bit is set (equal to 1), or if @p valid is nullptr
  * @return false If the bit is not set (equal to 0)
- *---------------------------------------------------------------------------**/
+ **/
 CUDA_HOST_DEVICE_CALLABLE
 bool gdf_is_valid(const cudf::valid_type *valid, cudf::size_type pos)
 {

@@ -23,16 +23,16 @@
 
 #include <cudf/detail/utilities/trie.cuh>
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Checks whether the given character is a whitespace character.
  *
  * @param[in] ch The character to check
  *
  * @return True if the input is whitespace, False otherwise
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' '; }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Scans a character stream within a range, and adjusts the start and end
  * indices of the range to ignore whitespace and quotation characters.
  *
@@ -42,7 +42,7 @@ __inline__ __device__ bool isWhitespace(char ch) { return ch == '\t' || ch == ' 
  * @param[in] quotechar The character used to denote quotes
  *
  * @return Adjusted or unchanged start_idx and end_idx
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
                                                         long* start,
                                                         long* end,
@@ -54,7 +54,7 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
   if ((*start <= *end) && data[*end] == quotechar) { (*end)--; }
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes a 32-bit hash when given a byte stream and range.
  *
  * MurmurHash3_32 implementation from
@@ -77,7 +77,7 @@ __inline__ __device__ void adjustForWhitespaceAndQuotes(const char* data,
  * @param[in] seed An initialization value
  *
  * @return The hash value
- *---------------------------------------------------------------------------**/
+ **/
 __inline__ __device__ int32_t convertStrToHash(const char* key, long start, long end, uint32_t seed)
 {
   auto getblock32 = [] __device__(const uint32_t* p, int i) -> uint32_t {
@@ -138,10 +138,10 @@ __inline__ __device__ int32_t convertStrToHash(const char* key, long start, long
   return h1;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Structure for holding various options used when parsing and
  * converting CSV data to cuDF data type values.
- *---------------------------------------------------------------------------**/
+ **/
 struct ParseOptions {
   char delimiter;
   char terminator;
@@ -192,7 +192,7 @@ __device__ __forceinline__ uint8_t decode_digit(char c)
   return c - '0';
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Parses a character string and returns its numeric value.
  *
  * @param[in] data The character string for parse
@@ -202,7 +202,7 @@ __device__ __forceinline__ uint8_t decode_digit(char c)
  * @param[in] base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
 __inline__ __device__ T
 parse_numeric(const char* data, long start, long end, const ParseOptions& opts, int base = 10)
