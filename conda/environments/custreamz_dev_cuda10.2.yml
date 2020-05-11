@@ -1,6 +1,6 @@
 name: custreamz_dev
 channels:
-  - jdye64
+  - jdye64 # Remove in subsequent commit once updated 'custreamz' and 'cudf-kafka-datasource' are in rapidsai/nightly repo
   - rapidsai
   - nvidia
   - rapidsai-nightly
