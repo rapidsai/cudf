@@ -121,9 +121,9 @@ def make_meta_cudf_index(x, index=None):
 
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
-        return cudf.Series([UNKNOWN_CATEGORIES], name=name, index=index).iloc[
-            :0
-        ]
+        return cudf.Series(
+            [UNKNOWN_CATEGORIES], dtype=dtype, name=name, index=index
+        ).iloc[:0]
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
