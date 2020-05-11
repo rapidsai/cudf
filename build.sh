@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks tests external --external-lib-dir -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks tests external -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [external] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                         over)
    libnvstrings         - build the nvstrings C++ code only
@@ -31,7 +31,6 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [
    benchmarks           - build benchmarks
    tests                - build tests
    external             - build external datasource support for libcudf
-   --external-lib-dir   - default directory to search for external datasource libraries
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
@@ -46,7 +45,6 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [
 "
 LIB_BUILD_DIR=${REPODIR}/cpp/build
 EXTERNAL_BUILD_DIR=${REPODIR}/external/build
-EXTERNAL_LIB_DIR=/usr/lib/cudf/external
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
@@ -120,9 +118,6 @@ if hasArg tests; then
 fi
 if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
-    if hasArg --external-lib-dir; then
-        EXTERNAL_LIB_DIR=/something
-    fi
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
@@ -250,7 +245,6 @@ fi
 # Build and install the external datasources
 if buildAll || hasArg external; then
 
-    echo "Making external datasource ${EXTERNAL_BUILD_DIR}"
     mkdir -p ${EXTERNAL_BUILD_DIR}
     cd ${EXTERNAL_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
