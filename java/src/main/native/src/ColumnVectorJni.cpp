@@ -32,6 +32,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
+#include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strip.hpp>
@@ -898,6 +899,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env
 
     std::unique_ptr<cudf::column> result = cudf::strings::strip(scv, s_striptype, *ss_tostrip);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_extractRe(JNIEnv *env, jobject j_object,
+                                                                   jlong j_view_handle,
+                                                                   jstring patternObj) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
+  JNI_NULL_CHECK(env, patternObj, "pattern is null", nullptr);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view* column_view = reinterpret_cast<cudf::column_view*>(j_view_handle);
+    cudf::strings_column_view strings_column(*column_view);
+    cudf::jni::native_jstring pattern(env, patternObj);
+
+    std::unique_ptr<cudf::experimental::table> table_result =
+        cudf::strings::extract(strings_column, pattern.get());
+    return cudf::jni::convert_table_for_return(env, table_result);
   }
   CATCH_STD(env, 0);
 }
