@@ -607,6 +607,10 @@ def test_dataframe_as_gpu_matrix(order):
     for k in "abcd":
         df[k] = np.random.random(nelem)
 
+    # Check all columns in empty dataframe.
+    mat = df.head(0).as_gpu_matrix(order=order).copy_to_host()
+    assert mat.shape == (0, 4)
+
     # Check all columns
     mat = df.as_gpu_matrix(order=order).copy_to_host()
     assert mat.shape == (nelem, 4)
@@ -3053,6 +3057,7 @@ def test_all(data):
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
+        {},
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
@@ -3064,12 +3069,21 @@ def test_all(data):
         ),
     ],
 )
-def test_any(data):
+@pytest.mark.parametrize("axis", [0, 1])
+def test_any(data, axis):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
+
+        if axis == 1:
+            with pytest.raises(NotImplementedError):
+                gdata.any(axis=axis)
+        else:
+            got = gdata.any(axis=axis)
+            expected = pdata.any(axis=axis)
+            assert_eq(got, expected)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
@@ -3085,9 +3099,9 @@ def test_any(data):
             with pytest.raises(NotImplementedError):
                 gdata.any(level="a")
 
-    got = gdata.any()
-    expected = pdata.any()
-    assert_eq(got, expected)
+        got = gdata.any(axis=axis)
+        expected = pdata.any(axis=axis)
+        assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("indexed", [False, True])

@@ -1925,8 +1925,7 @@ class DataFrame(Frame):
         nrow = len(self)
         if ncol < 1:
             raise ValueError("require at least 1 column")
-        if nrow < 1:
-            raise ValueError("require at least 1 row")
+
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
             for c in cols
