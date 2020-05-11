@@ -1677,15 +1677,9 @@ class Series(Frame):
         codes = DataFrame(
             {"value": self._data.columns[0].copy(deep=False), "order": order}
         )
-        codes = codes.merge(value, on="value", how="left")
 
-        # If the `code` column is full of nulls
-        # there is no need of sorting by `order`
-        if codes._data["code"].null_count == len(codes):
-            codes = codes["code"]
-        else:
-            codes = codes.sort_values("order")["code"]
-        codes = codes.fillna(na_sentinel)
+        codes = codes.merge(value, on="value", how="left")
+        codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
         return codes._copy_construct(name=None, index=self.index)
 
