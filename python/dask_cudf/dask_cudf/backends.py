@@ -129,7 +129,7 @@ def _empty_series(name, dtype, index=None):
 
 @make_meta.register(object)
 def make_meta_object(x, index=None):
-    """Create an empty pandas object containing the desired metadata.
+    """Create an empty cudf object containing the desired metadata.
 
     Parameters
     ----------
@@ -137,11 +137,11 @@ def make_meta_object(x, index=None):
         dtype, scalar
         To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
         an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
-        tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
+        tuple of `(name, dtype)`. If a cudf object, names, dtypes, and index
         should match the desired output. If a dtype or scalar, a scalar of the
         same dtype is returned.
     index :  cudf.Index, optional
-        Any pandas index to use in the metadata. If none provided, a
+        Any cudf index to use in the metadata. If none provided, a
         `RangeIndex` will be used.
 
     Examples
