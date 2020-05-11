@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 
-from libcpp cimport bool
 from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
@@ -14,8 +13,6 @@ from cudf._lib.cpp.strings.char_types cimport (
     is_integer as cpp_is_integer,
     is_float as cpp_is_float,
 )
-
-cimport cudf._lib.cpp.types as libcudf_types
 
 
 def is_decimal(Column source_strings):
