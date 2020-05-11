@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1475,18 +1475,26 @@ public class JCudfSerialization {
 
   public static TableAndRowCountPair readTableFrom(SerializedTableHeader header,
                                                    HostMemoryBuffer hostBuffer) {
-    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom");
-         DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
-      if (hostBuffer.length > 0) {
-        try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
-          devBuffer.copyFromHostBuffer(hostBuffer);
+    try (DevicePrediction prediction = new DevicePrediction(hostBuffer.length, "readTableFrom")) {
+      ContiguousTable contigTable = null;
+      DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
+      try {
+        if (hostBuffer.length > 0) {
+          try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
+            devBuffer.copyFromHostBuffer(hostBuffer);
+          }
+        }
+        if (header.getNumColumns() > 0) {
+          Table table = sliceUpColumnVectors(header, devBuffer, hostBuffer);
+          contigTable = new ContiguousTable(table, devBuffer);
+        }
+      } finally {
+        if (contigTable == null) {
+          devBuffer.close();
         }
       }
-      if (header.getNumColumns() > 0) {
-        return new TableAndRowCountPair(header.numRows, sliceUpColumnVectors(header, devBuffer, hostBuffer));
-      } else {
-        return new TableAndRowCountPair(header.numRows, null);
-      }
+
+      return new TableAndRowCountPair(header.numRows, contigTable);
     }
   }
 
@@ -1520,35 +1528,51 @@ public class JCudfSerialization {
     }
   }
 
+  /** Holds the result of deserializing a table. */
   public static final class TableAndRowCountPair implements Closeable {
-      private int numRows;
-      private Table table;
+    private final int numRows;
+    private final ContiguousTable contigTable;
 
-      public TableAndRowCountPair(int numRows, Table table) {
-          this.numRows = numRows;
-          this.table = table;
-      }
+    public TableAndRowCountPair(int numRows, ContiguousTable table) {
+      this.numRows = numRows;
+      this.contigTable = table;
+    }
 
-      @Override
-      public void close() {
-          if (table != null) {
-              table.close();
-          }
+    @Override
+    public void close() {
+      if (contigTable != null) {
+        contigTable.close();
       }
-      public int getNumRows() {
+    }
+
+    /** Get the number of rows that were deserialized. */
+    public int getNumRows() {
           return numRows;
       }
 
-      public void setNumRows(int numRows) {
-          this.numRows = numRows;
+    /**
+     * Get the Table that was deserialized or null if there was no data
+     * (e.g.: rows without columns).
+     * <p>NOTE: Ownership of the table is not transferred by this method.
+     * The table is still owned by this instance and will be closed when this
+     * instance is closed.
+     */
+    public Table getTable() {
+      if (contigTable != null) {
+        return contigTable.getTable();
       }
+      return null;
+    }
 
-      public Table getTable() {
-          return table;
-      }
-
-      public void setTable(Table table) {
-          this.table = table;
-      }
+    /**
+     * Get the ContiguousTable that was deserialized or null if there was no
+     * data (e.g.: rows without columns).
+     * <p>NOTE: Ownership of the contiguous table is not transferred by this
+     * method. The contiguous table is still owned by this instance and will
+     * be closed when this instance is closed.
+     */
+    public ContiguousTable getContiguousTable() {
+      return contigTable;
+    }
   }
 }

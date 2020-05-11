@@ -56,7 +56,9 @@ def _nonempty_series(s, idx=None):
         idx = _nonempty_index(s.index)
     dtype = s.dtype
     if is_categorical_dtype(dtype):
-        categories = s._column.categories
+        categories = (
+            s._column.categories if len(s._column.categories) else ["a"]
+        )
         codes = [0, 0]
         ordered = s._column.ordered
         data = column.build_categorical_column(
@@ -113,21 +115,14 @@ def concat_cudf(
 try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
-    from cudf.core.column import column, CategoricalColumn, StringColumn
+    from cudf.core.column import column
 
-    def _handle_string(s):
-        if isinstance(s._column, StringColumn):
-            s = s._hash()
-        return s
-
-    def safe_hash(df):
-        frame = df.copy(deep=False)
+    def safe_hash(frame):
+        index = frame.index
         if isinstance(frame, cudf.DataFrame):
-            for col in frame.columns:
-                frame[col] = _handle_string(frame[col])
-            return frame.hash_columns()
+            return cudf.Series(frame.hash_columns(), index=index)
         else:
-            return _handle_string(frame)
+            return cudf.Series(frame.hash_values(), index=index)
 
     @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
     def hash_object_cudf(frame, index=True):
@@ -142,18 +137,18 @@ try:
             return safe_hash(ind.to_frame(index=False))
 
         col = column.as_column(ind)
-        if isinstance(col, StringColumn):
-            col = col.as_numerical_column("int32")
-        elif isinstance(col, CategoricalColumn):
-            col = col.as_numerical
-        return cudf.Series(col).hash_values()
+        return safe_hash(cudf.Series(col))
 
     @group_split_dispatch.register(cudf.DataFrame)
     def group_split_cudf(df, c, k, ignore_index=False):
         return dict(
             zip(
                 range(k),
-                df.scatter_by_map(c, map_size=k, keep_index=not ignore_index),
+                df.scatter_by_map(
+                    c.astype(np.int32, copy=False),
+                    map_size=k,
+                    keep_index=not ignore_index,
+                ),
             )
         )
 

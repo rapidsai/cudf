@@ -119,15 +119,7 @@ R"***(
 TEST_F(UnaryOperationIntegrationTest, Transform_INT32_INT32) {
 
 // c = a * a - a
-const char cuda[] =
-R"***(
-__device__ inline void f(
-  int* output, 
-  int input
-){
-  *output = input*input - input;
-}
-)***";
+const char cuda[] = "__device__ inline void f(int* output,int input){*output = input*input - input;}";
 
 const char* ptx =
 R"***(

@@ -20,6 +20,7 @@
 
 namespace cudf
 {
+//! Strings column APIs.
 namespace strings
 {
 

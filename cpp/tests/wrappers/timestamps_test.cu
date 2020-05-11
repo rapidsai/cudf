@@ -72,7 +72,8 @@ TYPED_TEST(TimestampColumnTest,
 
   // rount-trip through the host to copy `timestamp_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
-  std::vector<Rep> timestamp_col_data;
+  // When C++17, use structured bindings
+  thrust::host_vector<Rep> timestamp_col_data;
   std::vector<cudf::bitmask_type> timestamp_col_mask;
   std::tie(timestamp_col_data, timestamp_col_mask) = to_host<Rep>(timestamp_col);
 
@@ -193,3 +194,5 @@ TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsEmptyParm) {
   EXPECT_FALSE(column->has_nulls());
   EXPECT_EQ(0, column->num_children());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

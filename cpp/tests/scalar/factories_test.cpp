@@ -122,7 +122,6 @@ TYPED_TEST(DefaultScalarFactory, TypeCast) {
   EXPECT_FALSE(s->is_valid());
 }
 
-
 template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {};
 
@@ -143,3 +142,5 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided) {
   EXPECT_TRUE(numeric_s->is_valid());
   EXPECT_TRUE(s->is_valid());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

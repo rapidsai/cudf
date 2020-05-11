@@ -51,42 +51,4 @@ doc_get_watermark_offsets = docfmt_partial(
     docstring=_docstring_get_watermark_offsets
 )
 
-_docstring_read_gdf = """
-Load an Avro dataset into a DataFrame
-
-Parameters
-----------
-filepath_or_buffer : str, path object, bytes, or file-like object
-    Either a path to a file (a `str`, `pathlib.Path`, or
-    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
-    Python bytes of raw binary data, or any object with a `read()` method
-    (such as builtin `open()` file handler function or `BytesIO`).
-engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
-    Parser engine to use.
-columns : list, default None
-    If not None, only these columns will be read.
-skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
-num_rows : int, default None
-    If not None, the total number of rows to read.
-
-Returns
--------
-DataFrame
-
-Examples
---------
->>> import cudf
->>> df = cudf.read_avro(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
-
-See Also
---------
-cudf.io.csv.read_csv
-cudf.io.json.read_json
-"""
 doc_read_gdf = docfmt_partial(docstring=_docstring_read_gdf)

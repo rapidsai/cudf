@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME_EXTERNAL VERSION 0.13.0 LANGUAGES C CXX)
+project(CUDA_DATAFRAME_EXTERNAL VERSION 0.14.0 LANGUAGES C CXX)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
 ###################################################################################################
@@ -87,8 +87,7 @@ if(BUILD_TESTS)
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 
-    message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
-    message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
+    message(STATUS "EXTERNAL_TEST_LIST set to: ${EXTERNAL_TEST_LIST}")
 endif(BUILD_TESTS)
 
 ###################################################################################################
@@ -140,7 +139,8 @@ endif(CONDA_LINK_DIRS)
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf_kafka SHARED
-            kafka/src/kafka_datasource.cpp
+            kafka/src/kafka_consumer.cpp
+            kafka/src/kafka_producer.cpp
 )
 
 # Include librdkafka exclusively for libcudf_kafka

@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/type_lists.hpp>
 #include <type_traits>
@@ -450,3 +450,5 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice) {
     EXPECT_EQ(vec2, vec3);
 
 }
+
+CUDF_TEST_PROGRAM_MAIN()

@@ -305,9 +305,9 @@ def test_csv_reader_negative_vals(tmpdir):
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
-    np.testing.assert_allclose(zero, df["0"])
-    np.testing.assert_allclose(one, df["1"])
-    np.testing.assert_allclose(two, df["2"])
+    np.testing.assert_allclose(zero, df["0"].to_array())
+    np.testing.assert_allclose(one, df["1"].to_array())
+    np.testing.assert_allclose(two, df["2"].to_array())
 
 
 def test_csv_reader_strings(tmpdir):
@@ -398,7 +398,7 @@ def test_csv_reader_mangle_dupe_cols(tmpdir):
     cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
     # check that the dupe columns were removed
     assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"], [1])
+    np.testing.assert_array_equal(cu_df["abc"].to_array(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -431,11 +431,11 @@ def test_csv_reader_float_decimal(tmpdir):
         decimal=",",
     )
 
-    np.testing.assert_allclose(basic_32_ref, df["basic_32"])
-    np.testing.assert_allclose(basic_64_ref, df["basic_64"])
-    np.testing.assert_allclose(round_ref, df["round"])
-    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"])
-    np.testing.assert_allclose(precision_ref, df["precision"])
+    np.testing.assert_allclose(basic_32_ref, df["basic_32"].to_array())
+    np.testing.assert_allclose(basic_64_ref, df["basic_64"].to_array())
+    np.testing.assert_allclose(round_ref, df["round"].to_array())
+    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"].to_array())
+    np.testing.assert_allclose(precision_ref, df["precision"].to_array())
 
 
 def test_csv_reader_NaN_values():
@@ -527,10 +527,10 @@ def test_csv_reader_thousands(tmpdir):
         str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'"
     )
 
-    np.testing.assert_allclose(f32_ref, df["float32"])
-    np.testing.assert_allclose(f64_ref, df["float64"])
-    np.testing.assert_allclose(int32_ref, df["int32"])
-    np.testing.assert_allclose(int64_ref, df["int64"])
+    np.testing.assert_allclose(f32_ref, df["float32"].to_array())
+    np.testing.assert_allclose(f64_ref, df["float64"].to_array())
+    np.testing.assert_allclose(int32_ref, df["int32"].to_array())
+    np.testing.assert_allclose(int64_ref, df["int64"].to_array())
 
 
 def test_csv_reader_buffer_strings():
@@ -670,10 +670,10 @@ def test_csv_quotednumbers(tmpdir):
     df2 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
     assert len(df2.columns) == 2
-    np.testing.assert_allclose(integer_ref, df1["integer"])
-    np.testing.assert_allclose(decimal_ref, df1["decimal"])
-    np.testing.assert_allclose(integer_ref, df2["integer"])
-    np.testing.assert_allclose(decimal_ref, df2["decimal"])
+    np.testing.assert_allclose(integer_ref, df1["integer"].to_array())
+    np.testing.assert_allclose(decimal_ref, df1["decimal"].to_array())
+    np.testing.assert_allclose(integer_ref, df2["integer"].to_array())
+    np.testing.assert_allclose(decimal_ref, df2["decimal"].to_array())
 
 
 def test_csv_reader_nrows(tmpdir):
@@ -919,8 +919,8 @@ def test_csv_reader_tabs():
         "1970-12-12T00:00:00.000",
         "2018-06-15T00:00:00.000",
     ]
-    np.testing.assert_allclose(floats, df["float_point"])
-    np.testing.assert_allclose(ints, df["integer"])
+    np.testing.assert_allclose(floats, df["float_point"].to_array())
+    np.testing.assert_allclose(ints, df["integer"].to_array())
     for row in range(4):
         assert str(df["date"][row]) == dates[row]
 
@@ -952,6 +952,28 @@ def test_csv_reader_byte_range(tmpdir, segment_bytes):
 
     assert list(df["int1"]) == list(ref_df["int1"])
     assert list(df["int2"]) == list(ref_df["int2"])
+
+
+@pytest.mark.parametrize("segment_bytes", [10, 19, 31, 36])
+def test_csv_reader_byte_range_strings(segment_bytes):
+    names = ["strings"]
+    buffer = "\n".join('"' + str(x) + '"' for x in range(1, 100))
+    file_size = len(buffer)
+
+    ref_df = read_csv(StringIO(buffer), names=names).to_pandas()
+
+    dfs = []
+    for segment in range((file_size + segment_bytes - 1) // segment_bytes):
+        dfs.append(
+            read_csv(
+                StringIO(buffer),
+                names=names,
+                byte_range=(segment * segment_bytes, segment_bytes),
+            )
+        )
+    df = cudf.concat(dfs).to_pandas()
+
+    assert list(df["strings"]) == list(ref_df["strings"])
 
 
 @pytest.mark.parametrize(
@@ -1125,7 +1147,7 @@ def test_csv_reader_bools_false_positives(tmpdir):
 
     df = read_csv(StringIO(buffer), header=None, dtype=["int32"])
 
-    np.testing.assert_array_equal(items, df["0"])
+    np.testing.assert_array_equal(items, df["0"].to_array())
 
 
 def test_csv_reader_aligned_byte_range(tmpdir):
@@ -1156,7 +1178,9 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         # require explicit `hex` dtype to parse hexadecimals
         pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
-        np.testing.assert_array_equal(pdf["hex_int"], gdf["hex_int"])
+        np.testing.assert_array_equal(
+            pdf["hex_int"], gdf["hex_int"].to_array()
+        )
     else:
         # otherwise, dtype inference returns as object (string)
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
@@ -1442,3 +1466,12 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     expect = pd.read_csv(pdf_df_fname)
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
+
+
+def test_to_csv_empty_filename():
+    df = cudf.DataFrame({"vals": [1, 2, 3]})
+
+    exception = pytest.raises(ValueError, match="path/filename not provided")
+
+    with exception:
+        df.to_csv()

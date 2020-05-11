@@ -19,11 +19,12 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.HostColumnVector.Builder;
+import ai.rapids.cudf.WindowOptions.FrameType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -34,7 +35,6 @@ import java.util.function.Consumer;
  */
 public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
-  private static final AtomicLong idGen = new AtomicLong(0);
 
   static {
     NativeDepsLoader.loadNativeDeps();
@@ -45,14 +45,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private final long rows;
   private Optional<Long> nullCount = Optional.empty();
   private int refCount;
-  private final long internalId = idGen.incrementAndGet();
 
   /**
    * Wrap an existing on device cudf::column with the corresponding ColumnVector.
    */
   ColumnVector(long nativePointer) {
     assert nativePointer != 0;
-    offHeap = new OffHeapState(internalId, nativePointer);
+    offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
@@ -60,7 +59,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.refCount = 0;
     incRefCountInternal(true);
 
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -84,7 +83,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
 
-    offHeap = new OffHeapState(internalId, type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer);
+    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
@@ -93,7 +92,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.refCount = 0;
     incRefCountInternal(true);
 
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   /**
@@ -105,7 +104,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param contiguousBuffer the buffer that this is based off of.
    */
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
-    offHeap = new OffHeapState(internalId, viewAddress, contiguousBuffer);
+    offHeap = new OffHeapState(viewAddress, contiguousBuffer);
     MemoryCleaner.register(this, offHeap);
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
@@ -113,12 +112,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     this.nullCount = Optional.empty();
     this.refCount = 0;
     incRefCountInternal(true);
-    MemoryListener.deviceAllocation(getDeviceMemorySize(), internalId);
+    MemoryListener.deviceAllocation(getDeviceMemorySize(), offHeap.id);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
     return new ColumnVector(columnViewAddress, buffer);
   }
+
+  /**
+   * Returns a column of strings where, for each string row in the input,
+   * the first character after spaces is modified to upper-case,
+   * while all the remaining characters in a word are modified to lower-case.
+   *
+   * Any null string entries return corresponding null output column entries
+   */
+  public ColumnVector toTitle() {
+    assert type == DType.STRING;
+    return new ColumnVector(title(getNativeView()));
+  }
+
+  private native long title(long handle);
 
   /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
@@ -140,9 +153,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (refCount == 0) {
       offHeap.clean(false);
     } else if (refCount < 0) {
-      log.error("Close called too many times on {}", this);
       offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times");
+      throw new IllegalStateException("Close called too many times " + this);
     }
   }
 
@@ -672,6 +684,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new vector of length rows, starting at the initialValue and going by step each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param step the step to add to each subsequent row.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
+    if (!initialValue.isValid() || !step.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
+    }
+  }
+
+  /**
+   * Create a new vector of length rows, starting at the initialValue and going by 1 each time.
+   * Only numeric types are supported.
+   * @param initialValue the initial value to start at.
+   * @param rows the total number of rows
+   * @return the new ColumnVector.
+   */
+  public static ColumnVector sequence(Scalar initialValue, int rows) {
+    if (!initialValue.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    long amount = predictSizeFor(initialValue.getType().sizeInBytes, rows, false);
+    try (DevicePrediction ignored = new DevicePrediction(amount, "sequence")) {
+      return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
+    }
+  }
+
+  /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
@@ -689,6 +736,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         columnHandles[i] = columns[i].getNativeView();
       }
       return new ColumnVector(concatenate(columnHandles));
+    }
+  }
+
+  /**
+   * Create a new vector of "normalized" values, where:
+   *  1. All representations of NaN (and -NaN) are replaced with the normalized NaN value
+   *  2. All elements equivalent to 0.0 (including +0.0 and -0.0) are replaced with +0.0.
+   *  3. All elements that are not equivalent to NaN or 0.0 remain unchanged.
+   * 
+   * {@link https://docs.oracle.com/javase/8/docs/api/java/lang/Double.html#longBitsToDouble-long-}
+   * describes how equivalent values of NaN/-NaN might have different bitwise representations.
+   * 
+   * This method may be used to compare different bitwise values of 0.0 or NaN as logically
+   * equivalent. For instance, if these values appear in a groupby key column, without normalization
+   * 0.0 and -0.0 would be erroneously treated as distinct groups, as will each representation of NaN.
+   * 
+   * @return A new ColumnVector with all elements equivalent to NaN/0.0 replaced with a normalized equivalent.
+   */
+  public ColumnVector normalizeNANsAndZeros() {
+    try (DevicePrediction prediction =
+                 new DevicePrediction(getDeviceMemorySize(), "normalizeNANsAndZeros")) {
+      return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
     }
   }
 
@@ -903,6 +972,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector log() {
     return unaryOp(UnaryOp.LOG);
+  }
+
+  /**
+   * Calculate the log with base 2, output is the same type as input.
+   */
+  public ColumnVector log2() {
+    try (Scalar base = Scalar.fromInt(2)) {
+      return binaryOp(BinaryOp.LOG_BASE, base, getType());
+    }
+  }
+
+  /**
+   * Calculate the log with base 10, output is the same type as input.
+   */
+  public ColumnVector log10() {
+    try (Scalar base = Scalar.fromInt(10)) {
+      return binaryOp(BinaryOp.LOG_BASE, base, getType());
+    }
   }
 
   /**
@@ -1208,23 +1295,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Calculate the quantile of this ColumnVector
-   * @param method   the method used to calculate the quantile
-   * @param quantile the quantile value [0,1]
-   * @return the quantile as double. The type can be changed in future
+   * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
+   * in the desired order.
+   * @param method   the method used to calculate the quantiles
+   * @param quantiles the quantile values [0,1]
+   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
    */
-  public Scalar quantile(QuantileMethod method, double quantile) {
-    return new Scalar(type, quantile(getNativeView(), method.nativeId, quantile));
+  public ColumnVector quantile(QuantileMethod method, double[] quantiles) {
+    return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
   }
 
   /**
    * This function aggregates values in a window around each element i of the input
    * column. Please refer to WindowsOptions for various options that can be passed.
+   * Note: Only rows-based windows are supported.
    * @param op the operation to perform.
    * @param options various window function arguments.
    * @return Column containing aggregate function result.
+   * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link FrameType#ROWS} is used.
    */
   public ColumnVector rollingWindow(AggregateOp op, WindowOptions options) {
+    // Check that only row-based windows are used.
+    if (!options.getFrameType().equals(FrameType.ROWS)) {
+      throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
+            + options.getFrameType());
+    }
+
     return new ColumnVector(
         rollingWindow(this.getNativeView(),
             options.getMinPeriods(),
@@ -1489,7 +1585,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
-      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
+      return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
   }
@@ -1622,10 +1718,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns indefinite number of columns containing strings.
+   * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public ColumnVector stringConcatenate(ColumnVector... columns) {
+  public ColumnVector stringConcatenate(ColumnVector[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -1639,10 +1735,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns indefinite number of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector... columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
@@ -1707,6 +1803,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "stringLocate")) {
       return new ColumnVector(substringLocate(getNativeView(), substring.getScalarHandle(),
           start, end));
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using the specified delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @param delimiter UTF-8 encoded string identifying the split points in each string.
+   *                  Default of empty string indicates split on whitespace.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit(Scalar delimiter) {
+    assert type == DType.STRING : "column type must be a String";
+    assert delimiter != null : "delimiter may not be null";
+    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.isValid() == true : "delimiter string scalar may not contain a null value";
+    try (DevicePrediction prediction = new DevicePrediction(getDeviceMemorySize(), "filter")) {
+      return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Returns a list of columns by splitting each string using whitespace as the delimiter.
+   * The number of rows in the output columns will be the same as the input column.
+   * Null entries are added for a row where split results have been exhausted.
+   * Null string entries return corresponding null output columns.
+   * @return New table of strings columns.
+   */
+  public Table stringSplit() {
+    try (Scalar emptyString = Scalar.fromString("")) {
+      return stringSplit(emptyString);
     }
   }
 
@@ -1809,6 +1937,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert pattern.getJavaString().isEmpty() == false : "pattern string scalar may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "endsWith")) {
       return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
+    }
+  }
+
+  /**
+   * Removes whitespace from the beginning and end of a string.
+   * @return A new java column vector containing the stripped strings.
+   */
+  public ColumnVector strip() {
+    assert type == DType.STRING : "column type must be a String";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.INT32), "strip")) {
+      return new ColumnVector(stringStrip(getNativeView()));
     }
   }
 
@@ -1928,14 +2067,80 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public ColumnVector matchesRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
-    assert pattern.isEmpty() == false : "pattern string may not be empty";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
     try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "matchesRe")) {
       return new ColumnVector(matchesRe(getNativeView(), pattern));
     }
   }
+
+  /**
+   * Returns a boolean ColumnVector identifying rows which
+   * match the given regex pattern starting at any location.
+   *
+   * ```
+   * cv = ["abc","123","def456"]
+   * result = cv.matches_re("\\d+")
+   * r is now [false, true, true]
+   * ```
+   * Any null string entries return corresponding null output column entries.
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   *
+   * @param pattern Regex pattern to match to each string.
+   * @return New ColumnVector of boolean results for each string.
+   */
+  public ColumnVector containsRe(String pattern) {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    assert !pattern.isEmpty() : "pattern string may not be empty";
+    try (DevicePrediction prediction = new DevicePrediction(predictSizeFor(DType.BOOL8), "containsRe")) {
+      return new ColumnVector(containsRe(getNativeView(), pattern));
+    }
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Close all non-null buffers. Exceptions that occur during the process will
+   * be aggregated into a single exception thrown at the end.
+   */
+  static void closeBuffers(MemoryBuffer data, MemoryBuffer valid, MemoryBuffer offsets) {
+    Throwable toThrow = null;
+    if (data != null) {
+      try {
+        data.close();
+      } catch (Throwable t) {
+        toThrow = t;
+      }
+    }
+    if (valid != null) {
+      try {
+        valid.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (offsets != null) {
+      try {
+        offsets.close();
+      } catch (Throwable t) {
+        if (toThrow != null) {
+          toThrow.addSuppressed(t);
+        } else {
+          toThrow = t;
+        }
+      }
+    }
+    if (toThrow != null) {
+      throw new RuntimeException(toThrow);
+    }
+  }
 
   /**
    * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
@@ -2014,6 +2219,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
+   * Native method which returns array of columns by splitting each string using the specified
+   * delimiter.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   * @param delimiter  UTF-8 encoded string identifying the split points in each string.
+   */
+  private static native long[] stringSplit(long columnView, long delimiter);
+
+  /**
    * Native method to calculate substring from a given string column. 0 indexing.
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param start      first character index to begin the substring(inclusive).
@@ -2056,7 +2269,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
 
-  private static native long matchesRe(long cudfViewHandle, String compString) throws CudfException;
+  /**
+   * Native method to strip whitespace from the start and end of a string.
+   * @param columnView native handle of the cudf::column_view being operated on.
+   */
+  private static native long stringStrip(long columnView) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in regex pattern from the
+   * beginning of the string.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
+   * Native method for checking if strings match the passed in regex pattern starting at any location.
+   * @param cudfViewHandle native handle of the cudf::column_view being operated on.
+   * @param pattern string regex pattern.
+   * @return native handle of the resulting cudf column containing the boolean results.
+   */
+  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
@@ -2110,7 +2344,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   private static native long upperStrings(long cudfViewHandle);
 
-  private static native long quantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+  private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
   private static native long rollingWindow(long viewHandle, int min_periods, int agg_type,
                                            int preceding, int following,
@@ -2119,6 +2353,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long lengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
@@ -2161,6 +2397,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
   
   private static native long transform(long viewHandle, String udf, boolean isPtx);
+
+  /**
+   * Native method to normalize the various bitwise representations of NAN and zero.
+   * 
+   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * 
+   * @param viewHandle `long` representation of pointer to input column_view.
+   * @return Pointer to a new `column` of normalized values.
+   * @throws CudfException On failure to normalize.
+   */
+  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
@@ -2223,7 +2470,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Holds the off heap state of the column vector so we can clean it up, even if it is leaked.
    */
   protected static final class OffHeapState extends MemoryCleaner.Cleaner {
-    private final long internalId;
     // This must be kept in sync with the native code
     public static final long UNKNOWN_NULL_COUNT = -1;
     private long columnHandle;
@@ -2235,8 +2481,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Make a column form an existing cudf::column *.
      */
-    public OffHeapState(long internalId, long columnHandle) {
-      this.internalId = internalId;
+    public OffHeapState(long columnHandle) {
       this.columnHandle = columnHandle;
       data = getNativeDataPointer();
       valid = getNativeValidPointer();
@@ -2246,11 +2491,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Create a cudf::column_view from device side data.
      */
-    public OffHeapState(long internalId, DType type, int rows, Optional<Long> nullCount,
+    public OffHeapState(DType type, int rows, Optional<Long> nullCount,
                         DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets) {
       assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
           || !nullCount.isPresent();
-      this.internalId = internalId;
       int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
       this.data = data;
       this.valid = valid;
@@ -2269,9 +2513,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     /**
      * Create a cudf::column_view from contiguous device side data.
      */
-    public OffHeapState(long internalId, long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
+    public OffHeapState(long viewHandle, DeviceMemoryBuffer contiguousBuffer) {
       assert viewHandle != 0;
-      this.internalId = internalId;
       this.viewHandle = viewHandle;
 
       data = contiguousBuffer.sliceFrom(getNativeDataPointer());
@@ -2359,46 +2602,79 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
     @Override
     public String toString() {
-      return String.valueOf(columnHandle == 0 ? viewHandle : columnHandle);
+      return "(ID: " + id + " " + Long.toHexString(columnHandle == 0 ? viewHandle : columnHandle) + ")";
     }
 
     @Override
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       long size = getDeviceMemorySize();
       boolean neededCleanup = false;
+      long address = 0;
+
+      // Always mark the resource as freed even if an exception is thrown.
+      // We cannot know how far it progressed before the exception, and
+      // therefore it is unsafe to retry.
+      Throwable toThrow = null;
       if (viewHandle != 0) {
-        deleteColumnView(viewHandle);
-        viewHandle = 0;
+        address = viewHandle;
+        try {
+          deleteColumnView(viewHandle);
+        } catch (Throwable t) {
+          toThrow = t;
+        } finally {
+          viewHandle = 0;
+        }
         neededCleanup = true;
       }
       if (columnHandle != 0) {
-        deleteCudfColumn(columnHandle);
-        columnHandle = 0;
+        if (address != 0) {
+          address = columnHandle;
+        }
+        try {
+          deleteCudfColumn(columnHandle);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          columnHandle = 0;
+        }
         neededCleanup = true;
       }
-      if (data != null) {
-        data.close();
-        data = null;
+      if (data != null || valid != null || offsets != null) {
+        try {
+          closeBuffers(data, valid, offsets);
+        } catch (Throwable t) {
+          if (toThrow != null) {
+            toThrow.addSuppressed(t);
+          } else {
+            toThrow = t;
+          }
+        } finally {
+          data = null;
+          valid = null;
+          offsets = null;
+        }
         neededCleanup = true;
       }
-      if (valid != null) {
-        valid.close();
-        valid = null;
-        neededCleanup = true;
-      }
-      if (offsets != null) {
-        offsets.close();
-        offsets = null;
-        neededCleanup = true;
+      if (toThrow != null) {
+        throw new RuntimeException(toThrow);
       }
       if (neededCleanup) {
         if (logErrorIfNotClean) {
-          log.error("YOU LEAKED A DEVICE COLUMN VECTOR!!!!");
+          log.error("A DEVICE COLUMN VECTOR WAS LEAKED (ID: " + id + " " + Long.toHexString(address)+ ")");
           logRefCountDebug("Leaked vector");
         }
-        MemoryListener.deviceDeallocation(size, internalId);
+        MemoryListener.deviceDeallocation(size, id);
       }
       return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return viewHandle == 0 && columnHandle == 0 && data == null && valid == null && offsets == null;
     }
 
     /**

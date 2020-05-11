@@ -16,7 +16,6 @@
 
 #include <algorithm>
 #include <cudf/utilities/traits.hpp>
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cudf/detail/utilities/device_atomics.cuh>
@@ -129,7 +128,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
     }
 
     thrust::host_vector<T> host_result(dev_result);
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     CHECK_CUDA(0);
 
     EXPECT_EQ(host_result[0], exact[0]) << "atomicAdd test failed";
@@ -269,7 +268,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
         reinterpret_cast<T*>(dev_data.data().get()), vec_size);
 
     thrust::host_vector<T> host_result(dev_result);
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     CHECK_CUDA(0);
 
     print_exact(exact, "exact");
@@ -314,3 +313,5 @@ TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps) {
     this->atomic_test(input_array);
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()

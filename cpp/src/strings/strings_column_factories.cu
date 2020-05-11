@@ -18,7 +18,8 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <strings/utilities.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -34,6 +35,7 @@ std::unique_ptr<column> make_strings_column(
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
+    CUDF_FUNC_RANGE();
     size_type strings_count = strings.size();
     if( strings_count==0 )
         return strings::detail::make_empty_strings_column(mr,stream);
@@ -125,6 +127,7 @@ std::unique_ptr<column> make_strings_column(
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     size_type num_strings = offsets.size()-1;
     if( num_strings==0 )
         return strings::detail::make_empty_strings_column(mr,stream);

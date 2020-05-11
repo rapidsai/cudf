@@ -1,50 +1,37 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: boundscheck = False
-
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.includes.orc cimport (
-    reader as orc_reader,
-    reader_options as orc_reader_options,
-    writer as orc_writer,
-    writer_options as orc_writer_options,
-    compression_type
-)
-from cython.operator cimport dereference as deref
-from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr, make_unique
+from libcpp cimport bool, int
 from libcpp.string cimport string
+from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
+from cudf._lib.cpp.io.functions cimport (
+    read_orc_args,
+    write_orc_args,
+    read_orc as libcudf_read_orc,
+    write_orc as libcudf_write_orc
+)
+from cudf._lib.cpp.io.types cimport (
+    compression_type,
+    sink_info,
+    table_metadata,
+    table_with_metadata,
+)
+from cudf._lib.cpp.types cimport (
+    data_type, type_id, size_type
+)
 
-import errno
-import os
-
-
-cdef unique_ptr[cudf_table] make_table_from_columns(columns):
-    """
-    Cython function to create a `cudf_table` from an ordered dict of columns
-    """
-    cdef vector[gdf_column*] c_columns
-    for idx, (col_name, col) in enumerate(columns.items()):
-        # Workaround for string columns
-        if col.dtype.type == np.object_:
-            c_columns.push_back(
-                column_view_from_string_column(col, col_name)
-            )
-        else:
-            c_columns.push_back(
-                column_view_from_column(col, col_name)
-            )
-
-    return make_unique[cudf_table](c_columns)
+from cudf._lib.io.utils cimport make_source_info
+from cudf._lib.move cimport move
+from cudf._lib.table cimport Table
+from cudf._lib.types import np_to_cudf_types
+import numpy as np
 
 
-cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
+cpdef read_orc(filepath_or_buffer, columns=None,
+               stripe=None, stripe_count=None,
                skip_rows=None, num_rows=None, use_index=True,
-               decimals_as_float=True, force_decimal_scale=None):
+               decimals_as_float=True, force_decimal_scale=None,
+               timestamp_type=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -52,54 +39,37 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     --------
     cudf.io.orc.read_orc
     """
+    cdef read_orc_args c_read_orc_args = make_read_orc_args(
+        filepath_or_buffer,
+        columns or [],
+        get_size_t_arg(stripe, "stripe"),
+        get_size_t_arg(stripe_count, "stripe_count"),
+        get_size_t_arg(skip_rows, "skip_rows"),
+        get_size_t_arg(num_rows, "num_rows"),
+        (
+            type_id.EMPTY
+            if timestamp_type is None else
+            np_to_cudf_types[np.dtype(timestamp_type)]
+        ),
+        use_index,
+        decimals_as_float,
+        get_size_t_arg(force_decimal_scale, "force_decimal_scale")
+    )
 
-    # Setup reader options
-    cdef orc_reader_options options = orc_reader_options()
-    for col in columns or []:
-        options.columns.push_back(str(col).encode())
-    options.use_index = use_index
-    options.decimals_as_float = decimals_as_float
-    if force_decimal_scale is not None:
-        options.forced_decimals_scale = force_decimal_scale
+    cdef table_with_metadata c_result
 
-    # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-        filepath = <string>str(filepath_or_buffer).encode()
-
-    cdef unique_ptr[orc_reader] reader
     with nogil:
-        if buffer is None:
-            reader = unique_ptr[orc_reader](
-                new orc_reader(filepath, options)
-            )
-        else:
-            reader = unique_ptr[orc_reader](
-                new orc_reader(<char *>&buffer[0], buffer.shape[0], options)
-            )
+        c_result = move(libcudf_read_orc(c_read_orc_args))
 
-    # Read data into columns
-    cdef cudf_table c_out_table
-    cdef size_type c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef size_type c_num_rows = num_rows if num_rows is not None else -1
-    cdef size_type c_stripe = stripe if stripe is not None else -1
-    with nogil:
-        if c_skip_rows != 0 or c_num_rows != -1:
-            c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
-        elif c_stripe != -1:
-            c_out_table = reader.get().read_stripe(c_stripe)
-        else:
-            c_out_table = reader.get().read_all()
+    names = [name.decode() for name in c_result.metadata.column_names]
 
-    return table_to_dataframe(&c_out_table)
+    return Table.from_unique_ptr(move(c_result.tbl), names)
 
 
-cpdef write_orc(cols, filepath_or_buffer, compression=None):
+cpdef write_orc(Table table,
+                filepath,
+                compression=None,
+                enable_statistics=False):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -107,25 +77,61 @@ cpdef write_orc(cols, filepath_or_buffer, compression=None):
     --------
     cudf.io.orc.read_orc
     """
-
-    # Setup writer options
-    cdef orc_writer_options options = orc_writer_options()
-    if compression is None:
-        options.compression = compression_type.none
+    cdef compression_type compression_ = compression_type.NONE
+    if compression is None or compression is False:
+        compression_ = compression_type.NONE
     elif compression == "snappy":
-        options.compression = compression_type.snappy
+        compression_ = compression_type.SNAPPY
     else:
-        raise ValueError("Unsupported `compression` type")
-
-    # Create writer
-    cdef string filepath = <string>str(filepath_or_buffer).encode()
-    cdef unique_ptr[orc_writer] writer
-    with nogil:
-        writer = unique_ptr[orc_writer](
-            new orc_writer(filepath, options)
+        raise ValueError(
+            "Unsupported compression type `{}`".format(compression)
         )
 
-    # Write data to output
-    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    cdef table_metadata metadata_ = table_metadata()
+    metadata_.column_names.reserve(len(table._column_names))
+
+    for col_name in table._column_names:
+        metadata_.column_names.push_back(str.encode(col_name))
+
+    cdef write_orc_args c_write_orc_args = write_orc_args(
+        sink_info(<string>str(filepath).encode()),
+        table.data_view(), &metadata_, compression_,
+        <bool> (True if enable_statistics else False)
+    )
+
     with nogil:
-        writer.get().write_all(deref(c_in_table))
+        libcudf_write_orc(c_write_orc_args)
+
+
+cdef size_type get_size_t_arg(arg, name) except*:
+    arg = -1 if arg is None else arg
+    if not isinstance(arg, int) or arg < -1:
+        raise TypeError("{} must be an int >= -1".format(name))
+    return <size_type> arg
+
+
+cdef read_orc_args make_read_orc_args(filepath_or_buffer,
+                                      column_names,
+                                      size_type stripe,
+                                      size_type stripe_count,
+                                      size_type skip_rows,
+                                      size_type num_rows,
+                                      type_id timestamp_type,
+                                      bool use_index,
+                                      bool decimals_as_float,
+                                      size_type force_decimal_scale) except*:
+    cdef read_orc_args args = read_orc_args(
+        make_source_info(filepath_or_buffer)
+    )
+    args.stripe = stripe
+    args.stripe_count = stripe_count
+    args.skip_rows = skip_rows
+    args.num_rows = num_rows
+    args.timestamp_type = data_type(timestamp_type)
+    args.use_index = <bool> use_index
+    args.decimals_as_float = <bool> decimals_as_float
+    args.forced_decimals_scale = <int> force_decimal_scale
+    args.columns.reserve(len(column_names))
+    for col in column_names:
+        args.columns.push_back(str(col).encode())
+    return args

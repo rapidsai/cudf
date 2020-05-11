@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 
 public class UnaryOpTest extends CudfTestBase {
-  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY};
+  private static final Double[] DOUBLES_1 = new Double[]{1.0, 10.0, -100.1, 5.3, 50.0, 100.0, null, Double.NaN, Double.POSITIVE_INFINITY, 1/9.0, Double.NEGATIVE_INFINITY, 500.0, -500.0};
   private static final Integer[] INTS_1 = new Integer[]{1, 10, -100, 5, 50, 100, null};
   private static final Boolean[] BOOLEANS_1 = new Boolean[]{true, false, true, false, true, false, null};
 
@@ -249,6 +249,24 @@ public class UnaryOpTest extends CudfTestBase {
     try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
          ColumnVector answer = dcv.log();
          ColumnVector expected = forEach(dcv, doubleFun(Math::log))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testLog2() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.log2();
+         ColumnVector expected = forEach(dcv, doubleFun(n -> Math.log(n) / Math.log(2)))) {
+      assertColumnsAreEqual(expected, answer);
+    }
+  }
+
+  @Test
+  public void testLog10() {
+    try (ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1);
+         ColumnVector answer = dcv.log10();
+         ColumnVector expected = forEach(dcv, doubleFun(Math::log10))) {
       assertColumnsAreEqual(expected, answer);
     }
   }

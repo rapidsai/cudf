@@ -41,11 +41,12 @@ template <bool check_exact_equality>
 void column_property_comparison(cudf::column_view const& lhs, cudf::column_view const& rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
   if (lhs.size() > 0 and check_exact_equality) {
     EXPECT_EQ(lhs.nullable(), rhs.nullable());
   }
-  EXPECT_EQ(lhs.num_children(), rhs.num_children());
+  EXPECT_EQ(lhs.num_children(), rhs.num_children()); 
+
+  // TODO: compare children properties?
 }
 
 void expect_column_properties_equal(column_view const& lhs, column_view const& rhs) {
@@ -192,8 +193,6 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
                                    differences.begin(),
                                    ComparatorType(*d_lhs, *d_rhs));
 
-  CUDA_TRY(cudaDeviceSynchronize());
-
   differences.resize(thrust::distance(differences.begin(), diff_iter));
 
   if (diff_iter > differences.begin()) {
@@ -214,7 +213,7 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       //
       //  Need to pull back the differences
       //
-      std::vector<std::string> h_left_strings = to_strings(diff_table->get_column(0));
+      std::vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
       std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
 
       for (size_t i = 0 ; i < differences.size() ; ++i) {
@@ -232,7 +231,7 @@ void column_comparison(cudf::column_view const& lhs, cudf::column_view const& rh
       auto diff_lhs = cudf::experimental::detail::slice(lhs, index, index+1);
       auto diff_rhs = cudf::experimental::detail::slice(rhs, index, index+1);
 
-      std::vector<std::string> h_left_strings = to_strings(diff_lhs);
+      std::vector<std::string> h_left_strings  = to_strings(diff_lhs);
       std::vector<std::string> h_right_strings = to_strings(diff_rhs);
 
       EXPECT_EQ(differences.size(), size_t{0}) << "first difference: "
@@ -302,16 +301,19 @@ struct column_view_printer {
     out.resize(col.size());
 
     if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL");
-                     });
+
+      std::transform(
+        thrust::make_counting_iterator(size_type{0}),
+        thrust::make_counting_iterator(col.size()),
+        out.begin(),
+        [&h_data](auto idx) {
+          return bit_is_set(h_data.second.data(), idx) ? std::to_string(h_data.first[idx]) : std::string("NULL"); });
+
     } else {
-      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(), [](Element el) {
-          return std::to_string(el);
-        });
+
+      std::transform(h_data.first.begin(), h_data.first.end(), out.begin(),
+        [] (Element el) { return std::to_string(el); });
+
     }
   }
 
@@ -334,16 +336,12 @@ struct column_view_printer {
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
-    if (col.nullable()) {
-      std::transform(thrust::make_counting_iterator(size_type{0}),
-                     thrust::make_counting_iterator(col.size()),
-                     out.begin(),
-                     [&h_data](auto idx) {
-                       return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
-                     });
-    } else {
-      out = std::move(h_data.first);
-    }
+    std::transform(thrust::make_counting_iterator(size_type{0}),
+                   thrust::make_counting_iterator(col.size()),
+                   out.begin(),
+                   [&h_data](auto idx) {
+                     return bit_is_set(h_data.second.data(), idx) ? h_data.first[idx] : std::string("NULL");
+                   });
   }
 
   template <typename Element, typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
@@ -351,7 +349,7 @@ struct column_view_printer {
     cudf::dictionary_column_view dictionary(col);
     if( col.size()==0 )
       return;
-    std::vector<std::string> keys = to_strings(dictionary.keys());
+    std::vector<std::string> keys    = to_strings(dictionary.keys());
     std::vector<std::string> indices = to_strings(
         { cudf::data_type{cudf::INT32}, dictionary.size(), 
                          dictionary.indices().head<int32_t>(),
@@ -369,12 +367,10 @@ struct column_view_printer {
 
 std::vector<std::string> to_strings(cudf::column_view const& col) {
   std::vector<std::string> reply;
-
   cudf::experimental::type_dispatcher(col.type(),
                                       column_view_printer{}, 
                                       col,
                                       reply);
-
   return reply;
 }
 

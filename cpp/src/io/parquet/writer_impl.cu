@@ -145,7 +145,7 @@ class parquet_column_view {
         break;
       case cudf::type_id::BOOL8:
         _physical_type = Type::BOOLEAN;
-        _stats_dtype = statistics_dtype::dtype_bool8;
+        _stats_dtype = statistics_dtype::dtype_bool;
         break;
       case cudf::type_id::TIMESTAMP_DAYS:
         _physical_type = Type::INT32;
@@ -192,7 +192,7 @@ class parquet_column_view {
             view.offsets().data<size_type>(), view.chars().data<char>(),
             _nulls, _data_count);
       _data = _indexes.data();
-      cudaStreamSynchronize(stream);
+      CUDA_TRY(cudaStreamSynchronize(stream));
     }
     // Generating default name if name isn't present in metadata
     if (metadata && _id < metadata->column_names.size()) {
@@ -384,7 +384,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink, writer_options const &option
   stats_granularity_(options.stats_granularity),
   out_sink_(std::move(sink)){}
 
-void writer::impl::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
+                         table_view const &table, const table_metadata *metadata,
+                         bool return_filemetadata, const std::string& metadata_out_file_path,
+                         cudaStream_t stream) {    
   pq_chunked_state state;
   state.user_metadata = metadata;
   state.stream = stream;
@@ -392,7 +395,7 @@ void writer::impl::write(table_view const &table, const table_metadata *metadata
 
   write_chunked_begin(state);
   write_chunked(table, state);
-  write_chunked_end(state);    
+  return write_chunked_end(state, return_filemetadata, metadata_out_file_path);
 }
 
 void writer::impl::write_chunked_begin(pq_chunked_state& state){
@@ -765,14 +768,36 @@ void writer::impl::write_chunked(table_view const& table, pq_chunked_state& stat
   }
 }
 
-void writer::impl::write_chunked_end(pq_chunked_state &state){
+std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(pq_chunked_state &state,
+                         bool return_filemetadata, const std::string& metadata_out_file_path) {
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
-  fendr.footer_len = (uint32_t)cpw.write(&state.md);  
+  buffer_.resize(0);
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
   fendr.magic = PARQUET_MAGIC;
   out_sink_->host_write(buffer_.data(), buffer_.size());  
   out_sink_->host_write(&fendr, sizeof(fendr));  
   out_sink_->flush();
+
+  // Optionally output raw file metadata with the specified column chunk file path
+  if (return_filemetadata) {
+    file_header_s fhdr = {PARQUET_MAGIC};
+    buffer_.resize(0);
+    buffer_.insert(buffer_.end(), reinterpret_cast<const uint8_t *>(&fhdr),
+                                  reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
+    for (auto& rowgroup : state.md.row_groups) {
+      for (auto& col : rowgroup.columns) {
+        col.file_path = metadata_out_file_path;
+      }
+    }
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+    buffer_.insert(buffer_.end(), reinterpret_cast<const uint8_t *>(&fendr),
+                                  reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
+  }
+  else {
+    return {nullptr};
+  }
 }
 
 // Forward to implementation
@@ -784,8 +809,12 @@ writer::writer(std::unique_ptr<data_sink> sink, writer_options const& options,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream) {
-  _impl->write(table, metadata, stream);
+std::unique_ptr<std::vector<uint8_t>> writer::write_all(
+                 table_view const &table, const table_metadata *metadata,
+                 bool return_filemetadata,
+                 const std::string metadata_out_file_path,
+                 cudaStream_t stream) {
+  return _impl->write(table, metadata, return_filemetadata, metadata_out_file_path, stream);
 }
 
 // Forward to implementation
@@ -801,6 +830,48 @@ void writer::write_chunked(table_view const& table, pq_chunked_state &state){
 // Forward to implementation
 void writer::write_chunked_end(pq_chunked_state &state){
   _impl->write_chunked_end(state);
+}
+
+std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
+  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
+{
+  std::vector<uint8_t> output;
+  CompactProtocolWriter cpw(&output);
+  FileMetaData md;
+
+  md.row_groups.reserve(metadata_list.size());
+  for (const auto& blob : metadata_list) {
+    CompactProtocolReader cpreader(blob.get()->data(),
+                                   std::max<size_t>(blob.get()->size(), sizeof(file_ender_s)) - sizeof(file_ender_s));
+    cpreader.skip_bytes(sizeof(file_header_s)); // Skip over file header
+    if (md.num_rows == 0) {
+      cpreader.read(&md);
+    }
+    else {
+      FileMetaData tmp;
+      cpreader.read(&tmp);
+      md.row_groups.insert(md.row_groups.end(),
+                           std::make_move_iterator(tmp.row_groups.begin()),
+                           std::make_move_iterator(tmp.row_groups.end()));
+      md.num_rows += tmp.num_rows;
+    }
+  }
+  // Reader doesn't currently populate column_order, so infer it here
+  if (md.row_groups.size() != 0) {
+    uint32_t num_columns = static_cast<uint32_t>(md.row_groups[0].columns.size());
+    md.column_order_listsize = (num_columns > 0 && md.row_groups[0].columns[0].meta_data.statistics_blob.size()) ? num_columns : 0;
+  }
+  // Thrift-encode the resulting output
+  file_header_s fhdr;
+  file_ender_s fendr;
+  fhdr.magic = PARQUET_MAGIC;
+  output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fhdr),
+                              reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
+  fendr.magic = PARQUET_MAGIC;
+  output.insert(output.end(), reinterpret_cast<const uint8_t *>(&fendr),
+                              reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
+  return std::make_unique<std::vector<uint8_t>>(std::move(output));
 }
 
 }  // namespace parquet

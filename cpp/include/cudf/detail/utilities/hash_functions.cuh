@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/wrappers/bool.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/strings/string_view.cuh>
 
@@ -145,7 +144,7 @@ hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<cudf::bool8>::operator(
 }
 
 template <>
-hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<cudf::experimental::bool8>::operator()(cudf::experimental::bool8 const& key) const {
+hash_value_type CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32<bool>::operator()(bool const& key) const {
   return this->compute(static_cast<uint8_t>(key));
 }
 

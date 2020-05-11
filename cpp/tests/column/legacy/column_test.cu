@@ -1,6 +1,6 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <utilities/legacy/cudf_utils.h>
 #include <utilities/legacy/column_utils.hpp>
@@ -26,7 +26,7 @@ struct print {
 };
 
 template <typename ColumnType>
-struct ColumnConcatTest : public cudf::test::BaseFixture
+struct ColumnConcatTest : public GdfTest
 {
   ColumnConcatTest() {}
   ~ColumnConcatTest() {}
@@ -131,7 +131,7 @@ struct ColumnConcatTest : public cudf::test::BaseFixture
     for (int i = 0; i < num; ++i) {
       gdf_column_concat(output_gdf_col.get(), columns_to_concat, num_columns);
     }
-    cudaDeviceSynchronize();
+    CUDA_TRY(cudaDeviceSynchronize());
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = end-start;
     std::cout << "Time for " << num << " concats of " << num_columns << " columns of " 

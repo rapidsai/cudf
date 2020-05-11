@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,11 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/replace_re.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <strings/utilities.hpp>
 #include <strings/utilities.cuh>
 #include <strings/regex/regex.cuh>
@@ -83,7 +84,7 @@ struct replace_regex_fn
         // copy input to output replacing strings as we go
         while( mxn-- > 0 ) // maximum number of replaces
         {
-            if( prog.find(idx,d_str,begin,end) <= 0 )
+            if( prog.is_empty() || prog.find(idx,d_str,begin,end) <= 0 )
                 break; // no more matches
             auto spos = d_str.byte_offset(begin); // get offset for these
             auto epos = d_str.byte_offset(end);   // character position values
@@ -159,6 +160,7 @@ std::unique_ptr<column> replace_re( strings_column_view const& strings,
                                     size_type maxrepl,
                                     rmm::mr::device_memory_resource* mr )
 {
+    CUDF_FUNC_RANGE();
     return detail::replace_re(strings, pattern, repl, maxrepl, mr);
 }
 

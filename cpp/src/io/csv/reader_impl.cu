@@ -241,8 +241,18 @@ table_with_metadata reader::impl::read(size_t range_offset,
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
+    // None of the parameters for row selection is used, we are parsing the entire file
+    const bool load_whole_file = range_offset == 0 && range_size == 0 && 
+                                 skip_rows == 0 && skip_end_rows == 0 && 
+                                 num_rows == -1;
+    
+    // Preload the intput data to device
+    if (load_whole_file)
+      data_ = rmm::device_buffer(h_uncomp_data, h_uncomp_size);
+    
+    // Pass nullptr for the device data is the data is not preloaded (will cause additional copies)
+    gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset, stream, (load_whole_file ? &data_ : nullptr));
 
-    gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset, stream);
     auto row_range = select_rows(h_uncomp_data, h_uncomp_size, range_size,
                                  skip_rows, skip_end_rows, num_rows, stream);
 
@@ -250,7 +260,15 @@ table_with_metadata reader::impl::read(size_t range_offset,
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
 
     num_bits = (data_size + 63) / 64;
-    data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
+    if (load_whole_file){
+      // Loaded the whole file, add the start offset (e.g. empty rows) to the pointer 
+      data_ptr = static_cast<char *>(data_.data()) + row_range.first;
+    }
+    else{
+      // The start offset is applied to the device data buffer
+      data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
+      data_ptr = static_cast<char *>(data_.data());
+    }
   }
 
   // Check if the user gave us a list of column names
@@ -378,7 +396,7 @@ table_with_metadata reader::impl::read(size_t range_offset,
 
 void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
                                       size_t range_offset,
-                                      cudaStream_t stream) {
+                                      cudaStream_t stream, const rmm::device_buffer* d_data) {
   // Account for the start and end of row region offsets
   const bool require_first_line_start = (range_offset == 0);
   const bool require_last_line_end = (h_data[h_size - 1] != opts.terminator);
@@ -386,8 +404,15 @@ void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
   auto symbols = (opts.quotechar != '\0')
                      ? std::vector<char>{opts.terminator, opts.quotechar}
                      : std::vector<char>{opts.terminator};
-  const auto num_rows = count_all_from_set(h_data, h_size, symbols) +
-                        (require_first_line_start ? 1 : 0);
+  
+  cudf::size_type num_rows = (require_first_line_start ? 1 : 0);
+  if (d_data){
+    // preloaded to device memory
+    num_rows += count_all_from_set(*d_data, symbols);
+  }
+  else{
+    num_rows += count_all_from_set(h_data, h_size, symbols);
+  }
   const auto num_offsets = num_rows + (require_last_line_end ? 1 : 0);
   row_offsets.resize(num_offsets);
 
@@ -404,7 +429,12 @@ void reader::impl::gather_row_offsets(const char *h_data, size_t h_size,
   }
 
   // Passing offset = 1 to return positions AFTER the found character
-  find_all_from_set(h_data, h_size, symbols, 1, ptr_first);
+  if (d_data){
+    find_all_from_set(*d_data, symbols, 1, ptr_first);
+  }
+  else{
+    find_all_from_set(h_data, h_size, symbols, 1, ptr_first);
+  }
 
   // Sort the row info according to ascending start offset
   // Subsequent processing (filtering, etc.) may require row order
@@ -425,17 +455,31 @@ std::pair<uint64_t, uint64_t> reader::impl::select_rows(
   // or a linetermination within a quotechar pair.
   if (opts.quotechar != '\0') {
     auto count = std::distance(it_begin, it_end) - 1;
-
+    // First element is zero if reading from start of file, skip it in that case
+    // Check the first element otherwise, it could be a quotation
+    const int start = (h_row_offsets[0] == 0) ? 1 : 0;
+    // Starting in the incomplete first row (before first line terminator in the byte range)?
+    bool is_partial_row = (h_row_offsets[0] != 0);
     auto filtered_count = count;
     bool quotation = false;
-    for (int i = 1; i < count; ++i) {
-      if (h_data[h_row_offsets[i] - 1] == opts.quotechar) {
-        quotation = !quotation;
-        h_row_offsets[i] = static_cast<uint64_t>(-1);
+    for (int i = start; i < count; ++i) {
+      auto& offset = h_row_offsets[i];
+      if (offset > 0 && h_data[offset - 1] == opts.quotechar) {
+        // Don't update the quotation state before hitting the first line terminator 
+        if (!is_partial_row) {
+          quotation = !quotation;
+        }
+        offset = static_cast<uint64_t>(-1);
         filtered_count--;
-      } else if (quotation) {
-        h_row_offsets[i] = static_cast<uint64_t>(-1);
-        filtered_count--;
+      } else if (offset > 0 && h_data[offset - 1] == opts.terminator) {
+        if (quotation){
+          offset = static_cast<uint64_t>(-1);
+          filtered_count--;
+        }
+        else if (is_partial_row){
+          // Hit the the first line terminator, reset the is_partial_row flag
+          is_partial_row = false;
+        }
       }
     }
     if (filtered_count != count) {
@@ -530,7 +574,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream) {
       CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0,
                                column_stats.memory_size(), stream));
       CUDA_TRY(cudf::io::csv::gpu::DetectColumnTypes(
-          static_cast<const char *>(data_.data()), row_offsets.data().get(),
+          data_ptr, row_offsets.data().get(),
           num_records, num_actual_cols, opts, d_column_flags.data().get(),
           column_stats.device_ptr(), stream));
       CUDA_TRY(cudaMemcpyAsync(
@@ -655,7 +699,7 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   d_column_flags = h_column_flags;
 
   CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(
-      static_cast<const char *>(data_.data()), row_offsets.data().get(),
+      data_ptr, row_offsets.data().get(),
       num_records, num_actual_cols, opts, d_column_flags.data().get(),
       d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(),
       stream));
@@ -723,20 +767,6 @@ reader::impl::impl(std::unique_ptr<datasource> source, std::string filepath,
     d_naTrie = createSerializedTrie(args_.na_values);
     opts.naValuesTrie = d_naTrie.data().get();
   }
-}
-
-// Forward to implementation
-reader::reader(
-      std::string external_datasource_id, std::map<std::string, std::string> datasource_confs,
-      reader_options const &options, rmm::mr::device_memory_resource *mr) {
-
-  //TODO: Speak with team about a good place to place the ds_factory as a singleton that persists with the lifetime of the cudf process
-  // Load external datasource implementation based on provided unique identifier
-  cudf::io::external::datasource_factory ds_factory("/home/jdyer/Development/cudf/external/build");
-  cudf::io::external::external_datasource *ex_datasource = ds_factory.external_datasource_by_id(external_datasource_id, datasource_confs);
-
-  // Create the implementation
-  _impl = std::make_unique<impl>(std::unique_ptr<datasource>(ex_datasource), "", options, mr);
 }
 
 // Forward to implementation

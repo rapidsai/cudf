@@ -22,7 +22,7 @@ namespace detail {
 
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value
-    and not std::is_same<map_type, cudf::experimental::bool8>::value>* = nullptr>
+    and not std::is_same<map_type, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source_table,
 				    column_view const& gather_map,
 				    size_type num_destination_rows, bool check_bounds,
@@ -73,7 +73,7 @@ struct dispatch_map_type {
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value
-    or std::is_same<map_type, cudf::experimental::bool8>::value>* = nullptr>
+    or std::is_same<map_type, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(table_view const& source_table, column_view const& gather_map,
 				    size_type num_destination_rows, bool check_bounds,
 				    bool ignore_out_of_bounds, bool allow_negative_indices = false,

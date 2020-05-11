@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <cuda_runtime.h>
+#include <cudf/utilities/error.hpp>
 
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
@@ -72,7 +73,7 @@ public:
   gdf_host_column() = delete;
   explicit gdf_host_column(const gdf_column *col) {
     m_hostdata = std::vector<T>(col->size);
-    cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost);
+    CUDA_TRY(cudaMemcpy(m_hostdata.data(), col->data, sizeof(T) * col->size, cudaMemcpyDeviceToHost));
   }
 
   auto hostdata() const -> const auto & { return m_hostdata; }

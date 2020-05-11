@@ -42,7 +42,7 @@ namespace {
 
 struct dispatch_map_type {
     template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value
-     and not std::is_same<MapType, bool8>::value>* = nullptr>
+     and not std::is_same<MapType, bool>::value>* = nullptr>
     std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
@@ -54,7 +54,7 @@ struct dispatch_map_type {
   }
 
   template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value
-      or std::is_same<MapType, bool8>::value>* = nullptr>
+      or std::is_same<MapType, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       table_view const& source, column_view const& scatter_map,
       table_view const& target, bool check_bounds,
@@ -180,7 +180,7 @@ struct column_scalar_scatterer
 
 struct scatter_scalar_impl {
   template <typename T, std::enable_if_t<std::is_integral<T>::value
-      and not std::is_same<T, bool8>::value>* = nullptr>
+      and not std::is_same<T, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
@@ -216,79 +216,13 @@ struct scatter_scalar_impl {
   }
 
   template <typename T, std::enable_if_t<not std::is_integral<T>::value
-      or std::is_same<T, bool8>::value>* = nullptr>
+      or std::is_same<T, bool>::value>* = nullptr>
   std::unique_ptr<table> operator()(
       std::vector<std::unique_ptr<scalar>> const& source,
       column_view const& indices, table_view const& target, bool check_bounds,
       rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
   {
     CUDF_FAIL("Scatter index column must be an integral, non-boolean type");
-  }
-};
-
-struct scatter_to_tables_impl {
-  template <typename T, std::enable_if_t<std::is_integral<T>::value
-      and not std::is_same<T, bool8>::value>* = nullptr>
-  std::vector<std::unique_ptr<table>> operator()(
-      table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
-  {
-    // Make a mutable copy of the partition map
-    auto d_partitions = rmm::device_vector<T>(
-      partition_map.begin<T>(), partition_map.end<T>());
-
-    // Initialize gather maps and offsets to sequence
-    auto d_gather_maps = rmm::device_vector<size_type>(partition_map.size());
-    auto d_offsets = rmm::device_vector<size_type>(partition_map.size());
-    thrust::sequence(rmm::exec_policy(stream)->on(stream),
-      d_gather_maps.begin(), d_gather_maps.end());
-    thrust::sequence(rmm::exec_policy(stream)->on(stream),
-      d_offsets.begin(), d_offsets.end());
-
-    // Sort sequence using partition map as key to generate gather maps
-    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
-      d_partitions.begin(), d_partitions.end(), d_gather_maps.begin());
-
-    // Reduce unique partitions to extract gather map offsets from sequence
-    auto end = thrust::unique_by_key(rmm::exec_policy(stream)->on(stream),
-      d_partitions.begin(), d_partitions.end(), d_offsets.begin());
-
-    // Copy partition indices and gather map offsets to host
-    auto partitions = thrust::host_vector<T>(d_partitions.begin(), end.first);
-    auto offsets = thrust::host_vector<size_type>(d_offsets.begin(), end.second);
-    offsets.push_back(partition_map.size());
-
-    CUDF_EXPECTS(partitions.front() >= 0, "Invalid negative partition index");
-    auto output = std::vector<std::unique_ptr<table>>(partitions.back() + 1);
-
-    size_t next_partition = 0;
-    for (size_t index = 0; index < partitions.size(); ++index) {
-      auto const partition = static_cast<size_t>(partitions[index]);
-
-      // Create empty tables for unused partitions
-      for (; next_partition < partition; ++next_partition) {
-        output[next_partition] = empty_like(input);
-      }
-
-      // Gather input rows for the current partition (second dispatch for column types)
-      auto const data = d_gather_maps.data().get() + offsets[index];
-      auto const size = offsets[index + 1] - offsets[index];
-      auto const gather_map = column_view(data_type(INT32), size, data);
-      output[partition] = gather(input, gather_map, false, false, false, mr, stream);
-
-      next_partition = partition + 1;
-    }
-
-    return output;
-  }
-
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value
-      or std::is_same<T, bool8>::value>* = nullptr>
-  std::vector<std::unique_ptr<table>> operator()(
-      table_view const& input, column_view const& partition_map,
-      rmm::mr::device_memory_resource* mr, cudaStream_t stream) const
-  {
-    CUDF_FAIL("Partition map column must be an integral, non-boolean type");
   }
 };
 
@@ -340,23 +274,6 @@ std::unique_ptr<table> scatter(
   // First dispatch for scatter index type
   return type_dispatcher(indices.type(), scatter_scalar_impl{}, source,
     indices, target, check_bounds, mr, stream);
-}
-
-std::vector<std::unique_ptr<table>> scatter_to_tables(
-    table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
-{
-  CUDF_EXPECTS(partition_map.size() <= input.num_rows(), "scatter map larger than input");
-  CUDF_EXPECTS(partition_map.has_nulls() == false, "scatter map contains nulls");
-
-  if (partition_map.size() == 0 || input.num_rows() == 0) {
-    return std::vector<std::unique_ptr<table>>{};
-  }
-
-  // First dispatch for scatter index type
-  return type_dispatcher(partition_map.type(), scatter_to_tables_impl{},
-    input, partition_map, mr, stream);
 }
 
 std::unique_ptr<column> boolean_mask_scatter(
@@ -472,13 +389,6 @@ std::unique_ptr<table> scatter(
     rmm::mr::device_memory_resource* mr) {
   CUDF_FUNC_RANGE();
   return detail::scatter(source, indices, target, check_bounds, mr);
-}
-
-std::vector<std::unique_ptr<table>> scatter_to_tables(
-    table_view const& input, column_view const& partition_map,
-    rmm::mr::device_memory_resource* mr) {
-  CUDF_FUNC_RANGE();
-  return detail::scatter_to_tables(input, partition_map, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(

@@ -24,26 +24,18 @@
 #include <map>
 #include <dlfcn.h>
 #include <boost/filesystem.hpp>
+#include <cudf/utilities/error.hpp>
 #include "external_datasource.hpp"
 
 namespace cudf {
 namespace io {
 namespace external {
 
-// Default `EXTERNAL_DATASOURCE_LIB_PATH` to `$CONDA_PREFIX/lib/external`.
-// This definition can be overridden at compile time by specifying a
-// `-DEXTERNAL_DATASOURCE_LIB_PATH=/home/lib/cudf_external_lib` CMake argument.
-// Use `boost::filesystem` for cross-platform path resolution and dir
-// creation. This path is used in the `getExternalLibDir()` function below.
-#if !defined(EXTERNAL_DATASOURCE_LIB_PATH)
-#define EXTERNAL_DATASOURCE_LIB_PATH \
-  boost::filesystem::path("/usr/local/lib/cudf_external_lib")
-#endif
-
 /**
  * @brief Factory class for creating and managing instances of external datasources
  */
 class datasource_factory {
+
  public:
 
   /**
@@ -63,7 +55,7 @@ class datasource_factory {
    *
    * This path can be overridden at runtime by defining an environment variable
    * named `EXTERNAL_DATASOURCE_LIB_PATH`. The value of this variable must be a path
-   * under which the process' user has read privileges.
+   * under which the owming process's user has read privileges.
    *
    * This function returns a path to the cache directory, creating it if it
    * doesn't exist.
@@ -72,16 +64,13 @@ class datasource_factory {
    */
   boost::filesystem::path getExternalLibDir() {
     // python user supplied `external_lib_dir_` always has the most precedence
-    printf("external_lib_dir_: '%s'\n", external_lib_dir_.c_str());
     if (!boost::filesystem::exists(external_lib_dir_)) {
       // Since the python external dir was not supplied check for environment variable.
       auto external_io_lib_path_env = std::getenv("EXTERNAL_DATASOURCE_LIB_PATH");
       if (external_io_lib_path_env != nullptr && boost::filesystem::exists(external_io_lib_path_env)) {
         return boost::filesystem::path(external_io_lib_path_env);
       } else {
-        if (external_io_lib_path_env != nullptr) {
-          printf("`EXTERNAL_DATASOURCE_LIB_PATH` was set to: '%s' but does not exist\n", external_io_lib_path_env);
-        }
+        CUDF_EXPECTS(external_io_lib_path_env == nullptr, "`EXTERNAL_DATASOURCE_LIB_PATH` was set but does not exist on the filesystem.");
         auto conda_prefix = std::getenv("CONDA_PREFIX");
         if (boost::filesystem::exists(conda_prefix)) {
           std::string conda_str = conda_prefix;
@@ -89,7 +78,7 @@ class datasource_factory {
           boost::filesystem::path conda_path(conda_str);
           return conda_path;
         } else {
-          return boost::filesystem::path(EXTERNAL_DATASOURCE_LIB_PATH);
+          CUDF_FAIL("`EXTERNAL_DATASOURCE_LIB_PATH` was not specified. External datasources could not be loaded.");
         }
       }
     } else {
@@ -97,15 +86,16 @@ class datasource_factory {
     }
   }
   
+  /**
+   * Takes the python/user supplied `external_datasource_id` and returns the external_datasource object to the calling function.
+   **/
   external_datasource* external_datasource_by_id(std::string unique_id, std::map<std::string, std::string> datasource_confs) {
     std::map<std::string, external_datasource_wrapper>::iterator it;
     it = external_libs_.find(unique_id);
     if (it != external_libs_.end()) {
       return it->second.get_external_datasource();
     } else {
-      printf("Unable to find External Datasource with Identifier: '%s'\n", unique_id.c_str());
-      //TODO: What exactly should we do here???
-      exit(1);
+      CUDF_FAIL("Unable to find External Datasource specified");
     }
   }
 
@@ -120,23 +110,19 @@ class datasource_factory {
         external_datasource_lib_ = external_datasource_lib;
 
         dl_handle = dlopen(external_datasource_lib_.c_str(), RTLD_LAZY);
-        //TODO: Explore best approach for error handling here that fits into the cuDF paradigm
         if (!dl_handle) {
-          fputs (dlerror(), stderr);
-          exit(1);
+          CUDF_FAIL(dlerror());
         }
 
         ex_ds_load ex_ds = (ex_ds_load) dlsym(dl_handle, "libcudf_external_datasource_load");
         ex_ds_load_from_conf ex_ds_conf = (ex_ds_load_from_conf) dlsym(dl_handle, "libcudf_external_datasource_load_from_conf");
         ex_ds_destroy ex_ds_dest = (ex_ds_destroy) dlsym(dl_handle, "libcudf_external_datasource_destroy");
 
-        //TODO: Explore best approach for error handling here that fits into the cuDF paradigm
         if ((error = dlerror()) != NULL) {
-          fputs(error, stderr);
-          exit(1);
+          CUDF_FAIL(error);
         }
 
-        ex_ds_ = ex_ds();
+        ex_ds_ = ex_ds(); // Create external_datasource object
         ds_unique_id_ = ex_ds_->libcudf_datasource_identifier();
 
         // Pending no errors consider the handle alive and open
@@ -149,7 +135,7 @@ class datasource_factory {
 
       bool configure(std::map<std::string, std::string> datasource_confs, std::vector<std::string> topics, std::vector<int> partitions) {
         datasource_confs_ = datasource_confs;
-        return ex_ds_->configure_datasource(datasource_confs, topics, partitions);
+        return ex_ds_->configure_datasource(datasource_confs);
       }
 
       std::string unique_id() {
@@ -179,7 +165,6 @@ class datasource_factory {
  private:
   void load_external_libs() {
     boost::filesystem::path ext_path = getExternalLibDir();
-    printf("Loading External Libraries at: '%s'\n", ext_path.c_str());
     if (boost::filesystem::exists(ext_path) && boost::filesystem::is_directory(ext_path)) {
         boost::filesystem::directory_iterator it{ext_path};
         boost::filesystem::directory_iterator endit;
@@ -187,12 +172,11 @@ class datasource_factory {
           if (it->path().extension() == EXTERNAL_LIB_SUFFIX) {
             external_datasource_wrapper wrapper(it->path().c_str());
             external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
-            printf("External Datasource: '%s' loaded from shared object: '%s'\n", wrapper.unique_id().c_str(), it->path().c_str());
           }
           ++it;
         }
     } else {
-      //CUDF_FAIL();
+      CUDF_FAIL("External Datasource directory does not exist");
     }
   }
 

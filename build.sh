@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks external  --external-lib-dir -v -g -n -l --allgpuarch --disable_nvtx -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external] [--external-lib-dir] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks tests external -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [external] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                         over)
    libnvstrings         - build the nvstrings C++ code only
@@ -29,14 +29,15 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external
    dask_cudf            - build the dask_cudf Python package
    custreamz            - build the custreamz Python package
    benchmarks           - build benchmarks
+   tests                - build tests
    external             - build external datasource support for libcudf
-   --external-lib-dir   - default directory to search for external datasource libraries
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
    -l                   - build legacy tests
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --allgpuarch         - build for all supported GPU architectures
+   --show_depr_warn     - show cmake deprecation warnings
    -h                   - print this text
    
    default action (no args) is to build and install 'libnvstrings' then
@@ -44,7 +45,6 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [external
 "
 LIB_BUILD_DIR=${REPODIR}/cpp/build
 EXTERNAL_BUILD_DIR=${REPODIR}/external/build
-EXTERNAL_LIB_DIR=/usr/lib/cudf/external
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
@@ -61,6 +61,7 @@ BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
+BUILD_DISABLE_DEPRECATION_WARNING=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -117,12 +118,12 @@ if hasArg tests; then
 fi
 if hasArg external; then
     BUILD_EXTERNAL_DATASOURCES="ON"
-    if hasArg --external-lib-dir; then
-        EXTERNAL_LIB_DIR=/something
-    fi
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
+fi
+if hasArg --show_depr_warn; then
+    BUILD_DISABLE_DEPRECATION_WARNING=OFF
 fi
 
 # If clean given, run it prior to any other steps
@@ -161,6 +162,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
+          -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
 fi
 
@@ -243,7 +245,6 @@ fi
 # Build and install the external datasources
 if buildAll || hasArg external; then
 
-    echo "Making external datasource ${EXTERNAL_BUILD_DIR}"
     mkdir -p ${EXTERNAL_BUILD_DIR}
     cd ${EXTERNAL_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \

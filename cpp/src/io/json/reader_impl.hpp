@@ -66,6 +66,7 @@ private:
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_ = 0;
+  bool load_whole_file_ = true;
   
   table_metadata         metadata;
   std::vector<data_type> dtypes_;
