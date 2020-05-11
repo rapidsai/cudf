@@ -847,7 +847,11 @@ class StringMethods(object):
         NotImplementedError if anything other than the default value is set.
         """
         if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
+
+        warnings.warn("`expand` parameter defatults to True.")
 
         # Pandas treats 0 as all
         if n == 0:
