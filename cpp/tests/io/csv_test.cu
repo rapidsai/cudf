@@ -154,6 +154,58 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   EXPECT_TRUE(found == end_count);  // not found...
 }
 
+// helper to replacein `str`  _all_ occurences of `from` with `to`
+std::string replace_all_helper(std::string str, const std::string& from, const std::string& to)
+{
+  size_t start_pos = 0;
+  while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+    str.replace(start_pos, from.length(), to);
+    start_pos += to.length();
+  }
+  return str;
+}
+
+// compare string columns accounting for special character
+// treatment: double double quotes ('\"')
+// and surround whole string by double quotes if it contains:
+// newline '\n', <delimiter>, and double quotes;
+void check_string_column(cudf::column_view const& col_lhs,
+                         cudf::column_view const& col_rhs,
+                         std::string const& delimiter = ",")
+{
+  auto h_lhs = cudf::test::to_host<std::string>(col_lhs).first;
+  auto h_rhs = cudf::test::to_host<std::string>(col_rhs).first;
+
+  std::string newline("\n");
+  std::string quotes("\"");
+  std::string quotes_repl("\"\"");
+
+  std::vector<std::string> v_lhs;
+  std::transform(h_lhs.begin(),
+                 h_lhs.end(),
+                 std::back_inserter(v_lhs),
+                 [delimiter, newline, quotes, quotes_repl](std::string const& str_row) {
+                   auto found_quote = str_row.find(quotes);
+                   auto found_newl  = str_row.find(newline);
+                   auto found_delim = str_row.find(delimiter);
+
+                   bool flag_found_quotes = (found_quote != std::string::npos);
+                   bool need_surround = flag_found_quotes || (found_newl != std::string::npos) ||
+                                        (found_delim != std::string::npos);
+
+                   std::string str_repl;
+                   if (flag_found_quotes) {
+                     str_repl = replace_all_helper(str_row, quotes, quotes_repl);
+                   } else {
+                     str_repl = str_row;
+                   }
+
+                   return need_surround ? quotes + str_repl + quotes : str_row;
+                 });
+
+  EXPECT_TRUE(std::equal(v_lhs.begin(), v_lhs.end(), h_rhs.begin()));
+}
+
 // Helper function to compare two floating-point column contents
 template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
 void expect_column_data_equal(std::vector<T> const& lhs, cudf::column_view const& rhs)
@@ -964,7 +1016,7 @@ TEST_F(CsvReaderTest, FloatingPointWithWriter)
   cudf::test::expect_tables_equivalent(input_table, result_table);
 }
 
-TEST_F(CsvReaderTest, DISABLED_StringsWithWriter)
+TEST_F(CsvReaderTest, StringsWithWriter)
 {
   std::vector<std::string> names{"line", "verse"};
 
@@ -985,10 +1037,11 @@ TEST_F(CsvReaderTest, DISABLED_StringsWithWriter)
   auto result     = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(input_table, result_table);
+  cudf::test::expect_columns_equivalent(input_table.column(0), result_table.column(0));
+  check_string_column(input_table.column(1), result_table.column(1));
 }
 
-TEST_F(CsvReaderTest, DISABLED_EmptyFileWithWriter)
+TEST_F(CsvReaderTest, EmptyFileWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "EmptyFileWithWriter.csv";
 
@@ -996,12 +1049,6 @@ TEST_F(CsvReaderTest, DISABLED_EmptyFileWithWriter)
 
   // TODO is it ok for write_csv to throw instead of just writing an empty file?
   EXPECT_THROW(write_csv_helper(filepath, empty_table, false), cudf::logic_error);
-
-  /*cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
-  auto result = cudf_io::read_csv(in_args);
-
-  const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(empty_table, result_table);*/
 }
 
 CUDF_TEST_PROGRAM_MAIN()
