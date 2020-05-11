@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-
 from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
