@@ -1907,7 +1907,7 @@ class DataFrame(Frame):
                 # rename in this case
                 for key, col in self._data.items():
                     if key in columns:
-                        if columns[key] in out.columns:
+                        if columns[key] in out._data:
                             out_column = columns[key] + "_" + str(postfix)
                             postfix += 1
                         else:
@@ -1916,8 +1916,8 @@ class DataFrame(Frame):
                     else:
                         out[key] = col
             elif callable(columns):
-                for col in self._data.names:
-                    out[columns(col)] = self[col]
+                for key, col in self._data.items():
+                    out[columns(key)] = col
         else:
             out._data = self._data
 
