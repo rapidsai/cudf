@@ -39,7 +39,7 @@ TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 /**
- * @brief Base test fixture for CSV reader/writer tests
+ * @brief Base test fixture external tests
  **/
 struct ExternalDatasource : public GdfTest {};
 
@@ -52,12 +52,12 @@ TEST_F(ExternalDatasource, Basic)
 
     //General Conf
     datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
-    datasource_confs.insert({"group.id", "jeremy_test"});
+    datasource_confs.insert({"group.id", "libcudf_consumer"});
     datasource_confs.insert({"auto.offset.reset", "beginning"});
 
     //cudf::io::external::datasource_factory dfs("/home/jdyer/anaconda3/envs/cudf_dev/lib/external");
     //cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
     //ex_datasource->configure_datasource(datasource_confs);
 
-    //std::string json_str = ex_datasource->consume_range(datasource_confs, 0, 3, 10000);
+    // TODO: All of this seems more like integration testing to me ... unsure best approach to take for the tests?
 }

@@ -87,8 +87,7 @@ if(BUILD_TESTS)
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 
-    message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
-    message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
+    message(STATUS "EXTERNAL_TEST_LIST set to: ${EXTERNAL_TEST_LIST}")
 endif(BUILD_TESTS)
 
 ###################################################################################################
@@ -141,7 +140,7 @@ endif(CONDA_LINK_DIRS)
 
 add_library(cudf_kafka SHARED
             kafka/src/kafka_consumer.cpp
-            # kafka/src/kafka_producer.cpp
+            kafka/src/kafka_producer.cpp
 )
 
 # Include librdkafka exclusively for libcudf_kafka

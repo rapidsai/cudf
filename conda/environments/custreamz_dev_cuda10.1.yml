@@ -45,6 +45,7 @@ dependencies:
   - rapidjson
   - flatbuffers
   - hypothesis
+  - librdkafka=1.4.0
   - custreamz
   - cudf-kafka-datasource
   - pip:

@@ -399,6 +399,11 @@ add_library(libNVText
             custrings/text/tokens.cu
             custrings/util.cu)
 
+# Set the sources for External Datasources if enabled.
+if(BUILD_EXTERNAL_DATASOURCE)
+    set(EXTERNAL_DATASOURCE_SOURCES, "src/io/utilities/datasource_factory.cpp")
+endif(BUILD_EXTERNAL_DATASOURCE)
+
 add_library(cudf
             src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
@@ -549,7 +554,6 @@ add_library(cudf
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
             src/io/utilities/datasource.cpp
-            src/io/utilities/datasource_factory.cpp
             src/io/utilities/parsing_utils.cu
             src/io/utilities/type_conversion.cu
             src/io/utilities/data_sink.cpp
@@ -669,6 +673,7 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            ${EXTERNAL_DATASOURCE_SOURCES}
 )
 
 # Rename installation to proper names for later finding
