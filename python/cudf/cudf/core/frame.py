@@ -872,7 +872,6 @@ class Frame(libcudf.table.Table):
         rows corresponding to `False` is dropped
         """
         boolean_mask = as_column(boolean_mask)
-        breakpoint()
         if boolean_mask.has_nulls:
             raise ValueError(
                 "cannot mask with boolean_mask containing null values"
