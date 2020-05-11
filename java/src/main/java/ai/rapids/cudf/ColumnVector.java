@@ -2060,7 +2060,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * For each captured group specified in the given regular expression
-   * return a column in the table. null entries are added if the string
+   * return a column in the table. Null entries are added if the string
    * does not match. Any null inputs also result in null output entries.
    *
    * For supported regex patterns refer to:
