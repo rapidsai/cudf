@@ -15,6 +15,7 @@
  */
 
 #include "external_datasource.hpp"
+#include <cudf/utilities/error.hpp>
 #include <map>
 #include <sys/time.h>
 #include <librdkafka/rdkafkacpp.h>
@@ -78,35 +79,6 @@ class kafka_datasource : public external_datasource {
       struct timeval tv;
       gettimeofday(&tv, NULL);
       return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
-    }
-
-    /**
-     * librdkafka errors are contextually and usage sensitive. Often errors are set that can be
-     * ignored if certain usage patterns or configurations are set. This method provides a 
-     * common place for a subset of those errors to be handled in the context of libcudf usage/
-     **/
-    void handle_error(RdKafka::Message *msg, int msg_count) {
-      err_ = msg->err();
-      errstr_ = msg->errstr();
-      std::string error_msg;
-
-      if (msg_count == 0 &&
-                err_ == RdKafka::ErrorCode::ERR__TIMED_OUT) {
-        // unable to connect to the specified Kafka Broker(s)
-        std::string brokers_val;
-        conf_res_ = kafka_conf_->get("metadata.broker.list", brokers_val);
-        if (brokers_val.empty()) {
-          // 'bootstrap.servers' is an alias configuration so its valid that
-          // either 'metadata.broker.list' or 'bootstrap.servers' is set
-          conf_res_ = kafka_conf_->get("bootstrap.servers", brokers_val);
-        }
-
-        if (conf_res_ == RdKafka::Conf::ConfResult::CONF_OK) {
-          error_msg.append("Connection attempt to Kafka broker(s) '");
-          error_msg.append(brokers_val);
-          error_msg.append("' timed out.");
-        }
-      }
     }
 
   protected:

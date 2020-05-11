@@ -44,11 +44,9 @@ namespace external {
       conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
       if (conf_res_ != RdKafka::Conf::ConfResult::CONF_OK) {
         if (conf_res_ == RdKafka::Conf::ConfResult::CONF_INVALID) {
-          //TODO
-          printf("Invalid configuration supplied ... what to do here?\n");
+          //TODO: I don't think failing is needed here? Just warning maybe?
         } else if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
-          //TODO
-          printf("Invalid configuration property supplied ... what to do here? Likely just ignore???\n");
+          //TODO: I don't think failing is needed here? Just warning maybe?
         }
       }
     }
@@ -56,6 +54,9 @@ namespace external {
     // Kafka 0.9 > requires at least a group.id in the configuration so lets
     // make sure that is present.
     conf_res_ = kafka_conf_->get("group.id", conf_val);
+    if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
+      CUDF_FAIL("Kafka `group.id` was not supplied in its configuration and is required for operation");
+    }
 
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
@@ -79,7 +80,8 @@ namespace external {
 
  int64_t kafka_consumer::get_committed_offset(std::string topic, int partition) {
     std::vector<RdKafka::TopicPartition*> toppar_list;
-    //toppar_list.push_back(find_toppar(topic, partition));
+
+    // vector of always size 1. Required by underlying library
     toppar_list.push_back(RdKafka::TopicPartition::create(topic, partition));
 
     // Query Kafka to populate the TopicPartitions with the desired offsets
@@ -94,7 +96,7 @@ namespace external {
                                               int64_t end_offset,
                                               int batch_timeout,
                                               std::string delimiter) {
-    std::string json_str;
+    std::string str_buffer;
     int64_t messages_read = 0;
     int64_t batch_size = end_offset - start_offset;
     int64_t end = now() + batch_timeout;
@@ -106,12 +108,9 @@ namespace external {
       RdKafka::Message *msg = consumer_->consume(remaining_timeout);
 
       if (msg->err() == RdKafka::ErrorCode::ERR_NO_ERROR) {
-        json_str.append(static_cast<char *>(msg->payload()));
-        json_str.append(delimiter);
+        str_buffer.append(static_cast<char *>(msg->payload()));
+        str_buffer.append(delimiter);
         messages_read++;
-      } else {
-        handle_error(msg);
-        break;
       }
 
       remaining_timeout = end - now();
@@ -122,7 +121,7 @@ namespace external {
       delete msg;
     }
 
-    return json_str;
+    return str_buffer;
   }
 
   std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string topic, int partition, int timeout, bool cached) {
@@ -137,7 +136,6 @@ namespace external {
     }
 
     if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
-      printf("Error: '%s'\n", err2str(err_).c_str());
       if (err_ == RdKafka::ErrorCode::ERR__PARTITION_EOF) {
         results.insert(std::pair<std::string, int64_t>("low", low));
         results.insert(std::pair<std::string, int64_t>("high", high));
@@ -168,6 +166,7 @@ namespace external {
   bool kafka_consumer::unsubscribe() {
     err_ = consumer_.get()->unassign();
     if (err_ != RdKafka::ERR_NO_ERROR) {
+      //TODO: CUDF_FAIL here or??
       printf("Timeout occurred while unsubscribing from Kafka Consumer assignments.\n");
       return false;
     } else {
@@ -179,6 +178,7 @@ namespace external {
     err_ = consumer_.get()->close();
 
     if (err_ != RdKafka::ERR_NO_ERROR) {
+      //TODO: CUDF_FAIL here or??
       printf("Timeout occurred while closing Kafka Consumer\n");
       return false;
     } else {
