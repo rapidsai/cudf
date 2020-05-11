@@ -43,7 +43,7 @@ namespace strings {
  * Any null string entries return corresponding null output columns.
  *
  * @param strings_column Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
@@ -71,7 +71,7 @@ std::unique_ptr<experimental::table> split(
  * Any null string entries return corresponding null output columns.
  *
  * @param strings_column Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
@@ -117,7 +117,7 @@ struct contiguous_split_record_result {
  * @throws cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indentifying the split points in each
+ * @param delimiter UTF-8 encoded string indicating the split points in each
  *        string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
@@ -149,7 +149,7 @@ contiguous_split_record_result contiguous_split_record(
  * @throws cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indentifying the split points in each
+ * @param delimiter UTF-8 encoded string indicating the split points in each
  *        string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.

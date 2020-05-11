@@ -61,7 +61,7 @@ using VectorT = rmm::device_vector<T>;
  * transpose_dbg = transpose graph of dbg; (i.e., (i -> j) edge in dbg means (j -> i) edge in
  * transpose);
  *
- * (offsets, indxs) = (row_offsets, col_indices) of transpose_dbg;
+ * (offsets, indices) = (row_offsets, col_indices) of transpose_dbg;
  * where (row_offsets, col_indices) are the CSR format of the graph;
  *
  * @Param[in] input The input table to be round-robin partitioned

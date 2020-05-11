@@ -65,7 +65,7 @@ struct dst_transition_s {
 #pragma pack(pop)
 
 /**
- * @brief Parse a name from the poxiz TZ string
+ * @brief Parse a name from the posix TZ string
  *
  * @param[in] cur current position in TZ string
  * @param[in] end end of TZ string
@@ -92,7 +92,7 @@ static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end)
 }
 
 /**
- * @brief Parse a number from the poxiz TZ string
+ * @brief Parse a number from the posix TZ string
  *
  * @param[in] cur current position in TZ string
  * @param[in] end end of TZ string
@@ -114,7 +114,7 @@ static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end,
 }
 
 /**
- * @brief Parse a UTC offset from the poxiz TZ string
+ * @brief Parse a UTC offset from the posix TZ string
  *
  * @param[in] cur current position in TZ string
  * @param[in] end end of TZ string
@@ -144,7 +144,7 @@ static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end,
 }
 
 /**
- * @brief Parse a DST transition time from the poxiz TZ string
+ * @brief Parse a DST transition time from the posix TZ string
  *
  * @param[in] cur current position in TZ string
  * @param[in] end end of TZ string
@@ -309,7 +309,7 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
 }
 
 /**
- * @brief Creates a transition table to convert ORC timestanps to UTC
+ * @brief Creates a transition table to convert ORC timestamps to UTC
  *
  * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
  *transitions repeat forever with 400 year cycle)

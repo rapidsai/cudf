@@ -523,7 +523,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
   CHECK_CUDA(stream);
 
-  // third adjust counts in segement boundaries (if segments are not
+  // third adjust counts in segment boundaries (if segments are not
   // word-aligned)
 
   constexpr size_type block_size{256};

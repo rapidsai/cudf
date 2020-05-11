@@ -518,7 +518,7 @@ void writer::impl::write_chunked(table_view const &table, pq_chunked_state &stat
       // with nulls/no nulls in the multiple write_chunked() case.  so we'll do some special
       // handling.
       //
-      // if the user is explictly saying "I am only calling this once", fall back to the original
+      // if the user is explicitly saying "I am only calling this once", fall back to the original
       // behavior and assume the columns in this one table tell us everything we need to know.
       if (state.single_write_mode) {
         state.md.schema[1 + i].repetition_type =

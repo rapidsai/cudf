@@ -118,7 +118,7 @@ class ptx_parser {
    * @brief Convert the input PTX instruction into a inline PTX
    * statement without changing (exceptions exist).
    *
-   * Non-alphanemric that are not underscore in register identifiers
+   * Non-alphanumeric that are not underscore in register identifiers
    * are all replaced with underscore. An example:
    *
    *  fma.rn.f32 	%f4, %f3, %f1, %f2
@@ -187,7 +187,7 @@ class ptx_parser {
   ptx_parser() = delete;
 
   /**
-   * @brief C'tor of the `ptx_parser` class
+   * @brief Constructor of the `ptx_parser` class
    *
    * @param ptx_ The input PTX code that contains the function whose
    * CUDA is to be generated.

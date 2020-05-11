@@ -32,7 +32,7 @@ enum class unary_op : int32_t {
   COSH,        // < Hyperbolic cosine
   TANH,        // < Hyperbolic tangent
   ARCSINH,     // < Hyperbolic sine inverse
-  ARCCOSH,     // < Hperbolic cosine inverse
+  ARCCOSH,     // < Hyperbolic cosine inverse
   ARCTANH,     // < Hyperbolic tangent inverse
   EXP,         // < Exponential (base e, Euler number)
   LOG,         // < Natural Logarithm (base e)
@@ -67,7 +67,7 @@ std::unique_ptr<cudf::column> unary_operation(
  * @param input A `column_view` as input
  * @param mr Optional, The resource to use for all allocations
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `true`
+ * @returns std::unique_ptr<cudf::column> A non-nullable column of `BOOL8` elements with `true`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_null(
@@ -81,7 +81,7 @@ std::unique_ptr<cudf::column> is_null(
  * @param input A `column_view` as input
  * @param mr Optional, The resource to use for all allocations
  *
- * @returns std::unique_ptr<cudf::column> A non-nulalble column of `BOOL8` elements with `false`
+ * @returns std::unique_ptr<cudf::column> A non-nullable column of `BOOL8` elements with `false`
  * representing `null` values.
  */
 std::unique_ptr<cudf::column> is_valid(
@@ -113,7 +113,7 @@ std::unique_ptr<column> cast(column_view const& input,
  * @param input A column of floating-point elements
  * @param mr Optional, The resource to use for allocating the device memory in the returned column.
  *
- * @returns unique_ptr<column> A non-nulalble column of `BOOL8` elements with `true`
+ * @returns unique_ptr<column> A non-nullable column of `BOOL8` elements with `true`
  * representing `NAN` values
  */
 std::unique_ptr<column> is_nan(
@@ -130,7 +130,7 @@ std::unique_ptr<column> is_nan(
  * @param input A column of floating-point elements
  * @param mr Optional, The resource to use for allocating the device memory in the returned column.
  *
- * @returns unique_ptr<column> A non-nulalble column of `BOOL8` elements with `false`
+ * @returns unique_ptr<column> A non-nullable column of `BOOL8` elements with `false`
  * representing `NAN` values
  */
 std::unique_ptr<column> is_not_nan(

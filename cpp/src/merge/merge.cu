@@ -143,7 +143,7 @@ void materialize_bitmask(column_view const& left_col,
  *
  * @tparam index_type Indicates the type to be used to collect index and side information;
  * @param[in] left_table The left table_view to be merged
- * @param[in] right_tbale The right table_view to be merged
+ * @param[in] right_table The right table_view to be merged
  * @param[in] column_order Sort order types of index columns
  * @param[in] null_precedence Array indicating the order of nulls with respect to non-nulls for the
  * index columns
@@ -264,7 +264,7 @@ struct column_merger {
     // initialize null_mask to all valid:
     //
     // Note: this initialization in conjunction with _conditionally_
-    // calling materialze_bitmask() below covers the case
+    // calling materialize_bitmask() below covers the case
     // materialize_merged_bitmask_kernel<false, false>()
     // which won't be called anymore (because of the _condition_ below)
     //

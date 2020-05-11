@@ -453,7 +453,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   /**
    * @brief Factory to construct a column view that is usable in device memory.
    *
-   * Allocates and copies views of `soure_view`'s children to device memory to
+   * Allocates and copies views of `source_view`'s children to device memory to
    * make them accessible in device code.
    *
    * If `source_view.num_children() == 0`, then no device memory is allocated.

@@ -57,7 +57,7 @@ namespace strings {
  * ```
  *
  * @param[in] strings String column.
- * @param[in] width Maximum chararacter width of a line within each string.
+ * @param[in] width Maximum character width of a line within each string.
  * @param[in] mr Resource for allocating device memory.
  * @return Column of wrapped strings.
  */

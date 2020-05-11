@@ -1591,7 +1591,7 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
   int dist_rb_idx;
   uint32_t blen_L, blen_I, blen_D;
   uint8_t *const dict_scratch =
-    (uint8_t *)&s->hs;  // 24+13 bytes (max length of a dictionary word incuding prefix & suffix)
+    (uint8_t *)&s->hs;  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
   int context_mode;
 
   if (!t) {

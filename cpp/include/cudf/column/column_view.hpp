@@ -150,7 +150,7 @@ class column_view_base {
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param[in] begin The starting index of the range (inclusive).
-   * @param[in] end The index of the last element in the range (exlusive).
+   * @param[in] end The index of the last element in the range (exclusive).
    **/
   size_type null_count(size_type begin, size_type end) const;
 
@@ -171,7 +171,7 @@ class column_view_base {
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param begin The starting index of the range (inclusive).
-   * @param end The index of the last element in the range (exlusive).
+   * @param end The index of the last element in the range (exclusive).
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    */
