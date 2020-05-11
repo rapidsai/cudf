@@ -143,6 +143,7 @@
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
         <cxx11.abi.value>ON</cxx11.abi.value>
+        <cxx.flags/>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
     </properties>
@@ -152,6 +153,12 @@
             <id>abiOff</id>
             <properties>
                 <cxx11.abi.value>OFF</cxx11.abi.value>
+            </properties>
+        </profile>
+        <profile>
+            <id>no-cxx-deprecation-warnings</id>
+            <properties>
+                <cxx.flags>-Wno-deprecated-declarations</cxx.flags>
             </properties>
         </profile>
         <profile>
@@ -336,6 +343,7 @@
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
+                                    <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
