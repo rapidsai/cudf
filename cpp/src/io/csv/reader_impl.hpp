@@ -36,8 +36,6 @@
 #include <utility>
 #include <vector>
 
-#include <io/utilities/datasource_factory.hpp>
-
 namespace cudf {
 namespace experimental {
 namespace io {
