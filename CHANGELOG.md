@@ -160,6 +160,7 @@
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5123 Display more useful info on `clang-format` CI Failure
+- PR #5156 Raise error when applying boolean mask containing null values.
 - PR #5137 Add java bindings for getSizeInBytes in DType
 
 ## Bug Fixes
@@ -265,6 +266,7 @@
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 - PR #5124 `DataFrame.rename` support for renaming indexes w/ default for `index`
+- PR #5108 Fix float-to-string convert for -0.0
 - PR #5111 Fix header not being included in legacy jit transform.
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
 - PR #5118 Fix naming for java string length operators
