@@ -155,7 +155,7 @@
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5123 Display more useful info on `clang-format` CI Failure
-- PR #5156 Error if boolean mask in masking has nulls
+- PR #5156 Raise error when applying boolean mask containing null values.
 
 ## Bug Fixes
 
