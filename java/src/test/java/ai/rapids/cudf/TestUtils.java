@@ -22,11 +22,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.IntStream;
-import java.lang.Double;
 
 import static java.lang.Double.NEGATIVE_INFINITY;
 import static java.lang.Double.POSITIVE_INFINITY;
 
+/**
+ * Utility class for generating test data
+ */
 class TestUtils {
 
   static int NULL = 0x00000001;
@@ -73,9 +75,9 @@ class TestUtils {
    * A convenience method for generating a fixed set of Integer values. This is by no means uniformly
    * distributed. i.e. some values have more probability of occurrence than others.
    *
-   * @param seed seed to be used to generate values
-   * @param size number of values to be generated
-   * @param specialValues values to include {@link TestUtils#ALL}
+   * @param seed Seed value to be used to generate values
+   * @param size Number of values to be generated
+   * @param specialValues Values to include. Please refer to {@link TestUtils#ALL} for possible values
    */
   static Long[] getLongs(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);
@@ -114,9 +116,9 @@ class TestUtils {
    * A convenience method for generating a fixed set of Integer values. This is by no means uniformly
    * distributed. i.e. some values have more probability of occurrence than others.
    *
-   * @param seed seed to be used to generate values
-   * @param size number of values to be generated
-   * @param specialValues values to include {@link TestUtils#ALL}
+   * @param seed Seed value to be used to generate values
+   * @param size Number of values to be generated
+   * @param specialValues Values to include. Please refer to {@link TestUtils#ALL} for possible values
    */
   static Integer[] getIntegers(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);
@@ -155,9 +157,9 @@ class TestUtils {
    * A convenience method for generating a fixed set of Double values. This is by no means uniformly
    * distributed. i.e. some values have more probability of occurrence than others.
    *
-   * @param seed seed to be used to generate values
-   * @param size number of values to be generated
-   * @param specialValues values to include {@link TestUtils#ALL}
+   * @param seed Seed value to be used to generate values
+   * @param size Number of values to be generated
+   * @param specialValues Values to include. Please refer to {@link TestUtils#ALL} for possible values
    */
   static Double[] getDoubles(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);

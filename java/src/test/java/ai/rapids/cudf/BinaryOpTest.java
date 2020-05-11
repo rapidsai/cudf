@@ -22,8 +22,6 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.function.Function;
-import java.util.stream.Collector;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
