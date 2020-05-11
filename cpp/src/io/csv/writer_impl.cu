@@ -397,7 +397,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
     std::copy(metadata->column_names.begin(),
               metadata->column_names.end() - 1,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
-    ss << metadata->column_names.back();
+    ss << metadata->column_names.back() << options_.line_terminator();
 
     out_sink_->host_write(ss.str().data(), ss.str().size());
   }
