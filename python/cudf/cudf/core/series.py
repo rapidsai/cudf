@@ -1652,7 +1652,7 @@ class Series(Frame):
         if dtype is None:
             dtype = min_scalar_type(len(cats), 8)
 
-        cats = Series(cats)
+        cats = column.as_column(cats)
         try:
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
@@ -1670,8 +1670,8 @@ class Series(Frame):
                 name=None,
             )
 
-        order = Series(cupy.arange(len(self)))
-        codes = Series(cupy.arange(len(cats), dtype=dtype))
+        order = column.as_column(cupy.arange(len(self)))
+        codes = column.as_column(cupy.arange(len(cats), dtype=dtype))
 
         value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame(
@@ -1687,7 +1687,6 @@ class Series(Frame):
             codes = codes.sort_values("order")["code"]
         codes = codes.fillna(na_sentinel)
 
-        cats.name = None  # because it was mutated above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
