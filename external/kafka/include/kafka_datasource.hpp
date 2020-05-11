@@ -15,7 +15,6 @@
  */
 
 #include "external_datasource.hpp"
-#include <cudf/utilities/error.hpp>
 #include <map>
 #include <sys/time.h>
 #include <librdkafka/rdkafkacpp.h>
@@ -35,7 +34,9 @@ class kafka_datasource : public external_datasource {
    * Returns the Kafka datasource identifier for a datsource instance.
    * Example: 'librdkafka-1.3.1'
    **/
-  std::string libcudf_datasource_identifier();
+  std::string libcudf_datasource_identifier() {
+    return DATASOURCE_ID;
+  }
 
   /**
    * Apply user supplied configurations to the current datasource object.
@@ -49,7 +50,20 @@ class kafka_datasource : public external_datasource {
   /**
    * Queries the librdkafka instance and returns its current configurations.
    **/
-  std::map<std::string, std::string> current_configs();
+  std::map<std::string, std::string> current_configs() {
+    std::map<std::string, std::string> configs;
+    std::list<std::string> *dump = kafka_conf_->dump();
+    std::string key;
+    std::string val;
+    for (std::list<std::string>::iterator it = dump->begin(); it != dump->end(); ) {
+      key = (*it);
+      it++;
+      val = (*it);
+      it++;
+      configs.insert(std::pair<std::string, std::string>{key, val});
+    }
+    return configs;
+  };
 
   /**
    * @brief Base class destructor

@@ -10,7 +10,7 @@ from cudf.utils import ioutils
 @annotate("READ_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_read_csv()
 def read_csv(
-    filepath_or_buffer=None,
+    filepath_or_buffer,
     lineterminator="\n",
     quotechar='"',
     quoting=0,
@@ -42,7 +42,6 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
-    external_datasource_configs=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -83,7 +82,6 @@ def read_csv(
         na_filter=na_filter,
         prefix=prefix,
         index_col=index_col,
-        external_datasource_configs=external_datasource_configs,
     )
 
 

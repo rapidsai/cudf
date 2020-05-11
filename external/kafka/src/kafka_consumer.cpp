@@ -55,27 +55,13 @@ namespace external {
     // make sure that is present.
     conf_res_ = kafka_conf_->get("group.id", conf_val);
     if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
-      CUDF_FAIL("Kafka `group.id` was not supplied in its configuration and is required for operation");
+     //CUDF_FAIL("Kafka `group.id` was not supplied in its configuration and is required for operation");
+     //TODO: What are options here? I would like to not include CUDA RT just for error handling logic alone.
     }
 
     consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
     return true;
-  }
-
-  std::map<std::string, std::string> kafka_consumer::current_configs() {
-    std::map<std::string, std::string> configs;
-    std::list<std::string> *dump = kafka_conf_->dump();
-    std::string key;
-    std::string val;
-    for (std::list<std::string>::iterator it = dump->begin(); it != dump->end(); ) {
-      key = (*it);
-      it++;
-      val = (*it);
-      it++;
-      configs.insert(std::pair<std::string, std::string>{key, val});
-    }
-    return configs;
   }
 
  int64_t kafka_consumer::get_committed_offset(std::string topic, int partition) {
