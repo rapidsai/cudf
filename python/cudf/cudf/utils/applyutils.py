@@ -3,14 +3,21 @@
 import functools
 
 import cupy
-from numba import cuda, six
-from numba.utils import exec_, pysignature
+from numba import cuda
 
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
+
+try:
+    # Numba >= 0.49
+    from numba.core.utils import pysignature
+except ImportError:
+    # Numba <= 0.49
+    from numba.utils import pysignature
+
 
 _doc_applyparams = """
 df : DataFrame
@@ -205,7 +212,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
-        if isinstance(chunks, six.integer_types):
+        if isinstance(chunks, int):
             # *chunks* is the chunksize
             return cupy.arange(0, size, chunks)
         else:
@@ -254,7 +261,7 @@ def row_wise_kernel({args}):
     concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
     glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
-    exec_(concrete, glbs)
+    exec(concrete, glbs)
     # Compile as CUDA kernel
     kernel = cuda.jit(glbs["row_wise_kernel"])
     return kernel
@@ -317,7 +324,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
     glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
-    exec_(concrete, glbs)
+    exec(concrete, glbs)
     # Compile as CUDA kernel
     kernel = cuda.jit(glbs["chunk_wise_kernel"])
     return kernel

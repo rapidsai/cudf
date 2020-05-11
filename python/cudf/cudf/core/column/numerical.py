@@ -7,6 +7,7 @@ from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -19,7 +20,9 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -35,7 +38,12 @@ class NumericalColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
 
     def __contains__(self, item):
@@ -69,7 +77,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -114,6 +122,12 @@ class NumericalColumn(column.ColumnBase):
                 )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
+
+    def int2ip(self):
+        if self.dtype != np.dtype("int64"):
+            raise TypeError("Only int64 type can be converted to ip")
+
+        return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string, as_column

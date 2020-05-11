@@ -29,6 +29,7 @@
 
 
 template <typename T>
-struct TypedColumnTest : public cudf::test::BaseFixture {};
+struct TypedColumnTest : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);

@@ -28,40 +28,45 @@ namespace experimental {
  * @brief Types of binary operations that can be performed on data.
  */
 enum class binary_operator : int32_t {
-  ADD,                    ///< operator +
-  SUB,                    ///< operator -
-  MUL,                    ///< operator *
-  DIV,                    ///< operator / using common type of lhs and rhs
-  TRUE_DIV,               ///< operator / after promoting type to floating point
-  FLOOR_DIV,              ///< operator / after promoting to 64 bit floating point and then
-                          ///< flooring the result
-  MOD,                    ///< operator %
-  PYMOD,                  ///< operator % but following python's sign rules for negatives
-  POW,                    ///< lhs ^ rhs
-  EQUAL,                  ///< operator ==
-  NOT_EQUAL,              ///< operator !=
-  LESS,                   ///< operator <
-  GREATER,                ///< operator >
-  LESS_EQUAL,             ///< operator <=
-  GREATER_EQUAL,          ///< operator >=
-  BITWISE_AND,            ///< operator &
-  BITWISE_OR,             ///< operator |
-  BITWISE_XOR,            ///< operator ^
-  LOGICAL_AND,            ///< operator &&
-  LOGICAL_OR,             ///< operator ||
-  COALESCE,               ///< operator x,y  x is null ? y : x
-  GENERIC_BINARY,         ///< generic binary operator to be generated with input
-                          ///< ptx code
-  SHIFT_LEFT,             ///< operator <<
-  SHIFT_RIGHT,            ///< operator >>
-
+  ADD,             ///< operator +
+  SUB,             ///< operator -
+  MUL,             ///< operator *
+  DIV,             ///< operator / using common type of lhs and rhs
+  TRUE_DIV,        ///< operator / after promoting type to floating point
+  FLOOR_DIV,       ///< operator / after promoting to 64 bit floating point and then
+                   ///< flooring the result
+  MOD,             ///< operator %
+  PYMOD,           ///< operator % but following python's sign rules for negatives
+  POW,             ///< lhs ^ rhs
+  EQUAL,           ///< operator ==
+  NOT_EQUAL,       ///< operator !=
+  LESS,            ///< operator <
+  GREATER,         ///< operator >
+  LESS_EQUAL,      ///< operator <=
+  GREATER_EQUAL,   ///< operator >=
+  BITWISE_AND,     ///< operator &
+  BITWISE_OR,      ///< operator |
+  BITWISE_XOR,     ///< operator ^
+  LOGICAL_AND,     ///< operator &&
+  LOGICAL_OR,      ///< operator ||
+  COALESCE,        ///< operator x,y  x is null ? y : x
+  GENERIC_BINARY,  ///< generic binary operator to be generated with input
+                   ///< ptx code
+  SHIFT_LEFT,      ///< operator <<
+  SHIFT_RIGHT,     ///< operator >>
   // Logical right shift. Casts to an unsigned value before shifing.
   // approximates >>> from Java.
-  SHIFT_RIGHT_UNSIGNED,   ///< operator >>> 
+  SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
+                         ///< result of equality when both are non-null
+  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
 
-  LOG_BASE,               ///< logarithm to the base
-  
-  INVALID_BINARY          ///< invalid operation
+  INVALID_BINARY  ///< invalid operation
 };
 
 /**
@@ -83,11 +88,11 @@ enum class binary_operator : int32_t {
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
 std::unique_ptr<column> binary_operation(
-    scalar const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between a column and a scalar.
@@ -108,11 +113,11 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    scalar const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between two columns.
@@ -133,11 +138,11 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    column_view const& rhs,
-    binary_operator op,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Performs a binary operation between two columns using a
@@ -162,11 +167,11 @@ std::unique_ptr<column> binary_operation(
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
  */
 std::unique_ptr<column> binary_operation(
-    column_view const& lhs,
-    column_view const& rhs,
-    std::string const& ptx,
-    data_type output_type,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& lhs,
+  column_view const& rhs,
+  std::string const& ptx,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental
 }  // namespace cudf

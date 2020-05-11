@@ -25,10 +25,13 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 # - common test utils -----------------------------------------------------------------------------
 
 add_library(cudftestutil STATIC
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/base_fixture.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/scalar_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/table_utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
+
+set_property(TARGET cudftestutil PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(cudftestutil cudf)
 
@@ -51,21 +54,6 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
     set(CUDF_TEST_LIST ${CUDF_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "CUDF_TEST_LIST")
 endfunction(ConfigureTest)
-
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
-
-function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
-    if(CMAKE_ENABLE_BENCHMARKS)
-        add_executable(${CMAKE_BENCH_NAME}
-                       ${CMAKE_BENCH_SRC})
-        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        target_link_libraries(${CMAKE_BENCH_NAME} cudf cudftestutil)
-        set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
-                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bench")
-        add_test(NAME ${CMAKE_BENCH_NAME} COMMAND ${CMAKE_BENCH_NAME})
-    endif(CMAKE_ENABLE_BENCHMARKS)
-endfunction(ConfigureBench)
-
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -147,21 +135,21 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 # - groupby tests ---------------------------------------------------------------------------------
 
 set(GROUPBY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_groups_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmin_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_argmax_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_keys_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_count_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_sum_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_min_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_max_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_mean_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_var_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_std_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_median_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_quantile_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nunique_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/group_nth_element_test.cpp")
 
 ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
@@ -230,7 +218,7 @@ ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
 # - reduction tests -------------------------------------------------------------------------------
 
 set(REDUCTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/reductions/reduction_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reductions/scan_tests.cpp")
 
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
@@ -247,6 +235,11 @@ set(REPLACE_NULLS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
 
 ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
+set(REPLACE_NANS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nans_tests.cu")
+
+ConfigureTest(REPLACE_NANS_TEST "${REPLACE_NANS_TEST_SRC}")
 
 set(NORMALIZE_REPLACE_TEST_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")
@@ -361,6 +354,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
@@ -560,9 +554,11 @@ set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/decode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/encode_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/factories_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/fill_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/gather_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/remove_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/scatter_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/search_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/set_keys_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/slice_test.cpp")
 

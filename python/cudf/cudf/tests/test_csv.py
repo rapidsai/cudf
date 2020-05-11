@@ -69,7 +69,8 @@ def make_numpy_mixed_dataframe():
     )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    df["Category"] = np.array(["M", "F", "F", "F"])
+    # Category is not yet supported from libcudf
+    # df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df
@@ -194,22 +195,34 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
     gdf1 = read_csv(
         str(fname),
-        names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        # dtype=[
+        #    "int64", "date", "float64", "int64", "category", "str", "bool"
+        # ],
+        names=["1", "2", "3", "4", "5", "6"],
+        dtype=["int64", "date", "float64", "int64", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
-        names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        # dtype=[
+        #    "int64", "date", "float64", "int64", "category", "str", "bool"
+        # ],
+        names=["1", "2", "3", "4", "5", "6"],
+        dtype=["int64", "date", "float64", "int64", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
 
     pdf = pd.read_csv(
         fname,
-        names=["1", "2", "3", "4", "5", "6", "7"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        names=["1", "2", "3", "4", "5", "6"],
         parse_dates=[1],
         dayfirst=True,
         **pandas_arg,
@@ -305,9 +318,9 @@ def test_csv_reader_negative_vals(tmpdir):
 
     df = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
-    np.testing.assert_allclose(zero, df["0"])
-    np.testing.assert_allclose(one, df["1"])
-    np.testing.assert_allclose(two, df["2"])
+    np.testing.assert_allclose(zero, df["0"].to_array())
+    np.testing.assert_allclose(one, df["1"].to_array())
+    np.testing.assert_allclose(two, df["2"].to_array())
 
 
 def test_csv_reader_strings(tmpdir):
@@ -398,7 +411,7 @@ def test_csv_reader_mangle_dupe_cols(tmpdir):
     cu_df = read_csv(StringIO(buffer), mangle_dupe_cols=False)
     # check that the dupe columns were removed
     assert len(cu_df.columns) == 3
-    np.testing.assert_array_equal(cu_df["abc"], [1])
+    np.testing.assert_array_equal(cu_df["abc"].to_array(), [1])
 
 
 def test_csv_reader_float_decimal(tmpdir):
@@ -431,11 +444,11 @@ def test_csv_reader_float_decimal(tmpdir):
         decimal=",",
     )
 
-    np.testing.assert_allclose(basic_32_ref, df["basic_32"])
-    np.testing.assert_allclose(basic_64_ref, df["basic_64"])
-    np.testing.assert_allclose(round_ref, df["round"])
-    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"])
-    np.testing.assert_allclose(precision_ref, df["precision"])
+    np.testing.assert_allclose(basic_32_ref, df["basic_32"].to_array())
+    np.testing.assert_allclose(basic_64_ref, df["basic_64"].to_array())
+    np.testing.assert_allclose(round_ref, df["round"].to_array())
+    np.testing.assert_allclose(decimal_only_ref, df["decimal_only"].to_array())
+    np.testing.assert_allclose(precision_ref, df["precision"].to_array())
 
 
 def test_csv_reader_NaN_values():
@@ -457,26 +470,6 @@ def test_csv_reader_NaN_values():
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
     assert all(np.isnan(all_nan.to_pandas()["float32"]))
-
-    # no NA values: defaults are off, no custom values passed in
-    # only NaNs should be empty cells
-    none_nan = read_csv(
-        StringIO(default_na_cells),
-        names=names,
-        dtype=dtypes,
-        keep_default_na=False,
-    )
-    assert not any(np.isnan(none_nan.to_pandas()["float32"]))
-
-    # na_filter off - only NaNs should be empty cells
-    none_nan = read_csv(
-        StringIO(default_na_cells + custom_na_cells),
-        names=names,
-        dtype=dtypes,
-        na_filter=False,
-        na_values=custom_na_values,
-    )
-    assert not any(np.isnan(none_nan.to_pandas()["float32"]))
 
     # custom NA values
     all_nan = read_csv(
@@ -527,10 +520,10 @@ def test_csv_reader_thousands(tmpdir):
         str(fname), names=names, dtype=dtypes, skiprows=1, thousands="'"
     )
 
-    np.testing.assert_allclose(f32_ref, df["float32"])
-    np.testing.assert_allclose(f64_ref, df["float64"])
-    np.testing.assert_allclose(int32_ref, df["int32"])
-    np.testing.assert_allclose(int64_ref, df["int64"])
+    np.testing.assert_allclose(f32_ref, df["float32"].to_array())
+    np.testing.assert_allclose(f64_ref, df["float64"].to_array())
+    np.testing.assert_allclose(int32_ref, df["int32"].to_array())
+    np.testing.assert_allclose(int64_ref, df["int64"].to_array())
 
 
 def test_csv_reader_buffer_strings():
@@ -670,10 +663,10 @@ def test_csv_quotednumbers(tmpdir):
     df2 = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1)
 
     assert len(df2.columns) == 2
-    np.testing.assert_allclose(integer_ref, df1["integer"])
-    np.testing.assert_allclose(decimal_ref, df1["decimal"])
-    np.testing.assert_allclose(integer_ref, df2["integer"])
-    np.testing.assert_allclose(decimal_ref, df2["decimal"])
+    np.testing.assert_allclose(integer_ref, df1["integer"].to_array())
+    np.testing.assert_allclose(decimal_ref, df1["decimal"].to_array())
+    np.testing.assert_allclose(integer_ref, df2["integer"].to_array())
+    np.testing.assert_allclose(decimal_ref, df2["decimal"].to_array())
 
 
 def test_csv_reader_nrows(tmpdir):
@@ -914,13 +907,13 @@ def test_csv_reader_tabs():
     floats = [1.2, 3.4, 5.6, 7.8]
     ints = [12, 34, 56, 78]
     dates = [
-        "1995-11-22T00:00:00.000",
-        "2001-01-01T00:00:00.000",
-        "1970-12-12T00:00:00.000",
-        "2018-06-15T00:00:00.000",
+        "1995-11-22T00:00:00.000000000",
+        "2001-01-01T00:00:00.000000000",
+        "1970-12-12T00:00:00.000000000",
+        "2018-06-15T00:00:00.000000000",
     ]
-    np.testing.assert_allclose(floats, df["float_point"])
-    np.testing.assert_allclose(ints, df["integer"])
+    np.testing.assert_allclose(floats, df["float_point"].to_array())
+    np.testing.assert_allclose(ints, df["integer"].to_array())
     for row in range(4):
         assert str(df["date"][row]) == dates[row]
 
@@ -1037,17 +1030,6 @@ def test_csv_reader_prefix():
         assert column_names[col] == prefix_str + str(col)
 
 
-def test_csv_reader_category_hash():
-
-    lines = ["HBM0676", "KRC0842", "ILM1441", "EJV0094", "ILM1441"]
-    buffer = "\n".join(lines)
-
-    df = read_csv(StringIO(buffer), names=["user"], dtype=["category"])
-
-    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
-    assert list(df["user"]) == hash_ref
-
-
 def test_csv_reader_delim_whitespace():
     buffer = "1    2  3\n4  5 6"
 
@@ -1147,7 +1129,7 @@ def test_csv_reader_bools_false_positives(tmpdir):
 
     df = read_csv(StringIO(buffer), header=None, dtype=["int32"])
 
-    np.testing.assert_array_equal(items, df["0"])
+    np.testing.assert_array_equal(items, df["0"].to_array())
 
 
 def test_csv_reader_aligned_byte_range(tmpdir):
@@ -1178,7 +1160,9 @@ def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
         # require explicit `hex` dtype to parse hexadecimals
         pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
         gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
-        np.testing.assert_array_equal(pdf["hex_int"], gdf["hex_int"])
+        np.testing.assert_array_equal(
+            pdf["hex_int"], gdf["hex_int"].to_array()
+        )
     else:
         # otherwise, dtype inference returns as object (string)
         pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
@@ -1200,6 +1184,27 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
 
     assert_eq(pd_df, gd_df)
+
+
+def test_read_csv_names_header_combination():
+    pdf = pd.DataFrame(
+        {
+            "firstname": ["Emma", "Ava", "Sophia"],
+            "lastname": ["Olivia", "Isabella", "Charlotte"],
+            "gender": ["F", "F", "F"],
+        }
+    )
+    buffer = pdf.to_csv(header=True, index=False)
+    names = pdf.columns
+
+    gdf = read_csv(StringIO(buffer), names=names, header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer), header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer))
+    assert_eq(pdf, gdf)
 
 
 def test_csv_reader_scientific_type_detection():
@@ -1359,12 +1364,16 @@ def test_csv_writer_datetime_data(tmpdir):
 @pytest.mark.parametrize(
     "columns",
     [
-        ["Integer", "Date", "Float", "Integer2", "Category"],
-        ["Category", "Date", "Float"],
+        # Category is not yet supported from libcudf
+        # ["Integer", "Date", "Float", "Integer2", "Category"],
+        ["Integer", "Date", "Float", "Integer2"],
+        # ["Category", "Date", "Float"],
+        ["Date", "Float"],
         ["Integer2"],
-        ["Category", "Integer2", "Float", "Date", "Integer"],
+        # ["Category", "Integer2", "Float", "Date", "Integer"],
+        ["Integer2", "Float", "Date", "Integer"],
         [
-            "Category",
+            # "Category",
             "Integer2",
             "Float",
             "Date",

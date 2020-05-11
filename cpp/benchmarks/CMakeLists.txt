@@ -5,6 +5,8 @@ project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+set(BENCHMARK_LIST CACHE INTERNAL "BENCHMARK_LIST")
+
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
@@ -13,9 +15,8 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gbenchmarks")
+    set(BENCHMARK_LIST ${BENCHMARK_LIST} ${CMAKE_BENCH_NAME} CACHE INTERNAL "BENCHMARK_LIST")
 endfunction(ConfigureBench)
-
-option(CMAKE_ENABLE_BENCHMARKS "Enable building cuDF benchmarks" OFF)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -63,6 +64,11 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+set(LEGACY_GATHER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_benchmark.cu")
+
+ConfigureBench(LEGACY_GATHER_BENCH "${LEGACY_GATHER_BENCH_SRC}")
+
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
@@ -70,6 +76,11 @@ set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+set(LEGACY_SCATTER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_benchmark.cu")
+
+ConfigureBench(LEGACY_SCATTER_BENCH "${LEGACY_SCATTER_BENCH_SRC}")
 
 ###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
@@ -99,9 +110,18 @@ ConfigureBench(TRANSPOSE_BENCH "${TRANSPOSE_BENCH_SRC}")
 # - apply_boolean_mask benchmark ------------------------------------------------------------------
 
 set(APPLY_BOOLEAN_MASK_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cpp")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
+
+
+###################################################################################################
+# - legacy apply_boolean_mask benchmark ------------------------------------------------------------------
+
+set(LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/legacy_apply_boolean_mask_benchmark.cu")
+
+ConfigureBench(LEGACY_APPLY_BOOLEAN_MASK_BENCH "${LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
@@ -135,6 +155,11 @@ set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+
+set(LEGACY_TD_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/legacy/type_dispatcher_benchmark.cu")
+
+ConfigureBench(LEGACY_TYPE_DISPATCHER_BENCH "${LEGACY_TD_BENCH_SRC}")
 
 ###################################################################################################
 # - quantiles benchmark ---------------------------------------------------------------------------

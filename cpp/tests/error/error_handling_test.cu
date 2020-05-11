@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/utilities/error.hpp>
 #include <cudf/cudf.h>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/rmm.h>
 
@@ -22,34 +22,32 @@
 
 #include <cstring>
 
-
-TEST(ExpectsTest, FalseCondition) {
+TEST(ExpectsTest, FalseCondition)
+{
   EXPECT_THROW(CUDF_EXPECTS(false, "condition is false"), cudf::logic_error);
 }
 
-TEST(ExpectsTest, TrueCondition) {
-  EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true"));
+TEST(ExpectsTest, TrueCondition) { EXPECT_NO_THROW(CUDF_EXPECTS(true, "condition is true")); }
+
+TEST(ExpectsTest, TryCatch)
+{
+  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), "test reason");
 }
 
-TEST(ExpectsTest, TryCatch) {
-  CUDF_EXPECT_THROW_MESSAGE(CUDF_EXPECTS(false, "test reason"), 
-                            "test reason");
-}
-
-TEST(CudaTryTest, Error) {
+TEST(CudaTryTest, Error)
+{
   CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorLaunchFailure),
                             "cudaErrorLaunchFailure unspecified launch failure");
 }
 TEST(CudaTryTest, Success) { EXPECT_NO_THROW(CUDA_TRY(cudaSuccess)); }
 
-TEST(CudaTryTest, TryCatch) {
+TEST(CudaTryTest, TryCatch)
+{
   CUDA_EXPECT_THROW_MESSAGE(CUDA_TRY(cudaErrorMemoryAllocation),
                             "cudaErrorMemoryAllocation out of memory");
 }
 
-TEST(StreamCheck, success) {
-  EXPECT_NO_THROW(CHECK_CUDA(0));
-}
+TEST(StreamCheck, success) { EXPECT_NO_THROW(CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
@@ -61,7 +59,8 @@ void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // cudaStreamSynchronize to guarantee failure on error. In a non-release build,
 // CHECK_CUDA deterministically fails on erroneous asynchronous CUDA
 // calls.
-TEST(StreamCheck, FailedKernel) {
+TEST(StreamCheck, FailedKernel)
+{
   cudaStream_t stream;
   CUDA_TRY(cudaStreamCreate(&stream));
   int a;
@@ -73,7 +72,8 @@ TEST(StreamCheck, FailedKernel) {
   CUDA_TRY(cudaStreamDestroy(stream));
 }
 
-TEST(StreamCheck, CatchFailedKernel) {
+TEST(StreamCheck, CatchFailedKernel)
+{
   cudaStream_t stream;
   CUDA_TRY(cudaStreamCreate(&stream));
   int a;

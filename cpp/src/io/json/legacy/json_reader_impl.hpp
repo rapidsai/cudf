@@ -28,13 +28,12 @@
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/legacy/wrapper_utils.hpp>
 
-#include <rmm/device_buffer.hpp>
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
 namespace json {
-
 struct ColumnInfo {
   cudf::size_type float_count;
   cudf::size_type datetime_count;
@@ -44,13 +43,13 @@ struct ColumnInfo {
   cudf::size_type null_count;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to parse Json input and convert it into gdf columns
  *
- *---------------------------------------------------------------------------**/
+ **/
 class reader::Impl {
-public:
-private:
+ public:
+ private:
   const reader_options args_{};
 
   std::unique_ptr<datasource> source_;
@@ -58,7 +57,7 @@ private:
   std::shared_ptr<arrow::Buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
-  size_t uncomp_size_ = 0;
+  size_t uncomp_size_      = 0;
 
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
@@ -66,7 +65,7 @@ private:
   rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
-  size_t byte_range_size_ = 0;
+  size_t byte_range_size_   = 0;
 
   std::vector<std::string> column_names_;
   std::vector<gdf_dtype> dtypes_;
@@ -80,7 +79,7 @@ private:
   rmm::device_vector<SerialTrieNode> d_false_trie_;
   rmm::device_vector<SerialTrieNode> d_na_trie_;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Ingest input JSON file/buffer, without decompression
    *
    * Sets the source_, byte_range_offset_, and byte_range_size_ data members
@@ -89,28 +88,28 @@ private:
    * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void ingestRawInput(size_t range_offset, size_t range_size);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void decompressInput();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Finds all record starts in the file and stores them in rec_starts_
    *
    * Does not upload the entire file to the GPU
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setRecordStarts();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
    *
    * Sets the d_data_ data member.
@@ -118,47 +117,47 @@ private:
    * Also updates the array of record starts to match the device data offset.
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void uploadDataToDevice();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setColumnNames();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void setDataTypes();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set up and launches JSON data type detect CUDA kernel.
    *
    * @param[out] column_infos The count for each column data type
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void detectDataTypes(ColumnInfo *column_infos);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Parse the input data and store results in dsf columns
    *
    * Allocates columns in the column_names_ data member and populates them with
    * parsed data
    *
    * @return void
-   *---------------------------------------------------------------------------**/
+   **/
   void convertDataToColumns();
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Helper function to setup and launch JSON parsing CUDA kernel.
    *
    * @param[in] dtypes The data type of each column
@@ -167,15 +166,18 @@ private:
    * @param[out] num_valid_fields The numbers of valid fields in columns
    *
    * @return void
-   *---------------------------------------------------------------------------**/
-  void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, cudf::valid_type *const *valid_fields,
+   **/
+  void convertJsonToColumns(gdf_dtype *const dtypes,
+                            void *const *gdf_columns,
+                            cudf::valid_type *const *valid_fields,
                             cudf::size_type *num_valid_fields);
 
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<datasource> source, std::string filepath,
+  explicit Impl(std::unique_ptr<datasource> source,
+                std::string filepath,
                 reader_options const &args);
 
   /**

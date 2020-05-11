@@ -144,6 +144,7 @@
         <skipNativeCopy>false</skipNativeCopy>
         <cxx11.abi.value>ON</cxx11.abi.value>
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
+        <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
     </properties>
 
     <profiles>
@@ -333,6 +334,7 @@
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
+                                    <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"

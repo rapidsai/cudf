@@ -1,5 +1,5 @@
 # An integration test & dev container which builds and installs cuDF from master
-ARG CUDA_VERSION=9.2
+ARG CUDA_VERSION=10.0
 ARG CUDA_SHORT_VERSION=${CUDA_VERSION}
 ARG LINUX_VERSION=ubuntu16.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}

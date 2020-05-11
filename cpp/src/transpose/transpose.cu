@@ -13,23 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/transpose.hpp>
-#include <cudf/detail/transpose.hpp>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/nvtx_utils.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/reshape.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/transpose.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/reshape.hpp>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/transpose.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
 namespace detail {
-
 std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
-  rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+                                                         rmm::mr::device_memory_resource* mr,
+                                                         cudaStream_t stream)
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
@@ -38,25 +38,27 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 
   // Check datatype homogeneity
   auto const dtype = input.column(0).type();
-  CUDF_EXPECTS(std::all_of(input.begin(), input.end(), [dtype](auto const& col) {
-    return dtype == col.type(); }), "Column type mismatch");
+  CUDF_EXPECTS(
+    std::all_of(
+      input.begin(), input.end(), [dtype](auto const& col) { return dtype == col.type(); }),
+    "Column type mismatch");
 
   nvtx::range_push("CUDF_TRANSPOSE", nvtx::color::GREEN);
 
   auto output_column = cudf::experimental::interleave_columns(input);
-  auto one_iter = thrust::make_counting_iterator<size_type>(1);
-  auto splits_iter = thrust::make_transform_iterator(one_iter, [width=input.num_columns()](size_type idx){ return idx * width; });
+  auto one_iter      = thrust::make_counting_iterator<size_type>(1);
+  auto splits_iter   = thrust::make_transform_iterator(
+    one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
   auto output_column_views = cudf::experimental::split(output_column->view(), splits);
-  auto output_table_view = table_view(output_column_views);
+  auto output_table_view   = table_view(output_column_views);
 
   return std::make_pair(std::move(output_column), output_table_view);
 }
 }  // namespace detail
 
-std::pair<std::unique_ptr<column>, table_view> transpose(
-  table_view const& input,
-  rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input,
+                                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::transpose(input, mr);

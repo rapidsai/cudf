@@ -14,58 +14,50 @@
  * limitations under the License.
  */
 
-#include <memory>
+#include <thrust/transform.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
-#include <thrust/transform.h>
 #include <cudf/transpose.hpp>
 #include <cudf/types.hpp>
+#include <memory>
 #include <tests/utilities/column_wrapper.hpp>
 
 using cudf::test::fixed_width_column_wrapper;
 
 static void BM_transpose(benchmark::State& state)
 {
-    auto count = state.range(0);
+  auto count = state.range(0);
 
-    auto data = std::vector<int>(count, 0);
-    auto validity = std::vector<bool>(count, 1);
+  auto data     = std::vector<int>(count, 0);
+  auto validity = std::vector<bool>(count, 1);
 
-    auto fwcw_iter = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0),
-        [&data, &validity](auto idx) {
-            return fixed_width_column_wrapper<int>(
-                data.begin(),
-                data.end(),
-                validity.begin());
-        });
+  auto fwcw_iter = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), [&data, &validity](auto idx) {
+      return fixed_width_column_wrapper<int>(data.begin(), data.end(), validity.begin());
+    });
 
-    auto input_columns = std::vector<fixed_width_column_wrapper<int>>(fwcw_iter,
-                                                                      fwcw_iter + count);
+  auto input_columns = std::vector<fixed_width_column_wrapper<int>>(fwcw_iter, fwcw_iter + count);
 
-    auto input_column_views = std::vector<cudf::column_view>(input_columns.begin(),
-                                                             input_columns.end());
+  auto input_column_views =
+    std::vector<cudf::column_view>(input_columns.begin(), input_columns.end());
 
-    auto input = cudf::table_view(input_column_views);
+  auto input = cudf::table_view(input_column_views);
 
-    for (auto _ : state)
-    {
-        cuda_event_timer raii(state, true);
-        auto output = cudf::transpose(input);
-    }
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);
+    auto output = cudf::transpose(input);
+  }
 }
 
+class Transpose : public cudf::benchmark {
+};
 
-class Transpose : public cudf::benchmark {};
-
-#define TRANSPOSE_BM_BENCHMARK_DEFINE(name) \
-    BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { \
-        BM_transpose(state); \
-    } \
-    BENCHMARK_REGISTER_F(Transpose, name) \
-        ->RangeMultiplier(4) \
-        ->Range(4, 4<<13) \
-        ->UseManualTime() \
-        ->Unit(benchmark::kMillisecond);
+#define TRANSPOSE_BM_BENCHMARK_DEFINE(name)                                                \
+  BENCHMARK_DEFINE_F(Transpose, name)(::benchmark::State & state) { BM_transpose(state); } \
+  BENCHMARK_REGISTER_F(Transpose, name)                                                    \
+    ->RangeMultiplier(4)                                                                   \
+    ->Range(4, 4 << 13)                                                                    \
+    ->UseManualTime()                                                                      \
+    ->Unit(benchmark::kMillisecond);
 
 TRANSPOSE_BM_BENCHMARK_DEFINE(transpose_simple);

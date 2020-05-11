@@ -15,13 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_convert Converters
+ * APIs to convert strings to and from other data-types.
+ * @{
+ */
 
 /**
  * @brief Returns a new timestamp column converting a strings column into
@@ -67,11 +71,11 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New datetime column.
  */
-std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
-                                       data_type timestamp_type,
-                                       std::string const& format,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
+std::unique_ptr<column> to_timestamps(
+  strings_column_view const& strings,
+  data_type timestamp_type,
+  std::string const& format,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a new strings column converting a timestamp column into
@@ -118,10 +122,11 @@ std::unique_ptr<column> to_timestamps( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column with formatted timestamps.
  */
-std::unique_ptr<column> from_timestamps( column_view const& timestamps,
-                                         std::string const& format = "%Y-%m-%dT%H:%M:%SZ",
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_timestamps(
+  column_view const& timestamps,
+  std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

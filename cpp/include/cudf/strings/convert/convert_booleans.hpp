@@ -15,14 +15,18 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_convert Converters
+ * APIs to convert strings to and from other data-types.
+ * @{
+ */
 
 /**
  * @brief Returns a new BOOL8 column by parsing boolean values from the strings
@@ -35,9 +39,10 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New BOOL8 column converted from strings.
  */
-std::unique_ptr<column> to_booleans( strings_column_view const& strings,
-                                     string_scalar const& true_string = string_scalar("true"),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_booleans(
+  strings_column_view const& strings,
+  string_scalar const& true_string    = string_scalar("true"),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a new strings column converting the boolean values from the
@@ -53,10 +58,12 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> from_booleans( column_view const& booleans,
-                                       string_scalar const& true_string = string_scalar("true"),
-                                       string_scalar const& false_string = string_scalar("false"),
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_booleans(
+  column_view const& booleans,
+  string_scalar const& true_string    = string_scalar("true"),
+  string_scalar const& false_string   = string_scalar("false"),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf
