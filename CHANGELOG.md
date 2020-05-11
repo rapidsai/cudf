@@ -24,6 +24,7 @@
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 - PR #5132 Support out-of-band buffers in Python pickling
+- PR #5153 Add Java bindings for extract
 
 ## Improvements
 
@@ -163,6 +164,7 @@
 
 ## Bug Fixes
 
+- PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
@@ -263,12 +265,14 @@
 - PR #5090 Fix losing nulls while creating DataFrame from dictionary
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 - PR #5108 Fix float-to-string convert for -0.0
+- PR #5111 Fix header not being included in legacy jit transform.
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
 - PR #5118 Fix naming for java string length operators
 - PR #5129 Fix missed reference in tests from 5118
 - PR #5122 Fix `clang-format` `custrings` bug
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
+- PR #5148 Fix JNI build for GCC 8
 
 
 # cuDF 0.13.0 (31 Mar 2020)
