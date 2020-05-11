@@ -141,3 +141,36 @@ class Consumer(object):
 
     def close(self, timeout=10000):
         return self.kafka_datasource.close(timeout=timeout)
+
+    def test_secure( self,
+        lines=True,
+        dtype=True,
+        compression="infer",
+        dayfirst=True,
+        byte_range=None,
+        topic=None,
+        partition=0,
+        start=0,
+        end=0,
+        timeout=10000,
+        delimiter="\n",
+        *args,
+        **kwargs,
+    )
+
+        print("Connecting to Kafka")
+        result = self.kafka_datasource.read_gdf(
+                lines=lines,
+                dtype=dtype,
+                compression=compression,
+                dayfirst=dayfirst,
+                byte_range=byte_range,
+                topic=topic,
+                partition=partition,
+                start=start,
+                end=end,
+                timeout=timeout,
+                delimiter=delimiter,
+            )
+        
+        print("Result: " + str(result))

@@ -32,7 +32,7 @@ namespace io {
 namespace external {
 
 /**
- * @brief Class for reading from a datasource external to the cuDF codebase.
+ * @brief Interface for I/O from a datasource external to the cuDF codebase.
  **/
 class external_datasource : public datasource {
  public:
