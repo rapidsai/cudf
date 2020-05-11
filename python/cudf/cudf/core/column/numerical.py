@@ -123,6 +123,12 @@ class NumericalColumn(column.ColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
+    def int2ip(self):
+        if self.dtype != np.dtype("int64"):
+            raise TypeError("Only int64 type can be converted to ip")
+
+        return libcudf.string_casting.int2ip(self)
+
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string, as_column
 
