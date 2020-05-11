@@ -20,8 +20,11 @@
 - PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
+- PR #5092 Add `cudf::replace_nans`
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
+- PR #5132 Support out-of-band buffers in Python pickling
+- PR #5153 Add Java bindings for extract
 
 ## Improvements
 
@@ -141,10 +144,12 @@
 - PR #5047 Add Cython binding for libcudf++ CSV reader
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #5024 CSV reader input stage optimizations
 - PR #5061 Add support for writing parquet to python file-like objects
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 - PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
@@ -156,9 +161,11 @@
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5123 Display more useful info on `clang-format` CI Failure
 - PR #5156 Raise error when applying boolean mask containing null values.
+- PR #5137 Add java bindings for getSizeInBytes in DType
 
 ## Bug Fixes
 
+- PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
 - PR #4466 Fix merge key column sorting
@@ -205,6 +212,7 @@
 - PR #4813 Fix `GenericIndex` printing
 - PR #4804 Fix issue related `repartition` during hash based repartition
 - PR #4814 Raise error if `to_csv` does not get `filename/path`
+- PR #4821 Port apply_boolean_mask_benchmark to new cudf::column types
 - PR #4826 Move memory resource from RmmTestEnvironment to the custom gtest main() scope
 - PR #4839 Update Java bindings for timestamp cast formatting changes
 - PR #4797 Fix string timestamp to datetime conversion with `ms` and `ns`
@@ -259,7 +267,11 @@
 - PR #5089 Return false for sign-only string in libcudf is_float and is_integer
 - PR #5115 Fix hex-to-integer logic when string has prefix '0x'
 - PR #5118 Fix naming for java string length operators
+- PR #5129 Fix missed reference in tests from 5118
 - PR #5122 Fix `clang-format` `custrings` bug
+- PR #5138 Install `contextvars` backport on Python 3.6
+- PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
+- PR #5148 Fix JNI build for GCC 8
 
 
 # cuDF 0.13.0 (31 Mar 2020)
