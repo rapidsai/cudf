@@ -770,20 +770,6 @@ reader::impl::impl(std::unique_ptr<datasource> source, std::string filepath,
 }
 
 // Forward to implementation
-reader::reader(
-      std::string external_datasource_id, std::map<std::string, std::string> datasource_confs,
-      reader_options const &options, rmm::mr::device_memory_resource *mr) {
-
-  //TODO: Speak with team about a good place to place the ds_factory as a singleton that persists with the lifetime of the cudf process
-  // Load external datasource implementation based on provided unique identifier
-  cudf::io::external::datasource_factory ds_factory("/home/jdyer/Development/cudf/external/build");
-  cudf::io::external::external_datasource *ex_datasource = ds_factory.external_datasource_by_id(external_datasource_id, datasource_confs);
-
-  // Create the implementation
-  _impl = std::make_unique<impl>(std::unique_ptr<datasource>(ex_datasource), "", options, mr);
-}
-
-// Forward to implementation
 reader::reader(std::string filepath, reader_options const &options,
                rmm::mr::device_memory_resource *mr)
     : _impl(std::make_unique<impl>(nullptr, filepath, options, mr)) {
