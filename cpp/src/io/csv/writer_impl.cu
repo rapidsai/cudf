@@ -485,11 +485,12 @@ void writer::impl::write(table_view const& table,
   auto exec = rmm::exec_policy(stream);
 
   auto num_rows = table.num_rows();
-  std::vector<size_type> splits;
+  std::vector<table_view> vector_views;
 
-  if (num_rows <= n_rows_per_chunk)
-    splits.push_back(num_rows);
-  else {
+  if (num_rows <= n_rows_per_chunk) {
+    vector_views.push_back(table);
+  } else {
+    std::vector<size_type> splits;
     auto n_chunks = num_rows / n_rows_per_chunk;
     splits.resize(n_chunks);
 
@@ -503,11 +504,11 @@ void writer::impl::write(table_view const& table,
                              stream));
 
     CUDA_TRY(cudaStreamSynchronize(stream));
-  }
 
-  // split table_view into chunks:
-  //
-  auto vector_views = cudf::experimental::split(table, splits);
+    // split table_view into chunks:
+    //
+    vector_views = cudf::experimental::split(table, splits);
+  }
 
   // convert each chunk to CSV:
   //

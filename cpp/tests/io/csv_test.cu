@@ -39,6 +39,9 @@
 #include <string>
 #include <vector>
 
+#include <thrust/find.h>
+#include <thrust/iterator/counting_iterator.h>
+
 namespace cudf_io = cudf::experimental::io;
 
 template <typename T>
@@ -117,6 +120,38 @@ void check_float_column(cudf::column_view const& col_lhs,
   CUDF_EXPECTS(col_lhs.null_count() == 0, "All elements should be valid");
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
+}
+
+// timestamp column checker within tolerance
+// given by `tol_ms` (miliseconds)
+void check_timestamp_column(cudf::column_view const& col_lhs,
+                            cudf::column_view const& col_rhs,
+                            long tol_ms = 1000l)
+{
+  using T = cudf::timestamp_ms;
+  using namespace simt::std::chrono;
+
+  auto h_lhs = cudf::test::to_host<T>(col_lhs).first;
+  auto h_rhs = cudf::test::to_host<T>(col_rhs).first;
+
+  cudf::size_type nrows = h_lhs.size();
+  EXPECT_TRUE(nrows == static_cast<cudf::size_type>(h_rhs.size()));
+
+  auto begin_count = thrust::make_counting_iterator<cudf::size_type>(0);
+  auto end_count   = thrust::make_counting_iterator<cudf::size_type>(nrows);
+
+  auto* ptr_lhs = h_lhs.data();  // cannot capture host_vector in thrust,
+                                 // not even in host lambda
+  auto* ptr_rhs = h_rhs.data();
+
+  auto found = thrust::find_if(
+    thrust::host, begin_count, end_count, [ptr_lhs, ptr_rhs, tol_ms](auto row_index) {
+      auto delta_ms = simt::std::chrono::duration_cast<simt::std::chrono::milliseconds>(
+        ptr_lhs[row_index] - ptr_rhs[row_index]);
+      return delta_ms.count() >= tol_ms;
+    });
+
+  EXPECT_TRUE(found == end_count);  // not found...
 }
 
 // Helper function to compare two floating-point column contents
@@ -876,7 +911,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
   check_float_column(input_table.column(10), result_table.column(10), tol, validity);
 }
 
-TEST_F(CsvReaderTest, DISABLED_DatesWithWriter)
+TEST_F(CsvReaderTest, DatesWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "DatesWithWriter.csv";
 
@@ -903,10 +938,11 @@ TEST_F(CsvReaderTest, DISABLED_DatesWithWriter)
   auto result      = cudf_io::read_csv(in_args);
 
   const auto result_table = result.tbl->view();
-  cudf::test::expect_tables_equivalent(input_table, result_table);
+
+  check_timestamp_column(input_table.column(0), result_table.column(0));
 }
 
-TEST_F(CsvReaderTest, DISABLED_FloatingPointWithWriter)
+TEST_F(CsvReaderTest, FloatingPointWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "FloatingPointWithWriter.csv";
 
