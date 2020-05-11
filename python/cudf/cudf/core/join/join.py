@@ -494,7 +494,7 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-        if is_categorical_dtype(dtype) and dtype != "category":
+        if isinstance(dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)):
             outcol = cudf.core.column.build_categorical_column(
                 categories=dtype.categories, codes=col
             )
