@@ -39,12 +39,12 @@ from cudf._lib.strings.case import (
     to_upper as cpp_to_upper,
 )
 from cudf._lib.strings.char_types import (
-    all_floats as cpp_all_floats,
-    all_integers as cpp_all_integers,
     is_alnum as cpp_is_alnum,
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -2057,14 +2057,14 @@ class StringColumn(column.ColumnBase):
 
         if str_dtype.kind in ("i"):
 
-            if not cpp_all_integers(self):
+            if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer \
                         type due to presence of non-integer values."
                 )
         elif str_dtype.kind in ("f"):
 
-            if not cpp_all_floats(self):
+            if not cpp_is_float(self).all():
                 raise ValueError(
                     "Could not convert strings to float \
                         type due to presence of non-floating values."

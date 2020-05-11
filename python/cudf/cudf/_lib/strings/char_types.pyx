@@ -12,9 +12,7 @@ from cudf._lib.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
     string_character_types as string_character_types,
     is_integer as cpp_is_integer,
-    all_integer as cpp_all_integer,
     is_float as cpp_is_float,
-    all_float as cpp_all_float
 )
 
 cimport cudf._lib.cpp.types as libcudf_types
@@ -184,23 +182,6 @@ def is_integer(Column source_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def all_integers(Column source_strings):
-    """
-    Returns `True` if all values in `source_strings` are intergers.
-    Else, returns `False`.
-    """
-    cdef bool c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = cpp_all_integer(
-            source_view,
-            libcudf_types.null_policy.INCLUDE
-        )
-
-    return c_result
-
-
 def is_float(Column source_strings):
     """
     Returns a Column of boolean values with True for `source_strings`
@@ -215,20 +196,3 @@ def is_float(Column source_strings):
         ))
 
     return Column.from_unique_ptr(move(c_result))
-
-
-def all_floats(Column source_strings):
-    """
-    Returns `True` if all values in `source_strings` are floats.
-    Else, returns `False`.
-    """
-    cdef bool c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = cpp_all_float(
-            source_view,
-            libcudf_types.null_policy.INCLUDE
-        )
-
-    return c_result

@@ -4,7 +4,6 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 from libcpp cimport bool
-from cudf._lib.cpp.types cimport null_policy
 
 cdef extern from "cudf/strings/char_types/char_types.hpp" \
         namespace "cudf::strings" nogil:
@@ -33,16 +32,6 @@ cdef extern from "cudf/strings/char_types/char_types.hpp" \
         column_view source_strings
     ) except +
 
-    cdef bool all_integer(
-        column_view source_strings,
-        null_policy null_handling
-    ) except +
-
     cdef unique_ptr[column] is_float(
         column_view source_strings
-    ) except +
-
-    cdef bool all_float(
-        column_view source_strings,
-        null_policy null_handling
     ) except +
