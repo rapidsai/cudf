@@ -904,8 +904,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringStrip(JNIEnv *env
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_extractRe(JNIEnv *env, jobject j_object,
-                                                                   jlong j_view_handle,
-                                                                   jstring patternObj) {
+                                                                        jlong j_view_handle,
+                                                                        jstring patternObj) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
   JNI_NULL_CHECK(env, patternObj, "pattern is null", nullptr);
 
