@@ -353,14 +353,14 @@ class list_scalar : public scalar {
   list_scalar& operator=(list_scalar&& other) = delete;
 
   /**
-   * @brief Get the value of the scalar as a string_view
+   * @brief Get the value of the scalar as a list_view
    *
    * @param stream The CUDA stream to do the operation in
    */
   value_type value(cudaStream_t stream = 0) const { return list_view{}; }
 
   /**
-   * @brief Returns the size of the string in bytes
+   * @brief Returns 0
    */
   size_type size() const { return 0; }
 
