@@ -268,6 +268,7 @@
 - PR #5122 Fix `clang-format` `custrings` bug
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
+- PR #5148 Fix JNI build for GCC 8
 
 
 # cuDF 0.13.0 (31 Mar 2020)
