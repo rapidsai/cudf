@@ -851,7 +851,7 @@ class StringMethods(object):
                 "`expand=False` setting is not supported yet"
             )
 
-        warnings.warn("`expand` parameter defatults to True.")
+        warnings.warn("`expand` parameter defaults to True.")
 
         # Pandas treats 0 as all
         if n == 0:
