@@ -8,8 +8,8 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-
 from cudf.core.dtypes import CategoricalDtype
+
 
 class Merge(object):
     """
@@ -37,7 +37,7 @@ class Merge(object):
         Boolean flag indicating the right index column or coumns
         are to be used as join keys in order.
     how : string
-        The type of join. Possible values are 
+        The type of join. Possible values are
         'inner', 'outer', 'left', 'leftsemi' and 'leftanti'
     sort : bool
         Boolean flag indicating if the output Frame is to be
@@ -54,6 +54,7 @@ class Merge(object):
         Left and right suffixes specified together, unpacked into lsuffix
         and rsuffix.
     """
+
     def __init__(
         self,
         lhs,
@@ -102,7 +103,7 @@ class Merge(object):
         """
         Call libcudf to perform a merge between the operands. If
         necessary, cast the input key columns to compatible types.
-        Potentially also cast the output back to categorical. 
+        Potentially also cast the output back to categorical.
         """
         output_dtypes = self.compute_output_dtypes()
         self.typecast_input_to_libcudf()
@@ -127,7 +128,7 @@ class Merge(object):
     ):
         """
         Translate a valid configuration of user input parameters into
-        the subset of input configurations handled by the cython layer. 
+        the subset of input configurations handled by the cython layer.
         Apply suffixes to columns.
         """
 
@@ -156,8 +157,11 @@ class Merge(object):
 
         no_suffix_cols = []
         if left_on and right_on:
-            no_suffix_cols = [left_name for left_name, right_name in zip(left_on, right_on) if left_name == right_name and left_name in same_named_columns]
-        
+            no_suffix_cols = [
+                left_name
+                for left_name, right_name in zip(left_on, right_on)
+                if left_name == right_name and left_name in same_named_columns
+            ]
 
         if suffixes:
             lsuffix, rsuffix = suffixes
@@ -279,8 +283,8 @@ class Merge(object):
 
     def typecast_input_to_libcudf(self):
         """
-        Check each pair of join keys in the left and right hand 
-        operands and apply casting rules to match their types 
+        Check each pair of join keys in the left and right hand
+        operands and apply casting rules to match their types
         before passing the result to libcudf.
         """
         lhs_keys, rhs_keys, lhs_cols, rhs_cols = [], [], [], []
@@ -313,9 +317,9 @@ class Merge(object):
 
     def input_to_libcudf_casting_rules(self, lcol, rcol, how):
         """
-        Determine what dtype the left and right hand 
+        Determine what dtype the left and right hand
         input columns must be cast to for a libcudf
-        join to proceed. 
+        join to proceed.
         """
 
         cast_warn = (
@@ -333,7 +337,9 @@ class Merge(object):
         if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
             # if categorical and equal, children passed to libcudf
             libcudf_join_type = dtype_l
-        elif isinstance(dtype_l, CategoricalDtype) and isinstance(dtype_r, CategoricalDtype):
+        elif isinstance(dtype_l, CategoricalDtype) and isinstance(
+            dtype_r, CategoricalDtype
+        ):
             # categories are not equal
             libcudf_join_type = np.dtype("O")
         elif how == "left":
@@ -382,15 +388,17 @@ class Merge(object):
                     libcudf_join_type = np.find_common_type(
                         [], [dtype_l, dtype_r]
                     )
-            elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(dtype_r, np.datetime64):
+            elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(
+                dtype_r, np.datetime64
+            ):
                 libcudf_join_type = max(dtype_l, dtype_r)
         return libcudf_join_type
 
     def libcudf_to_output_casting_rules(self, lcol, rcol, how):
         """
         Determine what dtype an output merge key column should be
-        cast to after it has been processed by libcudf. Determine 
-        if a column should be promoted to a categorical datatype. 
+        cast to after it has been processed by libcudf. Determine
+        if a column should be promoted to a categorical datatype.
         """
 
         dtype_l = lcol.dtype
@@ -398,7 +406,9 @@ class Merge(object):
 
         merge_return_type = None
         # we  currently only need to do this for categorical variables
-        if isinstance(dtype_l, CategoricalDtype) and isinstance(dtype_r, CategoricalDtype):
+        if isinstance(dtype_l, CategoricalDtype) and isinstance(
+            dtype_r, CategoricalDtype
+        ):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 if how in ["inner", "left"]:
                     merge_return_type = dtype_l
@@ -494,7 +504,9 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-        if isinstance(dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)):
+        if isinstance(
+            dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
+        ):
             outcol = cudf.core.column.build_categorical_column(
                 categories=dtype.categories, codes=col
             )
@@ -505,9 +517,9 @@ class Merge(object):
     @staticmethod
     def compute_result_col_names(lhs, rhs, how):
         """
-        Determine the names of the data columns in the result of 
+        Determine the names of the data columns in the result of
         a libcudf join, based on the original left and right frames
-        as well as the type of join that was performed. 
+        as well as the type of join that was performed.
         """
         if how in ("left", "inner", "outer"):
             # the result cols are all the left columns (incl. common ones)

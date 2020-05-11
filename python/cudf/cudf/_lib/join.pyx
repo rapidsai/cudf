@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cudf.core.join.join import Merge
 from collections import OrderedDict
 
 from libcpp.memory cimport unique_ptr
@@ -13,8 +14,6 @@ from cudf._lib.move cimport move
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 cimport cudf._lib.cpp.join as cpp_join
-
-from cudf.core.join.join import Merge
 
 cpdef join(Table lhs,
            Table rhs,
