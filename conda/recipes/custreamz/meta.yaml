@@ -19,6 +19,8 @@ build:
     - VERSION_SUFFIX
 
 requirements:
+  host:
+    - python
   build:
     - cython >=0.29,<0.30
     - setuptools
