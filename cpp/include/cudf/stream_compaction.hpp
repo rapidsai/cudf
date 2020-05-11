@@ -18,6 +18,9 @@
 
 #include <cudf/types.hpp>
 
+#include <memory>
+#include <vector>
+
 namespace cudf {
 namespace experimental {
 /**
@@ -64,7 +67,7 @@ namespace experimental {
  * @return Table containing all rows of the `input` with at least @p
  * keep_threshold non-null fields in @p keys.
  */
-std::unique_ptr<experimental::table> drop_nulls(
+std::unique_ptr<table> drop_nulls(
   table_view const& input,
   std::vector<size_type> const& keys,
   cudf::size_type keep_threshold,
@@ -150,17 +153,17 @@ enum class duplicate_keep_option {
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
- * @param[in] nulls_are_equal flag to denote nulls are equal if true,
- * nulls are not equal if false
- * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
+ * nulls are not equal if null_equality::UNEQUAL
+ * @param[in] mr Optional, The resource to use for allocation of returned table
  *
  * @return unique_ptr<table> Table with unique rows as per specified `keep`.
  */
 std::unique_ptr<experimental::table> drop_duplicates(
   table_view const& input,
   std::vector<size_type> const& keys,
-  duplicate_keep_option const& keep,
-  bool const& nulls_are_equal         = true,
+  duplicate_keep_option keep,
+  null_equality nulls_equal           = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -168,22 +171,20 @@ std::unique_ptr<experimental::table> drop_duplicates(
  *
  * Given an input column_view, number of unique elements in this column_view is returned
  *
- * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
- * values are ignored.
- * If `ignore_nulls` is true and `nan_as_null` is false, only `null` is
- * ignored, `NaN` is considered in unique count.
+ * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
+ * `NaN` and `null` values are ignored. If `null_handling` is null_policy::EXCLUDE and
+ * `nan_handling` is nan_policy::NAN_IS_VALID, only `null` is ignored, `NaN` is considered in unique
+ * count.
  *
- * @param[in] input         The column_view whose unique elements will be counted.
- * @param[in] ignore_nulls  flag to ignore `null` in unique count if true
- * @param[in] nan_as_null   flag to consider `NaN==null` if true.
- * @param[in] mr Optional, The resource to use for all allocations
+ * @param[in] input The column_view whose unique elements will be counted.
+ * @param[in] null_handling flag to include or ignore `null` while counting
+ * @param[in] nan_handling flag to consider `NaN==null` or not.
  *
  * @return number of unique elements
  */
 cudf::size_type unique_count(column_view const& input,
-                             bool const& ignore_nulls,
-                             bool const& nan_as_null,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                             null_policy null_handling,
+                             nan_policy nan_handling);
 
 /** @} */  // end of group
 }  // namespace experimental

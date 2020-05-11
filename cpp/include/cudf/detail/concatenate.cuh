@@ -26,16 +26,10 @@ namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
 /**
- * @brief Concatenates the null mask bits of all the column device views in the
- * `views` array to the destination bitmask.
+ * @copydoc cudf::concatenate_masks(std::vector<column_view>
+ * const&,rmm::mr::device_memory_resource*)
  *
- * @param d_views Vector of column device views whose bitmasks need to be concatenated
- * @param d_offsets Prefix sum of sizes of elements of `d_views`
- * @param dest_mask Pointer to array that contains the combined bitmask
- * of the column views
- * @param output_size The total number of null masks bits that are being concatenated
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream stream on which all memory allocations and copies will be performed
  */
 void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        rmm::device_vector<size_t> const& d_offsets,
@@ -44,27 +38,31 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        cudaStream_t stream);
 
 /**
- * @brief Concatenates `views[i]`'s bitmask from the bits
- * `[views[i].offset(), views[i].offset() + views[i].size())` for all elements
- * views[i] in views into an array
+ * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
  *
- * @param views Vector of column views whose bitmasks need to be concatenated
- * @param dest_mask Pointer to array that contains the combined bitmask
- * of the column views
- * @param stream stream on which all memory allocations and copies
- * will be performed
+ * @param stream stream on which all memory allocations and copies will be performed
  */
 void concatenate_masks(std::vector<column_view> const& views,
                        bitmask_type* dest_mask,
                        cudaStream_t stream);
 
 /**
- * @copydoc cudf::concatenate(std::vector<column_view> const&, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::concatenate(std::vector<column_view> const&,rmm::mr::device_memory_resource*)
  *
  * @param stream Optional The stream on which to execute all allocations and copies
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @copydoc cudf::concatenate(std::vector<table_view> const&,rmm::mr::device_memory_resource*)
+ *
+ * @param stream Optional The stream on which to execute all allocations and copies
+ */
+std::unique_ptr<experimental::table> concatenate(
+  std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 

@@ -58,8 +58,11 @@ class Buffer:
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
 
-    def __reduce__(self):
-        return self.__class__, (self.to_host_array(),)
+    def __reduce_ex__(self, protocol):
+        data = self.to_host_array()
+        if protocol >= 5:
+            data = pickle.PickleBuffer(data)
+        return self.__class__, (data,)
 
     def __len__(self):
         return self.size

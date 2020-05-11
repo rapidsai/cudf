@@ -69,6 +69,57 @@ std::unique_ptr<column> replace_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
+ * @brief Replaces all NaN values in a column with corresponding values from another column
+ *
+ * If `input[i]` is NaN, then `output[i]` will contain `replacement[i]`.
+ * @code{.pseudo}
+ * input        = {1.0, NaN, 4.0}
+ * replacement  = {3.0, 9.0, 7.0}
+ * output       = {1.0, 9.0, 4.0}
+ * @endcode
+ *
+ * @note Nulls are not considered as NaN
+ *
+ * @throws cudf::logic_error If `input` and `replacement` are of different type or size.
+ * @throws cudf::logic_error If `input` or `replacement` are not of floating-point dtype.
+ *
+ * @param input A column whose NaN values will be replaced
+ * @param replacement A cudf::column whose values will replace NaN values in input
+ * @param mr Optional device_memory_resource to use for allocations
+ * @return A copy of `input` with the NaN values replaced with corresponding values from
+ * `replacement`.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  column_view const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
+ * @brief Replaces all NaN values in a column with a scalar
+ *
+ * If `input[i]` is NaN, then `output[i]` will contain `replacement`.
+ * @code{.pseudo}
+ * input        = {1.0, NaN, 4.0}
+ * replacement  = 7.0
+ * output       = {1.0, 7.0, 4.0}
+ * @endcode
+ *
+ * @note Nulls are not considered as NaN
+ *
+ * @throws cudf::logic_error If `input` and `replacement` are of different type.
+ * @throws cudf::logic_error If `input` or `replacement` are not of floating-point dtype.
+ *
+ * @param input A column whose NaN values will be replaced
+ * @param replacement A cudf::scalar whose value will replace NaN values in input
+ * @param mr Optional device_memory_resource to use for allocations
+ * @return A copy of `input` with the NaN values replaced by `replacement`.
+ */
+std::unique_ptr<column> replace_nans(
+  column_view const& input,
+  scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**
  * @brief Return a copy of `input_col` replacing any `values_to_replace[i]`
  * found with `replacement_values[i]`.
  *

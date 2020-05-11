@@ -33,7 +33,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                           rmm::device_vector<size_type> const &group_offsets,
                                           size_type num_groups,
                                           size_type n,
-                                          include_nulls _include_nulls,
+                                          null_policy null_handling,
                                           rmm::mr::device_memory_resource *mr,
                                           cudaStream_t stream)
 {
@@ -44,8 +44,8 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
 
   auto nth_index = rmm::device_vector<size_type>(num_groups, values.size());
 
-  // include nulls (equivalent to pandas nth(dropna=None) but return nulls for n
-  if (_include_nulls == include_nulls::YES || !values.has_nulls()) {
+  // nulls_policy::INCLUDE (equivalent to pandas nth(dropna=None) but return nulls for n
+  if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
     // Returns index of nth value.
     thrust::transform_if(
       rmm::exec_policy(stream)->on(stream),

@@ -10,8 +10,8 @@ import cudf
 import dask_cudf
 
 
-@pytest.mark.parametrize("agg", ["sum", "mean", "count", "min", "max"])
-def test_groupby_basic_aggs(agg):
+@pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
+def test_groupby_basic_aggs(aggregation):
     pdf = pd.DataFrame(
         {
             "x": np.random.randint(0, 5, size=10000),
@@ -23,18 +23,21 @@ def test_groupby_basic_aggs(agg):
 
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
-    a = getattr(gdf.groupby("x"), agg)().to_pandas()
-    b = getattr(ddf.groupby("x"), agg)().compute().to_pandas()
+    a = getattr(gdf.groupby("x"), aggregation)()
+    b = getattr(ddf.groupby("x"), aggregation)().compute()
 
-    a.index.name = None
-    a.name = None
-    b.index.name = None
-    b.name = None
+    if aggregation == "count":
+        dd.assert_eq(a, b, check_dtype=False)
+    else:
+        dd.assert_eq(a, b)
 
-    if agg == "count":
-        a["y"] = a["y"].astype(np.int64)
+    a = gdf.groupby("x").agg({"x": aggregation})
+    b = ddf.groupby("x").agg({"x": aggregation}).compute()
 
-    dd.assert_eq(a, b)
+    if aggregation == "count":
+        dd.assert_eq(a, b, check_dtype=False)
+    else:
+        dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize(

@@ -43,10 +43,10 @@ std::unique_ptr<aggregation> make_max_aggregation()
   return std::make_unique<aggregation>(aggregation::MAX);
 }
 /// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls)
+std::unique_ptr<aggregation> make_count_aggregation(null_policy null_handling)
 {
   auto kind =
-    (_include_nulls == include_nulls::YES) ? aggregation::COUNT_ALL : aggregation::COUNT_VALID;
+    (null_handling == null_policy::INCLUDE) ? aggregation::COUNT_ALL : aggregation::COUNT_VALID;
   return std::make_unique<aggregation>(kind);
 }
 /// Factory to create a ANY aggregation
@@ -102,15 +102,20 @@ std::unique_ptr<aggregation> make_argmin_aggregation()
   return std::make_unique<aggregation>(aggregation::ARGMIN);
 }
 /// Factory to create a NUNIQUE aggregation
-std::unique_ptr<aggregation> make_nunique_aggregation(include_nulls _include_nulls)
+std::unique_ptr<aggregation> make_nunique_aggregation(null_policy null_handling)
 {
-  return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, _include_nulls);
+  return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, null_handling);
 }
 /// Factory to create a NTH_ELEMENT aggregation
-std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, include_nulls _include_nulls)
+std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, null_policy null_handling)
 {
   return std::make_unique<detail::nth_element_aggregation>(
-    aggregation::NTH_ELEMENT, n, _include_nulls);
+    aggregation::NTH_ELEMENT, n, null_handling);
+}
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation()
+{
+  return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
