@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "kafka_datasource.hpp"
 
 namespace cudf {

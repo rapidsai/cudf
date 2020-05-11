@@ -1,12 +1,13 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 # cython: profile=False
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from custreamz._libxx.includes.kafka cimport (
-    kafka_datasource,
+from custreamz._lib.includes.kafka cimport (
+    kafka_consumer,
+    kafka_producer,
 )
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table cimport table
@@ -23,14 +24,16 @@ cimport cudf._lib.cpp.io.types as cudf_io_types
 
 cdef class librdkafka:
 
-    cpdef kafka_datasource *kds
+    cpdef kafka_consumer *kdc
+    cpdef kafka_producer *kdp
 
     def __init__(self, kafka_conf):        
         cdef map[string, string] kafka_confs
         for key, value in kafka_conf.items():
             kafka_confs[str.encode(key)] = str.encode(value)
 
-        self.kds = new kafka_datasource(kafka_confs)
+        self.kdc = new kafka_consumer(kafka_confs)
+        self.kdp = new kafka_producer(kafka_confs)
 
     cpdef read_gdf(self,
                 lines=True,
@@ -45,7 +48,7 @@ cdef class librdkafka:
                 timeout=10000,
                 delimiter="\n"):
 
-        cdef json_str = self.kds.consume_range(str.encode(topic),
+        cdef str_buffer = self.kdc.consume_range(str.encode(topic),
                                         partition,
                                         start,
                                         end,
@@ -55,10 +58,10 @@ cdef class librdkafka:
         cdef cudf_io_types.table_with_metadata c_out_table
         cdef libcudf.read_json_args json_args = libcudf.read_json_args()
 
-        if len(json_str) > 0:
+        if len(str_buffer) > 0:
             json_args.lines = lines
             json_args.source = cudf_io_types.source_info(
-                json_str, len(json_str))
+                str_buffer, len(str_buffer))
             json_args.compression = cudf_io_types.compression_type.NONE
             json_args.dayfirst = dayfirst
 
@@ -72,13 +75,10 @@ cdef class librdkafka:
             return None
 
     cpdef get_committed_offset(self, topic=None, partition=None):
-        return self.kds.get_committed_offset(str.encode(topic), partition)
+        return self.kdc.get_committed_offset(str.encode(topic), partition)
 
     cpdef current_configs(self):
-        self.kds.current_configs()
-
-    cpdef print_consumer_metadata(self):
-        self.kds.print_consumer_metadata()
+        self.kdc.current_configs()
 
     cpdef get_watermark_offsets(self,
                                 topic=None,
@@ -87,7 +87,7 @@ cdef class librdkafka:
                                 cached=False):
 
         cdef map[string, int64_t] offsets = \
-            self.kds.get_watermark_offset(str.encode(topic), partition, timeout, cached)
+            self.kdc.get_watermark_offset(str.encode(topic), partition, timeout, cached)
         return offsets
 
     cpdef commit_topic_offset(self,
@@ -95,18 +95,24 @@ cdef class librdkafka:
                             partition=0,
                             offset=0,
                             asynchronous=True):
-        return self.kds.commit_offset(str.encode(topic), partition, offset)
+        return self.kdc.commit_offset(str.encode(topic), partition, offset)
 
     cpdef produce_message(self, topic="", message_val="", message_key=""):
-        return self.kds.produce_message(str.encode(topic),
+        return self.kdp.produce_message(str.encode(topic),
                                 str.encode(message_val),
                                 str.encode(message_key))
 
     cpdef flush(self, timeout=10000):
-        return self.kds.flush(timeout)
+        return self.kdp.flush(timeout)
 
     cpdef unsubscribe(self):
-        return self.kds.unsubscribe()
+        return self.kdc.unsubscribe()
 
     cpdef close(self, timeout=10000):
-        return self.kds.close(timeout)
+        if (self.kdp.close(timeout) == False):
+            return False
+        
+        if (self.kdc.close(timeout) == False):
+            return False
+        
+        return True

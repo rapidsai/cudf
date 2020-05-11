@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "external_datasource.hpp"
 #include <map>
 #include <sys/time.h>

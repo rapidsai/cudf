@@ -1,10 +1,8 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
-import confluent_kafka as ck
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-
-import custreamz._libxx.kafka as libkafka
+import custreamz._lib.kafka as libkafka
+import confluent_kafka as ck
 from custreamz.utils import docutils
 
 
@@ -23,8 +21,7 @@ class Consumer(object):
         """{docstring}"""
 
         self.kafka_datasource.current_configs()
-
-    @docutils.doc_read_gdf()
+        
     def read_gdf(
         self,
         lines=True,

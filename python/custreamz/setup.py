@@ -83,8 +83,8 @@ setup(
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["custreamz", "custreamz.*"]),
     package_data={
-        "custreamz._libxx": ["*.pxd"],
-        "custreamz._libxx.includes": ["*.pxd"],
+        "custreamz._lib": ["*.pxd"],
+        "custreamz._lib.includes": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,

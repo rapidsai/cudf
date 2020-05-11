@@ -12,11 +12,11 @@ from libcpp cimport bool
 from libc.stdint cimport int32_t, int64_t
 
 
-cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
+cdef extern from "kafka_consumer.hpp" namespace "cudf::io::external" nogil:
 
-    cpdef cppclass kafka_datasource:
+    cpdef cppclass kafka_consumer:
 
-        kafka_datasource(map[string, string] configs) except +
+        kafka_consumer(map[string, string] configs) except +
 
         bool assign(vector[string] topics, vector[int] partitions) except +
 
@@ -43,12 +43,26 @@ cdef extern from "kafka_datasource.hpp" namespace "cudf::io::external" nogil:
                              int batch_timeout,
                              string delimiter) except +
 
+        bool unsubscribe() except +
+
+        bool close(int timeout) except +
+
+
+cdef extern from "kafka_producer.hpp" namespace "cudf::io::external" nogil:
+
+    cpdef cppclass kafka_producer:
+
+        kafka_producer(map[string, string] configs) except +
+
+        string libcudf_datasource_identifier() except +
+
+        map[string, string] current_configs() except +
+
         bool produce_message(string topic,
                              string message_val,
                              string message_key) except +
 
         bool flush(int timeout) except +
 
-        bool unsubscribe() except +
-
         bool close(int timeout) except +
+
