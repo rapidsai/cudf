@@ -1,10 +1,10 @@
 # libcudf++ C++ Documentation Guide
 
-These guidelines apply for documenting all libcudf C++ source files using doxygen style formatting although only publich APIs and classes are actually [published](https://docs.rapids.ai/api/libcudf/stable/index.html).
+These guidelines apply to documenting all libcudf C++ source files using doxygen style formatting although only public APIs and classes are actually [published](https://docs.rapids.ai/api/libcudf/stable/index.html).
 
 ## Copyright License
 
-This is included here but may also be mentioned in a coding guideline document as well.
+The copyright comment is included here but may also be mentioned in a coding guideline document as well.
 The following is the license header comment that should appear at the beginning of every C++ source file.
 
 ```c++
@@ -27,7 +27,7 @@ The following is the license header comment that should appear at the beginning 
 
 The comment should start with `/*` and not `/**` so it is not processed by doxygen.
 
-Also, here are the rules for the year copyright year.
+Also, here are the rules for the copyright year.
 
 - A new file should have the year in which it was created
 - A modified file should span the year it was created and the year it was modified (e.g. `2019-2020`)
@@ -38,11 +38,11 @@ Changing the copyright year may not be necessary if no content has changed (e.g.
 
 The [doxygen tool](http://www.doxygen.nl/manual/index.html) is used to generate html pages from the C++ comments in the source code. Doxygen will recognize and parse block comments as well as perform specialized output formatting when encountering [doxgen commands](http://www.doxygen.nl/manual/commands.html).
 
-There are almost 200 commands (also called tags in the document) that doxygen recognizes in comment blocks. This document will provide guidance on which commands/tags to use in the libcudf C++ source code.
+There are almost 200 commands (also called tags in this document) that doxygen recognizes in comment blocks. This document will provide guidance on which commands/tags to use and how to use them in the libcudf C++ source code.
 
 The doxygen process can be customized using the many, many configuration options in the [Doxyfile](../doxygen/Doxyfile).
 
-Here are some of the custom options in the Doxyfile.
+Here are some of the custom options in the Doxyfile for libcudf.
 | Option | Setting | Description |
 | ------ | ------- | ----------- |
 | PROJECT_NAME | libcudf | Title used on the main page |
@@ -79,9 +79,9 @@ The doxygen tool supports a limited set of markdown format in the comment block 
 
 In some cases a trade-off may be required for readability in the source text file versus the readability in the doxygen formatted web pages.
 
-For example, there are some limitations on readability with '%' character and pipe character '|' within a table.
+For example, there are some limitations on readability with '%' character and pipe character '|' within a markdown table.
 
-Also, try to avoid using direct html tags. Although doxygen supports markdown and markdown supports html tags, the html support for doxygen's markdown is also limited.
+Also, try to avoid using direct hTML tags. Although doxygen supports markdown and markdown supports HTML tags, the HTML support for doxygen's markdown is also limited.
 
 ## The Example
 
@@ -90,7 +90,7 @@ for documenting C++ code in libcudf.
 
 ```c++
 /**
- * @file the_source_file.cpp
+ * @file source_file.cpp
  * @brief Description of source file contents
  *
  * Longer description of the source file contents.
@@ -109,13 +109,13 @@ template <typename T>
 class example_class {
 
   void get_my_int();            ///< Members can be documented like this
-  void set_my_int( int value ); ///< Try to use descriptive names
+  void set_my_int( int value ); ///< Try to use descriptive member names
 
   /**
    * @brief Short, one sentence description of the member function.
    *
    * A more detailed description of what this function does and what
-   * its logic is.
+   * its logic does.
    *
    * @code
    * example_class<int> inst;
@@ -123,9 +123,9 @@ class example_class {
    * int output = inst.complicated_function(1,dptr,fptr);
    * @endcode
    *
-   * @param[in] first  This parameter is an input parameter to the function
+   * @param[in]     first  This parameter is an input parameter to the function
    * @param[in,out] second This parameter is used both as an input and output
-   * @param[out] third This parameter is an output of the function
+   * @param[out]    third  This parameter is an output of the function
    *
    * @return The result of the complex function
    */
@@ -142,9 +142,9 @@ class example_class {
 /**
  * @brief Short, one sentence description of this free function.
  *
- * Longer description must start after a blank line.
- *
  * @ingroup optional_one_or_more predefined_groups
+ *
+ * Longer description must start after a blank line.
  *
  * @code
  * template<typename T>
@@ -159,7 +159,7 @@ class example_class {
  * @tparam functor_type The type of the functor
  * @tparam input_type The datatype of the input argument
  *
- * @param[in] functor The functor to be called on the input argument
+ * @param[in] functor        The functor to be called on the input argument
  * @param[in] input_argument The input argument passed into the functor
  * @return The result of calling the functor on the input argument
  */
@@ -172,6 +172,8 @@ bool free_function(functor_type functor, input_type input_argument)
 
 /**
  * @brief Short, one sentence description.
+ *
+ * @ingroup optional_one_or_more predefined_groups
  *
  * Optional, longer description.
  */
@@ -186,7 +188,7 @@ enum class example_enum {
 
 The comment description should clearly detail how the output(s) are created from any inputs.
 Include any performance and any boundary considerations.
-Also include any limits on parameter values and if any default values that are declared.
+Also include any limits on parameter values and if any default values are declared.
 Don't forget to specify how nulls are handled or produced.
 Also, try to include a short [example](#inline-examples) if possible.
 
@@ -197,6 +199,14 @@ Doxygen does not provide much space to show this text in the output pages.
 Always follow the `@brief` line with a blank comment line.
 
 The longer description is the rest of the comment text that is not tagged with any doxygen command.
+
+```c++
+/**
+ * @brief Short description.
+ *
+ * Long description.
+ *
+```
 
 ### @copydoc
 
@@ -228,11 +238,11 @@ Note, you must specify the whole signature of the function, including optional p
 
 ### Function parameters
 
-The following tags normally appear near the end of function comment block in the following order:
+The following tags normally appear near the end of function comment block in the order specified here:
 
 | Command | Description |
 | ------- | ----------- |
-| [@throw](#throw) | Specify the conditions which the function may throw an exception |
+| [@throw](#throw) | Specify the conditions in which the function may throw an exception |
 | [@tparam](#tparam) | Description for each template parameter |
 | [@param](#param) | Description for each function parameter |
 | [@return](#return) | Short description of object or value returned |
@@ -240,8 +250,8 @@ The following tags normally appear near the end of function comment block in the
 #### @throw
 
 Add an [@throw](http://www.doxygen.nl/manual/commands.html#cmdthrow) comment line in the comment block for each exception that the function may throw.
-You only need to include exception thrown by the function itself.
-If the function calls another function that may throw an exception, you do not need to document that exception here.
+You only need to include exceptions thrown by the function itself.
+If the function calls another function that may throw an exception, you do not need to document those exceptions here.
 
 Include the name of the exception without tick marks so doxygen can add reference links correctly.
 
@@ -276,10 +286,13 @@ Also include append `[in]`, `[out]` or `[in,out]` to the `@param` if it is not c
 
 ```c++
  *
- * @param[in] functor The functor to be called on the input argument
- * @param[in] input_argument The input argument passed into the functor
+ * @param[in]     first  This parameter is an input parameter to the function
+ * @param[in,out] second This parameter is used both as an input and output
+ * @param[out]    third  This parameter is an output of the function
  *
 ```
+
+Also recommend vertically aligning the 3 columns of text if possible to make it easier to read in the source code itself.
 
 #### @return
 
@@ -287,6 +300,8 @@ Add a single [@return](http://www.doxygen.nl/manual/commands.html#cmdreturn) com
 Include a brief description of what is returned.
 
 ```c++
+/**
+ * ...
  *
  * @return A new column of type INT32 and no nulls
  */
@@ -297,7 +312,7 @@ Do not include the type of the object returned with the `@return` comment.
 ### Inline Examples
 
 It is usually helpful to include a source code example inside your comment block when documenting a function or other declaration.
-Use the [@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and `@endcode` pair to include inline examples.
+Use the [@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and [@endcode](http://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
 By default, the `@code` tag will use syntax highlighting based on the source code where it was found.
@@ -345,11 +360,11 @@ When writing example snippets, using fully qualified class names allows doxygen 
  *
 ```
 
-Although using 3 tick marks for example blocks will work too, they do not standout as well in vs-code and other editors.
+Although using 3 backtick marks `` ``` `` for example blocks will work too, they do not standout as well in vs-code and other source editors.
 
 Do not use the `@example` tag in the comments for a declaration.
 Doxygen will interpret the entire source file as example source code when it encounters this tag.
-The source file is then published under the 'Examples' tab in the output pages.
+The source file is then published under a separate the _Examples_ page in the output.
 
 ## Namespaces
 
@@ -364,6 +379,8 @@ namespace cudf {
 A description comment should be included for only once for each unique namespace declaration.
 Otherwise, if more than one description is found, doxygen will aggregate the descriptions in an arbitrary order in the output pages.
 
+If you are introducing a new namespace, provide a short description block for only one declaration and not for every occurrence.
+
 ## Groups/Modules
 
 Grouping declarations into modules helps users to find APIs in the doxygen pages.
@@ -372,34 +389,56 @@ Doxygen output includes a _Modules_ page that organizes items into groups using 
 These commands can group common functions across header files, source files, and even namespaces.
 Groups can also be nested by defining new groups within existing groups.
 
-Example of adding an API to the _Columns and Tables APIs_ group.
+For libcudf, all the group hierarchy is defined in the `doxygen_groups.h` header file.
+This file does not need to be included in any other source file.
+It is processed only by the doxygen tool.
+Use this file to add or update any groups.
+Doxygen will also use the definitions in this file to order to groups in the _Modules_ page.
+
+When creating a new API, specify the group in which it should belong using the [@ingroup](http://www.doxygen.nl/manual/commands.html#cmdingroup) tag along with the group reference id from the `doxygen_groups.h` file.
+
+```c++
+namespace cudf {
+
+/**
+ * @brief ...
+ *
+ * @ingroup transformation_fill
+ *
+ * @param ...
+ * @return ...
+ */
+std::unique_ptr<column> fill(table_view const& input,...);
+
+}  // namespace cudf
+```
+
+The `@{` is a convenience to include all doxygen documentation from here to the `@}` line as part of the group.
 
 ```c++
 namespace cudf {
 /**
- * @brief Hashing APIs
- * @ingroup column_apis
- * @addtogroup column_hash Hashing
+ * @ingroup transformation_fill
  * @{
  */
 
 /**
  * @brief ...
  *
+ * @ingroup transformation_fill
+ *
  * @param ...
  * @return ...
  */
-std::unique_ptr<column> hash(table_view const& input,...);
+std::unique_ptr<column> fill(table_view const& input,...);
 
-/** @} */  // end of group
+/** @} */
 }  // namespace cudf
 ```
 
-The `@ingroup` specifies the parent group and the `@addtogroup` creates a new group.
-The `@brief` will be the description text of the new group.
-The `@{` is a convenience to include all doxygen documentation from here to the `@}` line as part of the group.
 This just saves adding `@ingroup` to each comment block that appears in the file.
 Make sure there is a blank line after the group definition comment block so doxygen know it does not apply to whatever follows in the source code.
+Note that the `@{` and `@}` does not work especially if it crosses namespaces or includes classes or enums.
 
 ## Build Doxygen Output
 
