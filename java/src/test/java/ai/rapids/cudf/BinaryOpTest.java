@@ -113,17 +113,23 @@ public class BinaryOpTest extends CudfTestBase {
    else return r;
   }
 
+  private int pmod(int i1, int i2) {
+    int r = i1 % i2;
+    if (r < 0) return (r + i2) % i2;
+    else return r;
+  }
+
   @Test
   public void testPmod() {
 
-    Double[] d1 = TestUtils.getDoubles(23423423424L, 20, ALL ^ NULL);
-    Double[] d2 = TestUtils.getDoubles(56456456454L, 20, NONE);
+    Double[] d1 = TestUtils.getDoubles(23423423424L, 50, ALL ^ NULL);
+    Double[] d2 = TestUtils.getDoubles(56456456454L, 50, NONE);
 
-    Integer[] i1 = TestUtils.getIntegers(76576554564L, 20, NULL);
-    Integer[] i2 = TestUtils.getIntegers(34502395934L, 20, NONE);
+    Integer[] i1 = TestUtils.getIntegers(76576554564L, 50, NULL);
+    Integer[] i2 = TestUtils.getIntegers(34502395934L, 50, NONE);
 
-    Long[] l1 = TestUtils.getLongs(29843248234L, 20, NULL);
-    Long[] l2 = TestUtils.getLongs(23423049234L, 20, NONE);
+    Long[] l1 = TestUtils.getLongs(29843248234L, 50, NULL);
+    Long[] l2 = TestUtils.getLongs(23423049234L, 50, NONE);
 
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(i1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(i2);
@@ -135,21 +141,21 @@ public class BinaryOpTest extends CudfTestBase {
       // Ints
       try (ColumnVector pmod = icv1.pmod(icv2);
            ColumnVector expected = forEach(DType.INT32, icv1, icv2,
-               (b, l, r, i) -> b.append((int)pmod(l.getInt(i), r.getInt(i))))) {
+               (b, l, r, i) -> b.append(pmod(l.getInt(i), r.getInt(i))))) {
         assertColumnsAreEqual(expected, pmod, "int32");
       }
 
       try (Scalar s = Scalar.fromInt(11);
            ColumnVector pmod = icv1.pmod(s);
            ColumnVector expected = forEachS(DType.INT32, icv1, 11,
-               (b, l, r, i) -> b.append((int)pmod(l.getInt(i) , r)))) {
+               (b, l, r, i) -> b.append(pmod(l.getInt(i) , r)))) {
         assertColumnsAreEqual(expected, pmod, "int32 + scalar int32");
       }
 
       try (Scalar s = Scalar.fromInt(11);
            ColumnVector pmod = s.pmod(icv2);
            ColumnVector expected = forEachS(DType.INT32, 11, icv2,
-               (b, l, r, i) -> b.append((int)pmod(l , r.getInt(i))))) {
+               (b, l, r, i) -> b.append(pmod(l , r.getInt(i))))) {
         assertColumnsAreEqual(expected, pmod, "scalar int32 + int32");
       }
 
@@ -194,7 +200,6 @@ public class BinaryOpTest extends CudfTestBase {
                (b, l, r, i) -> b.append(pmod(l , r.getDouble(i))))) {
         assertColumnsAreEqual(expected, pmod, "scalar float64 + float64");
       }
-
     }
   }
 

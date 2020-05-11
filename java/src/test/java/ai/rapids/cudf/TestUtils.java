@@ -34,7 +34,7 @@ class TestUtils {
   static int INF = 0x00000004;
   static int NAN = 0x00000008;
   static int NEG_ZERO = 0x00000010;
-  static int ALL = NULL|ZERO|INF|NAN;
+  static int ALL = NULL|ZERO|INF|NAN|NEG_ZERO;
   static int NONE = 0;
 
   private static boolean hasZero(int v) {
@@ -75,14 +75,14 @@ class TestUtils {
    *
    * @param seed seed to be used to generate values
    * @param size number of values to be generated
-   * @param flags values to include {@link TestUtils#ALL}
+   * @param specialValues values to include {@link TestUtils#ALL}
    */
-  static Long[] getLongs(final long seed, final int size, int flags) {
+  static Long[] getLongs(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);
     Long[] result = new Long[size];
     List<Long> v = new ArrayList();
-    if (hasZero(flags)) v.add(0L);
-    if (hasNull(flags)) v.add(null);
+    if (hasZero(specialValues)) v.add(0L);
+    if (hasNull(specialValues)) v.add(null);
 
     Long[] v_arr = v.stream().toArray(Long[]::new);
 
@@ -116,14 +116,14 @@ class TestUtils {
    *
    * @param seed seed to be used to generate values
    * @param size number of values to be generated
-   * @param flags values to include {@link TestUtils#ALL}
+   * @param specialValues values to include {@link TestUtils#ALL}
    */
-  static Integer[] getIntegers(final long seed, final int size, int flags) {
+  static Integer[] getIntegers(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);
     Integer[] result = new Integer[size];
     List<Integer> v = new ArrayList();
-    if (hasZero(flags)) v.add(0);
-    if (hasNull(flags)) v.add(null);
+    if (hasZero(specialValues)) v.add(0);
+    if (hasNull(specialValues)) v.add(null);
 
     Integer[] v_arr = v.stream().toArray(Integer[]::new);
 
@@ -157,20 +157,20 @@ class TestUtils {
    *
    * @param seed seed to be used to generate values
    * @param size number of values to be generated
-   * @param flags values to include {@link TestUtils#ALL}
+   * @param specialValues values to include {@link TestUtils#ALL}
    */
-  static Double[] getDoubles(final long seed, final int size, int flags) {
+  static Double[] getDoubles(final long seed, final int size, int specialValues) {
     Random r = new Random(seed);
     Double[] result = new Double[size];
     List<Double> v = new ArrayList();
-    if (hasZero(flags)) v.add(0.0);
-    if (hasNegativeZero(flags)) v.add(-0.0);
-    if (hasInf(flags)) {
+    if (hasZero(specialValues)) v.add(0.0);
+    if (hasNegativeZero(specialValues)) v.add(-0.0);
+    if (hasInf(specialValues)) {
       v.add(POSITIVE_INFINITY);
       v.add(NEGATIVE_INFINITY);
     }
-    if (hasNan(flags)) v.add(Double.NaN);
-    if (hasNull(flags)) v.add(null);
+    if (hasNan(specialValues)) v.add(Double.NaN);
+    if (hasNull(specialValues)) v.add(null);
 
     Double[] v_arr = v.stream().toArray(Double[]::new);
 
