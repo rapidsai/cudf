@@ -412,10 +412,12 @@ class Merge(object):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 if how in ["inner", "left"]:
                     merge_return_type = dtype_l
-                elif how == "outer":
+                elif how == "outer" and not (
+                    dtype_l.ordered or dtype_r.ordered
+                ):
                     new_cats = cudf.concat(
                         dtype_l.categories, dtype_r.categories
-                    )
+                    ).unique()
                     merge_return_type = cudf.core.dtypes.CategoricalDtype(
                         categories=new_cats
                     )
@@ -504,6 +506,7 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
+
         if isinstance(
             dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
         ):

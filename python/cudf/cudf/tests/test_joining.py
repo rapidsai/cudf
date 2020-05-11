@@ -200,6 +200,29 @@ def test_dataframe_join_cats():
     assert set(got["c"].to_array()) & set(cc)
 
 
+def test_dataframe_join_combine_cats():
+    lhs = cudf.DataFrame({"join_index": ["a", "b", "c"], "data_x": [1, 2, 3]})
+    rhs = cudf.DataFrame({"join_index": ["b", "c", "d"], "data_y": [2, 3, 4]})
+
+    lhs["join_index"] = lhs["join_index"].astype("category")
+    rhs["join_index"] = rhs["join_index"].astype("category")
+
+    lhs = lhs.set_index("join_index")
+    rhs = rhs.set_index("join_index")
+
+    lhs_pd = lhs.to_pandas()
+    rhs_pd = rhs.to_pandas()
+
+    lhs_pd.index = lhs_pd.index.astype("object")
+    rhs_pd.index = rhs_pd.index.astype("object")
+
+    expect = lhs_pd.join(rhs_pd, how="outer")
+    expect.index = expect.index.astype("category")
+    got = lhs.join(rhs, how="outer")
+
+    assert_eq(sorted(expect.index), sorted(got.index))
+
+
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
 def test_dataframe_join_mismatch_cats(how):
     pdf1 = pd.DataFrame(
@@ -229,8 +252,8 @@ def test_dataframe_join_mismatch_cats(how):
     got = join_gdf.to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
-    # We yield a categorical here whereas pandas gives Object. 
-    expect.index = expect.index.astype('category')
+    # We yield a categorical here whereas pandas gives Object.
+    expect.index = expect.index.astype("category")
     # cudf creates the columns in different order than pandas for right join
     if how == "right":
         got = got[["data_col_left", "data_col_right"]]
@@ -1090,8 +1113,10 @@ def test_typecast_on_join_overflow_unsafe(dtypes):
 
     with pytest.warns(
         UserWarning,
-        match=(f"can't safely cast column"
-               f" from right with type {dtype_r} to {dtype_l}"),
+        match=(
+            f"can't safely cast column"
+            f" from right with type {dtype_r} to {dtype_l}"
+        ),
     ):
         merged = lhs.merge(rhs, on="a", how="left")  # noqa: F841
 
