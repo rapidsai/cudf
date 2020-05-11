@@ -21,8 +21,7 @@
 namespace cudf {
 namespace dictionary {
 /**
- * @ingroup dictionary_apis
- * @addtogroup dictionary_update_keys Updating Keys
+ * @ingroup dictionary_update
  * @{
  */
 

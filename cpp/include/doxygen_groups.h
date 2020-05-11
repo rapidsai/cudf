@@ -117,7 +117,7 @@
  * @}
  * @defgroup nvtext_apis NVText APIs
  * @{
- *   @defgroup nvtext_encode NGrams
+ *   @defgroup nvtext_ngrams NGrams
  *   @defgroup nvtext_normalize Normalizing
  *   @defgroup nvtext_tokenize Tokenizing
  * @}

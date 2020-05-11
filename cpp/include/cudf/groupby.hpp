@@ -35,12 +35,9 @@ class sort_groupby_helper;
 }  // namespace detail
 
 /**
- * @ingroup aggregation_groupby
- * @{
- */
-
-/**
  * @brief Request for groupby aggregation(s) to perform on a column.
+ *
+ * @ingroup aggregation_groupby
  *
  * The group membership of each `value[i]` is determined by the corresponding
  * row `i` in the original order of `keys` used to construct the
@@ -57,6 +54,8 @@ struct aggregation_request {
 /**
  * @brief The result(s) of an `aggregation_request`
  *
+ * @ingroup aggregation_groupby
+ *
  * For every `aggregation_request` given to `groupby::aggregate` an
  * `aggregation_result` will be returned. The `aggregation_result` holds the
  * resulting column(s) for each requested aggregation on the `request`s values.
@@ -69,6 +68,8 @@ struct aggregation_result {
 
 /**
  * @brief Groups values by keys and computes aggregations on those groups.
+ *
+ * @ingroup aggregation_groupby
  */
 class groupby {
  public:
@@ -230,7 +231,6 @@ class groupby {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr);
 };
-/** @} */  // end of group
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf
