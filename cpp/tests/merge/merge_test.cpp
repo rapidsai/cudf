@@ -18,7 +18,6 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gmock.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_factories.hpp>
