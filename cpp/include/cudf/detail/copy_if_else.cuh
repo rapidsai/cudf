@@ -116,9 +116,50 @@ __launch_bounds__(block_size) __global__
 
 }  // anonymous namespace
 
-template <typename Element, typename FilterFn, typename LeftIter, typename RightIter>
+/**
+ * @brief Returns a new column, where each element is selected from either of two input ranges based
+ * on a filter
+ *
+ * Given two ranges lhs and rhs, and a unary filter function, this function will allocate and return
+ * an output column that contains `lhs[i]` if `function(i) == true` or `rhs[i]` if `function(i) ==
+ * false`. The validity of the elements is propagated to the output.
+ *
+ * The range lhs is defined by iterators `[lhs_begin, lhs_end)`. The `size` of output is
+ * determined by the distance between `lhs_begin` and `lhs_end`.
+ *
+ * The range rhs is defined by `[rhs, rhs + size)`
+ *
+ * Example:
+ * @code{.pseudo}
+ * lhs = {1, 2, 3, -, 5}
+ * rhs = {-, 6, 7, 8, 9}
+ *
+ * filter = [](i) {
+ *   bool arr[5] = {1, 1, 0, 1, 0}
+ *   return arr[i];
+ * }
+ *
+ * output = {1, 2, 7, -, 9}
+ * @endcode
+ *
+ * @tparam FilterFn   A function of type `bool(size_type)`
+ * @tparam LeftIter   An iterator of pair type where `first` is the value and `second` is the
+ *                    validity
+ * @tparam RightIter  An iterator of pair type where `first` is the value and `second` is the
+ *                    validity
+ * @param nullable    Indicate whether either input range can contain nulls
+ * @param lhs_begin   Begin iterator of lhs range
+ * @param lhs_end     End iterator of lhs range
+ * @param rhs         Begin iterator of rhs range
+ * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
+ *                    corresponding output value from
+ * @param mr          Memory resource to use for allocating the output
+ * @param stream      CUDA stream to perform the computation in
+ * @return            A new column that contains the values from either `lhs` or `rhs` as determined
+ *                    by `filter[i]`
+ */
+template <typename FilterFn, typename LeftIter, typename RightIter>
 std::unique_ptr<column> copy_if_else(
-  data_type type,
   bool nullable,
   LeftIter lhs_begin,
   LeftIter lhs_end,
@@ -127,13 +168,20 @@ std::unique_ptr<column> copy_if_else(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0)
 {
+  using Element =
+    typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
+
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
   constexpr int block_size = 256;
   cudf::experimental::detail::grid_1d grid{num_els, block_size, 1};
 
-  std::unique_ptr<column> out = make_fixed_width_column(
-    type, size, nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED, stream, mr);
+  std::unique_ptr<column> out =
+    make_fixed_width_column(data_type(type_to_id<Element>()),
+                            size,
+                            nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
+                            stream,
+                            mr);
 
   auto out_v = mutable_column_device_view::create(*out);
 
