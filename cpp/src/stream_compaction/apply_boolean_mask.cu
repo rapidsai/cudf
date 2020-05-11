@@ -14,46 +14,39 @@
  * limitations under the License.
  */
 
-#include<cudf/types.hpp>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy_if.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/stream_compaction.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/copy_if.cuh>
-#include <cudf/stream_compaction.hpp>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-
 
 #include <algorithm>
 
 namespace {
-
 // Returns true if the mask is true and valid (non-null) for index i
 // This is the filter functor for apply_boolean_mask
-template<bool has_nulls = true>
-struct boolean_mask_filter
-{
-  boolean_mask_filter(cudf::column_device_view const& boolean_mask) :
-    boolean_mask{boolean_mask}
-    {}
+template <bool has_nulls = true>
+struct boolean_mask_filter {
+  boolean_mask_filter(cudf::column_device_view const& boolean_mask) : boolean_mask{boolean_mask} {}
 
-  __device__ inline
-  bool operator()(cudf::size_type i)
+  __device__ inline bool operator()(cudf::size_type i)
   {
-    if(true == has_nulls) {
-        bool valid   = boolean_mask.is_valid(i);
-        bool is_true = boolean_mask.data<bool>()[i];
-    
-        return is_true && valid;
+    if (true == has_nulls) {
+      bool valid   = boolean_mask.is_valid(i);
+      bool is_true = boolean_mask.data<bool>()[i];
+
+      return is_true && valid;
     } else {
-        return boolean_mask.data<bool>()[i];
+      return boolean_mask.data<bool>()[i];
     }
   }
 
-protected:
-
+ protected:
   cudf::column_device_view boolean_mask;
 };
 
@@ -62,21 +55,17 @@ protected:
 namespace cudf {
 namespace experimental {
 namespace detail {
-
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
  *
  * calls copy_if() with the `boolean_mask_filter` functor.
  */
-std::unique_ptr<experimental::table> 
-    apply_boolean_mask(table_view const& input,
-                       column_view const& boolean_mask,
-                       rmm::mr::device_memory_resource *mr,
-                       cudaStream_t stream) {
-
-  if (boolean_mask.size() == 0) {
-      return experimental::empty_like(input);
-  }
+std::unique_ptr<experimental::table> apply_boolean_mask(table_view const& input,
+                                                        column_view const& boolean_mask,
+                                                        rmm::mr::device_memory_resource* mr,
+                                                        cudaStream_t stream)
+{
+  if (boolean_mask.size() == 0) { return experimental::empty_like(input); }
 
   CUDF_EXPECTS(boolean_mask.type().id() == BOOL8, "Mask must be Boolean type");
   // zero-size inputs are OK, but otherwise input size must match mask size
@@ -84,31 +73,25 @@ std::unique_ptr<experimental::table>
                "Column size mismatch");
 
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
-  
-  if(boolean_mask.has_nulls()){
-      return detail::copy_if(input,
-                         boolean_mask_filter<true> {*device_boolean_mask},
-                         mr, stream);
+
+  if (boolean_mask.has_nulls()) {
+    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, mr, stream);
   } else {
-      return detail::copy_if(input,
-                         boolean_mask_filter<false> {*device_boolean_mask},
-                         mr, stream);
+    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, mr, stream);
   }
 }
 
-} // namespace detail
+}  // namespace detail
 
 /*
  * Filters a table_view using a column_view of boolean values as a mask.
  */
-std::unique_ptr<experimental::table>
-    apply_boolean_mask(table_view const& input,
-                       column_view const& boolean_mask,
-                       rmm::mr::device_memory_resource *mr) {
+std::unique_ptr<experimental::table> apply_boolean_mask(table_view const& input,
+                                                        column_view const& boolean_mask,
+                                                        rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
   return detail::apply_boolean_mask(input, boolean_mask, mr);
 }
-} // namespace experimental
+}  // namespace experimental
 }  // namespace cudf
-
-

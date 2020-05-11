@@ -24,15 +24,15 @@
 
 namespace cudf {
 namespace test {
-
-
 template <typename V>
-struct groupby_keys_test : public cudf::test::BaseFixture {};
+struct groupby_keys_test : public cudf::test::BaseFixture {
+};
 
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_keys_test, supported_types);
 
+// clang-format off
 TYPED_TEST(groupby_keys_test, basic)
 {
     using K = TypeParam;
@@ -102,7 +102,7 @@ TYPED_TEST(groupby_keys_test, include_null_keys)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        force_use_sort_impl::NO, include_nulls::YES);
+        force_use_sort_impl::NO, null_policy::INCLUDE);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys)
@@ -119,7 +119,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), 
-        force_use_sort_impl::YES, include_nulls::NO, sorted::YES);
+        force_use_sort_impl::YES, null_policy::EXCLUDE, sorted::YES);
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
@@ -136,7 +136,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_descending)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        force_use_sort_impl::YES, include_nulls::NO, sorted::YES, {order::DESCENDING});
+        force_use_sort_impl::YES, null_policy::EXCLUDE, sorted::YES, {order::DESCENDING});
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
@@ -154,7 +154,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        force_use_sort_impl::YES, include_nulls::NO, sorted::YES); 
+        force_use_sort_impl::YES, null_policy::EXCLUDE, sorted::YES); 
 }
 
 TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
@@ -174,7 +174,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nulls_before_include_nulls)
 
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg),
-        force_use_sort_impl::YES, include_nulls::YES, sorted::YES); 
+        force_use_sort_impl::YES, null_policy::INCLUDE, sorted::YES); 
 }
 
 struct groupby_string_keys_test : public cudf::test::BaseFixture {};
@@ -193,6 +193,7 @@ TEST_F(groupby_string_keys_test, basic)
     auto agg = cudf::experimental::make_sum_aggregation();
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
+// clang-format on
 
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf

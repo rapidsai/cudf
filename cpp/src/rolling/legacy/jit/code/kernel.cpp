@@ -18,9 +18,8 @@ namespace cudf {
 namespace rolling {
 namespace jit {
 namespace code {
-
 const char* kernel =
-R"***(
+  R"***(
 #include <cudf/types.h>
 #include <cudf/types.hpp>
 #include "operation.h"
@@ -85,7 +84,7 @@ void gpu_rolling(cudf::size_type nrows,
 }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace rolling
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf

@@ -2,6 +2,7 @@
 
 from io import BytesIO, IOBase, StringIO
 
+import cudf._lib as libcudf
 import cudf._lib.legacy as libcudf_legacy
 from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
@@ -49,7 +50,7 @@ def read_csv(
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
-    return libcudf_legacy.csv.read_csv(
+    return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
         quotechar=quotechar,

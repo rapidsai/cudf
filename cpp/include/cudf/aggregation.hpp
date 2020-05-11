@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -33,7 +34,6 @@
 
 namespace cudf {
 namespace experimental {
-
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -47,40 +47,45 @@ class aggregation {
    * @brief Possible aggregation operations
    */
   enum Kind {
-    SUM,       ///< sum reduction
-    PRODUCT,   ///< product reduction
-    MIN,       ///< min reduction
-    MAX,       ///< max reduction
-    COUNT_VALID,    ///< count number of valid elements
-    COUNT_ALL,      ///< count number of elements
-    ANY,       ///< any reduction
-    ALL,       ///< all reduction
-    SUM_OF_SQUARES, ///< sum of squares reduction
-    MEAN,      ///< arithmetic mean reduction
-    VARIANCE,  ///< groupwise variance
-    STD,       ///< groupwise standard deviation
-    MEDIAN,    ///< median reduction
-    QUANTILE,  ///< compute specified quantile(s)
-    ARGMAX,    ///< Index of max element
-    ARGMIN,    ///< Index of min element
-    NUNIQUE,   ///< count number of unique elements
-    NTH_ELEMENT, ///< get the nth element
-    PTX,       ///< PTX UDF based reduction
-    CUDA       ///< CUDA UDf based reduction
+    SUM,             ///< sum reduction
+    PRODUCT,         ///< product reduction
+    MIN,             ///< min reduction
+    MAX,             ///< max reduction
+    COUNT_VALID,     ///< count number of valid elements
+    COUNT_ALL,       ///< count number of elements
+    ANY,             ///< any reduction
+    ALL,             ///< all reduction
+    SUM_OF_SQUARES,  ///< sum of squares reduction
+    MEAN,            ///< arithmetic mean reduction
+    VARIANCE,        ///< groupwise variance
+    STD,             ///< groupwise standard deviation
+    MEDIAN,          ///< median reduction
+    QUANTILE,        ///< compute specified quantile(s)
+    ARGMAX,          ///< Index of max element
+    ARGMIN,          ///< Index of min element
+    NUNIQUE,         ///< count number of unique elements
+    NTH_ELEMENT,     ///< get the nth element
+    ROW_NUMBER,      ///< get row-number of element
+    PTX,             ///< PTX UDF based reduction
+    CUDA             ///< CUDA UDf based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
 
-  bool operator==(aggregation const& other) const { return kind == other.kind; }
+  virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
 
-  virtual ~aggregation() = default; 
+  virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+
+  virtual std::unique_ptr<aggregation> clone() const
+  {
+    return std::make_unique<aggregation>(*this);
+  }
+
+  virtual ~aggregation() = default;
 };
 
-enum class udf_type : bool {
-   CUDA,
-   PTX
-};
+enum class udf_type : bool { CUDA, PTX };
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();
@@ -96,10 +101,11 @@ std::unique_ptr<aggregation> make_max_aggregation();
 
 /**
  * @brief Factory to create a COUNT aggregation
- * 
- * @param _include_nulls Indicates if null values will be counted.
-*/
-std::unique_ptr<aggregation> make_count_aggregation(include_nulls _include_nulls = include_nulls::NO);
+ *
+ * @param null_handling Indicates if null values will be counted.
+ */
+std::unique_ptr<aggregation> make_count_aggregation(
+  null_policy null_handling = null_policy::EXCLUDE);
 
 /// Factory to create a ANY aggregation
 std::unique_ptr<aggregation> make_any_aggregation();
@@ -115,16 +121,16 @@ std::unique_ptr<aggregation> make_mean_aggregation();
 
 /**
  * @brief Factory to create a VARIANCE aggregation
- * 
- * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
- * 
- * @param ddof Delta degrees of freedom. The divisor used in calculation of 
+ *
+ * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
  */
 std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
@@ -138,31 +144,31 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param quantiles The desired quantiles
  * @param interpolation The desired interpolation
  */
-std::unique_ptr<aggregation> make_quantile_aggregation(
-    std::vector<double> const& q, interpolation i = interpolation::LINEAR);
+std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
+                                                       interpolation i = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
- * 
+ *
  * `argmax` returns the index of the maximum element.
-*/
+ */
 std::unique_ptr<aggregation> make_argmax_aggregation();
 
 /**
  * @brief Factory to create an `argmin` aggregation
- * 
+ *
  * `argmin` returns the index of the minimum element.
-*/
+ */
 std::unique_ptr<aggregation> make_argmin_aggregation();
 
 /**
  * @brief Factory to create a `nunique` aggregation
- * 
+ *
  * `nunique` returns the number of unique elements.
- * @param _include_nulls Indicates if null values will be counted.
-*/
-std::unique_ptr<aggregation>
-make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
+ * @param null_handling Indicates if null values will be counted.
+ */
+std::unique_ptr<aggregation> make_nunique_aggregation(
+  null_policy null_handling = null_policy::EXCLUDE);
 
 /**
  * @brief Factory to create a `nth_element` aggregation
@@ -175,10 +181,13 @@ make_nunique_aggregation(include_nulls _include_nulls = include_nulls::NO);
  * the size of each group.
  *
  * @param n index of nth element in each group.
- * @param _include_nulls include nulls during indexing.
+ * @param null_handling Indicates to include/exclude nulls during indexing.
  */
-std::unique_ptr<aggregation>
-make_nth_element_aggregation(size_type n, include_nulls _include_nulls = include_nulls::YES);
+std::unique_ptr<aggregation> make_nth_element_aggregation(
+  size_type n, null_policy null_handling = null_policy::INCLUDE);
+
+/// Factory to create a ROW_NUMBER aggregation
+std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /**
  * @brief Factory to create a aggregation base on UDF for PTX or CUDA

@@ -23,7 +23,7 @@ where:
 ```
 
 Example Usage:
-`bash build.sh -r ~/rapids/cudf -i gpuci/rapidsai-base:cuda9.2-ubuntu16.04-gcc5-py3.6`
+`bash build.sh -r ~/rapids/cudf -i gpuci/rapidsai-base:cuda10.1-ubuntu16.04-gcc5-py3.6`
 
 For a full list of available gpuCI docker images, visit our [DockerHub](https://hub.docker.com/r/gpuci/rapidsai-base/tags) page.
 
@@ -42,7 +42,7 @@ There are some caveats to be aware of when using this script, especially if you 
 
 ### Docker Image Build Repository
 
-The docker image will generate build artifacts in a folder on your machine located in the `root` directory of the repository you passed to the script. For the above example, the directory is named `~/rapids/cudf/build_rapidsai-base_cuda9.2-ubuntu16.04-gcc5-py3.6/`. Feel free to remove this directory after the script is finished.
+The docker image will generate build artifacts in a folder on your machine located in the `root` directory of the repository you passed to the script. For the above example, the directory is named `~/rapids/cudf/build_rapidsai-base_cuda10.1-ubuntu16.04-gcc5-py3.6/`. Feel free to remove this directory after the script is finished.
 
 *Note*: The script *will not* override your local build repository. Your local environment stays in tact.
 

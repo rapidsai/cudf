@@ -10,13 +10,20 @@ from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 from cudf.utils import cudautils
 
-from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, IncludeNulls
+from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
 from cudf._lib.move cimport move
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
-    underlying_type_t_include_nulls
+    underlying_type_t_null_policy
 )
 from cudf._lib.types import Interpolation
+
+try:
+    # Numba >= 0.49
+    from numba.np import numpy_support
+except ImportError:
+    # Numba <= 0.49
+    from numba import numpy_support
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
@@ -125,8 +132,8 @@ cdef class _AggregationFactory:
     def size(cls):
         cdef Aggregation agg = Aggregation.__new__(Aggregation)
         agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
-            <libcudf_types.include_nulls><underlying_type_t_include_nulls>(
-                IncludeNulls.YES
+            <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                NullHandling.INCLUDE
             )
         ))
         return agg
@@ -216,7 +223,7 @@ cdef class _AggregationFactory:
         cdef string cpp_str
 
         # Handling UDF type
-        nb_type = numba.numpy_support.from_dtype(kwargs['dtype'])
+        nb_type = numpy_support.from_dtype(kwargs['dtype'])
         type_signature = (nb_type[:],)
         compiled_op = cudautils.compile_udf(op, type_signature)
         output_np_dtype = np.dtype(compiled_op[1])

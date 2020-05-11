@@ -277,6 +277,16 @@ if(JITIFY_USE_CACHE)
 endif(JITIFY_USE_CACHE)
 
 ###################################################################################################
+# - per-thread default stream option --------------------------------------------------------------
+# This needs to be defined first so tests and benchmarks can inherit it.
+
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -312,6 +322,8 @@ if(BUILD_BENCHMARKS)
   endif(GBENCH_FOUND)
 
 endif(BUILD_BENCHMARKS)
+
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -580,6 +592,7 @@ add_library(cudf
             src/bitmask/legacy/legacy_bitmask.cpp
             src/copying/legacy/copy_range.cu
             src/copying/copy_range.cu
+            src/copying/get_element.cu
             src/filling/legacy/fill.cu
             src/filling/fill.cu
             src/filling/legacy/repeat.cu
@@ -636,6 +649,7 @@ add_library(cudf
             src/strings/sorting/sorting.cu
             src/strings/split/partition.cu
             src/strings/split/split.cu
+            src/strings/split/split_record.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu
             src/strings/strings_scalar_factories.cpp
@@ -655,6 +669,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
             src/groupby/hash/groupby.cu
@@ -749,6 +764,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/rolling_jit_detail.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../../thirdparty/libcudacxx/include/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
@@ -889,6 +905,9 @@ add_custom_target(test_cudf
 add_custom_target(test_nvstrings
                   COMMAND ctest -R "NVSTRINGS"
                   DEPENDS build_tests_nvstrings)
+
+add_custom_target(build_benchmarks_cudf
+                  DEPENDS ${BENCHMARK_LIST})
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------

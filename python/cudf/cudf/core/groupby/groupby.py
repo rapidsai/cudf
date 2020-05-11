@@ -164,6 +164,7 @@ class GroupBy(object):
 
         # copy categorical information from keys to the result index:
         result.index._copy_categories(self.grouping.keys)
+        result._index = cudf.core.index.as_index(result._index)
 
         if not self._as_index:
             for col_name in reversed(self.grouping._named_columns):
@@ -263,11 +264,14 @@ class GroupBy(object):
 
             # Can't do set arithmetic here as sets are
             # not ordered
-            columns = [
-                col_name
-                for col_name in self.obj._data
-                if col_name not in self.grouping._named_columns
-            ]
+            if isinstance(self, SeriesGroupBy):
+                columns = [self.obj.name]
+            else:
+                columns = [
+                    col_name
+                    for col_name in self.obj._data
+                    if col_name not in self.grouping._named_columns
+                ]
             out = dict.fromkeys(columns, aggs)
         else:
             out = aggs.copy()

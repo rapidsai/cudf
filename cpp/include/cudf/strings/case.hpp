@@ -15,13 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_case Case
+ * APIs to convert the upper/lower case of strings characters.
+ * @{
+ */
 
 /**
  * @brief Converts a column of strings to lower case.
@@ -36,8 +40,9 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column of strings with characters converted.
  */
-std::unique_ptr<column> to_lower( strings_column_view const& strings,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_lower(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Converts a column of strings to upper case.
@@ -52,8 +57,9 @@ std::unique_ptr<column> to_lower( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New column of strings with characters converted.
  */
-std::unique_ptr<column> to_upper( strings_column_view const& strings,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_upper(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns a column of strings converting lower case characters to
@@ -69,8 +75,10 @@ std::unique_ptr<column> to_upper( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New column of strings with characters converted.
  */
-std::unique_ptr<column> swapcase( strings_column_view const& strings,
-                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> swapcase(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

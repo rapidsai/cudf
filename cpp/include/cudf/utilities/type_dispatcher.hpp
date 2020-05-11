@@ -16,21 +16,21 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 #include <string>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file type_dispatcher.hpp
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
- *---------------------------------------------------------------------------**/
+ **/
 namespace cudf {
 namespace experimental {
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a C++ type to it's corresponding `cudf::type_id`
  *
  * When explicitly passed a template argument of a given type, returns the
@@ -43,15 +43,17 @@ namespace experimental {
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T>
-inline constexpr type_id type_to_id() {
+inline constexpr type_id type_to_id()
+{
   return EMPTY;
 };
 
 struct type_to_name {
   template <typename T>
-  inline std::string operator()() {
+  inline std::string operator()()
+  {
     return "void";
   }
 };
@@ -60,7 +62,7 @@ template <cudf::type_id t>
 struct id_to_type_impl {
   using type = void;
 };
-/**---------------------------------------------------------------------------*
+/**
  * @brief Maps a `cudf::type_id` to it's corresponding concrete C++ type
  *
  * Example:
@@ -68,38 +70,39 @@ struct id_to_type_impl {
  * static_assert(std::is_same<int32_t, id_to_type<INT32>);
  * ```
  * @tparam t The `cudf::type_id` to map
- *---------------------------------------------------------------------------**/
+ **/
 template <cudf::type_id Id>
 using id_to_type = typename id_to_type_impl<Id>::type;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Macro used to define a mapping between a concrete C++ type and a
  *`cudf::type_id` enum.
 
  * @param Type The concrete C++ type
  * @param Id The `cudf::type_id` enum
- *---------------------------------------------------------------------------**/
+ **/
 #ifndef CUDF_TYPE_MAPPING
-#define CUDF_TYPE_MAPPING(Type, Id)             \
-  template <>                                   \
-  constexpr inline type_id type_to_id<Type>() { \
-    return Id;                                  \
-  }                                             \
-  template <>                                   \
-  inline std::string                            \
-  type_to_name::operator()<Type>() {            \
-    return CUDF_STRINGIFY(Type);                \
-  }                                             \
-  template <>                                   \
-  struct id_to_type_impl<Id> {                  \
-    using type = Type;                          \
+#define CUDF_TYPE_MAPPING(Type, Id)                   \
+  template <>                                         \
+  constexpr inline type_id type_to_id<Type>()         \
+  {                                                   \
+    return Id;                                        \
+  }                                                   \
+  template <>                                         \
+  inline std::string type_to_name::operator()<Type>() \
+  {                                                   \
+    return CUDF_STRINGIFY(Type);                      \
+  }                                                   \
+  template <>                                         \
+  struct id_to_type_impl<Id> {                        \
+    using type = Type;                                \
   }
 #endif
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
- *---------------------------------------------------------------------------**/
+ **/
 CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
@@ -121,12 +124,12 @@ struct type_to_scalar_type_impl {
 };
 
 #ifndef MAP_NUMERIC_SCALAR
-#define MAP_NUMERIC_SCALAR(Type)                    \
-template <>                                         \
-struct type_to_scalar_type_impl<Type> {             \
-  using ScalarType = cudf::numeric_scalar<Type>;    \
-  using ScalarDeviceType = cudf::numeric_scalar_device_view<Type>; \
-};
+#define MAP_NUMERIC_SCALAR(Type)                                     \
+  template <>                                                        \
+  struct type_to_scalar_type_impl<Type> {                            \
+    using ScalarType       = cudf::numeric_scalar<Type>;             \
+    using ScalarDeviceType = cudf::numeric_scalar_device_view<Type>; \
+  };
 #endif
 
 MAP_NUMERIC_SCALAR(int8_t)
@@ -139,29 +142,29 @@ MAP_NUMERIC_SCALAR(bool);
 
 template <>
 struct type_to_scalar_type_impl<std::string> {
-  using ScalarType = cudf::string_scalar;
+  using ScalarType       = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
 template <>
 struct type_to_scalar_type_impl<cudf::string_view> {
-  using ScalarType = cudf::string_scalar;
+  using ScalarType       = cudf::string_scalar;
   using ScalarDeviceType = cudf::string_scalar_device_view;
 };
 
-template <> // TODO: this is a temporary solution for make_pair_iterator
+template <>  // TODO: this is a temporary solution for make_pair_iterator
 struct type_to_scalar_type_impl<cudf::dictionary32> {
-  using ScalarType = cudf::numeric_scalar<int32_t>;
+  using ScalarType       = cudf::numeric_scalar<int32_t>;
   using ScalarDeviceType = cudf::numeric_scalar_device_view<int32_t>;
 };
 
 #ifndef MAP_TIMESTAMP_SCALAR
-#define MAP_TIMESTAMP_SCALAR(Type)                  \
-template <>                                         \
-struct type_to_scalar_type_impl<Type> {             \
-  using ScalarType = cudf::timestamp_scalar<Type>;  \
-  using ScalarDeviceType = cudf::timestamp_scalar_device_view<Type>;       \
-};
+#define MAP_TIMESTAMP_SCALAR(Type)                                     \
+  template <>                                                          \
+  struct type_to_scalar_type_impl<Type> {                              \
+    using ScalarType       = cudf::timestamp_scalar<Type>;             \
+    using ScalarDeviceType = cudf::timestamp_scalar_device_view<Type>; \
+  };
 #endif
 
 MAP_TIMESTAMP_SCALAR(timestamp_D)
@@ -172,7 +175,7 @@ MAP_TIMESTAMP_SCALAR(timestamp_ns)
 
 /**
  * @brief Maps a C++ type to the scalar type required to hold its value
- * 
+ *
  * @tparam T The concrete C++ type to map
  */
 template <typename T>
@@ -181,7 +184,7 @@ using scalar_type_t = typename type_to_scalar_type_impl<T>::ScalarType;
 template <typename T>
 using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceType;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Invokes an `operator()` template with the type instantiation based on
  * the specified `cudf::data_type`'s `id()`.
  *
@@ -272,57 +275,52 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * @param args Parameter pack of arguments forwarded to the `operator()`
  * invocation
  * @return Whatever is returned by the callable's `operator()`
- *---------------------------------------------------------------------------**/
+ **/
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
-          typename Functor, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
-    cudf::data_type dtype, Functor f, Ts&&... args) {
+          typename Functor,
+          typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
+                                                                   Functor f,
+                                                                   Ts&&... args)
+{
   switch (dtype.id()) {
     case BOOL8:
-      return f.template operator()<typename IdTypeMap<BOOL8>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<BOOL8>::type>(std::forward<Ts>(args)...);
     case INT8:
-      return f.template operator()<typename IdTypeMap<INT8>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<INT8>::type>(std::forward<Ts>(args)...);
     case INT16:
-      return f.template operator()<typename IdTypeMap<INT16>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<INT16>::type>(std::forward<Ts>(args)...);
     case INT32:
-      return f.template operator()<typename IdTypeMap<INT32>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<INT32>::type>(std::forward<Ts>(args)...);
     case INT64:
-      return f.template operator()<typename IdTypeMap<INT64>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<INT64>::type>(std::forward<Ts>(args)...);
     case FLOAT32:
-      return f.template operator()<typename IdTypeMap<FLOAT32>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<FLOAT32>::type>(std::forward<Ts>(args)...);
     case FLOAT64:
-      return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<FLOAT64>::type>(std::forward<Ts>(args)...);
     case STRING:
-      return f.template operator()<typename IdTypeMap<STRING>::type>(
-          std::forward<Ts>(args)...);
+      return f.template operator()<typename IdTypeMap<STRING>::type>(std::forward<Ts>(args)...);
     case TIMESTAMP_DAYS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_DAYS>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     case TIMESTAMP_SECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_SECONDS>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     case TIMESTAMP_MILLISECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_MILLISECONDS>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     case TIMESTAMP_MICROSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_MICROSECONDS>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     case TIMESTAMP_NANOSECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     case DICTIONARY32:
       return f.template operator()<typename IdTypeMap<DICTIONARY32>::type>(
-          std::forward<Ts>(args)...);
+        std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
@@ -335,8 +333,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
       // Need to find out what the return type is in order to have a default
       // return value and solve the compiler warning for lack of a default
       // return
-      using return_type =
-          decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+      using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
       return return_type();
 #endif
     }

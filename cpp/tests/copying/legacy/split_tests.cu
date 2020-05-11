@@ -17,24 +17,26 @@
  */
 
 #include <gtest/gtest.h>
-#include <cudf/legacy/copying.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/legacy/copying.hpp>
 #include <tests/copying/legacy/copying_test_helper.hpp>
 #include <tests/utilities/legacy/nvcategory_utils.cuh>
-#include <bitmask/legacy/bit_mask.cuh>
 
-void call_split(gdf_column const*          input_column,
-                cudf::size_type const*      indices,
-                cudf::size_type              num_indices,
-                std::vector<gdf_column*> & output){
-
-  output = cudf::split(*input_column, indices, num_indices); 
+void call_split(gdf_column const* input_column,
+                cudf::size_type const* indices,
+                cudf::size_type num_indices,
+                std::vector<gdf_column*>& output)
+{
+  output = cudf::split(*input_column, indices, num_indices);
 }
 
-struct SplitInputTest : GdfTest {};
+struct SplitInputTest : GdfTest {
+};
 
-TEST_F(SplitInputTest, IndexesNull) {
-  const int SIZE = 32;
+TEST_F(SplitInputTest, IndexesNull)
+{
+  const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
   // Create input column
@@ -46,8 +48,9 @@ TEST_F(SplitInputTest, IndexesNull) {
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SplitInputTest, InputColumnSizeNull) {
-  const int SIZE = 32;
+TEST_F(SplitInputTest, InputColumnSizeNull)
+{
+  const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
   // Create input column
@@ -58,20 +61,24 @@ TEST_F(SplitInputTest, InputColumnSizeNull) {
   std::vector<cudf::size_type> indices_host{SIZE / 2};
   cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
 
-   // Perform test
+  // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_split(&input_column, static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_NO_THROW(call_split(&input_column,
+                             static_cast<cudf::size_type*>(indices.get()->data),
+                             indices.get()->size,
+                             output));
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
-TEST_F(SplitInputTest, InputColumnDataNull) {
-  const int SIZE = 32;
+TEST_F(SplitInputTest, InputColumnDataNull)
+{
+  const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
   // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
+  auto input_column             = create_random_column<ColumnType>(SIZE);
   gdf_column* input_column_test = input_column.get();
-  input_column_test->data = nullptr;
+  input_column_test->data       = nullptr;
 
   // Create indices
   std::vector<cudf::size_type> indices_host{SIZE / 2};
@@ -79,17 +86,21 @@ TEST_F(SplitInputTest, InputColumnDataNull) {
 
   // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_split(input_column_test, static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_ANY_THROW(call_split(input_column_test,
+                              static_cast<cudf::size_type*>(indices.get()->data),
+                              indices.get()->size,
+                              output));
 }
 
-TEST_F(SplitInputTest, InputColumnBitmaskNull) {
-  const int SIZE = 32;
+TEST_F(SplitInputTest, InputColumnBitmaskNull)
+{
+  const int SIZE   = 32;
   using ColumnType = std::int32_t;
 
   // Create input column
-  auto input_column = create_random_column<ColumnType>(SIZE);
+  auto input_column             = create_random_column<ColumnType>(SIZE);
   gdf_column* input_column_test = input_column.get();
-  input_column_test->valid = nullptr;
+  input_column_test->valid      = nullptr;
 
   // Create indices
   std::vector<cudf::size_type> indices_host{SIZE / 2};
@@ -97,14 +108,17 @@ TEST_F(SplitInputTest, InputColumnBitmaskNull) {
 
   // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_split(input_column_test, static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_NO_THROW(call_split(input_column_test,
+                             static_cast<cudf::size_type*>(indices.get()->data),
+                             indices.get()->size,
+                             output));
 }
 
 template <typename ColumnType>
-struct SplitTest : GdfTest {};
+struct SplitTest : GdfTest {
+};
 
-using test_types =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 TYPED_TEST_CASE(SplitTest, test_types);
 
 /**
@@ -116,17 +130,79 @@ TYPED_TEST_CASE(SplitTest, test_types);
  * when the indices are the same.
  * when is less than 16 or greater than 64.
  */
-TYPED_TEST(SplitTest, MultipleSplits) {
-    // Create input column
-    auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
+TYPED_TEST(SplitTest, MultipleSplits)
+{
+  // Create input column
+  auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
+  // Create indices
+  std::vector<cudf::size_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+  cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
+
+  // Perform operation
+  std::vector<gdf_column*> output_column_ptrs;
+  ASSERT_NO_THROW(call_split(input_column.get(),
+                             static_cast<cudf::size_type*>(indices.get()->data),
+                             indices.get()->size,
+                             output_column_ptrs));
+
+  // Transfer input column to host
+  std::vector<TypeParam> input_col_data;
+  std::vector<cudf::valid_type> input_col_bitmask;
+  std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
+
+  // Perform split in cpu
+  std::vector<std::vector<TypeParam>> output_cols_data;
+  std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
+  std::vector<cudf::size_type> output_cols_null_count;
+  std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) =
+    split_columns<TypeParam>(input_col_data, input_col_bitmask, indices_host);
+
+  // Create Validation output column_wrappers
+  std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
+  for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+    validation_columns.emplace_back(
+      cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));
+    ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
+  }
+
+  // Verify the operation
+  for (std::size_t i = 0; i < validation_columns.size(); ++i) {
+    if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
+      ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
+  }
+
+  for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+    gdf_column_free(output_column_ptrs[i]);
+    delete output_column_ptrs[i];
+  }
+}
+
+/**
+ * It performs a parameterized type and a parameterized value test.
+ * The indices array contains only one value and that value goes from
+ * 0 to the size of the input column.
+ */
+TYPED_TEST(SplitTest, RangeIndexPosition)
+{
+  // Test parameters
+  constexpr cudf::size_type init_index{0};
+  constexpr cudf::size_type final_index{INPUT_SIZE};
+
+  // Create input column
+  auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
+
+  for (cudf::size_type index = init_index; index < final_index; ++index) {
     // Create indices
-    std::vector<cudf::size_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+    std::vector<cudf::size_type> indices_host{index};
     cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
 
     // Perform operation
     std::vector<gdf_column*> output_column_ptrs;
-    ASSERT_NO_THROW(call_split(input_column.get(), static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+    ASSERT_NO_THROW(call_split(input_column.get(),
+                               static_cast<cudf::size_type*>(indices.get()->data),
+                               indices.get()->size,
+                               output_column_ptrs));
 
     // Transfer input column to host
     std::vector<TypeParam> input_col_data;
@@ -137,142 +213,97 @@ TYPED_TEST(SplitTest, MultipleSplits) {
     std::vector<std::vector<TypeParam>> output_cols_data;
     std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
     std::vector<cudf::size_type> output_cols_null_count;
-    std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
-                                                                                input_col_bitmask, indices_host);
+    std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) =
+      split_columns<TypeParam>(input_col_data, input_col_bitmask, indices_host);
 
     // Create Validation output column_wrappers
     std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
-    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-        validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
-        ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
+    for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+      validation_columns.emplace_back(
+        cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));
+      ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
     }
 
     // Verify the operation
     for (std::size_t i = 0; i < validation_columns.size(); ++i) {
-        if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
+      if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
         ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
     }
 
-    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-        gdf_column_free(output_column_ptrs[i]);
-        delete output_column_ptrs[i];
+    for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+      gdf_column_free(output_column_ptrs[i]);
+      delete output_column_ptrs[i];
     }
+  }
 }
 
-/**
- * It performs a parameterized type and a parameterized value test.
- * The indices array contains only one value and that value goes from
- * 0 to the size of the input column.
- */
-TYPED_TEST(SplitTest, RangeIndexPosition) {
-    // Test parameters
-    constexpr cudf::size_type init_index{0};
-    constexpr cudf::size_type final_index{INPUT_SIZE};
+TEST_F(SplitInputTest, NVCategoryMultipleSlices)
+{
+  // Create host strings
+  bool print                    = false;
+  const int length              = 7;
+  const char** orig_string_data = cudf::test::generate_string_data(INPUT_SIZE, length, print);
+  std::vector<std::string> orig_strings_vector(orig_string_data, orig_string_data + INPUT_SIZE);
 
-    // Create input column
-    auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
+  // Create input column
+  gdf_column* input_column =
+    cudf::test::create_nv_category_column_strings(orig_string_data, INPUT_SIZE);
 
-    for (cudf::size_type index = init_index; index < final_index; ++index) {
-        // Create indices
-        std::vector<cudf::size_type> indices_host{index};
-        cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
+  // Create indices
+  std::vector<cudf::size_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+  cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
 
-        // Perform operation
-        std::vector<gdf_column*> output_column_ptrs;
-        ASSERT_NO_THROW(call_split(input_column.get(), static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+  // Perform operation
+  std::vector<gdf_column*> output_column_ptrs;
+  ASSERT_NO_THROW(call_split(input_column,
+                             static_cast<cudf::size_type*>(indices.get()->data),
+                             indices.get()->size,
+                             output_column_ptrs));
 
-        // Transfer input column to host
-        std::vector<TypeParam> input_col_data;
-        std::vector<cudf::valid_type> input_col_bitmask;
-        std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
+  // Transfer input column to host
+  std::vector<std::string> input_col_data;
+  std::vector<cudf::valid_type> input_col_bitmask;
+  std::tie(input_col_data, input_col_bitmask) = cudf::test::nvcategory_column_to_host(input_column);
+  for (cudf::size_type i = 0; i < INPUT_SIZE; i++) {
+    ASSERT_EQ(orig_strings_vector[i], input_col_data[i]);
+  }
 
-        // Perform split in cpu
-        std::vector<std::vector<TypeParam>> output_cols_data;
-        std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
-        std::vector<cudf::size_type> output_cols_null_count;
-        std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
-                                                                                    input_col_bitmask, indices_host);
+  // Transfer output to host
+  std::vector<std::vector<std::string>> host_output_string_vector(output_column_ptrs.size());
+  std::vector<std::vector<cudf::valid_type>> host_output_bitmask(output_column_ptrs.size());
+  for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+    std::tie(host_output_string_vector[i], host_output_bitmask[i]) =
+      cudf::test::nvcategory_column_to_host(output_column_ptrs[i]);
+  }
 
-        // Create Validation output column_wrappers
-        std::vector<cudf::test::column_wrapper<TypeParam>> validation_columns;
-        for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-            validation_columns.emplace_back(cudf::test::column_wrapper<TypeParam>(output_cols_data[i], output_cols_bitmask[i]));    
-            ASSERT_EQ(validation_columns[i].null_count(), output_cols_null_count[i]);
-        }
+  // Perform slice in cpu
+  std::vector<std::vector<std::string>> output_cols_data;
+  std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
+  std::vector<cudf::size_type> output_cols_null_count;
+  std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) =
+    split_columns<std::string>(input_col_data, input_col_bitmask, indices_host);
 
-        // Verify the operation
-        for (std::size_t i = 0; i < validation_columns.size(); ++i) {
-            if (validation_columns[i].size() > 0 && output_column_ptrs[i]->size > 0)
-            ASSERT_TRUE(validation_columns[i] == *(output_column_ptrs[i]));
-        }
-
-        for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-            gdf_column_free(output_column_ptrs[i]);
-            delete output_column_ptrs[i];
-        }
+  // Verify the operation
+  ASSERT_EQ(host_output_string_vector.size(), output_cols_data.size());
+  ASSERT_EQ(host_output_bitmask.size(), output_cols_bitmask.size());
+  for (std::size_t i = 0; i < host_output_string_vector.size(); ++i) {
+    ASSERT_EQ(host_output_string_vector[i].size(), output_cols_data[i].size());
+    ASSERT_EQ(host_output_bitmask[i].size(), output_cols_bitmask[i].size());
+    ASSERT_EQ(output_cols_null_count[i], output_column_ptrs[i]->null_count);
+    for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
+      ASSERT_EQ(host_output_string_vector[i][j], output_cols_data[i][j]);
     }
-}
-
-TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
-  
-    // Create host strings
-    bool print = false;
-    const int length = 7;
-    const char ** orig_string_data = cudf::test::generate_string_data(INPUT_SIZE, length, print);
-    std::vector<std::string> orig_strings_vector(orig_string_data, orig_string_data + INPUT_SIZE);
-
-    // Create input column
-    gdf_column * input_column = cudf::test::create_nv_category_column_strings(orig_string_data, INPUT_SIZE);
-
-    // Create indices
-    std::vector<cudf::size_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
-    cudf::test::column_wrapper<cudf::size_type> indices(indices_host);
-
-    // Perform operation
-    std::vector<gdf_column*> output_column_ptrs;
-    ASSERT_NO_THROW(call_split(input_column, static_cast<cudf::size_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
-
-    // Transfer input column to host
-    std::vector<std::string> input_col_data;
-    std::vector<cudf::valid_type> input_col_bitmask;
-    std::tie(input_col_data, input_col_bitmask) = cudf::test::nvcategory_column_to_host(input_column);
-    for(cudf::size_type i=0;i<INPUT_SIZE;i++){
-        ASSERT_EQ(orig_strings_vector[i], input_col_data[i]);
+    for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
+      bool lhs_is_valids = bit_mask::is_valid(
+        reinterpret_cast<bit_mask::bit_mask_t*>(host_output_bitmask[i].data()), j);
+      bool rhs_is_valids = bit_mask::is_valid(
+        reinterpret_cast<bit_mask::bit_mask_t*>(output_cols_bitmask[i].data()), j);
+      ASSERT_EQ(lhs_is_valids, rhs_is_valids);
     }
+  }
 
-    // Transfer output to host
-    std::vector<std::vector<std::string>> host_output_string_vector(output_column_ptrs.size());
-    std::vector<std::vector<cudf::valid_type>> host_output_bitmask(output_column_ptrs.size());
-    for(std::size_t i=0;i<output_column_ptrs.size();i++){
-        std::tie(host_output_string_vector[i], host_output_bitmask[i]) = cudf::test::nvcategory_column_to_host(output_column_ptrs[i]);
-    }
-
-    // Perform slice in cpu
-    std::vector<std::vector<std::string>> output_cols_data;
-    std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
-    std::vector<cudf::size_type> output_cols_null_count;
-    std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<std::string>(input_col_data, 
-                                                                                input_col_bitmask, indices_host);
-
-    // Verify the operation
-    ASSERT_EQ(host_output_string_vector.size(), output_cols_data.size());
-    ASSERT_EQ(host_output_bitmask.size(), output_cols_bitmask.size());
-    for (std::size_t i = 0; i < host_output_string_vector.size(); ++i) {
-        ASSERT_EQ(host_output_string_vector[i].size(), output_cols_data[i].size());
-        ASSERT_EQ(host_output_bitmask[i].size(), output_cols_bitmask[i].size());
-        ASSERT_EQ(output_cols_null_count[i], output_column_ptrs[i]->null_count);
-        for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
-            ASSERT_EQ(host_output_string_vector[i][j], output_cols_data[i][j]);
-        }
-        for (std::size_t j = 0; j < host_output_string_vector[i].size(); ++j) {
-            bool lhs_is_valids = bit_mask::is_valid(reinterpret_cast<bit_mask::bit_mask_t*>(host_output_bitmask[i].data()),j);
-            bool rhs_is_valids = bit_mask::is_valid(reinterpret_cast<bit_mask::bit_mask_t*>(output_cols_bitmask[i].data()),j);
-            ASSERT_EQ(lhs_is_valids, rhs_is_valids);
-        }
-    }
-
-    for (std::size_t i = 0; i < output_column_ptrs.size(); i++){
-        gdf_column_free(output_column_ptrs[i]);
-        delete output_column_ptrs[i];    
-    }
+  for (std::size_t i = 0; i < output_column_ptrs.size(); i++) {
+    gdf_column_free(output_column_ptrs[i]);
+    delete output_column_ptrs[i];
+  }
 }

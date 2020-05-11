@@ -111,7 +111,7 @@ if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
 if hasArg benchmarks; then
-    BENCHMARKS="ON"
+    BUILD_BENCHMARKS=ON
 fi
 if hasArg tests; then
     BUILD_TESTS=ON
@@ -160,7 +160,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
           ${GPU_ARCH} \
           -DBUILD_EXTERNAL_DATASOURCES=${BUILD_EXTERNAL_DATASOURCES} \
           -DUSE_NVTX=${BUILD_NVTX} \
-          -DBUILD_BENCHMARKS=${BENCHMARKS} \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
@@ -204,6 +204,10 @@ if buildAll || hasArg libcudf; then
 
     if [[ ${BUILD_TESTS} == "ON" ]]; then
         make -j${PARALLEL_LEVEL} build_tests_cudf VERBOSE=${VERBOSE}
+    fi
+
+    if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
+        make -j${PARALLEL_LEVEL} build_benchmarks_cudf VERBOSE=${VERBOSE}
     fi
 fi
 

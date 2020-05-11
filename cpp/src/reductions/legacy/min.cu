@@ -13,17 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- // The translation unit for reduction `min`
+// The translation unit for reduction `min`
 
 #include "reduction_functions.cuh"
 #include "simple.cuh"
 
-gdf_scalar cudf::reduction::min(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
+gdf_scalar cudf::reduction::min(gdf_column const& col,
+                                gdf_dtype const output_dtype,
+                                cudaStream_t stream)
 {
-    using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::min>;
-    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
+  using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::min>;
+  return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
 }
-
-
-
-

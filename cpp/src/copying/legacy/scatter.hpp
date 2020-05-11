@@ -21,7 +21,6 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-
 // Forward declaration
 struct table;
 
@@ -64,18 +63,22 @@ namespace detail {
  * i.e., setting both to `true` is undefined.
  * @param allow_negative_indices Interpret each negative index `i` in the
  * scattermap as the positive index `i+num_destination_rows`.
- *---------------------------------------------------------------------------**/
-void scatter(table const* source_table, gdf_column const& scatter_map,
-	     table* destination_table, bool check_bounds = false,
-	     bool allow_negative_indices = false);
+ **/
+void scatter(table const* source_table,
+             gdf_column const& scatter_map,
+             table* destination_table,
+             bool check_bounds           = false,
+             bool allow_negative_indices = false);
 
 /**
  * @overload This function accepts `scatter_map` as an array instead of
  * a `gdf_column`.
  */
-void scatter(table const* source_table, cudf::size_type const scatter_map[],
-	     table* destination_table, bool check_bounds = false,
-	     bool allow_negative_indices = false);
+void scatter(table const* source_table,
+             cudf::size_type const scatter_map[],
+             table* destination_table,
+             bool check_bounds           = false,
+             bool allow_negative_indices = false);
 
 }  // namespace detail
 

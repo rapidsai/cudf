@@ -6,7 +6,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from cudf.core import DataFrame
+from cudf.core import DataFrame, Series
 
 
 def _random_float(nelem, dtype):
@@ -111,6 +111,16 @@ def test_label_encode_float_output():
 
     handcoded = np.array([encoder.get(v, np.nan) for v in arr])
     np.testing.assert_equal(got, handcoded)
+
+
+@pytest.mark.parametrize(
+    "ncats,cat_dtype", [(10, np.int8), (127, np.int8), (128, np.int16)]
+)
+def test_label_encode_dtype(ncats, cat_dtype):
+    s = Series([str(i % ncats) for i in range(ncats + 1)])
+    cats = s.unique().astype(s.dtype)
+    encoded_col = s.label_encoding(cats=cats)
+    np.testing.assert_equal(encoded_col.dtype, cat_dtype)
 
 
 if __name__ == "__main__":

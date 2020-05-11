@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/legacy/filling.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
@@ -26,11 +26,10 @@ template <typename T>
 using scalar_wrapper = cudf::test::scalar_wrapper<T>;
 
 template <typename T>
-struct FillingTest : GdfTest {};
+struct FillingTest : GdfTest {
+};
 
-using test_types =
-  ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
-                   cudf::bool8>;
+using test_types = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(FillingTest, test_types);
 
 constexpr cudf::size_type column_size{1000};
@@ -38,24 +37,24 @@ constexpr cudf::size_type column_size{1000};
 auto all_valid = [](cudf::size_type row) { return true; };
 
 template <typename T, typename BitInitializerType = decltype(all_valid)>
-void FillTest(cudf::size_type begin, cudf::size_type end,
-              T value, bool value_is_valid = true, 
+void FillTest(cudf::size_type begin,
+              cudf::size_type end,
+              T value,
+              bool value_is_valid                = true,
               BitInitializerType source_validity = all_valid)
 {
-  column_wrapper<T> source(column_size, 
+  column_wrapper<T> source(
+    column_size,
     [](cudf::size_type row) { return static_cast<T>(row); },
     [&](cudf::size_type row) { return source_validity(row); });
 
   scalar_wrapper<T> val(value, value_is_valid);
 
-  column_wrapper<T> expected(column_size,
-    [&](cudf::size_type row) { 
-      return (row >= begin && row < end) ? 
-        value : static_cast<T>(row);
-    },
-    [&](cudf::size_type row) { 
-      return (row >= begin && row < end) ? 
-        value_is_valid : source_validity(row); 
+  column_wrapper<T> expected(
+    column_size,
+    [&](cudf::size_type row) { return (row >= begin && row < end) ? value : static_cast<T>(row); },
+    [&](cudf::size_type row) {
+      return (row >= begin && row < end) ? value_is_valid : source_validity(row);
     });
 
   EXPECT_NO_THROW(cudf::fill(source.get(), *val.get(), begin, end));
@@ -75,12 +74,12 @@ void FillTest(cudf::size_type begin, cudf::size_type end,
 TYPED_TEST(FillingTest, SetSingle)
 {
   cudf::size_type index = 9;
-  TypeParam val = TypeParam{1};
-  
+  TypeParam val         = TypeParam{1};
+
   // First set it as valid
-  FillTest(index, index+1, val, true);
+  FillTest(index, index + 1, val, true);
   // next set it as invalid
-  FillTest(index, index+1, val, false);
+  FillTest(index, index + 1, val, false);
 }
 
 TYPED_TEST(FillingTest, SetAll)
@@ -97,7 +96,7 @@ TYPED_TEST(FillingTest, SetRange)
 {
   cudf::size_type begin = 99;
   cudf::size_type end   = 299;
-  TypeParam val = TypeParam{1};
+  TypeParam val         = TypeParam{1};
 
   // First set it as valid
   FillTest(begin, end, val, true);
@@ -108,16 +107,12 @@ TYPED_TEST(FillingTest, SetRange)
 TYPED_TEST(FillingTest, SetRangeNullCount)
 {
   cudf::size_type begin = 10;
-  cudf::size_type end = 50;
-  TypeParam val = TypeParam{1};
+  cudf::size_type end   = 50;
+  TypeParam val         = TypeParam{1};
 
-  auto some_valid = [](cudf::size_type row) { 
-    return row % 2 != 0;
-  };
+  auto some_valid = [](cudf::size_type row) { return row % 2 != 0; };
 
-  auto all_invalid = [](cudf::size_type row) { 
-    return false;
-  };
+  auto all_invalid = [](cudf::size_type row) { return false; };
 
   // First set it as valid value
   FillTest(begin, end, val, true, some_valid);
@@ -135,13 +130,13 @@ TYPED_TEST(FillingTest, SetRangeNullCount)
   FillTest(0, column_size, val, true, some_valid);
 }
 
-struct FillingErrorTest : GdfTest {};
+struct FillingErrorTest : GdfTest {
+};
 
 TEST_F(FillingErrorTest, InvalidColumn)
 {
   scalar_wrapper<int32_t> val(5, true);
-  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(nullptr, *val.get(), 0, 10),
-                            "Null gdf_column pointer");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(nullptr, *val.get(), 0, 10), "Null gdf_column pointer");
 
   gdf_column bad_input;
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
@@ -149,8 +144,7 @@ TEST_F(FillingErrorTest, InvalidColumn)
   EXPECT_NO_THROW(cudf::fill(&bad_input, *val.get(), 0, 0));
 
   // for zero-size column, non-empty range is out of bounds
-  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(&bad_input, *val.get(), 0, 10),
-                            "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(&bad_input, *val.get(), 0, 10), "Range is out of bounds");
 
   // invalid data pointer
   bad_input.size = 20;
@@ -161,14 +155,13 @@ TEST_F(FillingErrorTest, InvalidColumn)
 TEST_F(FillingErrorTest, InvalidRange)
 {
   scalar_wrapper<int32_t> val(5, true);
-  column_wrapper<int32_t> dest(100, 
+  column_wrapper<int32_t> dest(
+    100,
     [](cudf::size_type row) { return static_cast<int32_t>(row); },
     [](cudf::size_type row) { return true; });
-  
-  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 110),
-                            "Range is out of bounds");
-  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), -10, 0),
-                            "Range is out of bounds");
+
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 110), "Range is out of bounds");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), -10, 0), "Range is out of bounds");
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 10, 0),
                             "Range is empty or reversed");
 }
@@ -176,11 +169,11 @@ TEST_F(FillingErrorTest, InvalidRange)
 TEST_F(FillingErrorTest, DTypeMismatch)
 {
   scalar_wrapper<int32_t> val(5, true);
-  column_wrapper<float> dest(100, 
+  column_wrapper<float> dest(
+    100,
     [](cudf::size_type row) { return static_cast<float>(row); },
     [](cudf::size_type row) { return true; });
-  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10),
-                            "Data type mismatch");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 10), "Data type mismatch");
 }
 
 TEST_F(FillingErrorTest, StringCategoryNotSupported)
@@ -189,5 +182,5 @@ TEST_F(FillingErrorTest, StringCategoryNotSupported)
   std::vector<const char*> strings{"foo"};
   column_wrapper<cudf::nvstring_category> dest(1, strings.data());
   CUDF_EXPECT_THROW_MESSAGE(cudf::fill(dest.get(), *val.get(), 0, 1),
-    "cudf::fill() does not support GDF_STRING_CATEGORY columns");
+                            "cudf::fill() does not support GDF_STRING_CATEGORY columns");
 }

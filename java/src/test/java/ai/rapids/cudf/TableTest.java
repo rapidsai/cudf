@@ -40,6 +40,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.Aggregate.max;
+import static ai.rapids.cudf.Aggregate.first;
+import static ai.rapids.cudf.Aggregate.last;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -1783,6 +1785,45 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingRowNumber() {
+    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+                                                 .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+                                                 .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+                                                 .build();
+         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2))) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(2,1).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,2,2, 1,2,2,2, 1,2,2,2);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(3,2).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,3, 1,2,3,3, 1,2,3,3);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                                            .aggregateWindows(WindowAggregate.row_number(3, windowBuilder.window(4,3).build()));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedInts(1,2,3,4, 1,2,3,4, 1,2,3,4);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+       }
+    }
+  }
+
+  @Test
   void testWindowingMean() {
     try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                  .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
@@ -1859,6 +1900,31 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingWithoutGroupByColumns() {
+    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
+                                                 .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
+                                                 .build();
+         ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+
+      try (Table sorted = unsorted.orderBy(Table.asc(0))) {
+        ColumnVector sortedAggColumn = sorted.getColumn(1);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+                                            .minPeriods(1)
+                                            .window(2, 1)
+                                            .build();
+
+        try (Table windowAggResults = sorted.groupBy().aggregateWindows(WindowAggregate.sum(1, window));
+             ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 17L, 25L, 24L, 19L, 18L, 10L, 14L, 12L, 12L);
+        ) {
+          assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
   void testTimeRangeWindowingCount() {
     try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
                                                  .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
@@ -1917,6 +1983,97 @@ public class TableTest extends CudfTestBase {
         try (Table windowAggResults = sorted.groupBy(0, 1)
                   .aggregateWindows(WindowAggregate.max(3, window));
              ColumnVector expect = ColumnVector.fromBoxedInts(        7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 8, 8)) {
+          assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testTimeRangeWindowingRowNumber() {
+    try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+                                                 .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+                                                 .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+                                                 .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.asc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+            .minPeriods(1)
+            .window(3, 0)
+            .timestampColumnIndex(2)
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverTimeRanges(WindowAggregate.row_number(3, window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4,  1, 2, 3, 4,  1, 2, 3, 4, 5)) {
+          assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testTimeRangeWindowingCountDescendingTimestamps() {
+    try (Table unsorted = new Table.TestBuilder().column(             1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1, 1) // GBY Key
+                                                 .column(             0, 0, 0, 0,  1, 1, 1, 1,  2, 2, 2, 2, 2) // GBY Key
+                                                 .timestampDayColumn( 7, 6, 6, 5,  5, 4, 4, 3,  3, 3, 2, 1, 1) // Timestamp Key
+                                                 .column(             7, 5, 1, 9,  7, 9, 8, 2,  8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0), Table.asc(1), Table.desc(2));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(3);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window_0 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(2, 1)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        WindowOptions window_1 = WindowOptions.builder()
+            .minPeriods(1)
+            .window(3, 0)
+            .timestampColumnIndex(2)
+            .timestampDescending()
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverTimeRanges(
+                    WindowAggregate.count(3, window_0),
+                    WindowAggregate.sum  (3, window_1));
+             ColumnVector expect_0 = ColumnVector.fromBoxedInts(3,  4,  4,  4,  3, 4, 4, 4,  3, 3, 5, 5, 5);
+             ColumnVector expect_1 = ColumnVector.fromBoxedLongs(7L, 13L, 13L, 22L,  7L, 24L, 24L, 26L,  8L, 8L, 14L, 28L, 28L)) {
+          assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
+          assertColumnsAreEqual(expect_1, windowAggResults.getColumn(1));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testTimeRangeWindowingWithoutGroupByColumns() {
+    try (Table unsorted = new Table.TestBuilder().timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+                                                 .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+                                                 .build()) {
+      try (Table sorted = unsorted.orderBy(Table.asc(0));
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+        ColumnVector sortedAggColumn = sorted.getColumn(1);
+        assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+        WindowOptions window = WindowOptions.builder()
+            .minPeriods(1)
+            .window(1, 1)
+            .timestampColumnIndex(0)
+            .build();
+
+        try (Table windowAggResults = sorted.groupBy()
+                  .aggregateWindowsOverTimeRanges(WindowAggregate.count(1, window));
+             ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 6, 6, 6, 6, 7, 7, 6, 6, 5, 5, 3)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
       }
@@ -2216,6 +2373,66 @@ public class TableTest extends CudfTestBase {
           }
         }
       }
+    }
+  }
+
+  @Test
+  void testGroupByFirstExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(13, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastExcludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, 15)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, false))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByFirstIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(null, 14)
+                 .build();
+         Table found = input.groupBy(0).aggregate(first(1, true))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByLastIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+            .column(  1,   1,    1,  1,  2,    2,  2,    2)
+            .column(null, 13, null, 12, 14, null, 15, null)
+            .build();
+         Table expected = new Table.TestBuilder()
+                 .column(1, 2)
+                 .column(12, null)
+                 .build();
+         Table found = input.groupBy(0).aggregate(last(1, true))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 

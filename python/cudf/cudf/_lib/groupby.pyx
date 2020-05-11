@@ -57,12 +57,12 @@ cdef class GroupBy:
     cdef dict __dict__
 
     def __cinit__(self, Table keys, bool dropna=True, *args, **kwargs):
-        cdef libcudf_types.include_nulls c_include_nulls
+        cdef libcudf_types.null_policy c_null_handling
 
         if dropna:
-            c_include_nulls = libcudf_types.include_nulls.NO
+            c_null_handling = libcudf_types.null_policy.EXCLUDE
         else:
-            c_include_nulls = libcudf_types.include_nulls.YES
+            c_null_handling = libcudf_types.null_policy.INCLUDE
 
         cdef table_view keys_view = keys.view()
 
@@ -70,7 +70,7 @@ cdef class GroupBy:
             self.c_obj.reset(
                 new libcudf_groupby.groupby(
                     keys_view,
-                    c_include_nulls
+                    c_null_handling
                 )
             )
 

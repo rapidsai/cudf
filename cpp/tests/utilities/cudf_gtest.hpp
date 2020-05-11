@@ -20,7 +20,7 @@
 #error "Don't include gtest/gtest.h directly, include cudf_gtest.hpp instead"
 #endif
 
-/**---------------------------------------------------------------------------*
+/**
  * @file GTest.hpp
  * @brief Work around for GTests emulation of variadic templates in
  * ::Testing::Types.
@@ -32,7 +32,7 @@
  *
  * Uses macros to rename GTests's emulated variadic template types and then
  * redefines them properly.
- *---------------------------------------------------------------------------**/
+ **/
 
 #define Types Types_NOT_USED
 #define Types0 Types0_NOT_USED
@@ -47,7 +47,6 @@
 #undef Templates0
 
 namespace testing {
-
 template <class... TYPES>
 struct Types {
   using type = Types;
@@ -62,11 +61,11 @@ struct Types<T, TYPES...> {
 };
 
 namespace internal {
-
 using Types0 = Types<>;
 
 template <GTEST_TEMPLATE_... TYPES>
-struct Templates {};
+struct Templates {
+};
 
 template <GTEST_TEMPLATE_ HEAD, GTEST_TEMPLATE_... TAIL>
 struct Templates<HEAD, TAIL...> {
@@ -91,25 +90,29 @@ struct TypeList<Types<TYPES...>> {
 }  // namespace internal
 }  // namespace testing
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 // Utility for testing the expectation that an expression x throws the specified
 // exception whose what() message ends with the msg
-#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)     \
-do { \
-  EXPECT_THROW({                                                     \
-    try { x; }                                                       \
-    catch (const exception &e) {                                     \
-    ASSERT_NE(nullptr, e.what());                                    \
-    EXPECT_THAT(e.what(), testing::StartsWith((startswith)));        \
-    EXPECT_THAT(e.what(), testing::EndsWith((endswith)));            \
-    throw;                                                           \
-  }}, exception);                                                    \
-} while (0)
+#define EXPECT_THROW_MESSAGE(x, exception, startswith, endswith)    \
+  do {                                                              \
+    EXPECT_THROW(                                                   \
+      {                                                             \
+        try {                                                       \
+          x;                                                        \
+        } catch (const exception &e) {                              \
+          ASSERT_NE(nullptr, e.what());                             \
+          EXPECT_THAT(e.what(), testing::StartsWith((startswith))); \
+          EXPECT_THAT(e.what(), testing::EndsWith((endswith)));     \
+          throw;                                                    \
+        }                                                           \
+      },                                                            \
+      exception);                                                   \
+  } while (0)
 
 #define CUDF_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
+  EXPECT_THROW_MESSAGE(x, cudf::logic_error, "cuDF failure at:", msg)
 
 #define CUDA_EXPECT_THROW_MESSAGE(x, msg) \
-EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)
+  EXPECT_THROW_MESSAGE(x, cudf::cuda_error, "CUDA error encountered at:", msg)

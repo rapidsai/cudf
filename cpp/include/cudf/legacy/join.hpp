@@ -19,25 +19,25 @@
 namespace cudf {
 // joins
 
-/** 
+/**
  * @brief  Performs an inner join on the specified columns of two
  * tables (left, right)
  *
- * @example TableA a: {0, 1, 2}
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, a: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {1, 2}, b: {1, 2} }
  *
- * @example TableA a: {0, 1, 2}
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
  *          columns_in_common: { }
  * Result: { a: {1, 2}, b: {1, 2}, c: {1, 2} }
  *
- * @throws cudf::logic_error 
+ * @throws cudf::logic_error
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
  * @param[in] left The left table
@@ -65,25 +65,25 @@ namespace cudf {
  * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table inner_join(
-                         cudf::table const& left,
-                         cudf::table const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudf::table *joined_indices,
-                         gdf_context *join_context);
-/** 
+  cudf::table const& left,
+  cudf::table const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  cudf::table* joined_indices,
+  gdf_context* join_context);
+/**
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
  *
- * @example TableA a: {0, 1, 2}
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, a: {1 ,2 ,5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {0, 1, 2}, b: {NULL, 1, 2} }
  *
- * @example TableA a: {0, 1, 2}
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
@@ -113,32 +113,32 @@ cudf::table inner_join(
  * responsibility to free these columns.
  * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
- * 
+ *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table left_join(
-                         cudf::table const& left,
-                         cudf::table const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudf::table *joined_indices,
-                         gdf_context *join_context);
+  cudf::table const& left,
+  cudf::table const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  cudf::table* joined_indices,
+  gdf_context* join_context);
 
-/** 
+/**
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two tables (left, right)
- * 
- * @example TableA a: {0, 1, 2}
+ *
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {1}
  *          columns_in_common: { {0, 1} }
  * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
- * @example TableA a: {0, 1, 2}
+ * Example TableA a: {0, 1, 2}
  *          TableB b: {1, 2, 3}, c: {1, 2, 5}
  *          left_on: {0}
  *          right_on: {0}
@@ -169,17 +169,17 @@ cudf::table left_join(
  * It is the caller's responsibility to free these columns.
  * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
- * 
+ *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
  * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table full_join(
-                         cudf::table const& left,
-                         cudf::table const& right,
-                         std::vector<cudf::size_type> const& left_on,
-                         std::vector<cudf::size_type> const& right_on,
-                         std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
-                         cudf::table *joined_indices,
-                         gdf_context *join_context);
-} //namespace cudf
+  cudf::table const& left,
+  cudf::table const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
+  cudf::table* joined_indices,
+  gdf_context* join_context);
+}  // namespace cudf

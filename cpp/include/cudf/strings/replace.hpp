@@ -15,14 +15,18 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @ingroup strings_apis
+ * @addtogroup strings_replace Replace
+ * APIs to replace substrings/patterns within strings.
+ * @{
+ */
 
 /**
  * @brief Replaces target string within each string with the specified
@@ -38,13 +42,14 @@ namespace strings
  *
  * Null string entries will return null output string entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * r1 = replace(s,"o","OOO")
  * r1 is now ["hellOOO","gOOOOOOdbye"]
  * r2 = replace(s,"oo","")
  * r2 is now ["hello","gdbye"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if target is an empty string.
  *
@@ -56,11 +61,12 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace( strings_column_view const& strings,
-                                 string_scalar const& target,
-                                 string_scalar const& repl,
-                                 int32_t maxrepl = -1,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  string_scalar const& repl,
+  int32_t maxrepl                     = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief This function replaces each string in the column with the provided
@@ -76,11 +82,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * string can be appended to each string by specifying -1 for both
  * start and stop.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["abcdefghij","0123456789"]
  * r = s.replace_slice(s,2,5,"z")
  * r is now ["abzfghij", "01z56789"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if start is greater than stop.
  *
@@ -94,10 +101,12 @@ std::unique_ptr<column> replace( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_slice( strings_column_view const& strings,
-                                       string_scalar const& repl = string_scalar(""),
-                                       size_type start = 0, size_type stop = -1,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_slice(
+  strings_column_view const& strings,
+  string_scalar const& repl           = string_scalar(""),
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replaces substrings matching a list of targets with the corresponding
@@ -114,7 +123,8 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * The repls argument can optionally contain a single string. In this case, all
  * matching target substrings will be replaced by that single string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", "goodbye"]
  * tgts = ["e","o"]
  * repls = ["EE","OO"]
@@ -124,7 +134,7 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * repls = ["33",""]
  * r2 = replace(s,tgts,repls)
  * r2 is now ["h33llo", "gdby33"]
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if targets and repls are different sizes except
  * if repls is a single string.
@@ -136,31 +146,34 @@ std::unique_ptr<column> replace_slice( strings_column_view const& strings,
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace( strings_column_view const& strings,
-                                 strings_column_view const& targets,
-                                 strings_column_view const& repls,
-                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  strings_column_view const& repls,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Replaces any null string entries with the given string.
  *
  * This returns a strings column with no null entries.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ["hello", nullptr, "goodbye"]
  * r = replace_nulls(s,"**")
  * r is now ["hello", "**", "goodbye"]
- * ```
+ * @endcode
  *
  * @param strings Strings column for this operation.
  * @param repl Replacement string for null entries. Default is empty string.
  * @param mr Resource for allocating device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> replace_nulls( strings_column_view const& strings,
-                                       string_scalar const& repl = string_scalar(""),
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> replace_nulls(
+  strings_column_view const& strings,
+  string_scalar const& repl           = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

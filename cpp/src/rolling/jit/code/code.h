@@ -25,15 +25,20 @@ namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
+extern const char* kernel_headers;
+extern const char* kernel;
+extern const char* operation_h;
 
-    extern const char* kernel_headers;
-    extern const char* kernel;
-    extern const char* operation_h;
+extern const char* kernel_headers;
+extern const char* kernel;
+extern const char* operation_h;
 
-}
-}
-}
-}
-}
+extern const char* grouped_window_wrapper;
+
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace experimental
+}  // namespace cudf
 
 #endif

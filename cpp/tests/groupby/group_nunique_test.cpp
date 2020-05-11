@@ -24,13 +24,13 @@
 
 namespace cudf {
 namespace test {
-
-
 template <typename V>
-struct groupby_nunique_test : public cudf::test::BaseFixture {};
+struct groupby_nunique_test : public cudf::test::BaseFixture {
+};
 
 TYPED_TEST_CASE(groupby_nunique_test, cudf::test::AllTypes);
 
+// clang-format off
 TYPED_TEST(groupby_nunique_test, basic)
 {
     using K = int32_t;
@@ -190,13 +190,13 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
     fixed_width_column_wrapper<R> expect_bool_vals { 2, 2, 1, 1};
 
 
-    auto agg = cudf::experimental::make_nunique_aggregation(include_nulls::YES);
+    auto agg = cudf::experimental::make_nunique_aggregation(null_policy::INCLUDE);
     if(std::is_same<V, bool>())
         test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
     else 
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
+// clang-format on
 
-
-} // namespace test
-} // namespace cudf
+}  // namespace test
+}  // namespace cudf
