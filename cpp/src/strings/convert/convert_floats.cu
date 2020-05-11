@@ -110,7 +110,8 @@ __device__ inline double stod(string_view const& d_str)
                     : -std::numeric_limits<double>::infinity();
   else if (exp_ten < -308)
     return 0.0;
-  // using exp10() since the pow(10.0,exp_ten) function is very inaccurate in 10.2
+  // using exp10() since the pow(10.0,exp_ten) function is
+  // very inaccurate in 10.2: http://nvbugs/2971187
   double value = static_cast<double>(digits) * exp10(static_cast<double>(exp_ten));
   return (value * sign);
 }
