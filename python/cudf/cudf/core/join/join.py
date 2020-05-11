@@ -8,8 +8,8 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
-from cudf.utils.dtypes import is_categorical_dtype, is_datetime_dtype
 
+from cudf.core.dtypes import CategoricalDtype
 
 class Merge(object):
     """
@@ -333,7 +333,7 @@ class Merge(object):
         if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
             # if categorical and equal, children passed to libcudf
             libcudf_join_type = dtype_l
-        elif is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r):
+        elif isinstance(dtype_l, CategoricalDtype) and isinstance(dtype_r, CategoricalDtype):
             # categories are not equal
             libcudf_join_type = np.dtype("O")
         elif how == "left":
@@ -363,11 +363,11 @@ class Merge(object):
             else:
                 libcudf_join_type = dtype_r
 
-        elif is_categorical_dtype(dtype_l):
+        elif isinstance(dtype_l, CategoricalDtype):
             if how == "right":
                 raise ValueError(ctgry_err.format(rcol, "right"))
             libcudf_join_type = lcol.cat().categories.dtype
-        elif is_categorical_dtype(dtype_r):
+        elif isinstance(dtype_r, CategoricalDtype):
             if how == "left":
                 raise ValueError(ctgry_err.format(lcol, "left"))
             libcudf_join_type = rcol.cat().categories.dtype
@@ -382,7 +382,7 @@ class Merge(object):
                     libcudf_join_type = np.find_common_type(
                         [], [dtype_l, dtype_r]
                     )
-            elif is_datetime_dtype(dtype_l) and is_datetime_dtype(dtype_r):
+            elif np.issubdtype(dtype_l, np.datetime64) and np.issubdtype(dtype_r, np.datetime64):
                 libcudf_join_type = max(dtype_l, dtype_r)
         return libcudf_join_type
 
@@ -398,7 +398,7 @@ class Merge(object):
 
         merge_return_type = None
         # we  currently only need to do this for categorical variables
-        if is_categorical_dtype(dtype_l) and is_categorical_dtype(dtype_r):
+        if isinstance(dtype_l, CategoricalDtype) and isinstance(dtype_r, CategoricalDtype):
             if pd.api.types.is_dtype_equal(dtype_l, dtype_r):
                 if how in ["inner", "left"]:
                     merge_return_type = dtype_l
@@ -494,7 +494,7 @@ class Merge(object):
         return output
 
     def _build_output_col(self, col, dtype):
-        if is_categorical_dtype(dtype) and dtype != "category":
+        if isinstance(dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)):
             outcol = cudf.core.column.build_categorical_column(
                 categories=dtype.categories, codes=col
             )
