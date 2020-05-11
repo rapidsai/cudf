@@ -942,7 +942,7 @@ TEST_F(CsvReaderTest, DatesWithWriter)
   check_timestamp_column(input_table.column(0), result_table.column(0));
 }
 
-TEST_F(CsvReaderTest, DISABLED_FloatingPointWithWriter)
+TEST_F(CsvReaderTest, FloatingPointWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "FloatingPointWithWriter.csv";
 
