@@ -22,9 +22,9 @@
 #include <arrow/io/memory.h>
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
 #include "datasource.hpp"
 
 namespace cudf {
@@ -36,9 +36,8 @@ namespace external {
  **/
 class external_datasource : public datasource {
  public:
-
   /**
-   * Returns the unique identifier for the external datasource. 
+   * Returns the unique identifier for the external datasource.
    * This value is used in the python/cython layer to specify
    * which external datasource should be used on invocation.
    */
@@ -56,8 +55,8 @@ class external_datasource : public datasource {
   virtual ~external_datasource(){};
 
  public:
-  std::string DATASOURCE_ID;  // The unique ID the datasource will be referenced by to directly access it.
-  
+  std::string
+    DATASOURCE_ID;  // The unique ID the datasource will be referenced by to directly access it.
 };
 
 }  // namespace external

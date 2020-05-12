@@ -17,47 +17,50 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 #include <cudf/cudf.h>
-#include <cudf/legacy/unary.hpp>
 #include <nvstrings/NVStrings.h>
+#include <cudf/legacy/unary.hpp>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <tests/io/legacy/io_test_utils.hpp>
+#include <gtest/gtest.h>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/io/legacy/io_test_utils.hpp>
 
 #include <arrow/io/api.h>
 
-#include <io/utilities/datasource_factory.hpp>
 #include <cudf/io/readers.hpp>
+#include <io/utilities/datasource_factory.hpp>
 
 TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
-    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+  ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 /**
  * @brief Base test fixture external tests
  **/
-struct ExternalDatasource : public GdfTest {};
+struct ExternalDatasource : public GdfTest {
+};
 
 TEST_F(ExternalDatasource, Basic)
 {
-    std::map<std::string, std::string> datasource_confs;
+  std::map<std::string, std::string> datasource_confs;
 
-    //Topic
-    datasource_confs.insert({"ex_ds.kafka.topic", "libcudf-test"});
+  // Topic
+  datasource_confs.insert({"ex_ds.kafka.topic", "libcudf-test"});
 
-    //General Conf
-    datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
-    datasource_confs.insert({"group.id", "libcudf_consumer"});
-    datasource_confs.insert({"auto.offset.reset", "beginning"});
+  // General Conf
+  datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
+  datasource_confs.insert({"group.id", "libcudf_consumer"});
+  datasource_confs.insert({"auto.offset.reset", "beginning"});
 
-    //cudf::io::external::datasource_factory dfs("/home/jdyer/anaconda3/envs/cudf_dev/lib/external");
-    //cudf::io::external::external_datasource* ex_datasource = dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
-    //ex_datasource->configure_datasource(datasource_confs);
+  // cudf::io::external::datasource_factory dfs("/home/jdyer/anaconda3/envs/cudf_dev/lib/external");
+  // cudf::io::external::external_datasource* ex_datasource =
+  // dfs.external_datasource_by_id("librdkafka-1.2.2", datasource_confs);
+  // ex_datasource->configure_datasource(datasource_confs);
 
-    // TODO: All of this seems more like integration testing to me ... unsure best approach to take for the tests?
+  // TODO: All of this seems more like integration testing to me ... unsure best approach to take
+  // for the tests?
 }

@@ -16,15 +16,15 @@
 
 #pragma once
 
-#include <string>
-#include <iostream>
-#include <sys/types.h>
 #include <dirent.h>
-#include <vector>
-#include <map>
 #include <dlfcn.h>
+#include <sys/types.h>
 #include <boost/filesystem.hpp>
 #include <cudf/utilities/error.hpp>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
 #include "external_datasource.hpp"
 
 namespace cudf {
@@ -35,9 +35,7 @@ namespace external {
  * @brief Factory class for creating and managing instances of external datasources
  */
 class datasource_factory {
-
  public:
-
   /**
    * Load all of the .so files that are possible candidates for housing external datasources.
    */
@@ -47,9 +45,8 @@ class datasource_factory {
    * @brief Base class destructor
    */
   virtual ~datasource_factory(){};
- 
- public:
 
+ public:
   /**
    * @brief Get the string path to libcudf External Datasource libraries.
    *
@@ -62,15 +59,19 @@ class datasource_factory {
    *
    * The default cache directory `$CONDA_PREFIX/lib/external`.
    */
-  boost::filesystem::path getExternalLibDir() {
+  boost::filesystem::path getExternalLibDir()
+  {
     // python user supplied `external_lib_dir_` always has the most precedence
     if (!boost::filesystem::exists(external_lib_dir_)) {
       // Since the python external dir was not supplied check for environment variable.
       auto external_io_lib_path_env = std::getenv("EXTERNAL_DATASOURCE_LIB_PATH");
-      if (external_io_lib_path_env != nullptr && boost::filesystem::exists(external_io_lib_path_env)) {
+      if (external_io_lib_path_env != nullptr &&
+          boost::filesystem::exists(external_io_lib_path_env)) {
         return boost::filesystem::path(external_io_lib_path_env);
       } else {
-        CUDF_EXPECTS(external_io_lib_path_env == nullptr, "`EXTERNAL_DATASOURCE_LIB_PATH` was set but does not exist on the filesystem.");
+        CUDF_EXPECTS(
+          external_io_lib_path_env == nullptr,
+          "`EXTERNAL_DATASOURCE_LIB_PATH` was set but does not exist on the filesystem.");
         auto conda_prefix = std::getenv("CONDA_PREFIX");
         if (boost::filesystem::exists(conda_prefix)) {
           std::string conda_str = conda_prefix;
@@ -78,18 +79,23 @@ class datasource_factory {
           boost::filesystem::path conda_path(conda_str);
           return conda_path;
         } else {
-          CUDF_FAIL("`EXTERNAL_DATASOURCE_LIB_PATH` was not specified. External datasources could not be loaded.");
+          CUDF_FAIL(
+            "`EXTERNAL_DATASOURCE_LIB_PATH` was not specified. External datasources could not be "
+            "loaded.");
         }
       }
     } else {
       return external_lib_dir_;
     }
   }
-  
+
   /**
-   * Takes the python/user supplied `external_datasource_id` and returns the external_datasource object to the calling function.
+   * Takes the python/user supplied `external_datasource_id` and returns the external_datasource
+   *object to the calling function.
    **/
-  external_datasource* external_datasource_by_id(std::string unique_id, std::map<std::string, std::string> datasource_confs) {
+  external_datasource* external_datasource_by_id(
+    std::string unique_id, std::map<std::string, std::string> datasource_confs)
+  {
     std::map<std::string, external_datasource_wrapper>::iterator it;
     it = external_libs_.find(unique_id);
     if (it != external_libs_.end()) {
@@ -100,81 +106,78 @@ class datasource_factory {
   }
 
  public:
-  
   /**
    * Wrapper for the external datasource to assist with more concise life cycle management
    */
   class external_datasource_wrapper {
-    public:
-      external_datasource_wrapper(std::string external_datasource_lib){
-        external_datasource_lib_ = external_datasource_lib;
+   public:
+    external_datasource_wrapper(std::string external_datasource_lib)
+    {
+      external_datasource_lib_ = external_datasource_lib;
 
-        dl_handle = dlopen(external_datasource_lib_.c_str(), RTLD_LAZY);
-        if (!dl_handle) {
-          CUDF_FAIL(dlerror());
-        }
+      dl_handle = dlopen(external_datasource_lib_.c_str(), RTLD_LAZY);
+      if (!dl_handle) { CUDF_FAIL(dlerror()); }
 
-        ex_ds_load ex_ds = (ex_ds_load) dlsym(dl_handle, "libcudf_external_datasource_load");
-        ex_ds_load_from_conf ex_ds_conf = (ex_ds_load_from_conf) dlsym(dl_handle, "libcudf_external_datasource_load_from_conf");
-        ex_ds_destroy ex_ds_dest = (ex_ds_destroy) dlsym(dl_handle, "libcudf_external_datasource_destroy");
+      ex_ds_load ex_ds = (ex_ds_load)dlsym(dl_handle, "libcudf_external_datasource_load");
+      ex_ds_load_from_conf ex_ds_conf =
+        (ex_ds_load_from_conf)dlsym(dl_handle, "libcudf_external_datasource_load_from_conf");
+      ex_ds_destroy ex_ds_dest =
+        (ex_ds_destroy)dlsym(dl_handle, "libcudf_external_datasource_destroy");
 
-        if ((error = dlerror()) != NULL) {
-          CUDF_FAIL(error);
-        }
+      if ((error = dlerror()) != NULL) { CUDF_FAIL(error); }
 
-        ex_ds_ = ex_ds(); // Create external_datasource object
-        ds_unique_id_ = ex_ds_->libcudf_datasource_identifier();
+      ex_ds_        = ex_ds();  // Create external_datasource object
+      ds_unique_id_ = ex_ds_->libcudf_datasource_identifier();
 
-        // Pending no errors consider the handle alive and open
-        open_ = true;
-      };
+      // Pending no errors consider the handle alive and open
+      open_ = true;
+    };
 
-      bool isOpen() {
-        return open_;
-      }
+    bool isOpen() { return open_; }
 
-      bool configure(std::map<std::string, std::string> datasource_confs, std::vector<std::string> topics, std::vector<int> partitions) {
-        datasource_confs_ = datasource_confs;
-        return ex_ds_->configure_datasource(datasource_confs);
-      }
+    bool configure(std::map<std::string, std::string> datasource_confs,
+                   std::vector<std::string> topics,
+                   std::vector<int> partitions)
+    {
+      datasource_confs_ = datasource_confs;
+      return ex_ds_->configure_datasource(datasource_confs);
+    }
 
-      std::string unique_id() {
-        return ds_unique_id_;
-      }
+    std::string unique_id() { return ds_unique_id_; }
 
-      external_datasource* get_external_datasource() {
-        return ex_ds_;
-      }
+    external_datasource* get_external_datasource() { return ex_ds_; }
 
-    private:
-      // Shared Object specific variables
-      void *dl_handle;
-      typedef external_datasource* (*ex_ds_load)();
-      typedef external_datasource* (*ex_ds_load_from_conf)(std::map<std::string, std::string>);
-      typedef void (*ex_ds_destroy) (external_datasource*);
-      char *error;
+   private:
+    // Shared Object specific variables
+    void* dl_handle;
+    typedef external_datasource* (*ex_ds_load)();
+    typedef external_datasource* (*ex_ds_load_from_conf)(std::map<std::string, std::string>);
+    typedef void (*ex_ds_destroy)(external_datasource*);
+    char* error;
 
-      std::string ds_unique_id_;
-      std::string external_datasource_lib_;
-      cudf::io::external::external_datasource *ex_ds_;
-      std::map<std::string, std::string> datasource_confs_;
-      bool configured_ = false;
-      bool open_ = false;
+    std::string ds_unique_id_;
+    std::string external_datasource_lib_;
+    cudf::io::external::external_datasource* ex_ds_;
+    std::map<std::string, std::string> datasource_confs_;
+    bool configured_ = false;
+    bool open_       = false;
   };
 
  private:
-  void load_external_libs() {
+  void load_external_libs()
+  {
     boost::filesystem::path ext_path = getExternalLibDir();
     if (boost::filesystem::exists(ext_path) && boost::filesystem::is_directory(ext_path)) {
-        boost::filesystem::directory_iterator it{ext_path};
-        boost::filesystem::directory_iterator endit;
-        while (it != endit) {
-          if (it->path().extension() == EXTERNAL_LIB_SUFFIX) {
-            external_datasource_wrapper wrapper(it->path().c_str());
-            external_libs_.insert(std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
-          }
-          ++it;
+      boost::filesystem::directory_iterator it{ext_path};
+      boost::filesystem::directory_iterator endit;
+      while (it != endit) {
+        if (it->path().extension() == EXTERNAL_LIB_SUFFIX) {
+          external_datasource_wrapper wrapper(it->path().c_str());
+          external_libs_.insert(
+            std::pair<std::string, external_datasource_wrapper>(wrapper.unique_id(), wrapper));
         }
+        ++it;
+      }
     } else {
       CUDF_FAIL("External Datasource directory does not exist");
     }
@@ -182,7 +185,7 @@ class datasource_factory {
 
  private:
   boost::filesystem::path external_lib_dir_;
-  std::string EXTERNAL_LIB_SUFFIX = ".so";     // Currently only support .so files.
+  std::string EXTERNAL_LIB_SUFFIX = ".so";  // Currently only support .so files.
   std::map<std::string, external_datasource_wrapper> external_libs_;
 };
 

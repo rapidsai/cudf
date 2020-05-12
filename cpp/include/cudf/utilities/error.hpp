@@ -59,12 +59,11 @@ struct cuda_error : public std::runtime_error {
  * expected to be true
  * @throw cudf::logic_error if the condition evaluates to false.
  *---------------------------------------------------------------------------**/
-#define CUDF_EXPECTS(cond, reason)                                  \
-  (!!(cond)) ? static_cast<void>(0)                                 \
-             : throw cudf::logic_error(                             \
-                   std::string("cuDF failure at: " __FILE__         \
-                               ":" CUDF_STRINGIFY(__LINE__) ": ") + \
-                   reason)
+#define CUDF_EXPECTS(cond, reason) \
+  (!!(cond))                       \
+    ? static_cast<void>(0)         \
+    : throw cudf::logic_error(     \
+        std::string("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": ") + reason)
 /**---------------------------------------------------------------------------*
  * @brief Indicates that an erroneous code path has been taken.
  *
@@ -78,10 +77,9 @@ struct cuda_error : public std::runtime_error {
  *
  * @param[in] reason String literal description of the reason
  *---------------------------------------------------------------------------**/
-#define CUDF_FAIL(reason)                                                  \
-  throw cudf::logic_error(std::string("cuDF failure at: " __FILE__         \
-                                      ":" CUDF_STRINGIFY(__LINE__) ": ") + \
-                          reason)
+#define CUDF_FAIL(reason)  \
+  throw cudf::logic_error( \
+    std::string("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": ") + reason)
 
 namespace cudf {
 namespace detail {

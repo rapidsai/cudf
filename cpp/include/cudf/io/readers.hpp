@@ -343,15 +343,17 @@ class reader {
  public:
   /**
    * @brief Constructor for external datasource.
-   * 
+   *
    * @param external_datasource_id Unique identifier of the externally loaded datasource
-   * @param datasource_confs Map of <string, string> key/value pairs that will be used in configuring the external datasource
+   * @param datasource_confs Map of <string, string> key/value pairs that will be used in
+   * configuring the external datasource
    * @param options Settings for controlling reading behavior
    * @param mr Optional resource to use for device memory allocation
    */
-  explicit reader(
-      std::string external_datasource_id, std::map<std::string, std::string> datasource_confs,
-      reader_options const &options, rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+  explicit reader(std::string external_datasource_id,
+                  std::map<std::string, std::string> datasource_confs,
+                  reader_options const &options,
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
   /**
    * @brief Constructor for a filepath to dataset.
