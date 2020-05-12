@@ -1480,7 +1480,7 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname, quoting=csv.QUOTE_NONE)
+    expect = pd.read_csv(pdf_df_fname)
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
