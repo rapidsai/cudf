@@ -468,83 +468,86 @@ void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
                          cudaStream_t stream)
 {
-  CUDF_EXPECTS(table.num_columns() > 0 && table.num_rows() > 0, "Empty table.");
+  CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
 
   // write header: column names separated by delimiter:
+  // (even for tables with no rows)
   //
   write_chunked_begin(table, metadata, stream);
 
-  // no need to check same-size columns constraint; auto-enforced by table_view
-  auto n_rows_per_chunk = options_.rows_per_chunk();
-  //
-  // This outputs the CSV in row chunks to save memory.
-  // Maybe we can use the total_rows*count calculation and a memory threshold
-  // instead of an arbitrary chunk count.
-  // The entire CSV chunk must fit in CPU memory before writing it out.
-  //
-  if (n_rows_per_chunk % 8)  // must be divisible by 8
-    n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
-  CUDF_EXPECTS(n_rows_per_chunk > 0, "write_csv: invalid chunk_rows; must be at least 8");
-
-  auto exec = rmm::exec_policy(stream);
-
-  auto num_rows = table.num_rows();
-  std::vector<table_view> vector_views;
-
-  if (num_rows <= n_rows_per_chunk) {
-    vector_views.push_back(table);
-  } else {
-    std::vector<size_type> splits;
-    auto n_chunks = num_rows / n_rows_per_chunk;
-    splits.resize(n_chunks);
-
-    rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-    thrust::inclusive_scan(exec->on(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
-
-    CUDA_TRY(cudaMemcpyAsync(splits.data(),
-                             d_splits.data().get(),
-                             n_chunks * sizeof(size_type),
-                             cudaMemcpyDeviceToHost,
-                             stream));
-
-    CUDA_TRY(cudaStreamSynchronize(stream));
-
-    // split table_view into chunks:
+  if (table.num_rows() > 0) {
+    // no need to check same-size columns constraint; auto-enforced by table_view
+    auto n_rows_per_chunk = options_.rows_per_chunk();
     //
-    vector_views = cudf::experimental::split(table, splits);
-  }
-
-  // convert each chunk to CSV:
-  //
-  column_to_strings_fn converter{options_, mr_};
-  for (auto&& sub_view : vector_views) {
-    std::vector<std::unique_ptr<column>> str_column_vec;
-
-    // populate vector of string-converted columns:
+    // This outputs the CSV in row chunks to save memory.
+    // Maybe we can use the total_rows*count calculation and a memory threshold
+    // instead of an arbitrary chunk count.
+    // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    std::transform(sub_view.begin(),
-                   sub_view.end(),
-                   std::back_inserter(str_column_vec),
-                   [converter](auto const& current_col) {
-                     return cudf::experimental::type_dispatcher(
-                       current_col.type(), converter, current_col);
-                   });
+    if (n_rows_per_chunk % 8)  // must be divisible by 8
+      n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
+    CUDF_EXPECTS(n_rows_per_chunk > 0, "write_csv: invalid chunk_rows; must be at least 8");
 
-    // create string table view from str_column_vec:
+    auto exec = rmm::exec_policy(stream);
+
+    auto num_rows = table.num_rows();
+    std::vector<table_view> vector_views;
+
+    if (num_rows <= n_rows_per_chunk) {
+      vector_views.push_back(table);
+    } else {
+      std::vector<size_type> splits;
+      auto n_chunks = num_rows / n_rows_per_chunk;
+      splits.resize(n_chunks);
+
+      rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
+      thrust::inclusive_scan(exec->on(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
+
+      CUDA_TRY(cudaMemcpyAsync(splits.data(),
+                               d_splits.data().get(),
+                               n_chunks * sizeof(size_type),
+                               cudaMemcpyDeviceToHost,
+                               stream));
+
+      CUDA_TRY(cudaStreamSynchronize(stream));
+
+      // split table_view into chunks:
+      //
+      vector_views = cudf::experimental::split(table, splits);
+    }
+
+    // convert each chunk to CSV:
     //
-    auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
-    table_view str_table_view{std::move(*str_table_ptr)};
+    column_to_strings_fn converter{options_, mr_};
+    for (auto&& sub_view : vector_views) {
+      std::vector<std::unique_ptr<column>> str_column_vec;
 
-    // concatenate columns in each row into one big string column
-    //(using null representation and delimiter):
-    //
-    std::string delimiter_str{options_.inter_column_delimiter()};
-    auto str_concat_col =
-      cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
+      // populate vector of string-converted columns:
+      //
+      std::transform(sub_view.begin(),
+                     sub_view.end(),
+                     std::back_inserter(str_column_vec),
+                     [converter](auto const& current_col) {
+                       return cudf::experimental::type_dispatcher(
+                                                                  current_col.type(), converter, current_col);
+                     });
 
-    strings_column_view strings_converted{std::move(*str_concat_col)};
+      // create string table view from str_column_vec:
+      //
+      auto str_table_ptr = std::make_unique<cudf::experimental::table>(std::move(str_column_vec));
+      table_view str_table_view{std::move(*str_table_ptr)};
 
-    write_chunked(strings_converted, metadata, stream);
+      // concatenate columns in each row into one big string column
+      //(using null representation and delimiter):
+      //
+      std::string delimiter_str{options_.inter_column_delimiter()};
+      auto str_concat_col =
+        cudf::strings::concatenate(str_table_view, delimiter_str, options_.na_rep(), mr_);
+
+      strings_column_view strings_converted{std::move(*str_concat_col)};
+
+      write_chunked(strings_converted, metadata, stream);
+    }
   }
 
   // finalize (no-op, for now, but offers a hook for future extensions):
