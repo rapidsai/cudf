@@ -392,7 +392,7 @@ If you introduce a new namespace, provide a description block for only one decla
 
 Grouping declarations into modules helps users to find APIs in the doxygen pages.
 Generally, common functions are already grouped logically into header files but doxygen does not automatically group them this way in its output.
-Th doxygen output includes a _Modules_ page that organizes items into groups specified using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html).
+The doxygen output includes a _Modules_ page that organizes items into groups specified using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html).
 These commands can group common functions across header files, source files, and even namespaces.
 Groups can also be nested by defining new groups within existing groups.
 
