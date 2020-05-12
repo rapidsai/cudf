@@ -33,12 +33,14 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup aggregation_factories
+ * @{
+ */
 
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
- *
- * @ingroup column_aggregation
  *
  * Other kinds of aggregations may derive from this class to encapsulate
  * additional information needed to compute the aggregation.
@@ -88,11 +90,6 @@ class aggregation {
 };
 
 enum class udf_type : bool { CUDA, PTX };
-
-/**
- * @ingroup aggregation_factories
- * @{
- */
 
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation();

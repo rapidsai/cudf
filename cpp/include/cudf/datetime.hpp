@@ -56,8 +56,7 @@ std::unique_ptr<column> extract_component(
 }  // namespace detail
 
 /**
- * @ingroup datetime_apis
- * @addtogroup datetime_extract Extracting
+ * @addtogroup datetime_extract
  * @{
  */
 
@@ -154,8 +153,7 @@ std::unique_ptr<cudf::column> extract_second(
 
 /** @} */  // end of group
 /**
- * @ingroup datetime_apis
- * @addtogroup datetime_compute Compute Day
+ * @addtogroup datetime_compute
  * @{
  */
 

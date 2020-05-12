@@ -30,7 +30,7 @@
  *   @{
  *      @defgroup column_factories Factories
  *      @defgroup strings_classes Strings
- *      @defgroup dictionary_classes
+ *      @defgroup dictionary_classes Dictionary
  *      @defgroup timestamp_classes Timestamp
  *   @}
  *   @defgroup table_classes Table
@@ -38,6 +38,7 @@
  *   @{
  *      @defgroup scalar_factories Factories
  *   @}
+ *   @defgroup fixed_point_classes Fixed Point
  * @}
  * @defgroup column_apis Column and Table APIs
  * @{

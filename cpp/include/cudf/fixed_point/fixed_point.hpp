@@ -192,8 +192,7 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
 }  // namespace detail
 
 /**
- * @ingroup cudf_classes
- * @addtogroup numeric_fixed_point Fixed Point
+ * @addtogroup fixed_point_classes
  * @{
  */
 

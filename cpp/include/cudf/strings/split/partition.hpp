@@ -22,7 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_split
+ * @addtogroup strings_split
  * @{
  */
 

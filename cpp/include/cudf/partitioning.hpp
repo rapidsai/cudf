@@ -23,7 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup reorder_partition
+ * @addtogroup reorder_partition
  * @{
  */
 

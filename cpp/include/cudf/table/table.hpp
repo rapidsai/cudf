@@ -24,8 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup cudf_classes
- * @addtogroup table_classes Table
+ * @addtogroup table_classes
  * @{
  */
 

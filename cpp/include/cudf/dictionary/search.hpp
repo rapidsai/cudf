@@ -20,8 +20,7 @@
 namespace cudf {
 namespace dictionary {
 /**
- * @ingroup dictionary_apis
- * @addtogroup dictionary_search Searching
+ * @addtogroup dictionary_search
  * @{
  */
 

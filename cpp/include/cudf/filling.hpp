@@ -23,7 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup transformation_fill
+ * @addtogroup transformation_fill
  * @{
  */
 

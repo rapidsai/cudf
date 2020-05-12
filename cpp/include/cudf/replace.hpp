@@ -22,7 +22,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup transformation_replace
+ * @addtogroup transformation_replace
  * @{
  */
 
@@ -234,7 +234,7 @@ std::unique_ptr<column> clamp(
 /** @} */  // end of group
 }  // namespace experimental
 /**
- * @ingroup transformation_replace
+ * @addtogroup transformation_replace
  * @{
  */
 

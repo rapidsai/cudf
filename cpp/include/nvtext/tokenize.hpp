@@ -21,7 +21,7 @@
 
 namespace nvtext {
 /**
- * @ingroup nvtext_tokenize
+ * @addtogroup nvtext_tokenize
  * @{
  */
 

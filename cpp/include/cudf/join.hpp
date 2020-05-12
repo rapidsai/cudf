@@ -24,7 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_join
+ * @addtogroup column_join
  * @{
  */
 

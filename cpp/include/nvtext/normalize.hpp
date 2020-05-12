@@ -21,7 +21,7 @@
 //! NVText APIs
 namespace nvtext {
 /**
- * @ingroup nvtext_normalize
+ * @addtogroup nvtext_normalize
  * @{
  */
 

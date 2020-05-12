@@ -20,7 +20,7 @@
 
 namespace cudf {
 /**
- * @ingroup reshape_transpose
+ * @addtogroup reshape_transpose
  * @{
  */
 

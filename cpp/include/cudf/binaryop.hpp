@@ -25,7 +25,7 @@ namespace cudf {
 namespace experimental {
 
 /**
- * @ingroup transformation_binaryops
+ * @addtogroup transformation_binaryops
  * @{
  */
 

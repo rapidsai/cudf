@@ -29,7 +29,7 @@
 namespace cudf {
 
 /**
- * @addtogroup column_classes Column
+ * @ingroup column_classes Column
  * @{
  */
 

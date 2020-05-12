@@ -23,7 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup aggregation_rolling
+ * @addtogroup aggregation_rolling
  * @{
  */
 

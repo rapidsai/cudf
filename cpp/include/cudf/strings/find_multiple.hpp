@@ -21,7 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_find
+ * @addtogroup strings_find
  * @{
  */
 

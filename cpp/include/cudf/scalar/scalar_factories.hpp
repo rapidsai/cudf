@@ -22,7 +22,7 @@
 
 namespace cudf {
 /**
- * @addtogroup scalar_factories Factories
+ * @ingroup scalar_factories
  * @{
  */
 

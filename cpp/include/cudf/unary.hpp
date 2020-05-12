@@ -22,7 +22,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup transformation_unaryops
+ * @addtogroup transformation_unaryops
  * @{
  */
 

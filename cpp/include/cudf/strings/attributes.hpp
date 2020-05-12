@@ -19,13 +19,14 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
-/**
- * @addtogroup strings_apis Strings column APIs
- * @{
- */
 
 //! Strings column APIs
 namespace strings {
+/**
+ * @addtogroup strings_apis
+ * @{
+ */
+
 /**
  * @brief Returns an integer numeric column containing the length of each string in
  * characters.
@@ -82,6 +83,7 @@ std::unique_ptr<column> code_points(
   strings_column_view const& strings,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace strings
 /** @} */  // end of strings_apis group
+
+}  // namespace strings
 }  // namespace cudf

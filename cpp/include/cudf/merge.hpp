@@ -23,7 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_merge
+ * @addtogroup column_merge
  * @{
  */
 

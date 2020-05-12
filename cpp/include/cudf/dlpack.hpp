@@ -22,7 +22,7 @@ struct DLManagedTensor;
 
 namespace cudf {
 /**
- * @ingroup interop_dlpack
+ * @addtogroup interop_dlpack
  * @{
  */
 

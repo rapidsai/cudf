@@ -28,7 +28,7 @@
 namespace cudf {
 
 /**
- * @addtogroup strings_classes Strings
+ * @ingroup strings_classes
  * @{
  */
 

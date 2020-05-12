@@ -35,7 +35,7 @@ namespace experimental {
 /**
  * @brief Gathers the specified rows (including null values) of a set of columns.
  *
- * @ingroup copy_gather Gathering
+ * @ingroup copy_gather
  *
  * Gathers the rows of the source columns according to `gather_map` such that row "i"
  * in the resulting table's columns will contain row "gather_map[i]" from the source columns.

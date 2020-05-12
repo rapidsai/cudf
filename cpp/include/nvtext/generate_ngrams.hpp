@@ -21,7 +21,7 @@
 
 namespace nvtext {
 /**
- * @ingroup nvtext_ngrams
+ * @addtogroup nvtext_ngrams
  * @{
  */
 

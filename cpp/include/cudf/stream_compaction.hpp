@@ -23,11 +23,13 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup reorder_compact
+ * @{
+ */
 
 /**
  * @brief Filters a table to remove null elements with threshold count.
- *
- * @ingroup reorder_compact
  *
  * Filters the rows of the `input` considering specified columns indicated in
  * `keys` for validity / null values.
@@ -72,8 +74,6 @@ std::unique_ptr<table> drop_nulls(
 /**
  * @brief Filters a table to remove null elements.
  *
- * @ingroup reorder_compact
- *
  * Filters the rows of the `input` considering specified columns indicated in
  * `keys` for validity / null values.
  *
@@ -105,8 +105,6 @@ std::unique_ptr<experimental::table> drop_nulls(
 /**
  * @brief Filters `input` using `boolean_mask` of boolean values as a mask.
  *
- * @ingroup reorder_compact
- *
  * Given an input `table_view` and a mask `column_view`, an element `i` from
  * each column_view of the `input` is copied to the corresponding output column
  * if the corresponding element `i` in the mask is non-null and `true`.
@@ -132,8 +130,6 @@ std::unique_ptr<experimental::table> apply_boolean_mask(
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
- *
- * @ingroup reorder_compact
  */
 enum class duplicate_keep_option {
   KEEP_FIRST = 0,  ///< Keeps first duplicate row and unique rows
@@ -143,8 +139,6 @@ enum class duplicate_keep_option {
 
 /**
  * @brief Create a new table without duplicate rows
- *
- * @ingroup reorder_compact
  *
  * Given an `input` table_view, each row is copied to output table if the corresponding
  * row of `keys` columns is unique, where the definition of unique depends on the value of @p keep:
@@ -173,8 +167,6 @@ std::unique_ptr<experimental::table> drop_duplicates(
 /**
  * @brief Count the unique elements in the column_view
  *
- * @ingroup reorder_compact
- *
  * Given an input column_view, number of unique elements in this column_view is returned
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both
@@ -192,5 +184,6 @@ cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
                              nan_policy nan_handling);
 
+/** @} */
 }  // namespace experimental
 }  // namespace cudf

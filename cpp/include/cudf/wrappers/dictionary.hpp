@@ -26,7 +26,7 @@
 
 namespace cudf {
 /**
- * @addtogroup dictionary_classes Dictionary
+ * @addtogroup dictionary_classes
  * @{
  */
 
