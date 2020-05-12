@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ TEST_F(StringsConvertTest, ToFloats32)
                                      ".25",
                                      "-.002",
                                      "",
+                                     "-0.0",
+                                     "1.2e4",
                                      "NaN",
                                      "abc123",
                                      "123abc",
@@ -60,6 +62,8 @@ TEST_F(StringsConvertTest, ToFloats32)
                                 0.25,
                                 -0.002,
                                 0,
+                                -0.0,
+                                12000,
                                 nanval,
                                 0,
                                 123.0,
@@ -80,10 +84,17 @@ TEST_F(StringsConvertTest, ToFloats32)
 
 TEST_F(StringsConvertTest, FromFloats32)
 {
-  std::vector<float> h_floats{
-    100, 654321.25, -12761.125, 0, 5, -4, std::numeric_limits<float>::quiet_NaN(), 839542223232.79};
+  std::vector<float> h_floats{100,
+                              654321.25,
+                              -12761.125,
+                              0,
+                              5,
+                              -4,
+                              std::numeric_limits<float>::quiet_NaN(),
+                              839542223232.79,
+                              -0.0};
   std::vector<const char*> h_expected{
-    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11"};
+    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422433e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<float> floats(
     h_floats.begin(),
@@ -110,6 +121,8 @@ TEST_F(StringsConvertTest, ToFloats64)
                                      ".25",
                                      "-.002",
                                      "",
+                                     "-0.0",
+                                     "1.28e256",
                                      "NaN",
                                      "abc123",
                                      "123abc",
@@ -132,6 +145,8 @@ TEST_F(StringsConvertTest, ToFloats64)
                                  0.25,
                                  -0.002,
                                  0,
+                                 -0.0,
+                                 1.28e256,
                                  nanval,
                                  0,
                                  123.0,
@@ -159,9 +174,10 @@ TEST_F(StringsConvertTest, FromFloats64)
                                5,
                                -4,
                                std::numeric_limits<double>::quiet_NaN(),
-                               839542223232.794248339};
+                               839542223232.794248339,
+                               -0.0};
   std::vector<const char*> h_expected{
-    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11"};
+    "100.0", "654321.25", "-12761.125", "0.0", "5.0", "-4.0", "NaN", "8.395422232e+11", "-0.0"};
 
   cudf::test::fixed_width_column_wrapper<double> floats(
     h_floats.begin(),
