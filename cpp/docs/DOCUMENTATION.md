@@ -443,8 +443,17 @@ std::unique_ptr<column> fill(table_view const& input,...);
 ```
 
 This just saves adding `@ingroup` to each comment block that appears in the file.
-Make sure there is a blank line after the group definition comment block so doxygen know it does not apply to whatever follows in the source code.
-Note that the `@{` and `@}` does not work especially if it crosses namespaces so include them and the `@addtogroup` between the namespace declaration braces as shown in the example above.
+Make sure a blank line is included after the group definition comment block so doxygen knows it does not apply to whatever follows in the source code.
+Note that doxygen will not assign groups to items if the `@addtogroup` with `@{ ... @}` pair includes a namespace declaration.
+So include the `@addtogroup` and `@{ ... @}` between the namespace declaration braces as shown in the example above.
+
+Summary of groups tags
+| Tag/Command | Where to use |
+| ----------- | ------------ |
+| `@defgroup` | Fo use only in `doxygen_groups.h` and should include the group's title. |
+| `@ingroup` | Use inside individual doxygen block comments for declaration statements in a header file. |
+| `@addtogroup` | Use instead of `@ingroup` for multiple declarations in the same file within a namespace declaration. Do not specify a group title. |
+| `@{ ... @}` |  Use only with `@addtogroup`. |
 
 ## Build Doxygen Output
 
