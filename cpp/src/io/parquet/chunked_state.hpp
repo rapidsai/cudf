@@ -55,6 +55,8 @@ struct pq_chunked_state {
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
 
+  pq_chunked_state() = default;
+
   pq_chunked_state(std::unique_ptr<writer> writer_ptr,
                    std::size_t curr_chunk_offset,
                    SetMetadata set_metadata,

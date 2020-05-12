@@ -285,11 +285,22 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
 {
   parquet::writer_options options{args.compression, args.stats_level};
 
-  auto writer                  = make_writer<parquet::writer>(args.sink, options, mr);
-  auto const curr_chunk_offset = writer->write_chunked_begin();
+  // auto writer                  = make_writer<parquet::writer>(args.sink, options, mr);
+  // auto const curr_chunk_offset = writer->write_chunked_begin();
 
-  return std::make_shared<pq_chunked_state>(
-    std::move(writer), curr_chunk_offset, SetMetadata::WITH_NULLABILITY, nullptr, args.metadata);
+  // return std::make_shared<pq_chunked_state>(
+  //   std::move(writer), curr_chunk_offset, SetMetadata::WITH_NULLABILITY, nullptr, args.metadata);
+
+  auto state = std::make_shared<pq_chunked_state>();
+  state->wp  = make_writer<parquet::writer>(args.sink, options, mr);
+
+  if (args.metadata != nullptr) {
+    state->user_metadata_with_nullability = *args.metadata;
+    state->user_metadata                  = &state->user_metadata_with_nullability;
+  }
+  state->stream               = 0;
+  state->current_chunk_offset = state->wp->write_chunked_begin();
+  return state;
 }
 
 /**
