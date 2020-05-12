@@ -811,7 +811,7 @@ class DataFrame(Frame):
             Return a copy when ``copy=True`` (be very careful setting
             ``copy=False`` as changes to values then may propagate to other
             pandas objects).
-        errors : {'raise', 'ignore'}, default 'raise'
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
@@ -822,10 +822,7 @@ class DataFrame(Frame):
         -------
         casted : DataFrame
         """
-        if copy:
-            result = self.copy()
-        else:
-            result = self
+        result = self.copy(deep=copy)
 
         if is_dict_like(dtype):
             for col_name in dtype.keys():

@@ -1415,31 +1415,44 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, copy=True, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
         Parameters
         ----------
 
-        dtype : data type
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast Series object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            series name and dtype is a numpy.dtype or Python type to cast to.
+        copy : bool, default True
+            Return a copy when ``copy=True`` (be very careful setting
+            ``copy=False`` as changes to values then may propagate to other
+            pandas objects).
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
         out : Series
-            Copy of ``self`` cast to the given dtype. Returns
-            ``self`` if ``dtype`` is the same as ``self.dtype``.
+            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
+            as ``self.dtype``.
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
         try:
             return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
+                data=self._column.copy(deep=copy).astype(dtype, **kwargs)
             )
+
         except Exception as e:
             if errors == "raise":
                 raise e

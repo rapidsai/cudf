@@ -5321,3 +5321,32 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
         df = gd.DataFrame(pdf)
         assert_eq(pdf, df, check_dtype=False)
         assert df["one_col"].dtype == expected_upcast_type
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_df_series_dataframe_astype_copy(copy):
+    gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf, pdf)
+    assert_eq(gdf.astype("float", copy=copy), pdf.astype("float", copy=copy))
+    assert_eq(gdf, pdf)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(gsr, psr)
+    assert_eq(gsr.astype("float", copy=copy), psr.astype("float", copy=copy))
+    assert_eq(gsr, psr)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(gsr, psr)
+    actual = gsr.astype("int64", copy=copy)
+    expected = psr.astype("int64", copy=copy)
+    assert_eq(expected, actual)
+    assert_eq(gsr, psr)
+    actual[0] = 3
+    expected[0] = 3
+    assert_eq(gsr, psr)
