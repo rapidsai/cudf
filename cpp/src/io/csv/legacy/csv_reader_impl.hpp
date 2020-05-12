@@ -35,9 +35,10 @@
 namespace cudf {
 namespace io {
 namespace csv {
-/**---------------------------------------------------------------------------*
+
+/**
  * @brief Class used to parse Json input and convert it into gdf columns
- *---------------------------------------------------------------------------**/
+ **/
 class reader::Impl {
  private:
   const reader_options args_;

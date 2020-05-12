@@ -21,7 +21,7 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import unique_count as cpp_unique_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
@@ -326,7 +326,7 @@ class ColumnBase(Column):
         if is_categorical_dtype(self.dtype):
             return self._fill_categorical(fill_value, begin, end, inplace)
 
-        fill_scalar = Scalar(fill_value, self.dtype)
+        fill_scalar = as_scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudf.filling.fill(self, begin, end, fill_scalar)
@@ -347,7 +347,7 @@ class ColumnBase(Column):
 
     def _fill_categorical(self, fill_value, begin, end, inplace):
         fill_code = self._encode(fill_value)
-        fill_scalar = Scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 
@@ -418,16 +418,10 @@ class ColumnBase(Column):
         index = np.int32(index)
         if index < 0:
             index = len(self) + index
-        if index > len(self) - 1:
-            raise IndexError
+        if index > len(self) - 1 or index < 0:
+            raise IndexError("single positional indexer is out-of-bounds")
 
-        val = self[index : (index + 1)]
-        if val.null_count == 1:
-            val = None
-        else:
-            val = val.to_array()[0]
-
-        return val
+        return libcudf.copying.get_element(self, index).value
 
     def __getitem__(self, arg):
         from cudf.core.column import column
@@ -852,6 +846,17 @@ class ColumnBase(Column):
             ordered = False
 
         sr = cudf.Series(self)
+
+        # Re-label self w.r.t. the provided categories
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            labels = sr.label_encoding(cats=dtype.categories)
+            return build_categorical_column(
+                categories=dtype.categories,
+                codes=labels._column,
+                mask=self.mask,
+                ordered=ordered,
+            ).astype(dtype)
+
         labels, cats = sr.factorize()
 
         # columns include null index in factorization; remove:
@@ -1275,9 +1280,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                if nan_as_null:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-                else:
+                if nan_as_null is False:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
                     if new_dtype == np.dtype("object"):
@@ -1288,6 +1291,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         arbitrary = utils.scalar_broadcast_to(
                             np.nan, (len(arbitrary),), dtype=new_dtype
                         )
+                else:
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
@@ -1469,7 +1474,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             buffer = Buffer(arbitrary)
             mask = None
-            if nan_as_null:
+            if nan_as_null is None or nan_as_null is True:
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )

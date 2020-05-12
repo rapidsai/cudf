@@ -69,8 +69,8 @@ std::unique_ptr<scalar> reduce(
  * @param[in] agg unique_ptr to aggregation operator applied by the scan
  * @param[in] inclusive The flag for applying an inclusive scan if
  *            scan_type::INCLUSIVE, an exclusive scan if scan_type::EXCLUSIVE.
- * @param[in] include_nulls_flag Exclude null values when computing the result if
- * include_nulls::NO. Include nulls if include_nulls::YES.
+ * @param[in] null_handling Exclude null values when computing the result if
+ * null_policy::EXCLUDE. Include nulls if null_policy::INCLUDE.
  * Any operation with a null results in a null.
  * @params[in] mr The resource to use for all allocations
  * @returns unique pointer to new output column
@@ -78,7 +78,7 @@ std::unique_ptr<scalar> reduce(
 std::unique_ptr<column> scan(const column_view &input,
                              std::unique_ptr<aggregation> const &agg,
                              scan_type inclusive,
-                             include_nulls include_nulls_flag    = include_nulls::NO,
+                             null_policy null_handling           = null_policy::EXCLUDE,
                              rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
 
 }  // namespace experimental

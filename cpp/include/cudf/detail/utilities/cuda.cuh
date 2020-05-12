@@ -16,12 +16,12 @@
 
 #pragma once
 
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <cub/cub.cuh>
-//#include <utilities/cuda_utils.hpp>
 
 #include <assert.h>
 #include <type_traits>
@@ -123,6 +123,8 @@ cudf::size_type elements_per_thread(Kernel kernel,
                                     cudf::size_type block_size,
                                     cudf::size_type max_per_thread = 32)
 {
+  CUDF_FUNC_RANGE();
+
   // calculate theoretical occupancy
   int max_blocks = 0;
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&max_blocks, kernel, block_size, 0));
@@ -151,6 +153,25 @@ template <typename T>
 __device__ inline T round_up_pow2(T number_to_round, T modulus)
 {
   return (number_to_round + (modulus - 1)) & -modulus;
+}
+
+template <class F>
+__global__ void single_thread_kernel(F f)
+{
+  f();
+}
+
+/**
+ * @brief single thread cuda kernel
+ *
+ * @tparam Functor Device functor type
+ * @param functor device functor object or device lambda function
+ * @param stream stream to run the kernel
+ */
+template <class Functor>
+void device_single_thread(Functor functor, cudaStream_t stream = 0)
+{
+  single_thread_kernel<<<1, 1, 0, stream>>>(functor);
 }
 
 }  // namespace detail

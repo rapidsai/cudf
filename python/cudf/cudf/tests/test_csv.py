@@ -69,7 +69,8 @@ def make_numpy_mixed_dataframe():
     )
     df["Float"] = np.array([9.001, 8.343, 6, 2.781])
     df["Integer2"] = np.array([2345, 106, 2088, 789277])
-    df["Category"] = np.array(["M", "F", "F", "F"])
+    # Category is not yet supported from libcudf
+    # df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
     return df
@@ -194,22 +195,34 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
 
     gdf1 = read_csv(
         str(fname),
-        names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        # dtype=[
+        #    "int64", "date", "float64", "int64", "category", "str", "bool"
+        # ],
+        names=["1", "2", "3", "4", "5", "6"],
+        dtype=["int64", "date", "float64", "int64", "str", "bool"],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
-        names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        # dtype=[
+        #    "int64", "date", "float64", "int64", "category", "str", "bool"
+        # ],
+        names=["1", "2", "3", "4", "5", "6"],
+        dtype=["int64", "date", "float64", "int64", "str", "bool"],
         dayfirst=True,
         **pandas_arg,
     )
 
     pdf = pd.read_csv(
         fname,
-        names=["1", "2", "3", "4", "5", "6", "7"],
+        # Category is not yet supported from libcudf
+        # names=["1", "2", "3", "4", "5", "6", "7"],
+        names=["1", "2", "3", "4", "5", "6"],
         parse_dates=[1],
         dayfirst=True,
         **pandas_arg,
@@ -457,26 +470,6 @@ def test_csv_reader_NaN_values():
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
     assert all(np.isnan(all_nan.to_pandas()["float32"]))
-
-    # no NA values: defaults are off, no custom values passed in
-    # only NaNs should be empty cells
-    none_nan = read_csv(
-        StringIO(default_na_cells),
-        names=names,
-        dtype=dtypes,
-        keep_default_na=False,
-    )
-    assert not any(np.isnan(none_nan.to_pandas()["float32"]))
-
-    # na_filter off - only NaNs should be empty cells
-    none_nan = read_csv(
-        StringIO(default_na_cells + custom_na_cells),
-        names=names,
-        dtype=dtypes,
-        na_filter=False,
-        na_values=custom_na_values,
-    )
-    assert not any(np.isnan(none_nan.to_pandas()["float32"]))
 
     # custom NA values
     all_nan = read_csv(
@@ -914,10 +907,10 @@ def test_csv_reader_tabs():
     floats = [1.2, 3.4, 5.6, 7.8]
     ints = [12, 34, 56, 78]
     dates = [
-        "1995-11-22T00:00:00.000",
-        "2001-01-01T00:00:00.000",
-        "1970-12-12T00:00:00.000",
-        "2018-06-15T00:00:00.000",
+        "1995-11-22T00:00:00.000000000",
+        "2001-01-01T00:00:00.000000000",
+        "1970-12-12T00:00:00.000000000",
+        "2018-06-15T00:00:00.000000000",
     ]
     np.testing.assert_allclose(floats, df["float_point"].to_array())
     np.testing.assert_allclose(ints, df["integer"].to_array())
@@ -1035,17 +1028,6 @@ def test_csv_reader_prefix():
     column_names = list(df.columns.values)
     for col in range(len(column_names)):
         assert column_names[col] == prefix_str + str(col)
-
-
-def test_csv_reader_category_hash():
-
-    lines = ["HBM0676", "KRC0842", "ILM1441", "EJV0094", "ILM1441"]
-    buffer = "\n".join(lines)
-
-    df = read_csv(StringIO(buffer), names=["user"], dtype=["category"])
-
-    hash_ref = [2022314536, -189888986, 1512937027, 397836265, 1512937027]
-    assert list(df["user"]) == hash_ref
 
 
 def test_csv_reader_delim_whitespace():
@@ -1202,6 +1184,27 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     pd_df = pd.read_csv(StringIO(buffer), names=names, quoting=quoting)
 
     assert_eq(pd_df, gd_df)
+
+
+def test_read_csv_names_header_combination():
+    pdf = pd.DataFrame(
+        {
+            "firstname": ["Emma", "Ava", "Sophia"],
+            "lastname": ["Olivia", "Isabella", "Charlotte"],
+            "gender": ["F", "F", "F"],
+        }
+    )
+    buffer = pdf.to_csv(header=True, index=False)
+    names = pdf.columns
+
+    gdf = read_csv(StringIO(buffer), names=names, header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer), header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer))
+    assert_eq(pdf, gdf)
 
 
 def test_csv_reader_scientific_type_detection():
@@ -1361,12 +1364,16 @@ def test_csv_writer_datetime_data(tmpdir):
 @pytest.mark.parametrize(
     "columns",
     [
-        ["Integer", "Date", "Float", "Integer2", "Category"],
-        ["Category", "Date", "Float"],
+        # Category is not yet supported from libcudf
+        # ["Integer", "Date", "Float", "Integer2", "Category"],
+        ["Integer", "Date", "Float", "Integer2"],
+        # ["Category", "Date", "Float"],
+        ["Date", "Float"],
         ["Integer2"],
-        ["Category", "Integer2", "Float", "Date", "Integer"],
+        # ["Category", "Integer2", "Float", "Date", "Integer"],
+        ["Integer2", "Float", "Date", "Integer"],
         [
-            "Category",
+            # "Category",
             "Integer2",
             "Float",
             "Date",

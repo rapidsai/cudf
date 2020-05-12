@@ -8,7 +8,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
     data_type,
     interpolation,
-    include_nulls
+    null_policy
 )
 
 
@@ -52,7 +52,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf::experimental" nogil:
 
     cdef unique_ptr[aggregation] make_count_aggregation() except +
 
-    cdef unique_ptr[aggregation] make_count_aggregation(include_nulls) except +
+    cdef unique_ptr[aggregation] make_count_aggregation(null_policy) except +
 
     cdef unique_ptr[aggregation] make_any_aggregation() except +
 

@@ -83,7 +83,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
     std::move(device_view_owners), std::move(d_views), std::move(d_offsets), output_size);
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Concatenates the null mask bits of all the column device views in the
  * `views` array to the destination bitmask.
  *
@@ -93,7 +93,7 @@ auto create_device_views(std::vector<column_view> const& views, cudaStream_t str
  * @param dest_mask The output buffer to copy null masks into
  * @param number_of_mask_bits The total number of null masks bits that are being
  * copied
- *---------------------------------------------------------------------------**/
+ **/
 __global__ void concatenate_masks_kernel(column_device_view const* views,
                                          size_t const* output_offsets,
                                          size_type number_of_views,
@@ -337,6 +337,33 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return experimental::type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
 }
 
+std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                                 rmm::mr::device_memory_resource* mr,
+                                                 cudaStream_t stream)
+{
+  if (tables_to_concat.empty()) { return std::make_unique<experimental::table>(); }
+
+  table_view const first_table = tables_to_concat.front();
+  CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
+                           tables_to_concat.cend(),
+                           [&first_table](auto const& t) {
+                             return t.num_columns() == first_table.num_columns() &&
+                                    have_same_types(first_table, t);
+                           }),
+               "Mismatch in table columns to concatenate.");
+
+  std::vector<std::unique_ptr<column>> concat_columns;
+  for (size_type i = 0; i < first_table.num_columns(); ++i) {
+    std::vector<column_view> cols;
+    std::transform(tables_to_concat.cbegin(),
+                   tables_to_concat.cend(),
+                   std::back_inserter(cols),
+                   [i](auto const& t) { return t.column(i); });
+    concat_columns.emplace_back(detail::concatenate(cols, mr, stream));
+  }
+  return std::make_unique<experimental::table>(std::move(concat_columns));
+}
+
 }  // namespace detail
 
 rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
@@ -369,30 +396,11 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
   return detail::concatenate(columns_to_concat, mr, 0);
 }
 
-namespace experimental {
-std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<experimental::table> concatenate(std::vector<table_view> const& tables_to_concat,
+                                                 rmm::mr::device_memory_resource* mr)
 {
-  if (tables_to_concat.size() == 0) { return std::make_unique<table>(); }
-
-  table_view const first_table = tables_to_concat.front();
-  CUDF_EXPECTS(std::all_of(tables_to_concat.begin(),
-                           tables_to_concat.end(),
-                           [&first_table](auto const& t) {
-                             return t.num_columns() == first_table.num_columns() &&
-                                    have_same_types(first_table, t);
-                           }),
-               "Mismatch in table columns to concatenate.");
-
-  std::vector<std::unique_ptr<column>> concat_columns;
-  for (size_type i = 0; i < first_table.num_columns(); ++i) {
-    std::vector<column_view> cols;
-    for (auto& t : tables_to_concat) { cols.emplace_back(t.column(i)); }
-    concat_columns.emplace_back(cudf::concatenate(cols, mr));
-  }
-  return std::make_unique<table>(std::move(concat_columns));
+  CUDF_FUNC_RANGE();
+  return detail::concatenate(tables_to_concat, mr, 0);
 }
-
-}  // namespace experimental
 
 }  // namespace cudf

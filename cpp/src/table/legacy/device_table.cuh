@@ -39,7 +39,7 @@
  */
 class device_table {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Factory function to construct a device_table wrapped in a
    * unique_ptr.
    *
@@ -71,7 +71,7 @@ class device_table {
    * @param[in] cols Array of columns
    * @param[in] stream CUDA stream to use for device operations
    * @return A unique_ptr containing a device_table object
-   *---------------------------------------------------------------------------**/
+   **/
   static auto create(cudf::size_type num_columns,
                      gdf_column const* const* cols,
                      cudaStream_t stream = 0)
@@ -86,19 +86,19 @@ class device_table {
     return p;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Create a device_table from a `cudf::table`
    *
    * @param[in] t The `cudf::table` to wrap
    * @param[in] stream The stream to use for allocations/frees
    * @return A unique_ptr containing a device_table object
-   *---------------------------------------------------------------------------**/
+   **/
   static auto create(cudf::table const& t, cudaStream_t stream = 0)
   {
     return device_table::create(t.num_columns(), t.begin(), stream);
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Destroys the `device_table`.
    *
    * Frees the underlying device memory and deletes the object.
@@ -106,7 +106,7 @@ class device_table {
    * This function is invoked by the deleter of the
    * unique_ptr returned from device_table::create.
    *
-   *---------------------------------------------------------------------------**/
+   **/
   __host__ void destroy(cudaStream_t stream)
   {
     RMM_FREE(device_columns, stream);
@@ -137,7 +137,7 @@ class device_table {
   gdf_column* device_columns{nullptr};  ///< Array of `gdf_column`s in device memory
 
  protected:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Constructs a new device_table object from an array of `gdf_column*`.
    *
    * This constructor is protected to require use of the device_table::create
@@ -145,7 +145,7 @@ class device_table {
    *
    * @param num_cols The number of columns to wrap
    * @param columns An array of columns to copy to device memory
-   *---------------------------------------------------------------------------**/
+   **/
   device_table(cudf::size_type num_cols, gdf_column const* const* columns, cudaStream_t stream = 0)
     : _num_columns(num_cols)
   {

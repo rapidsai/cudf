@@ -1096,7 +1096,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testStringLengths() {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
-      ColumnVector lengths = cv.getLengths();
+      ColumnVector lengths = cv.getCharLengths();
       ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 3, 4)) {
       TableTest.assertColumnsAreEqual(expected, lengths);
     }
@@ -1114,7 +1114,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testEmptyStringColumnOpts() {
     try (ColumnVector cv = ColumnVector.fromStrings()) {
-      try (ColumnVector len = cv.getLengths()) {
+      try (ColumnVector len = cv.getCharLengths()) {
         assertEquals(0, len.getRowCount());
       }
 
@@ -1757,6 +1757,18 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedEmpty, containsEmpty);
     }
   }
+
+    @Test
+    void testExtractRe() {
+        try (ColumnVector input = ColumnVector.fromStrings("a1", "b2", "c3", null);
+             Table expected = new Table.TestBuilder()
+                     .column("a", "b", null, null)
+                     .column("1", "2", null, null)
+                     .build();
+             Table found = input.extractRe("([ab])(\\d)")) {
+            assertTablesAreEqual(expected, found);
+        }
+    }
 
   @Test
   void testMatchesRe() {

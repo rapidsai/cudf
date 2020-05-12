@@ -75,7 +75,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  cudf::test::expect_columns_equivalent(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromFloats32)
@@ -97,7 +97,7 @@ TEST_F(StringsConvertTest, FromFloats32)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  cudf::test::expect_columns_equal(*results, expected);
+  cudf::test::expect_columns_equivalent(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ToFloats64)
@@ -147,7 +147,7 @@ TEST_F(StringsConvertTest, ToFloats64)
     h_expected.begin(),
     h_expected.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  cudf::test::expect_columns_equal(*results, expected);
+  cudf::test::expect_columns_equivalent(*results, expected);
 }
 
 TEST_F(StringsConvertTest, FromFloats64)
@@ -175,7 +175,7 @@ TEST_F(StringsConvertTest, FromFloats64)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
-  cudf::test::expect_columns_equal(*results, expected);
+  cudf::test::expect_columns_equivalent(*results, expected);
 }
 
 TEST_F(StringsConvertTest, ZeroSizeStringsColumnFloat)

@@ -64,7 +64,7 @@ inline void test_single_agg(column_view const& keys,
                             column_view const& expect_vals,
                             std::unique_ptr<experimental::aggregation>&& agg,
                             force_use_sort_impl use_sort           = force_use_sort_impl::NO,
-                            include_nulls include_null_keys        = include_nulls::NO,
+                            null_policy include_null_keys          = null_policy::EXCLUDE,
                             sorted keys_are_sorted                 = sorted::NO,
                             std::vector<order> const& column_order = {},
                             std::vector<null_order> const& null_precedence = {})
@@ -87,7 +87,7 @@ inline void test_single_agg(column_view const& keys,
 
   if (use_sort == force_use_sort_impl::YES) {
     expect_tables_equal(table_view({expect_keys}), result.first->view());
-    expect_columns_equal(expect_vals, *result.second[0].results[0], true);
+    expect_columns_equivalent(expect_vals, *result.second[0].results[0], true);
   } else {
     auto const sort_order =
       experimental::sorted_order(result.first->view(), {}, {null_order::AFTER});
@@ -96,7 +96,7 @@ inline void test_single_agg(column_view const& keys,
       experimental::gather(table_view({result.second[0].results[0]->view()}), *sort_order);
 
     expect_tables_equal(table_view({expect_keys}), *sorted_keys);
-    expect_columns_equal(expect_vals, sorted_vals->get_column(0), true);
+    expect_columns_equivalent(expect_vals, sorted_vals->get_column(0), true);
   }
 }
 

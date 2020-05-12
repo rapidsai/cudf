@@ -183,8 +183,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param group_offsets Offsets of groups' starting points within @p values
- * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
- *  Include nulls if include_nulls::YES.
+ * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
+ *  Include nulls if null_policy::INCLUDE.
  *  Nulls are treated equal.
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
@@ -193,7 +193,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       rmm::device_vector<size_type> const& group_labels,
                                       size_type const num_groups,
                                       rmm::device_vector<size_type> const& group_offsets,
-                                      include_nulls _include_nulls,
+                                      null_policy null_handling,
                                       rmm::mr::device_memory_resource* mr,
                                       cudaStream_t stream = 0);
 
@@ -206,8 +206,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param n nth element to choose from each group of @p values
- * @param _include_nulls Exclude nulls while counting if include_nulls::NO,
- *  Include nulls if include_nulls::YES.
+ * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
+ *  Include nulls if null_policy::INCLUDE.
  * @param mr Memory resource to allocate output with
  * @param stream Stream to perform computation in
  */
@@ -217,7 +217,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                           rmm::device_vector<size_type> const& group_offsets,
                                           size_type num_groups,
                                           size_type n,
-                                          include_nulls _include_nulls,
+                                          null_policy null_handling,
                                           rmm::mr::device_memory_resource* mr,
                                           cudaStream_t stream = 0);
 }  // namespace detail
