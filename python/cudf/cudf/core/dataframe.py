@@ -1378,7 +1378,7 @@ class DataFrame(Frame):
             raise ValueError(msg)
 
         mapper = dict(zip(old_cols, new_names))
-        self.rename(mapper=mapper, inplace=True)
+        self.rename(mapper=mapper, inplace=True, axis=1)
 
     @property
     def index(self):
@@ -1838,7 +1838,7 @@ class DataFrame(Frame):
         index=None,
         copy=True,
         inplace=False,
-        axis=1,
+        axis=0,
     ):
         """Alter column and index labels.
 

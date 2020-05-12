@@ -1969,11 +1969,10 @@ def test_dataframe_index_rename(axis):
 
     assert_eq([str(item) for item in expect.index], list(got.index))
 
-    # Have not set rename default to axis=0 yet.
-    # expect = pdf.rename({1 : "x", 2: "y"})
-    # got = gdf.rename({1 : "x", 2: "y"})
+    expect = pdf.rename({1: "x", 2: "y"})
+    got = gdf.rename({1: "x", 2: "y"})
 
-    # assert_eq([str(item) for item in expect.index], list(got.index))
+    assert_eq([str(item) for item in expect.index], list(got.index))
 
 
 @pytest.mark.parametrize("axis", [1, "columns"])
@@ -1985,7 +1984,7 @@ def test_dataframe_column_rename(axis):
     got = gdf.rename(mapper=lambda name: 2 * name, axis=axis)
 
     assert_eq(expect, got)
-    
+
     expect = pdf.rename(columns=lambda name: 2 * name)
     got = gdf.rename(columns=lambda name: 2 * name)
 

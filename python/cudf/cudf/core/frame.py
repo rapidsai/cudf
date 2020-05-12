@@ -1529,8 +1529,12 @@ class Frame(libcudf.table.Table):
 
         for name in same_named_columns:
             if name not in no_suffix_cols:
-                lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
-                rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
+                lhs.rename(
+                    {name: "%s%s" % (name, lsuffix)}, inplace=True, axis=1
+                )
+                rhs.rename(
+                    {name: "%s%s" % (name, rsuffix)}, inplace=True, axis=1
+                )
                 if name in left_on:
                     left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
                 if name in right_on:
