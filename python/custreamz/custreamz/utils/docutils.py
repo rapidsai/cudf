@@ -50,5 +50,3 @@ topics=["kafka-topic"], partitions=[0]))
 doc_get_watermark_offsets = docfmt_partial(
     docstring=_docstring_get_watermark_offsets
 )
-
-doc_read_gdf = docfmt_partial(docstring=_docstring_read_gdf)

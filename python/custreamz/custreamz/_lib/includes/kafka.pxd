@@ -65,4 +65,3 @@ cdef extern from "kafka_producer.hpp" namespace "cudf::io::external" nogil:
         bool flush(int timeout) except +
 
         bool close(int timeout) except +
-
