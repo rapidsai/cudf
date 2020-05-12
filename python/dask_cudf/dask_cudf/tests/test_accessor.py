@@ -274,3 +274,20 @@ def test_categorical_as_known():
     pdf["col_1"] = pdf["col_1"].astype("category")
     expected = pdf["col_1"].cat.as_known()
     dd.assert_eq(expected, actual)
+
+
+def test_str_slice():
+
+    df = DataFrame({"a": ["abc,def,123", "xyz,hi,bye"]})
+
+    ddf = dgd.from_cudf(df, 1)
+    pdf = df.to_pandas()
+
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=1),
+        ddf.a.str.split(",", expand=True, n=1),
+    )
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=2),
+        ddf.a.str.split(",", expand=True, n=2),
+    )

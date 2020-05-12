@@ -4154,16 +4154,18 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
 )
 def test_df_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
+        # change None to "NaT" after this issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/5117
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
         kwargs = {"format": "%Y-%m-%d"}
     elif as_dtype == "int32":
-        data = [1, 2, 3, None]
+        data = [1, 2, 3]
         kwargs = {}
     elif as_dtype == "category":
         data = ["1", "2", "3", None]
         kwargs = {}
     elif "float" in as_dtype:
-        data = [1.0, 2.0, 3.0, None]
+        data = [1.0, 2.0, 3.0, np.nan]
         kwargs = {}
 
     insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
