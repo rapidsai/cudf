@@ -17,6 +17,7 @@
 - PR #5004 Added a null considering min/max binary op
 - PR #4992 Add Java bindings for converting nans to nulls
 - PR #4975 Add Java bindings for first and last aggregate expressions based on nth
+- PR #5036 Add positive remainder binary op functionality
 - PR #5055 Add atan2 binary op
 - PR #5099 Add git commit hook for clang-format
 - PR #5072 Adding cython binding to `get_element`
@@ -159,9 +160,11 @@
 - PR #5112 Adding `htoi` and `ip2int` support to `StringMethods`
 - PR #5101 Add POSITION_INDEPENDENT_CODE flag to static cudftestutil library
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
+- PR #5054 Change String typecasting to be inline with Pandas
 - PR #5123 Display more useful info on `clang-format` CI Failure
 - PR #5156 Raise error when applying boolean mask containing null values.
 - PR #5137 Add java bindings for getSizeInBytes in DType
+- PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
 
 ## Bug Fixes
 
@@ -275,6 +278,7 @@
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
+- PR #5163 Fix parquet INT96 timestamps before the epoch
 
 
 # cuDF 0.13.0 (31 Mar 2020)
