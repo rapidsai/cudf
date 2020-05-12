@@ -796,6 +796,8 @@ class DataFrame(Frame):
         return self.to_string()
 
     def astype(self, dtype, errors="raise", **kwargs):
+        if self._num_columns == 0:
+            return self
         return self._apply_support_method(
             "astype", dtype=dtype, errors=errors, **kwargs
         )
@@ -1924,7 +1926,9 @@ class DataFrame(Frame):
         ncol = len(cols)
         nrow = len(self)
         if ncol < 1:
-            raise ValueError("require at least 1 column")
+            # This is the case for empty dataframe - construct empty cupy array
+            matrix = cupy.empty(shape=(0, 0), order=order)
+            return cuda.as_cuda_array(matrix)
 
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
