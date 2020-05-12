@@ -135,7 +135,7 @@ cdef extern from "cudf/io/functions.hpp" \
         cudf_io_types.sink_info snk
         cudf_table_view.table_view table
         const cudf_io_types.table_metadata *metadata
-        
+
         write_csv_args() except +
         write_csv_args(cudf_io_types.sink_info snk_,
                        cudf_table_view.table_view table_,

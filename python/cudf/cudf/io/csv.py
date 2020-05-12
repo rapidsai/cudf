@@ -3,8 +3,6 @@
 from io import BytesIO, IOBase, StringIO
 
 import cudf._lib as libcudf
-import cudf._lib.legacy as libcudf_legacy
-import cudf._lib as libcudf
 from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
@@ -120,7 +118,9 @@ def to_csv(
         try:
             df = df[columns]
         except KeyError:
-            raise NameError("No column found with column name provided")
+            raise NameError(
+                "Dataframe doesn't have the label provided in columns"
+            )
 
     rows_per_chunk = chunksize if chunksize else len(df)
 

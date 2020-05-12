@@ -354,13 +354,6 @@ def read_csv(
 
 
 cpdef write_csv(
-    #Table table,
-    #filepath,
-    #object sep,
-    #object na_rep,
-    #bool header,
-    #object line_terminator,
-    #int rows_per_chunk,
     Table table,
     file_path=None,
     sep=",",
@@ -378,6 +371,7 @@ cpdef write_csv(
     cudf.io.csv.write_csv
     """
 
+    # Index already been reset and added as main column, so just data_view
     cdef table_view input_table_view = table.data_view()
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
@@ -394,8 +388,11 @@ cpdef write_csv(
         for col_name in table._column_names:
             metadata_.column_names.push_back(str.encode(col_name))
 
-    cdef write_csv_args write_csv_args_c = write_csv_args(snk, input_table_view, na_c, include_header_c, rows_per_hunk_c, line_term_c, delim_c, true_value_c, false_value_c, &metadata_)
+    cdef write_csv_args write_csv_args_c = write_csv_args(
+        snk, input_table_view, na_c, include_header_c,
+        rows_per_hunk_c, line_term_c, delim_c, true_value_c,
+        false_value_c, &metadata_
+    )
 
     with nogil:
         cpp_write_csv(write_csv_args_c)
-
