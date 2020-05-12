@@ -5329,24 +5329,72 @@ def test_df_series_dataframe_astype_copy(copy):
     pdf = gdf.to_pandas()
 
     assert_eq(gdf, pdf)
-    assert_eq(gdf.astype("float", copy=copy), pdf.astype("float", copy=copy))
+    assert_eq(
+        gdf.astype(dtype="float", copy=copy),
+        pdf.astype(dtype="float", copy=copy),
+    )
     assert_eq(gdf, pdf)
 
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
     assert_eq(gsr, psr)
-    assert_eq(gsr.astype("float", copy=copy), psr.astype("float", copy=copy))
+    assert_eq(
+        gsr.astype(dtype="float", copy=copy),
+        psr.astype(dtype="float", copy=copy),
+    )
     assert_eq(gsr, psr)
 
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
     assert_eq(gsr, psr)
-    actual = gsr.astype("int64", copy=copy)
-    expected = psr.astype("int64", copy=copy)
+    actual = gsr.astype(dtype="int64", copy=copy)
+    expected = psr.astype(dtype="int64", copy=copy)
     assert_eq(expected, actual)
     assert_eq(gsr, psr)
+    actual[0] = 3
+    expected[0] = 3
+    assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_df_series_dataframe_astype_dtype_dict(copy):
+    gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(gdf, pdf)
+    assert_eq(
+        gdf.astype(dtype={"col1": "float"}, copy=copy),
+        pdf.astype(dtype={"col1": "float"}, copy=copy),
+    )
+    assert_eq(gdf, pdf)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(gsr, psr)
+    assert_eq(
+        gsr.astype(dtype={None: "float"}, copy=copy),
+        psr.astype(dtype={None: "float"}, copy=copy),
+    )
+    assert_eq(gsr, psr)
+
+    with pytest.raises(KeyError):
+        gsr.astype(dtype={"a": "float"}, copy=copy)
+
+    with pytest.raises(KeyError):
+        psr.astype(dtype={"a": "float"}, copy=copy)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(gsr, psr)
+    actual = gsr.astype({None: "int64"}, copy=copy)
+    expected = psr.astype({None: "int64"}, copy=copy)
+    assert_eq(expected, actual)
+    assert_eq(gsr, psr)
+
     actual[0] = 3
     expected[0] = 3
     assert_eq(gsr, psr)

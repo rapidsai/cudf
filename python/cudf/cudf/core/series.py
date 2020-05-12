@@ -6,6 +6,7 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
@@ -1445,6 +1446,14 @@ class Series(Frame):
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
+
+        if is_dict_like(dtype):
+            if len(dtype) > 1 or self.name not in dtype:
+                raise KeyError(
+                    "Only the Series name can be used for "
+                    "the key in Series dtype mappings."
+                )
+            dtype = dtype[self.name]
 
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
