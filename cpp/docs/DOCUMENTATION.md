@@ -36,11 +36,13 @@ Changing the copyright year may not be necessary if no content has changed (e.g.
 
 ## Doxygen
 
-The [doxygen tool](http://www.doxygen.nl/manual/index.html) is used to generate html pages from the C++ comments in the source code. Doxygen will recognize and parse block comments as well as perform specialized output formatting when encountering [doxgen commands](http://www.doxygen.nl/manual/commands.html).
+The [doxygen tool](http://www.doxygen.nl/manual/index.html) is used to generate html pages from the C++ comments in the source code.
+Doxygen recognizes and parses block comments and performs specialized output formatting when it encounters [doxgen commands](http://www.doxygen.nl/manual/commands.html).
 
-There are almost 200 commands (also called tags in this document) that doxygen recognizes in comment blocks. This document will provide guidance on which commands/tags to use and how to use them in the libcudf C++ source code.
+There are almost 200 commands (also called tags in this document) that doxygen recognizes in comment blocks. 
+This document provides guidance on which commands/tags to use and how to use them in the libcudf C++ source code.
 
-The doxygen process can be customized using the many, many configuration options in the [Doxyfile](../doxygen/Doxyfile).
+The doxygen process can be customized using options in the [Doxyfile](../doxygen/Doxyfile).
 
 Here are some of the custom options in the Doxyfile for libcudf.
 | Option | Setting | Description |
@@ -53,7 +55,7 @@ Here are some of the custom options in the Doxyfile for libcudf.
 
 ## Block Comments
 
-The following block comment style should be used for all C++ doxygen comments.
+Use the following style for block comments describing functions, classes and other types, groups, and files.
 
 ```c++
 /**
@@ -62,12 +64,14 @@ The following block comment style should be used for all C++ doxygen comments.
  */
 ```
 
-The block should start with `/**` and end with `*/` only and with nothing else on those lines.
-(e.g. do not add dashes `-----` or extra asterisks `*****` in these lines).
-The block must be placed immediately before the source code line in which it is referring.
-The block may be indented to line up vertically with the item they are documenting as appropriate. See the [Example](#the-example) section below.
+Doxygen comment blocks start with `/**` and end with `*/` only, and with nothing else on those lines.
+Do not add dashes `-----` or extra asterisks `*****` to the first and last lines of a Doxygen block.
+The block must be placed immediately before the source code line to which it refers.
+The block may be indented to line up vertically with the item it documents as appropriate.
+See the [Example](#the-example) section below.
 
-Each line in the comment block between the `/**` and `*/` lines should start with a space followed by an asterisk. Any text on these lines, including tag declarations, should start after a single space after the asterisk.
+Each line in the comment block between the `/**` and `*/` lines should start with a space followed by an asterisk.
+Any text on these lines, including tag declarations, should start after a single space after the asterisk.
 
 ## Tag/Command names
 
@@ -81,11 +85,12 @@ In some cases a trade-off may be required for readability in the source text fil
 
 For example, there are some limitations on readability with '%' character and pipe character '|' within a markdown table.
 
-Also, try to avoid using direct hTML tags. Although doxygen supports markdown and markdown supports HTML tags, the HTML support for doxygen's markdown is also limited.
+Avoid using direct hTML tags.
+Although doxygen supports markdown and markdown supports HTML tags, the HTML support for doxygen's markdown is also limited.
 
 ## The Example
 
-The following example will cover most of the doxygen block comment and tag styles
+The following example covers most of the doxygen block comment and tag styles
 for documenting C++ code in libcudf.
 
 ```c++
@@ -101,14 +106,15 @@ for documenting C++ code in libcudf.
  *
  * @ingroup optional_group_name_for_modules_page
  *
- * Longer, more detailed desriptio of the class.
+ * Longer, more detailed description of the class.
  *
- * @tparam T Short description of any template parameters
+ * @tparam T Short description of each template parameter
+ * @tparam U Short description of each template parameter
  */
-template <typename T>
+template <typename T, typename U>
 class example_class {
 
-  void get_my_int();            ///< Members can be documented like this
+  void get_my_int();            ///< Simple members can be documented like this
   void set_my_int( int value ); ///< Try to use descriptive member names
 
   /**
@@ -210,8 +216,8 @@ The longer description is the rest of the comment text that is not tagged with a
 
 ### @copydoc
 
-Documentation for declarations in headers is expected to be clear and complete.
-You can use the `@copydoc` tag to avoid duplicating the comment block for a function definition for example.
+Documentation for declarations in headers should be clear and complete.
+You can use the `@copydoc` tag to avoid duplicating the comment block for a function definition.
 
 ```c++
   /**
@@ -221,7 +227,7 @@ You can use the `@copydoc` tag to avoid duplicating the comment block for a func
    */
 ```
 
-Also, the `@copydoc` is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
+Also, `@copydoc` is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
 
 ```c++
 /**
@@ -275,7 +281,7 @@ The name of the parameter in the comment must match exactly to the template para
  *
 ```
 
-The definition should detail the requirements of parameter.
+The definition should detail the requirements of the parameter.
 For example, if the template is for a functor or predicate, then describe the expected input types and output.
 
 #### @param
@@ -315,7 +321,7 @@ It is usually helpful to include a source code example inside your comment block
 Use the [@code](http://www.doxygen.nl/manual/commands.html#cmdcode) and [@endcode](http://www.doxygen.nl/manual/commands.html#cmdendcode) pair to include inline examples.
 
 Doxygen supports syntax highlighting for C++ and several other programming languages (e.g. Python, Java).
-By default, the `@code` tag will use syntax highlighting based on the source code where it was found.
+By default, the `@code` tag uses syntax highlighting based on the source code in which it is found.
 
 ```c++
  *
@@ -362,40 +368,42 @@ When writing example snippets, using fully qualified class names allows doxygen 
 
 Although using 3 backtick marks `` ``` `` for example blocks will work too, they do not standout as well in vs-code and other source editors.
 
-Do not use the `@example` tag in the comments for a declaration.
-Doxygen will interpret the entire source file as example source code when it encounters this tag.
+Do not use the `@example` tag in the comments for a declaration, or
+Doxygen will interpret the entire source file as example source code.
 The source file is then published under a separate the _Examples_ page in the output.
 
 ## Namespaces
 
 Doxygen output includes a _Namespaces_ page that shows all the namespaces declared with comment blocks in the processed files.
-Here is an example of doxygen description comment for a namespace declaration.
+Here is an example doxygen description comment for a namespace declaration.
 
 ```c++
-//! cuDF interfaces
+/**
+ * @brief cuDF interfaces
+ *
+ * This is the top-level namespace which contains all cuDF functions and types.
+ */
 namespace cudf {
 ```
 
-A description comment should be included for only once for each unique namespace declaration.
-Otherwise, if more than one description is found, doxygen will aggregate the descriptions in an arbitrary order in the output pages.
+A description comment should be included only once for each unique namespace declaration.
+Otherwise, if more than one description is found, doxygen aggregates the descriptions in an arbitrary order in the output pages.
 
-If you are introducing a new namespace, provide a short description block for only one declaration and not for every occurrence.
+If you introduce a new namespace, provide a short description block for only one declaration and not for every occurrence.
 
 ## Groups/Modules
 
 Grouping declarations into modules helps users to find APIs in the doxygen pages.
-Generally, common functions are already grouped logically into header files but not easily reflected in the doxygen output.
-Doxygen output includes a _Modules_ page that organizes items into groups using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html)
+Generally, common functions are already grouped logically into header files but doxygen does not automatically group them in its output.
+Doxygen output includes a _Modules_ page that organizes items into groups specified using the [Grouping doxygen commands](http://www.doxygen.nl/manual/grouping.html).
 These commands can group common functions across header files, source files, and even namespaces.
 Groups can also be nested by defining new groups within existing groups.
 
 For libcudf, all the group hierarchy is defined in the `doxygen_groups.h` header file.
-This file does not need to be included in any other source file.
-It is processed only by the doxygen tool.
-Use this file to add or update any groups.
-Doxygen will also use the definitions in this file to order to groups in the _Modules_ page.
+`doxygen_groups.h` does not need to be included in any other source file because the definitions in this file are used only by the doxygen tool generate groups in the _Modules_ page.
+The existing groups have been carefully structured and named, so new groups should be added thoughtfully.
 
-When creating a new API, specify the group in which it should belong using the [@ingroup](http://www.doxygen.nl/manual/commands.html#cmdingroup) tag along with the group reference id from the `doxygen_groups.h` file.
+When creating a new API, specify its group using the [@ingroup](http://www.doxygen.nl/manual/commands.html#cmdingroup) tag and the group reference id from the `doxygen_groups.h` file.
 
 ```c++
 namespace cudf {
@@ -413,19 +421,17 @@ std::unique_ptr<column> fill(table_view const& input,...);
 }  // namespace cudf
 ```
 
-The `@{` is a convenience to include all doxygen documentation from here to the `@}` line as part of the group.
+Use the `@addtogroup` with `@{` to include all doxygen documentation from here to the `@}` line as part of the group.
 
 ```c++
 namespace cudf {
 /**
- * @ingroup transformation_fill
+ * @addtogroup transformation_fill
  * @{
  */
 
 /**
  * @brief ...
- *
- * @ingroup transformation_fill
  *
  * @param ...
  * @return ...
@@ -438,16 +444,25 @@ std::unique_ptr<column> fill(table_view const& input,...);
 
 This just saves adding `@ingroup` to each comment block that appears in the file.
 Make sure there is a blank line after the group definition comment block so doxygen know it does not apply to whatever follows in the source code.
-Note that the `@{` and `@}` does not work especially if it crosses namespaces or includes classes or enums.
+Note that the `@{` and `@}` does not work especially if it crosses namespaces so include them and the `@addtogroup` between the namespace declaration braces as shown in the example above.
 
 ## Build Doxygen Output
 
-The doxygen tool can be installed using the instructions on its [Installation](http://www.doxygen.nl/manual/install.html) page.
+We recommend installing Doxygen using conda (`conda install doxygen`) or a Linux package manager (`sudo apt install doxygen`).
+Alternatively you can [build and install from source](http://www.doxygen.nl/manual/install.html).
 
-Building the output is simply running the `doxygen` command while in the `cpp/doxygen` directory containing the `Doxyfile`. The tool will read and process all appropriate source files under the `cpp/include/` directory. The output will be created in the `cpp/doxygen/html/` directory. You can load the local `index.html` file generated there into any web browser to view the result.
+To build the libcudf HTML documentatiopn simply run the `doxygen` command from the `cpp/doxygen` directory containing the `Doxyfile`.
+Doxygen reads and processes all appropriate source files under the `cpp/include/` directory.
+The output is generated in the `cpp/doxygen/html/` directory.
+You can load the local `index.html` file generated there into any web browser to view the result.
 
-By default, doxygen also uses the `graphviz dot` tool to build some diagrams of the class, namespace, and module relationships. If the `dot` tool cannot be found then the output will be generated without diagrams. The doxygen installation page does not include instructions for downloading and installing `graphviz dot`.
+To view docs built on a remote server, you can run a simple HTTP server using Python: `cd html && python -m http.server`.
+Then open `http://<IP address>:8000` in your local web browser, inserting the IP address of the machine on which you ran the HTTP server.
+
+By default, doxygen uses the `graphviz dot` tool to build diagrams of the class, namespace, and module relationships.
+If the `dot` tool cannot be found then doxygen generates output without diagrams.
+The doxygen installation page does not include instructions for downloading and installing `graphviz dot`.
 
 The doxygen output is intended for building documentation only for the public APIs and classes.
-For example, the output should not include documentation for `detail` or `/src` files.
+For example, the output should not include documentation for `detail` or `/src` files, and these directories are excluded in the `Doxyfile` configuration.
 When published by the build/CI system, the doxygen output will appear on our external RAPIDS [web site](https://docs.rapids.ai/api/libcudf/stable/index.html).
