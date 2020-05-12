@@ -3,7 +3,7 @@ import pickle
 import cudf
 import cudf.core.groupby.groupby
 
-# all (de-)serializtion are attached to cudf Objects:
+# all (de-)serialization are attached to cudf Objects:
 # Series/DataFrame/Index/Column/Buffer/etc
 serializable_classes = (
     cudf.CategoricalDtype,
@@ -30,7 +30,7 @@ try:
             header["lengths"] = [f.nbytes for f in frames]
             return header, frames
 
-    # all (de-)serializtion are attached to cudf Objects:
+    # all (de-)serialization are attached to cudf Objects:
     # Series/DataFrame/Index/Column/Buffer/etc
     @dask_serialize.register(serializable_classes)
     def dask_serialize_cudf_object(x):

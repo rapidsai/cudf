@@ -149,7 +149,7 @@ _numeric_to_str_typecast_functions = {
 
 class StringMethods(object):
     """
-    This mimicks pandas `df.str` interface.
+    This mimics pandas `df.str` interface.
     """
 
     def __init__(self, column, parent=None):
@@ -429,7 +429,7 @@ class StringMethods(object):
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
     ):
         """
-        Replace occurences of pattern/regex in the Series/Index with some other
+        Replace occurrences of pattern/regex in the Series/Index with some other
         string.
 
         Parameters
@@ -784,7 +784,7 @@ class StringMethods(object):
             Default is beginning of the each string.
             Specify -1 to insert at the end of each string.
         repl : str
-            String to insert into the specified position valus.
+            String to insert into the specified position value.
 
         Returns
         -------

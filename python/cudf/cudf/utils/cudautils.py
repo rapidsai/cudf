@@ -179,7 +179,7 @@ def gpu_mark_lt(arr, val, out, not_found):
 def find_first(arr, val, compare="eq"):
     """
     Returns the index of the first occurrence of *val* in *arr*..
-    Or the first occurence of *arr* *compare* *val*, if *compare* is not eq
+    Or the first occurrence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
@@ -216,7 +216,7 @@ def find_first(arr, val, compare="eq"):
 def find_last(arr, val, compare="eq"):
     """
     Returns the index of the last occurrence of *val* in *arr*.
-    Or the last occurence of *arr* *compare* *val*, if *compare* is not eq
+    Or the last occurrence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
@@ -273,7 +273,7 @@ def compile_udf(udf, type_signature):
     together with the generated output type.
 
     The output is expected to be passed to the PTX parser in `libcudf`
-    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    to generate a CUDA device function to be inlined into CUDA kernels,
     compiled at runtime and launched.
 
     Parameters

@@ -1093,7 +1093,7 @@ class Series(Frame):
             )
 
     def __neg__(self):
-        """Negatated value (-) for each element
+        """Negated value (-) for each element
 
         Returns a new Series.
         """
@@ -1693,7 +1693,7 @@ class Series(Frame):
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply a elementwise function to transform the values in the Column.
 
         The user function is expected to take one argument and return the
         result, which will be stored to the output Series.  The function
@@ -3281,7 +3281,7 @@ class Series(Frame):
         return result
 
     def merge(self, other):
-        # An inner join shuold return a series containing matching elements
+        # An inner join should return a series containing matching elements
         # a Left join should return just self
         # an outer join should return a two column
         # dataframe containing all elements from both

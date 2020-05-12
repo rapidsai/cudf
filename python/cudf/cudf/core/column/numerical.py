@@ -222,7 +222,7 @@ class NumericalColumn(column.ColumnBase):
         return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply a elementwise function to transform the values in the Column.
 
         Parameters
         ----------

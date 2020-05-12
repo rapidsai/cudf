@@ -880,7 +880,7 @@ def test_join_multi(how, column_a, column_b, column_c):
             "right_on": None,
             "left_index": True,
             "right_index": True,
-        },  # left_inded and right_index, no on
+        },  # left_index and right_index, no on
         {
             "left_on": ["a", "b"],
             "right_on": None,

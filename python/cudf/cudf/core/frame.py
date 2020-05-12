@@ -393,7 +393,7 @@ class Frame(libcudf.table.Table):
 
             if self is DataFrame, other can be only a
             scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimenstion
+            in DataFrame or a DataFrame with same dimension
 
             if self is Series, other can be only a scalar or
             a series like with same length as self
@@ -456,7 +456,7 @@ class Frame(libcudf.table.Table):
             supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimention as self.
+            dataframe with same dimension as self.
 
             Series expects only scalar or series like with same length
         inplace : bool, default False
@@ -634,7 +634,7 @@ class Frame(libcudf.table.Table):
             supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimention as self.
+            dataframe with same dimension as self.
 
             Series expects only scalar or series like with same length
         inplace : bool, default False
@@ -1126,7 +1126,7 @@ class Frame(libcudf.table.Table):
                         col_to_replace, col_replacement, col_all_nan
                     )
                 except KeyError:
-                    # Donot change the copy_data[name]
+                    # Do not change the copy_data[name]
                     pass
 
         result = self._from_table(Frame(copy_data, self.index))
