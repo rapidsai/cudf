@@ -278,6 +278,7 @@
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
 - PR #5162 Fix issues related to empty `Dataframe` in `as_gpu_matrix` & `astype`
+- PR #5163 Fix parquet INT96 timestamps before the epoch
 
 
 # cuDF 0.13.0 (31 Mar 2020)
