@@ -871,6 +871,11 @@ class Frame(libcudf.table.Table):
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
+        boolean_mask = as_column(boolean_mask)
+        if boolean_mask.has_nulls:
+            raise ValueError(
+                "cannot mask with boolean_mask containing null values"
+            )
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
