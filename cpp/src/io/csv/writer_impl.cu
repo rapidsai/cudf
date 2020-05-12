@@ -104,7 +104,9 @@ struct probe_special_chars {
 
   __device__ int32_t operator()(size_type idx) const
   {
-    if (d_column_.is_null(idx)) return 0;  // null string
+    if (d_column_.is_null(idx)) {
+      return 0;  // null string, so no-op
+    }
 
     string_view d_str = d_column_.template element<string_view>(idx);
 
@@ -141,7 +143,9 @@ struct modify_special_chars {
   {
     using namespace cudf::strings::detail;
 
-    if (d_column_.is_null(idx)) return 0;  // null string
+    if (d_column_.is_null(idx)) {
+      return 0;  // null string, so no-op
+    }
 
     string_view d_str        = d_column_.template element<string_view>(idx);
     size_type str_size_bytes = d_str.size_bytes();
@@ -181,7 +185,7 @@ struct modify_special_chars {
       // copy the source string unmodified:
       //(pass-through)
       //
-      memcpy(d_chars_, d_str.data(), str_size_bytes);
+      memcpy(get_output_ptr(idx), d_str.data(), str_size_bytes);
     }
     return 0;
   }

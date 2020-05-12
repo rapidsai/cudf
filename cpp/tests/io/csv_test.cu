@@ -1041,6 +1041,30 @@ TEST_F(CsvReaderTest, StringsWithWriter)
   check_string_column(input_table.column(1), result_table.column(1));
 }
 
+TEST_F(CsvReaderTest, StringsWithWriterSimple)
+{
+  std::vector<std::string> names{"line", "verse"};
+
+  auto filepath = temp_env->get_temp_dir() + "StringsWithWriterSimple.csv";
+
+  auto int_column    = column_wrapper<int32_t>{10, 20, 30};
+  auto string_column = column_wrapper<cudf::string_view>{"abc def ghi", "jkl mno pq", "stu vwx y"};
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
+
+  // TODO add quoting style flag?
+  write_csv_helper(filepath, input_table, true, names);
+
+  cudf_io::read_csv_args in_args{cudf_io::source_info{filepath}};
+  in_args.names   = names;
+  in_args.dtype   = {"int32", "str"};
+  in_args.quoting = cudf_io::quote_style::NONE;
+  auto result     = cudf_io::read_csv(in_args);
+
+  const auto result_table = result.tbl->view();
+  cudf::test::expect_columns_equivalent(input_table.column(0), result_table.column(0));
+  check_string_column(input_table.column(1), result_table.column(1));
+}
+
 TEST_F(CsvReaderTest, EmptyFileWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "EmptyFileWithWriter.csv";
