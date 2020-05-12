@@ -229,6 +229,16 @@ class DatetimeColumn(column.ColumnBase):
     def is_unique(self):
         return self.as_numerical.is_unique
 
+    def can_cast_safely(self, to_dtype):
+        if np.issubdtype(to_dtype, np.datetime64):
+            from cudf import Series
+            import pdb
+            pdb.set_trace()
+            if (Series(self) == Series(self).astype(to_dtype)).all():
+                return True
+            else:
+                return False
+
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
