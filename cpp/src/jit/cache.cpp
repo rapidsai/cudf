@@ -24,6 +24,8 @@
 #include <unistd.h>
 #include <boost/filesystem.hpp>
 
+#include <cuda.h>
+
 namespace cudf {
 namespace jit {
 // Get the directory in home to use for storing the cache
@@ -120,6 +122,11 @@ named_prog<jitify::experimental::KernelInstantiation> cudfJitCache::getKernelIns
   // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
   std::string kern_inst_name = prog_name + '.' + kern_name;
   for (auto&& arg : arguments) kern_inst_name += '_' + arg;
+
+  CUcontext c;
+  cuCtxGetCurrent(&c);
+
+  auto& kernel_inst_map = kernel_inst_context_map[c];
 
   return getCached(kern_inst_name, kernel_inst_map, [&]() {
     return program.kernel(kern_name).instantiate(arguments);
