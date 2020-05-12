@@ -795,7 +795,7 @@ class DataFrame(Frame):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, copy=True, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
         Cast the DataFrame to the given dtype
 
@@ -807,10 +807,9 @@ class DataFrame(Frame):
             the same type. Alternatively, use {col: dtype, ...}, where col is a
             column label and dtype is a numpy.dtype or Python type to cast one
             or more of the DataFrame's columns to column-specific types.
-        copy : bool, default True
-            Return a copy when ``copy=True`` (be very careful setting
-            ``copy=False`` as changes to values then may propagate to other
-            pandas objects).
+        copy : bool, default False
+            Return a copy when ``copy=True``. Note that when ``copy=False`` is
+            set changes to values then may propagate to other cudf objects).
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
             - ``raise`` : allow exceptions to be raised
@@ -825,19 +824,19 @@ class DataFrame(Frame):
         result = self.copy(deep=copy)
 
         if is_dict_like(dtype):
-            for col_name in dtype.keys():
+            for col_name, col_dtype in dtype.items():
                 if col_name not in result:
                     raise KeyError(
                         "Only a column name can be used for the "
                         "key in a dtype mappings argument."
                     )
                 result._data[col_name] = result._data[col_name].astype(
-                    dtype=dtype[col_name], errors=errors, **kwargs
+                    dtype=col_dtype, errors=errors, copy=copy, **kwargs
                 )
         else:
             for col in result._data:
                 result._data[col] = result._data[col].astype(
-                    dtype=dtype, errors=errors, **kwargs
+                    dtype=dtype, errors=errors, copy=copy, **kwargs
                 )
 
         return result
@@ -1970,7 +1969,7 @@ class DataFrame(Frame):
             matrix = cupy.empty(
                 shape=(0, 0), dtype=np.dtype("float64"), order=order
             )
-            return cuda.as_cuda_array(matrix).view(np.dtype("float64"))
+            return cuda.as_cuda_array(matrix)
 
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))

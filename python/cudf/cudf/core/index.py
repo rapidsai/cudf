@@ -346,19 +346,29 @@ class Index(Frame):
             out.name = name
             return out.copy(deep=True)
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
-
+    def astype(self, dtype, copy=False):
+        """
+        Create an Index with values cast to dtypes. The class of a new Index
+        is determined by dtype. When conversion is impossible, a ValueError
+        exception is raised.
+        Parameters
+        ----------
+        dtype : numpy dtype
+            Use a numpy.dtype to cast entire Index object to.
+        copy : bool, default True
+            By default, astype always returns a newly allocated object.
+            If copy is set to False and internal requirements on dtype are
+            satisfied, the original data is used to create a new Index
+            or the original Index is returned.
         Returns
         -------
-        If the dtype changed, a new ``Index`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        Index
+            Index with values cast to specified dtype.
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
-        return as_index(self._values.astype(dtype), name=self.name)
+        return as_index(self._values.astype(dtype, copy=copy), name=self.name)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
