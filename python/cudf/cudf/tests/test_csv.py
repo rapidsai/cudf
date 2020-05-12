@@ -73,6 +73,7 @@ def make_numpy_mixed_dataframe():
     # df["Category"] = np.array(["M", "F", "F", "F"])
     df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     df["Boolean"] = np.array([True, False, True, False])
+    #df.index.rename('Index', inplace=True)
     return df
 
 
@@ -1404,7 +1405,8 @@ def test_csv_writer_mixed_data(
         header=header,
         line_terminator=line_terminator,
         date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
+        quoting=csv.QUOTE_NONE,
+        escapechar='\\'
     )
     gdf.to_csv(
         path=gdf_df_fname,
@@ -1418,7 +1420,7 @@ def test_csv_writer_mixed_data(
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname)
+    expect = pd.read_csv(pdf_df_fname, quoting=csv.QUOTE_NONE, escapechar='\\')
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
@@ -1462,7 +1464,6 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     pdf.to_csv(
         pdf_df_fname,
         date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
         chunksize=chunksize,
     )
     gdf.to_csv(gdf_df_fname, chunksize=chunksize)
@@ -1470,7 +1471,7 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname)
+    expect = pd.read_csv(pdf_df_fname, quoting=csv.QUOTE_NONE)
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
