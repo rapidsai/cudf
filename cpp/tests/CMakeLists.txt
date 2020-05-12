@@ -500,13 +500,20 @@ set(ORC_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/orc_test.cu")
 set(PARQUET_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cu")
-set(EXTERNAL_DATASOURCE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/external_datasource_test.cpp")
 
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
-ConfigureTest(EXTERNAL_DATASOURCE_TEST "${EXTERNAL_DATASOURCE_TEST_SRC}")
+
+###################################################################################################
+# - external datasource tests ---------------------------------------------------------------------
+
+if(BUILD_EXTERNAL_DATASOURCE)
+    message(STATUS "External Datasource tests ENABLED")
+    set(EXTERNAL_DATASOURCE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/external_datasource_test.cpp")
+    ConfigureTest(EXTERNAL_DATASOURCE_TEST "${EXTERNAL_DATASOURCE_TEST_SRC}")
+endif(BUILD_EXTERNAL_DATASOURCE)
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
