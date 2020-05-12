@@ -4285,10 +4285,14 @@ def test_df_astype_to_categorical_ordered(ordered):
 
 
 @pytest.mark.parametrize(
-    "dtype,d",
+    "dtype,args",
     [
+        ("int8", {}),
+        ("int16", {}),
         ("int32", {}),
+        ("int64", {}),
         ("float32", {}),
+        ("float64", {}),
         ("category", {}),
         ("category", {"ordered": True}),
         ("category", {"ordered": False}),
@@ -4299,10 +4303,10 @@ def test_df_astype_to_categorical_ordered(ordered):
         ("str", {}),
     ],
 )
-def test_empty_df_astype(dtype, d):
+def test_empty_df_astype(dtype, args):
     df = DataFrame()
     kwargs = {}
-    kwargs.update(d)
+    kwargs.update(args)
     assert_eq(df, df.astype(dtype=dtype, **kwargs))
 
 
