@@ -600,16 +600,30 @@ def test_dataframe_dir_and_getattr():
 
 
 @pytest.mark.parametrize("order", ["C", "F"])
+def test_empty_dataframe_as_gpu_matrix(order):
+    df = DataFrame()
+
+    # Check fully empty dataframe.
+    mat = df.as_gpu_matrix(order=order).copy_to_host()
+    assert mat.shape == (0, 0)
+
+    df = DataFrame()
+    nelem = 123
+    for k in "abc":
+        df[k] = np.random.random(nelem)
+
+    # Check all columns in empty dataframe.
+    mat = df.head(0).as_gpu_matrix(order=order).copy_to_host()
+    assert mat.shape == (0, 3)
+
+
+@pytest.mark.parametrize("order", ["C", "F"])
 def test_dataframe_as_gpu_matrix(order):
     df = DataFrame()
 
     nelem = 123
     for k in "abcd":
         df[k] = np.random.random(nelem)
-
-    # Check all columns in empty dataframe.
-    mat = df.head(0).as_gpu_matrix(order=order).copy_to_host()
-    assert mat.shape == (0, 4)
 
     # Check all columns
     mat = df.as_gpu_matrix(order=order).copy_to_host()
@@ -3057,7 +3071,6 @@ def test_all(data):
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
-        {},
         pytest.param(
             [["a", True], ["b", False], ["c", False]],
             marks=[
@@ -3073,7 +3086,7 @@ def test_all(data):
 def test_any(data, axis):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
-    if not isinstance(data, dict) and np.array(data).ndim <= 1:
+    if np.array(data).ndim <= 1:
         pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
 
@@ -3101,10 +3114,16 @@ def test_any(data, axis):
 
         got = gdata.any(axis=axis)
         expected = pdata.any(axis=axis)
-        if data == {}:
-            assert_eq(got, expected, check_index_type=False)
-        else:
-            assert_eq(got, expected)
+        assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+def test_empty_dataframe_any(axis):
+    pdf = pd.DataFrame({}, columns=["a", "b"])
+    gdf = DataFrame.from_pandas(pdf)
+    got = gdf.any(axis=axis)
+    expected = pdf.any(axis=axis)
+    assert_eq(got, expected, check_index_type=False)
 
 
 @pytest.mark.parametrize("indexed", [False, True])
@@ -4122,16 +4141,13 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
         data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
 
     gdf = DataFrame()
-    expect = DataFrame()
-
-    # Test empty dataframe astype
-    assert_eq(gdf.astype(as_dtype), expect)
 
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
     insert_data = Series(data, dtype=as_dtype)
 
+    expect = DataFrame()
     expect["foo"] = insert_data
     expect["bar"] = insert_data
 
@@ -4174,9 +4190,6 @@ def test_df_astype_string_to_other(as_dtype):
     gdf = DataFrame()
     expect = DataFrame()
 
-    # Test empty dataframe astype
-    assert_eq(gdf.astype(as_dtype, **kwargs), expect)
-
     gdf["foo"] = insert_data
     gdf["bar"] = insert_data
 
@@ -4203,9 +4216,6 @@ def test_df_astype_datetime_to_other(as_dtype):
 
     gdf = DataFrame()
     expect = DataFrame()
-
-    # Test empty dataframe astype
-    assert_eq(gdf.astype(as_dtype, format="%Y-%m-%d"), expect)
 
     gdf["foo"] = Series(data, dtype="datetime64[ms]")
     gdf["bar"] = Series(data, dtype="datetime64[ms]")
@@ -4272,6 +4282,28 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
         gdf.astype("int32", ordered=ordered),
     )
+
+
+@pytest.mark.parametrize(
+    "dtype,d",
+    [
+        ("int32", {}),
+        ("float32", {}),
+        ("category", {}),
+        ("category", {"ordered": True}),
+        ("category", {"ordered": False}),
+        ("datetime64[s]", {"format": "%Y-%m-%d"}),
+        ("datetime64[ms]", {"format": "%Y-%m-%d"}),
+        ("datetime64[us]", {"format": "%Y-%m-%d"}),
+        ("datetime64[ns]", {"format": "%Y-%m-%d"}),
+        ("str", {}),
+    ],
+)
+def test_empty_df_astype(dtype, d):
+    df = DataFrame()
+    kwargs = {}
+    kwargs.update(d)
+    assert_eq(df, df.astype(dtype=dtype, **kwargs))
 
 
 @pytest.mark.parametrize(

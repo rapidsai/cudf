@@ -796,11 +796,14 @@ class DataFrame(Frame):
         return self.to_string()
 
     def astype(self, dtype, errors="raise", **kwargs):
-        if self._num_columns == 0:
-            return self
-        return self._apply_support_method(
-            "astype", dtype=dtype, errors=errors, **kwargs
-        )
+        result = self.copy()
+
+        for col in result._data:
+            result._data[col] = result._data[col].astype(
+                dtype=dtype, errors=errors, **kwargs
+            )
+
+        return result
 
     def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
         """
@@ -1927,8 +1930,10 @@ class DataFrame(Frame):
         nrow = len(self)
         if ncol < 1:
             # This is the case for empty dataframe - construct empty cupy array
-            matrix = cupy.empty(shape=(0, 0), order=order)
-            return cuda.as_cuda_array(matrix)
+            matrix = cupy.empty(
+                shape=(0, 0), dtype=np.dtype("float64"), order=order
+            )
+            return cuda.as_cuda_array(matrix).view(np.dtype("float64"))
 
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
