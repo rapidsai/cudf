@@ -231,10 +231,21 @@ class DatetimeColumn(column.ColumnBase):
 
     def can_cast_safely(self, to_dtype):
         if np.issubdtype(to_dtype, np.datetime64):
-            from cudf import Series
-            import pdb
-            pdb.set_trace()
-            if (Series(self) == Series(self).astype(to_dtype)).all():
+
+            to_res = to_dtype.name[-3:-1]
+            self_res = self.dtype.name[-3:-1]
+
+            epoch = np.datetime64(0, to_res)
+            max_int = np.iinfo(np.dtype("int64")).max
+
+            max_dist = self.max() - epoch.astype(self.dtype)
+            min_dist = self.min() - epoch.astype(self.dtype)
+
+            if max_dist <= np.timedelta64(max_int, to_res).astype(
+                "m8[" + self_res + "]"
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                "m8[" + self_res + "]"
+            ):
                 return True
             else:
                 return False
