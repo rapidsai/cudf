@@ -5328,7 +5328,6 @@ def test_df_series_dataframe_astype_copy(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
     pdf = gdf.to_pandas()
 
-    assert_eq(gdf, pdf)
     assert_eq(
         gdf.astype(dtype="float", copy=copy),
         pdf.astype(dtype="float", copy=copy),
@@ -5338,7 +5337,6 @@ def test_df_series_dataframe_astype_copy(copy):
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(gsr, psr)
     assert_eq(
         gsr.astype(dtype="float", copy=copy),
         psr.astype(dtype="float", copy=copy),
@@ -5348,7 +5346,6 @@ def test_df_series_dataframe_astype_copy(copy):
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(gsr, psr)
     actual = gsr.astype(dtype="int64", copy=copy)
     expected = psr.astype(dtype="int64", copy=copy)
     assert_eq(expected, actual)
@@ -5363,7 +5360,6 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
     pdf = gdf.to_pandas()
 
-    assert_eq(gdf, pdf)
     assert_eq(
         gdf.astype(dtype={"col1": "float"}, copy=copy),
         pdf.astype(dtype={"col1": "float"}, copy=copy),
@@ -5373,7 +5369,6 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(gsr, psr)
     assert_eq(
         gsr.astype(dtype={None: "float"}, copy=copy),
         psr.astype(dtype={None: "float"}, copy=copy),
@@ -5389,7 +5384,6 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     gsr = Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(gsr, psr)
     actual = gsr.astype({None: "int64"}, copy=copy)
     expected = psr.astype({None: "int64"}, copy=copy)
     assert_eq(expected, actual)
