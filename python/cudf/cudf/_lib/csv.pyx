@@ -352,6 +352,7 @@ def read_csv(
 
     return df
 
+
 cpdef write_csv(
     #Table table,
     #filepath,
@@ -388,7 +389,7 @@ cpdef write_csv(
     cdef string false_value_c = 'False'.encode()
     cdef sink_info snk = sink_info(<string>str(file_path).encode())
 
-    if table._column_names is not None:
+    if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
         for col_name in table._column_names:
             metadata_.column_names.push_back(str.encode(col_name))
