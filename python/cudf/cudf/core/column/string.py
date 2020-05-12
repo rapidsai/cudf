@@ -43,6 +43,8 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -2052,6 +2054,21 @@ class StringColumn(column.ColumnBase):
                     fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
+
+        if str_dtype.kind in ("i"):
+
+            if not cpp_is_integer(self).all():
+                raise ValueError(
+                    "Could not convert strings to integer \
+                        type due to presence of non-integer values."
+                )
+        elif str_dtype.kind in ("f"):
+
+            if not cpp_is_float(self).all():
+                raise ValueError(
+                    "Could not convert strings to float \
+                        type due to presence of non-floating values."
+                )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 
