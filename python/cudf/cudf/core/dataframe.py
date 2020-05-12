@@ -795,13 +795,53 @@ class DataFrame(Frame):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, errors="raise", **kwargs):
-        result = self.copy()
+    def astype(self, dtype, copy=True, errors="raise", **kwargs):
+        """
+        Cast the DataFrame to the given dtype
 
-        for col in result._data:
-            result._data[col] = result._data[col].astype(
-                dtype=dtype, errors=errors, **kwargs
-            )
+        Parameters
+        ----------
+
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast entire DataFrame object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            column label and dtype is a numpy.dtype or Python type to cast one
+            or more of the DataFrame's columns to column-specific types.
+        copy : bool, default True
+            Return a copy when ``copy=True`` (be very careful setting
+            ``copy=False`` as changes to values then may propagate to other
+            pandas objects).
+        errors : {'raise', 'ignore'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+        **kwargs : extra arguments to pass on to the constructor
+
+        Returns
+        -------
+        casted : DataFrame
+        """
+        if copy:
+            result = self.copy()
+        else:
+            result = self
+
+        if is_dict_like(dtype):
+            for col_name in dtype.keys():
+                if col_name not in result:
+                    raise KeyError(
+                        "Only a column name can be used for the "
+                        "key in a dtype mappings argument."
+                    )
+                result._data[col_name] = result._data[col_name].astype(
+                    dtype=dtype[col_name], errors=errors, **kwargs
+                )
+        else:
+            for col in result._data:
+                result._data[col] = result._data[col].astype(
+                    dtype=dtype, errors=errors, **kwargs
+                )
 
         return result
 
