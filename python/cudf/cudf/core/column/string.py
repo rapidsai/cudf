@@ -823,7 +823,7 @@ class StringMethods(object):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True, **kwargs):
+    def split(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -848,8 +848,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -870,7 +875,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -895,8 +900,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand=False` is not yet supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
