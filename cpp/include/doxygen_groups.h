@@ -40,7 +40,7 @@
  *   @}
  *   @defgroup fixed_point_classes Fixed Point
  * @}
- * @defgroup column_apis Column and Table APIs
+ * @defgroup column_apis Column and Table
  * @{
  *   @defgroup column_copy Copying
  *   @{
@@ -87,12 +87,12 @@
  *     @defgroup interop_dlpack DLPack
  *   @}
  * @}
- * @defgroup datetime_apis DateTime column APIs
+ * @defgroup datetime_apis DateTime
  * @{
  *   @defgroup datetime_extract Extracting
  *   @defgroup datetime_compute Compute Day
  * @}
- * @defgroup strings_apis Strings column APIs
+ * @defgroup strings_apis Strings
  * @{
  *   @defgroup strings_case Case
  *   @defgroup strings_types Character Types
@@ -105,21 +105,28 @@
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
  * @}
- * @defgroup dictionary_apis Dictionary APIs
+ * @defgroup dictionary_apis Dictionary
  * @{
  *   @defgroup dictionary_encode Encoding
  *   @defgroup dictionary_search Searching
  *   @defgroup dictionary_update Updating Keys
  * @}
- * @defgroup io_apis IO APIs
+ * @defgroup io_apis IO
  * @{
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
  * @}
- * @defgroup nvtext_apis NVText APIs
+ * @defgroup nvtext_apis NVText
  * @{
  *   @defgroup nvtext_ngrams NGrams
  *   @defgroup nvtext_normalize Normalizing
  *   @defgroup nvtext_tokenize Tokenizing
+ * @}
+ * @defgroup utility_apis Utilities
+ * @{
+ *   @defgroup utility_types Types
+ *   @defgroup utility_dispatcher Type Dispatcher
+ *   @defgroup utility_bitmask Bitmask
+ *   @defgroup utility_error Exception
  * @}
  */
