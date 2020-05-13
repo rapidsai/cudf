@@ -58,7 +58,11 @@ extensions = [
             np.get_include(),
             cuda_include_dir,
         ],
-        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
+        library_dirs=[
+            get_python_lib(),
+            os.path.join(os.sys.prefix, "lib"),
+            "/usr/local/cuda/lib64",
+        ],
         libraries=["cudf"],
         language="c++",
         extra_compile_args=["-std=c++14"],
