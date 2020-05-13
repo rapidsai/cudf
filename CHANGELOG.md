@@ -280,6 +280,7 @@
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
+- PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
 
