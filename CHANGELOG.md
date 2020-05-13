@@ -24,6 +24,7 @@
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 - PR #5132 Support out-of-band buffers in Python pickling
+- PR #5149 Add Java bindings for PMOD
 
 ## Improvements
 

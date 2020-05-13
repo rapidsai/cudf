@@ -121,13 +121,13 @@ public class BinaryOpTest extends CudfTestBase {
   public void testPmod() {
 
     Double[] d1 = TestUtils.getDoubles(23423423424L, 50, ALL ^ NULL);
-    Double[] d2 = TestUtils.getDoubles(56456456454L, 50, NONE);
+    Double[] d2 = TestUtils.getDoubles(56456456454L, 50, NULL);
 
     Integer[] i1 = TestUtils.getIntegers(76576554564L, 50, NULL);
-    Integer[] i2 = TestUtils.getIntegers(34502395934L, 50, NONE);
+    Integer[] i2 = TestUtils.getIntegers(34502395934L, 50, NULL);
 
     Long[] l1 = TestUtils.getLongs(29843248234L, 50, NULL);
-    Long[] l2 = TestUtils.getLongs(23423049234L, 50, NONE);
+    Long[] l2 = TestUtils.getLongs(23423049234L, 50, NULL);
 
     try (ColumnVector icv1 = ColumnVector.fromBoxedInts(i1);
          ColumnVector icv2 = ColumnVector.fromBoxedInts(i2);
