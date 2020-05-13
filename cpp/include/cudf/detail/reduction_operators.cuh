@@ -111,7 +111,7 @@ struct simple_op {
 };
 
 // `sum`, `product`, `sum_of_squares`, `min`, `max` are used at simple_reduction
-// inferface is defined by CRTP class simple_op
+// interface is defined by CRTP class simple_op
 
 // operator for `sum`
 struct sum : public simple_op<sum> {

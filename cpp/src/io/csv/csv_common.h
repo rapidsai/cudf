@@ -36,7 +36,7 @@ enum : uint8_t {
 using flags = uint8_t;
 
 /**
- * @brief Per-column histogram struct holding detected occurrences of each dtype
+ * @brief Per-column histogram struct containing detected occurrences of each dtype
  */
 struct stats {
   uint32_t countFloat;

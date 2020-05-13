@@ -310,7 +310,7 @@ class concurrent_unordered_map {
    * that the insert did not succeed.
    *
    * If the new key was not present, the iterator points to the location
-   *where the insert occurred and the boolean is `true` indicating that the
+   * where the insert occurred and the boolean is `true` indicating that the
    *insert succeeded.
    *
    * @param insert_pair The key and value pair to insert

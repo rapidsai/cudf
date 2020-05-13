@@ -115,11 +115,11 @@ class ptx_parser {
   std::string parse_statement(const std::string& src);
 
   /**
-   * @brief Convert the input PTX instruction into a inline PTX
+   * @brief Convert the input PTX instruction into an inline PTX
    * statement without changing (exceptions exist).
    *
-   * Non-alphanumeric that are not underscore in register identifiers
-   * are all replaced with underscore. An example:
+   * Non-alphanumeric characters in register identifiers, except underscores, are replaced with
+   underscore. Example:
    *
    *  fma.rn.f32 	%f4, %f3, %f1, %f2
    *

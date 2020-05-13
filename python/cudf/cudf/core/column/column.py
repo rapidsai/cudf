@@ -1578,7 +1578,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
 
 def column_applymap(udf, column, out_dtype):
-    """Apply a elementwise function to transform the values in the Column.
+    """Apply an element-wise function to transform the values in the Column.
 
     Parameters
     ----------
