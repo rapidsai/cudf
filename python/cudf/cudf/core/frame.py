@@ -423,7 +423,7 @@ class Frame(libcudf.table.Table):
             ):
                 return self._normalize_scalars(other)
 
-            elif (self, cudf.DataFrame):
+            elif isinstance(self, cudf.DataFrame):
                 out = []
                 if is_scalar(other):
                     other = [other for i in range(len(self._data.names))]
@@ -1718,8 +1718,10 @@ class Frame(libcudf.table.Table):
                 elif right_index:
                     compare_cols_l = lhs[left_on]._data.columns
                     compare_cols_r = rhs._index._data.columns
-                for l, r in compare_cols_l, compare_cols_r:
-                    if not pd.api.types.is_dtype_equal(l.dtype, r.dtype):
+                for left, right in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(
+                        left.dtype, right.dtype
+                    ):
                         raise NotImplementedError(
                             "Typecasting not yet supported for MultiIndicies"
                         )
