@@ -1841,6 +1841,140 @@ TEST_F(BinaryOperationIntegrationTest, ShiftRightUnsigned_Scalar_Vector_SI64_SI6
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
 }
 
+TEST_F(BinaryOperationIntegrationTest, PMod_Scalar_Vector_FP32)
+{
+  using TypeOut = float;
+  using TypeLhs = float;
+  using TypeRhs = float;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = cudf::experimental::scalar_type_t<TypeLhs>(-86099.68377);
+  auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881, -15456.4335, 32213.22119}};
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  auto expected_result =
+    fixed_width_column_wrapper<TypeOut>{{4671.0625, -8817.51953125, 10539.974609375}};
+  expect_columns_equal(*out, expected_result);
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Scalar_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = double;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = fixed_width_column_wrapper<TypeLhs>{{90770.74881, -15456.4335, 32213.22119}};
+  auto rhs = cudf::experimental::scalar_type_t<TypeRhs>(-86099.68377);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  auto expected_result = fixed_width_column_wrapper<TypeOut>{
+    {4671.0650400000013178, -15456.433499999999185, 32213.221190000000206}};
+  expect_columns_equal(*out, expected_result);
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_FP32_FP64)
+{
+  using TypeOut = double;
+  using TypeLhs = float;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = fixed_width_column_wrapper<TypeLhs>{
+    {24854.55893, 79946.87288, -86099.68377, -86099.68377, 1.0, 1.0, -1.0, -1.0}};
+  auto rhs = fixed_width_column_wrapper<TypeRhs>{{90770.74881,
+                                                  -15456.4335,
+                                                  36223.96138,
+                                                  -15456.4335,
+                                                  2.1336193413893147E307,
+                                                  -2.1336193413893147E307,
+                                                  2.1336193413893147E307,
+                                                  -2.1336193413893147E307}};
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  auto expected_result = fixed_width_column_wrapper<TypeOut>{{24854.55859375,
+                                                              2664.7075000000040745,
+                                                              22572.196640000001935,
+                                                              -8817.5200000000040745,
+                                                              1.0,
+                                                              1.0,
+                                                              0.0,
+                                                              0.0}};
+  expect_columns_equal(*out, expected_result);
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_FP64_SI32_SI64)
+{
+  using TypeOut = double;
+  using TypeLhs = int32_t;
+  using TypeRhs = int64_t;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(1000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(1000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_SI32_SI64)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = int32_t;
+  using TypeRhs = int64_t;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(1000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(1000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
+TEST_F(BinaryOperationIntegrationTest, PMod_Vector_Vector_SI64_FP64_FP64)
+{
+  using TypeOut = int64_t;
+  using TypeLhs = double;
+  using TypeRhs = double;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = make_random_wrapped_column<TypeLhs>(1000);
+  auto rhs = make_random_wrapped_column<TypeRhs>(1000);
+
+  auto out = cudf::experimental::binary_operation(lhs,
+                                                  rhs,
+                                                  cudf::experimental::binary_operator::PMOD,
+                                                  data_type(experimental::type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
 TEST_F(BinaryOperationIntegrationTest, ATan2_Scalar_Vector_FP32)
 {
   using TypeOut = float;
