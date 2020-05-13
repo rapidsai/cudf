@@ -155,6 +155,7 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5100 Add documentation on libcudf doxygen guidelines
 - PR #5106 Add detail API for `cudf::concatenate` with tables
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
 - PR #5112 Adding `htoi` and `ip2int` support to `StringMethods`
@@ -279,6 +280,7 @@
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
 - PR #5162 Fix issues related to empty `Dataframe` in `as_gpu_matrix` & `astype`
+- PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
 
