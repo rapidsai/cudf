@@ -1391,9 +1391,8 @@ class DataFrame(Frame):
         if isinstance(value, cudf.core.multiindex.MultiIndex):
             if len(self._data) > 0 and len(value) != len(self):
                 msg = (
-                    f"Length mismatch: Expected axis has "
-                    "%d elements, new values "
-                    "have %d elements" % (len(self), len(value))
+                    f"Length mismatch: Expected axis has {len(self)} "
+                    f"elements, new values have {len(value)} elements"
                 )
                 raise ValueError(msg)
             self._index = value
@@ -1404,9 +1403,8 @@ class DataFrame(Frame):
 
         if len(self._data) > 0 and new_length != old_length:
             msg = (
-                f"Length mismatch: Expected axis has "
-                "%d elements, new values "
-                "have %d elements" % (old_length, new_length)
+                f"Length mismatch: Expected axis has {old_length} elements, "
+                f"new values have {new_length} elements"
             )
             raise ValueError(msg)
 
