@@ -196,7 +196,7 @@ class writer {
    * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
    * boundaries.
    */
-  std::size_t write_chunked_begin();
+  void write_chunked_begin(struct pq_chunked_state& state);
 
   /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.

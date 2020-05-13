@@ -58,16 +58,12 @@ struct pq_chunked_state {
   pq_chunked_state() = default;
 
   pq_chunked_state(std::unique_ptr<writer> writer_ptr,
-                   std::size_t curr_chunk_offset,
                    SetMetadata set_metadata,
                    table_metadata const* metadata,
                    table_metadata_with_nullability const* metadata_with_nullability,
                    SingleWriteMode mode = SingleWriteMode::NO,
                    cudaStream_t str     = 0)
-    : wp{std::move(writer_ptr)},
-      current_chunk_offset{curr_chunk_offset},
-      single_write_mode{mode == SingleWriteMode::YES},
-      stream{str}
+    : wp{std::move(writer_ptr)}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
   {
     if (set_metadata == SetMetadata::WITH_NULLABILITY) {
       if (metadata_with_nullability != nullptr) {

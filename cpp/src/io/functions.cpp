@@ -298,8 +298,8 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *args.metadata;
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->stream               = 0;
-  state->current_chunk_offset = state->wp->write_chunked_begin();
+  state->stream = 0;
+  state->wp->write_chunked_begin(*state);
   return state;
 }
 
