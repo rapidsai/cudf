@@ -168,6 +168,7 @@
 
 ## Bug Fixes
 
+- PR #5181 Allocate null count using the default resource in `copy_if`
 - PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
@@ -278,6 +279,8 @@
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
 - PR #5162 Fix issues related to empty `Dataframe` in `as_gpu_matrix` & `astype`
+- PR #5163 Fix parquet INT96 timestamps before the epoch
+- PR #5165 Fix potentially missing last row in libcudf++ csv reader
 
 
 # cuDF 0.13.0 (31 Mar 2020)
