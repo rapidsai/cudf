@@ -67,7 +67,7 @@ namespace {  // anonym.
 
 using namespace cudf::strings;
 
-// predicate to determine if given string_view conatins special characters:
+// predicate to determine if a given string_view contains special characters:
 //{"\"", "\n", <delimiter>}
 //
 struct predicate_special_chars {
@@ -80,9 +80,9 @@ struct predicate_special_chars {
   {
     // if (any_of{"\"", "\n", <delimiter>} )
     //
-    char const* quote_str   = "\"";
-    char const* newline_str = "\n";
-    size_type len1byte{1};  //<-TODO: confirm that find() expects len==1, or 2 (including '\0')
+    constexpr char const* quote_str   = "\"";
+    constexpr char const* newline_str = "\n";
+    constexpr size_type len1byte{1};
 
     if ((str_view.find(quote_str, len1byte) >= 0) || (str_view.find(newline_str, len1byte) >= 0) ||
         (str_view.find(delimiter_) >= 0)) {
@@ -111,11 +111,10 @@ struct probe_special_chars {
     string_view d_str = d_column_.template element<string_view>(idx);
 
     if (predicate_(d_str)) {
-      // count number of quotes "\""
-      size_type num_quotes{0};
-      char const quote_char = '\"';
+      constexpr char const quote_char = '\"';
 
-      num_quotes =
+      // count number of quotes "\""
+      size_type num_quotes =
         thrust::count_if(thrust::seq, d_str.begin(), d_str.end(), [quote_char](char_utf8 chr) {
           return chr == quote_char;
         });
@@ -154,9 +153,9 @@ struct modify_special_chars {
     // assert( d_buffer != nullptr );
 
     if (predicate_(d_str)) {
-      char const quote_char   = '\"';
-      char const* quote_str   = "\"";
-      char const* str_2quotes = "\"\"";
+      constexpr char const quote_char   = '\"';
+      constexpr char const* quote_str   = "\"";
+      constexpr char const* str_2quotes = "\"\"";
 
       size_type len1quote{1};
       size_type len2quotes{2};
@@ -213,10 +212,12 @@ struct column_to_strings_fn {
   template <typename column_type>
   constexpr static bool is_not_handled(void)
   {
-    return (  //(!std::is_same<column_type, bool>::value) && <- case covered by is_integral
-      (!std::is_same<column_type, cudf::string_view>::value) &&
-      (!std::is_integral<column_type>::value) && (!std::is_floating_point<column_type>::value) &&
-      (!cudf::is_timestamp<column_type>()));
+    // Note: the case (not std::is_same<column_type, bool>::value)
+    // is already covered by is_integral)
+    //
+    return not((std::is_same<column_type, cudf::string_view>::value) ||
+               (std::is_integral<column_type>::value) ||
+               (std::is_floating_point<column_type>::value) || (cudf::is_timestamp<column_type>()));
   }
 
   explicit column_to_strings_fn(writer_options const& options,
@@ -226,7 +227,7 @@ struct column_to_strings_fn {
   {
   }
 
-  // Note: Done: `null` replacement with `na_rep` defered to `concatenate()`
+  // Note: `null` replacement with `na_rep` defered to `concatenate()`
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
@@ -244,14 +245,6 @@ struct column_to_strings_fn {
       cudf::strings::from_booleans(column, options_.true_value(), options_.false_value(), mr_);
 
     return conv_col_ptr;
-
-    // null replacement could be done here, but probably more efficient
-    // to defer it until concatenate() call:
-    //
-    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    // return  cudf::strings::replace_nulls(strings_converted,
-    //                                      options_.na_rep() ,
-    //                                      mr_);
   }
 
   // strings:
@@ -281,13 +274,6 @@ struct column_to_strings_fn {
     predicate_special_chars pred{delimiter, stream_};
 
     return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);
-
-    // null replacement could be done here, but probably more efficient
-    // to defer it until concatenate() call:
-    //
-    // return cudf::strings::replace_nulls(column,
-    //                                     options_.na_rep() ,
-    //                                     mr_);
   }
 
   // ints:
@@ -300,14 +286,6 @@ struct column_to_strings_fn {
     auto conv_col_ptr = cudf::strings::from_integers(column, mr_);
 
     return conv_col_ptr;
-
-    // null replacement could be done here, but probably more efficient
-    // to defer it until concatenate() call:
-    //
-    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    // return cudf::strings::replace_nulls(strings_converted,
-    //                                     options_.na_rep() ,
-    //                                     mr_);
   }
 
   // floats:
@@ -319,14 +297,6 @@ struct column_to_strings_fn {
     auto conv_col_ptr = cudf::strings::from_floats(column, mr_);
 
     return conv_col_ptr;
-
-    // null replacement could be done here, but probably more efficient
-    // to defer it until concatenate() call:
-    //
-    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    // return cudf::strings::replace_nulls(strings_converted,
-    //                                     options_.na_rep() ,
-    //                                     mr_);
   }
 
   // timestamps:
@@ -336,17 +306,26 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     std::string format{"%Y-%m-%dT%H:%M:%SZ"};  // same as default for `from_timestamp`
+
+    // handle the cases where delimiter / line-terminator can be
+    // "-" or ":", in which case they are to be dropped from the format:
+    //
+    std::string delimiter{options_.inter_column_delimiter()};
+    std::string newline{options_.line_terminator()};
+
+    constexpr char const* dash{"-"};
+    constexpr char const* colon{":"};
+    if (delimiter == dash || newline == dash) {
+      format.erase(std::remove(format.begin(), format.end(), dash[0]), format.end());
+    }
+
+    if (delimiter == colon || newline == colon) {
+      format.erase(std::remove(format.begin(), format.end(), colon[0]), format.end());
+    }
+
     auto conv_col_ptr = cudf::strings::from_timestamps(column, format, mr_);
 
     return conv_col_ptr;
-
-    // null replacement could be done here, but probably more efficient
-    // to defer it until concatenate() call:
-    //
-    // strings_column_view strings_converted{std::move(*conv_col_ptr)};
-    // return cudf::strings::replace_nulls(strings_converted,
-    //                                     options_.na_rep() ,
-    //                                     mr_);
   }
 
   // unsupported type of column:
@@ -486,7 +465,8 @@ void writer::impl::write(table_view const& table,
     //
     if (n_rows_per_chunk % 8)  // must be divisible by 8
       n_rows_per_chunk += 8 - (n_rows_per_chunk % 8);
-    CUDF_EXPECTS(n_rows_per_chunk > 0, "write_csv: invalid chunk_rows; must be at least 8");
+
+    CUDF_EXPECTS(n_rows_per_chunk >= 8, "write_csv: invalid chunk_rows; must be at least 8");
 
     auto exec = rmm::exec_policy(stream);
 
@@ -529,7 +509,7 @@ void writer::impl::write(table_view const& table,
                      std::back_inserter(str_column_vec),
                      [converter](auto const& current_col) {
                        return cudf::experimental::type_dispatcher(
-                                                                  current_col.type(), converter, current_col);
+                         current_col.type(), converter, current_col);
                      });
 
       // create string table view from str_column_vec:
