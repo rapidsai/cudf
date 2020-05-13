@@ -128,15 +128,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     if (row_count == 0) {
       col = cudf::make_empty_column(dtype);
     } else if (cudf::is_fixed_width(dtype)) {
-      col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
+      col = cudf::make_fixed_width_column(dtype, row_count, mask_state, stream_t{});
       auto mut_view = col->mutable_view();
       cudf::experimental::fill_in_place(mut_view, 0, row_count, *scalar_val);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
-      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED);
+      auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, row_count + 1, cudf::mask_state::UNALLOCATED, cudf::stream_t{});
       auto data = cudf::make_empty_column(cudf::data_type{cudf::INT8});
       auto mask_buffer = cudf::create_null_mask(row_count, cudf::mask_state::UNALLOCATED);
-      auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0, std::move(mask_buffer));
+      auto str_col = cudf::make_strings_column(row_count, std::move(offsets), std::move(data), 0, std::move(mask_buffer), cudf::stream_t{});
 
       col = cudf::experimental::fill(str_col->view(), 0, row_count, *scalar_val);
     } else {
@@ -1177,7 +1177,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeNumericCudfColumn(
     cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
     cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
     std::unique_ptr<cudf::column> column(
-        cudf::make_numeric_column(n_data_type, n_size, n_mask_state));
+        cudf::make_numeric_column(n_data_type, n_size, n_mask_state, cudf::stream_t{}));
     return reinterpret_cast<jlong>(column.release());
   }
   CATCH_STD(env, 0);
@@ -1196,7 +1196,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeTimestampCudfColumn
     cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
     cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
     std::unique_ptr<cudf::column> column(
-        cudf::make_timestamp_column(*n_data_type.get(), n_size, n_mask_state));
+        cudf::make_timestamp_column(*n_data_type.get(), n_size, n_mask_state, cudf::stream_t{}));
     return reinterpret_cast<jlong>(column.release());
   }
   CATCH_STD(env, 0);
@@ -1224,7 +1224,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
     std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(
             cudf::data_type{cudf::INT32},
             size + 1,
-            cudf::mask_state::UNALLOCATED);
+            cudf::mask_state::UNALLOCATED,
+            cudf::stream_t{});
     auto offsets_view = offsets->mutable_view();
     JNI_CUDA_TRY(env, 0, cudaMemcpyAsync(
                 offsets_view.data<int32_t>(),
@@ -1235,7 +1236,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
     std::unique_ptr<cudf::column> data = cudf::make_numeric_column(
             cudf::data_type{cudf::INT8},
             n_data_size,
-            cudf::mask_state::UNALLOCATED);
+            cudf::mask_state::UNALLOCATED,
+            cudf::stream_t{});
     auto data_view = data->mutable_view();
     JNI_CUDA_TRY(env, 0, cudaMemcpyAsync(
                 data_view.data<int8_t>(),
@@ -1245,7 +1247,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
 
     std::unique_ptr<cudf::column> column;
     if (j_null_count == 0) {
-      column = cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count, {});
+      column = cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count, {}, cudf::stream_t{});
     } else {
       cudf::size_type bytes = (cudf::word_index(size) + 1) * sizeof(cudf::bitmask_type);
       rmm::device_buffer dev_validity(bytes);
@@ -1256,7 +1258,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHos
                   cudaMemcpyHostToDevice));
 
       column = cudf::make_strings_column(size, std::move(offsets), std::move(data),
-              j_null_count, std::move(dev_validity));
+              j_null_count, std::move(dev_validity), cudf::stream_t{});
     }
 
     JNI_CUDA_TRY(env, 0, cudaStreamSynchronize(0));

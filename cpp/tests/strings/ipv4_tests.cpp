@@ -80,6 +80,7 @@ TEST_F(StringsConvertTest, ZeroSizeStringsColumnIPV4)
 
 TEST_F(StringsConvertTest, IPv4Error)
 {
-  auto column = cudf::make_numeric_column(cudf::data_type{cudf::INT32}, 100);
+  auto column = cudf::make_numeric_column(
+    cudf::data_type{cudf::INT32}, 100, cudf::mask_state::UNALLOCATED, cudf::stream_t{});
   EXPECT_THROW(cudf::strings::integers_to_ipv4(column->view()), cudf::logic_error);
 }

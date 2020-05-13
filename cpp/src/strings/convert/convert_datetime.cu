@@ -388,7 +388,7 @@ std::unique_ptr<cudf::column> to_timestamps(
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_timestamp_column(timestamp_type, 0);
+  if (strings_count == 0) return make_empty_column(timestamp_type);
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   timestamp_units units =

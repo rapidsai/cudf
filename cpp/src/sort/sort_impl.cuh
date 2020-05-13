@@ -37,7 +37,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      cudaStream_t stream)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
-    return cudf::make_numeric_column(data_type(experimental::type_to_id<size_type>()), 0);
+    return cudf::make_empty_column(data_type(experimental::type_to_id<size_type>()));
   }
 
   if (not column_order.empty()) {

@@ -210,8 +210,9 @@ TEST_F(StringsConvertTest, ZeroSizeFloatsColumn)
 
 TEST_F(StringsConvertTest, FromToFloatsError)
 {
-  auto dtype  = cudf::data_type{cudf::INT32};
-  auto column = cudf::make_numeric_column(dtype, 100);
+  auto dtype = cudf::data_type{cudf::INT32};
+  auto column =
+    cudf::make_numeric_column(dtype, 100, cudf::mask_state::UNALLOCATED, cudf::stream_t{});
   EXPECT_THROW(cudf::strings::from_floats(column->view()), cudf::logic_error);
 
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};

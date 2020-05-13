@@ -111,7 +111,9 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   d_integers.push_back(std::numeric_limits<TypeParam>::max());
   auto integers =
     cudf::make_numeric_column(cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
-                              (cudf::size_type)d_integers.size());
+                              (cudf::size_type)d_integers.size(),
+                              cudf::mask_state::UNALLOCATED,
+                              cudf::stream_t{});
   auto integers_view = integers->mutable_view();
   CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
                       d_integers.data().get(),
@@ -147,8 +149,9 @@ TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {
-  auto dtype  = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
-  auto column = cudf::make_numeric_column(dtype, 100);
+  auto dtype = cudf::data_type{cudf::experimental::type_to_id<TypeParam>()};
+  auto column =
+    cudf::make_numeric_column(dtype, 100, cudf::mask_state::UNALLOCATED, cudf::stream_t{});
   EXPECT_THROW(cudf::strings::from_integers(column->view()), cudf::logic_error);
 
   cudf::test::strings_column_wrapper strings{"this string intentionally left blank"};

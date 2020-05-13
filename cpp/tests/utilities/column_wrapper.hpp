@@ -371,7 +371,7 @@ class strings_column_wrapper : public detail::column_wrapper {
     std::vector<int32_t> offsets;
     auto all_valid           = make_counting_transform_iterator(0, [](auto i) { return true; });
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    wrapped                  = cudf::make_strings_column(chars, offsets);
+    wrapped                  = cudf::make_strings_column(chars, offsets, {}, 0, cudf::stream_t{});
   }
 
   /**
@@ -410,8 +410,11 @@ class strings_column_wrapper : public detail::column_wrapper {
     std::vector<char> chars;
     std::vector<int32_t> offsets;
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    wrapped =
-      cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings));
+    wrapped                  = cudf::make_strings_column(chars,
+                                        offsets,
+                                        detail::make_null_mask_vector(v, v + num_strings),
+                                        UNKNOWN_NULL_COUNT,
+                                        stream_t{});
   }
 
   /**

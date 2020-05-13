@@ -75,7 +75,7 @@ std::unique_ptr<column> ipv4_to_integers(
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{INT64}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{INT64});
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   // create output column copying the strings' null-mask

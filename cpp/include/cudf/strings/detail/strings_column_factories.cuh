@@ -35,8 +35,8 @@ namespace detail {
 template<typename IndexPairIterator>
 std::unique_ptr<column> make_strings_column(
   IndexPairIterator begin, IndexPairIterator end,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream ) 
+  stream_t const& stream,
+  rmm::mr::device_memory_resource* mr) 
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin,end);

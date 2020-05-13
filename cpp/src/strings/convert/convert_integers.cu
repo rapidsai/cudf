@@ -124,7 +124,7 @@ std::unique_ptr<column> to_integers(
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(output_type, 0);
+  if (strings_count == 0) return make_empty_column(output_type);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create integer output column copying the strings null-mask

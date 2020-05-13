@@ -71,7 +71,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   }
   rmm::device_vector<thrust::pair<const char*, cudf::size_type>> d_strings(strings);
   CUDA_TRY(cudaMemcpy(d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
-  auto column = cudf::make_strings_column(d_strings);
+  auto column = cudf::make_strings_column(d_strings, cudf::stream_t{});
   EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});
   EXPECT_EQ(column->null_count(), nulls);
   if (nulls) {
@@ -131,7 +131,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   rmm::device_vector<char> d_buffer(h_buffer);
   rmm::device_vector<cudf::size_type> d_offsets(h_offsets);
   rmm::device_vector<cudf::bitmask_type> d_nulls(h_nulls);
-  auto column = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
+  auto column =
+    cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count, cudf::stream_t{});
   EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});
   EXPECT_EQ(column->null_count(), null_count);
   EXPECT_EQ(2, column->num_children());
@@ -150,7 +151,8 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
 
   // check host version of the factory too
-  auto column2 = cudf::make_strings_column(h_buffer, h_offsets, h_nulls, null_count);
+  auto column2 =
+    cudf::make_strings_column(h_buffer, h_offsets, h_nulls, null_count, cudf::stream_t{});
   cudf::test::expect_columns_equal(column->view(), column2->view());
 }
 
@@ -171,11 +173,11 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
   rmm::device_vector<cudf::size_type> d_offsets(1, 0);
   rmm::device_vector<cudf::bitmask_type> d_nulls;
 
-  auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
+  auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0, cudf::stream_t{});
   cudf::test::expect_strings_empty(results->view());
 
   rmm::device_vector<thrust::pair<const char*, cudf::size_type>> d_strings;
-  results = cudf::make_strings_column(d_strings);
+  results = cudf::make_strings_column(d_strings, cudf::stream_t{});
   cudf::test::expect_strings_empty(results->view());
 }
 

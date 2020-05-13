@@ -179,13 +179,13 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     cudaStream_t stream)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
 
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
   {
     auto true_scalar = make_fixed_width_scalar<bool>(true, stream, mr);
-    auto results     = make_column_from_scalar(*true_scalar, strings.size(), mr, stream);
+    auto results     = make_column_from_scalar(*true_scalar, strings.size(), stream, mr);
     results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                            strings.null_count());
     return results;

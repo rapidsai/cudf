@@ -538,7 +538,7 @@ std::unique_ptr<experimental::table> split_fn(strings_column_view const& strings
   // - Create the strings column from the vector using the strings factory.
   for (size_type col = 0; col < columns_count; ++col) {
     auto column_tokens = d_tokens + (col * strings_count);
-    auto column = make_strings_column(column_tokens, column_tokens + strings_count, mr, stream);
+    auto column = make_strings_column(column_tokens, column_tokens + strings_count, stream, mr);
     results.emplace_back(std::move(column));
   }
   return std::make_unique<experimental::table>(std::move(results));
@@ -885,7 +885,7 @@ std::unique_ptr<experimental::table> whitespace_split_fn(size_type strings_count
   // - Create the strings column from the vector using the strings factory.
   for (size_type col = 0; col < columns_count; ++col) {
     auto column_tokens = d_tokens + (col * strings_count);
-    auto column = make_strings_column(column_tokens, column_tokens + strings_count, mr, stream);
+    auto column = make_strings_column(column_tokens, column_tokens + strings_count, stream, mr);
     results.emplace_back(std::move(column));
   }
   return std::make_unique<experimental::table>(std::move(results));

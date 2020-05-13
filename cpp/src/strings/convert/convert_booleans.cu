@@ -41,7 +41,7 @@ std::unique_ptr<column> to_booleans(
   cudaStream_t stream                 = 0)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
+  if (strings_count == 0) return make_empty_column(data_type{BOOL8});
 
   CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
                "Parameter true_string must not be empty.");

@@ -140,7 +140,7 @@ struct out_of_place_fill_range_dispatch {
     }
 
     // add the scalar to get the output dictionary key-set
-    auto scalar_column = cudf::make_column_from_scalar(value, 1, mr, stream);
+    auto scalar_column = cudf::make_column_from_scalar(value, 1, stream, mr);
     auto target_matched =
       cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
     cudf::column_view const target_indices =
