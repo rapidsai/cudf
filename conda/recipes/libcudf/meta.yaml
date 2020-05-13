@@ -99,3 +99,6 @@ about:
   license_family: Apache
   license_file: LICENSE
   summary: libcudf library
+
+extra:
+  commit_hash: {{ git_commit }}

@@ -57,3 +57,6 @@ about:
   license_family: Apache
   license_file: LICENSE
   summary: libnvstrings library
+
+extra:
+  commit_hash: {{ git_commit }}
