@@ -32,6 +32,7 @@ if not os.path.isdir(CUDA_HOME):
     )
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
+cuda_lib_dir = os.path.join(CUDA_HOME, "lib64")
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
@@ -61,9 +62,9 @@ extensions = [
         library_dirs=[
             get_python_lib(),
             os.path.join(os.sys.prefix, "lib"),
-            "/usr/local/cuda/lib64",
+            cuda_lib_dir,
         ],
-        libraries=["cudf"],
+        libraries=["cudf", "cudart"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
