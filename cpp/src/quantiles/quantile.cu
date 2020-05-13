@@ -64,8 +64,8 @@ struct quantile_functor {
       return output;
     }
 
-    auto d_input  = column_device_view::create(input);
-    auto d_output = mutable_column_device_view::create(output->mutable_view());
+    auto d_input  = column_device_view::create(input, stream);
+    auto d_output = mutable_column_device_view::create(output->mutable_view(), stream);
 
     rmm::device_vector<double> q_device{q};
 

@@ -206,7 +206,7 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
   // test column input
   cudf::test::fixed_width_column_wrapper<T> w_col(host_array.begin(), host_array.end());
-  this->values_equal_test(replaced_array, *cudf::column_device_view::create(w_col));
+  this->values_equal_test(replaced_array, *cudf::column_device_view::create(w_col, cudf::stream_t{}));
 }
 
 // Tests for null input iterator (column with null bitmap)
@@ -224,7 +224,7 @@ TYPED_TEST(IteratorTest, null_iterator)
   // create a column with bool vector
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate the expected value by CPU.
   thrust::host_vector<T> replaced_array(host_values.size());
@@ -264,7 +264,7 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
 
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate the expected value by CPU.
   thrust::host_vector<T> replaced_array(d_col->size());
@@ -306,7 +306,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
 
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate the expected value by CPU.
   thrust::host_vector<T_upcast> replaced_array(d_col->size());
@@ -343,7 +343,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate by cudf::reduce
   thrust::host_vector<T> replaced_array(d_col->size());
@@ -418,7 +418,7 @@ TYPED_TEST(PairIteratorTest, mean_var_output)
 
   cudf::test::fixed_width_column_wrapper<TypeParam> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate expected values by CPU
   T_output expected_value;
@@ -459,8 +459,8 @@ TYPED_TEST(IteratorTest, error_handling)
   cudf::test::fixed_width_column_wrapper<T> w_col_no_null(host_array.begin(), host_array.end());
   cudf::test::fixed_width_column_wrapper<T> w_col_null(
     host_array.begin(), host_array.end(), host_bools.begin());
-  auto d_col_no_null = cudf::column_device_view::create(w_col_no_null);
-  auto d_col_null    = cudf::column_device_view::create(w_col_null);
+  auto d_col_no_null = cudf::column_device_view::create(w_col_no_null, cudf::stream_t{});
+  auto d_col_null    = cudf::column_device_view::create(w_col_null, cudf::stream_t{});
 
   // expects error: data type mismatch
   if (!(std::is_same<T, double>::value)) {
@@ -529,7 +529,7 @@ TEST_F(StringIteratorTest, string_view_null_iterator)
   // create a column with bool vector
   cudf::test::strings_column_wrapper w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // GPU test
   auto it_dev = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
@@ -556,7 +556,7 @@ TEST_F(StringIteratorTest, string_view_no_null_iterator)
 
   // create a column with bool vector
   cudf::test::strings_column_wrapper w_col(host_values.begin(), host_values.end());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // GPU test
   auto it_dev = d_col->begin<T>();
@@ -573,7 +573,7 @@ TYPED_TEST(IteratorTest, nonull_pair_iterator)
 
   // create a column
   cudf::test::fixed_width_column_wrapper<T> w_col(host_values.begin(), host_values.end());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate the expected value by CPU.
   thrust::host_vector<thrust::pair<T, bool>> replaced_array(host_values.size());
@@ -596,7 +596,7 @@ TYPED_TEST(IteratorTest, null_pair_iterator)
   // create a column with bool vector
   cudf::test::fixed_width_column_wrapper<T> w_col(
     host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
+  auto d_col = cudf::column_device_view::create(w_col, cudf::stream_t{});
 
   // calculate the expected value by CPU.
   thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());

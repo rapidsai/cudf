@@ -85,8 +85,8 @@ TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation)
   EXPECT_TRUE(thrust::all_of(indices.begin(),
                              indices.end(),
                              compare_timestamp_elements_to_primitive_representation<T>{
-                               *cudf::column_device_view::create(primitive_col),
-                               *cudf::column_device_view::create(timestamp_col)}));
+                               *cudf::column_device_view::create(primitive_col, cudf::stream_t{}),
+                               *cudf::column_device_view::create(timestamp_col, cudf::stream_t{})}));
 }
 
 template <typename Timestamp>
@@ -140,29 +140,29 @@ TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode)
     indices.begin(),
     indices.end(),
     compare_timestamp_elements<TypeParam>{GDF_LESS,
-                                          *cudf::column_device_view::create(timestamp_lhs_col),
-                                          *cudf::column_device_view::create(timestamp_rhs_col)}));
+                                          *cudf::column_device_view::create(timestamp_lhs_col, cudf::stream_t{}),
+                                          *cudf::column_device_view::create(timestamp_rhs_col, cudf::stream_t{})}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
     compare_timestamp_elements<TypeParam>{GDF_GREATER,
-                                          *cudf::column_device_view::create(timestamp_rhs_col),
-                                          *cudf::column_device_view::create(timestamp_lhs_col)}));
+                                          *cudf::column_device_view::create(timestamp_rhs_col, cudf::stream_t{}),
+                                          *cudf::column_device_view::create(timestamp_lhs_col, cudf::stream_t{})}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
     compare_timestamp_elements<TypeParam>{GDF_LESS_EQUAL,
-                                          *cudf::column_device_view::create(timestamp_lhs_col),
-                                          *cudf::column_device_view::create(timestamp_lhs_col)}));
+                                          *cudf::column_device_view::create(timestamp_lhs_col, cudf::stream_t{}),
+                                          *cudf::column_device_view::create(timestamp_lhs_col, cudf::stream_t{})}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
     compare_timestamp_elements<TypeParam>{GDF_GREATER_EQUAL,
-                                          *cudf::column_device_view::create(timestamp_rhs_col),
-                                          *cudf::column_device_view::create(timestamp_rhs_col)}));
+                                          *cudf::column_device_view::create(timestamp_rhs_col, cudf::stream_t{}),
+                                          *cudf::column_device_view::create(timestamp_rhs_col, cudf::stream_t{})}));
 }
 
 TYPED_TEST(TimestampColumnTest, TimestampFactoryNullMaskAsParm)

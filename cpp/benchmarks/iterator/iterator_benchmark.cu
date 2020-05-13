@@ -76,7 +76,7 @@ void iterator_bench_cub(cudf::column_view &col, rmm::device_vector<T> &result)
   // std::cout << "iterator cub " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
   T init{0};
-  auto d_col    = cudf::column_device_view::create(col);
+  auto d_col    = cudf::column_device_view::create(col, cudf::stream_t{});
   int num_items = col.size();
   if (has_null) {
     auto begin = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
@@ -105,7 +105,7 @@ void iterator_bench_thrust(cudf::column_view &col, rmm::device_vector<T> &result
   // std::cout << "iterator thust " << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
 
   T init{0};
-  auto d_col = cudf::column_device_view::create(col);
+  auto d_col = cudf::column_device_view::create(col, cudf::stream_t{});
   if (has_null) {
     auto d_in  = cudf::experimental::detail::make_null_replacement_iterator(*d_col, init);
     auto d_end = d_in + col.size();
@@ -166,7 +166,7 @@ void pair_iterator_bench_cub(cudf::column_view &col,
                              rmm::device_vector<thrust::pair<T, bool>> &result)
 {
   thrust::pair<T, bool> init{0, false};
-  auto d_col    = cudf::column_device_view::create(col);
+  auto d_col    = cudf::column_device_view::create(col, cudf::stream_t{});
   int num_items = col.size();
   auto begin    = d_col->pair_begin<T, has_null>();
   reduce_by_cub(result.begin(), begin, num_items, init);
@@ -177,7 +177,7 @@ void pair_iterator_bench_thrust(cudf::column_view &col,
                                 rmm::device_vector<thrust::pair<T, bool>> &result)
 {
   thrust::pair<T, bool> init{0, false};
-  auto d_col = cudf::column_device_view::create(col);
+  auto d_col = cudf::column_device_view::create(col, cudf::stream_t{});
   auto d_in  = d_col->pair_begin<T, has_null>();
   auto d_end = d_in + col.size();
   thrust::reduce(thrust::device, d_in, d_end, init, cudf::DeviceSum{});

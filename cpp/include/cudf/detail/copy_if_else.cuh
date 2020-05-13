@@ -182,7 +182,7 @@ std::unique_ptr<column> copy_if_else(bool nullable,
                             stream,
                             mr);
 
-  auto out_v = mutable_column_device_view::create(*out);
+  auto out_v = mutable_column_device_view::create(*out, stream);
 
   // if we have validity in the output
   if (nullable) {

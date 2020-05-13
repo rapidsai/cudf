@@ -65,7 +65,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, stream_t
 {
   // Create device views for each input view
   using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
+    decltype(column_device_view::create(std::declval<column_view>(), std::declval<stream_t const&>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(
     views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {

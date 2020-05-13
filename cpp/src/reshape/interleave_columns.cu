@@ -43,8 +43,8 @@ struct interleave_columns_functor {
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
       allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
-    auto device_input  = table_device_view::create(input);
-    auto device_output = mutable_column_device_view::create(*output);
+    auto device_input  = table_device_view::create(input, stream);
+    auto device_output = mutable_column_device_view::create(*output, stream);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 

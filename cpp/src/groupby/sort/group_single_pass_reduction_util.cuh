@@ -71,8 +71,8 @@ struct reduce_functor {
     auto result_table = mutable_table_view({*result});
     experimental::detail::initialize_with_identity(result_table, {K}, stream);
 
-    auto resultview = mutable_column_device_view::create(result->mutable_view());
-    auto valuesview = column_device_view::create(values);
+    auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
+    auto valuesview = column_device_view::create(values, stream);
 
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),

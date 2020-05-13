@@ -34,7 +34,7 @@ struct nan_dispatcher {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    auto input_device_view = column_device_view::create(input);
+    auto input_device_view = column_device_view::create(input, stream);
 
     if (input.has_nulls()) {
       auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);

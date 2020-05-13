@@ -32,7 +32,7 @@ auto is_sorted(cudf::table_view const& in,
                std::vector<null_order> const& null_precedence)
 {
   cudaStream_t stream = 0;
-  auto in_d           = table_device_view::create(in);
+  auto in_d           = table_device_view::create(in, stream);
   rmm::device_vector<order> d_column_order(column_order);
   rmm::device_vector<null_order> const d_null_precedence =
     (has_nulls) ? rmm::device_vector<null_order>{null_precedence}

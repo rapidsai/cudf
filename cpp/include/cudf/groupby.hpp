@@ -216,13 +216,13 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> dispatch_aggregation(
     std::vector<aggregation_request> const& requests,
-    cudaStream_t stream,
+    stream_t const& stream,
     rmm::mr::device_memory_resource* mr);
 
   // Sort-based groupby
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_aggregate(
     std::vector<aggregation_request> const& requests,
-    cudaStream_t stream,
+    stream_t const& stream,
     rmm::mr::device_memory_resource* mr);
 };
 }  // namespace groupby

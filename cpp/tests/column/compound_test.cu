@@ -88,14 +88,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
                                                std::move(children));
 
   {
-    auto column = cudf::column_device_view::create(parent->view());
+    auto column = cudf::column_device_view::create(parent->view(), cudf::stream_t{});
     EXPECT_TRUE(thrust::any_of(thrust::device,
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level1<cudf::column_device_view>{*column}));
   }
   {
-    auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
+    auto column = cudf::mutable_column_device_view::create(parent->mutable_view(), cudf::stream_t{});
     EXPECT_TRUE(thrust::any_of(thrust::device,
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
@@ -161,14 +161,14 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
                                                std::move(children));
 
   {
-    auto column = cudf::column_device_view::create(parent->view());
+    auto column = cudf::column_device_view::create(parent->view(), cudf::stream_t{});
     EXPECT_TRUE(thrust::any_of(thrust::device,
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),
                                checker_for_level2<cudf::column_device_view>{*column}));
   }
   {
-    auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
+    auto column = cudf::mutable_column_device_view::create(parent->mutable_view(), cudf::stream_t{});
     EXPECT_TRUE(thrust::any_of(thrust::device,
                                thrust::make_counting_iterator<int32_t>(0),
                                thrust::make_counting_iterator<int32_t>(100),

@@ -54,7 +54,7 @@ groupby::groupby(table_view const& keys,
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr)
 {
   // If sort groupby has been called once on this groupby object, then
@@ -132,7 +132,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, 0, mr);
+  return dispatch_aggregation(requests, stream_t{}, mr);
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)

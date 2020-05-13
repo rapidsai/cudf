@@ -56,9 +56,9 @@ struct quantiles_functor {
     //            so that sorting isn't required. Then add support for pre-sorted
 
     // prepare args to be used by lambda below
-    auto values_view     = column_device_view::create(values);
-    auto group_size_view = column_device_view::create(group_sizes);
-    auto result_view     = mutable_column_device_view::create(result->mutable_view());
+    auto values_view     = column_device_view::create(values, stream);
+    auto group_size_view = column_device_view::create(group_sizes, stream);
+    auto result_view     = mutable_column_device_view::create(result->mutable_view(), stream);
 
     // For each group, calculate quantile
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),

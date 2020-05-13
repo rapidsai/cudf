@@ -217,7 +217,8 @@ struct column_copy_functor {
   void operator()(column_view const& in,
                   column_split_info const& split_info,
                   char*& dst,
-                  std::vector<column_view>& out_cols)
+                  std::vector<column_view>& out_cols,
+                  stream_t const& stream)
   {
     // outgoing pointers
     char* data             = dst;
@@ -243,11 +244,11 @@ struct column_copy_functor {
     // output copied column
     mutable_column_view mcv{in.type(), in.size(), data, validity, in.null_count()};
     if (in.has_nulls()) {
-      copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+      copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, stream>>>(
+        *column_device_view::create(in, stream), *mutable_column_device_view::create(mcv, stream));
     } else {
-      copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+      copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, stream>>>(
+        *column_device_view::create(in, stream), *mutable_column_device_view::create(mcv, stream));
     }
 
     out_cols.push_back(mcv);
@@ -257,7 +258,8 @@ template <>
 void column_copy_functor::operator()<string_view>(column_view const& in,
                                                   column_split_info const& split_info,
                                                   char*& dst,
-                                                  std::vector<column_view>& out_cols)
+                                                  std::vector<column_view>& out_cols,
+                                                  stream_t const& stream)
 {
   // outgoing pointers
   char* chars_buf            = dst;
@@ -288,7 +290,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in,
   constexpr int block_size = 256;
   cudf::experimental::detail::grid_1d grid{num_threads, block_size, 1};
   if (in.has_nulls()) {
-    copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
+    copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, stream>>>(
       in.size(),                                        // num_rows
       in_offsets.head<size_type>() + in.offset(),       // offsets_in
       offsets_buf,                                      // offsets_out
@@ -300,7 +302,7 @@ void column_copy_functor::operator()<string_view>(column_view const& in,
       in_chars.head<char>() + split_info.chars_offset,  // chars_in
       chars_buf);
   } else {
-    copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
+    copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, stream>>>(
       in.size(),                                        // num_rows
       in_offsets.head<size_type>() + in.offset(),       // offsets_in
       offsets_buf,                                      // offsets_out
@@ -441,9 +443,9 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 
   column_index = 0;
   std::for_each(
-    t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info](cudf::column_view const& c) {
+    t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info, &stream](cudf::column_view const& c) {
       cudf::experimental::type_dispatcher(
-        c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols);
+        c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols, stream);
       column_index++;
     });
 

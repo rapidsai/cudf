@@ -133,7 +133,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
 
   if (boolean_mask.size() == 0) { return cudf::make_empty_column(lhs.type()); }
 
-  auto bool_mask_device_p             = column_device_view::create(boolean_mask);
+  auto bool_mask_device_p             = column_device_view::create(boolean_mask, stream);
   column_device_view bool_mask_device = *bool_mask_device_p;
 
   if (boolean_mask.has_nulls()) {
@@ -178,8 +178,8 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs and rhs columns");
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");
-  return copy_if_else(*column_device_view::create(lhs),
-                      *column_device_view::create(rhs),
+  return copy_if_else(*column_device_view::create(lhs, stream),
+                      *column_device_view::create(rhs, stream),
                       lhs.has_nulls(),
                       rhs.has_nulls(),
                       boolean_mask,
@@ -196,7 +196,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column");
   return copy_if_else(lhs,
-                      *column_device_view::create(rhs),
+                      *column_device_view::create(rhs, stream),
                       !lhs.is_valid(),
                       rhs.has_nulls(),
                       boolean_mask,
@@ -212,7 +212,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column");
-  return copy_if_else(*column_device_view::create(lhs),
+  return copy_if_else(*column_device_view::create(lhs, stream),
                       rhs,
                       lhs.has_nulls(),
                       !rhs.is_valid(),

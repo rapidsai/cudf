@@ -340,10 +340,10 @@ struct replace_kernel_forwarder {
 
     cudf::experimental::detail::grid_1d grid{outputView.size(), BLOCK_SIZE, 1};
 
-    auto device_in                 = cudf::column_device_view::create(input_col);
-    auto device_out                = cudf::mutable_column_device_view::create(outputView);
-    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace);
-    auto device_replacement_values = cudf::column_device_view::create(replacement_values);
+    auto device_in                 = cudf::column_device_view::create(input_col, stream);
+    auto device_out                = cudf::mutable_column_device_view::create(outputView, stream);
+    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace, stream);
+    auto device_replacement_values = cudf::column_device_view::create(replacement_values, stream);
 
     replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(*device_in,
                                                         *device_out,
@@ -410,11 +410,11 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto sizes_view   = sizes->mutable_view();
   auto indices_view = indices->mutable_view();
 
-  auto device_in                = cudf::column_device_view::create(input_col);
-  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
-  auto device_replacement       = cudf::column_device_view::create(replacement_values);
-  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
-  auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
+  auto device_in                = cudf::column_device_view::create(input_col, stream);
+  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace, stream);
+  auto device_replacement       = cudf::column_device_view::create(replacement_values, stream);
+  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view, stream);
+  auto device_indices           = cudf::mutable_column_device_view::create(indices_view, stream);
 
   rmm::device_buffer valid_bits =
     cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
@@ -433,7 +433,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), mr, stream);
   auto offsets_view   = offsets->mutable_view();
-  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
+  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
   int32_t size;
   CUDA_TRY(cudaMemcpyAsync(
     &size, offsets_view.end<int32_t>() - 1, sizeof(int32_t), cudaMemcpyDefault, stream));
@@ -444,7 +444,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     input_col.size(), null_count, size, mr, stream);
 
   auto output_chars_view = output_chars->mutable_view();
-  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
+  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view, stream);
 
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
     *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);
@@ -647,9 +647,9 @@ struct replace_nulls_column_kernel_forwarder {
     auto replace = replace_nulls<col_type, false>;
     if (output_view.nullable()) replace = replace_nulls<col_type, true>;
 
-    auto device_in          = cudf::column_device_view::create(input);
-    auto device_out         = cudf::mutable_column_device_view::create(output_view);
-    auto device_replacement = cudf::column_device_view::create(replacement);
+    auto device_in          = cudf::column_device_view::create(input, stream);
+    auto device_out         = cudf::mutable_column_device_view::create(output_view, stream);
+    auto device_replacement = cudf::column_device_view::create(replacement, stream);
 
     rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -696,8 +696,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     cudf::data_type(cudf::type_id::INT32), input.size(), cudf::mask_state::UNALLOCATED, stream);
 
   auto sizes_view         = sizes->mutable_view();
-  auto device_in          = cudf::column_device_view::create(input);
-  auto device_replacement = cudf::column_device_view::create(replacement);
+  auto device_in          = cudf::column_device_view::create(input, stream);
+  auto device_replacement = cudf::column_device_view::create(replacement, stream);
 
   rmm::device_buffer valid_bits =
     cudf::detail::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
@@ -772,7 +772,7 @@ struct replace_nulls_scalar_kernel_forwarder {
 
     using ScalarType = cudf::experimental::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
-    auto device_in   = cudf::column_device_view::create(input);
+    auto device_in   = cudf::column_device_view::create(input, stream);
 
     replace_nulls_functor<col_type> func(s1.data());
     thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -883,7 +883,7 @@ struct replace_nans_functor {
 
     if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
 
-    auto input_device_view = column_device_view::create(input);
+    auto input_device_view = column_device_view::create(input, stream);
     size_type size         = input.size();
 
     auto predicate = [dinput = *input_device_view] __device__(auto i) {
@@ -955,7 +955,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
   return type_dispatcher(input.type(),
                          replace_nans_functor{},
                          input,
-                         *column_device_view::create(replacement),
+                         *column_device_view::create(replacement, stream),
                          replacement.nullable(),
                          mr,
                          stream);
@@ -1050,10 +1050,10 @@ void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 
   column_view input = in_out;
 
   // to device. unique_ptr which gets automatically cleaned up when we leave
-  auto device_in = column_device_view::create(input);
+  auto device_in = column_device_view::create(input, stream);
 
   // from device. unique_ptr which gets automatically cleaned up when we leave.
-  auto device_out = mutable_column_device_view::create(in_out);
+  auto device_out = mutable_column_device_view::create(in_out, stream);
 
   // invoke the actual kernel.
   cudf::experimental::type_dispatcher(

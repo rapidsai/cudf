@@ -378,7 +378,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    */
   static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(
-    column_view source_view, cudaStream_t stream = 0);
+    column_view source_view, stream_t const& stream);
 
   /**
    * @brief Destroy the `column_device_view` object.
@@ -471,7 +471,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   static std::unique_ptr<mutable_column_device_view,
                          std::function<void(mutable_column_device_view*)>>
-  create(mutable_column_view source_view, cudaStream_t stream = 0);
+  create(mutable_column_view source_view, stream_t const& stream);
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to

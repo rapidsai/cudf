@@ -62,7 +62,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))
     // Returns index of nth value.
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(experimental::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });

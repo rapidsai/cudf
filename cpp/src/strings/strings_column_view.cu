@@ -67,7 +67,7 @@ void print(strings_column_view const& strings,
   count = last - first;
 
   // stick with the default stream for this odd/rare stdout function
-  auto strings_column = column_device_view::create(strings.parent());
+  auto strings_column = column_device_view::create(strings.parent(), stream_t{});
   auto d_column       = *strings_column;
 
   // create output strings offsets

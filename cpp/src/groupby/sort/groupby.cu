@@ -55,7 +55,7 @@ struct store_result_functor {
                        column_view const& values,
                        sort::sort_groupby_helper& helper,
                        experimental::detail::result_cache& cache,
-                       cudaStream_t stream,
+                       stream_t const& stream,
                        rmm::mr::device_memory_resource* mr)
     : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr)
   {
@@ -106,7 +106,7 @@ struct store_result_functor {
   experimental::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;                  ///< Column of values to group and aggregate
 
-  cudaStream_t stream;                  ///< CUDA stream on which to execute kernels
+  stream_t const& stream;                  ///< CUDA stream on which to execute kernels
   rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
 
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values
@@ -392,7 +392,7 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr)
 {
   // We're going to start by creating a cache of results so that aggs that

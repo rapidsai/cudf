@@ -199,7 +199,7 @@ TEST_F(StringsColumnTest, Scatter)
   scatter_map.push_back(4);
   scatter_map.push_back(1);
 
-  auto source_column = cudf::column_device_view::create(source.parent());
+  auto source_column = cudf::column_device_view::create(source.parent(), stream_t{});
   auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
                                                column_to_string_view_vector{*source_column});
 

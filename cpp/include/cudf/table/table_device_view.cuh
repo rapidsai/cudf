@@ -62,10 +62,9 @@ class table_device_view_base {
   ColumnDeviceView* _columns{};  ///< Array of view objects in device memory
   size_type _num_rows{};
   size_type _num_columns{};
-  cudaStream_t _stream{};
 
  protected:
-  table_device_view_base(HostTableView source_view, cudaStream_t stream);
+  table_device_view_base(HostTableView source_view, stream_t const& stream);
 
   rmm::device_buffer* _descendant_storage{};
 };
@@ -73,7 +72,7 @@ class table_device_view_base {
 
 class table_device_view : public detail::table_device_view_base<column_device_view, table_view> {
  public:
-  static auto create(table_view source_view, cudaStream_t stream = 0)
+  static auto create(table_view source_view, stream_t const& stream)
   {
     auto deleter = [](table_device_view* t) {
       t->destroy();
@@ -93,7 +92,7 @@ class table_device_view : public detail::table_device_view_base<column_device_vi
 class mutable_table_device_view
   : public detail::table_device_view_base<mutable_column_device_view, mutable_table_view> {
  public:
-  static auto create(mutable_table_view source_view, cudaStream_t stream = 0)
+  static auto create(mutable_table_view source_view, stream_t const& stream)
   {
     auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
     return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
@@ -101,7 +100,7 @@ class mutable_table_device_view
   }
 
  private:
-  mutable_table_device_view(mutable_table_view source_view, cudaStream_t stream)
+  mutable_table_device_view(mutable_table_view source_view, stream_t const& stream)
     : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
                                                                                      stream)
   {

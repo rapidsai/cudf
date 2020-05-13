@@ -133,8 +133,8 @@ void column_comparison(cudf::column_view const& lhs,
                                             corresponding_rows_unequal,
                                             corresponding_rows_not_equivalent>;
 
-  auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
-  auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
+  auto d_lhs = cudf::table_device_view::create(table_view{{lhs}}, stream_t{});
+  auto d_rhs = cudf::table_device_view::create(table_view{{rhs}}, stream_t{});
 
   thrust::device_vector<int> differences(lhs.size());
 

@@ -56,7 +56,7 @@ TEST_F(StringsHashTest, HashTest)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
   auto strings_view   = cudf::strings_column_view(strings);
-  auto strings_column = cudf::column_device_view::create(strings_view.parent());
+  auto strings_column = cudf::column_device_view::create(strings_view.parent(), cudf::stream_t{});
   auto d_view         = *strings_column;
 
   thrust::device_vector<uint32_t> d_values(strings_view.size());

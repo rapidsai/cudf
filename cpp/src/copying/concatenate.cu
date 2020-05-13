@@ -45,13 +45,10 @@ auto create_device_views(std::vector<column_view> const& views, stream_t const& 
 {
   // Create device views for each input view
   using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
+    decltype(column_device_view::create(std::declval<column_view>(), std::declval<stream_t const&>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(
     views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {
-      // TODO creating this device view can invoke null count computation
-      // even though it isn't used. See this issue:
-      // https://github.com/rapidsai/cudf/issues/4368
       return column_device_view::create(col, stream);
     });
 
