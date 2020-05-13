@@ -366,9 +366,11 @@ class Index(Frame):
             Index with values cast to specified dtype.
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
 
-        return as_index(self._values.astype(dtype, copy=copy), name=self.name)
+        return as_index(
+            self.copy(deep=copy)._values.astype(dtype), name=self.name
+        )
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

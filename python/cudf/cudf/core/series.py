@@ -1457,12 +1457,13 @@ class Series(Frame):
                 )
             dtype = dtype[self.name]
 
-        result = self.copy(deep=copy)
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return result
+            return self.copy(deep=copy)
         try:
+            data = self._column.astype(dtype, **kwargs)
+
             return self._copy_construct(
-                data=result._column.astype(dtype, **kwargs), index=result.index
+                data=data.copy(deep=copy), index=self.index.copy(deep=copy)
             )
 
         except Exception as e:

@@ -824,21 +824,32 @@ class DataFrame(Frame):
         -------
         casted : DataFrame
         """
-        result = self.copy(deep=copy)
+        result = DataFrame(index=self.index.copy(deep=copy))
 
         if is_dict_like(dtype):
-            for col_name, col_dtype in dtype.items():
-                if col_name not in result:
-                    raise KeyError(
-                        "Only a column name can be used for the "
-                        "key in a dtype mappings argument."
-                    )
-                result._data[col_name] = result._data[col_name].astype(
-                    dtype=col_dtype, errors=errors, copy=copy, **kwargs
+            current_cols = self._data.names
+            if len(set(dtype.keys()) - set(current_cols)) > 0:
+                raise KeyError(
+                    "Only a column name can be used for the "
+                    "key in a dtype mappings argument."
                 )
+            for col_name in current_cols:
+                if col_name in dtype:
+                    result._data[col_name] = self._data[col_name].astype(
+                        dtype=dtype[col_name],
+                        errors=errors,
+                        copy=copy,
+                        **kwargs,
+                    )
+                else:
+                    result._data[col_name] = (
+                        self._data[col_name].copy(deep=True)
+                        if copy
+                        else self._data[col_name]
+                    )
         else:
-            for col in result._data:
-                result._data[col] = result._data[col].astype(
+            for col in self._data:
+                result._data[col] = self._data[col].astype(
                     dtype=dtype, errors=errors, copy=copy, **kwargs
                 )
 
