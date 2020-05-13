@@ -443,8 +443,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(table_view const &tabl
                                                           const std::string &metadata_out_file_path,
                                                           cudaStream_t stream)
 {
-  pq_chunked_state state{
-    nullptr, SetMetadata::WITHOUT_NULLABILITY, metadata, nullptr, SingleWriteMode::YES, stream};
+  pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
   write_chunked(table, state);

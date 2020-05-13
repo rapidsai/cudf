@@ -31,8 +31,6 @@ namespace parquet {
 
 enum class SingleWriteMode : bool { YES, NO };
 
-enum class SetMetadata : bool { WITH_NULLABILITY, WITHOUT_NULLABILITY };
-
 /**
  * @brief Chunked writer state struct. Contains various pieces of information
  *        needed that span the begin() / write() / end() call process.
@@ -57,22 +55,11 @@ struct pq_chunked_state {
 
   pq_chunked_state() = default;
 
-  pq_chunked_state(std::unique_ptr<writer> writer_ptr,
-                   SetMetadata set_metadata,
-                   table_metadata const* metadata,
-                   table_metadata_with_nullability const* metadata_with_nullability,
+  pq_chunked_state(table_metadata const* metadata,
                    SingleWriteMode mode = SingleWriteMode::NO,
                    cudaStream_t str     = 0)
-    : wp{std::move(writer_ptr)}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
+    : user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
   {
-    if (set_metadata == SetMetadata::WITH_NULLABILITY) {
-      if (metadata_with_nullability != nullptr) {
-        user_metadata_with_nullability = *metadata_with_nullability;
-        user_metadata                  = &(this->user_metadata_with_nullability);
-      }
-    } else {
-      user_metadata = metadata;
-    }
   }
 };
 
