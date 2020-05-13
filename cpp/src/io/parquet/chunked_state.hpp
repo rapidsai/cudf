@@ -48,7 +48,7 @@ struct pq_chunked_state {
   table_metadata_with_nullability user_metadata_with_nullability;
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
-  table_metadata const* user_metadata;
+  table_metadata const* user_metadata = nullptr;
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
