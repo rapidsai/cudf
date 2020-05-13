@@ -355,7 +355,7 @@ class Index(Frame):
         ----------
         dtype : numpy dtype
             Use a numpy.dtype to cast entire Index object to.
-        copy : bool, default True
+        copy : bool, default False
             By default, astype always returns a newly allocated object.
             If copy is set to False and internal requirements on dtype are
             satisfied, the original data is used to create a new Index

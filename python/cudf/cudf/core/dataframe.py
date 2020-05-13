@@ -808,13 +808,16 @@ class DataFrame(Frame):
             column label and dtype is a numpy.dtype or Python type to cast one
             or more of the DataFrame's columns to column-specific types.
         copy : bool, default False
-            Return a copy when ``copy=True``. Note that when ``copy=False`` is
-            set changes to values then may propagate to other cudf objects).
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
             object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns

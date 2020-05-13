@@ -1427,15 +1427,17 @@ class Series(Frame):
             Use a numpy.dtype or Python type to cast Series object to
             the same type. Alternatively, use {col: dtype, ...}, where col is a
             series name and dtype is a numpy.dtype or Python type to cast to.
-        copy : bool, default True
-            Return a copy when ``copy=True`` (be very careful setting
-            ``copy=False`` as changes to values then may propagate to other
-            pandas objects).
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
             object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
