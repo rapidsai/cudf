@@ -28,7 +28,7 @@ namespace detail {
  */
 rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              scalar const& s,
-                                             stream_t stream,
+                                             stream_t const& stream,
                                              rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 
@@ -67,7 +67,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -93,7 +93,7 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -119,7 +119,7 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace compiled

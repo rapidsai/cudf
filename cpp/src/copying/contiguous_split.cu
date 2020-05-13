@@ -454,7 +454,7 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
-                                                      stream_t stream,
+                                                      stream_t const& stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
   auto subtables = cudf::experimental::split(input, splits);

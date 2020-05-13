@@ -172,7 +172,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     stream_t stream,
+                                     stream_t const& stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
@@ -190,7 +190,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      column_view const& rhs,
                                      column_view const& boolean_mask,
-                                     stream_t stream,
+                                     stream_t const& stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
@@ -207,7 +207,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     stream_t stream,
+                                     stream_t const& stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
@@ -224,7 +224,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      scalar const& rhs,
                                      column_view const& boolean_mask,
-                                     stream_t stream,
+                                     stream_t const& stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   return copy_if_else(lhs, rhs, !lhs.is_valid(), !rhs.is_valid(), boolean_mask, mr, stream);

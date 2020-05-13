@@ -50,7 +50,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
 std::unique_ptr<column> allocate_like(column_view const& input,
                                       size_type size,
                                       mask_allocation_policy mask_alloc,
-                                      stream_t stream,
+                                      stream_t const& stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

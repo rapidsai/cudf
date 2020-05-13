@@ -42,7 +42,7 @@ std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  stream_t stream                     = stream_t{},
+  stream_t const& stream                     = stream_t{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto num_columns = strings_columns.num_columns();
@@ -156,7 +156,7 @@ std::unique_ptr<column> join_strings(
   strings_column_view const& strings,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  stream_t stream                     = stream_t{},
+  stream_t const& stream                     = stream_t{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
 {
   auto strings_count = strings.size();

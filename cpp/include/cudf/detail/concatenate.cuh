@@ -34,7 +34,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        rmm::device_vector<size_t> const& d_offsets,
                        bitmask_type* dest_mask,
                        size_type output_size,
-                       stream_t stream);
+                       stream_t const& stream);
 
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
@@ -43,7 +43,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
  */
 void concatenate_masks(std::vector<column_view> const& views,
                        bitmask_type* dest_mask,
-                       stream_t stream);
+                       stream_t const& stream);
 
 /**
  * @copydoc cudf::concatenate(std::vector<column_view> const&,rmm::mr::device_memory_resource*)
@@ -52,7 +52,7 @@ void concatenate_masks(std::vector<column_view> const& views,
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -62,7 +62,7 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<experimental::table> concatenate(
   std::vector<table_view> const& tables_to_concat,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace detail

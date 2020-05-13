@@ -115,7 +115,7 @@ namespace detail {
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              stream_t stream,
+                              stream_t const& stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.type() == fill_value.type(),

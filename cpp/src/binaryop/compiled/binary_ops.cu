@@ -109,7 +109,7 @@ struct binary_op {
                                      data_type out_type,
                                      bool const reversed,
                                      rmm::mr::device_memory_resource* mr,
-                                     stream_t stream)
+                                     stream_t const& stream)
   {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     auto out      = make_fixed_width_column(out_type,
@@ -167,7 +167,7 @@ struct binary_op {
                                      binary_operator op,
                                      data_type out_type,
                                      rmm::mr::device_memory_resource* mr,
-                                     stream_t stream)
+                                     stream_t const& stream)
   {
     auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     auto out =
@@ -313,7 +313,7 @@ struct null_considering_binop {
   void populate_out_col(LhsViewT const& lhsv,
                         RhsViewT const& rhsv,
                         cudf::size_type col_size,
-                        stream_t stream,
+                        stream_t const& stream,
                         CompareFunc cfunc,
                         OutT* out_col) const
   {
@@ -336,7 +336,7 @@ struct null_considering_binop {
                                      data_type output_type,
                                      cudf::size_type col_size,
                                      rmm::mr::device_memory_resource* mr,
-                                     stream_t stream) const
+                                     stream_t const& stream) const
   {
     std::unique_ptr<column> out;
     // Create device views for inputs
@@ -427,7 +427,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
@@ -449,7 +449,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
@@ -470,7 +470,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times

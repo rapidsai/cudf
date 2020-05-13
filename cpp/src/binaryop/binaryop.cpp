@@ -51,7 +51,7 @@ namespace detail {
  */
 rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              scalar const& s,
-                                             stream_t stream,
+                                             stream_t const& stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   if (col.size() == 0) { return rmm::device_buffer{}; }
@@ -94,7 +94,7 @@ void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
                       binary_operator op,
-                      stream_t stream)
+                      stream_t const& stream)
 {
   if (null_using_binop(op)) {
     cudf::jit::launcher(
@@ -133,7 +133,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
                       binary_operator op,
-                      stream_t stream)
+                      stream_t const& stream)
 {
   if (null_using_binop(op)) {
     cudf::jit::launcher(
@@ -172,7 +172,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       binary_operator op,
-                      stream_t stream)
+                      stream_t const& stream)
 {
   if (null_using_binop(op)) {
     cudf::jit::launcher(
@@ -212,7 +212,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       const std::string& ptx,
-                      stream_t stream)
+                      stream_t const& stream)
 {
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
@@ -245,7 +245,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
@@ -278,7 +278,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   if ((lhs.type().id() == type_id::STRING) && (rhs.type().id() == type_id::STRING)) {
@@ -311,7 +311,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
@@ -347,7 +347,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          std::string const& ptx,
                                          data_type output_type,
-                                         stream_t stream,
+                                         stream_t const& stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // Check for datatype

@@ -37,7 +37,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(
   size_type size,
   mask_state state,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -47,7 +47,7 @@ rmm::device_buffer create_null_mask(
  * will be submitted
  **/
 void set_null_mask(
-  bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid, stream_t stream);
+  bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid, stream_t const& stream);
 
 /**
  * @copydoc cudf::segmented_count_set_bits
@@ -56,7 +56,7 @@ void set_null_mask(
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 std::vector<size_type> const& indices,
-                                                stream_t stream = stream_t{});
+                                                stream_t const& stream);
 
 /**
  * @copydoc cudf::segmented_count_unset_bits
@@ -65,7 +65,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
  */
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   std::vector<size_type> const& indices,
-                                                  stream_t stream = stream_t{});
+                                                  stream_t const& stream);
 
 /**
  * @copydoc cudf::copy_bitmask(bitmask_type
@@ -78,7 +78,7 @@ rmm::device_buffer copy_bitmask(
   bitmask_type const* mask,
   size_type begin_bit,
   size_type end_bit,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -89,7 +89,7 @@ rmm::device_buffer copy_bitmask(
  **/
 rmm::device_buffer copy_bitmask(
   column_view const& view,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
@@ -99,7 +99,7 @@ rmm::device_buffer copy_bitmask(
  */
 rmm::device_buffer bitmask_and(
   table_view const& view,
-  stream_t stream,
+  stream_t const& stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace detail
