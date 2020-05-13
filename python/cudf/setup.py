@@ -64,7 +64,7 @@ extensions = [
             os.path.join(os.sys.prefix, "lib"),
             cuda_lib_dir,
         ],
-        libraries=["cudf", "cudart"],
+        libraries=["cudf", "cudart", "cuda", "nvrtc"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
