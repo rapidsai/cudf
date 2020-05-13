@@ -64,8 +64,8 @@ struct chars_size_transform {
 auto create_strings_device_views(std::vector<column_view> const& views, stream_t const& stream)
 {
   // Create device views for each input view
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<stream_t const&>()));
+  using CDViewPtr = decltype(
+    column_device_view::create(std::declval<column_view>(), std::declval<stream_t const&>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(
     views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {

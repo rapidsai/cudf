@@ -443,7 +443,9 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 
   column_index = 0;
   std::for_each(
-    t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info, &stream](cudf::column_view const& c) {
+    t.begin(),
+    t.end(),
+    [&out_cols, &buf, &column_index, &split_info, &stream](cudf::column_view const& c) {
       cudf::experimental::type_dispatcher(
         c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols, stream);
       column_index++;

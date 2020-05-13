@@ -106,7 +106,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                                cudf::column_view const& rhs,
                                                cudf::column_view const& boolean_mask)
 {
-  auto bool_mask_device_p                   = cudf::column_device_view::create(boolean_mask, cudf::stream_t{});
+  auto bool_mask_device_p = cudf::column_device_view::create(boolean_mask, cudf::stream_t{});
   cudf::column_device_view bool_mask_device = *bool_mask_device_p;
   auto filter                               = [bool_mask_device] __device__(cudf::size_type i) {
     return bool_mask_device.element<bool>(i);

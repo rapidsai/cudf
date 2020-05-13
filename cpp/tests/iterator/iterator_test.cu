@@ -206,7 +206,8 @@ TYPED_TEST(IteratorTest, non_null_iterator)
 
   // test column input
   cudf::test::fixed_width_column_wrapper<T> w_col(host_array.begin(), host_array.end());
-  this->values_equal_test(replaced_array, *cudf::column_device_view::create(w_col, cudf::stream_t{}));
+  this->values_equal_test(replaced_array,
+                          *cudf::column_device_view::create(w_col, cudf::stream_t{}));
 }
 
 // Tests for null input iterator (column with null bitmap)

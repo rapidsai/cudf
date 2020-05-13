@@ -46,8 +46,11 @@ rmm::device_buffer create_null_mask(
  * @param stream Optional, stream on which all memory allocations/operations
  * will be submitted
  **/
-void set_null_mask(
-  bitmask_type* bitmask, size_type begin_bit, size_type end_bit, bool valid, stream_t const& stream);
+void set_null_mask(bitmask_type* bitmask,
+                   size_type begin_bit,
+                   size_type end_bit,
+                   bool valid,
+                   stream_t const& stream);
 
 /**
  * @copydoc cudf::segmented_count_set_bits

@@ -71,7 +71,7 @@ namespace detail {
 // Create a device_buffer for a null mask
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
-                                    stream_t const& stream,
+                                    stream_t const &stream,
                                     rmm::mr::device_memory_resource *mr)
 {
   size_type mask_size{0};
@@ -131,7 +131,7 @@ namespace detail {
 // to valid, if valid==true,
 // or null, otherwise;
 void set_null_mask(
-  bitmask_type *bitmask, size_type begin_bit, size_type end_bit, bool valid, stream_t const& stream)
+  bitmask_type *bitmask, size_type begin_bit, size_type end_bit, bool valid, stream_t const &stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(begin_bit >= 0, "Invalid range.");
@@ -391,7 +391,7 @@ namespace detail {
 cudf::size_type count_set_bits(bitmask_type const *bitmask,
                                size_type start,
                                size_type stop,
-                               stream_t const& stream)
+                               stream_t const &stream)
 {
   if (nullptr == bitmask) { return 0; }
 
@@ -418,7 +418,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
 cudf::size_type count_unset_bits(bitmask_type const *bitmask,
                                  size_type start,
                                  size_type stop,
-                                 stream_t const& stream)
+                                 stream_t const &stream)
 {
   if (nullptr == bitmask) { return 0; }
   auto num_bits = (stop - start);
@@ -427,7 +427,7 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask,
 
 std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
                                                 std::vector<size_type> const &indices,
-                                                stream_t const& stream)
+                                                stream_t const &stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0,
                "Array of indices needs to have an even number of elements.");
@@ -532,7 +532,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
                                                   std::vector<size_type> const &indices,
-                                                  stream_t const& stream)
+                                                  stream_t const &stream)
 {
   if (indices.size() == 0) {
     return std::vector<size_type>{};
@@ -587,7 +587,7 @@ namespace detail {
 rmm::device_buffer copy_bitmask(bitmask_type const *mask,
                                 size_type begin_bit,
                                 size_type end_bit,
-                                stream_t const& stream,
+                                stream_t const &stream,
                                 rmm::mr::device_memory_resource *mr)
 {
   CUDF_FUNC_RANGE();
@@ -615,7 +615,7 @@ rmm::device_buffer copy_bitmask(bitmask_type const *mask,
 
 // Create a bitmask from a column view
 rmm::device_buffer copy_bitmask(column_view const &view,
-                                stream_t const& stream,
+                                stream_t const &stream,
                                 rmm::mr::device_memory_resource *mr)
 {
   rmm::device_buffer null_mask{};
@@ -631,7 +631,7 @@ namespace {
 rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
                                std::vector<size_type> const &begin_bits,
                                size_type mask_size,
-                               stream_t const& stream,
+                               stream_t const &stream,
                                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(std::all_of(begin_bits.begin(), begin_bits.end(), [](auto b) { return b >= 0; }),
@@ -667,7 +667,7 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
 
 // Returns the bitwise AND of the null masks of all columns in the table view
 rmm::device_buffer bitmask_and(table_view const &view,
-                               stream_t const& stream,
+                               stream_t const &stream,
                                rmm::mr::device_memory_resource *mr)
 {
   CUDF_FUNC_RANGE();
