@@ -160,6 +160,7 @@
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5123 Display more useful info on `clang-format` CI Failure
 - PR #5137 Add java bindings for getSizeInBytes in DType
+- PR #5194 Update Series.fillna to reflect dtype behavior
 
 ## Bug Fixes
 
