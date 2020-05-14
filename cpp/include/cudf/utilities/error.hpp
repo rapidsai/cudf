@@ -7,6 +7,11 @@
 
 #include <rmm/rmm.h>
 
+/**
+ * @addtogroup utility_error
+ * @{
+ */
+
 #define RMM_TRY(call)                                                                         \
   do {                                                                                        \
     rmmError_t const status = (call);                                                         \
@@ -20,10 +25,12 @@ namespace cudf {
 /**
  * @brief Exception thrown when logical precondition is violated.
  *
+ * @ingroup utility_error
+ *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
  *
- **/
+ */
 struct logic_error : public std::logic_error {
   logic_error(char const* const message) : std::logic_error(message) {}
 
@@ -35,7 +42,8 @@ struct logic_error : public std::logic_error {
 /**
  * @brief Exception thrown when a CUDA error is encountered.
  *
- **/
+ * @ingroup utility_error
+ */
 struct cuda_error : public std::runtime_error {
   cuda_error(std::string const& message) : std::runtime_error(message) {}
 };
@@ -138,3 +146,5 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
 #else
 #define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
 #endif
+
+/** @} */

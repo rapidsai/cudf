@@ -29,11 +29,15 @@
  *
  * @note Not all aggregation APIs support all aggregation operations. See
  * individual function documentation to see what aggregations are supported.
- *
  */
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup aggregation_factories
+ * @{
+ */
+
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -202,5 +206,6 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,
                                                   data_type output_type);
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

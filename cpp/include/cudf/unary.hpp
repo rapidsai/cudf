@@ -21,6 +21,11 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup transformation_unaryops
+ * @{
+ */
+
 enum class unary_op : int32_t {
   SIN,         // < Trigonometric sine
   COS,         // < Trigonometric cosine
@@ -137,5 +142,6 @@ std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_convert Converters
- * APIs to convert strings to and from other data-types.
+ * @addtogroup strings_convert
  * @{
  */
 

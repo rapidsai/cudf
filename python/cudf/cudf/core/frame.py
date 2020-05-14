@@ -1718,8 +1718,10 @@ class Frame(libcudf.table.Table):
                 elif right_index:
                     compare_cols_l = lhs[left_on]._data.columns
                     compare_cols_r = rhs._index._data.columns
-                for lcol, rcol in compare_cols_l, compare_cols_r:
-                    if not pd.api.types.is_dtype_equal(lcol.dtype, rcol.dtype):
+                for left, right in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(
+                        left.dtype, right.dtype
+                    ):
                         raise NotImplementedError(
                             "Typecasting not yet supported for MultiIndicies"
                         )

@@ -22,6 +22,10 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup transformation_fill
+ * @{
+ */
 
 /**
  * @brief Fills a range of elements in-place in a column with a scalar value.
@@ -48,7 +52,7 @@ namespace experimental {
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
  * @return void
- **/
+ */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
@@ -75,7 +79,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param value The scalar value to fill
  * @param mr Memory resource to allocate the result output column
  * @return std::unique_ptr<column> The result output column
- **/
+ */
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
@@ -111,7 +115,7 @@ std::unique_ptr<column> fill(column_view const& input,
  * @param check_count Whether to check count (negative values and overflow)
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
- **/
+ */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
@@ -137,7 +141,7 @@ std::unique_ptr<table> repeat(
  * @param count Non-null scalar of an integral type
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
- **/
+ */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   scalar const& count,
@@ -197,5 +201,6 @@ std::unique_ptr<column> sequence(
   scalar const& init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf
