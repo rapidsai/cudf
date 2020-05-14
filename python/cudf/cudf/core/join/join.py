@@ -486,6 +486,7 @@ class Merge(object):
         Apply precomputed output index and data column data types
         to the output of a libcudf join.
         """
+
         index_dtypes, data_dtypes = output_dtypes
         if output._index and len(index_dtypes) > 0:
             for i, (index_col_lbl, index_col) in enumerate(
@@ -510,7 +511,9 @@ class Merge(object):
             dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
         ):
             outcol = cudf.core.column.build_categorical_column(
-                categories=dtype.categories, codes=col
+                categories=dtype.categories,
+                codes=col.set_mask(None),
+                mask=col.base_mask,
             )
         else:
             outcol = col.astype(dtype)
