@@ -5185,7 +5185,7 @@ def to_datetime(
             )
 
             if is_scalar(arg):
-                return as_index(col)[0]
+                return col[0]
             else:
                 return as_index(col)
     except Exception as e:
