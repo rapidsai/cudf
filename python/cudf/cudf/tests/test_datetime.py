@@ -559,6 +559,11 @@ def test_datetime_dataframe():
             dtype="datetime64[ns]",
             freq=None,
         ),
+        pd.Series([1, 2, 3]).astype("datetime64[ns]"),
+        pd.Series([1, 2, 3]).astype("datetime64[us]"),
+        pd.Series([1, 2, 3]).astype("datetime64[ms]"),
+        pd.Series([1, 2, 3]).astype("datetime64[s]"),
+        pd.Series([1, 2, 3]).astype("datetime64[D]"),
     ],
 )
 @pytest.mark.parametrize("dayfirst", [True, False])
