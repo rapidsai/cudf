@@ -846,6 +846,17 @@ class ColumnBase(Column):
             ordered = False
 
         sr = cudf.Series(self)
+
+        # Re-label self w.r.t. the provided categories
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            labels = sr.label_encoding(cats=dtype.categories)
+            return build_categorical_column(
+                categories=dtype.categories,
+                codes=labels._column,
+                mask=self.mask,
+                ordered=ordered,
+            ).astype(dtype)
+
         labels, cats = sr.factorize()
 
         # columns include null index in factorization; remove:
@@ -1215,7 +1226,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
-            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

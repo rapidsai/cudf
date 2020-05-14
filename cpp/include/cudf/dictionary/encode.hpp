@@ -25,8 +25,12 @@
  */
 
 namespace cudf {
-//! Dictionary column APIs.
 namespace dictionary {
+/**
+ * @addtogroup dictionary_encode
+ * @{
+ */
+
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
  *
@@ -42,11 +46,11 @@ namespace dictionary {
  * @throw cudf::logic_error if indices type is not INT32
  * @throw cudf::logic_error if the column to encode is already a DICTIONARY type.
  *
- * ```
+ * @code{.pseudo}
  * c = [429,111,213,111,213,429,213]
  * d = make_dictionary_column(c)
  * d now has keys [111,213,429] and indices [2,0,1,0,1,2,1]
- * ```
+ * @endcode
  *
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
@@ -62,11 +66,11 @@ std::unique_ptr<column> encode(
  * @brief Create a column by gathering the keys from the provided
  * dictionary_column into a new column using the indices from that column.
  *
- * ```
+ * @code{.pseudo}
  * d1 = {["a","c","d"],[2,0,1,0]}
  * s = decode(d1)
  * s is now ["d","a","c","a"]
- * ```
+ * @endcode
  *
  * @param dictionary_column Existing dictionary column.
  * @param mr Resource for allocating memory for the output.
@@ -76,5 +80,6 @@ std::unique_ptr<column> decode(
   dictionary_column_view const& dictionary_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace dictionary
 }  // namespace cudf

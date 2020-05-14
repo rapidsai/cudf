@@ -24,6 +24,7 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
+//! IO interfaces
 namespace io {
 /**
  * @brief Interface class for storing the output data from the writers
