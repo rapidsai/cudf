@@ -285,6 +285,7 @@
 - PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
+- PR #5193 Fix OOB read in csv reader
 
 
 # cuDF 0.13.0 (31 Mar 2020)
