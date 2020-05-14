@@ -23,9 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_rolling Rolling Window
- * Rolling Windows APIs
+ * @addtogroup aggregation_rolling
  * @{
  */
 

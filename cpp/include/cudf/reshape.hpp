@@ -24,9 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_reshape Reshape
- * Reshape APIs
+ * @addtogroup column_reshape
  * @{
  */
 

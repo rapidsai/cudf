@@ -23,9 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_fill Fill
- * Fill columns APIs
+ * @addtogroup transformation_fill
  * @{
  */
 

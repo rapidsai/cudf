@@ -24,6 +24,11 @@
 namespace cudf {
 
 /**
+ * @addtogroup column_nullmask
+ * @{
+ */
+
+/**
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.
  *
@@ -138,9 +143,9 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, s
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if indices.size() % 2 != 0
- * @throws cudf::logic_error if indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or
+ * indices[2*i] > indices[(2*i)+1]`
  *
  * @param[in] bitmask Bitmask residing in device memory whose bits will be
  * counted
@@ -157,9 +162,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if indices.size() % 2 != 0
- * @throws cudf::logic_error if indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or
+ * indices[2*i] > indices[(2*i)+1]`
  *
  * @param[in] bitmask Bitmask residing in device memory whose bits will be
  * counted
@@ -232,4 +237,5 @@ rmm::device_buffer bitmask_and(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
   cudaStream_t stream                 = 0);
 
+/** @} */  // end of group
 }  // namespace cudf

@@ -24,9 +24,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_compact Stream Compaction
- * Stream Compaction APIs
+ * @addtogroup reorder_compact
  * @{
  */
 
@@ -186,6 +184,6 @@ cudf::size_type unique_count(column_view const& input,
                              null_policy null_handling,
                              nan_policy nan_handling);
 
-/** @} */  // end of group
+/** @} */
 }  // namespace experimental
 }  // namespace cudf

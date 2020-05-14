@@ -20,16 +20,13 @@
 
 #include <memory>
 
-namespace cudf {
-//! `datetime` APIs
-namespace datetime {
 /**
- * @ingroup column_apis
- * @addtogroup column_datetime DateTime
- * DateTime APIs
- * @{
+ * @file datetime.hpp
+ * @brief DateTime column APIs.
  */
 
+namespace cudf {
+namespace datetime {
 namespace detail {
 enum class datetime_component {
   INVALID = 0,
@@ -57,6 +54,11 @@ std::unique_ptr<column> extract_component(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace detail
+
+/**
+ * @addtogroup datetime_extract
+ * @{
+ */
 
 /**
  * @brief  Extracts year from any date time type and returns an int16_t
@@ -148,6 +150,12 @@ std::unique_ptr<cudf::column> extract_minute(
 std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/** @} */  // end of group
+/**
+ * @addtogroup datetime_compute
+ * @{
+ */
 
 /**
  * @brief  Computes the last day of the month in date time type and returns a TIMESTAMP_DAYS

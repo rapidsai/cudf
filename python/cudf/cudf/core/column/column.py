@@ -1226,7 +1226,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
-            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

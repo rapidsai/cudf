@@ -20,9 +20,7 @@
 
 namespace cudf {
 /**
- * @ingroup column_apis
- * @addtogroup column_transpose Transpose
- * Transpose APIs
+ * @addtogroup reshape_transpose
  * @{
  */
 

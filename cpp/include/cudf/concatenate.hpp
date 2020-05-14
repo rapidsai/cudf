@@ -21,15 +21,9 @@
 #include <memory>
 #include <vector>
 
-/**
- * @brief Column and Table APIs
- * @defgroup column_apis Column and Table APIs
- */
 namespace cudf {
 /**
- * @ingroup column_apis
- * @addtogroup column_concatenate Concatenate
- * APIs to concatenate columns and tables
+ * @addtogroup copy_concatenate
  * @{
  */
 

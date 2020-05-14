@@ -35,20 +35,12 @@
 namespace cudf {
 //! In-development features
 namespace experimental {
-/**
- * @brief IO APIs
- * @defgroup cudf_io IO APIs
- */
 namespace io {
-/**
- * @ingroup cudf_io
- * @addtogroup cudf_io_readers Readers
- * Readers APIs
- * @{
- */
 
 /**
  * @brief Settings to use for `read_avro()`
+ *
+ * @ingroup io_readers
  */
 struct read_avro_args {
   source_info source;
@@ -68,6 +60,8 @@ struct read_avro_args {
 
 /**
  * @brief Reads an Avro dataset into a set of columns
+ *
+ * @ingroup io_readers
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
@@ -90,6 +84,8 @@ table_with_metadata read_avro(
 
 /**
  * @brief Input arguments to the `read_json` interface
+ *
+ * @ingroup io_readers
  *
  * Available parameters and are closely patterned after PANDAS' `read_json` API.
  * Not all parameters are unsupported. If the matching PANDAS' parameter
@@ -139,6 +135,8 @@ struct read_json_args {
 /**
  * @brief Reads a JSON dataset into a set of columns
  *
+ * @ingroup io_readers
+ *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  #include <cudf.h>
@@ -160,6 +158,8 @@ table_with_metadata read_json(
 
 /**
  * @brief Settings to use for `read_csv()`
+ *
+ * @ingroup io_readers
  */
 struct read_csv_args {
   source_info source;
@@ -251,6 +251,8 @@ struct read_csv_args {
 /**
  * @brief Reads a CSV dataset into a set of columns
  *
+ * @ingroup io_readers
+ *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  #include <cudf.h>
@@ -271,6 +273,8 @@ table_with_metadata read_csv(read_csv_args const& args,
 
 /**
  * @brief Settings to use for `read_orc()`
+ *
+ * @ingroup io_readers
  */
 struct read_orc_args {
   source_info source;
@@ -310,6 +314,8 @@ struct read_orc_args {
 
 /**
  * @brief Reads an ORC dataset into a set of columns
+ *
+ * @ingroup io_readers
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
@@ -364,6 +370,8 @@ struct read_parquet_args {
 /**
  * @brief Reads a Parquet dataset into a set of columns
  *
+ * @ingroup io_readers
+ *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  #include <cudf.h>
@@ -383,17 +391,10 @@ table_with_metadata read_parquet(
   read_parquet_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-/** @} */  // end of Readers group
-
-/**
- * @ingroup cudf_io
- * @addtogroup cudf_io_writers Writers
- * Writers APIs
- * @{
- */
-
 /**
  * @brief Settings to use for `write_orc()`
+ *
+ * @ingroup io_writers
  */
 struct write_orc_args {
   /// Specify the sink to use for writer output
@@ -426,6 +427,8 @@ struct write_orc_args {
 /**
  * @brief Writes a set of columns to ORC format
  *
+ * @ingroup io_writers
+ *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
  *  #include <cudf.h>
@@ -444,6 +447,8 @@ void write_orc(write_orc_args const& args,
 
 /**
  * @brief Settings to use for `write_orc_chunked()`
+ *
+ * @ingroup io_writers
  */
 struct write_orc_chunked_args {
   /// Specify the sink to use for writer output
@@ -464,17 +469,19 @@ struct write_orc_chunked_args {
   }
 };
 
+namespace detail {
+namespace orc {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace orc {
 struct orc_chunked_state;
-};
+};  // namespace orc
 };  // namespace detail
 
 /**
  * @brief Begin the process of writing an ORC file in a chunked/stream form.
+ *
+ * @ingroup io_writers
  *
  * The intent of the write_orc_chunked_ path is to allow writing of an
  * arbitrarily large / arbitrary number of rows to an ORC file in multiple passes.
@@ -504,8 +511,11 @@ struct orc_chunked_state;
 std::shared_ptr<detail::orc::orc_chunked_state> write_orc_chunked_begin(
   write_orc_chunked_args const& args,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
 /**
  * @brief Write a single table as a subtable of a larger logical orc file/table.
+ *
+ * @ingroup io_writers
  *
  * All tables passed into multiple calls of this function must contain the same # of columns and
  * have columns of the same type.
@@ -520,6 +530,8 @@ void write_orc_chunked(table_view const& table,
 /**
  * @brief Finish writing a chunked/stream orc file.
  *
+ * @ingroup io_writers
+ *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_orc_chunked_begin()
  */
@@ -527,6 +539,8 @@ void write_orc_chunked_end(std::shared_ptr<detail::orc::orc_chunked_state>& stat
 
 /**
  * @brief Settings to use for `write_parquet()`
+ *
+ * @ingroup io_writers
  */
 struct write_parquet_args {
   /// Specify the sink to use for writer output
@@ -563,6 +577,8 @@ struct write_parquet_args {
 /**
  * @brief Writes a set of columns to parquet format
  *
+ * @ingroup io_writers
+ *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
  *  #include <cudf.h>
@@ -587,6 +603,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob
  *
+ * @ingroup io_writers
+ *
  * @param[in] metadata_list List of input file metadata
  * @return A parquet-compatible blob that contains the data for all rowgroups in the list
  */
@@ -595,6 +613,8 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 
 /**
  * @brief Settings to use for `write_parquet_chunked()`
+ *
+ * @ingroup io_writers
  */
 struct write_parquet_chunked_args {
   /// Specify the sink to use for writer output
@@ -618,17 +638,19 @@ struct write_parquet_chunked_args {
   }
 };
 
+namespace detail {
+namespace parquet {
 /**
  * @brief Forward declaration of anonymous chunked-writer state struct.
  */
-namespace detail {
-namespace parquet {
 struct pq_chunked_state;
-};
+};  // namespace parquet
 };  // namespace detail
 
 /**
  * @brief Begin the process of writing a parquet file in a chunked/stream form.
+ *
+ * @ingroup io_writers
  *
  * The intent of the write_parquet_chunked_ path is to allow writing of an
  * arbitrarily large / arbitrary number of rows to a parquet file in multiple passes.
@@ -662,6 +684,8 @@ std::shared_ptr<detail::parquet::pq_chunked_state> write_parquet_chunked_begin(
 /**
  * @brief Write a single table as a subtable of a larger logical parquet file/table.
  *
+ * @ingroup io_writers
+ *
  * All tables passed into multiple calls of this function must contain the same # of columns and
  * have columns of the same type.
  *
@@ -675,12 +699,13 @@ void write_parquet_chunked(table_view const& table,
 /**
  * @brief Finish writing a chunked/stream parquet file.
  *
+ * @ingroup io_writers
+ *
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin()
  */
 void write_parquet_chunked_end(std::shared_ptr<detail::parquet::pq_chunked_state>& state);
 
-/** @} */  // end of Writers group
 }  // namespace io
 }  // namespace experimental
 }  // namespace cudf

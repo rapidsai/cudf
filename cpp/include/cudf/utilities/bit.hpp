@@ -49,6 +49,11 @@ constexpr CUDA_HOST_DEVICE_CALLABLE std::size_t size_in_bits()
 }  // namespace detail
 
 /**
+ * @addtogroup utility_bitmask
+ * @{
+ */
+
+/**
  * @brief Returns the index of the word containing the specified bit.
  **/
 constexpr CUDA_HOST_DEVICE_CALLABLE size_type word_index(size_type bit_index)
@@ -175,4 +180,5 @@ __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)
   atomicAnd(&bitmask[word_index(bit_index)], ~(bitmask_type{1} << intra_word_index(bit_index)));
 }
 #endif
+/** @} */  // end of group
 }  // namespace cudf

@@ -20,9 +20,7 @@
 
 namespace cudf {
 /**
- * @ingroup column_apis
- * @addtogroup column_hash Hash
- * Hash APIs
+ * @addtogroup column_hash
  * @{
  */
 

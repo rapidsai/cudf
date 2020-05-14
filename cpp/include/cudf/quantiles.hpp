@@ -23,9 +23,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_quantiles Quantiles
- * Quantiles APIs
+ * @addtogroup column_quantiles
  * @{
  */
 

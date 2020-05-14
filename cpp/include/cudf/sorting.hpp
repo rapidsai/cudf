@@ -22,16 +22,11 @@
 #include <vector>
 
 namespace cudf {
-/**
- * @ingroup column_apis
- * @addtogroup column_sort Sort
- * Sort APIs
- * @{
- */
 
 /**
  * @brief Tie-breaker method to use for ranking the column.
  *
+ * @ingroup column_sort
  */
 enum class rank_method {
   FIRST,    ///< stable sort order ranking (no ties)
@@ -43,10 +38,13 @@ enum class rank_method {
 
 namespace experimental {
 /**
+ * @addtogroup column_sort
+ * @{
+ */
+
+/**
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.
- *
- * @ingroup column_sort
  *
  * @param input The table to sort
  * @param column_order The desired sort order for each column. Size must be
@@ -68,8 +66,6 @@ std::unique_ptr<column> sorted_order(
  * @brief Computes the row indices that would produce `input` in a stable
  * lexicographical sorted order.
  *
- * @ingroup column_sort
- *
  * The order of equivalent elements is guaranteed to be preserved.
  *
  * @copydoc cudf::experimental::sorted_order
@@ -83,8 +79,6 @@ std::unique_ptr<column> stable_sorted_order(
 /**
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
  *        order.
- *
- * @ingroup column_sort
  *
  * @param[in] in                table whose rows need to be compared for ordering
  * @param[in] column_order      The expected sort order for each column. Size
@@ -105,8 +99,6 @@ bool is_sorted(cudf::table_view const& table,
 /**
  * @brief Performs a lexicographic sort of the rows of a table
  *
- * @ingroup column_sort
- *
  * @param input The table to sort
  * @param column_order The desired order for each column. Size must be
  * equal to `input.num_columns()` or empty. If empty, all columns are sorted in
@@ -125,8 +117,6 @@ std::unique_ptr<table> sort(table_view input,
 
 /**
  * @brief Performs a key-value sort.
- *
- * @ingroup column_sort
  *
  * Creates a new table that reorders the rows of `values` according to the
  * lexicographic ordering of the rows of `keys`.
@@ -155,8 +145,6 @@ std::unique_ptr<table> sort_by_key(
 
 /**
  * @brief Computes the ranks of input column in sorted order.
- *
- * @ingroup column_sort
  *
  * Rank indicate the position of each element in the sorted column and rank
  * value starts from 1.
@@ -193,6 +181,6 @@ std::unique_ptr<column> rank(column_view const& input,
                              bool percentage,
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-}  // namespace experimental
 /** @} */  // end of group
+}  // namespace experimental
 }  // namespace cudf

@@ -21,9 +21,7 @@
 //! NVText APIs
 namespace nvtext {
 /**
- * @ingroup nvtext_apis
- * @addtogroup nvtext_normalize Normalize
- * APIs to normalize strings column.
+ * @addtogroup nvtext_normalize
  * @{
  */
 

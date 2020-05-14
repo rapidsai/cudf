@@ -35,9 +35,7 @@ class sort_groupby_helper;
 }  // namespace detail
 
 /**
- * @ingroup column_apis
- * @addtogroup column_groupby GroupBy
- * GroupBy APIs
+ * @addtogroup aggregation_groupby
  * @{
  */
 
@@ -232,7 +230,7 @@ class groupby {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr);
 };
-/** @} */  // end of group
+/** @} */
 }  // namespace groupby
 }  // namespace experimental
 }  // namespace cudf

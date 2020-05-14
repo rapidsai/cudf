@@ -26,9 +26,7 @@
 namespace cudf {
 namespace experimental {
 /**
- * @ingroup column_apis
- * @addtogroup column_search Search
- * Search APIs
+ * @addtogroup column_search
  * @{
  */
 
