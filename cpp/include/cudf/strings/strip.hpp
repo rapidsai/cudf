@@ -22,9 +22,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_modify Modify
- * APIs to modify from strings.
+ * @addtogroup strings_modify
  * @{
  */
 
