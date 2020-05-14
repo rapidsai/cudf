@@ -42,7 +42,7 @@ namespace experimental {
  * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
  * @param mr            The memory resource to use for for all device allocations
- * @return cudf::column The column resulting from applying the unary function to
+ * @return              The column resulting from applying the unary function to
  *                      every element of the input
  **/
 std::unique_ptr<column> transform(
