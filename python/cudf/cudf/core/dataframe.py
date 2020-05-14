@@ -4996,6 +4996,69 @@ def to_datetime(
     origin="unix",
     cache=True,
 ):
+    """
+    Convert argument to datetime.
+
+    Parameters
+    ----------
+    arg : int, float, str, datetime, list, tuple, 1-d array,
+        Series DataFrame/dict-like
+        The object to convert to a datetime.
+    errors : {'ignore', 'raise', 'coerce', 'warn'}, default 'raise'
+        - If 'raise', then invalid parsing will raise an exception.
+        - If 'coerce', then invalid parsing will be set as NaT.
+        - If 'warn' : prints last exceptions as warnings and
+            return the input.
+        - If 'ignore', then invalid parsing will return the input.
+    dayfirst : bool, default False
+        Specify a date parse order if `arg` is str or its list-likes.
+        If True, parses dates with the day first, eg 10/11/12 is parsed as
+        2012-11-10.
+        Warning: dayfirst=True is not strict, but will prefer to parse
+        with day first (this is a known bug, based on dateutil behavior).
+    format : str, default None
+        The strftime to parse time, eg "%d/%m/%Y", note that "%f" will parse
+        all the way up to nanoseconds.
+        See strftime documentation for more information on choices:
+        https://docs.python.org/3/library/datetime.html#strftime-and-strptime-behavior.
+    unit : str, default 'ns'
+        The unit of the arg (D,s,ms,us,ns) denote the unit, which is an
+        integer or float number. This will be based off the
+        origin(unix epoch start).
+        Example, with unit='ms' and origin='unix' (the default), this
+        would calculate the number of milliseconds to the unix epoch start.
+    infer_datetime_format : bool, default False
+        If True and no `format` is given, attempt to infer the format of the
+        datetime strings, and if it can be inferred, switch to a faster
+        method of parsing them. In some cases this can increase the parsing
+        speed by ~5-10x.
+
+    Returns
+    -------
+    datetime
+        If parsing succeeded.
+        Return type depends on input:
+        - list-like: DatetimeIndex
+        - Series: Series of datetime64 dtype
+        - scalar: Timestamp
+
+    Examples
+    --------
+    Assembling a datetime from multiple columns of a DataFrame. The keys can be
+    common abbreviations like ['year', 'month', 'day', 'minute', 'second',
+    'ms', 'us', 'ns']) or plurals of the same
+    >>> df = cudf.DataFrame({'year': [2015, 2016],
+    ...                    'month': [2, 3],
+    ...                    'day': [4, 5]})
+    >>> cudf.to_datetime(df)
+    0   2015-02-04
+    1   2016-03-05
+    dtype: datetime64[ns]
+    >>> cudf.to_datetime(1490195805, unit='s')
+    numpy.datetime64('2017-03-22T15:16:45.000000000')
+    >>> cudf.to_datetime(1490195805433502912, unit='ns')
+    numpy.datetime64('1780-11-20T01:02:30.494253056')
+    """
     if arg is None:
         return None
     from cudf.core.column.datetime import _unit_map
@@ -5009,117 +5072,135 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
-    if isinstance(arg, DataFrame):
-        # we require at least Ymd
-        required = ["year", "month", "day"]
-        req = sorted(list(set(required) - set(arg._data.names)))
-        if len(req):
-            raise ValueError(
-                "to assemble mappings requires at least that "
-                "[year, month, day] be specified: [{required}] "
-                "is missing".format(required=",".join(req))
-            )
-
-            # replace passed unit with _unit_map
-
-        def get_units(value):
-            if value in _unit_map:
-                return _unit_map[value]
-
-            # m is case significant
-            if value.lower() in _unit_map:
-                return _unit_map[value.lower()]
-
-            return value
-
-        unit = {k: get_units(k) for k in arg._data.names}
-        unit_rev = {v: k for k, v in unit.items()}
-
-        # keys we don't recognize
-        excess = sorted(set(unit_rev.keys()) - set(_unit_map.values()))
-        if len(excess):
-            excess = ",".join(excess)
-            raise ValueError(
-                f"extra keys have been passed to the \
-                    datetime assemblage: [{excess}]"
-            )
-
-        new_series = (
-            arg[unit_rev["year"]].astype("str")
-            + "-"
-            + arg[unit_rev["month"]].astype("str").str.zfill(2)
-            + "-"
-            + arg[unit_rev["day"]].astype("str").str.zfill(2)
-        )
-        format = "%Y-%m-%d"
-        col = new_series._column.as_datetime_column(
-            "datetime64[ns]", format=format
-        )
-
-        time_delta_col = None
-        for u in ["h", "m", "s", "ms", "us", "ns"]:
-            value = unit_rev.get(u)
-            if value is not None and value in arg:
-                current_col = arg._data[value]
-                # If the arg[value] is of int or
-                # float dtype we don't want to type-cast
-                if current_col.dtype.kind not in ("i", "f"):
-                    current_col = current_col.astype(dtype="int64")
-
-                factor = utils.scalar_broadcast_to(
-                    scalar=column.datetime._numpy_to_pandas_conversion[u],
-                    size=len(current_col),
-                    dtype=current_col.dtype,
+    try:
+        if isinstance(arg, DataFrame):
+            # we require at least Ymd
+            required = ["year", "month", "day"]
+            req = sorted(list(set(required) - set(arg._data.names)))
+            if len(req):
+                raise ValueError(
+                    "to assemble mappings requires at least that "
+                    "[year, month, day] be specified: [{required}] "
+                    "is missing".format(required=",".join(req))
                 )
 
-                if time_delta_col is None:
-                    time_delta_col = current_col.binary_operator(
-                        binop="mul", rhs=factor
-                    )
-                else:
-                    time_delta_col = time_delta_col.binary_operator(
-                        binop="add",
-                        rhs=current_col.binary_operator(
-                            binop="mul", rhs=factor
-                        ),
-                    )
-        if time_delta_col is not None:
-            col = (
-                col.astype(dtype="int64")
-                .binary_operator(binop="add", rhs=time_delta_col)
-                .astype(dtype="datetime64[ns]")
+                # replace passed unit with _unit_map
+
+            def get_units(value):
+                if value in _unit_map:
+                    return _unit_map[value]
+
+                # m is case significant
+                if value.lower() in _unit_map:
+                    return _unit_map[value.lower()]
+
+                return value
+
+            unit = {k: get_units(k) for k in arg._data.names}
+            unit_rev = {v: k for k, v in unit.items()}
+
+            # keys we don't recognize
+            excess = sorted(set(unit_rev.keys()) - set(_unit_map.values()))
+            if len(excess):
+                excess = ",".join(excess)
+                raise ValueError(
+                    f"extra keys have been passed to the \
+                        datetime assemblage: [{excess}]"
+                )
+
+            new_series = (
+                arg[unit_rev["year"]].astype("str")
+                + "-"
+                + arg[unit_rev["month"]].astype("str").str.zfill(2)
+                + "-"
+                + arg[unit_rev["day"]].astype("str").str.zfill(2)
             )
-        return cudf.Series(col, index=arg.index)
-    elif isinstance(arg, Index):
-        col = arg._values
-        col = _process_col(
-            col=col,
-            unit=unit,
-            dayfirst=dayfirst,
-            infer_datetime_format=infer_datetime_format,
-            format=format,
-        )
-        return as_index(col, name=arg.name)
-    elif isinstance(arg, Series):
-        col = arg._column
-        col = _process_col(
-            col=col,
-            unit=unit,
-            dayfirst=dayfirst,
-            infer_datetime_format=infer_datetime_format,
-            format=format,
-        )
-        return Series(col, index=arg.index, name=arg.name)
-    else:
-        col = as_column(arg)
-        col = _process_col(
-            col=col,
-            unit=unit,
-            dayfirst=dayfirst,
-            infer_datetime_format=infer_datetime_format,
-            format=format,
-        )
-        return as_index(col)
+            format = "%Y-%m-%d"
+            col = new_series._column.as_datetime_column(
+                "datetime64[ns]", format=format
+            )
+
+            time_delta_col = None
+            for u in ["h", "m", "s", "ms", "us", "ns"]:
+                value = unit_rev.get(u)
+                if value is not None and value in arg:
+                    current_col = arg._data[value]
+                    # If the arg[value] is of int or
+                    # float dtype we don't want to type-cast
+                    if current_col.dtype.kind not in ("i", "f"):
+                        current_col = current_col.astype(dtype="int64")
+
+                    factor = utils.scalar_broadcast_to(
+                        scalar=column.datetime._numpy_to_pandas_conversion[u],
+                        size=len(current_col),
+                        dtype=current_col.dtype,
+                    )
+
+                    if time_delta_col is None:
+                        time_delta_col = current_col.binary_operator(
+                            binop="mul", rhs=factor
+                        )
+                    else:
+                        time_delta_col = time_delta_col.binary_operator(
+                            binop="add",
+                            rhs=current_col.binary_operator(
+                                binop="mul", rhs=factor
+                            ),
+                        )
+            if time_delta_col is not None:
+                col = (
+                    col.astype(dtype="int64")
+                    .binary_operator(binop="add", rhs=time_delta_col)
+                    .astype(dtype="datetime64[ns]")
+                )
+            return cudf.Series(col, index=arg.index)
+        elif isinstance(arg, Index):
+            col = arg._values
+            col = _process_col(
+                col=col,
+                unit=unit,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+                format=format,
+            )
+            return as_index(col, name=arg.name)
+        elif isinstance(arg, Series):
+            col = arg._column
+            col = _process_col(
+                col=col,
+                unit=unit,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+                format=format,
+            )
+            return Series(col, index=arg.index, name=arg.name)
+        else:
+            col = as_column(arg)
+            col = _process_col(
+                col=col,
+                unit=unit,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+                format=format,
+            )
+
+            if is_scalar(arg):
+                return as_index(col)[0]
+            else:
+                return as_index(col)
+    except Exception as e:
+        if errors == "raise":
+            raise e
+        elif errors == "warn":
+            import traceback
+
+            tb = traceback.format_exc()
+            warnings.warn(tb)
+        elif errors == "ignore":
+            pass
+        elif errors == "coerce":
+            return np.datetime64("nat", "ns" if unit is None else unit)
+        return arg
 
 
 def _process_col(col, unit, dayfirst, infer_datetime_format, format):
