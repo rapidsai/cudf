@@ -249,6 +249,11 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
+        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+            # can safely cast to representation, or string
+            return True
+        else:
+            return False
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
