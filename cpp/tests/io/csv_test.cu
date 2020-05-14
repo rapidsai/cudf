@@ -226,7 +226,6 @@ void write_csv_helper(std::string const& filename,
                       bool include_header,
                       std::vector<std::string> const& names = {})
 {
-  // NOTE sink_info, na, and metadata lifetimes must extend past write_csv call since
   // write_csv_args is non-owning
   cudf_io::sink_info const sink{filename};
   std::string const na{"null"};  // why doesn't this have a default?
@@ -244,7 +243,8 @@ void write_csv_helper(std::string const& filename,
     });
   }
 
-  int const rows_per_chunk{1};  // what should this be set to? how would I know?
+  int const rows_per_chunk{
+    1};  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
   cudf_io::write_csv_args write_args{sink, table, na, include_header, rows_per_chunk};
   write_args.metadata_ = &metadata;
 
