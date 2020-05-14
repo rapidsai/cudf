@@ -29,6 +29,7 @@
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 - PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
+- PR #5192 Add support for `cudf.to_datetime`
 
 ## Improvements
 
@@ -173,7 +174,6 @@
 - PR #5137 Add java bindings for getSizeInBytes in DType
 - PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
-- PR #5192 Add support for` cudf.to_datetime`
 
 ## Bug Fixes
 
