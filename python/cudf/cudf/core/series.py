@@ -1187,7 +1187,7 @@ class Series(Frame):
             Value to use to fill nulls. If `value`'s dtype differs from the
             series, the fill value will be cast to the column's dtype before
             applying the fill. If Series-like, null values are filled with the
-            values in corresponding indices of the given Series. 
+            values in corresponding indices of the given Series.
 
         Returns
         -------
