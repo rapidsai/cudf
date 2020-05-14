@@ -288,8 +288,8 @@
 - PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
-- PR #5191 Fix the use of the device memory resource
 - PR #5185 Fix flake8 configuration and issues from new flake8 version
+- PR #5191 Fix the use of the device memory resource
 
 
 # cuDF 0.13.0 (31 Mar 2020)
