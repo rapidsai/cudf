@@ -22,6 +22,11 @@
 
 namespace cudf {
 /**
+ * @ingroup scalar_factories
+ * @{
+ */
+
+/**
  * @brief Construct scalar with uninitialized storage to hold a value of the
  * specified numeric `data_type`.
  *
@@ -116,4 +121,5 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
   return std::make_unique<experimental::scalar_type_t<T>>(value, true, stream, mr);
 }
 
+/** @} */  // end of group
 }  // namespace cudf

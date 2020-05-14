@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #5042 Use RMM for Numba
 - PR #4472 Add new `partition` API to replace `scatter_to_tables`.
 - PR #4626 LogBase binops
 - PR #4750 Normalize NANs and Zeroes (JNI Bindings)
@@ -25,7 +26,9 @@
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 - PR #5132 Support out-of-band buffers in Python pickling
+- PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
+- PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
 
 ## Improvements
 
@@ -152,6 +155,7 @@
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5049 Add grouping of libcudf apis into doxygen modules
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 - PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
@@ -284,6 +288,7 @@
 - PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
+- PR #5185 Fix flake8 configuration and issues from new flake8 version
 - PR #5191 Fix the use of the device memory resource
 
 
