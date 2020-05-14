@@ -1223,4 +1223,102 @@ public class BinaryOpTest extends CudfTestBase {
       assertColumnsAreEqual(expectedDouble, resultDouble);
     }
   }
+
+  @Test
+  public void testEqualNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.equalToNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false, false,
+                   false, false)) {
+        assertColumnsAreEqual(expected, answer, "int32 <=> double");
+      }
+
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false, false,
+                   false, false)) {
+        assertColumnsAreEqual(expected, answer, "int32 <=> scalar float");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 100);
+           ColumnVector answer = s.equalToNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false,
+                   false, true)) {
+        assertColumnsAreEqual(expected, answer, "scalar short <=> int32");
+      }
+    }
+  }
+
+  @Test
+  public void testStringEqualNullAwareScalar() {
+    try (ColumnVector a = ColumnVector.fromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.fromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.fromStrings("a", null, "b", null);
+         Scalar s = Scalar.fromString("b")) {
+
+      try (ColumnVector answer = a.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.equalToNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
+  public void testMaxNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.maxNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedDoubles(1.0, 10.0,  100.0, 5.3, 50.0,
+                   100.0, 100.0)) {
+        assertColumnsAreEqual(expected, answer, "max(int32, double)");
+      }
+
+      try (Scalar s = Scalar.fromFloat(1.0f);
+           ColumnVector answer = icv.maxNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedFloats(1f, 2f, 3f, 4f, 5f, 1f, 100f)) {
+        assertColumnsAreEqual(expected, answer, "max(int32, scalar float)");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 99);
+           ColumnVector answer = s.maxNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedInts(99, 99, 99, 99, 99, 99, 100)) {
+        assertColumnsAreEqual(expected, answer, "max(scalar short, int32)");
+      }
+    }
+  }
+
+  @Test
+  public void testMinNullAware() {
+    try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
+         ColumnVector dcv = ColumnVector.fromBoxedDoubles(DOUBLES_1)) {
+      try (ColumnVector answer = icv.minNullAware(dcv);
+           ColumnVector expected = ColumnVector.fromBoxedDoubles(1.0, 2.0, 3.0, 4.0, 5.0, 100.0, 100.0)) {
+        assertColumnsAreEqual(expected, answer, "min(int32, double)");
+      }
+
+      try (Scalar s = Scalar.fromFloat(3.1f);
+           ColumnVector answer = icv.minNullAware(s);
+           ColumnVector expected = ColumnVector.fromBoxedFloats(1f, 2f, 3f, 3.1f, 3.1f, 3.1f, 3.1f)) {
+        assertColumnsAreEqual(expected, answer, "min(int32, scalar float)");
+      }
+
+      try (Scalar s = Scalar.fromShort((short) 99);
+           ColumnVector answer = s.minNullAware(icv);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 99, 99)) {
+        assertColumnsAreEqual(expected, answer, "min(scalar short, int32)");
+      }
+    }
+  }
+
 }
