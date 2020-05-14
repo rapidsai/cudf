@@ -530,3 +530,99 @@ def test_datetime_dataframe():
     assert_eq(ps.dropna(), gs.dropna())
 
     assert_eq(ps.isnull(), gs.isnull())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([1, 2, 3]),
+        pd.Series([0, 1, -1]),
+        pd.Series([0, 1, -1, 100, 200, 47637289]),
+        pd.Series(["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"]),
+        [1, 2, 3, 100, -123, -1, 0, 1000000000000679367],
+        pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0],
+            },
+            index=["a", "b"],
+        ),
+        ["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"],
+        pd.Index([1, 2, 3, 4]),
+        pd.DatetimeIndex(
+            ["1970-01-01 00:00:00.000000001", "1970-01-01 00:00:00.000000002"],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
+    ],
+)
+@pytest.mark.parametrize("dayfirst", [True, False])
+@pytest.mark.parametrize("infer_datetime_format", [True, False])
+def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    expected = pd.to_datetime(
+        pd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
+    )
+    actual = cudf.to_datetime(
+        gd_data, dayfirst=dayfirst, infer_datetime_format=infer_datetime_format
+    )
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["1", "2", "3"],
+        ["1/1/1", "2/2/2", "1"],
+        pd.DataFrame(
+            {
+                "year": [2015, 2016],
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0],
+                "blablacol": [1, 1],
+            }
+        ),
+        pd.DataFrame(
+            {
+                "month": [2, 3],
+                "day": [4, 5],
+                "minute": [1, 100],
+                "second": [90, 10],
+                "hour": [1, 0],
+            }
+        ),
+    ],
+)
+def test_to_datetime_errors(data):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    exception_type = None
+    try:
+        pd.to_datetime(pd_data)
+    except Exception as e:
+
+        exception_type = type(e)
+
+    if exception_type is None:
+        raise TypeError("Was expecting `pd.to_datetime` to fail")
+
+    with pytest.raises(exception_type):
+        cudf.to_datetime(gd_data)
