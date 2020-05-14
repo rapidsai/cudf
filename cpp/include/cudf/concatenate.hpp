@@ -22,6 +22,10 @@
 #include <vector>
 
 namespace cudf {
+/**
+ * @addtogroup copy_concatenate
+ * @{
+ */
 
 /**
  * @brief Concatenates `views[i]`'s bitmask from the bits
@@ -35,7 +39,7 @@ namespace cudf {
  * the device memory for the new device_buffer
  * @return rmm::device_buffer A `device_buffer` containing the bitmasks of all
  * the column views in the views vector
- **/
+ */
 rmm::device_buffer concatenate_masks(
   std::vector<column_view> const& views,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -51,7 +55,7 @@ rmm::device_buffer concatenate_masks(
  * @param mr Optional The resource to use for all allocations
  * @return Unique pointer to a single table having all the rows from the
  * elements of `columns_to_concat` respectively in the same order.
- **/
+ */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
@@ -59,6 +63,8 @@ std::unique_ptr<column> concatenate(
 /**
  * @brief Columns of `tables_to_concat` are concatenated vertically to return a
  * single table_view
+ *
+ * @ingroup column_concatenate
  *
  * example:
  * ```
@@ -85,4 +91,5 @@ std::unique_ptr<experimental::table> concatenate(
   std::vector<table_view> const& tables_to_concat,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace cudf

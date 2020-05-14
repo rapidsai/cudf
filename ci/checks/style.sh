@@ -22,11 +22,11 @@ BLACK=`black --check python`
 BLACK_RETVAL=$?
 
 # Run flake8 and get results/return code
-FLAKE=`flake8 python`
+FLAKE=`flake8 --config=python/.flake8 python`
 FLAKE_RETVAL=$?
 
 # Run flake8-cython and get results/return code
-FLAKE_CYTHON=`flake8 --config=python/cudf/.flake8.cython`
+FLAKE_CYTHON=`flake8 --config=python/.flake8.cython`
 FLAKE_CYTHON_RETVAL=$?
 
 # Run clang-format and check for a consistent code format

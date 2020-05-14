@@ -79,6 +79,11 @@ class table;
 class table_view;
 class mutable_table_view;
 
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
@@ -160,6 +165,7 @@ namespace experimental {
  * @brief Interpolation method to use when the desired quantile lies between
  * two data points i and j
  *
+ * @ingroup utility_types
  */
 enum class interpolation : int32_t {
   LINEAR,    ///< Linear interpolation between i and j
@@ -252,4 +258,5 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.
  */
 std::size_t size_of(data_type t);
 
+/** @} */
 }  // namespace cudf

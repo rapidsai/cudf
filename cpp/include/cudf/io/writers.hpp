@@ -37,10 +37,7 @@ namespace cudf {
 namespace experimental {
 //! IO interfaces
 namespace io {
-//! Inner interfaces and implementations
 namespace detail {
-
-//! ORC format
 namespace orc {
 
 /**
@@ -127,7 +124,6 @@ class writer {
 
 }  // namespace orc
 
-//! Parquet format
 namespace parquet {
 
 /**
@@ -230,7 +226,6 @@ class writer {
 
 }  // namespace parquet
 
-//! CSV format
 namespace csv {
 
 /**

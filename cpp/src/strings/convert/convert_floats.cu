@@ -84,30 +84,35 @@ __device__ inline double stod(string_view const& d_str)
     ++in_ptr;
   }
   // check for exponent char
-  int exp10    = 0;
+  int exp_ten  = 0;
   int exp_sign = 1;
   if (in_ptr < end) {
     char ch = *in_ptr++;
     if (ch == 'e' || ch == 'E') {
       if (in_ptr < end) {
-        ch = *in_ptr++;
-        if (ch == '-' || ch == '+') exp_sign = (ch == '-' ? -1 : 1);
+        ch = *in_ptr;
+        if (ch == '-' || ch == '+') {
+          exp_sign = (ch == '-' ? -1 : 1);
+          ++in_ptr;
+        }
         while (in_ptr < end) {
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
-          exp10 = (exp10 * 10) + (int)(ch - '0');
+          exp_ten = (exp_ten * 10) + (int)(ch - '0');
         }
       }
     }
   }
-  exp10 *= exp_sign;
-  exp10 += exp_off;
-  if (exp10 > 308)
+  exp_ten *= exp_sign;
+  exp_ten += exp_off;
+  if (exp_ten > 308)
     return sign > 0 ? std::numeric_limits<double>::infinity()
                     : -std::numeric_limits<double>::infinity();
-  else if (exp10 < -308)
+  else if (exp_ten < -308)
     return 0.0;
-  double value = (double)digits * pow(10.0, (double)exp10);
+  // using exp10() since the pow(10.0,exp_ten) function is
+  // very inaccurate in 10.2: http://nvbugs/2971187
+  double value = static_cast<double>(digits) * exp10(static_cast<double>(exp_ten));
   return (value * sign);
 }
 
@@ -316,7 +321,7 @@ struct ftos_converter {
       return 3;
     }
     bool bneg = false;
-    if (value < 0.0) {
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
@@ -379,7 +384,7 @@ struct ftos_converter {
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
-    if (value < 0.0) {
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
