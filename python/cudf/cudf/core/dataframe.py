@@ -5002,23 +5002,24 @@ def to_datetime(
         for u in ["h", "m", "s", "ms", "us", "ns"]:
             value = unit_rev.get(u)
             if value is not None and value in arg:
-                if arg[value].dtype.kind not in ("i", "f"):
-                    curr_col = arg[value].astype("int64")._column
-                else:
-                    # If the arg[value] is of int or
-                    # float dtype we don't want to type-cast
-                    curr_col = arg[value]._column
+                current_col = arg._data[value]
+                # If the arg[value] is of int or
+                # float dtype we don't want to type-cast
+                if current_col.dtype.kind not in ("i", "f"):
+                    current_col = current_col.astype("int64")
 
                 factor = utils.scalar_broadcast_to(
                     column.datetime._numpy_to_pandas_conversion[u],
-                    size=len(curr_col),
-                    dtype=curr_col.dtype,
+                    size=len(current_col),
+                    dtype=current_col.dtype,
                 )
 
                 if time_delta_col is None:
-                    time_delta_col = curr_col.binary_operator("mul", factor)
+                    time_delta_col = current_col.binary_operator("mul", factor)
                 else:
-                    time_delta_col += curr_col.binary_operator("mul", factor)
+                    time_delta_col = time_delta_col.binary_operator(
+                        "add", current_col.binary_operator("mul", factor)
+                    )
         if time_delta_col is not None:
             col = (
                 col.astype("int64")
@@ -5071,9 +5072,8 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 dtype=col.dtype,
             )
             col = col.binary_operator("mul", factor)
-            col = col.astype(dtype)
-        else:
-            col = col.as_datetime_column(dtype)
+
+        col = col.as_datetime_column(dtype)
     elif col.dtype.kind in ("O"):
         if unit not in (None, "ns"):
             col = col.astype("int64")
@@ -5087,7 +5087,8 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             if infer_datetime_format or format is None:
                 format = column.datetime.infer_format(
-                    col[0], dayfirst=dayfirst
+                    col[0],
+                    dayfirst=dayfirst if infer_datetime_format else False,
                 )
             col = col.as_datetime_column(dtype, format=format)
     return col
