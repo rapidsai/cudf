@@ -44,9 +44,7 @@ namespace cudf {
 namespace experimental {
 //! IO interfaces
 namespace io {
-//! Inner interfaces and implementations
 namespace detail {
-//! Avro format
 namespace avro {
 /**
  * @brief Options for the Avro reader.
@@ -138,7 +136,6 @@ class reader {
 
 }  // namespace avro
 
-//! JSON format
 namespace json {
 /**
  * @brief Options for the JSON reader.
@@ -243,7 +240,6 @@ class reader {
 
 }  // namespace json
 
-//! CSV format
 namespace csv {
 /**
  * @brief Options for the CSV reader.
@@ -423,7 +419,6 @@ class reader {
 
 }  // namespace csv
 
-//! ORC format
 namespace orc {
 /**
  * @brief Options for the ORC reader.
@@ -563,7 +558,6 @@ class reader {
 
 }  // namespace orc
 
-//! Parquet format
 namespace parquet {
 /**
  * @brief Options for the Parquet reader.
