@@ -27,6 +27,7 @@
 - PR #5132 Support out-of-band buffers in Python pickling
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
+- PR #5196 Add java bimdomgs for NULL_EQUALS, NULL_MAX and NULL_MIN
 
 ## Improvements
 
