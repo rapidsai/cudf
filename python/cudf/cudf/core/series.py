@@ -6,6 +6,7 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_dict_like
 
 import cudf
 import cudf._lib as libcudf
@@ -1416,31 +1417,56 @@ class Series(Frame):
         """
         return self._column.as_mask()
 
-    def astype(self, dtype, errors="raise", **kwargs):
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
         Parameters
         ----------
 
-        dtype : data type
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast Series object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            series name and dtype is a numpy.dtype or Python type to cast to.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
         out : Series
-            Copy of ``self`` cast to the given dtype. Returns
-            ``self`` if ``dtype`` is the same as ``self.dtype``.
+            Returns ``self.copy(deep=copy)`` if ``dtype`` is the same
+            as ``self.dtype``.
         """
         if errors not in ("ignore", "raise", "warn"):
             raise ValueError("invalid error value specified")
 
+        if is_dict_like(dtype):
+            if len(dtype) > 1 or self.name not in dtype:
+                raise KeyError(
+                    "Only the Series name can be used for "
+                    "the key in Series dtype mappings."
+                )
+            dtype = dtype[self.name]
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
+            return self.copy(deep=copy)
         try:
+            data = self._column.astype(dtype, **kwargs)
+
             return self._copy_construct(
-                data=self._column.astype(dtype, **kwargs)
+                data=data.copy(deep=True) if copy else data, index=self.index
             )
+
         except Exception as e:
             if errors == "raise":
                 raise e
