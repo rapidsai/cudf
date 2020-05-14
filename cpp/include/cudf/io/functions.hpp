@@ -256,7 +256,7 @@ struct read_csv_args {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  #include <cudf.h>
+ *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
  *  cudf::read_csv_args args{cudf::source_info(filepath)};
@@ -322,12 +322,15 @@ struct write_csv_args : detail::csv::writer_options {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  #include <cudf.h>
+ *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
- *  cudf::write_csv_args args{cudf::sink_info(filepath), table->view()};
+ *  cudf::experimental::io::sink_info sink_info(filepath);
+ *
+ *  cudf::experimental::io::write_csv_args args{sink_info, table->view(), na, include_header,
+ * rows_per_chunk};
  *  ...
- *  cudf::write_csv(args);
+ *  cudf::experimental::io::write_csv(args);
  * @endcode
  *
  * @param args Settings for controlling writing behavior
