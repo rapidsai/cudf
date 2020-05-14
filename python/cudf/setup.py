@@ -28,7 +28,7 @@ if not CUDA_HOME:
 
 if not os.path.isdir(CUDA_HOME):
     raise OSError(
-        f"Invalid CUDA_HOME: " "directory does not exist: {CUDA_HOME}"
+        f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}"
     )
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")

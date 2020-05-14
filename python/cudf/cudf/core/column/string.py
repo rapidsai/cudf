@@ -431,8 +431,8 @@ class StringMethods(object):
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
     ):
         """
-        Replace occurrences of pattern/regex in the Series/Index with some other
-        string.
+        Replace occurrences of pattern/regex in the Series/Index with some
+        other string.
 
         Parameters
         ----------
