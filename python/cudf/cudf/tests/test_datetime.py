@@ -667,6 +667,7 @@ def test_to_datetime_not_implemented():
 @pytest.mark.parametrize(
     "data",
     [
+        1,
         [],
         pd.Series([]),
         pd.Index([]),
@@ -696,6 +697,9 @@ def test_to_datetime_units(data, unit):
 @pytest.mark.parametrize(
     "data,format",
     [
+        ("2012-10-11", None),
+        ("2012-10-11", "%Y-%m-%d"),
+        ("2012-10-11", "%Y-%d-%m"),
         (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], None),
         (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%m-%d"),
         (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%d-%m"),
