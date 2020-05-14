@@ -824,7 +824,7 @@ class DataFrame(Frame):
         -------
         casted : DataFrame
         """
-        result = DataFrame(index=self.index.copy(deep=copy))
+        result = DataFrame(index=self.index)
 
         if is_dict_like(dtype):
             current_cols = self._data.names

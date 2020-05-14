@@ -1463,7 +1463,7 @@ class Series(Frame):
             data = self._column.astype(dtype, **kwargs)
 
             return self._copy_construct(
-                data=data.copy(deep=copy), index=self.index.copy(deep=copy)
+                data=data.copy(deep=True) if copy else data, index=self.index
             )
 
         except Exception as e:
