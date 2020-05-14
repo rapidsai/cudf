@@ -27,6 +27,7 @@
 - PR #5132 Support out-of-band buffers in Python pickling
 - PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
+- PR #5196 Add Java bindings for NULL_EQUALS, NULL_MAX and NULL_MIN
 
 ## Improvements
 
@@ -287,6 +288,7 @@
 - PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
+- PR #5185 Fix flake8 configuration and issues from new flake8 version
 
 
 # cuDF 0.13.0 (31 Mar 2020)
