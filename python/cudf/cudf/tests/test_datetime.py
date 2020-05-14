@@ -535,9 +535,13 @@ def test_datetime_dataframe():
 @pytest.mark.parametrize(
     "data",
     [
+        None,
+        [],
+        pd.Series([]),
+        pd.Index([]),
         pd.Series([1, 2, 3]),
         pd.Series([0, 1, -1]),
-        pd.Series([0, 1, -1, 100, 200, 47637289]),
+        pd.Series([0, 1, -1, 100.3, 200, 47637289]),
         pd.Series(["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"]),
         [1, 2, 3, 100, -123, -1, 0, 1000000000000679367],
         pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
@@ -548,9 +552,19 @@ def test_datetime_dataframe():
                 "day": [4, 5],
                 "minute": [1, 100],
                 "second": [90, 10],
-                "hour": [1, 0],
+                "hour": [1, 0.5],
             },
             index=["a", "b"],
+        ),
+        pd.DataFrame(
+            {
+                "year": [],
+                "month": [],
+                "day": [],
+                "minute": [],
+                "second": [],
+                "hour": [],
+            },
         ),
         ["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"],
         pd.Index([1, 2, 3, 4]),
@@ -559,6 +573,7 @@ def test_datetime_dataframe():
             dtype="datetime64[ns]",
             freq=None,
         ),
+        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
         pd.Series([1, 2, 3]).astype("datetime64[ns]"),
         pd.Series([1, 2, 3]).astype("datetime64[us]"),
         pd.Series([1, 2, 3]).astype("datetime64[ms]"),
@@ -588,6 +603,7 @@ def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
 @pytest.mark.parametrize(
     "data",
     [
+        "2",
         ["1", "2", "3"],
         ["1/1/1", "2/2/2", "1"],
         pd.DataFrame(
@@ -631,3 +647,79 @@ def test_to_datetime_errors(data):
 
     with pytest.raises(exception_type):
         cudf.to_datetime(gd_data)
+
+
+def test_to_datetime_not_implemented():
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], exact=False)
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], origin="julian")
+
+    with pytest.raises(NotImplementedError):
+        cudf.to_datetime([], yearfirst=True)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series([]),
+        pd.Index([]),
+        pd.Series([1, 2, 3]),
+        pd.Series([1, 2.4, 3]),
+        pd.Series([0, 1, -1]),
+        pd.Series([0, 1, -1, 100, 200, 47637]),
+        [10, 12, 1200, 15003],
+        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.Index([1, 2, 3, 4]),
+    ],
+)
+@pytest.mark.parametrize("unit", ["D", "s", "ms", "us", "ns"])
+def test_to_datetime_units(data, unit):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    expected = pd.to_datetime(pd_data, unit=unit)
+    actual = cudf.to_datetime(gd_data, unit=unit)
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,format",
+    [
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], None),
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%m-%d"),
+        (["2012-10-11", "2010-01-01", "2016-07-07", "2014-02-02"], "%Y-%d-%m"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], "%m-%d-%Y"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], "%d-%m-%Y"),
+        (["10-11-2012", "01-01-2010", "07-07-2016", "02-02-2014"], None),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], None),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], "%Y/%m/%d"),
+        (["2012/10/11", "2010/01/01", "2016/07/07", "2014/02/02"], "%Y/%d/%m"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%m/%d/%Y"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], "%d/%m/%Y"),
+        (["10/11/2012", "01/01/2010", "07/07/2016", "02/02/2014"], None),
+    ],
+)
+@pytest.mark.parametrize("infer_datetime_format", [True, False])
+def test_to_datetime_format(data, format, infer_datetime_format):
+    pd_data = data
+    if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
+        gd_data = cudf.from_pandas(pd_data)
+    else:
+        gd_data = pd_data
+
+    expected = pd.to_datetime(
+        pd_data, format=format, infer_datetime_format=infer_datetime_format
+    )
+    actual = cudf.to_datetime(
+        gd_data, format=format, infer_datetime_format=infer_datetime_format
+    )
+
+    assert_eq(actual, expected)

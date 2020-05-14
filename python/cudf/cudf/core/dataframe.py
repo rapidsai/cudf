@@ -5148,10 +5148,11 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             col = col.binary_operator(binop="mul", rhs=factor)
             col = col.astype(dtype=dtype)
         else:
-            if infer_datetime_format or format is None:
+            if infer_datetime_format and format is None:
                 format = column.datetime.infer_format(
-                    element=col[0],
-                    dayfirst=dayfirst if infer_datetime_format else False,
+                    element=col[0], dayfirst=dayfirst,
                 )
+            elif format is None:
+                format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(dtype=dtype, format=format)
     return col
