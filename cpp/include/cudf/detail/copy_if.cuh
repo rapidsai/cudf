@@ -256,7 +256,7 @@ struct scatter_gather_functor {
       cudf::experimental::detail::elements_per_thread(scatter, input.size(), block_size);
     cudf::experimental::detail::grid_1d grid{input.size(), block_size, per_thread};
 
-    rmm::device_scalar<cudf::size_type> null_count(0, stream);
+    rmm::device_scalar<cudf::size_type> null_count{0, stream};
     if (output.nullable()) {
       // Have to initialize the output mask to all zeros because we may update
       // it with atomicOr().
