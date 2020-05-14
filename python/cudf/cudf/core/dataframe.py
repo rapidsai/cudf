@@ -4938,17 +4938,18 @@ def to_datetime(
     origin="unix",
     cache=True,
 ):
-    from cudf.utils import utils
-
     if arg is None:
         return None
     from cudf.core.column.datetime import _unit_map
 
+    if exact is False:
+        raise NotImplementedError("exact support is not yet implemented")
+
     if origin != "unix":
-        raise NotImplementedError("origin is not yet implemented")
+        raise NotImplementedError("origin support is not yet implemented")
 
     if yearfirst:
-        raise NotImplementedError("yearfirst is not yet implemented")
+        raise NotImplementedError("yearfirst support is not yet implemented")
 
     if isinstance(arg, DataFrame):
         # we require at least Ymd
@@ -4963,7 +4964,7 @@ def to_datetime(
 
             # replace passed unit with _unit_map
 
-        def f(value):
+        def get_units(value):
             if value in _unit_map:
                 return _unit_map[value]
 
@@ -4973,7 +4974,7 @@ def to_datetime(
 
             return value
 
-        unit = {k: f(k) for k in arg._data.names}
+        unit = {k: get_units(k) for k in arg._data.names}
         unit_rev = {v: k for k, v in unit.items()}
 
         # keys we don't recognize
@@ -4992,13 +4993,11 @@ def to_datetime(
             + "-"
             + arg[unit_rev["day"]].astype("str").str.zfill(2)
         )
-        forma = "%Y-%m-%d"
+        format = "%Y-%m-%d"
         col = new_series._column.as_datetime_column(
-            "datetime64[ns]", format=forma
+            "datetime64[ns]", format=format
         )
-        import pdb
 
-        pdb.set_trace()
         time_delta_col = None
         for u in ["h", "m", "s", "ms", "us", "ns"]:
             value = unit_rev.get(u)
@@ -5006,6 +5005,8 @@ def to_datetime(
                 if arg[value].dtype.kind not in ("i", "f"):
                     curr_col = arg[value].astype("int64")._column
                 else:
+                    # If the arg[value] is of int or
+                    # float dtype we don't want to type-cast
                     curr_col = arg[value]._column
 
                 factor = utils.scalar_broadcast_to(
@@ -5018,19 +5019,49 @@ def to_datetime(
                     time_delta_col = curr_col.binary_operator("mul", factor)
                 else:
                     time_delta_col += curr_col.binary_operator("mul", factor)
-        if time_delta_col is None:
-            return cudf.Series(col)
-        else:
+        if time_delta_col is not None:
             col = (
                 col.astype("int64")
                 .binary_operator("add", time_delta_col)
                 .astype("datetime64[ns]")
             )
-            return cudf.Series(col)
+        return cudf.Series(col, index=arg.index)
+    elif isinstance(arg, Index):
+        col = arg._values
+        col = _process_col(
+            col,
+            unit=unit,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+            format=format,
+        )
+        return as_index(col, name=arg.name)
+    elif isinstance(arg, Series):
+        col = arg._column
+        col = _process_col(
+            col,
+            unit=unit,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+            format=format,
+        )
+        return Series(col, index=arg.index, name=arg.name)
+    else:
+        col = as_column(arg)
+        col = _process_col(
+            col,
+            unit=unit,
+            dayfirst=dayfirst,
+            infer_datetime_format=infer_datetime_format,
+            format=format,
+        )
+        return as_index(col)
 
-    col = as_column(arg)
 
-    # import pdb;pdb.set_trace()
+def _process_col(col, unit, dayfirst, infer_datetime_format, format):
+    if col.dtype.kind == "M":
+        return col
+
     dtype = "datetime64[ns]"
     if col.dtype.kind in ("i", "f"):
         if unit not in (None, "ns"):
@@ -5056,7 +5087,7 @@ def to_datetime(
         else:
             if infer_datetime_format or format is None:
                 format = column.datetime.infer_format(
-                    arg[0], dayfirst=dayfirst
+                    col[0], dayfirst=dayfirst
                 )
             col = col.as_datetime_column(dtype, format=format)
     return col
