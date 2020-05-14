@@ -105,7 +105,7 @@ class Merge(object):
         necessary, cast the input key columns to compatible types.
         Potentially also cast the output back to categorical.
         """
-        output_dtypes = self.compute_output_dtypes()
+        output_dtypes = self.output_cast()  # self.compute_output_dtypes()
         self.typecast_input_to_libcudf()
         libcudf_result = libcudf.join.join(
             self.lhs,
@@ -431,55 +431,55 @@ class Merge(object):
         of a libcudf join, baesd on the original left and right
         frames.
         """
-        index_dtypes = []
-        data_dtypes = {}
-        for name, col in itertools.chain(
-            self.lhs._data.items(), self.rhs._data.items()
-        ):
-            data_dtypes[name] = col.dtype
+
+        index_dtypes = {}
+        l_data_join_cols = {}
+        r_data_join_cols = {}
+
+        data_dtypes = {
+            name: col.dtype
+            for name, col in itertools.chain(
+                self.lhs._data.items(), self.rhs._data.items()
+            )
+        }
 
         if self.left_index and self.right_index:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs.index._data.items(), self.rhs.index._data.items()
-            ):
-                to_dtype = self.libcudf_to_output_casting_rules(
-                    vl, vr, self.how
-                )
-                index_dtypes.append(to_dtype)
+            l_idx_join_cols = list(self.lhs.index._data.values())
+            r_idx_join_cols = list(self.rhs.index._data.values())
+        elif self.left_on and self.right_index:
+            # Keep the orignal dtypes in the LEFT index if possible
+            # should trigger a bunch of no-ops
+            l_idx_join_cols = list(self.lhs.index._data.values())
+            r_idx_join_cols = list(self.lhs.index._data.values())
+            for i, name in enumerate(self.left_on):
+                l_data_join_cols[name] = self.lhs._data[name]
+                r_data_join_cols[name] = list(self.rhs.index._data.values())[i]
+
+        elif self.left_index and self.right_on:
+            # see above
+            l_idx_join_cols = list(self.rhs.index._data.values())
+            r_idx_join_cols = list(self.rhs.index._data.values())
+            for i, name in enumerate(self.right_on):
+                l_data_join_cols[name] = list(self.lhs.index._data.values())[i]
+                r_data_join_cols[name] = self.rhs._data[name]
+
         if self.left_on and self.right_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs[self.left_on]._data.items(),
-                self.rhs[self.right_on]._data.items(),
-            ):
-                to_dtype = self.libcudf_to_output_casting_rules(
-                    vl, vr, self.how
+            l_data_join_cols = self.lhs._data
+            r_data_join_cols = self.rhs._data
+
+        for i in range(
+            (self.left_index or self.right_index)
+            * len(self.lhs.index._data.items())
+        ):
+            index_dtypes[i] = self.libcudf_to_output_casting_rules(
+                l_idx_join_cols[i], r_idx_join_cols[i], self.how
+            )
+
+        for name in itertools.chain(self.left_on, self.right_on):
+            if name in self.left_on and name in self.right_on:
+                data_dtypes[name] = self.libcudf_to_output_casting_rules(
+                    l_data_join_cols[name], r_data_join_cols[name], self.how
                 )
-                data_dtypes[kl] = to_dtype
-                data_dtypes[kr] = to_dtype
-        if self.left_index and self.right_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs.index._data.items(),
-                self.rhs[self.right_on]._data.items(),
-            ):
-                to_dtype = self.libcudf_to_output_casting_rules(
-                    vl, vr, self.how
-                )
-                data_dtypes[kr] = to_dtype
-                index_dtypes = [
-                    col.dtype for col in self.rhs.index._data.values()
-                ]
-        if self.right_index and self.left_on:
-            for ((kl, vl), (kr, vr)) in zip(
-                self.lhs[self.left_on]._data.items(),
-                self.rhs.index._data.items(),
-            ):
-                to_dtype = self.libcudf_to_output_casting_rules(
-                    vl, vr, self.how
-                )
-                data_dtypes[kl] = to_dtype
-                index_dtypes = [
-                    col.dtype for col in self.lhs.index._data.values()
-                ]
         return (index_dtypes, data_dtypes)
 
     def typecast_libcudf_to_output(self, output, output_dtypes):
