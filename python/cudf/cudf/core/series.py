@@ -1179,14 +1179,15 @@ class Series(Frame):
         return self._fill([fill_value], begin, end, inplace)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
+        """Fill null values with ``value`` without changing the series' type.
 
         Parameters
         ----------
         value : scalar or Series-like
-            Value to use to fill nulls. If Series-like, null values
-            are filled with the values in corresponding indices of the
-            given Series.
+            Value to use to fill nulls. If `value`'s dtype differs from the
+            series, the fill value will be cast to the column's dtype before
+            applying the fill. If Series-like, null values are filled with the
+            values in corresponding indices of the given Series.
 
         Returns
         -------
