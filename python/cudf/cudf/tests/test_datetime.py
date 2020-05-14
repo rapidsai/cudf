@@ -546,6 +546,9 @@ def test_datetime_dataframe():
         [1, 2, 3, 100, -123, -1, 0, 1000000000000679367],
         pd.DataFrame({"year": [2015, 2016], "month": [2, 3], "day": [4, 5]}),
         pd.DataFrame(
+            {"year": ["2015", "2016"], "month": ["2", "3"], "day": [4, 5]}
+        ),
+        pd.DataFrame(
             {
                 "year": [2015, 2016],
                 "month": [2, 3],
