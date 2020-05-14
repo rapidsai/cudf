@@ -23,6 +23,11 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @addtogroup transformation_transform
+ * @{
+ */
+
+/**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.
  *
@@ -78,5 +83,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  **/
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

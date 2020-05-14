@@ -19,15 +19,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-/**
- * @brief NVText APIs
- * @defgroup nvtext_apis NVText APIs
- */
 namespace nvtext {
 /**
- * @ingroup nvtext_apis
- * @addtogroup nvtext_tokenize Tokenize
- * APIs to tokenize strings column.
+ * @addtogroup nvtext_tokenize
  * @{
  */
 

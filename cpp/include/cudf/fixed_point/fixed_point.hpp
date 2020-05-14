@@ -192,6 +192,11 @@ CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_ty
 }  // namespace detail
 
 /**
+ * @addtogroup fixed_point_classes
+ * @{
+ */
+
+/**
  * @brief Helper struct for constructing `fixed_point` when value is already shifted
  *
  * Example:
@@ -597,4 +602,5 @@ std::ostream& operator<<(std::ostream& os, fixed_point<Rep, Radix> const& fp)
   return os << static_cast<double>(fp);
 }
 
+/** @} */  // end of group
 }  // namespace numeric
