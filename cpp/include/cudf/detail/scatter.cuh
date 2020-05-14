@@ -135,7 +135,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto indices_column    = std::make_unique<column>(data_type{INT32},
                                                    static_cast<size_type>(output_size),
                                                    std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{},
+                                                   rmm::device_buffer(0, stream, mr),
                                                    0);
 
     // take the keys from the matched column allocated using mr

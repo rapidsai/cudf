@@ -156,7 +156,7 @@ std::unique_ptr<experimental::table> findall_re(
     results.emplace_back(
       std::make_unique<column>(data_type{STRING},
                                strings_count,
-                               rmm::device_buffer{0, stream, mr},  // no data
+                               rmm::device_buffer(0, stream, mr),  // no data
                                create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
                                strings_count));
 

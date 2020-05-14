@@ -192,7 +192,7 @@ struct create_column_from_view {
       children.emplace_back(std::make_unique<column>(view.child(i), stream, mr));
     return std::make_unique<column>(view.type(),
                                     view.size(),
-                                    rmm::device_buffer{},
+                                    rmm::device_buffer(0, stream, mr),
                                     cudf::copy_bitmask(view, stream, mr),
                                     view.null_count(),
                                     std::move(children));

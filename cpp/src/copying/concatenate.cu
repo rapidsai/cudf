@@ -385,7 +385,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{};
+  return rmm::device_buffer(0, 0, mr);
 }
 
 // Concatenates the elements from a vector of column_views

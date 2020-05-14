@@ -96,7 +96,7 @@ std::unique_ptr<column> add_keys(
   auto indices_column = std::make_unique<column>(data_type{INT32},
                                                  dictionary_column.size(),
                                                  std::move(*(contents.data.release())),
-                                                 rmm::device_buffer{},
+                                                 rmm::device_buffer(0, stream, mr),
                                                  0);
 
   // create new dictionary column with keys_column and indices_column
