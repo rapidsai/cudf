@@ -34,6 +34,7 @@
 namespace cudf {
 namespace experimental {
 namespace transformation {
+//! Jit functions
 namespace jit {
 
 const std::vector<std::string> header_names{cudf_types_hpp, cudf_wrappers_timestamps_hpp};

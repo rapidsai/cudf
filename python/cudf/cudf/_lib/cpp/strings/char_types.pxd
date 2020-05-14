@@ -26,3 +26,11 @@ cdef extern from "cudf/strings/char_types/char_types.hpp" \
         column_view source_strings,
         string_character_types types,
         string_character_types verify_types) except +
+
+    cdef unique_ptr[column] is_integer(
+        column_view source_strings
+    ) except +
+
+    cdef unique_ptr[column] is_float(
+        column_view source_strings
+    ) except +

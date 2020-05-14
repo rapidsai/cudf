@@ -19,6 +19,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -44,7 +45,8 @@ struct launcher {
                                         input.null_count());
 
       } else {
-        return cudf::experimental::allocate_like(input);
+        return cudf::experimental::detail::allocate_like(
+          input, input.size(), mask_allocation_policy::NEVER, mr, stream);
       }
     }();
 
