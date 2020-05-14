@@ -1193,10 +1193,6 @@ class Series(Frame):
         -------
         result : Series
             Copy with nulls filled.
-
-        Notes
-        -----
-        The series dtype remains unchanged. 
         """
         if method is not None:
             raise NotImplementedError("The method keyword is not supported")
