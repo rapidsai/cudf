@@ -109,8 +109,7 @@ std::unique_ptr<experimental::table> extract(
                         d_indices,
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
     //
-    auto column = make_strings_column(indices, stream, mr);
-    results.emplace_back(std::move(column));
+    results.emplace_back(make_strings_column(indices, stream, mr));
   }
   return std::make_unique<experimental::table>(std::move(results));
 }
