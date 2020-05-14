@@ -218,7 +218,7 @@ def query_execute(df, expr, callenv):
     columns = compiled["colnames"]
     # prepare col args
 
-    def extract_col(col):
+    def extract_colarrays(col):
         try:
             return df[col]._column.data_array_view
         except KeyError:
@@ -230,7 +230,7 @@ def query_execute(df, expr, callenv):
                 return df.index._data.columns[0].data_array_view
             return df.index._data[col].data_array_view
 
-    colarrays = [extract_col(col) for col in columns]
+    colarrays = [extract_colarrays(col) for col in columns]
 
     # allocate output buffer
     nrows = len(df)
