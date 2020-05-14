@@ -129,8 +129,8 @@ std::unique_ptr<column> make_empty_strings_column(rmm::mr::device_memory_resourc
 {
   return std::make_unique<column>(data_type{STRING},
                                   0,
-                                  rmm::device_buffer(0, stream, mr),  // data
-                                  rmm::device_buffer(0, stream, mr),
+                                  rmm::device_buffer{0, stream, mr},  // data
+                                  rmm::device_buffer{0, stream, mr},
                                   0);  // nulls
 }
 

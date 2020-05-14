@@ -54,14 +54,14 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return rmm::device_buffer(0, stream, mr); }
+  if (col.size() == 0) { return rmm::device_buffer{0, stream, mr}; }
 
   if (not s.is_valid()) {
     return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
   } else if (s.is_valid() && col.nullable()) {
     return copy_bitmask(col, stream, mr);
   } else {
-    return rmm::device_buffer(0, stream, mr);
+    return rmm::device_buffer{0, stream, mr};
   }
 }
 }  // namespace detail

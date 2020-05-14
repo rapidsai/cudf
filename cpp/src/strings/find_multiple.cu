@@ -47,7 +47,7 @@ std::unique_ptr<column> find_multiple(
   // create output column
   auto total_count = strings_count * targets_count;
   auto results     = make_numeric_column(
-    data_type{INT32}, total_count, rmm::device_buffer(0, stream, mr), 0, stream, mr);  // no nulls
+    data_type{INT32}, total_count, rmm::device_buffer{0, stream, mr}, 0, stream, mr);  // no nulls
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<int32_t>();
   // fill output column with position values

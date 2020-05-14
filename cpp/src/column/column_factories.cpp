@@ -131,7 +131,7 @@ struct column_from_scalar_dispatch {
     if (!value.is_valid())
       return std::make_unique<column>(value.type(),
                                       size,
-                                      rmm::device_buffer(0, stream, mr),
+                                      rmm::device_buffer{0, stream, mr},
                                       create_null_mask(size, mask_state::ALL_NULL, stream, mr),
                                       size);
 
@@ -144,7 +144,7 @@ struct column_from_scalar_dispatch {
     auto sv = static_cast<experimental::scalar_type_t<T> const&>(value);
     // fill the column with the scalar
     auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
-    output->set_null_mask(rmm::device_buffer(0, stream, mr), 0);  // should be no nulls
+    output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls
     return output;
   }
 

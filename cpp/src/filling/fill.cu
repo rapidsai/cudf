@@ -158,7 +158,7 @@ struct out_of_place_fill_range_dispatch {
     auto indices_column = std::make_unique<cudf::column>(cudf::data_type{cudf::INT32},
                                                          static_cast<cudf::size_type>(output_size),
                                                          std::move(*(contents.data.release())),
-                                                         rmm::device_buffer(0, stream, mr),
+                                                         rmm::device_buffer{0, stream, mr},
                                                          0);
 
     // take the keys from matched column

@@ -211,7 +211,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
   children.emplace_back(std::move(chars_column));
   return std::make_unique<column>(data_type{STRING},
                                   num_strings,
-                                  rmm::device_buffer(0, stream, mr),
+                                  rmm::device_buffer{0, stream, mr},
                                   null_mask,
                                   null_count,
                                   std::move(children));
