@@ -29,6 +29,7 @@
 
 ## Improvements
 
+- PR #5188 Add commit_hash to meta.yaml
 - PR #5184 Fix style checks
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
