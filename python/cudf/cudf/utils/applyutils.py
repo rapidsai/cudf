@@ -111,12 +111,27 @@ def apply_chunks(
 
 
 def make_aggregate_nullmask(df, columns=None, op="and"):
-    out_mask = None
-    for k in columns or df.columns:
-        if not df[k].nullable:
-            continue
+    from cudf import MultiIndex
 
-        nullmask = df[k].nullmask
+    out_mask = None
+    for k in columns or df._data:
+        try:
+            if not df[k].nullable:
+                continue
+            nullmask = df[k].nullmask
+        except KeyError:
+            if (
+                k == "index"
+                and k not in df.index._data
+                and not isinstance(df.index, MultiIndex)
+                and not df.index._data.columns[0].nullable
+            ):
+                continue
+                nullmask = df.index._data.columns[0].nullmask
+            elif not df.index._data[k].nullable:
+                continue
+                nullmask = df.index._data[k].nullmask
+
         if out_mask is None:
             out_mask = column.as_column(
                 nullmask.copy(), dtype=utils.mask_dtype
