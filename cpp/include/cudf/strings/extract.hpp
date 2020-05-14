@@ -21,9 +21,7 @@
 namespace cudf {
 namespace strings {
 /**
- * @ingroup strings_apis
- * @addtogroup strings_substring Substring
- * APIs to extract substrings from strings.
+ * @addtogroup strings_substring
  * @{
  */
 

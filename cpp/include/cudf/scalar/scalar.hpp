@@ -29,8 +29,11 @@
 #include <vector>
 
 namespace cudf {
+
 /**
  * @brief An owning class to represent a singular value
+ *
+ * @ingroup scalar_classes
  *
  * A scalar is a singular value of any of the supported datatypes in cudf.
  * Classes derived from this class are used to represent a scalar. Objects of
@@ -196,6 +199,8 @@ class fixed_width_scalar : public scalar {
 /**
  * @brief An owning class to represent a numerical value in device memory
  *
+ * @ingroup scalar_classes
+ *
  * @tparam T the data type of the numerical value
  */
 template <typename T>
@@ -243,6 +248,8 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
 
 /**
  * @brief An owning class to represent a string in device memory
+ *
+ * @ingroup scalar_classes
  */
 class string_scalar : public scalar {
  public:
@@ -340,6 +347,8 @@ class string_scalar : public scalar {
 
 /**
  * @brief An owning class to represent a timestamp value in device memory
+ *
+ * @ingroup scalar_classes
  *
  * @tparam T the data type of the timestamp value
  * @see cudf/wrappers/timestamps.hpp for a list of allowed types

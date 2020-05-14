@@ -25,10 +25,12 @@
 - PR #4881 Support row_number in rolling_window
 - PR #5068 Add Java bindings for arctan2
 - PR #5132 Support out-of-band buffers in Python pickling
+- PR #5149 Add Java bindings for PMOD
 - PR #5153 Add Java bindings for extract
 
 ## Improvements
 
+- PR #5184 Fix style checks
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
@@ -145,11 +147,13 @@
 - PR #5047 Add Cython binding for libcudf++ CSV reader
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #4822 Add constructor to `pq_chunked_state` to enable using RAII idiom
 - PR #5024 CSV reader input stage optimizations
 - PR #5061 Add support for writing parquet to python file-like objects
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
 - PR #5039 Make `annotate` picklable
 - PR #5045 Remove call to `unique()` in concat when `axis=1`
+- PR #5049 Add grouping of libcudf apis into doxygen modules
 - PR #5075 Add simple row-group aggregation mechanism in dask_cudf read_parquet
 - PR #5084 Improve downcasting in `Series.label_encoding()` to reduce memory usage
 - PR #5085 Print more precise numerical strings in unit tests
