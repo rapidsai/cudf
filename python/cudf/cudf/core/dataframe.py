@@ -4923,3 +4923,140 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
             else:
                 # handle append case
                 input_df.insert(len(input_df._data), col_1, replace_df[col_2])
+
+
+def to_datetime(
+    arg,
+    errors="raise",
+    dayfirst=False,
+    yearfirst=False,
+    utc=None,
+    format=None,
+    exact=True,
+    unit=None,
+    infer_datetime_format=False,
+    origin="unix",
+    cache=True,
+):
+    from cudf.utils import utils
+
+    if arg is None:
+        return None
+    from cudf.core.column.datetime import _unit_map
+
+    if origin != "unix":
+        raise NotImplementedError("origin is not yet implemented")
+
+    if yearfirst:
+        raise NotImplementedError("yearfirst is not yet implemented")
+
+    if isinstance(arg, DataFrame):
+        # we require at least Ymd
+        required = ["year", "month", "day"]
+        req = sorted(list(set(required) - set(arg._data.names)))
+        if len(req):
+            raise ValueError(
+                "to assemble mappings requires at least that "
+                "[year, month, day] be specified: [{required}] "
+                "is missing".format(required=",".join(req))
+            )
+
+            # replace passed unit with _unit_map
+
+        def f(value):
+            if value in _unit_map:
+                return _unit_map[value]
+
+            # m is case significant
+            if value.lower() in _unit_map:
+                return _unit_map[value.lower()]
+
+            return value
+
+        unit = {k: f(k) for k in arg._data.names}
+        unit_rev = {v: k for k, v in unit.items()}
+
+        # keys we don't recognize
+        excess = sorted(set(unit_rev.keys()) - set(_unit_map.values()))
+        if len(excess):
+            excess = ",".join(excess)
+            raise ValueError(
+                f"extra keys have been passed to the \
+                    datetime assemblage: [{excess}]"
+            )
+
+        new_series = (
+            arg[unit_rev["year"]].astype("str")
+            + "-"
+            + arg[unit_rev["month"]].astype("str").str.zfill(2)
+            + "-"
+            + arg[unit_rev["day"]].astype("str").str.zfill(2)
+        )
+        forma = "%Y-%m-%d"
+        col = new_series._column.as_datetime_column(
+            "datetime64[ns]", format=forma
+        )
+        import pdb
+
+        pdb.set_trace()
+        time_delta_col = None
+        for u in ["h", "m", "s", "ms", "us", "ns"]:
+            value = unit_rev.get(u)
+            if value is not None and value in arg:
+                if arg[value].dtype.kind not in ("i", "f"):
+                    curr_col = arg[value].astype("int64")._column
+                else:
+                    curr_col = arg[value]._column
+
+                factor = utils.scalar_broadcast_to(
+                    column.datetime._numpy_to_pandas_conversion[u],
+                    size=len(curr_col),
+                    dtype=curr_col.dtype,
+                )
+
+                if time_delta_col is None:
+                    time_delta_col = curr_col.binary_operator("mul", factor)
+                else:
+                    time_delta_col += curr_col.binary_operator("mul", factor)
+        if time_delta_col is None:
+            return cudf.Series(col)
+        else:
+            col = (
+                col.astype("int64")
+                .binary_operator("add", time_delta_col)
+                .astype("datetime64[ns]")
+            )
+            return cudf.Series(col)
+
+    col = as_column(arg)
+
+    # import pdb;pdb.set_trace()
+    dtype = "datetime64[ns]"
+    if col.dtype.kind in ("i", "f"):
+        if unit not in (None, "ns"):
+            factor = utils.scalar_broadcast_to(
+                column.datetime._numpy_to_pandas_conversion[unit],
+                size=len(col),
+                dtype=col.dtype,
+            )
+            col = col.binary_operator("mul", factor)
+            col = col.astype(dtype)
+        else:
+            col = col.as_datetime_column(dtype)
+    elif col.dtype.kind in ("O"):
+        if unit not in (None, "ns"):
+            col = col.astype("int64")
+            factor = utils.scalar_broadcast_to(
+                column.datetime._numpy_to_pandas_conversion[unit],
+                size=len(col),
+                dtype=col.dtype,
+            )
+            col = col.binary_operator("mul", factor)
+            col = col.astype(dtype)
+        else:
+            if infer_datetime_format or format is None:
+                format = column.datetime.infer_format(
+                    arg[0], dayfirst=dayfirst
+                )
+            col = col.as_datetime_column(dtype, format=format)
+    return col

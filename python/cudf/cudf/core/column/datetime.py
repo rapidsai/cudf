@@ -17,7 +17,33 @@ _numpy_to_pandas_conversion = {
     "us": 1000,
     "ms": 1000000,
     "s": 1000000000,
+    "m": 60000000000,
+    "h": 3600000000000,
     "D": 1000000000 * 86400,
+}
+
+_unit_map = {
+    "year": "year",
+    "years": "year",
+    "month": "month",
+    "months": "month",
+    "day": "day",
+    "days": "day",
+    "hour": "h",
+    "hours": "h",
+    "minute": "m",
+    "minutes": "m",
+    "second": "s",
+    "seconds": "s",
+    "ms": "ms",
+    "millisecond": "ms",
+    "milliseconds": "ms",
+    "us": "us",
+    "microsecond": "us",
+    "microseconds": "us",
+    "ns": "ns",
+    "nanosecond": "ns",
+    "nanoseconds": "ns",
 }
 
 
@@ -102,7 +128,7 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(other, pd.Timestamp):
             m = _numpy_to_pandas_conversion[self.time_unit]
             ary = utils.scalar_broadcast_to(
-                other.value * m, shape=len(self), dtype=self.dtype
+                other.value * m, size=len(self), dtype=self.dtype
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self.dtype)
@@ -180,10 +206,11 @@ class DatetimeColumn(column.ColumnBase):
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
         else:
-            raise TypeError(
-                f"Series of dtype {self.dtype} cannot perform "
-                f" the operation {op}"
-            )
+            # raise TypeError(
+            #     f"Series of dtype {self.dtype} cannot perform "
+            #     f" the operation {op}"
+            # )
+            pass
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
@@ -236,13 +263,13 @@ def binop(lhs, rhs, op, out_dtype):
     return out
 
 
-def infer_format(element):
+def infer_format(element, **kwargs):
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
     import re
 
-    fmt = pd.core.tools.datetimes._guess_datetime_format(element)
+    fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
         return fmt
@@ -257,20 +284,20 @@ def infer_format(element):
     subsecond_fmt = ".%" + str(len(second_part[0])) + "f"
 
     first_part = pd.core.tools.datetimes._guess_datetime_format(
-        element_parts[0]
+        element_parts[0], **kwargs
     )
     # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 " + element_parts[0]
-        first_part = pd.core.tools.datetimes._guess_datetime_format(tmp).split(
-            " ", 1
-        )[1]
+        first_part = pd.core.tools.datetimes._guess_datetime_format(
+            tmp, **kwargs
+        ).split(" ", 1)[1]
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
     if len(second_part) > 1:
         second_part = pd.core.tools.datetimes._guess_datetime_format(
-            "".join(second_part[1:])
+            "".join(second_part[1:]), **kwargs
         )
     else:
         second_part = ""
