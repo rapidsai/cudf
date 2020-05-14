@@ -259,7 +259,7 @@ struct read_csv_args {
  *  #include <cudf/io/functions.hpp>
  *  ...
  *  std::string filepath = "dataset.csv";
- *  cudf::read_csv_args args{cudf::source_info(filepath)};
+ *  cudf::experimental::io::read_csv_args args{cudf::source_info(filepath)};
  *  ...
  *  auto result = cudf::read_csv(args);
  * @endcode
