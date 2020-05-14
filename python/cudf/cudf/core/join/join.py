@@ -8,6 +8,7 @@ import pandas as pd
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.join import compute_result_col_names
 from cudf.core.dtypes import CategoricalDtype
 
 
@@ -105,7 +106,7 @@ class Merge(object):
         necessary, cast the input key columns to compatible types.
         Potentially also cast the output back to categorical.
         """
-        output_dtypes = self.output_cast()  # self.compute_output_dtypes()
+        output_dtypes = self.compute_output_dtypes()
         self.typecast_input_to_libcudf()
         libcudf_result = libcudf.join.join(
             self.lhs,
@@ -119,9 +120,7 @@ class Merge(object):
         )
         result = self.out_class._from_table(libcudf_result)
         result = self.typecast_libcudf_to_output(result, output_dtypes)
-        return result[
-            self.compute_result_col_names(self.lhs, self.rhs, self.how)
-        ]
+        return result[compute_result_col_names(self.lhs, self.rhs, self.how)]
 
     def preprocess_merge_params(
         self, on, left_on, right_on, lsuffix, rsuffix, suffixes
@@ -516,30 +515,3 @@ class Merge(object):
         else:
             outcol = col.astype(dtype)
         return outcol
-
-    @staticmethod
-    def compute_result_col_names(lhs, rhs, how):
-        """
-        Determine the names of the data columns in the result of
-        a libcudf join, based on the original left and right frames
-        as well as the type of join that was performed.
-        """
-        if how in ("left", "inner", "outer"):
-            # the result cols are all the left columns (incl. common ones)
-            # + all the right columns (excluding the common ones)
-            result_col_names = [None] * len(
-                lhs._data.keys() | rhs._data.keys()
-            )
-            ix = 0
-            for name in lhs._data.keys():
-                result_col_names[ix] = name
-                ix += 1
-            for name in rhs._data.keys():
-                if name not in lhs._data.keys():
-                    nom = name
-                    result_col_names[ix] = nom
-                    ix += 1
-        elif how in ("leftsemi", "leftanti"):
-            # the result columns are just all the left columns
-            result_col_names = list(lhs._data.keys())
-        return result_col_names

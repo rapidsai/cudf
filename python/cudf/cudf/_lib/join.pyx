@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from cudf.core.join.join import Merge
 from collections import OrderedDict
 
 from libcpp.memory cimport unique_ptr
@@ -55,7 +54,7 @@ cpdef join(Table lhs,
         rhs._num_columns + (rhs._num_indices * right_index)
     )
 
-    result_col_names = Merge.compute_result_col_names(lhs, rhs, how)
+    result_col_names = compute_result_col_names(lhs, rhs, how)
 
     columns_in_common = OrderedDict()
     cdef vector[pair[int, int]] c_columns_in_common
@@ -202,3 +201,30 @@ cpdef join(Table lhs,
         index = None
     data_ordered_dict = OrderedDict(zip(result_col_names, all_cols_py))
     return Table(data=data_ordered_dict, index=index)
+
+
+def compute_result_col_names(lhs, rhs, how):
+    """
+    Determine the names of the data columns in the result of
+    a libcudf join, based on the original left and right frames
+    as well as the type of join that was performed.
+    """
+    if how in ("left", "inner", "outer"):
+        # the result cols are all the left columns (incl. common ones)
+        # + all the right columns (excluding the common ones)
+        result_col_names = [None] * len(
+            lhs._data.keys() | rhs._data.keys()
+        )
+        ix = 0
+        for name in lhs._data.keys():
+            result_col_names[ix] = name
+            ix += 1
+        for name in rhs._data.keys():
+            if name not in lhs._data.keys():
+                nom = name
+                result_col_names[ix] = nom
+                ix += 1
+    elif how in ("leftsemi", "leftanti"):
+        # the result columns are just all the left columns
+        result_col_names = list(lhs._data.keys())
+    return result_col_names
