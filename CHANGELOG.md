@@ -29,6 +29,7 @@
 
 ## Improvements
 
+- PR #5184 Fix style checks
 - PR #4995 Add CMake option for per-thread default stream
 - PR #5033 Fix Numba deprecations warnings with Numba 0.49+
 - PR #4950 Fix import errors with Numba 0.49+
@@ -145,6 +146,7 @@
 - PR #5047 Add Cython binding for libcudf++ CSV reader
 - PR #5027 Move nvstrings standalone docs pages to libcudf doxygen pages
 - PR #4947 Add support for `CategoricalColumn` to be type-casted with different categories
+- PR #4822 Add constructor to `pq_chunked_state` to enable using RAII idiom
 - PR #5024 CSV reader input stage optimizations
 - PR #5061 Add support for writing parquet to python file-like objects
 - PR #5034 Use loc to apply boolmask to frame efficiently when constructing query result
@@ -155,6 +157,7 @@
 - PR #5085 Print more precise numerical strings in unit tests
 - PR #5028 Add Docker 19 support to local gpuci build
 - PR #5093 Add `.cat.as_known` related test in `dask_cudf`
+- PR #5100 Add documentation on libcudf doxygen guidelines
 - PR #5106 Add detail API for `cudf::concatenate` with tables
 - PR #5104 Add missing `.inl` files to clang-format and git commit hook
 - PR #5112 Adding `htoi` and `ip2int` support to `StringMethods`
@@ -168,6 +171,7 @@
 
 ## Bug Fixes
 
+- PR #5181 Allocate null count using the default resource in `copy_if`
 - PR #5141 Use user-provided resource correctly in `unary_operation()` and `shift()`
 - PR #5064 Fix `hash()` and `construct_join_output_df()` to use user-provided memory resource correctly
 - PR #4386 Update Java package to 0.14
@@ -277,6 +281,7 @@
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
+- PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
 
