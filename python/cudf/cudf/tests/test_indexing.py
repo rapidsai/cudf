@@ -662,6 +662,9 @@ def test_dataframe_boolean_mask_with_None():
     gdf_masked = gdf[[True, False, True, False]]
     assert_eq(pdf_masked, gdf_masked)
 
+    with pytest.raises(ValueError):
+        gdf[Series([True, False, None, False])]
+
 
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):

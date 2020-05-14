@@ -23,6 +23,11 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @addtogroup column_quantiles
+ * @{
+ */
+
+/**
  * @brief Computes quantiles with interpolation.
 
  * Computes the specified quantiles by interpolating values between which they
@@ -89,5 +94,6 @@ std::unique_ptr<table> quantiles(
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

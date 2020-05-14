@@ -24,6 +24,12 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 template <typename...>
 using void_t = void;
 
@@ -292,4 +298,5 @@ struct is_simple_impl {
  **/
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
+/** @} */
 }  // namespace cudf

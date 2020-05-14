@@ -139,8 +139,10 @@ class table_view_base {
 /**
  * @brief A set of `column_view`s of the same size.
  *
+ * @ingroup table_classes
+ *
  * All public member functions and constructors are inherited from
- *`table_view_base<column_view>`.
+ * `table_view_base<column_view>`.
  **/
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
@@ -186,8 +188,10 @@ class table_view : public detail::table_view_base<column_view> {
 /**
  * @brief A set of `mutable_column_view`s of the same size.
  *
+ * @ingroup table_classes
+ *
  * All public member functions and constructors are inherited from
- *`table_view_base<mutable_column_view>`.
+ * `table_view_base<mutable_column_view>`.
  **/
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;

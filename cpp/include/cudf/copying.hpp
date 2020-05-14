@@ -26,8 +26,16 @@
 
 namespace cudf {
 namespace experimental {
+
+/**
+ * @addtogroup column_copy
+ * @{
+ */
+
 /**
  * @brief Gathers the specified rows (including null values) of a set of columns.
+ *
+ * @ingroup copy_gather
  *
  * Gathers the rows of the source columns according to `gather_map` such that row "i"
  * in the resulting table's columns will contain row "gather_map[i]" from the source columns.
@@ -61,6 +69,8 @@ std::unique_ptr<table> gather(
 /**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
+ *
+ * @ingroup copy_scatter
  *
  * Scatters values from the source table into the target table out-of-place,
  * returning a "destination table". The scatter is performed according to a
@@ -103,6 +113,8 @@ std::unique_ptr<table> scatter(
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
  * according to a scatter map.
+ *
+ * @ingroup copy_scatter
  *
  * Scatters values from the source row into the target table out-of-place,
  * returning a "destination table". The scatter is performed according to a
@@ -274,6 +286,9 @@ std::unique_ptr<column> copy_range(
 
 /**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
+ *
+ * @ingroup copy_slice
+ *
  * The returned views of `input` are constructed from an even number indices where
  * the `i`th returned `column_view` views the elements in `input` indicated by the range
  * `[indices[2*i], indices[(2*i)+1])`.
@@ -303,6 +318,8 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
+ *
+ * @ingroup copy_slice
  *
  * The returned views of `input` are constructed from an even number indices where
  * the `i`th returned `table_view` views the elements in `input` indicated by the range
@@ -337,6 +354,8 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
  * derived from expected splits.
  *
+ * @ingroup copy_split
+ *
  * The returned view's of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `column_view` is sliced as
  * `[0, splits[i])` if `i`=0, else `[splits[i], input.size())` if `i` is the last view and
@@ -368,6 +387,8 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
  * derived from expected splits.
+ *
+ * @ingroup copy_split
  *
  * The returned views of `input` are constructed from vector of splits, which indicates
  * where the split should occur. The `i`th returned `table_view` is sliced as
@@ -402,6 +423,8 @@ std::vector<table_view> split(table_view const& input, std::vector<size_type> co
 /**
  * @brief The result(s) of a `contiguous_split`
  *
+ * @ingroup copy_split
+ *
  * Each table_view resulting from a split operation performed by contiguous_split,
  * will be returned wrapped in a `contiguous_split_result`.  The table_view and internal
  * column_views in this struct are not owned by a top level cudf::table or cudf::column.
@@ -419,6 +442,8 @@ struct contiguous_split_result {
 /**
  * @brief Performs a deep-copy split of a `table_view` into a set of `table_view`s into a single
  * contiguous block of memory.
+ *
+ * @ingroup copy_split
  *
  * The memory for the output views is allocated in a single contiguous `rmm::device_buffer` returned
  * in the `contiguous_split_result`. There is no top-level owning table.
@@ -488,6 +513,8 @@ std::unique_ptr<column> copy_if_else(
 
 /**
  * @brief Creates a new column by shifting all values by an offset.
+ *
+ * @ingroup copy_shift
  *
  * Elements will be determined by `output[idx] = input[idx - offset]`.
  * Some elements in the output may be indeterminable from the input. For those
@@ -597,6 +624,8 @@ std::unique_ptr<column> copy_if_else(
  * @brief Scatters rows from the input table to rows of the output corresponding
  * to true values in a boolean mask.
  *
+ * @ingroup copy_scatter
+ *
  * The `i`th row of `input` will be written to the output table at the location
  * of the `i`th true value in `boolean_mask`. All other rows in the output will
  * equal the same row in `target`.
@@ -636,6 +665,8 @@ std::unique_ptr<table> boolean_mask_scatter(
 /**
  * @brief Scatters scalar values to rows of the output corresponding
  * to true values in a boolean mask.
+ *
+ * @ingroup copy_scatter
  *
  * The `i`th scalar in `input` will be written to all columns of the output
  * table at the location of the `i`th true value in `boolean_mask`.
@@ -686,5 +717,6 @@ std::unique_ptr<scalar> get_element(
   size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */
 }  // namespace experimental
 }  // namespace cudf

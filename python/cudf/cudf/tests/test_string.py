@@ -1831,6 +1831,65 @@ def test_string_str_decode_url(data):
 
 
 @pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "float"),
+        (["-0.1", "10.2", "+10.876"], "float"),
+        (["1", "10.2", "10.876"], "float32"),
+        (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "float"),
+        (["0.1", "-10.2", "10.876", None], "float"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
+
+    expect = psr.astype(dtype=dtype)
+    actual = gsr.astype(dtype=dtype)
+    assert_eq(expect, actual)
+
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "int"),
+        (["1", "10.2", "+10.876"], "int"),
+        (["abc", "1", "2", " "], "int"),
+        ([" ", "0.1", "2"], "float"),
+        ([""], "int"),
+        ([" "], "float"),
+        (["\n"], "int"),
+        (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None, "ab"], "float"),
+        (["+", "-"], "float"),
+        (["+", "-"], "int"),
+        (["1++++", "--2"], "float"),
+        (["1++++", "--2"], "int"),
+        (["++++1", "--2"], "float"),
+        (["++++1", "--2"], "int"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast_error(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
+
+    exception_type = None
+    try:
+        psr.astype(dtype=dtype)
+    except Exception as e:
+        exception_type = type(e)
+
+    if exception_type is None:
+        raise TypeError("Was expecting `psr.astype` to fail")
+
+    with pytest.raises(exception_type):
+        gsr.astype(dtype=dtype)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["f0:18:98:22:c2:e4", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"],
