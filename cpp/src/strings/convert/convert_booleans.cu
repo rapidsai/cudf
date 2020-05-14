@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
+#include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -33,11 +34,10 @@ namespace cudf {
 namespace strings {
 namespace detail {
 // Convert strings column to boolean column
-std::unique_ptr<column> to_booleans(
-  strings_column_view const& strings,
-  string_scalar const& true_string    = string_scalar("true"),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> to_booleans(strings_column_view const& strings,
+                                    string_scalar const& true_string,
+                                    rmm::mr::device_memory_resource* mr,
+                                    cudaStream_t stream)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(data_type{BOOL8}, 0);
@@ -85,12 +85,11 @@ std::unique_ptr<column> to_booleans(strings_column_view const& strings,
 
 namespace detail {
 // Convert boolean column to strings column
-std::unique_ptr<column> from_booleans(
-  column_view const& booleans,
-  string_scalar const& true_string    = string_scalar("true"),
-  string_scalar const& false_string   = string_scalar("false"),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> from_booleans(column_view const& booleans,
+                                      string_scalar const& true_string,
+                                      string_scalar const& false_string,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
 {
   size_type strings_count = booleans.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
