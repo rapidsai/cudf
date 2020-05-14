@@ -52,11 +52,13 @@ struct extract_fn {
     if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
     string_index_pair result{nullptr, 0};
-    int32_t begin = 0, end = d_str.length();
+    int32_t begin = 0;
+    int32_t end   = -1;  // handles empty strings automatically
     if ((prog.find(idx, d_str, begin, end) > 0) &&
         (prog.extract(idx, d_str, begin, end, column_index) > 0)) {
       auto offset = d_str.byte_offset(begin);
-      result      = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
+      // build index-pair
+      result = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
     }
     return result;
   }

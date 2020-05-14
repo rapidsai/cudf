@@ -59,13 +59,15 @@ enum class binary_operator : int32_t {
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>>
   LOG_BASE,              ///< logarithm to the base
   ATAN2,                 ///< 2-argument arctangent
-  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
-                         ///< result of equality when both are non-null
-  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
-                         ///< operand when one is null; or invalid when both are null
-  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
-                         ///< operand when one is null; or invalid when both are null
-
+  // If remainder is negative, this returns (remainder + divisor) % divisor
+  // else, it returns (dividend % divisor)
+  PMOD,           ///< positive modulo operator
+  NULL_EQUALS,    ///< Returns true when both operands are null; false when one is null; the
+                  ///< result of equality when both are non-null
+  NULL_MAX,       ///< Returns max of operands when both are non-null; returns the non-null
+                  ///< operand when one is null; or invalid when both are null
+  NULL_MIN,       ///< Returns min of operands when both are non-null; returns the non-null
+                  ///< operand when one is null; or invalid when both are null
   INVALID_BINARY  ///< invalid operation
 };
 
