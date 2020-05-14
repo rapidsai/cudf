@@ -7,6 +7,7 @@ import numpy as np
 import six
 from numba import cuda
 
+import cudf
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
 
@@ -194,7 +195,6 @@ def query_execute(df, expr, callenv):
         Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
         They represent the arg, local and global dictionaries of the caller.
     """
-    from cudf import MultiIndex
 
     # compile
     compiled = query_compile(expr)
@@ -218,19 +218,10 @@ def query_execute(df, expr, callenv):
     columns = compiled["colnames"]
     # prepare col args
 
-    def extract_colarrays(col):
-        try:
-            return df[col]._column.data_array_view
-        except KeyError:
-            if (
-                col == "index"
-                and col not in df.index._data
-                and not isinstance(df.index, MultiIndex)
-            ):
-                return df.index._data.columns[0].data_array_view
-            return df.index._data[col].data_array_view
-
-    colarrays = [extract_colarrays(col) for col in columns]
+    colarrays = [
+        cudf.core.dataframe.extract_col(df, col).data_array_view
+        for col in columns
+    ]
 
     # allocate output buffer
     nrows = len(df)
