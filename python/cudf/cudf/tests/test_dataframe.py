@@ -200,7 +200,7 @@ def test_series_init_none():
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
-    # 2: Using `None` as a initializer
+    # 2: Using `None` as an initializer
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)

@@ -70,7 +70,7 @@ using VectorT = rmm::device_vector<T>;
  * @Param[in] mr Device memory allocator
  * @Param[in] stream cuda stream to execute on
  *
- * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition
+ * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
 std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>

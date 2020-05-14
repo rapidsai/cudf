@@ -319,7 +319,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
-      // Wait a bit in a attempt to make the spin less resource-hungry
+      // Wait a bit in an attempt to make the spin less resource-hungry
       NANOSLEEP(100);
       continue;
     }

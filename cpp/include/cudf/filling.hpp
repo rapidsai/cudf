@@ -107,7 +107,7 @@ std::unique_ptr<column> fill(column_view const& input,
  * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
- * @param count Non-nullable column of a integral type
+ * @param count Non-nullable column of an integral type
  * @param check_count Whether to check count (negative values and overflow)
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
@@ -134,7 +134,7 @@ std::unique_ptr<table> repeat(
  * size_type.
  *
  * @param input_table Input table
- * @param count Non-null scalar of a integral type
+ * @param count Non-null scalar of an integral type
  * @param mr Memory resource to allocate the result output table
  * @return std::unique_ptr<table> The result table containing the repetitions
  **/

@@ -2772,7 +2772,7 @@ class DataFrame(Frame):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in a efficient manner.
+        function can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit

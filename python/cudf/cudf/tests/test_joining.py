@@ -183,7 +183,7 @@ def test_dataframe_join_cats():
     got = lhs.join(rhs)
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
-    # Note: pandas make a object Index after joining
+    # Note: pandas make an object Index after joining
     pd.util.testing.assert_frame_equal(
         got.sort_values(by="b")
         .to_pandas()

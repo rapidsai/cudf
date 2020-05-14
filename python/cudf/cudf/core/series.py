@@ -1657,7 +1657,7 @@ class Series(Frame):
             # Where there is a type-cast from string to numeric types,
             # there is a possibility for ValueError when strings
             # are having non-numeric values, in such cases we have
-            # to catch the exception and return a encoded labels
+            # to catch the exception and return encoded labels
             # with na_sentinel values as there would be no corresponding
             # encoded values of cats in self.
             cats = cats.astype(self.dtype)
@@ -1709,7 +1709,7 @@ class Series(Frame):
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elementwise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         The user function is expected to take one argument and return the
         result, which will be stored to the output Series.  The function

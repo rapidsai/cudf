@@ -1422,7 +1422,7 @@ class StringMethods(object):
 
     def isempty(self, **kwargs):
         """
-        Check whether each string is a an empty string.
+        Check whether each string is an empty string.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length as

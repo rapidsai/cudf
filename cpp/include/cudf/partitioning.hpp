@@ -217,7 +217,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * @param[in] start_partition Index of the 1st partition
  * @param[in] mr Device memory allocator
  *
- * @return A std::pair consisting of an unique_ptr to the partitioned table
+ * @return A std::pair consisting of a unique_ptr to the partitioned table
  * and the partition offsets for each partition within the table.
  */
 std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
