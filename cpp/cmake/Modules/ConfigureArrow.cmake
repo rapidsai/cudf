@@ -17,7 +17,6 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_COMPUTE=OFF"
                      " -DARROW_CUDA=ON"
                      " -DARROW_JEMALLOC=OFF"
-                     " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
                      " -DARROW_USE_GLOG=OFF"
                      " -DARROW_DATASET=ON"
@@ -97,10 +96,10 @@ message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
 set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
 set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
-file(INSTALL ${ARROW_INCLUDE_DIR}/arrow/gpu DESTINATION include/arrow)
+file(INSTALL ${ARROW_INCLUDE_DIR}/arrow DESTINATION include)
 
-install(DIRECTORY ${ARROW_INCLUDE_DIR}/arrow/gpu
-        DESTINATION include/arrow
+install(DIRECTORY ${ARROW_INCLUDE_DIR}/arrow
+        DESTINATION include
         COMPONENT cudf)
 
 add_definitions(-DARROW_METADATA_V4)

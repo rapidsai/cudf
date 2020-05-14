@@ -1,5 +1,6 @@
 #include <arrow/api.h>
 #include <arrow/gpu/cuda_api.h>
+#include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
 
 class CudaMessageReader : arrow::ipc::MessageReader {
@@ -8,6 +9,8 @@ class CudaMessageReader : arrow::ipc::MessageReader {
 
   static std::unique_ptr<arrow::ipc::MessageReader> Open(arrow::cuda::CudaBufferReader* stream,
                                                          arrow::io::BufferReader* schema);
+
+  arrow::Result<std::unique_ptr<arrow::ipc::Message>> ReadNextMessage() override;
 
   arrow::Status ReadNextMessage(std::unique_ptr<arrow::ipc::Message>* message);
 

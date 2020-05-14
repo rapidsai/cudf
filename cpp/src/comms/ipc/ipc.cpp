@@ -1,8 +1,19 @@
+#include <arrow/result.h>
 #include <cudf/ipc.hpp>
+#include <cudf/utilities/error.hpp>
 
 CudaMessageReader::CudaMessageReader(arrow::cuda::CudaBufferReader* stream,
                                      arrow::io::BufferReader* schema)
   : stream_(stream), host_schema_reader_(schema){};
+
+arrow::Result<std::unique_ptr<arrow::ipc::Message>> CudaMessageReader::ReadNextMessage()
+{
+  std::unique_ptr<arrow::ipc::Message> message;
+  if (!ReadNextMessage(&message).ok()) {
+    return arrow::Status::Invalid("Failed to decode message");
+  }
+  return std::move(message);
+}
 
 arrow::Status CudaMessageReader::ReadNextMessage(std::unique_ptr<arrow::ipc::Message>* message)
 {
