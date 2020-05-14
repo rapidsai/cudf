@@ -410,7 +410,7 @@ class CategoricalColumn(column.ColumnBase):
         if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
             if op in ("lt", "gt", "le", "ge"):
                 raise TypeError(
-                    f"Unordered Categoricals can only compare equality or not"
+                    "Unordered Categoricals can only compare equality or not"
                 )
             raise TypeError(
                 f"Series of dtype `{self.dtype}` cannot perform the "
