@@ -169,6 +169,7 @@
 - PR #5109 Update CONTRIBUTING.md for `clang-format` pre-commit hook
 - PR #5054 Change String typecasting to be inline with Pandas
 - PR #5123 Display more useful info on `clang-format` CI Failure
+- PR #5058 Adding cython binding for CSV writer
 - PR #5156 Raise error when applying boolean mask containing null values.
 - PR #5137 Add java bindings for getSizeInBytes in DType
 - PR #5194 Update Series.fillna to reflect dtype behavior
