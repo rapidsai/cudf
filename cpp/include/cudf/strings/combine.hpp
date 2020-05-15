@@ -100,7 +100,7 @@ std::unique_ptr<column> join_strings(
 
 /**
  * @brief Concatenates a list of strings columns using separators for each row
- * and returns the result as a string column.
+ * and returns the result as a strings column.
  *
  * Each new string is created by concatenating the strings from the same
  * row delimited by the row separator provided for that row. The following rules
