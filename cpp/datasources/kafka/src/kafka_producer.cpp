@@ -20,23 +20,22 @@ namespace cudf {
 namespace io {
 namespace external {
 
-kafka_producer::kafka_producer() {
+kafka_producer::kafka_producer()
+{
   // Create an empty RdKafka::Conf instance. The configurations will be
   // constructed later
-  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(
-      RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 }
 
-kafka_producer::kafka_producer(std::map<std::string, std::string> configs) {
+kafka_producer::kafka_producer(std::map<std::string, std::string> configs)
+{
   // Construct the RdKafka::Conf object
-  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(
-      RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   configure_datasource(configs);
 }
 
-bool kafka_producer::configure_datasource(
-    std::map<std::string, std::string> configs) {
-
+bool kafka_producer::configure_datasource(std::map<std::string, std::string> configs)
+{
   // Set Kafka global configurations
   for (auto const &x : configs) {
     conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
@@ -59,19 +58,26 @@ bool kafka_producer::configure_datasource(
     // error handling logic alone.
   }
 
-  producer_ = std::unique_ptr<RdKafka::Producer>(
-      RdKafka::Producer::create(kafka_conf_.get(), errstr_));
+  producer_ =
+    std::unique_ptr<RdKafka::Producer>(RdKafka::Producer::create(kafka_conf_.get(), errstr_));
 
   return true;
 }
 
-bool kafka_producer::produce_message(std::string topic, std::string message_val,
-                                     std::string message_key) {
-  err_ = producer_->produce(
-      topic, RdKafka::Topic::PARTITION_UA, RdKafka::Producer::RK_MSG_COPY,
-      const_cast<char *>(message_val.c_str()), message_val.size(),
-      const_cast<char *>(message_key.c_str()), message_key.size(), 0, NULL,
-      NULL);
+bool kafka_producer::produce_message(std::string topic,
+                                     std::string message_val,
+                                     std::string message_key)
+{
+  err_ = producer_->produce(topic,
+                            RdKafka::Topic::PARTITION_UA,
+                            RdKafka::Producer::RK_MSG_COPY,
+                            const_cast<char *>(message_val.c_str()),
+                            message_val.size(),
+                            const_cast<char *>(message_key.c_str()),
+                            message_key.size(),
+                            0,
+                            NULL,
+                            NULL);
   if (err_ != RdKafka::ERR_NO_ERROR) {
     return false;
   } else {
@@ -79,7 +85,8 @@ bool kafka_producer::produce_message(std::string topic, std::string message_val,
   }
 }
 
-bool kafka_producer::flush(int timeout) {
+bool kafka_producer::flush(int timeout)
+{
   err_ = producer_.get()->flush(timeout);
   if (err_ != RdKafka::ERR_NO_ERROR) {
     return false;
@@ -88,13 +95,14 @@ bool kafka_producer::flush(int timeout) {
   }
 }
 
-bool kafka_producer::close(int timeout) {
+bool kafka_producer::close(int timeout)
+{
   err_ = producer_.get()->flush(timeout);
   delete producer_.get();
   delete kafka_conf_.get();
   return true;
 }
 
-} // namespace external
-} // namespace io
-} // namespace cudf
+}  // namespace external
+}  // namespace io
+}  // namespace cudf

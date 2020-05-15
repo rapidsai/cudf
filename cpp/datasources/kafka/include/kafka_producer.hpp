@@ -29,8 +29,7 @@ namespace external {
  * @brief Apache Kafka Producer for libcudf
  **/
 class kafka_producer {
-
-public:
+ public:
   /**
    * @brief Create Kafka Producer instance that is unable to consume/produce
    * but is able to assist with configurations
@@ -67,8 +66,7 @@ public:
    *
    * @return True on success or False otherwise
    **/
-  bool produce_message(std::string topic, std::string message_val,
-                       std::string message_key);
+  bool produce_message(std::string topic, std::string message_val, std::string message_key);
 
   /**
    * @brief Flush/write any locally pending messages to Kafka now
@@ -94,18 +92,16 @@ public:
    **/
   virtual ~kafka_producer(){};
 
-private:
+ private:
   std::unique_ptr<RdKafka::Producer> producer_ = NULL;
-  std::unique_ptr<RdKafka::Conf> kafka_conf_; // RDKafka configuration object
-  RdKafka::Conf::ConfResult
-      conf_res_;           // Result from configuration update operation
-  RdKafka::ErrorCode err_; // RDKafka ErrorCode from operation
-  std::string errstr_;     // Textual representation of Error
-  std::string conf_val;    // String value of a RDKafka configuration request
-  int32_t default_timeout_ =
-      10000; // Default timeout for server bound operations - 10 seconds
+  std::unique_ptr<RdKafka::Conf> kafka_conf_;  // RDKafka configuration object
+  RdKafka::Conf::ConfResult conf_res_;         // Result from configuration update operation
+  RdKafka::ErrorCode err_;                     // RDKafka ErrorCode from operation
+  std::string errstr_;                         // Textual representation of Error
+  std::string conf_val;                        // String value of a RDKafka configuration request
+  int32_t default_timeout_ = 10000;  // Default timeout for server bound operations - 10 seconds
 };
 
-} // namespace external
-} // namespace io
-} // namespace cudf
+}  // namespace external
+}  // namespace io
+}  // namespace cudf

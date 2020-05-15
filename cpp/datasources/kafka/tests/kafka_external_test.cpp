@@ -16,14 +16,15 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <sys/stat.h>
 #include <map>
 #include <string>
-#include <sys/stat.h>
 #include <vector>
 
 #include <kafka_consumer.hpp>
 
-TEST(ExternalDatasource, WaterMark) {
+TEST(ExternalDatasource, WaterMark)
+{
   std::string topic = "libcudf-test";
 
   std::map<std::string, std::string> datasource_confs;

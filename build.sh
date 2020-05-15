@@ -18,52 +18,47 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz kafka_ds benchmarks tests -v -g -n -l -external --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [kafka_ds] [benchmarks] [tests] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l] [-external]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks tests -v -g -n -l -datasources --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [-v] [-g] [-n] [-h] [-l] [-datasources]
    clean                - remove all existing build artifacts and configuration (start
-                        over)
+                          over)
    libnvstrings         - build the nvstrings C++ code only
    nvstrings            - build the nvstrings Python package
    libcudf              - build the cudf C++ code only
    cudf                 - build the cudf Python package
    dask_cudf            - build the dask_cudf Python package
-   custreamz            - build the custreamz Python package
-   kafka_ds             - build the kafka external datasource library
    benchmarks           - build benchmarks
    tests                - build tests
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
    -l                   - build legacy tests
-   -external            - build external datasource support for libcudf
-   --disable_nvtx       - disable inserting NVTX profiling ranges
+   -datasources         - build the cudf C++ datasources
    --allgpuarch         - build for all supported GPU architectures
+   --disable_nvtx       - disable inserting NVTX profiling ranges
    --show_depr_warn     - show cmake deprecation warnings
    -h                   - print this text
-   
+
    default action (no args) is to build and install 'libnvstrings' then
-   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' then 'external' targets
+   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${REPODIR}/cpp/build
-EXTERNAL_BUILD_DIR=${REPODIR}/external/build
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
-CUSTREAMZ_BUILD_DIR=${REPODIR}/python/custreamz/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR} ${CUSTREAMZ_BUILD_DIR} ${EXTERNAL_BUILD_DIR}"
+BUILD_DIRS="${LIB_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
-BENCHMARKS=OFF
-BUILD_KAFKA_EXTERNAL_DATASOURCE=OFF
-BUILD_EXTERNAL_DATASOURCE_SUPPORT=OFF
+BUILD_BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_LEGACY_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
+BUILD_DATASOURCES=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -109,8 +104,8 @@ fi
 if hasArg -l; then
     BUILD_LEGACY_TESTS=ON
 fi
-if hasArg -external; then
-    BUILD_EXTERNAL_DATASOURCE_SUPPORT=ON
+if hasArg -datasources; then
+    BUILD_DATASOURCES=ON
 fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
@@ -120,9 +115,6 @@ if hasArg benchmarks; then
 fi
 if hasArg tests; then
     BUILD_TESTS=ON
-fi
-if hasArg kafka_ds; then
-    BUILD_KAFKA_EXTERNAL_DATASOURCE=ON
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
@@ -163,12 +155,12 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
-          -DBUILD_EXTERNAL_DATASOURCE_SUPPORT=${BUILD_EXTERNAL_DATASOURCE_SUPPORT} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          -DBUILD_DATASOURCES=${BUILD_DATASOURCES} ..
 fi
 
 if buildAll || hasArg libnvstrings; then
@@ -237,30 +229,4 @@ if buildAll || hasArg dask_cudf; then
     else
         python setup.py build_ext --inplace
     fi
-fi
-
-# Build and install the custreamz Python package
-if buildAll || hasArg custreamz; then
-
-    cd ${REPODIR}/python/custreamz
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py build_ext --inplace
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        python setup.py build_ext --inplace --library-dir=${CUSTREAMZ_BUILD_DIR}
-    fi
-fi
-
-# Build and install the Kafka external datasource
-if buildAll || hasArg kafka_ds; then
-
-    mkdir -p ${EXTERNAL_BUILD_DIR}
-    cd ${EXTERNAL_BUILD_DIR}
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          -DCMAKE_CXX11_ABI=ON \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-
-    # build the external datasource project
-    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE}
-    make install
 fi

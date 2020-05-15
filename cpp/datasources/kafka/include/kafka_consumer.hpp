@@ -15,10 +15,7 @@
  */
 #pragma once
 
-#include "external_datasource.hpp"
-#include <librdkafka/rdkafkacpp.h>
-#include <map>
-#include <sys/time.h>
+#include "kafka_datasource.hpp"
 
 namespace cudf {
 namespace io {
@@ -27,9 +24,8 @@ namespace external {
 /**
  * @brief libcudf external datasource for Apache Kafka
  **/
-class kafka_consumer : public external_datasource {
-
-public:
+class kafka_consumer : public kafka_datasource {
+ public:
   /**
    * @brief Create Kafka Consumer instance that is unable to consume/produce
    * but is able to assist with configurations
@@ -46,33 +42,15 @@ public:
   kafka_consumer(std::map<std::string, std::string> configs);
 
   /**
-   * Returns the Kafka datasource identifier for a datsource instance.
-   * Example: 'librdkafka-1.3.1'
-   **/
-  std::string libcudf_datasource_identifier() { return DATASOURCE_ID; }
-
-  /**
-   * @brief Retrieves the current configurations of the underlying librdkafka
-   *client instance
+   * @brief Applies the specified configurations to the underlying librdkafka
+   *client
    *
-   * @return Map of key/value pairs representing the librdkafka current
-   *configurations
+   * @param configs Map of key/value pairs that represent the librdkafka
+   *configurations to be applied
+   *
+   * @return True on success or False otherwise
    **/
-  std::map<std::string, std::string> current_configs() {
-    std::map<std::string, std::string> configs;
-    std::list<std::string> *dump = kafka_conf_->dump();
-    std::string key;
-    std::string val;
-    for (std::list<std::string>::iterator it = dump->begin();
-         it != dump->end();) {
-      key = (*it);
-      it++;
-      val = (*it);
-      it++;
-      configs.insert(std::pair<std::string, std::string>{key, val});
-    }
-    return configs;
-  };
+  bool configure_datasource(std::map<std::string, std::string> configs);
 
   /**
    * @brief Acknowledge messages have been successfully read to the Kafka
@@ -103,18 +81,8 @@ public:
    **/
   std::map<std::string, int64_t> get_watermark_offset(std::string topic,
                                                       int partition,
-                                                      int timeout, bool cached);
-
-  /**
-   * @brief Applies the specified configurations to the underlying librdkafka
-   *client
-   *
-   * @param configs Map of key/value pairs that represent the librdkafka
-   *configurations to be applied
-   *
-   * @return True on success or False otherwise
-   **/
-  bool configure_datasource(std::map<std::string, std::string> configs);
+                                                      int timeout,
+                                                      bool cached);
 
   /**
    * @brief Retrieves the latest committed offset for a TOPPAR instance
@@ -140,13 +108,12 @@ public:
    * @return String with all of the individual messages from Kafka concatenated
    *together ready for handoff to cuDF
    **/
-  std::string consume_range(std::string topic, int partition,
-                            int64_t start_offset, int64_t end_offset,
-                            int batch_timeout, std::string delimiter);
-
-  void fill_buffer() {
-    buffer_ = consume_range("cudf_json_demo", 0, 0, 2, 6000, "\n");
-  }
+  std::string consume_range(std::string topic,
+                            int partition,
+                            int64_t start_offset,
+                            int64_t end_offset,
+                            int batch_timeout,
+                            std::string delimiter);
 
   /**
    * @brief Invoke librdkafka unsubscribe from the Kafka TOPPAR instance
@@ -164,81 +131,31 @@ public:
   bool close(int timeout);
 
   /**
-   * @brief Implementation for datasource.hpp-get_buffer()
-   **/
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
-                                                  size_t size) override {
-    return arrow::Buffer::Wrap(buffer_.c_str(), buffer_.size());
-  }
-
-  /**
-   * @brief Implemenration for cuDF datasource.hpp-size()
-   **/
-  size_t size() const override { return buffer_.size(); }
-
-  /**
    * @brief Base class destructor
    **/
   virtual ~kafka_consumer(){};
 
-protected:
-  /**
-   * Convenience method for getting "now()" in Kafka standard format
-   **/
-  int64_t now() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return ((int64_t)tv.tv_sec * 1000) + (tv.tv_usec / 1000);
-  }
-
-protected:
-  std::unique_ptr<RdKafka::Conf> kafka_conf_; // RDKafka configuration object
+ protected:
   std::unique_ptr<RdKafka::KafkaConsumer> consumer_ = NULL;
-  int64_t kafka_start_offset_ = 0;
-  int32_t kafka_batch_size_ =
-      10000;              // 10K is the Kafka standard. Max is 999,999
-  int64_t msg_count_ = 0; // Running tally of the messages consumed
+  int64_t kafka_start_offset_                       = 0;
+  int32_t kafka_batch_size_ = 10000;  // 10K is the Kafka standard. Max is 999,999
+  int64_t msg_count_        = 0;      // Running tally of the messages consumed
   std::string buffer_;
 
-  RdKafka::Conf::ConfResult
-      conf_res_;           // Result from configuration update operation
-  RdKafka::ErrorCode err_; // RDKafka ErrorCode from operation
-  std::string errstr_;     // Textual representation of Error
-  std::string conf_val;    // String value of a RDKafka configuration request
-  int32_t default_timeout_ =
-      10000; // Default timeout for server bound operations - 10 seconds
-
-  std::string topic_;
-  int partition_;
-  int first_read;
-
-private:
+ private:
   /**
    * Change the TOPPAR assignment for this consumer instance
    **/
   RdKafka::ErrorCode update_consumer_toppar_assignment(std::string topic,
                                                        int partition,
-                                                       int64_t offset) {
+                                                       int64_t offset)
+  {
     std::vector<RdKafka::TopicPartition *> _toppars;
-    _toppars.push_back(
-        RdKafka::TopicPartition::create(topic, partition, offset));
+    _toppars.push_back(RdKafka::TopicPartition::create(topic, partition, offset));
     return consumer_.get()->assign(_toppars);
   }
 };
 
-extern "C" external_datasource *libcudf_external_datasource_load() {
-  return new kafka_consumer;
-}
-
-extern "C" external_datasource *libcudf_external_datasource_load_from_conf(
-    std::map<std::string, std::string> &configs) {
-  return new kafka_consumer(configs);
-}
-
-extern "C" void libcudf_external_datasource_destroy(external_datasource *eds) {
-  delete eds;
-}
-
-} // namespace external
-} // namespace io
-} // namespace cudf
+}  // namespace external
+}  // namespace io
+}  // namespace cudf

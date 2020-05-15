@@ -138,7 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_EXTERNAL_DATASOURCE_SUPPORT "Configure CMake to build support for external datasources" OFF)
+option(BUILD_DATASOURCES "Configure CMake to build cuDF datasources" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -410,11 +410,6 @@ add_library(libNVText
             custrings/text/stemmer.cu
             custrings/text/tokens.cu
             custrings/util.cu)
-
-# Set the sources for External Datasources if enabled.
-if(BUILD_EXTERNAL_DATASOURCE_SUPPORT)
-    set(EXTERNAL_DATASOURCE_SRC, "src/io/utilities/datasource_factory.cpp")
-endif(BUILD_EXTERNAL_DATASOURCE_SUPPORT)
 
 add_library(cudf
             src/comms/ipc/ipc.cpp
@@ -688,8 +683,6 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
-            src/io/utilities/datasource_factory.cpp
-            ${EXTERNAL_DATASOURCE_SRC}
 )
 
 # Rename installation to proper names for later finding
@@ -928,3 +921,44 @@ add_custom_command(OUTPUT CUDF_DOXYGEN
                    VERBATIM)
 
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
+
+
+####################################################################################################
+# - cuDF Datasources
+message(STATUS "BUILD_DATASOURCES: ${BUILD_DATASOURCES}")
+if(BUILD_DATASOURCES)
+
+    # Kafka datasource
+    message(STATUS "KAFKA DATASOURCE: ENABLED")
+    add_library(kafka_datasource
+        datasources/kafka/src/kafka_consumer.cpp
+        datasources/kafka/src/kafka_producer.cpp
+    )
+
+    include_directories("${CMAKE_SOURCE_DIR}/datasources/kafka/include")
+    
+    # Rename installation to proper name for later finding
+    set_target_properties(kafka_datasource PROPERTIES OUTPUT_NAME "KafkaDatasource")
+    set_target_properties(kafka_datasource PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+    ###################################################################################################
+    # - find librdkafka -------------------------------------------------------------------------------
+
+    find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
+    find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+
+    message(STATUS "RDKAFKA: RDKAFKA++_LIBRARY set to ${RDKAFKA++_LIBRARY}")
+    message(STATUS "RDKAFKA: RDKAFKA_INCLUDE set to ${RDKAFKA_INCLUDE}")
+
+    target_link_libraries(kafka_datasource ${RDKAFKA++_LIBRARY})
+
+    target_link_libraries(cudf kafka_datasource)
+
+    install(TARGETS kafka_datasource
+            DESTINATION lib
+            COMPONENT kafka_datasource)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/datasource/kafka/include
+            DESTINATION include
+            COMPONENT kafka_datasource)
+
+endif(BUILD_DATASOURCES)

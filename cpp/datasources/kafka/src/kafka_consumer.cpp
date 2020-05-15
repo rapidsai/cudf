@@ -20,48 +20,24 @@ namespace cudf {
 namespace io {
 namespace external {
 
-kafka_consumer::kafka_consumer() {
-  DATASOURCE_ID = "librdkafka-";
-  DATASOURCE_ID.append(RdKafka::version_str());
-
+kafka_consumer::kafka_consumer()
+{
   // Create an empty RdKafka::Conf instance. The configurations will be applied
   // later.
-  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(
-      RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 }
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs) {
-  DATASOURCE_ID = "librdkafka-";
-  DATASOURCE_ID.append(RdKafka::version_str());
-
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs)
+{
   // Construct the RdKafka::Conf object
-  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(
-      RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  kafka_conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
   configure_datasource(configs);
 }
 
-bool kafka_consumer::configure_datasource(
-    std::map<std::string, std::string> configs) {
-
+bool kafka_consumer::configure_datasource(std::map<std::string, std::string> configs)
+{
   // Set Kafka global configurations
-  for (auto const &x : configs) {
-    if (x.first.compare("topic") == 0) {
-      topic_ = x.second;
-    } else {
-      conf_res_ = kafka_conf_->set(x.first, x.second, errstr_);
-      if (conf_res_ != RdKafka::Conf::ConfResult::CONF_OK) {
-        if (conf_res_ == RdKafka::Conf::ConfResult::CONF_INVALID) {
-          // TODO: I don't think failing is needed here? Just warning maybe?
-        } else if (conf_res_ == RdKafka::Conf::ConfResult::CONF_UNKNOWN) {
-          // TODO: I don't think failing is needed here? Just warning maybe?
-        }
-      }
-    }
-  }
-
-  // conf_res_ = kafka_conf_->get("topic", conf_val);
-  // topic_ = conf_val;
-  // printf("Kafka Topic: %s\n", topic_.c_str());
+  for (auto const &x : configs) { kafka_conf_->set(x.first, x.second, errstr_); }
 
   // Kafka 0.9 > requires at least a group.id in the configuration so lets
   // make sure that is present.
@@ -74,14 +50,13 @@ bool kafka_consumer::configure_datasource(
   }
 
   consumer_ = std::unique_ptr<RdKafka::KafkaConsumer>(
-      RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
-
-  fill_buffer();
+    RdKafka::KafkaConsumer::create(kafka_conf_.get(), errstr_));
 
   return true;
 }
 
-int64_t kafka_consumer::get_committed_offset(std::string topic, int partition) {
+int64_t kafka_consumer::get_committed_offset(std::string topic, int partition)
+{
   std::vector<RdKafka::TopicPartition *> toppar_list;
 
   // vector of always size 1. Required by underlying library
@@ -93,14 +68,17 @@ int64_t kafka_consumer::get_committed_offset(std::string topic, int partition) {
   return toppar_list[0]->offset();
 }
 
-std::string kafka_consumer::consume_range(std::string topic, int partition,
+std::string kafka_consumer::consume_range(std::string topic,
+                                          int partition,
                                           int64_t start_offset,
-                                          int64_t end_offset, int batch_timeout,
-                                          std::string delimiter) {
+                                          int64_t end_offset,
+                                          int batch_timeout,
+                                          std::string delimiter)
+{
   std::string str_buffer;
   int64_t messages_read = 0;
-  int64_t batch_size = end_offset - start_offset;
-  int64_t end = now() + batch_timeout;
+  int64_t batch_size    = end_offset - start_offset;
+  int64_t end           = now() + batch_timeout;
   int remaining_timeout = batch_timeout;
 
   update_consumer_toppar_assignment(topic, partition, start_offset);
@@ -115,9 +93,7 @@ std::string kafka_consumer::consume_range(std::string topic, int partition,
     }
 
     remaining_timeout = end - now();
-    if (remaining_timeout < 0) {
-      break;
-    }
+    if (remaining_timeout < 0) { break; }
 
     delete msg;
   }
@@ -125,9 +101,11 @@ std::string kafka_consumer::consume_range(std::string topic, int partition,
   return str_buffer;
 }
 
-std::map<std::string, int64_t>
-kafka_consumer::get_watermark_offset(std::string topic, int partition,
-                                     int timeout, bool cached) {
+std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string topic,
+                                                                    int partition,
+                                                                    int timeout,
+                                                                    bool cached)
+{
   int64_t low;
   int64_t high;
   std::map<std::string, int64_t> results;
@@ -135,8 +113,7 @@ kafka_consumer::get_watermark_offset(std::string topic, int partition,
   if (cached == true) {
     err_ = consumer_->get_watermark_offsets(topic, partition, &low, &high);
   } else {
-    err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high,
-                                              timeout);
+    err_ = consumer_->query_watermark_offsets(topic, partition, &low, &high, timeout);
   }
 
   if (err_ != RdKafka::ErrorCode::ERR_NO_ERROR) {
@@ -154,11 +131,10 @@ kafka_consumer::get_watermark_offset(std::string topic, int partition,
   return results;
 }
 
-bool kafka_consumer::commit_offset(std::string topic, int partition,
-                                   int64_t offset) {
+bool kafka_consumer::commit_offset(std::string topic, int partition, int64_t offset)
+{
   std::vector<RdKafka::TopicPartition *> partitions_;
-  RdKafka::TopicPartition *toppar =
-      RdKafka::TopicPartition::create(topic, partition, offset);
+  RdKafka::TopicPartition *toppar = RdKafka::TopicPartition::create(topic, partition, offset);
   if (toppar != NULL) {
     toppar->set_offset(offset);
     partitions_.push_back(toppar);
@@ -169,19 +145,22 @@ bool kafka_consumer::commit_offset(std::string topic, int partition,
   }
 }
 
-bool kafka_consumer::unsubscribe() {
+bool kafka_consumer::unsubscribe()
+{
   err_ = consumer_.get()->unassign();
   if (err_ != RdKafka::ERR_NO_ERROR) {
     // TODO: CUDF_FAIL here or??
-    printf("Timeout occurred while unsubscribing from Kafka Consumer "
-           "assignments.\n");
+    printf(
+      "Timeout occurred while unsubscribing from Kafka Consumer "
+      "assignments.\n");
     return false;
   } else {
     return true;
   }
 }
 
-bool kafka_consumer::close(int timeout) {
+bool kafka_consumer::close(int timeout)
+{
   err_ = consumer_.get()->close();
 
   if (err_ != RdKafka::ERR_NO_ERROR) {
@@ -196,6 +175,6 @@ bool kafka_consumer::close(int timeout) {
   delete kafka_conf_.get();
 }
 
-} // namespace external
-} // namespace io
-} // namespace cudf
+}  // namespace external
+}  // namespace io
+}  // namespace cudf
