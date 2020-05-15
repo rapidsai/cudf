@@ -387,7 +387,7 @@ cpdef write_csv(
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
         for col_name in table._column_names:
-            metadata_.column_names.push_back(str.encode(col_name))
+            metadata_.column_names.push_back(str(col_name).encode())
 
     cdef write_csv_args write_csv_args_c = write_csv_args(
         snk, input_table_view, na_c, include_header_c,

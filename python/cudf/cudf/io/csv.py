@@ -119,7 +119,7 @@ def to_csv(
             df = df[columns]
         except KeyError:
             raise NameError(
-                "Dataframe doesn't have the label provided in columns"
+                "Dataframe doesn't have the labels provided in columns"
             )
 
     rows_per_chunk = chunksize if chunksize else len(df)

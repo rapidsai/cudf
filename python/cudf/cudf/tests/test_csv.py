@@ -834,7 +834,7 @@ def test_csv_reader_dtype_inference_whitespace():
     assert list(cu_df.columns.values) == list(pd_df.columns.values)
 
 
-def test_csv_reader_writer_empty_dataframe(tmpdir):
+def test_csv_reader_empty_dataframe():
 
     dtypes = ["float64", "int64"]
     buffer = "float_point, integer"
@@ -846,18 +846,6 @@ def test_csv_reader_writer_empty_dataframe(tmpdir):
 
     # should default to string columns without dtypes
     df = read_csv(StringIO(buffer))
-    assert df.shape == (0, 2)
-    assert all(df.dtypes == ["object", "object"])
-
-    df_fname = tmpdir.join("gdf_df_5.csv")
-    gdf = cudf.DataFrame({"float_point": [], "integer": []})
-    gdf["float_point"] = gdf["float_point"].astype("float")
-    gdf["integer"] = gdf["integer"].astype("int")
-
-    gdf.to_csv(df_fname, index=False)
-
-    df = cudf.read_csv(df_fname)
-
     assert df.shape == (0, 2)
     assert all(df.dtypes == ["object", "object"])
 
@@ -1492,3 +1480,18 @@ def test_to_csv_empty_filename():
 
     with exception:
         df.to_csv()
+
+
+def test_csv_writer_empty_dataframe(tmpdir):
+
+    df_fname = tmpdir.join("gdf_df_5.csv")
+    gdf = cudf.DataFrame({"float_point": [], "integer": []})
+    gdf["float_point"] = gdf["float_point"].astype("float")
+    gdf["integer"] = gdf["integer"].astype("int")
+
+    gdf.to_csv(df_fname, index=False)
+
+    df = cudf.read_csv(df_fname)
+
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["object", "object"])
