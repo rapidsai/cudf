@@ -387,6 +387,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer
+   *
+   * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
+   * i.e. If this method returns true for a value could still result in an overflow or underflow
+   *
    * @return - Boolean vector
    */
   public ColumnVector isInteger() {
@@ -397,6 +401,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is a float, and FALSE if its not a float
+   *
+   * NOTE: Float doesn't mean a 32-bit float. It means a number that is a fraction.
+   * i.e. If this method returns true for a value could still result in an overflow or underflow
+   *
    * @return - Boolean vector
    */
   public ColumnVector isFloat() {
