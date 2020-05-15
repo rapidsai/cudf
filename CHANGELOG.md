@@ -172,7 +172,9 @@
 - PR #5123 Display more useful info on `clang-format` CI Failure
 - PR #5156 Raise error when applying boolean mask containing null values.
 - PR #5137 Add java bindings for getSizeInBytes in DType
+- PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
+- PR #5199 Add index support in `DataFrame.query`
 
 ## Bug Fixes
 
@@ -286,10 +288,12 @@
 - PR #5138 Install `contextvars` backport on Python 3.6
 - PR #5145 Fix an issue with calling an aggregation operation on `SeriesGroupBy`
 - PR #5148 Fix JNI build for GCC 8
+- PR #5162 Fix issues related to empty `Dataframe` in `as_gpu_matrix` & `astype`
 - PR #5167 Fix regex extract match to return empty string
 - PR #5163 Fix parquet INT96 timestamps before the epoch
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
 - PR #5185 Fix flake8 configuration and issues from new flake8 version
+- PR #5193 Fix OOB read in csv reader
 
 
 # cuDF 0.13.0 (31 Mar 2020)
