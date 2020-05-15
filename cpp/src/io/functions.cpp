@@ -89,35 +89,13 @@ table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory
   namespace json = cudf::experimental::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  json::reader_options options{args.lines,
-                               args.compression,
-                               args.dtype,
-                               args.dayfirst,
-                               args.external_datasource_id,
-                               args.external_datasource_lib_dir,
-                               args.external_datasource_configs};
+  json::reader_options options{args.lines, args.compression, args.dtype, args.dayfirst};
+  auto reader = make_reader<json::reader>(args.source, options, mr);
 
-  if (!args.external_datasource_id.empty()) {
-    // args.source = source_info(args.external_datasource_id,
-    //                           args.external_datasource_lib_dir,
-    //                           args.external_datasource_configs);
-
-    auto reader = std::make_unique<json::reader>(args.external_datasource_id,
-                                                 args.external_datasource_lib_dir,
-                                                 args.external_datasource_configs,
-                                                 options,
-                                                 mr);
-
-    return reader->read_all();
-
+  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
+    return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
   } else {
-    auto reader = make_reader<json::reader>(args.source, options, mr);
-
-    if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
-      return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
-    } else {
-      return reader->read_all();
-    }
+    return reader->read_all();
   }
 }
 
@@ -171,6 +149,16 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
   } else {
     return reader->read_all();
   }
+}
+
+// Freeform API wraps the detail writer class API
+void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
+{
+  using namespace cudf::experimental::io::detail;
+
+  auto writer = make_writer<csv::writer>(args.sink(), args, mr);
+
+  writer->write_all(args.table(), args.metadata());
 }
 
 namespace orc = cudf::experimental::io::detail::orc;

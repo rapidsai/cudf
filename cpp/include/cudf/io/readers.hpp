@@ -151,10 +151,6 @@ struct reader_options {
   reader_options()                       = default;
   reader_options(reader_options const &) = default;
 
-  std::string external_datasource_id;
-  std::string external_datasource_lib_dir;
-  std::map<std::string, std::string> external_datasource_configs;
-
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
    *
@@ -169,30 +165,6 @@ struct reader_options {
     : lines(lines), compression(compression), dtype(std::move(dtype)), dayfirst(dayfirst)
   {
   }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Constructor to populate reader options.
-   *
-   * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
-   * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
-   * @param[in] dtype Ordered list of data types; deduced from dataset if empty
-   *---------------------------------------------------------------------------**/
-  reader_options(bool lines,
-                 compression_type compression,
-                 std::vector<std::string> dtype,
-                 bool dayfirst,
-                 std::string ex_ds_id,
-                 std::string ex_ds_lib_dir,
-                 std::map<std::string, std::string> ex_ds_confs)
-    : lines(lines),
-      compression(compression),
-      dtype(std::move(dtype)),
-      dayfirst(dayfirst),
-      external_datasource_id(ex_ds_id),
-      external_datasource_lib_dir(ex_ds_lib_dir),
-      external_datasource_configs(ex_ds_confs)
-  {
-  }
 };
 
 /**
@@ -204,23 +176,6 @@ class reader {
   std::unique_ptr<impl> _impl;
 
  public:
-  /**
-   * @brief Constructor for external datasource.
-   *
-   * @param external_datasource_id Unique identifier of the externally loaded datasource
-   * @param external_datasource_lib_dir Manual override of directory to search for External
-   * Datasource libraries
-   * @param datasource_confs Map of <string, string> key/value pairs that will be used in
-   * configuring the external datasource
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::string external_datasource_id,
-                  std::string external_datasource_lib_dir,
-                  std::map<std::string, std::string> datasource_confs,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
   /**
    * @brief Constructor for a filepath to dataset.
    *
@@ -382,20 +337,6 @@ class reader {
   std::unique_ptr<impl> _impl;
 
  public:
-  /**
-   * @brief Constructor for external datasource.
-   *
-   * @param external_datasource_id Unique identifier of the externally loaded datasource
-   * @param datasource_confs Map of <string, string> key/value pairs that will be used in
-   * configuring the external datasource
-   * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
-   */
-  explicit reader(std::string external_datasource_id,
-                  std::map<std::string, std::string> datasource_confs,
-                  reader_options const &options,
-                  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
-
   /**
    * @brief Constructor for a filepath to dataset.
    *
