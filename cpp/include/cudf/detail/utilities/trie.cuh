@@ -15,7 +15,8 @@
  */
 
 /**
- * @file trie.cuh  serialized trie implementation for C++/CUDA
+ * @brief Serialized trie implementation for C++/CUDA
+ * @file trie.cuh
  *
  */
 
