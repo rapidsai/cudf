@@ -64,12 +64,8 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     def gather(df, grows):
         grows[df["x"].values[0]] = (set(df.al), set(df.ar))
 
-    expect.reset_index().groupby("x").apply(
-        partial(gather, grows=expect_rows)
-    )
-    expect.reset_index().groupby("x").apply(
-        partial(gather, grows=got_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
 
     assert got_rows == expect_rows
 
@@ -129,13 +125,9 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
 
         grows[df["x"].values[0]] = (cola, colb)
 
-    expect.reset_index().groupby("x").apply(
-        partial(gather, grows=expect_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
 
-    expect.reset_index().groupby("x").apply(
-        partial(gather, grows=got_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
 
     for k in expect_rows:
         np.testing.assert_array_equal(expect_rows[k][0], got_rows[k][0])
