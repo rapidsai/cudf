@@ -217,7 +217,12 @@ class Merge(object):
 
         # Keys need to be in their corresponding operands
         if on:
-            on_keys = [on] if not isinstance(on, list) else on
+            if isinstance(on, str):
+                on_keys = [on]
+            elif isinstance(on, tuple):
+                on_keys = list(on)
+            else:
+                on_keys = on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
                     raise KeyError("on key {} not in both operands".format(on))
