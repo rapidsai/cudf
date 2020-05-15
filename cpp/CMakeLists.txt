@@ -465,6 +465,7 @@ add_library(cudf
             src/io/avro/reader_impl.cu
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
+            src/io/csv/writer_impl.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
             src/io/orc/orc.cpp
