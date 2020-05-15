@@ -381,7 +381,8 @@ cpdef write_csv(
     cdef table_metadata metadata_ = table_metadata()
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
-    cdef sink_info snk = sink_info(<string>str(file_path).encode())
+    file_path = str(os.path.expanduser(str(file_path))).encode()
+    cdef sink_info snk = sink_info(<string>file_path)
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))

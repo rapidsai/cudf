@@ -278,7 +278,6 @@ table_with_metadata read_csv(read_csv_args const& args,
  * @ingroup io_writers
  */
 struct write_csv_args : detail::csv::writer_options {
-
   write_csv_args() = default;
 
   write_csv_args(sink_info const& snk,
