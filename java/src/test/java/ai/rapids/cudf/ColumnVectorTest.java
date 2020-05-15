@@ -2118,4 +2118,44 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedDouble, resultDouble);
     }
   }
+
+  @Test
+  void testIsInteger() {
+    String[] intStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2147483647", "2147483648", "-2147483648", "-2147483649", "NULL"};
+    String[] longStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "9223372036854775807", "9223372036854775808", "-9223372036854775808", "-9223372036854775809", "NULL"};
+    try (ColumnVector intStringCV = ColumnVector.fromStrings(intStrings);
+         ColumnVector longStringCV = ColumnVector.fromStrings(longStrings);
+         ColumnVector isInt = intStringCV.isInteger();
+         ColumnVector isLong = longStringCV.isInteger();
+         ColumnVector ints = intStringCV.asInts();
+         ColumnVector longs = longStringCV.asLongs();
+         ColumnVector expectedInts = ColumnVector.fromInts(0, 0, 0, 0, 0, 0, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, 0);
+         ColumnVector expectedLongs = ColumnVector.fromLongs(0, 0, 0, 0, 0, 0, Long.MAX_VALUE, Long.MIN_VALUE, Long.MIN_VALUE, Long.MAX_VALUE, 0);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false, false, true, true, true, true, false)) {
+      assertColumnsAreEqual(expected, isInt);
+      assertColumnsAreEqual(expected, isLong);
+      assertColumnsAreEqual(expectedInts, ints);
+      assertColumnsAreEqual(expectedLongs, longs);
+    }
+  }
+
+  @Test
+  void testIsFloat() {
+    String[] floatStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0", "3.4028235E38", "3.4028236E38", "-3.4028235E38", "-3.4028236E38", "1.2e-24", "NULL"};
+    String[] doubleStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0", "1.7976931348623159E308", "1.7976931348623160E308", "-1.7976931348623159E308", "-1.7976931348623160E308", "1.2e-234", "NULL"};
+    try (ColumnVector floatStringCV = ColumnVector.fromStrings(floatStrings);
+         ColumnVector doubleStringCV = ColumnVector.fromStrings(doubleStrings);
+         ColumnVector isFloat = floatStringCV.isFloat();
+         ColumnVector isDouble = doubleStringCV.isFloat();
+         ColumnVector doubles = doubleStringCV.asDoubles();
+         ColumnVector floats = floatStringCV.asFloats();
+         ColumnVector expectedFloats = ColumnVector.fromFloats(0f, 0f, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, 0f, 0f, -0f, 0f, Float.MAX_VALUE, Float.POSITIVE_INFINITY, -Float.MAX_VALUE, Float.NEGATIVE_INFINITY, 1.2e-24f, 0f);
+         ColumnVector expectedDoubles = ColumnVector.fromDoubles(0f, 0f, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0f, 0f, -0f, 0f, Double.MAX_VALUE, Double.POSITIVE_INFINITY, -Double.MAX_VALUE, Double.NEGATIVE_INFINITY, 1.2e-234d, 0f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true, false, false, true, true, true, true, true, true, true, false)) {
+      assertColumnsAreEqual(expected, isDouble);
+      assertColumnsAreEqual(expected, isFloat);
+      assertColumnsAreEqual(expectedFloats, floats);
+      assertColumnsAreEqual(expectedDoubles, doubles);
+    }
+  }
 }

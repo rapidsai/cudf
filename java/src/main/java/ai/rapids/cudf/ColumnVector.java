@@ -386,6 +386,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer
+   * @return - Boolean vector
+   */
+  public ColumnVector isInteger() {
+    return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a float, and FALSE if its not a float
+   * @return - Boolean vector
+   */
+  public ColumnVector isFloat() {
+    return new ColumnVector(isFloat(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is NaN, and FALSE if null or a valid floating point value
    * @return - Boolean vector
    */
@@ -2359,6 +2377,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long isNanNative(long viewHandle);
 
+  private static native long isFloat(long viewHandle);
+
+  private static native long isInteger(long viewHandle);
+
   private static native long isNotNanNative(long viewHandle);
 
   private static native long isNotNullNative(long viewHandle);
@@ -2912,4 +2934,5 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public static ColumnVector timestampNanoSecondsFromBoxedLongs(Long... values) {
     return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
+
 }
