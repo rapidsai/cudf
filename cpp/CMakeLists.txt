@@ -138,7 +138,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(BUILD_EXTERNAL_DATASOURCE "Configure CMake to build support for external datasources" OFF)
+option(BUILD_EXTERNAL_DATASOURCE_SUPPORT "Configure CMake to build support for external datasources" OFF)
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
@@ -412,9 +412,9 @@ add_library(libNVText
             custrings/util.cu)
 
 # Set the sources for External Datasources if enabled.
-if(BUILD_EXTERNAL_DATASOURCE)
-    set(EXTERNAL_DATASOURCE_SOURCES, "src/io/utilities/datasource_factory.cpp")
-endif(BUILD_EXTERNAL_DATASOURCE)
+if(BUILD_EXTERNAL_DATASOURCE_SUPPORT)
+    set(EXTERNAL_DATASOURCE_SRC, "src/io/utilities/datasource_factory.cpp")
+endif(BUILD_EXTERNAL_DATASOURCE_SUPPORT)
 
 add_library(cudf
             src/comms/ipc/ipc.cpp
@@ -688,7 +688,8 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
-            ${EXTERNAL_DATASOURCE_SOURCES}
+            src/io/utilities/datasource_factory.cpp
+            ${EXTERNAL_DATASOURCE_SRC}
 )
 
 # Rename installation to proper names for later finding

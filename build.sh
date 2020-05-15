@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz benchmarks tests external -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [external] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf custreamz kafka_ds benchmarks tests -v -g -n -l -external --allgpuarch --disable_nvtx --show_depr_warn -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [kafka_ds] [benchmarks] [tests] [--disable_nvtx] [-v] [-g] [-n] [-h] [-l] [-external]
    clean                - remove all existing build artifacts and configuration (start
                         over)
    libnvstrings         - build the nvstrings C++ code only
@@ -28,13 +28,14 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [custreamz] [benchmarks] [tests] [
    cudf                 - build the cudf Python package
    dask_cudf            - build the dask_cudf Python package
    custreamz            - build the custreamz Python package
+   kafka_ds             - build the kafka external datasource library
    benchmarks           - build benchmarks
    tests                - build tests
-   external             - build external datasource support for libcudf
    -v                   - verbose build mode
    -g                   - build for debug
    -n                   - no install step
    -l                   - build legacy tests
+   -external            - build external datasource support for libcudf
    --disable_nvtx       - disable inserting NVTX profiling ranges
    --allgpuarch         - build for all supported GPU architectures
    --show_depr_warn     - show cmake deprecation warnings
@@ -56,7 +57,8 @@ VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
 BENCHMARKS=OFF
-BUILD_EXTERNAL_DATASOURCES=OFF
+BUILD_KAFKA_EXTERNAL_DATASOURCE=OFF
+BUILD_EXTERNAL_DATASOURCE_SUPPORT=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
@@ -107,6 +109,9 @@ fi
 if hasArg -l; then
     BUILD_LEGACY_TESTS=ON
 fi
+if hasArg -external; then
+    BUILD_EXTERNAL_DATASOURCE_SUPPORT=ON
+fi
 if hasArg --allgpuarch; then
     BUILD_ALL_GPU_ARCH=1
 fi
@@ -116,8 +121,8 @@ fi
 if hasArg tests; then
     BUILD_TESTS=ON
 fi
-if hasArg external; then
-    BUILD_EXTERNAL_DATASOURCES="ON"
+if hasArg kafka_ds; then
+    BUILD_KAFKA_EXTERNAL_DATASOURCE=ON
 fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
@@ -158,7 +163,7 @@ if buildAll || hasArg libnvstrings || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           ${GPU_ARCH} \
-          -DBUILD_EXTERNAL_DATASOURCES=${BUILD_EXTERNAL_DATASOURCES} \
+          -DBUILD_EXTERNAL_DATASOURCE_SUPPORT=${BUILD_EXTERNAL_DATASOURCE_SUPPORT} \
           -DUSE_NVTX=${BUILD_NVTX} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DBUILD_LEGACY_TESTS=${BUILD_LEGACY_TESTS} \
@@ -246,8 +251,8 @@ if buildAll || hasArg custreamz; then
     fi
 fi
 
-# Build and install the external datasources
-if buildAll || hasArg external; then
+# Build and install the Kafka external datasource
+if buildAll || hasArg kafka_ds; then
 
     mkdir -p ${EXTERNAL_BUILD_DIR}
     cd ${EXTERNAL_BUILD_DIR}

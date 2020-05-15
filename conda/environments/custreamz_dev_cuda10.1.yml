@@ -7,6 +7,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - clang=8.0.1
+  - clang-tools=8.0.1
   - cupy>=6.6.0,<8.0.0a0,!=7.1.0
   - rmm=0.14.*
   - cmake>=3.12
@@ -35,9 +37,8 @@ dependencies:
   - black
   - isort
   - pre_commit
-  - dask>=2.12.0
-  - distributed>=2.12.0
-  - streamz
+  - dask>=2.15.0
+  - distributed>=2.15.0
   - dlpack
   - arrow-cpp=0.15.0
   - boost-cpp

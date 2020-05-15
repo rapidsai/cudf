@@ -89,13 +89,35 @@ table_with_metadata read_json(read_json_args const& args, rmm::mr::device_memory
   namespace json = cudf::experimental::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  json::reader_options options{args.lines, args.compression, args.dtype, args.dayfirst};
-  auto reader = make_reader<json::reader>(args.source, options, mr);
+  json::reader_options options{args.lines,
+                               args.compression,
+                               args.dtype,
+                               args.dayfirst,
+                               args.external_datasource_id,
+                               args.external_datasource_lib_dir,
+                               args.external_datasource_configs};
 
-  if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
-    return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
-  } else {
+  if (!args.external_datasource_id.empty()) {
+    // args.source = source_info(args.external_datasource_id,
+    //                           args.external_datasource_lib_dir,
+    //                           args.external_datasource_configs);
+
+    auto reader = std::make_unique<json::reader>(args.external_datasource_id,
+                                                 args.external_datasource_lib_dir,
+                                                 args.external_datasource_configs,
+                                                 options,
+                                                 mr);
+
     return reader->read_all();
+
+  } else {
+    auto reader = make_reader<json::reader>(args.source, options, mr);
+
+    if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
+      return reader->read_byte_range(args.byte_range_offset, args.byte_range_size);
+    } else {
+      return reader->read_all();
+    }
   }
 }
 

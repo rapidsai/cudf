@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libc.stdint cimport uint8_t
 
@@ -26,6 +27,9 @@ cdef extern from "cudf/io/functions.hpp" \
         read_avro_args &args) except +
 
     cdef cppclass read_json_args:
+        string external_datasource_id
+        string external_datasource_lib_dir
+        map[string, string] external_datasource_configs
         cudf_io_types.source_info source
         bool lines
         cudf_io_types.compression_type compression

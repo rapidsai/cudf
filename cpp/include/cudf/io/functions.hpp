@@ -26,6 +26,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -36,6 +37,15 @@ namespace cudf {
 //! In-development features
 namespace experimental {
 namespace io {
+
+/**
+ * @brief Settings for interacting with External Datasources
+ */
+struct external_datasource_args {
+  std::string external_datasource_id;
+  std::string external_datasource_lib_dir;
+  std::map<std::string, std::string> external_datasource_configs;
+};
 
 /**
  * @brief Settings to use for `read_avro()`
@@ -108,7 +118,7 @@ table_with_metadata read_avro(
  * | `chunksize`          | use `byte_range_xxx` for chunking instead |
  *
  */
-struct read_json_args {
+struct read_json_args : external_datasource_args {
   source_info source;
 
   ///< Data types of the column; empty to infer dtypes

@@ -16,31 +16,29 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <sys/stat.h>
-#include <string>
-#include <vector>
 #include <map>
+#include <string>
+#include <sys/stat.h>
+#include <vector>
 
-#include <kafka_datasource.hpp>
+#include <kafka_consumer.hpp>
 
-TEST(ExternalDatasource, WaterMark)
-{
-    std::string topic = "libcudf-test";
-    int partition = 0;
+TEST(ExternalDatasource, WaterMark) {
+  std::string topic = "libcudf-test";
 
-    std::map<std::string, std::string> datasource_confs;
-    std::vector<std::string> topics;
-    topics.push_back("libcudf-test");
+  std::map<std::string, std::string> datasource_confs;
+  std::vector<std::string> topics;
+  topics.push_back("libcudf-test");
 
-    std::vector<int> partitions;
-    partitions.push_back(0);
+  std::vector<int> partitions;
+  partitions.push_back(0);
 
-    //Topic
-    datasource_confs.insert({"ex_ds.kafka.topic", topic});
+  // Topic
+  datasource_confs.insert({"ex_ds.kafka.topic", topic});
 
-    //General Conf
-    datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
-    datasource_confs.insert({"group.id", "external_ds_local"});
-    datasource_confs.insert({"auto.offset.reset", "beginning"});
-    datasource_confs.insert({"enable.partition.eof", "true"});
+  // General Conf
+  datasource_confs.insert({"bootstrap.servers", "localhost:9092"});
+  datasource_confs.insert({"group.id", "external_ds_local"});
+  datasource_confs.insert({"auto.offset.reset", "beginning"});
+  datasource_confs.insert({"enable.partition.eof", "true"});
 }

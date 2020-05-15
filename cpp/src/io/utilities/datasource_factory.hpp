@@ -114,8 +114,9 @@ class datasource_factory {
     external_datasource_wrapper(std::string external_datasource_lib)
     {
       external_datasource_lib_ = external_datasource_lib;
+      printf("External Datasource Lib: %s\n", external_datasource_lib_.c_str());
 
-      dl_handle = dlopen(external_datasource_lib_.c_str(), RTLD_LAZY);
+      dl_handle = dlopen(external_datasource_lib_.c_str(), RTLD_LAZY | RTLD_GLOBAL);
       if (!dl_handle) { CUDF_FAIL(dlerror()); }
 
       ex_ds_load ex_ds = (ex_ds_load)dlsym(dl_handle, "libcudf_external_datasource_load");
@@ -128,6 +129,7 @@ class datasource_factory {
 
       ex_ds_        = ex_ds();  // Create external_datasource object
       ds_unique_id_ = ex_ds_->libcudf_datasource_identifier();
+      printf("Datasource Unique Identifier: %s\n", ds_unique_id_.c_str());
 
       // Pending no errors consider the handle alive and open
       open_ = true;

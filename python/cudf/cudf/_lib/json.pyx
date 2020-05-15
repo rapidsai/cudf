@@ -2,7 +2,8 @@
 
 # cython: boundscheck = False
 
-
+from libcpp.map cimport map
+from libcpp.string cimport string
 import cudf
 import collections.abc as abc
 import io
@@ -17,8 +18,14 @@ from cudf._lib.table cimport Table
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
-cpdef read_json(filepath_or_buffer, dtype,
-                lines, compression, byte_range):
+cpdef read_json(external_datasource_id,
+                external_datasource_lib_dir,
+                external_datasource_configs,
+                filepath_or_buffer,
+                dtype,
+                lines,
+                compression,
+                byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -41,6 +48,7 @@ cpdef read_json(filepath_or_buffer, dtype,
 
     # Setup arguments
     cdef read_json_args args = read_json_args(make_source_info(path_or_data))
+    cdef map[string, string] ex_ds_configs
 
     args.lines = lines
     if compression is not None:
@@ -70,6 +78,17 @@ cpdef read_json(filepath_or_buffer, dtype,
     cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
     args.byte_range_offset = c_range_offset
     args.byte_range_size = c_range_size
+
+    if external_datasource_id is not None:
+        args.external_datasource_id = external_datasource_id.encode()
+
+    if external_datasource_lib_dir is not None:
+        args.external_datasource_lib_dir = external_datasource_lib_dir.encode()
+
+    if external_datasource_configs is not None:
+        for k, v in external_datasource_configs.items():
+            ex_ds_configs[k.encode()] = v.encode()
+        args.external_datasource_configs = ex_ds_configs
 
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_out_table

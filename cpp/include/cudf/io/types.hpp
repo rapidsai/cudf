@@ -71,6 +71,7 @@ enum class io_type {
   ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
   VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
   USER_SINK,                 ///< Input/output is handled by a custom user class
+  EXTERNAL_DATASOURCE,       ///< Input/output is handled by an external datasource library
 };
 
 /**
@@ -161,6 +162,13 @@ struct source_info {
 
   explicit source_info(const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
     : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file)
+  {
+  }
+
+  explicit source_info(std::string external_datasource_id,
+                       std::string external_datasource_lib_dir,
+                       std::map<std::string, std::string> external_datasource_configs)
+    : type(io_type::EXTERNAL_DATASOURCE)
   {
   }
 };
