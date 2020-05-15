@@ -29,7 +29,6 @@
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/datasource.hpp>
-#include <io/utilities/datasource_factory.hpp>
 
 #include <cudf/io/readers.hpp>
 

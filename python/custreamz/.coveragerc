@@ -1,4 +1,0 @@
-# Configuration file for Python coverage tests
-[run]
-include = custreamz/*
-omit = custreamz/tests/*
