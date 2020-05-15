@@ -48,13 +48,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
       cudf::experimental::detail::make_null_replacement_iterator<string_view>(input, string_view{});
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
-    offsets_column = std::move(cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream));
+    offsets_column = cudf::strings::detail::make_offsets_child_column(
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
   }
 
   auto d_offsets = offsets_column->view().template data<size_type>();

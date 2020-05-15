@@ -76,8 +76,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     },
     stream,
     mr);
-  rmm::device_buffer null_mask = valid_mask.first;
-  auto null_count              = valid_mask.second;
+  auto& null_mask       = valid_mask.first;
+  auto const null_count = valid_mask.second;
 
   // build offsets column by computing sizes of each string in the output
   auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__(
