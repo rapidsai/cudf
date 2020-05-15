@@ -390,6 +390,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isInteger() {
+    assert type == DType.STRING;
     return new ColumnVector(isInteger(getNativeView()));
   }
 
@@ -399,6 +400,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public ColumnVector isFloat() {
+    assert type == DType.STRING;
     return new ColumnVector(isFloat(getNativeView()));
   }
 
