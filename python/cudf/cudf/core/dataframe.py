@@ -2649,6 +2649,8 @@ class DataFrame(Frame):
 
         expr : str
             A boolean expression. Names in expression refer to columns.
+            `index` can be used instead of index name, but this is not
+            supported for MultiIndex.
 
             Names starting with `@` refer to Python variables.
 
@@ -4981,3 +4983,21 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
             else:
                 # handle append case
                 input_df.insert(len(input_df._data), col_1, replace_df[col_2])
+
+
+def extract_col(df, col):
+    """
+    Extract column from dataframe `df` with their name `col`.
+    If `col` is index and there are no columns with name `index`,
+    then this will return index column.
+    """
+    try:
+        return df._data[col]
+    except KeyError:
+        if (
+            col == "index"
+            and col not in df.index._data
+            and not isinstance(df.index, cudf.MultiIndex)
+        ):
+            return df.index._data.columns[0]
+        return df.index._data[col]
