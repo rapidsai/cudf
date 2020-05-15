@@ -140,12 +140,12 @@ set(ITERATOR_BENCH_SRC
 ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
 
 ###################################################################################################
-# - search benchmark ------------------------------------------------------------------------------
+# - legacy search benchmark ------------------------------------------------------------------------------
 
-set(SEARCH_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/search/search_benchmark.cu")
+set(LEGACY_SEARCH_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/search/legacy/search_benchmark.cu")
 
-ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
+ConfigureBench(LEGACY_SEARCH_BENCH "${LEGACY_SEARCH_BENCH_SRC}")
 
 
 ###################################################################################################
