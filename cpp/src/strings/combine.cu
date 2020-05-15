@@ -263,7 +263,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   auto strings_count = strings_columns.num_rows();
   CUDF_EXPECTS(strings_count == separators.size(),
-               "Separators column should be of the same size of string columns");
+               "Separators column should be the same size as the strings columns");
   if (strings_count == 0)  // Empty begets empty
     return detail::make_empty_strings_column(mr, stream);
 
@@ -294,9 +294,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
         if (col0.is_valid(ridx)) {
           auto sv = col0.element<string_view>(ridx);
           return sv.empty() ? string_view{} : sv;
-        } else {
-          return (col_rep.is_valid() ? col_rep.value() : invalid_str);
-        }
+        } else if (col_rep.is_valid()) {
+          auto cv = col_rep.value();
+          return cv.empty() ? string_view{} : cv;
+        } else
+          return invalid_str;
       });
 
     return make_strings_column(out_col_strings, invalid_str, stream, mr);

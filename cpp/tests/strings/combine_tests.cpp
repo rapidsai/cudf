@@ -219,6 +219,51 @@ TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsNo
   cudf::test::expect_columns_equal(*results, exp_results, true);
 }
 
+TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsSeparatorReplacement)
+{
+  auto col0    = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
+  auto sep_col = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, true});
+  auto sep_rep = cudf::string_scalar("");
+
+  auto exp_results =
+    cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
+
+  auto results = cudf::strings::concatenate(
+    cudf::table_view{{col0}}, cudf::strings_column_view(sep_col), sep_rep);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsColumnReplacement)
+{
+  auto col0    = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
+  auto sep_col = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, true});
+  auto col_rep = cudf::string_scalar("");
+
+  auto exp_results =
+    cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, true});
+
+  auto results = cudf::strings::concatenate(cudf::table_view{{col0}},
+                                            cudf::strings_column_view(sep_col),
+                                            cudf::string_scalar("", false),
+                                            col_rep);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
+TEST_F(StringsConcatenateWithColSeparatorTest,
+       SingleColumnEmptyAndNullStringsSeparatorAndColumnReplacement)
+{
+  auto col0    = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
+  auto sep_col = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, true});
+  auto sep_rep = cudf::string_scalar("");
+  auto col_rep = cudf::string_scalar("");
+
+  auto exp_results = cudf::test::strings_column_wrapper({"", "", "", ""});
+
+  auto results = cudf::strings::concatenate(
+    cudf::table_view{{col0}}, cudf::strings_column_view(sep_col), sep_rep, col_rep);
+  cudf::test::expect_columns_equal(*results, exp_results, true);
+}
+
 TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnStringMixNoReplacements)
 {
   auto col0 = cudf::test::strings_column_wrapper(
