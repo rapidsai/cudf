@@ -139,7 +139,7 @@ std::unique_ptr<column> join_strings(
  *                          do not match
  *
  * @param strings_columns List of string columns to concatenate.
- * @param separators String column that provides the separator for a given row
+ * @param separators Strings column that provides the separator for a given row
  * @param separator_narep String that should be used in place of a null separator for a given
  *        row. Default of invalid-scalar means no row separator value replacements.
  *        Default is an invalid string.
