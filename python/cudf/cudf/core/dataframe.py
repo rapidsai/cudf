@@ -2649,6 +2649,8 @@ class DataFrame(Frame):
 
         expr : str
             A boolean expression. Names in expression refer to columns.
+            `index` can be used instead of index name, but this is not
+            supported for MultiIndex.
 
             Names starting with `@` refer to Python variables.
 
@@ -5237,3 +5239,21 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 format = column.datetime.infer_format(element=col[0])
             col = col.as_datetime_column(dtype=dtype, format=format)
     return col
+
+
+def extract_col(df, col):
+    """
+    Extract column from dataframe `df` with their name `col`.
+    If `col` is index and there are no columns with name `index`,
+    then this will return index column.
+    """
+    try:
+        return df._data[col]
+    except KeyError:
+        if (
+            col == "index"
+            and col not in df.index._data
+            and not isinstance(df.index, cudf.MultiIndex)
+        ):
+            return df.index._data.columns[0]
+        return df.index._data[col]
