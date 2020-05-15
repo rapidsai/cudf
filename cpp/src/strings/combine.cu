@@ -291,8 +291,12 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
       // Output depends on the separator
       [col0, invalid_str, separator_col_view, separator_rep, col_rep] __device__(auto ridx) {
         if (!separator_col_view.is_valid(ridx) && !separator_rep.is_valid()) return invalid_str;
-        return (!col0.is_valid(ridx)) ? (col_rep.is_valid() ? col_rep.value() : invalid_str)
-                                      : col0.element<string_view>(ridx);
+        if (col0.is_valid(ridx)) {
+          auto sv = col0.element<string_view>(ridx);
+          return sv.empty() ? string_view{} : sv;
+        } else {
+          return (col_rep.is_valid() ? col_rep.value() : invalid_str);
+        }
       });
 
     return make_strings_column(out_col_strings, invalid_str, stream, mr);

@@ -209,10 +209,10 @@ TEST_F(StringsConcatenateWithColSeparatorTest, ZeroSizedColumns)
 TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsNoReplacements)
 {
   auto col0    = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, true, false});
-  auto sep_col = cudf::test::strings_column_wrapper({"", "", "", ""}, {true, false, false, true});
+  auto sep_col = cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, true});
 
   auto exp_results =
-    cudf::test::strings_column_wrapper({"", "", "", ""}, {false, false, false, false});
+    cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, false});
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(sep_col));
@@ -346,7 +346,6 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixSeparatorRepl
   auto sep_col = cudf::test::strings_column_wrapper(
     {"", "~~~", "", "@", "", "", "", "^^^^", "", "--", "*****", "######"},
     {true, true, false, true, false, true, false, true, true, true, true, true});
-
   auto sep_rep = cudf::string_scalar("!!!!!!!!!!");
 
   auto exp_results = cudf::test::strings_column_wrapper(
@@ -380,7 +379,6 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixColumnReplace
   auto sep_col = cudf::test::strings_column_wrapper(
     {"", "~~~", "", "@", "", "", "", "^^^^", "", "--", "*****", "######"},
     {true, true, false, true, false, true, false, true, true, true, true, true});
-
   auto col_rep = cudf::string_scalar("_col_replacement_");
 
   auto exp_results = cudf::test::strings_column_wrapper(
@@ -416,7 +414,6 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixSeparatorAndC
   auto sep_col = cudf::test::strings_column_wrapper(
     {"", "~~~", "", "@", "", "", "", "^^^^", "", "--", "*****", "######"},
     {true, true, false, true, false, true, false, true, true, true, true, true});
-
   auto sep_rep = cudf::string_scalar("!!!!!!!!!!");
   auto col_rep = cudf::string_scalar("_col_replacement_");
 
