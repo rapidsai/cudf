@@ -78,7 +78,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
       };
 
-      auto mask_pair = detail::valid_if(index_begin, index_end, func_validity);
+      auto mask_pair = detail::valid_if(index_begin, index_end, func_validity, stream, mr);
 
       output->set_null_mask(std::move(std::get<0>(mask_pair)));
       output->set_null_count(std::get<1>(mask_pair));

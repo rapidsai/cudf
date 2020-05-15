@@ -153,7 +153,7 @@ std::unique_ptr<experimental::table> findall_re(
     *thrust::max_element(execpol->on(stream), find_counts.begin(), find_counts.end());
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
-    results.push_back(
+    results.emplace_back(
       std::make_unique<column>(data_type{STRING},
                                strings_count,
                                rmm::device_buffer{0, stream, mr},  // no data
@@ -184,8 +184,7 @@ std::unique_ptr<experimental::table> findall_re(
                         d_indices,
                         findall_fn<RX_STACK_LARGE>{d_strings, d_prog, column_index, d_find_counts});
     //
-    auto column = make_strings_column(indices, stream, mr);
-    results.emplace_back(std::move(column));
+    results.emplace_back(make_strings_column(indices, stream, mr));
   }
   return std::make_unique<experimental::table>(std::move(results));
 }

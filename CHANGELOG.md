@@ -294,6 +294,7 @@
 - PR #5165 Fix potentially missing last row in libcudf++ csv reader
 - PR #5185 Fix flake8 configuration and issues from new flake8 version
 - PR #5193 Fix OOB read in csv reader
+- PR #5191 Fix the use of the device memory resource
 
 
 # cuDF 0.13.0 (31 Mar 2020)
@@ -352,6 +353,7 @@
 - PR #3917 Add dictionary add_keys function
 - PR #3842 ORC writer: add support for column statistics
 - PR #4088 Added asString() on ColumnVector in Java that takes a format string
+- PR #4484 Port CSV writer to libcudf++
 
 ## Improvements
 
