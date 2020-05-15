@@ -13,9 +13,6 @@ from cudf.utils import ioutils
 @ioutils.doc_read_json()
 def read_json(
     path_or_buf,
-    external_datasource_id=None,
-    external_datasource_lib_dir=None,
-    external_datasource_configs=None,
     engine="auto",
     dtype=True,
     lines=False,
@@ -37,14 +34,7 @@ def read_json(
     if engine == "cudf":
         return cudf.DataFrame._from_table(
             libjson.read_json(
-                external_datasource_id,
-                external_datasource_lib_dir,
-                external_datasource_configs,
-                path_or_buf,
-                dtype,
-                lines,
-                compression,
-                byte_range,
+                path_or_buf, dtype, lines, compression, byte_range
             )
         )
     else:
