@@ -601,6 +601,24 @@ def test_dataframe_dir_and_getattr():
 
 
 @pytest.mark.parametrize("order", ["C", "F"])
+def test_empty_dataframe_as_gpu_matrix(order):
+    df = DataFrame()
+
+    # Check fully empty dataframe.
+    mat = df.as_gpu_matrix(order=order).copy_to_host()
+    assert mat.shape == (0, 0)
+
+    df = DataFrame()
+    nelem = 123
+    for k in "abc":
+        df[k] = np.random.random(nelem)
+
+    # Check all columns in empty dataframe.
+    mat = df.head(0).as_gpu_matrix(order=order).copy_to_host()
+    assert mat.shape == (0, 3)
+
+
+@pytest.mark.parametrize("order", ["C", "F"])
 def test_dataframe_as_gpu_matrix(order):
     df = DataFrame()
 
@@ -3065,12 +3083,21 @@ def test_all(data):
         ),
     ],
 )
-def test_any(data):
+@pytest.mark.parametrize("axis", [0, 1])
+def test_any(data, axis):
     # Pandas treats `None` in object type columns as True for some reason, so
     # replacing with `False`
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data).replace([None], False)
         gdata = Series.from_pandas(pdata)
+
+        if axis == 1:
+            with pytest.raises(NotImplementedError):
+                gdata.any(axis=axis)
+        else:
+            got = gdata.any(axis=axis)
+            expected = pdata.any(axis=axis)
+            assert_eq(got, expected)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"]).replace([None], False)
         gdata = DataFrame.from_pandas(pdata)
@@ -3086,9 +3113,18 @@ def test_any(data):
             with pytest.raises(NotImplementedError):
                 gdata.any(level="a")
 
-    got = gdata.any()
-    expected = pdata.any()
-    assert_eq(got, expected)
+        got = gdata.any(axis=axis)
+        expected = pdata.any(axis=axis)
+        assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+def test_empty_dataframe_any(axis):
+    pdf = pd.DataFrame({}, columns=["a", "b"])
+    gdf = DataFrame.from_pandas(pdf)
+    got = gdf.any(axis=axis)
+    expected = pdf.any(axis=axis)
+    assert_eq(got, expected, check_index_type=False)
 
 
 @pytest.mark.parametrize("indexed", [False, True])
@@ -4106,6 +4142,7 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
         data = [1.0, 2.0, None, 4.0, np.nan, -7.0]
 
     gdf = DataFrame()
+
     gdf["foo"] = Series(data, dtype=dtype)
     gdf["bar"] = Series(data, dtype=dtype)
 
@@ -4179,10 +4216,10 @@ def test_df_astype_datetime_to_other(as_dtype):
     data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
 
     gdf = DataFrame()
+    expect = DataFrame()
+
     gdf["foo"] = Series(data, dtype="datetime64[ms]")
     gdf["bar"] = Series(data, dtype="datetime64[ms]")
-
-    expect = DataFrame()
 
     if as_dtype == "int64":
         expect["foo"] = Series(
@@ -4246,6 +4283,32 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
         gdf.astype("int32", ordered=ordered),
     )
+
+
+@pytest.mark.parametrize(
+    "dtype,args",
+    [
+        ("int8", {}),
+        ("int16", {}),
+        ("int32", {}),
+        ("int64", {}),
+        ("float32", {}),
+        ("float64", {}),
+        ("category", {}),
+        ("category", {"ordered": True}),
+        ("category", {"ordered": False}),
+        ("datetime64[s]", {"format": "%Y-%m-%d"}),
+        ("datetime64[ms]", {"format": "%Y-%m-%d"}),
+        ("datetime64[us]", {"format": "%Y-%m-%d"}),
+        ("datetime64[ns]", {"format": "%Y-%m-%d"}),
+        ("str", {}),
+    ],
+)
+def test_empty_df_astype(dtype, args):
+    df = DataFrame()
+    kwargs = {}
+    kwargs.update(args)
+    assert_eq(df, df.astype(dtype=dtype, **kwargs))
 
 
 @pytest.mark.parametrize(
@@ -5306,3 +5369,74 @@ def test_from_pandas_for_series_nan_as_null(nan_as_null):
     got = gd.from_pandas(psr, nan_as_null=nan_as_null)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_df_series_dataframe_astype_copy(copy):
+    gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(
+        gdf.astype(dtype="float", copy=copy),
+        pdf.astype(dtype="float", copy=copy),
+    )
+    assert_eq(gdf, pdf)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(
+        gsr.astype(dtype="float", copy=copy),
+        psr.astype(dtype="float", copy=copy),
+    )
+    assert_eq(gsr, psr)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    actual = gsr.astype(dtype="int64", copy=copy)
+    expected = psr.astype(dtype="int64", copy=copy)
+    assert_eq(expected, actual)
+    assert_eq(gsr, psr)
+    actual[0] = 3
+    expected[0] = 3
+    assert_eq(gsr, psr)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_df_series_dataframe_astype_dtype_dict(copy):
+    gdf = DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    pdf = gdf.to_pandas()
+
+    assert_eq(
+        gdf.astype(dtype={"col1": "float"}, copy=copy),
+        pdf.astype(dtype={"col1": "float"}, copy=copy),
+    )
+    assert_eq(gdf, pdf)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    assert_eq(
+        gsr.astype(dtype={None: "float"}, copy=copy),
+        psr.astype(dtype={None: "float"}, copy=copy),
+    )
+    assert_eq(gsr, psr)
+
+    with pytest.raises(KeyError):
+        gsr.astype(dtype={"a": "float"}, copy=copy)
+
+    with pytest.raises(KeyError):
+        psr.astype(dtype={"a": "float"}, copy=copy)
+
+    gsr = Series([1, 2])
+    psr = gsr.to_pandas()
+
+    actual = gsr.astype({None: "int64"}, copy=copy)
+    expected = psr.astype({None: "int64"}, copy=copy)
+    assert_eq(expected, actual)
+    assert_eq(gsr, psr)
+
+    actual[0] = 3
+    expected[0] = 3
+    assert_eq(gsr, psr)

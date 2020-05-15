@@ -795,10 +795,65 @@ class DataFrame(Frame):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, errors="raise", **kwargs):
-        return self._apply_support_method(
-            "astype", dtype=dtype, errors=errors, **kwargs
-        )
+    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+        """
+        Cast the DataFrame to the given dtype
+
+        Parameters
+        ----------
+
+        dtype : data type, or dict of column name -> data type
+            Use a numpy.dtype or Python type to cast entire DataFrame object to
+            the same type. Alternatively, use {col: dtype, ...}, where col is a
+            column label and dtype is a numpy.dtype or Python type to cast one
+            or more of the DataFrame's columns to column-specific types.
+        copy : bool, default False
+            Return a deep-copy when ``copy=True``. Note by default
+            ``copy=False`` setting is used and hence changes to
+            values then may propagate to other cudf objects.
+        errors : {'raise', 'ignore', 'warn'}, default 'raise'
+            Control raising of exceptions on invalid data for provided dtype.
+            - ``raise`` : allow exceptions to be raised
+            - ``ignore`` : suppress exceptions. On error return original
+            object.
+            - ``warn`` : prints last exceptions as warnings and
+            return original object.
+        **kwargs : extra arguments to pass on to the constructor
+
+        Returns
+        -------
+        casted : DataFrame
+        """
+        result = DataFrame(index=self.index)
+
+        if is_dict_like(dtype):
+            current_cols = self._data.names
+            if len(set(dtype.keys()) - set(current_cols)) > 0:
+                raise KeyError(
+                    "Only a column name can be used for the "
+                    "key in a dtype mappings argument."
+                )
+            for col_name in current_cols:
+                if col_name in dtype:
+                    result._data[col_name] = self._data[col_name].astype(
+                        dtype=dtype[col_name],
+                        errors=errors,
+                        copy=copy,
+                        **kwargs,
+                    )
+                else:
+                    result._data[col_name] = (
+                        self._data[col_name].copy(deep=True)
+                        if copy
+                        else self._data[col_name]
+                    )
+        else:
+            for col in self._data:
+                result._data[col] = self._data[col].astype(
+                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                )
+
+        return result
 
     def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
         """
@@ -1922,9 +1977,12 @@ class DataFrame(Frame):
         ncol = len(cols)
         nrow = len(self)
         if ncol < 1:
-            raise ValueError("require at least 1 column")
-        if nrow < 1:
-            raise ValueError("require at least 1 row")
+            # This is the case for empty dataframe - construct empty cupy array
+            matrix = cupy.empty(
+                shape=(0, 0), dtype=np.dtype("float64"), order=order
+            )
+            return cuda.as_cuda_array(matrix)
+
         if any(
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
             for c in cols

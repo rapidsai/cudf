@@ -113,7 +113,7 @@ struct column_from_scalar_dispatch {
     cudaStream_t stream) const
   {
     if (!value.is_valid())
-      return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream);
+      return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto view = output_column->mutable_view();
@@ -128,20 +128,23 @@ struct column_from_scalar_dispatch {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream) const
   {
-    auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr);
     if (!value.is_valid())
-      return std::make_unique<column>(
-        value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
+      return std::make_unique<column>(value.type(),
+                                      size,
+                                      rmm::device_buffer{0, stream, mr},
+                                      create_null_mask(size, mask_state::ALL_NULL, stream, mr),
+                                      size);
 
     // Create a strings column_view with all nulls and no children.
     // Since we are setting every row to the scalar, the fill() never needs to access
     // any of the children in the strings column which would otherwise cause an exception.
+    auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
     column_view sc{
       data_type{STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
     auto sv = static_cast<experimental::scalar_type_t<T> const&>(value);
     // fill the column with the scalar
     auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, mr, stream);
-    output->set_null_mask(rmm::device_buffer{}, 0);  // should be no nulls
+    output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls
     return output;
   }
 
