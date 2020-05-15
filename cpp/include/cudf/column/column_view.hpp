@@ -258,6 +258,8 @@ class mutable_column_view_base : public column_view_base {
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
+ * @ingroup column_classes
+ *
  * A `column_view` can be constructed implicitly from a `cudf::column`, or may
  * be constructed explicitly from a pointer to pre-existing device memory.
  *
@@ -342,19 +344,21 @@ class column_view : public detail::column_view_base {
  * @brief A non-owning, mutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
+ * @ingroup column_classes
+ *
  * A `mutable_column_view` can be constructed implicitly from a `cudf::column`,
- *or may be constructed explicitly from a pointer to pre-existing device memory.
+ * or may be constructed explicitly from a pointer to pre-existing device memory.
  *
  * Unless otherwise noted, the memory layout of the `mutable_column_view`'s data
- *and bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * and bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
  * Because `mutable_column_view` is non-owning, no device memory is allocated
- *nor free'd when `mutable_column_view` objects are created or destroyed.
+ * nor free'd when `mutable_column_view` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `mutable_column_view` has an `offset` that
- *indicates the index of the first element in the column relative to the base
- *device memory allocation. By default, `offset()` is zero.
+ * indicates the index of the first element in the column relative to the base
+ * device memory allocation. By default, `offset()` is zero.
  *
  **/
 class mutable_column_view : public detail::column_view_base {

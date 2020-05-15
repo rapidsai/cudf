@@ -5,6 +5,7 @@ from cudf.utils.gpu_utils import validate_setup  # isort:skip
 validate_setup(check_dask=False)
 
 import cupy
+from numba import cuda
 
 import rmm
 
@@ -42,6 +43,7 @@ from cudf.io import (
 )
 from cudf.utils.utils import set_allocator
 
+cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 __version__ = get_versions()["version"]

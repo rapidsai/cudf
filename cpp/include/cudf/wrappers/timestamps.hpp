@@ -52,6 +52,11 @@ struct timestamp : time_point<Duration> {
 }  // namespace detail
 
 /**
+ * @addtogroup timestamp_classes Timestamp
+ * @{
+ */
+
+/**
  * @brief Type alias representing an int32_t duration of days since the unix
  * epoch.
  **/
@@ -84,6 +89,7 @@ static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep), "");
 static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep), "");
 static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
 
+/** @} */  // end of group
 }  // namespace cudf
 
 namespace std {

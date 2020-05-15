@@ -43,6 +43,8 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -180,6 +182,24 @@ class StringMethods(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def htoi(self):
+        """
+        This converts hex strings to integers
+        """
+
+        out = str_cast.htoi(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
+
+    def ip2int(self):
+        """
+        This converts ip strings to integers
+        """
+
+        out = str_cast.ip2int(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
 
     def _return_or_inplace(self, new_col, **kwargs):
         """
@@ -803,7 +823,7 @@ class StringMethods(object):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True, **kwargs):
+    def split(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -828,8 +848,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -850,7 +875,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -875,8 +900,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand=False` is not yet supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -2034,6 +2064,21 @@ class StringColumn(column.ColumnBase):
                     fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
+
+        if str_dtype.kind in ("i"):
+
+            if not cpp_is_integer(self).all():
+                raise ValueError(
+                    "Could not convert strings to integer \
+                        type due to presence of non-integer values."
+                )
+        elif str_dtype.kind in ("f"):
+
+            if not cpp_is_float(self).all():
+                raise ValueError(
+                    "Could not convert strings to float \
+                        type due to presence of non-floating values."
+                )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 

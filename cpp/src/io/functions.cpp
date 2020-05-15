@@ -152,13 +152,12 @@ table_with_metadata read_csv(read_csv_args const& args, rmm::mr::device_memory_r
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(write_csv_args const& args,
-               rmm::mr::device_memory_resource* mr) {
+void write_csv(write_csv_args const& args, rmm::mr::device_memory_resource* mr)
+{
   using namespace cudf::experimental::io::detail;
-  
-  csv::writer_options options{args.get_options()};
-  auto writer = make_writer<csv::writer>(args.sink(), options, mr);
-  
+
+  auto writer = make_writer<csv::writer>(args.sink(), args, mr);
+
   writer->write_all(args.table(), args.metadata());
 }
 
