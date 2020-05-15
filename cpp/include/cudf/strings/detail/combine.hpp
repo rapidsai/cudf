@@ -30,12 +30,11 @@ namespace detail {
  *
  * @param stream Stream on which to run kernels
  */
-std::unique_ptr<column> concatenate(
-  table_view const& strings_columns,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> concatenate(table_view const& strings_columns,
+                                    string_scalar const& separator,
+                                    string_scalar const& narep,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
@@ -43,12 +42,11 @@ std::unique_ptr<column> concatenate(
  *
  * @param stream Stream on which to run kernels
  */
-std::unique_ptr<column> join_strings(
-  strings_column_view const& strings,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> join_strings(strings_column_view const& strings,
+                                     string_scalar const& separator,
+                                     string_scalar const& narep,
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

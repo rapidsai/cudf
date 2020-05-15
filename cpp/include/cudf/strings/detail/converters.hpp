@@ -28,42 +28,38 @@ namespace detail {
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> to_integers(
-  strings_column_view const& strings,
-  data_type output_type,
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_integers(strings_column_view const& strings,
+                                    data_type output_type,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc from_integers(strings_column_view const&,rmm::mr::device_memory_resource*)
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> from_integers(
-  column_view const& integers,
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_integers(column_view const& integers,
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc to_floats(strings_column_view const&,data_type,rmm::mr::device_memory_resource*)
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> to_floats(
-  strings_column_view const& strings,
-  data_type output_type,
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_floats(strings_column_view const& strings,
+                                  data_type output_type,
+                                  cudaStream_t stream,
+                                  rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc from_floats(strings_column_view const&,rmm::mr::device_memory_resource*)
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> from_floats(
-  column_view const& floats,
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_floats(column_view const& floats,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc to_booleans(strings_column_view const&,string_scalar
@@ -71,11 +67,10 @@ std::unique_ptr<column> from_floats(
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> to_booleans(
-  strings_column_view const& strings,
-  string_scalar const& true_string    = string_scalar("true"),
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_booleans(strings_column_view const& strings,
+                                    string_scalar const& true_string,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc from_booleans(strings_column_view const&,string_scalar const&,string_scalar
@@ -83,12 +78,11 @@ std::unique_ptr<column> to_booleans(
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> from_booleans(
-  column_view const& booleans,
-  string_scalar const& true_string    = string_scalar("true"),
-  string_scalar const& false_string   = string_scalar("false"),
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_booleans(column_view const& booleans,
+                                      string_scalar const& true_string,
+                                      string_scalar const& false_string,
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc to_timestamps(strings_column_view const&,data_type,std::string
@@ -96,12 +90,11 @@ std::unique_ptr<column> from_booleans(
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<cudf::column> to_timestamps(
-  strings_column_view const& strings,
-  data_type timestamp_type,
-  std::string const& format,
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
+                                            data_type timestamp_type,
+                                            std::string const& format,
+                                            cudaStream_t stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc from_timestamps(strings_column_view const&,std::string
@@ -109,11 +102,10 @@ std::unique_ptr<cudf::column> to_timestamps(
  *
  * @param stream Stream on which to execute kernels.
  */
-std::unique_ptr<column> from_timestamps(
-  column_view const& timestamps,
-  std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
-  cudaStream_t stream                 = cudaStream_t{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_timestamps(column_view const& timestamps,
+                                        std::string const& format,
+                                        cudaStream_t stream,
+                                        rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings
