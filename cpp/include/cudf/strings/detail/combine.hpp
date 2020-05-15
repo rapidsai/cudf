@@ -34,8 +34,8 @@ std::unique_ptr<column> concatenate(
   table_view const& strings_columns,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  cudaStream_t stream                 = cudaStream_t{},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
@@ -47,8 +47,8 @@ std::unique_ptr<column> join_strings(
   strings_column_view const& strings,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0);
+  cudaStream_t stream                 = cudaStream_t{},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 }  // namespace detail
 }  // namespace strings

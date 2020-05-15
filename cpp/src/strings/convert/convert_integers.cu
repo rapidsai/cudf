@@ -119,8 +119,8 @@ void dispatch_to_integers_fn::operator()<bool>(column_device_view const&,
 // This will convert a strings column into any integer column type.
 std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     data_type output_type,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_numeric_column(output_type, 0);
@@ -149,7 +149,7 @@ std::unique_ptr<column> to_integers(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_integers(strings, output_type, mr);
+  return detail::to_integers(strings, output_type, cudaStream_t{}, mr);
 }
 
 namespace detail {
@@ -327,8 +327,8 @@ std::unique_ptr<column> dispatch_from_integers_fn::operator()<bool>(
 
 // This will convert all integer column types into a strings column.
 std::unique_ptr<column> from_integers(column_view const& integers,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = integers.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
@@ -345,7 +345,7 @@ std::unique_ptr<column> from_integers(column_view const& integers,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_integers(integers, mr);
+  return detail::from_integers(integers, cudaStream_t{}, mr);
 }
 
 }  // namespace strings

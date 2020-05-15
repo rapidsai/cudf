@@ -41,8 +41,8 @@ namespace detail {
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
@@ -154,8 +154,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
@@ -254,7 +254,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns, separator, narep, mr);
+  return detail::concatenate(strings_columns, separator, narep, cudaStream_t{}, mr);
 }
 
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
@@ -263,7 +263,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, mr);
+  return detail::join_strings(strings, separator, narep, cudaStream_t{}, mr);
 }
 
 }  // namespace strings
