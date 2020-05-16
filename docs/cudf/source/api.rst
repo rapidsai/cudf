@@ -20,7 +20,15 @@ Series
 
 .. autoclass:: Series
     :members:
- 
+
+Strings
+-------
+.. currentmodule:: cudf.core.column.string
+
+.. autoclass:: StringMethods
+    :members:
+
+
 Groupby
 -------
 .. currentmodule:: cudf.core.groupby.groupby

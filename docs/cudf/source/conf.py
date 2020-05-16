@@ -71,7 +71,7 @@ author = "NVIDIA"
 # built documents.
 #
 # The short X.Y version.
-version = '0.14'
+version = "0.14"
 # The full version, including alpha/beta/rc tags.
 release = cudf.__version__
 
@@ -192,7 +192,7 @@ texinfo_documents = [
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {"https://docs.python.org/": None}
 
-
+nbsphinx_allow_errors = True
 # Config numpydoc
 numpydoc_show_inherited_class_members = False
 numpydoc_class_members_toctree = False
@@ -200,3 +200,4 @@ numpydoc_class_members_toctree = False
 
 def setup(app):
     app.add_stylesheet("params.css")
+    app.add_stylesheet("https://docs.rapids.ai/assets/css/custom.css")
