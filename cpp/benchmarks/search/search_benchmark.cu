@@ -116,31 +116,24 @@ void BM_table(benchmark::State& state)
   const cudf::size_type column_size{(cudf::size_type)state.range(1)};
   const cudf::size_type values_size = column_size;
 
-  std::vector<wrapper> columns;
-  std::vector<wrapper> values;
-
-  auto make_table = [&](std::vector<wrapper>& cols, cudf::size_type col_size) {
+  auto make_table = [&](cudf::size_type col_size) {
     cudf::test::UniformRandomGenerator<int> random_gen(0, 100);
     auto data_it = cudf::test::make_counting_transform_iterator(
       0, [&](cudf::size_type row) { return random_gen.generate(); });
     auto valid_it = cudf::test::make_counting_transform_iterator(
       0, [&](cudf::size_type row) { return random_gen.generate() < 90; });
 
+    std::vector<std::unique_ptr<cudf::column>> cols;
     for (cudf::size_type i = 0; i < num_columns; i++) {
-      cols.emplace_back(data_it, data_it + col_size, valid_it);
+      wrapper temp(data_it, data_it + col_size, valid_it);
+      cols.emplace_back(temp.release());
     }
 
-    std::vector<cudf::column_view> col_views;
-    std::transform(
-      cols.begin(), cols.end(), std::back_inserter(col_views), [](wrapper& c) -> cudf::column_view {
-        return c;
-      });
-
-    return cudf::table_view{col_views};
+    return cudf::experimental::table(std::move(cols));
   };
 
-  auto data_table   = make_table(columns, column_size);
-  auto values_table = make_table(values, values_size);
+  auto data_table   = make_table(column_size);
+  auto values_table = make_table(values_size);
 
   std::vector<cudf::order> orders(num_columns, cudf::order::ASCENDING);
   std::vector<cudf::null_order> null_orders(num_columns, cudf::null_order::BEFORE);
