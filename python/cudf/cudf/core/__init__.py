@@ -2,7 +2,7 @@
 
 from cudf.core import buffer, column
 from cudf.core.buffer import Buffer
-from cudf.core.dataframe import DataFrame, from_pandas, merge, to_datetime
+from cudf.core.dataframe import DataFrame, from_pandas, merge
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,

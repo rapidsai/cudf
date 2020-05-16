@@ -11,15 +11,7 @@ import rmm
 
 from cudf import core, datasets
 from cudf._version import get_versions
-from cudf.core import (
-    DataFrame,
-    Index,
-    MultiIndex,
-    Series,
-    from_pandas,
-    merge,
-    to_datetime,
-)
+from cudf.core import DataFrame, Index, MultiIndex, Series, from_pandas, merge
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
@@ -39,6 +31,7 @@ from cudf.core.ops import (
     tan,
 )
 from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
+from cudf.core.tools.datetimes import to_datetime
 from cudf.io import (
     from_dlpack,
     read_avro,
