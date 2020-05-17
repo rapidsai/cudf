@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/detail/converters.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -379,12 +380,11 @@ struct dispatch_to_timestamps_fn {
 }  // namespace
 
 //
-std::unique_ptr<cudf::column> to_timestamps(
-  strings_column_view const& strings,
-  data_type timestamp_type,
-  std::string const& format,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
+                                            data_type timestamp_type,
+                                            std::string const& format,
+                                            cudaStream_t stream,
+                                            rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_timestamp_column(timestamp_type, 0);
@@ -419,7 +419,7 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_timestamps(strings, timestamp_type, format, mr);
+  return detail::to_timestamps(strings, timestamp_type, format, cudaStream_t{}, mr);
 }
 
 namespace detail {
@@ -712,11 +712,10 @@ struct dispatch_from_timestamps_fn {
 }  // namespace
 
 //
-std::unique_ptr<column> from_timestamps(
-  column_view const& timestamps,
-  std::string const& format           = "%Y-%m-%dT%H:%M:%SZ",
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-  cudaStream_t stream                 = 0)
+std::unique_ptr<column> from_timestamps(column_view const& timestamps,
+                                        std::string const& format,
+                                        cudaStream_t stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = timestamps.size();
   if (strings_count == 0) return make_empty_strings_column(mr, stream);
@@ -783,7 +782,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_timestamps(timestamps, format, mr);
+  return detail::from_timestamps(timestamps, format, cudaStream_t{}, mr);
 }
 
 }  // namespace strings
