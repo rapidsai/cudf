@@ -389,7 +389,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * TRUE for any entry that is an integer, and FALSE if its not an integer
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
-   * i.e. If this method returns true for a value could still result in an overflow or underflow
+   * i.e. If this method returns true for a value could still result in an overflow or underflow.
+   *
+   * Also note that exponents are handled but might not be what the user expects. This method will
+   * convert the mantissa without regarding the exponent before ending the conversion when it hits
+   * the decimal. e.g. 1.2e-4 => 1 but 0.00012 => 0
    *
    * @return - Boolean vector
    */
