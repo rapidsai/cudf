@@ -174,6 +174,7 @@
 - PR #5137 Add java bindings for getSizeInBytes in DType
 - PR #5194 Update Series.fillna to reflect dtype behavior
 - PR #5159 Add `make_meta_object` in `dask_cudf` backend and add `str.split` test
+- PR #5198 Add detail headers for strings converter functions
 - PR #5199 Add index support in `DataFrame.query`
 
 ## Bug Fixes
