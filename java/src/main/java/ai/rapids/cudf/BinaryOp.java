@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,11 @@ public enum BinaryOp {
   SHIFT_RIGHT(23), // bitwise shift right (>>)
   SHIFT_RIGHT_UNSIGNED(24), // bitwise shift right (>>>)
   LOG_BASE(25), // logarithm to the base
-  ATAN2(26); // atan2
+  ATAN2(26), // atan2
+  PMOD(27), // pmod
+  NULL_EQUALS(28), // like EQUAL but NULL == NULL is TRUE and NULL == not NULL is FALSE
+  NULL_MAX(29), // MAX but NULL < not NULL
+  NULL_MIN(30); // MIN but NULL > not NULL
 
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(

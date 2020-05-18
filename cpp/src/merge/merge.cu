@@ -457,8 +457,17 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
     auto const left_table = top_and_pop(merge_queue);
     // Deallocated at the end of the block
     auto const right_table = top_and_pop(merge_queue);
-    auto merged_table =
-      merge(left_table.view, right_table.view, key_cols, column_order, null_precedence, mr, stream);
+
+    // Only use mr for the output table
+    auto const& new_tbl_rm = merge_queue.empty() ? mr : rmm::mr::get_default_resource();
+    auto merged_table      = merge(left_table.view,
+                              right_table.view,
+                              key_cols,
+                              column_order,
+                              null_precedence,
+                              new_tbl_rm,
+                              stream);
+
     auto const merged_table_view = merged_table->view();
     merge_queue.emplace(merged_table_view, std::move(merged_table));
   }

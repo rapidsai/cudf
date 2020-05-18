@@ -159,13 +159,14 @@ __launch_bounds__(block_size) __global__
  *                    by `filter[i]`
  */
 template <typename FilterFn, typename LeftIter, typename RightIter>
-std::unique_ptr<column> copy_if_else(bool nullable,
-                                     LeftIter lhs_begin,
-                                     LeftIter lhs_end,
-                                     RightIter rhs,
-                                     FilterFn filter,
-                                     rmm::mr::device_memory_resource *mr,
-                                     cudaStream_t stream)
+std::unique_ptr<column> copy_if_else(
+  bool nullable,
+  LeftIter lhs_begin,
+  LeftIter lhs_end,
+  RightIter rhs,
+  FilterFn filter,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource(),
+  cudaStream_t stream                 = 0)
 {
   using Element =
     typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
