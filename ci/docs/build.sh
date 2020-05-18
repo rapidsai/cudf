@@ -7,7 +7,7 @@
 if [ -z "$PROJECT_WORKSPACE" ]; then
     echo ">>>> ERROR: Could not detect PROJECT_WORKSPACE in environment"
     echo ">>>> WARNING: This script contains git commands meant for automated building, do not run locally"
-    exit 0
+    exit 1
 fi
 
 export DOCS_WORKSPACE=$WORKSPACE/docs
