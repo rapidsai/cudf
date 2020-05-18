@@ -2868,10 +2868,6 @@ class Series(Frame):
             self._column.isin(values), index=self.index, name=self.name
         )
 
-    def unique_k(self, k):
-        warnings.warn("Use .unique() instead", DeprecationWarning)
-        return self.unique()
-
     def unique(self):
         """
         Returns unique values of this Series.
