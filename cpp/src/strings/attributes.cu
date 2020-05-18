@@ -41,7 +41,7 @@ namespace {
  * @param strings Strings instance for this operation.
  * @param ufn Function returns an integer for each string.
  * @param stream Stream to use for any kernels in this function.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column
  * @return New INT32 column with lengths for each string.
  */
 template <typename UnaryFunction>

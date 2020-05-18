@@ -56,7 +56,7 @@ namespace detail {
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mrDevice memory resource used to allocate the returned table
  * @param stream The stream to use for CUDA operations
  * @return Result of scattering values from source to target
  **/
@@ -96,7 +96,7 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table
  * @param stream The stream to use for CUDA operations
  * @return Result of scattering values from source to target
  **/

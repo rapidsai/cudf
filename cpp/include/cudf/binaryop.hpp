@@ -89,7 +89,7 @@ enum class binary_operator : int32_t {
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> Output column
  * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
@@ -114,7 +114,7 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> Output column
  * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric
  * @throw cudf::logic_error if @p output_type dtype isn't numeric
@@ -138,7 +138,7 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand column
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> Output column
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
  * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't fixed-width
@@ -167,7 +167,7 @@ std::unique_ptr<column> binary_operation(
  * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> Output column
  * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
  * @throw cudf::logic_error if @p lhs and @p rhs dtypes aren't numeric

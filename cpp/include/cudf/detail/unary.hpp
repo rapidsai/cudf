@@ -32,7 +32,7 @@ namespace detail {
  * @param begin Begining of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
- * @param mr Optional, The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns std::unique_ptr<cudf::column> A column of type `BOOL8,` with `true` representing
@@ -62,7 +62,7 @@ std::unique_ptr<column> true_if(
  *
  * @param input A `column_view` as input
  * @param op operation to perform
- * @param mr Optional, The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns std::unique_ptr<cudf::column> Result of the operation
@@ -79,7 +79,7 @@ std::unique_ptr<cudf::column> unary_operation(
  *
  * @param column_view Input column
  * @param out_type Desired datatype of output column
- * @param mr Optional, The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Optional CUDA stream on which to execute kernels
  *
  * @returns unique_ptr<column> Result of the cast operation

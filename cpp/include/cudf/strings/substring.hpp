@@ -51,7 +51,7 @@ namespace strings {
  * @param start First character position to begin the substring.
  * @param stop Last character position (exclusive) to end the substring.
  * @param step Distance between input characters retrieved.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<column> slice_strings(
@@ -95,7 +95,7 @@ std::unique_ptr<column> slice_strings(
  * @param strings Strings column for this operation.
  * @param starts First character positions to begin the substring.
  * @param stops Last character (exclusive) positions to end the substring.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @return New strings column with sorted elements of this instance.
  */
 std::unique_ptr<column> slice_strings(

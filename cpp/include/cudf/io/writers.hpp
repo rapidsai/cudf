@@ -77,7 +77,7 @@ class writer {
    *
    * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sinkp,
                   writer_options const& options,
@@ -163,7 +163,7 @@ class writer {
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   writer_options const& options,
@@ -325,7 +325,7 @@ class writer {
    *
    * @param sinkp The data sink to write the data to
    * @param options Settings for controlling writing behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
          writer_options const& options,

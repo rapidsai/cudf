@@ -32,7 +32,7 @@ namespace detail {
  * @param input The table to partition
  * @param columns_to_hash Indices of input columns to hash
  * @param num_partitions The number of partitions to use
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned table
  * @param stream Optional stream to use for allocations and copies
  *
  * @returns An output table and a vector of row offsets to each partition
@@ -50,7 +50,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
  * @param input The table of columns to hash
  * @param initial_hash Optional vector of initial hash values for each column.
  * If this vector is empty then each element will be hashed as-is.
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Optional stream to use for allocations and copies
  *
  * @returns A column where each row is the hash of a column from the input

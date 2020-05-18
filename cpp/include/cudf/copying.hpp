@@ -100,7 +100,7 @@ std::unique_ptr<table> gather(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -140,7 +140,7 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned table.
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
@@ -273,7 +273,7 @@ void copy_range_in_place(column_view const& source,
  * @param source_end The index of the last element in the source range
  * (exclusive)
  * @param target_begin The starting index of the target range (inclusive)
- * @param mr Memory resource to allocate the result target column.
+ * @param mr Device memory resource used to allocate the returned column.
  * @return std::unique_ptr<column> The result target column
  */
 std::unique_ptr<column> copy_range(
@@ -709,7 +709,7 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @param input Column view to get the element from
  * @param index Index into `input` to get the element at
- * @param mr Optional, The resource to use for all returned allocations
+ * @param mr Device memory resource used to allocate the returned scalar.
  * @return std::unique_ptr<scalar> Scalar containing the single value
  */
 std::unique_ptr<scalar> get_element(

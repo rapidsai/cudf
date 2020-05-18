@@ -112,7 +112,7 @@ struct column_gatherer_impl {
    *map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
+   * @param mr Device memory resource used to allocate the returned column
    * @param stream CUDA stream on which to execute kernels
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
@@ -171,7 +171,7 @@ struct column_gatherer_impl<string_view, MapItType> {
    *map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
+   * @param mr Device memory resource used to allocate the returned column
    * @param stream CUDA stream on which to execute kernels
    */
   std::unique_ptr<column> operator()(column_view const& source_column,
@@ -205,7 +205,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
    * map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
+   * @param mr Device memory resource used to allocate the returned column
    * @param stream CUDA stream on which to execute kernels
    * @return New dictionary column with gathered rows.
    */
@@ -272,7 +272,7 @@ struct column_gatherer {
    * map
    * @param gather_map_end End of iterator range of integral values representing the gather map
    * @param nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds
-   * @param mr Memory resource to use for all allocations
+   * @param mr Device memory resource used to allocate the returned column
    * @param stream CUDA stream on which to execute kernels
    */
   template <typename Element, typename MapIterator>

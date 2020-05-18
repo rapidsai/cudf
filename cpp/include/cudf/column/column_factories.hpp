@@ -241,8 +241,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * (indicating a null string). The size must be the number of bytes.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
@@ -273,8 +272,7 @@ std::unique_ptr<column> make_strings_column(
  * string_views.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<string_view>& string_views,
@@ -312,8 +310,7 @@ std::unique_ptr<column> make_strings_column(
  * first invocation of `column::null_count()`
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
   const rmm::device_vector<char>& strings,
@@ -353,8 +350,7 @@ std::unique_ptr<column> make_strings_column(
  * first invocation of `column::null_count()`
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
   const std::vector<char>& strings,
@@ -382,8 +378,7 @@ std::unique_ptr<column> make_strings_column(
  *                  Arrow format for nulls is used for interpeting this bitmask.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * @param mr Device memory resource used for allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<column> make_strings_column(
   size_type num_strings,
@@ -406,7 +401,7 @@ std::unique_ptr<column> make_strings_column(
  * @param size The number of rows for the output column.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  */
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,

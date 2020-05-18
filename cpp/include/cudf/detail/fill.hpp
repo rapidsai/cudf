@@ -80,7 +80,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @param mr Memory resource to allocate the result output column
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result output column
  */

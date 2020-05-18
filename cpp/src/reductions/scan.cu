@@ -184,7 +184,7 @@ struct ScanDispatcher {
    *
    * @param input     input column view
    * @param inclusive inclusive or exclusive scan
-   * @param mr The resource to use for all allocations
+   * @param mr Device memory resource used to allocate the returned column
    * @param stream The stream on which to execute all allocations and copies
    * @return
    *

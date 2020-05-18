@@ -74,7 +74,7 @@ class reader::impl {
    * @param source Dataset source
    * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,

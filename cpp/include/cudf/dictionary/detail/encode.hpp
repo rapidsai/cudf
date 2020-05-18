@@ -44,7 +44,7 @@ namespace detail {
  *
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
- * @param mr Optional resource to use for device memory allocation.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream Optional stream on which to issue all memory allocation and
  *               device kernels.
  * @return Returns a dictionary column.
@@ -66,7 +66,7 @@ std::unique_ptr<column> encode(
  * ```
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream Optional stream on which to issue all memory allocation and
  *               device kernels.
  * @return New column with type matching the dictionary_column's keys.

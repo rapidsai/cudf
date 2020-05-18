@@ -34,7 +34,7 @@ namespace detail {
  * ```
  *
  * @param columns List of string columns to concatenate.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to use for any kernels in this function.
  * @return New column with concatenated results.
  */

@@ -89,7 +89,7 @@ namespace detail {
  * @param target_begin The starting index of the target range (inclusive)
  * @param target_end The index of the last element in the target range
  * (exclusive)
- * @param mr Memory resource to allocate the result target column.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<column> The result target column
  */

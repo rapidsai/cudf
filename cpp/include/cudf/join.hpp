@@ -77,7 +77,7 @@ namespace experimental {
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -142,7 +142,7 @@ std::unique_ptr<cudf::experimental::table> inner_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
@@ -207,7 +207,7 @@ std::unique_ptr<cudf::experimental::table> left_join(
  * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.  For each of these pairs (L, R), L
  * should exist in `left_on` and R should exist in `right_on`.
- * @param mr Memory resource used to allocate the returned table and columns
+ * @param mr Device memory resource used to allocate the returned table and columns
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of

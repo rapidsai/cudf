@@ -35,7 +35,7 @@ namespace detail {
  * @param unary_udf     The PTX/CUDA string of the unary function to apply
  * @param outout_type   The output type that is compatible with the output type in the UDF
  * @param is_ptx        true: the UDF is treated as PTX code; false: the UDF is treated as CUDA code
- * @param mr            The memory resource to use for for all device allocations
+ * @param mr            Device memory resource used to allocate the returned column
  * @param stream        CUDA stream on which to execute kernels
  * @return cudf::column The column resulting from applying the unary function to
  *                      every element of the input

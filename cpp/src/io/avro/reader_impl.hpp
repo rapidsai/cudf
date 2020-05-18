@@ -56,7 +56,7 @@ class reader::impl {
    *
    * @param source Dataset source
    * @param options Settings for controlling reading behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
                 reader_options const &options,

@@ -56,8 +56,7 @@ class table {
    * @param view The view whose contents will be copied to create a new `table`
    * @param stream Optional, stream on which all memory allocations and copies
    * will be performed
-   * @param mr Optional, the memory resource that will be used for allocating
-   * the device memory for the new columns
+   * @param mr Device memory resource used for allocating the device memory for the new columns
    **/
   table(table_view view,
         cudaStream_t stream                 = 0,

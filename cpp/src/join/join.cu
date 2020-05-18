@@ -395,8 +395,7 @@ std::unique_ptr<experimental::table> construct_join_output_df(
  * full join.
  * Else, for every column in `left_on` and `right_on`, an output column will
  * be produced.
- * @param mr The memory resource that will be used for allocating
- * the device memory for the new table
+ * @param mr Device memory resource used to allocate the returned table
  * @param stream Optional, stream on which all memory allocations and copies
  * will be performed
  *

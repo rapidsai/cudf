@@ -45,7 +45,7 @@ namespace detail {
  * @param strings Strings instance for this operation.
  * @param begin Start of index iterator.
  * @param end End of index iterator.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column containing the gathered strings.
  */
@@ -122,7 +122,7 @@ std::unique_ptr<cudf::column> gather(
  * @param begin Start of index iterator.
  * @param end End of index iterator.
  * @param nullify_out_of_bounds If true, indices outside the column's range are nullified.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column containing the gathered strings.
  */

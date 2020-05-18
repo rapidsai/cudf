@@ -51,7 +51,7 @@ namespace detail {
  * @param input_table Input table
  * @param count Non-nullable column of a integral type
  * @param check_count Whether to check count (negative values and overflow)
- * @param mr Memory resource to allocate the result output table
+ * @param mr Device memory resource used to allocate the returned table
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
  */
@@ -78,7 +78,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  *
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
- * @param mr Memory resource to allocate the result output table
+ * @param mr Device memory resource used to allocate the returned table
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
  */

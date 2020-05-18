@@ -77,7 +77,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -89,7 +89,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -101,7 +101,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -181,7 +181,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -193,7 +193,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -205,7 +205,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -342,7 +342,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -354,7 +354,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -366,7 +366,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -472,7 +472,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -484,7 +484,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -496,7 +496,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,
@@ -605,7 +605,7 @@ class reader {
    *
    * @param filepath Path to whole dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::string filepath,
                   reader_options const &options,
@@ -617,7 +617,7 @@ class reader {
    * @param buffer Pointer to whole dataset
    * @param length Host buffer size in bytes
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(const char *buffer,
                   size_t length,
@@ -629,7 +629,7 @@ class reader {
    *
    * @param file Arrow file object of dataset
    * @param options Settings for controlling reading behavior
-   * @param mr Optional resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                   reader_options const &options,

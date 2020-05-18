@@ -44,7 +44,7 @@ namespace detail {
  * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
  * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
  * specific row.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column.
  */

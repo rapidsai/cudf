@@ -75,7 +75,8 @@ struct read_avro_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -149,7 +150,8 @@ struct read_json_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -265,8 +267,9 @@ struct read_csv_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
- *
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
+ * 
  * @return The set of columns along with metadata
  */
 table_with_metadata read_csv(read_csv_args const& args,
@@ -398,7 +401,8 @@ struct read_orc_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns
  */
@@ -453,7 +457,8 @@ struct read_parquet_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * table_with_metadata
  *
  * @return The set of columns along with metadata
  */
@@ -510,7 +515,7 @@ struct write_orc_args {
  * @endcode
  *
  * @param args Settings for controlling reading behavior
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource to use for device memory allocation
  */
 void write_orc(write_orc_args const& args,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());

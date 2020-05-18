@@ -77,7 +77,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @param mr Memory resource to allocate the result output column
+ * @param mr Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> The result output column
  */
 std::unique_ptr<column> fill(column_view const& input,
@@ -113,7 +113,7 @@ std::unique_ptr<column> fill(column_view const& input,
  * @param input_table Input table
  * @param count Non-nullable column of a integral type
  * @param check_count Whether to check count (negative values and overflow)
- * @param mr Memory resource to allocate the result output table
+ * @param mr Device memory resource used to allocate the returned table
  * @return std::unique_ptr<table> The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
@@ -139,7 +139,7 @@ std::unique_ptr<table> repeat(
  *
  * @param input_table Input table
  * @param count Non-null scalar of a integral type
- * @param mr Memory resource to allocate the result output table
+ * @param mr Device memory resource used to allocate the returned table.
  * @return std::unique_ptr<table> The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
@@ -167,7 +167,7 @@ std::unique_ptr<table> repeat(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param step Increment value
- * @param mr Memory resource to allocate the result output column
+ * @param mr Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
 std::unique_ptr<column> sequence(
@@ -193,7 +193,7 @@ std::unique_ptr<column> sequence(
  *
  * @param size Size of the output column
  * @param init First value in the sequence
- * @param mr Memory resource to allocate the result output column
+ * @param mr Device memory resource used to allocate the returned column
  * @return std::unique_ptr<column> The result table containing the sequence
  **/
 std::unique_ptr<column> sequence(

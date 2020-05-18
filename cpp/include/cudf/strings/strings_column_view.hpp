@@ -108,7 +108,7 @@ void print(strings_column_view const& strings,
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned device_vectors.
  * @return Pair containing a vector of chars and a vector of offsets.
  */
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offsets(

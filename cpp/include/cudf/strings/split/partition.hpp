@@ -50,7 +50,7 @@ namespace strings {
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table.
  * @return New table of strings columns.
  */
 std::unique_ptr<experimental::table> partition(
@@ -82,7 +82,7 @@ std::unique_ptr<experimental::table> partition(
  * @param strings Strings instance for this operation.
  * @param delimiter UTF-8 encoded string indentifying where to split each string.
  *        Default of empty string indicates split on whitespace.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table.
  * @return New strings columns.
  */
 std::unique_ptr<experimental::table> rpartition(

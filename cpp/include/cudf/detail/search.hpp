@@ -55,7 +55,7 @@ namespace detail {
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
  * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource to use for device memory allocation
+ * @param mr              Device memory resource used to allocate the returned column
  * @param stream          Stream to use for any kernel launches.
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
@@ -99,7 +99,7 @@ std::unique_ptr<column> lower_bound(
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
  * @param null_precedence Vector of null_precedence enums values
- * @param mr              Device memory resource to use for device memory allocation
+ * @param mr              Device memory resource used to allocate the returned column
  * @param stream          Stream to use for any kernel launches.
  * @return std::unique_ptr<column> A non-nullable column of cudf::size_type elements
  * containing the insertion points.
@@ -129,7 +129,7 @@ std::unique_ptr<column> upper_bound(
  *
  * @param col      A column object
  * @param value    A scalar value to search for in `col`
- * @param mr       Device memory resource to use for device memory allocation
+ * @param mr       Device memory resource used to allocate the returned column
  * @param stream   Stream to use for any kernel launches.
  * @return bool    If `value` is found in `column` true, else false.
  */
@@ -157,7 +157,7 @@ bool contains(column_view const& col,
  *
  * @param haystack  A column object
  * @param needles   A column of values to search for in `col`
- * @param mr        Device memory resource to use for device memory allocation
+ * @param mr        Device memory resource used to allocate the returned column
  * @param stream    Stream to use for any kernel launches.
  * @return std::unique_ptr<column> A column of bool elements containing
  * true if the corresponding entry in haystack is contained in needles and false

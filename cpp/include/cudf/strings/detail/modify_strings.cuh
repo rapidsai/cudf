@@ -41,7 +41,7 @@ namespace detail {
  *
  * @param strings Number Column of strings to apply the modifications on;
  * it is not modified in place; rather a new column is returned instead
- * @param mr Memory resource to use
+ * @param mr Device memory resource used to allocate the returned column.
  * (cannot be a default argument because of the variadic pack);
  * @param stream Stream to use for any kernel calls.
  * (cannot be a default argument because of the variadic pack);

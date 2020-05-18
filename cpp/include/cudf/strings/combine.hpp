@@ -59,7 +59,7 @@ namespace strings {
  * @param narep String that should be used in place of any null strings
  *        found in any column. Default of invalid-scalar means any null entry in any column will
  *        produces a null result for that row.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
@@ -89,7 +89,7 @@ std::unique_ptr<column> concatenate(
  *        Default is an empty string.
  * @param narep String that should represent any null strings found.
  *        Default of invalid-scalar will ignore any null entries.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @return New column containing one string.
  */
 std::unique_ptr<column> join_strings(

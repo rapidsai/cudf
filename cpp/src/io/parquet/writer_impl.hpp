@@ -66,7 +66,7 @@ class writer::impl {
    *
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
                 writer_options const& options,

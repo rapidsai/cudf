@@ -33,7 +33,7 @@ namespace detail {
  * @param values Grouped values to get sum of
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_sum(column_view const& values,
@@ -48,7 +48,7 @@ std::unique_ptr<column> group_sum(column_view const& values,
  * @param values Grouped values to get minimum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_min(column_view const& values,
@@ -63,7 +63,7 @@ std::unique_ptr<column> group_min(column_view const& values,
  * @param values Grouped values to get maximum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_max(column_view const& values,
@@ -79,7 +79,7 @@ std::unique_ptr<column> group_max(column_view const& values,
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_argmax(column_view const& values,
@@ -96,7 +96,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_argmin(column_view const& values,
@@ -113,7 +113,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
  * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_count_valid(column_view const& values,
@@ -127,7 +127,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
  *
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& group_offsets,
@@ -144,7 +144,7 @@ std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& gro
  * @param group_labels ID of group corresponding value in @p values belongs to
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `var` is `N - ddof`, where `N` is the group size.
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_var(column_view const& values,
@@ -163,7 +163,7 @@ std::unique_ptr<column> group_var(column_view const& values,
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param quantiles List of quantiles q where q lies in [0,1]
  * @param interp Method to use when desired value lies between data points
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_quantiles(column_view const& values,
@@ -186,7 +186,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
  *  Nulls are treated equal.
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_nunique(column_view const& values,
@@ -208,7 +208,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
  * @param n nth element to choose from each group of @p values
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
- * @param mr Memory resource to allocate output with
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream Stream to perform computation in
  */
 std::unique_ptr<column> group_nth_element(column_view const& values,

@@ -50,7 +50,7 @@ namespace cudf {
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream Optional stream on which to issue all memory allocation and
  *               device kernels.
  * @return New dictionary column.

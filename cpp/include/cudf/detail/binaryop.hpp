@@ -34,7 +34,7 @@ namespace detail {
  * @param lhs         The left operand scalar
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
@@ -59,7 +59,7 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand column
  * @param rhs         The right operand scalar
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
@@ -84,7 +84,7 @@ std::unique_ptr<column> binary_operation(
  * @param lhs         The left operand column
  * @param rhs         The right operand column
  * @param output_type The desired data type of the output column
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */
@@ -113,7 +113,7 @@ std::unique_ptr<column> binary_operation(
  * @param output_type The desired data type of the output column. It is assumed
  *                    that output_type is compatible with the output data type
  *                    of the function in the PTX code
- * @param mr          Memory resource for allocating output column
+ * @param mr          Device memory resource used to allocate the returned column
  * @param stream      CUDA stream on which to execute kernels
  * @return std::unique_ptr<column> Output column
  */

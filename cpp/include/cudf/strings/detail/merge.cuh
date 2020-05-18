@@ -37,7 +37,7 @@ namespace detail {
  * @param lhs First column.
  * @param rhs Second column.
  * @param row_order Indexes for each column.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream CUDA stream to use for any kernels in this function.
  * @return New strings column.
  */

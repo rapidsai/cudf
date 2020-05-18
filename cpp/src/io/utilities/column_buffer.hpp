@@ -40,7 +40,7 @@ namespace detail {
  * @param size The number of elements to be represented by the mask
  * @param state The desired state of the mask
  * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned device_buffer
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */
@@ -108,7 +108,7 @@ namespace {
  * @param size List of page information
  * @param size List of page information
  * @param stream Optional stream to use for device memory alloc and kernels
- * @param mr Optional resource to use for device memory allocation
+ * @param mr Device memory resource used to allocate the returned column
  *
  * @return `std::unique_ptr<cudf::column>` Column from the existing device data
  */

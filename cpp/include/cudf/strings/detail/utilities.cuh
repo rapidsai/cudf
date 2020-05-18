@@ -33,7 +33,7 @@ namespace detail {
  * @tparam Iterator Used as input to scan to set the offset values.
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
- * @param mr Memory resource to use.
+ * @param mr Device memory resource used to allocate the returned column.
  * @param stream Stream to use for any kernel calls.
  * @return offsets child column for strings column
  */

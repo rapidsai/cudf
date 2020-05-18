@@ -44,7 +44,7 @@ namespace detail {
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
- * @param mr The resource to use for all allocations
+ * @param mr Device memory resource used to allocate the returned column
  * @param stream The stream to use for CUDA operations
  * @return New strings column.
  */
