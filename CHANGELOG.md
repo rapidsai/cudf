@@ -180,6 +180,7 @@
 - PR #5199 Add index support in `DataFrame.query`
 - PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
+- PR #5208 Port search and join benchmark to libcudf++
 - PR #5214 Move docs build script into repository
 
 ## Bug Fixes
