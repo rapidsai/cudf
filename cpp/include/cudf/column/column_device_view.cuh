@@ -384,7 +384,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Destroy the `column_device_view` object.
    *
-   * @note Does not free the column data, simply free's the device memory
+   * @note Does not free the column data, simply frees the device memory
    * allocated to hold the child views.
    */
   void destroy();
@@ -454,7 +454,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   /**
    * @brief Factory to construct a column view that is usable in device memory.
    *
-   * Allocates and copies views of `soure_view`'s children to device memory to
+   * Allocates and copies views of `source_view`'s children to device memory to
    * make them accessible in device code.
    *
    * If `source_view.num_children() == 0`, then no device memory is allocated.
@@ -643,7 +643,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
   /**
    * @brief Destroy the `mutable_column_device_view` object.
    *
-   * @note Does not free the column data, simply free's the device memory
+   * @note Does not free the column data, simply frees the device memory
    * allocated to hold the child views.
    */
   void destroy();

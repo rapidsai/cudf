@@ -548,7 +548,7 @@ std::pair<std::unique_ptr<experimental::table>, std::vector<size_type>> hash_par
                          global_partition_sizes.end(),
                          scanned_global_partition_sizes);
 
-  // Copy the result of the exlusive scan to the output offsets array
+  // Copy the result of the exclusive scan to the output offsets array
   // to indicate the starting point for each partition in the output
   std::vector<size_type> partition_offsets(num_partitions);
   CUDA_TRY(cudaMemcpyAsync(partition_offsets.data(),

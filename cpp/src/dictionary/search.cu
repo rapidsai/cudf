@@ -31,7 +31,7 @@ namespace detail {
  *
  * The index is the position within the keys column where the given key (scalar) is found.
  * The keys column is sorted and unique so only one value is expected.
- * The result is an integer scalar identifing the index value.
+ * The result is an integer scalar identifying the index value.
  * If the key is not found, the resulting scalar has `is_valid()=false`.
  */
 struct find_index_fn {
