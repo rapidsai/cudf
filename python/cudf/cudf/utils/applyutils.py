@@ -5,6 +5,7 @@ import functools
 import cupy
 from numba import cuda
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
@@ -111,12 +112,14 @@ def apply_chunks(
 
 
 def make_aggregate_nullmask(df, columns=None, op="and"):
-    out_mask = None
-    for k in columns or df.columns:
-        if not df[k].nullable:
-            continue
 
+    out_mask = None
+    for k in columns or df._data:
+        col = cudf.core.dataframe.extract_col(df, k)
+        if not col.nullable:
+            continue
         nullmask = df[k].nullmask
+
         if out_mask is None:
             out_mask = column.as_column(
                 nullmask.copy(), dtype=utils.mask_dtype
