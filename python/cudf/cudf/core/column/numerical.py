@@ -158,19 +158,17 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.unary.cast(self, dtype)
 
     def to_pandas(self, index=None):
-        arr = self.data_array_view
-        if self.has_nulls:
-            to_dtype = _cudf_nullable_pd_dtypes[self.dtype.type]
-            sr = pd.Series(arr.copy_to_host(), dtype=to_dtype, index=index)
-            mask_bytes = (
-                    cudautils.expand_mask_bits(len(self), self.mask_array_view)
-                    .copy_to_host()
-                    .astype(bool)
-                )
-            sr[~mask_bytes] = pd.NA
-            return sr
+        if self.has_nulls and self.dtype == np.bool:
+            # Boolean series in Pandas that contains None/NaN is of dtype
+            # `np.object`, which is not natively supported in GDF.
+            ret = self.astype(np.int8).to_array(fillna=-1)
+            ret = pd.Series(ret, index=index)
+            ret = ret.where(ret >= 0, other=None)
+            ret.replace(to_replace=1, value=True, inplace=True)
+            ret.replace(to_replace=0, value=False, inplace=True)
+            return ret
         else:
-            return pd.Series(self.to_array(), index=index)
+            return pd.Series(self.to_array(fillna="pandas"), index=index)
 
     def to_arrow(self):
         mask = None
