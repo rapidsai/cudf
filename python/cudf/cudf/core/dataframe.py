@@ -98,7 +98,7 @@ class DataFrame(Frame):
     Examples
     --------
 
-    Build dataframe with `__setitem__`:
+    Build dataframe with ``__setitem__``:
 
     >>> import cudf
     >>> df = cudf.DataFrame()
@@ -850,18 +850,20 @@ class DataFrame(Frame):
 
         dtype : data type, or dict of column name -> data type
             Use a numpy.dtype or Python type to cast entire DataFrame object to
-            the same type. Alternatively, use {col: dtype, ...}, where col is a
-            column label and dtype is a numpy.dtype or Python type to cast one
-            or more of the DataFrame's columns to column-specific types.
+            the same type. Alternatively, use ``{col: dtype, ...}``, where col
+            is a column label and dtype is a numpy.dtype or Python type
+            to cast one or more of the DataFrame's columns to
+            column-specific types.
         copy : bool, default False
             Return a deep-copy when ``copy=True``. Note by default
             ``copy=False`` setting is used and hence changes to
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
+
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
-            object.
+                           object.
             - ``warn`` : prints last exceptions as warnings and
             return original object.
         **kwargs : extra arguments to pass on to the constructor
@@ -2248,11 +2250,12 @@ class DataFrame(Frame):
     def reindex(
         self, labels=None, axis=0, index=None, columns=None, copy=True
     ):
-        """Return a new DataFrame whose axes conform to a new index
+        """
+        Return a new DataFrame whose axes conform to a new index
 
-        ``DataFrame.reindex`` supports two calling conventions
-        * ``(index=index_labels, columns=column_names)``
-        * ``(labels, axis={0 or 'index', 1 or 'columns'})``
+        ``DataFrame.reindex`` supports two calling conventions:
+            - ``(index=index_labels, columns=column_names)``
+            - ``(labels, axis={0 or 'index', 1 or 'columns'})``
 
         Parameters
         ----------
@@ -2368,7 +2371,68 @@ class DataFrame(Frame):
             df.index = index
             return df
 
-    def reset_index(self, drop=False, inplace=False):
+    def reset_index(
+        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+    ):
+        """
+        Reset the index.
+
+        Reset the index of the DataFrame, and use the default one instead.
+
+        Parameters
+        ----------
+        drop : bool, default False
+            Do not try to insert index into dataframe columns. This resets
+            the index to the default integer index.
+        inplace : bool, default False
+            Modify the DataFrame in place (do not create a new object).
+
+        Returns
+        -------
+        DataFrame or None
+            DataFrame with the new index or None if ``inplace=True``.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame([('bird', 389.0),
+        ...                    ('bird', 24.0),
+        ...                    ('mammal', 80.5),
+        ...                    ('mammal', np.nan)],
+        ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
+        ...                   columns=('class', 'max_speed'))
+        >>> df
+                class max_speed
+        falcon    bird     389.0
+        parrot    bird      24.0
+        lion    mammal      80.5
+        monkey  mammal      null
+        >>> df.reset_index()
+            index   class max_speed
+        0  falcon    bird     389.0
+        1  parrot    bird      24.0
+        2    lion  mammal      80.5
+        3  monkey  mammal      null
+        >>> df.reset_index(drop=True)
+            class max_speed
+        0    bird     389.0
+        1    bird      24.0
+        2  mammal      80.5
+        3  mammal      null
+
+        """
+        if level is not None:
+            raise NotImplementedError("level parameter is not supported yet.")
+
+        if col_level != 0:
+            raise NotImplementedError(
+                "col_level parameter is not supported yet."
+            )
+
+        if col_fill != "":
+            raise NotImplementedError(
+                "col_fill parameter is not supported yet."
+            )
+
         if inplace:
             result = self
         else:
@@ -2557,7 +2621,8 @@ class DataFrame(Frame):
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Only axis=1 is currently supported.
-        columns: array of column names, the same as using labels and axis=1
+        columns
+            array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
         inplace : bool, default False
@@ -2887,6 +2952,7 @@ class DataFrame(Frame):
             the dtype for the outputs; see Series.label_encoding
         na_sentinel : number
             Value to indicate missing category.
+
         Returns
         -------
         a new dataframe with a new column append for the coded values.
@@ -2903,6 +2969,30 @@ class DataFrame(Frame):
 
     @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(self, ascending=True, na_position="last"):
+        """
+        Sort by the values.
+
+        Parameters
+        ----------
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+
+        Returns
+        -------
+        out_column_inds : cuDF Column of indices sorted based on input
+
+        Notes
+        -----
+        Difference from pandas:
+
+        - Support axis='index' only.
+        - Not supporting: inplace, kind
+        - Ascending can be a list of bools to control per column
+
+        """
         return self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
@@ -2928,6 +3018,7 @@ class DataFrame(Frame):
             by.
         na_position : {‘first’, ‘last’}, default ‘last’
             'first' puts nulls at the beginning, 'last' puts nulls at the end
+
         Returns
         -------
         sorted_obj : cuDF DataFrame
@@ -2961,15 +3052,17 @@ class DataFrame(Frame):
         Notes
         -----
         Difference from pandas:
-        * Only a single column is supported in *columns*
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest("nlargest", n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
 
+        Notes
+        -----
         Difference from pandas:
-        * Only a single column is supported in *columns*
+            - Only a single column is supported in *columns*
         """
         return self._n_largest_or_smallest("nsmallest", n, columns, keep)
 
@@ -3129,7 +3222,8 @@ class DataFrame(Frame):
 
         Returns
         -------
-        merged : DataFrame
+            merged : DataFrame
+
         Examples
         --------
         >>> import cudf
@@ -3373,13 +3467,29 @@ class DataFrame(Frame):
     def groupby(
         self,
         by=None,
-        sort=True,
-        as_index=True,
+        axis=0,
         level=None,
+        as_index=True,
+        sort=True,
+        group_keys=True,
+        squeeze=False,
+        observed=False,
         dropna=True,
         method=None,
-        group_keys=True,
     ):
+        if axis not in (0, "index"):
+            raise NotImplementedError("axis parameter is not yet implemented")
+
+        if squeeze is not False:
+            raise NotImplementedError(
+                "squeeze parameter is not yet implemented"
+            )
+
+        if observed is not False:
+            raise NotImplementedError(
+                "observed parameter is not yet implemented"
+            )
+
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
@@ -4107,9 +4217,10 @@ class DataFrame(Frame):
         ------
         TypeError for invalid input type.
 
-        **Notes**
+        Notes
+        -----
 
-        Does not support automatically setting index column(s) similar to how
+        - Does not support automatically setting index column(s) similar to how
         ``to_pandas`` works for PyArrow Tables.
 
         Examples
@@ -4338,7 +4449,7 @@ class DataFrame(Frame):
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
-            Default 'linear'.
+            Default ``linear``.
         columns : list of str
             List of column names to include.
         exact : boolean
@@ -4545,9 +4656,9 @@ class DataFrame(Frame):
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
-        Count non-NA cells for each column or row.
+        Count ``non-NA`` cells for each column or row.
 
-        The values None, NaN, NaT are considered NA.
+        The values ``None``, ``NaN``, ``NaT`` are considered ``NA``.
 
         Returns
         -------
@@ -4991,9 +5102,10 @@ class DataFrame(Frame):
     ):
         """
         Return the mean of the values for the requested axis.
+
         Parameters
         ----------
-        axis : {index (0), columns (1)}
+        axis : {0 or 'index', 1 or 'columns'}
             Axis for the function to be applied on.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
@@ -5006,6 +5118,7 @@ class DataFrame(Frame):
             Series.
         **kwargs
             Additional keyword arguments to be passed to the function.
+
         Returns
         -------
         mean : Series or DataFrame (if level specified)
@@ -5614,10 +5727,12 @@ class DataFrame(Frame):
 
     def cov(self, **kwargs):
         """Compute the covariance matrix of a DataFrame.
+
         Parameters
         ----------
         **kwargs
             Keyword arguments to be passed to cupy.cov
+
         Returns
         -------
         cov : DataFrame

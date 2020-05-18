@@ -476,6 +476,80 @@ class GroupBy(object):
 
 
 class DataFrameGroupBy(GroupBy):
+    """
+    Group DataFrame using a mapper or by a Series of columns.
+
+    A groupby operation involves some combination of splitting the object,
+    applying a function, and combining the results. This can be used to
+    group large amounts of data and compute operations on these groups.
+
+    Parameters
+    ----------
+        by : mapping, function, label, or list of labels
+            Used to determine the groups for the groupby. If by is a
+            function, it’s called on each value of the object’s index.
+            If a dict or Series is passed, the Series or dict VALUES will
+            be used to determine the groups (the Series’ values are first
+            aligned; see .align() method). If an ndarray is passed, the
+            values are used as-is determine the groups. A label or list
+            of labels may be passed to group by the columns in self.
+            Notice that a tuple is interpreted as a (single) key.
+        level : int, level name, or sequence of such, default None
+            If the axis is a MultiIndex (hierarchical), group by a particular
+            level or levels.
+        as_index : bool, default True
+            For aggregated output, return object with group labels as
+            the index. Only relevant for DataFrame input.
+            as_index=False is effectively “SQL-style” grouped output.
+        sort : bool, default True
+            Sort group keys. Get better performance by turning this off.
+            Note this does not influence the order of observations within each
+            group. Groupby preserves the order of rows within each group.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'Animal': ['Falcon', 'Falcon',
+        ...                               'Parrot', 'Parrot'],
+        ...                    'Max Speed': [380., 370., 24., 26.]})
+        >>> df
+        Animal  Max Speed
+        0  Falcon      380.0
+        1  Falcon      370.0
+        2  Parrot       24.0
+        3  Parrot       26.0
+        >>> df.groupby(['Animal']).mean()
+                Max Speed
+        Animal
+        Falcon      375.0
+        Parrot       25.0
+
+        >>> arrays = [['Falcon', 'Falcon', 'Parrot', 'Parrot'],
+          ['Captive', 'Wild', 'Captive', 'Wild']]
+        >>> index = pd.MultiIndex.from_arrays(arrays, names=('Animal', 'Type'))
+        >>> df = cudf.DataFrame({'Max Speed': [390., 350., 30., 20.]},
+                  index=index)
+        >>> df
+                        Max Speed
+        Animal Type
+        Falcon Captive      390.0
+               Wild         350.0
+        Parrot Captive       30.0
+               Wild          20.0
+        >>> df.groupby(level=0).mean()
+                Max Speed
+        Animal
+        Falcon      370.0
+        Parrot       25.0
+        >>> df.groupby(level="Type").mean()
+                Max Speed
+        Type
+        Captive      210.0
+        Wild         185.0
+
+    """
+
     def __getattr__(self, key):
         if key in self.obj:
             return self.obj[key].groupby(self.grouping, dropna=self._dropna)
