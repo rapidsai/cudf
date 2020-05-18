@@ -22,6 +22,10 @@
 
 namespace cudf {
 namespace experimental {
+/**
+ * @addtogroup column_quantiles
+ * @{
+ */
 
 /**
  * @brief Computes quantiles with interpolation.
@@ -45,14 +49,13 @@ namespace experimental {
  * @returns Column of specified quantiles, with nulls for indeterminable values.
  */
 
-std::unique_ptr<column>
-quantile(column_view const& input,
-         std::vector<double> const& q,
-         interpolation interp = interpolation::LINEAR,
-         column_view const& ordered_indices = {},
-         bool exact = true,
-         rmm::mr::device_memory_resource* mr =
-           rmm::mr::get_default_resource());
+std::unique_ptr<column> quantile(
+  column_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                = interpolation::LINEAR,
+  column_view const& ordered_indices  = {},
+  bool exact                          = true,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Returns the rows of the input corresponding to the requested quantiles.
@@ -82,15 +85,15 @@ quantile(column_view const& input,
  * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
  */
-std::unique_ptr<table>
-quantiles(table_view const& input,
-          std::vector<double> const& q,
-          interpolation interp = interpolation::NEAREST,
-          cudf::sorted is_input_sorted = sorted::NO,
-          std::vector<order> const& column_order = {},
-          std::vector<null_order> const& null_precedence = {},
-          rmm::mr::device_memory_resource* mr =
-            rmm::mr::get_default_resource());
+std::unique_ptr<table> quantiles(
+  table_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                           = interpolation::NEAREST,
+  cudf::sorted is_input_sorted                   = sorted::NO,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_default_resource());
 
-} // namespace experimental
-} // namespace cudf
+/** @} */  // end of group
+}  // namespace experimental
+}  // namespace cudf

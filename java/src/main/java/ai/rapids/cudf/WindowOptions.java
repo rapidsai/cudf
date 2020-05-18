@@ -31,6 +31,7 @@ public class WindowOptions {
   private final ColumnVector precedingCol;
   private final ColumnVector followingCol;
   private final int timestampColumnIndex;
+  private final boolean timestampOrderAscending;
   private FrameType frameType = FrameType.ROWS;
 
   private WindowOptions(Builder builder) {
@@ -40,6 +41,7 @@ public class WindowOptions {
     this.precedingCol = builder.precedingCol;
     this.followingCol = builder.followingCol;
     this.timestampColumnIndex = builder.timestampColumnIndex;
+    this.timestampOrderAscending = builder.timestampOrderAscending;
     this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
   }
 
@@ -59,6 +61,8 @@ public class WindowOptions {
 
   int getTimestampColumnIndex() { return this.timestampColumnIndex; }
 
+  boolean isTimestampOrderAscending() { return this.timestampOrderAscending; }
+
   FrameType getFrameType() { return frameType; }
 
   public static class Builder {
@@ -69,6 +73,7 @@ public class WindowOptions {
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
     private int timestampColumnIndex = -1;
+    private boolean timestampOrderAscending = true;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -99,6 +104,16 @@ public class WindowOptions {
 
     public Builder timestampColumnIndex(int index) {
       this.timestampColumnIndex = index;
+      return this;
+    }
+
+    public Builder timestampAscending() {
+      this.timestampOrderAscending = true;
+      return this;
+    }
+
+    public Builder timestampDescending() {
+      this.timestampOrderAscending = false;
       return this;
     }
 

@@ -2,9 +2,10 @@
 
 from cudf.utils.gpu_utils import validate_setup  # isort:skip
 
-validate_setup()
+validate_setup(check_dask=False)
 
 import cupy
+from numba import cuda
 
 import rmm
 
@@ -19,10 +20,12 @@ from cudf.core.ops import (
     arctan,
     cos,
     exp,
+    floor_divide,
     log,
     logical_and,
     logical_not,
     logical_or,
+    remainder,
     sin,
     sqrt,
     tan,
@@ -40,6 +43,7 @@ from cudf.io import (
 )
 from cudf.utils.utils import set_allocator
 
+cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 __version__ = get_versions()["version"]

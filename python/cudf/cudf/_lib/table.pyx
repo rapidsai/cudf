@@ -28,7 +28,7 @@ from cudf._lib.cpp.table.table_view cimport (
 
 
 cdef class Table:
-    def __init__(self, data=None, index=None):
+    def __init__(self, object data=None, object index=None):
         """
         Table: A collection of Column objects with an optional index.
 
@@ -49,9 +49,18 @@ cdef class Table:
         return len(self._data)
 
     @property
+    def _num_indices(self):
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
+
+    @property
     def _num_rows(self):
         if self._index is not None:
             return len(self._index)
+        if len(self._data) == 0:
+            return 0
         return len(self._data.columns[0])
 
     @property

@@ -54,6 +54,10 @@ public class WindowAggregate {
     return new WindowAggregate(AggregateOp.MEDIAN, columnIndex, windowOptions);
   }
 
+  public static WindowAggregate row_number(int columnIndex, WindowOptions windowOptions) {
+    return new WindowAggregate(AggregateOp.ROW_NUMBER, columnIndex, windowOptions);
+  }
+
   int getColumnIndex() {
     return columnIndex;
   }

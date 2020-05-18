@@ -5,6 +5,7 @@ from libcpp.memory cimport unique_ptr
 from cudf.utils.dtypes import is_scalar
 
 from cudf._lib.column cimport Column
+from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.move cimport move
 
@@ -50,7 +51,7 @@ def replace(Column input_col, Column values_to_replace,
 
 def replace_nulls_column(Column input_col, Column replacement_values):
     """
-    Replaces null values in input_col with corresponding vlaues from
+    Replaces null values in input_col with corresponding values from
     replacement_values
 
     Parameters
@@ -91,14 +92,17 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def replace_nulls(Column input_col, object replacement):
+def replace_nulls(Column input_col, object replacement, object dtype=None):
     """
-    Calls one of the version of replace_nulls depedning on type
+    Calls one of the version of replace_nulls depending on type
     of replacement
     """
 
     if is_scalar(replacement):
-        return replace_nulls_scalar(input_col, Scalar(replacement))
+        return replace_nulls_scalar(
+            input_col,
+            as_scalar(replacement, dtype=dtype)
+        )
     else:
         return replace_nulls_column(input_col, replacement)
 

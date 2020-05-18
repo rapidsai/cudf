@@ -27,12 +27,10 @@
 
 namespace cudf {
 namespace test {
-
 using time_point_ms =
-    simt::std::chrono::time_point<simt::std::chrono::system_clock,
-                                  simt::std::chrono::milliseconds>;
+  simt::std::chrono::time_point<simt::std::chrono::system_clock, simt::std::chrono::milliseconds>;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a `thrust::device_vector` with ascending timestamps in the
  * range `[start, stop)`.
  *
@@ -45,31 +43,33 @@ using time_point_ms =
  * @param count The number of timestamps to create
  * @param start The first timestamp as a simt::std::chrono::time_point
  * @param stop The last timestamp as a simt::std::chrono::time_point
- *---------------------------------------------------------------------------**/
+ **/
 template <typename T, bool nullable = false>
-inline cudf::test::fixed_width_column_wrapper<T>
-generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
-  using Rep = typename T::rep;
-  using Period = typename T::period;
+inline cudf::test::fixed_width_column_wrapper<T> generate_timestamps(int32_t count,
+                                                                     time_point_ms start,
+                                                                     time_point_ms stop)
+{
+  using Rep        = typename T::rep;
+  using Period     = typename T::period;
   using ToDuration = simt::std::chrono::duration<Rep, Period>;
 
   auto lhs = start.time_since_epoch().count();
   auto rhs = stop.time_since_epoch().count();
 
   // When C++17, auto [min, max] = std::minmax(lhs, rhs)
-  auto min = std::min(lhs, rhs);
-  auto max = std::max(lhs, rhs);
+  auto min   = std::min(lhs, rhs);
+  auto max   = std::max(lhs, rhs);
   auto range = max - min;
-  auto iter = cudf::test::make_counting_transform_iterator(0, [=](auto i) {
+  auto iter  = cudf::test::make_counting_transform_iterator(0, [=](auto i) {
     return simt::std::chrono::floor<ToDuration>(
-      simt::std::chrono::milliseconds(min + (range / count) * i)).count();
+             simt::std::chrono::milliseconds(min + (range / count) * i))
+      .count();
   });
 
   if (nullable) {
     auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count, mask);
-  }
-  else {
+  } else {
     // This needs to be in an else to quash `statement_not_reachable` warnings
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + count);
   }

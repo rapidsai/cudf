@@ -19,8 +19,8 @@
 #include "../hostdevice_vector.hpp"
 
 #include <cudf/cudf.h>
-#include <utilities/legacy/column_utils.hpp>
 #include <cudf/utilities/error.hpp>
+#include <utilities/legacy/column_utils.hpp>
 
 #include <nvstrings/NVStrings.h>
 
@@ -39,17 +39,20 @@
  **/
 class gdf_column_wrapper {
   using str_pair = std::pair<const char *, size_t>;
-  using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+  using str_ptr  = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
 
  public:
-  gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype,
-                     gdf_dtype_extra_info dtype_info, const std::string name) {
+  gdf_column_wrapper(cudf::size_type size,
+                     gdf_dtype dtype,
+                     gdf_dtype_extra_info dtype_info,
+                     const std::string name)
+  {
     col = static_cast<gdf_column *>(malloc(gdf_column_sizeof()));
-    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info,
-                              name.c_str());
+    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info, name.c_str());
   }
 
-  ~gdf_column_wrapper() {
+  ~gdf_column_wrapper()
+  {
     if (col) {
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
@@ -59,12 +62,11 @@ class gdf_column_wrapper {
   }
 
   gdf_column_wrapper(const gdf_column_wrapper &other) = delete;
-  gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) {
-    other.col = nullptr;
-  }
+  gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) { other.col = nullptr; }
 
-  void allocate() {
-    const auto num_rows = std::max(col->size, 1);
+  void allocate()
+  {
+    const auto num_rows   = std::max(col->size, 1);
     const auto valid_size = gdf_valid_allocation_size(num_rows);
 
     // For strings, just store the <ptr, length>. Eventually, the column's data
@@ -81,14 +83,14 @@ class gdf_column_wrapper {
     CUDA_TRY(cudaMemsetAsync(col->valid, 0, valid_size));
   }
 
-  void finalize() {
+  void finalize()
+  {
     // Create and initialize an `NvStrings` instance from <ptr, length> data.
     // The container copies the string data to its internal memory so the source
     // memory must not be released prior to calling this method.
     if (col->dtype == GDF_STRING) {
       auto str_list = static_cast<str_pair *>(col->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, col->size),
-                       &NVStrings::destroy);
+      str_ptr str_data(NVStrings::create_from_index(str_list, col->size), &NVStrings::destroy);
       CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_FREE(std::exchange(col->data, str_data.release()), 0);
     }
@@ -96,9 +98,10 @@ class gdf_column_wrapper {
 
   gdf_column *operator->() const noexcept { return col; }
   gdf_column *get() const noexcept { return col; }
-  gdf_column *release() noexcept {
+  gdf_column *release() noexcept
+  {
     auto temp = col;
-    col = nullptr;
+    col       = nullptr;
     return temp;
   }
 

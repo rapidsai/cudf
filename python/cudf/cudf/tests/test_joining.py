@@ -183,7 +183,7 @@ def test_dataframe_join_cats():
     got = lhs.join(rhs)
     expect = lhs.to_pandas().join(rhs.to_pandas())
 
-    # Note: pandas make a object Index after joining
+    # Note: pandas make an object Index after joining
     pd.util.testing.assert_frame_equal(
         got.sort_values(by="b")
         .to_pandas()
@@ -196,8 +196,8 @@ def test_dataframe_join_cats():
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
     assert set(got.index.to_pandas()) & set("abc")
-    assert set(got["b"]) & set(bb)
-    assert set(got["c"]) & set(cc)
+    assert set(got["b"].to_array()) & set(bb)
+    assert set(got["c"].to_array()) & set(cc)
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
@@ -864,6 +864,96 @@ def test_join_multi(how, column_a, column_b, column_c):
         gdf_result.reset_index(drop=True).fillna(-1),
         pdf_result.sort_index().reset_index(drop=True).fillna(-1),
     )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {
+            "left_on": ["a", "b"],
+            "right_on": ["a", "b"],
+            "left_index": False,
+            "right_index": False,
+        },  # left and right on, no indices
+        {
+            "left_on": None,
+            "right_on": None,
+            "left_index": True,
+            "right_index": True,
+        },  # left_index and right_index, no on
+        {
+            "left_on": ["a", "b"],
+            "right_on": None,
+            "left_index": False,
+            "right_index": True,
+        },  # left on and right_index
+        {
+            "left_on": None,
+            "right_on": ["a", "b"],
+            "left_index": True,
+            "right_index": False,
+        },  # right_on and left_index
+    ],
+)
+def test_merge_multi(kwargs):
+
+    left = DataFrame(
+        {
+            "a": [1, 2, 3, 4, 3, 5, 6],
+            "b": [1, 3, 5, 7, 5, 9, 0],
+            "c": ["o", "p", "q", "r", "s", "t", "u"],
+            "d": ["v", "w", "x", "y", "z", "1", "2"],
+        }
+    )
+    right = DataFrame(
+        {
+            "a": [0, 9, 3, 4, 3, 7, 8],
+            "b": [2, 4, 5, 7, 5, 6, 8],
+            "c": ["a", "b", "c", "d", "e", "f", "g"],
+            "d": ["j", "i", "j", "k", "l", "m", "n"],
+        }
+    )
+
+    if (
+        kwargs["left_on"] is not None
+        and kwargs["right_on"] is not None
+        and kwargs["left_index"] is False
+        and kwargs["right_index"] is False
+    ):
+        left = left.set_index(["c", "d"])
+        right = right.set_index(["c", "d"])
+    elif (
+        kwargs["left_on"] is None
+        and kwargs["right_on"] is None
+        and kwargs["left_index"] is True
+        and kwargs["right_index"] is True
+    ):
+        left = left.set_index(["a", "b"])
+        right = right.set_index(["a", "b"])
+    elif kwargs["left_on"] is not None and kwargs["right_index"] is True:
+        left = left.set_index(["c", "d"])
+        right = right.set_index(["a", "b"])
+    elif kwargs["right_on"] is not None and kwargs["left_index"] is True:
+        left = left.set_index(["a", "b"])
+        right = right.set_index(["c", "d"])
+
+    gleft = left.to_pandas()
+    gright = right.to_pandas()
+
+    kwargs["sort"] = True
+    expect = gleft.merge(gright, **kwargs)
+    got = left.merge(right, **kwargs)
+
+    assert_eq(expect.sort_index().index, got.sort_index().index)
+
+    expect.index = range(len(expect))
+    got.index = range(len(got))
+    expect = expect.sort_values(list(expect.columns))
+    got = got.sort_values(list(got.columns))
+    expect.index = range(len(expect))
+    got.index = range(len(got))
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("dtype_l", ["int8", "int16", "int32", "int64"])

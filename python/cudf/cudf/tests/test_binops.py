@@ -399,7 +399,7 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
     ps_result = func(random_series)
 
     # verify
-    np.testing.assert_allclose(ps_result, gs_result)
+    np.testing.assert_allclose(ps_result, gs_result.to_array())
 
 
 @pytest.mark.parametrize("binop", _binops)
@@ -701,3 +701,25 @@ def test_vector_to_none_binops(dtype):
     got = data + None
 
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("lhs", [pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2])])
+@pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
+@pytest.mark.parametrize(
+    "ops",
+    [(np.remainder, cudf.remainder), (np.floor_divide, cudf.floor_divide)],
+)
+def test_ufunc_ops(lhs, rhs, ops):
+    np_op, cu_op = ops
+
+    if isinstance(lhs, pd.Series):
+        culhs = cudf.from_pandas(lhs)
+
+    if isinstance(rhs, pd.Series):
+        curhs = cudf.from_pandas(rhs)
+    else:
+        curhs = rhs
+
+    expect = np_op(lhs, rhs)
+    got = cu_op(culhs, curhs)
+    utils.assert_eq(expect.fillna(-1), got, check_dtype=False)

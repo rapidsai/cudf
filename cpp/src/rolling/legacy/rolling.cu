@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/nvtx_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <utilities/legacy/bit_util.cuh>
-#include <bitmask/legacy/bit_mask.cuh>
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/cudf.h>
-#include <cub/cub.cuh>
-#include <memory>
+#include <rmm/thrust_rmm_allocator.h>
 #include <stdio.h>
 #include <algorithm>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <cub/cub.cuh>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/nvtx_utils.hpp>
+#include <memory>
+#include <utilities/legacy/bit_util.cuh>
 
 #include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/rolling.hpp>
@@ -41,11 +41,10 @@
 #include <types.h.jit>
 #include <types.hpp.jit>
 
-#include <rmm/device_scalar.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <rmm/device_scalar.hpp>
 
-namespace
-{
+namespace {
 /**
  * @brief Computes the rolling window function
  *
@@ -80,26 +79,25 @@ namespace
 
  */
 template <typename ColumnType, class agg_op, bool average, cudf::size_type block_size>
-__launch_bounds__ (block_size)
-__global__
-void gpu_rolling(cudf::size_type nrows,
-                 gdf_size_type * __restrict__ const output_valid_count,
-                 ColumnType * const __restrict__ out_col, 
-                 bit_mask::bit_mask_t * const __restrict__ out_col_valid,
-                 ColumnType const * const __restrict__ in_col, 
-                 bit_mask::bit_mask_t const * const __restrict__ in_col_valid,
-                 cudf::size_type window,
-                 cudf::size_type min_periods,
-                 cudf::size_type forward_window,
-                 const cudf::size_type *window_col,
-                 const cudf::size_type *min_periods_col,
-                 const cudf::size_type *forward_window_col)
+__launch_bounds__(block_size) __global__
+  void gpu_rolling(cudf::size_type nrows,
+                   gdf_size_type *__restrict__ const output_valid_count,
+                   ColumnType *const __restrict__ out_col,
+                   bit_mask::bit_mask_t *const __restrict__ out_col_valid,
+                   ColumnType const *const __restrict__ in_col,
+                   bit_mask::bit_mask_t const *const __restrict__ in_col_valid,
+                   cudf::size_type window,
+                   cudf::size_type min_periods,
+                   cudf::size_type forward_window,
+                   const cudf::size_type *window_col,
+                   const cudf::size_type *min_periods_col,
+                   const cudf::size_type *forward_window_col)
 {
   // we're going to be using bit utils a lot in the kernel
   using namespace bit_mask;
   const bool is_nullable = (in_col_valid != nullptr);
 
-  cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::size_type i      = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::size_type stride = blockDim.x * gridDim.x;
 
   agg_op op;
@@ -107,19 +105,21 @@ void gpu_rolling(cudf::size_type nrows,
   gdf_size_type warp_valid_count{0};
 
   auto active_threads = __ballot_sync(0xffffffff, i < nrows);
-  while(i < nrows)
-  {
+  while (i < nrows) {
     ColumnType val = agg_op::template identity<ColumnType>();
-    volatile cudf::size_type count = 0;	// declare this as volatile to avoid some compiler optimizations that lead to incorrect results for CUDA 10.0 and below (fixed in CUDA 10.1)
+    volatile cudf::size_type count =
+      0;  // declare this as volatile to avoid some compiler optimizations that lead to incorrect
+          // results for CUDA 10.0 and below (fixed in CUDA 10.1)
 
     // dynamic window handling
     if (window_col != nullptr) window = window_col[i];
-    if (min_periods_col != nullptr) min_periods = max(min_periods_col[i], 1);	// at least one observation is required
+    if (min_periods_col != nullptr)
+      min_periods = max(min_periods_col[i], 1);  // at least one observation is required
     if (forward_window_col != nullptr) forward_window = forward_window_col[i];
 
     // compute bounds
     cudf::size_type start_index = max((cudf::size_type)0, i - window + 1);
-    cudf::size_type end_index = min(nrows, i + forward_window + 1);       // exclusive
+    cudf::size_type end_index   = min(nrows, i + forward_window + 1);  // exclusive
 
     // aggregate
     // TODO: We should explore using shared memory to avoid redundant loads.
@@ -137,10 +137,11 @@ void gpu_rolling(cudf::size_type nrows,
 
     // set the mask
     bit_mask_t const result_mask{__ballot_sync(active_threads, output_is_valid)};
-    cudf::size_type const out_mask_location = cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(i);
+    cudf::size_type const out_mask_location =
+      cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(i);
 
     // only one thread writes the mask
-    if (0 == threadIdx.x % warpSize){
+    if (0 == threadIdx.x % warpSize) {
       out_col_valid[out_mask_location] = result_mask;
       warp_valid_count += __popc(result_mask);
     }
@@ -154,30 +155,36 @@ void gpu_rolling(cudf::size_type nrows,
     active_threads = __ballot_sync(active_threads, i < nrows);
   }
 
-  // sum the valid counts across the whole block  
-  gdf_size_type block_valid_count = cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-  if(threadIdx.x == 0){
-    atomicAdd(output_valid_count, block_valid_count);
-  }  
+  // sum the valid counts across the whole block
+  gdf_size_type block_valid_count =
+    cudf::experimental::detail::single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
+  if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
 }
 
-struct rolling_window_launcher
-{
+struct rolling_window_launcher {
   /**
    * @brief Uses SFINAE to instantiate only for supported type combos
    */
-  template<typename ColumnType, class agg_op, bool average, class... TArgs,
-     typename std::enable_if_t<cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
-  void dispatch_aggregation_type(cudf::size_type nrows, gdf_size_type& null_count, cudaStream_t stream, TArgs... FArgs)
+  template <typename ColumnType,
+            class agg_op,
+            bool average,
+            class... TArgs,
+            typename std::enable_if_t<cudf::detail::is_supported<ColumnType, agg_op>(),
+                                      std::nullptr_t> = nullptr>
+  void dispatch_aggregation_type(cudf::size_type nrows,
+                                 gdf_size_type &null_count,
+                                 cudaStream_t stream,
+                                 TArgs... FArgs)
   {
     cudf::nvtx::range_push("CUDF_ROLLING", cudf::nvtx::color::ORANGE);
 
     constexpr cudf::size_type block = 256;
-    cudf::size_type grid = (nrows + block-1) / block;
+    cudf::size_type grid            = (nrows + block - 1) / block;
 
     rmm::device_scalar<gdf_size_type> device_valid_count{0, stream};
 
-    gpu_rolling<ColumnType, agg_op, average, block><<<grid, block, 0, stream>>>(nrows, device_valid_count.data(), FArgs...);
+    gpu_rolling<ColumnType, agg_op, average, block>
+      <<<grid, block, 0, stream>>>(nrows, device_valid_count.data(), FArgs...);
 
     null_count = nrows - device_valid_count.value();
 
@@ -190,11 +197,20 @@ struct rolling_window_launcher
   /**
    * @brief If we cannot perform aggregation on this type then throw an error
    */
-  template<typename ColumnType, class agg_op, bool average, class... TArgs,
-     typename std::enable_if_t<!cudf::detail::is_supported<ColumnType, agg_op>(), std::nullptr_t> = nullptr>
-  void dispatch_aggregation_type(cudf::size_type nrows, gdf_size_type& null_count, cudaStream_t stream, TArgs... FArgs)
+  template <typename ColumnType,
+            class agg_op,
+            bool average,
+            class... TArgs,
+            typename std::enable_if_t<!cudf::detail::is_supported<ColumnType, agg_op>(),
+                                      std::nullptr_t> = nullptr>
+  void dispatch_aggregation_type(cudf::size_type nrows,
+                                 gdf_size_type &null_count,
+                                 cudaStream_t stream,
+                                 TArgs... FArgs)
   {
-    CUDF_FAIL("Unsupported column type/operation combo. Only `min` and `max` are supported for non-arithmetic types for aggregations.");
+    CUDF_FAIL(
+      "Unsupported column type/operation combo. Only `min` and `max` are supported for "
+      "non-arithmetic types for aggregations.");
   }
 
   /**
@@ -204,65 +220,109 @@ struct rolling_window_launcher
    */
   template <typename ColumnType>
   void operator()(cudf::size_type nrows,
-      gdf_size_type &null_count,
-      gdf_agg_op agg_type,
-      void *out_col_data_ptr, cudf::valid_type *out_col_valid_ptr,
-      void *in_col_data_ptr, cudf::valid_type *in_col_valid_ptr,
-      cudf::size_type window,
-      cudf::size_type min_periods,
-      cudf::size_type forward_window,
-      const cudf::size_type *window_col,
-      const cudf::size_type *min_periods_col,
-      const cudf::size_type *forward_window_col,
-      cudaStream_t stream)
+                  gdf_size_type &null_count,
+                  gdf_agg_op agg_type,
+                  void *out_col_data_ptr,
+                  cudf::valid_type *out_col_valid_ptr,
+                  void *in_col_data_ptr,
+                  cudf::valid_type *in_col_valid_ptr,
+                  cudf::size_type window,
+                  cudf::size_type min_periods,
+                  cudf::size_type forward_window,
+                  const cudf::size_type *window_col,
+                  const cudf::size_type *min_periods_col,
+                  const cudf::size_type *forward_window_col,
+                  cudaStream_t stream)
   {
-    ColumnType *typed_out_data = static_cast<ColumnType*>(out_col_data_ptr);
-    bit_mask::bit_mask_t *typed_out_valid = reinterpret_cast<bit_mask::bit_mask_t*>(out_col_valid_ptr);
-    const ColumnType *typed_in_data = static_cast<const ColumnType*>(in_col_data_ptr);
-    const bit_mask::bit_mask_t *typed_in_valid = reinterpret_cast<const bit_mask::bit_mask_t*>(in_col_valid_ptr);
+    ColumnType *typed_out_data = static_cast<ColumnType *>(out_col_data_ptr);
+    bit_mask::bit_mask_t *typed_out_valid =
+      reinterpret_cast<bit_mask::bit_mask_t *>(out_col_valid_ptr);
+    const ColumnType *typed_in_data = static_cast<const ColumnType *>(in_col_data_ptr);
+    const bit_mask::bit_mask_t *typed_in_valid =
+      reinterpret_cast<const bit_mask::bit_mask_t *>(in_col_valid_ptr);
 
     // TODO: We should consolidate our aggregation enums for reductions, scans,
     //       groupby and rolling. @harrism suggested creating
     //       aggregate_dispatcher that works like type_dispatcher.
     switch (agg_type) {
-    case GDF_SUM:
-      dispatch_aggregation_type<ColumnType, cudf::DeviceSum, false>(nrows, null_count, stream,
-                typed_out_data, typed_out_valid,
-                typed_in_data, typed_in_valid,
-                window, min_periods, forward_window,
-                window_col, min_periods_col, forward_window_col);
-      break;
-    case GDF_MIN:
-      dispatch_aggregation_type<ColumnType, cudf::DeviceMin, false>(nrows, null_count, stream,
-                 typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
-                 window, min_periods, forward_window,
-                 window_col, min_periods_col, forward_window_col);
-      break;
-    case GDF_MAX:
-      dispatch_aggregation_type<ColumnType, cudf::DeviceMax, false>(nrows, null_count, stream,
-                 typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
-                 window, min_periods, forward_window,
-                 window_col, min_periods_col, forward_window_col);
-      break;
-    case GDF_COUNT:
-      dispatch_aggregation_type<ColumnType, cudf::DeviceCount, false>(nrows, null_count, stream,
-                 typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
-                 window, min_periods, forward_window,
-                 window_col, min_periods_col, forward_window_col);
-      break;
-    case GDF_AVG:
-      dispatch_aggregation_type<ColumnType, cudf::DeviceSum, true>(nrows, null_count, stream,
-                 typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
-                 window, min_periods, forward_window,
-                 window_col, min_periods_col, forward_window_col);
-      break;
-    default:
-      // TODO: need a nice way to convert enums to strings, same would be useful for groupbys
-      CUDF_FAIL("Aggregation function " + std::to_string(agg_type) + " is not implemented");
+      case GDF_SUM:
+        dispatch_aggregation_type<ColumnType, cudf::DeviceSum, false>(nrows,
+                                                                      null_count,
+                                                                      stream,
+                                                                      typed_out_data,
+                                                                      typed_out_valid,
+                                                                      typed_in_data,
+                                                                      typed_in_valid,
+                                                                      window,
+                                                                      min_periods,
+                                                                      forward_window,
+                                                                      window_col,
+                                                                      min_periods_col,
+                                                                      forward_window_col);
+        break;
+      case GDF_MIN:
+        dispatch_aggregation_type<ColumnType, cudf::DeviceMin, false>(nrows,
+                                                                      null_count,
+                                                                      stream,
+                                                                      typed_out_data,
+                                                                      typed_out_valid,
+                                                                      typed_in_data,
+                                                                      typed_in_valid,
+                                                                      window,
+                                                                      min_periods,
+                                                                      forward_window,
+                                                                      window_col,
+                                                                      min_periods_col,
+                                                                      forward_window_col);
+        break;
+      case GDF_MAX:
+        dispatch_aggregation_type<ColumnType, cudf::DeviceMax, false>(nrows,
+                                                                      null_count,
+                                                                      stream,
+                                                                      typed_out_data,
+                                                                      typed_out_valid,
+                                                                      typed_in_data,
+                                                                      typed_in_valid,
+                                                                      window,
+                                                                      min_periods,
+                                                                      forward_window,
+                                                                      window_col,
+                                                                      min_periods_col,
+                                                                      forward_window_col);
+        break;
+      case GDF_COUNT:
+        dispatch_aggregation_type<ColumnType, cudf::DeviceCount, false>(nrows,
+                                                                        null_count,
+                                                                        stream,
+                                                                        typed_out_data,
+                                                                        typed_out_valid,
+                                                                        typed_in_data,
+                                                                        typed_in_valid,
+                                                                        window,
+                                                                        min_periods,
+                                                                        forward_window,
+                                                                        window_col,
+                                                                        min_periods_col,
+                                                                        forward_window_col);
+        break;
+      case GDF_AVG:
+        dispatch_aggregation_type<ColumnType, cudf::DeviceSum, true>(nrows,
+                                                                     null_count,
+                                                                     stream,
+                                                                     typed_out_data,
+                                                                     typed_out_valid,
+                                                                     typed_in_data,
+                                                                     typed_in_valid,
+                                                                     window,
+                                                                     min_periods,
+                                                                     forward_window,
+                                                                     window_col,
+                                                                     min_periods_col,
+                                                                     forward_window_col);
+        break;
+      default:
+        // TODO: need a nice way to convert enums to strings, same would be useful for groupbys
+        CUDF_FAIL("Aggregation function " + std::to_string(agg_type) + " is not implemented");
     }
   }
 };
@@ -270,9 +330,8 @@ struct rolling_window_launcher
 }  // anonymous namespace
 
 namespace cudf {
-
 // see rolling.hpp for declaration
-gdf_column* rolling_window(const gdf_column &input_col,
+gdf_column *rolling_window(const gdf_column &input_col,
                            cudf::size_type window,
                            cudf::size_type min_periods,
                            cudf::size_type forward_window,
@@ -281,17 +340,18 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            const cudf::size_type *min_periods_col,
                            const cudf::size_type *forward_window_col)
 {
-  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
+               "Window size and min periods must be non-negative");
 
   // Use the column wrapper class from io/utilities to quickly create a column
-  gdf_column_wrapper output_col(input_col.size,
-                                input_col.dtype,
-                                input_col.dtype_info,
-                                input_col.col_name == nullptr ? "" : std::string(input_col.col_name));
+  gdf_column_wrapper output_col(
+    input_col.size,
+    input_col.dtype,
+    input_col.dtype_info,
+    input_col.col_name == nullptr ? "" : std::string(input_col.col_name));
 
   // If there are no rows in the input, return successfully
-  if (input_col.size == 0)
-    return output_col.release();
+  if (input_col.size == 0) return output_col.release();
 
   // Allocate memory for the output column
   output_col.allocate();
@@ -305,91 +365,96 @@ gdf_column* rolling_window(const gdf_column &input_col,
   // Launch type dispatcher
   cudf::type_dispatcher(input_col.dtype,
                         rolling_window_launcher{},
-                        input_col.size, output_col->null_count, agg_type,
-                        output_col->data, output_col->valid,
-                        input_col.data, input_col.valid,
-                        window, min_periods, forward_window,
-                        window_col, min_periods_col, forward_window_col,
+                        input_col.size,
+                        output_col->null_count,
+                        agg_type,
+                        output_col->data,
+                        output_col->valid,
+                        input_col.data,
+                        input_col.valid,
+                        window,
+                        min_periods,
+                        forward_window,
+                        window_col,
+                        min_periods_col,
+                        forward_window_col,
                         stream);
 
   // Release the gdf pointer from the wrapper class
   return output_col.release();
 }
 
-gdf_column rolling_window(gdf_column const& input,
-                           cudf::size_type window,
-                           cudf::size_type min_periods,
-                           cudf::size_type forward_window,
-                           const std::string& user_defined_aggregator,
-                           gdf_agg_op agg_op,
-                           gdf_dtype output_type,
-                           cudf::size_type const* window_col,
-                           cudf::size_type const* min_periods_col,
-                           cudf::size_type const* forward_window_col)
+gdf_column rolling_window(gdf_column const &input,
+                          cudf::size_type window,
+                          cudf::size_type min_periods,
+                          cudf::size_type forward_window,
+                          const std::string &user_defined_aggregator,
+                          gdf_agg_op agg_op,
+                          gdf_dtype output_type,
+                          cudf::size_type const *window_col,
+                          cudf::size_type const *min_periods_col,
+                          cudf::size_type const *forward_window_col)
 {
-  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0),
+               "Window size and min periods must be non-negative");
 
   gdf_column output = allocate_column(output_type, input.size, true);
 
   // If there are no rows in the input, return successfully
-  if (input.size == 0)
-    return output;
+  if (input.size == 0) return output;
 
   if (input.null_count > 0) {
-    CUDF_FAIL("Currently the UDF version of rolling window"
-        " does NOT support inputs with nulls.");
+    CUDF_FAIL(
+      "Currently the UDF version of rolling window"
+      " does NOT support inputs with nulls.");
   }
 
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
 
-  std::string hash = "prog_rolling." 
-    + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
-  
+  std::string hash =
+    "prog_rolling." + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
+
   std::string cuda_source;
-  switch(agg_op){            
+  switch (agg_op) {
     case GDF_NUMBA_GENERIC_AGG_OPS:
-      cuda_source = 
-        cudf::jit::parse_single_function_ptx(
-          user_defined_aggregator, 
-          cudf::rolling::jit::get_function_name(agg_op), 
-          cudf::jit::getTypeName(output_type), {0, 5} // {0, 5} means the first and sixth args are pointers.
-        ) + cudf::rolling::jit::code::kernel;
-      break; 
-    case GDF_CUDA_GENERIC_AGG_OPS:
-      cuda_source = 
-        cudf::jit::parse_single_function_cuda(
-          user_defined_aggregator, 
-          cudf::rolling::jit::get_function_name(agg_op) 
-        ) + cudf::rolling::jit::code::kernel;
+      cuda_source = cudf::jit::parse_single_function_ptx(
+                      user_defined_aggregator,
+                      cudf::rolling::jit::get_function_name(agg_op),
+                      cudf::jit::getTypeName(output_type),
+                      {0, 5}  // {0, 5} means the first and sixth args are pointers.
+                      ) +
+                    cudf::rolling::jit::code::kernel;
       break;
-    default:
-      CUDF_FAIL("Unsupported UDF type.");
+    case GDF_CUDA_GENERIC_AGG_OPS:
+      cuda_source = cudf::jit::parse_single_function_cuda(
+                      user_defined_aggregator, cudf::rolling::jit::get_function_name(agg_op)) +
+                    cudf::rolling::jit::code::kernel;
+      break;
+    default: CUDF_FAIL("Unsupported UDF type.");
   }
 
   // Launch the jitify kernel
-  cudf::jit::launcher(
-    hash, cuda_source,
-    { cudf::rolling::jit::code::operation_h , cudf_types_h, cudf_types_hpp },
-    { "-std=c++14" }, nullptr
-  ).set_kernel_inst(
-    "gpu_rolling", // name of the kernel we are launching
-    { cudf::jit::getTypeName(output.dtype), // list of template arguments
-      cudf::jit::getTypeName(input.dtype),
-      cudf::rolling::jit::get_operator_name(agg_op) } 
-  ).launch(
-    output.size,
-    output.data,
-    output.valid,
-    input.data,
-    input.valid,
-    window,
-    min_periods,
-    forward_window,
-    window_col,
-    min_periods_col,
-    forward_window_col
-  );
+  cudf::jit::launcher(hash,
+                      cuda_source,
+                      {cudf::rolling::jit::code::operation_h, cudf_types_h, cudf_types_hpp},
+                      {"-std=c++14"},
+                      nullptr)
+    .set_kernel_inst("gpu_rolling",                          // name of the kernel we are launching
+                     {cudf::jit::getTypeName(output.dtype),  // list of template arguments
+                      cudf::jit::getTypeName(input.dtype),
+                      cudf::rolling::jit::get_operator_name(agg_op)})
+    .launch(output.size,
+            output.data,
+            output.valid,
+            input.data,
+            input.valid,
+            window,
+            min_periods,
+            forward_window,
+            window_col,
+            min_periods_col,
+            forward_window_col);
 
   set_null_count(output);
 

@@ -21,7 +21,6 @@
 #include "cudf/types.h"
 
 namespace cudf {
-
 /**
  * @brief Creates a new column by applying a unary function against every
  * element of an input column.
@@ -35,23 +34,26 @@ namespace cudf {
  *
  * @param input               The input column to transform
  * @param unary_udf           The PTX/CUDA string of the unary function to apply
- * @param outout_type         The output type that is compatible with the output type in the PTX code
- * @param is_ptx              If true the UDF is treated as a piece of PTX code; if fasle the UDF is treated as a piece of CUDA code
+ * @param outout_type         The output type that is compatible with the output type in the PTX
+ *code
+ * @param is_ptx              If true the UDF is treated as a piece of PTX code; if fasle the UDF is
+ *treated as a piece of CUDA code
  * @return gdf_column         The column resulting from applying the unary function to
  *                            every element of the input
  **/
 gdf_column transform(const gdf_column &input,
                      const std::string &unary_udf,
-                     gdf_dtype output_type, bool is_ptx);
+                     gdf_dtype output_type,
+                     bool is_ptx);
 
 /**
  * @brief Given a column with floating point values, generate a bitmask where every NaN
  * is indicated as the corresponding null bit.
- * 
+ *
  * @param input The input column to generate bitmask from
  * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
-*/
-std::pair<bit_mask::bit_mask_t*, cudf::size_type> nans_to_nulls(gdf_column const& input);
+ */
+std::pair<bit_mask::bit_mask_t *, cudf::size_type> nans_to_nulls(gdf_column const &input);
 
 }  // namespace cudf
 

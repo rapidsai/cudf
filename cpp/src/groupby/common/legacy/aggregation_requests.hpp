@@ -20,18 +20,17 @@
 #include <cudf/cudf.h>
 #include <cudf/legacy/groupby.hpp>
 
+#include <algorithm>
+#include <array>
 #include <utility>
 #include <vector>
-#include <array>
-#include <algorithm>
 
 namespace cudf {
 namespace groupby {
-
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
 
-/**---------------------------------------------------------------------------*
+/**
  * @file aggregations_requests.hpp
  * @brief An "aggregation request" is the pairing of a `gdf_column*` and an
  * aggregation operation to be performed on that column.
@@ -44,50 +43,45 @@ using cudaStream_t = struct CUstream_st*;
  * For example, `MEAN` is a "compound" aggregation. The request to compute an MEAN
  * on a column can be satisfied via the `COUNT` and `SUM` "simple" aggregation
  * operations.
- *---------------------------------------------------------------------------**/
+ **/
 using AggRequestType = std::pair<gdf_column*, operators>;
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief An "aggregation counter" is the pairing of a `AggRequestType` and a
  * counter of how many times said operation is needed.
- *---------------------------------------------------------------------------**/
+ **/
 using SimpleAggRequestCounter = std::pair<AggRequestType, cudf::size_type>;
 
 static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 
 static constexpr std::array<operators, 4> ordered_aggregations = {MEDIAN, QUANTILE, VARIANCE, STD};
 
-// Just an utility function to find the existence of on element in a constexpr array
+// Just a utility function to find the existence of on element in a constexpr array
 template <class T, size_t N>
-constexpr bool array_contains(std::array<T,N> const& haystack, T needle){
-    for(auto i = 0u; i < N; ++i){
-       if(haystack[i] == needle)
-           return true;
-    }
-    return false;
+constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
+{
+  for (auto i = 0u; i < N; ++i) {
+    if (haystack[i] == needle) return true;
+  }
+  return false;
 }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  To verify that the input operator is part of simple_aggregations list.
  * Note that in this kind of aggregators can be computed in a single pass scan.
  * In the other hand the compound aggregation MEAN need to be computed by simple
  * ones (SUM and COUNT).
- *---------------------------------------------------------------------------**/
-inline bool is_simple(operators op) {
-  return array_contains(simple_aggregations, op);
-}
+ **/
+inline bool is_simple(operators op) { return array_contains(simple_aggregations, op); }
 
-
-/**---------------------------------------------------------------------------*
+/**
  * @brief  To verify that the input operator is part of  ordered_aggregations list.
  * Ordered aggregation is used to identify other ones like MEDIAN and  QUANTILE,
- * which cannot be represented as a combination of single-pass aggregations. 
- *---------------------------------------------------------------------------**/
-inline bool is_ordered(operators op) {
-  return array_contains(ordered_aggregations, op);
-}
+ * which cannot be represented as a combination of single-pass aggregations.
+ **/
+inline bool is_ordered(operators op) { return array_contains(ordered_aggregations, op); }
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Converts a set of "compound" aggregation requests into a set of
  *"simple" aggregation requests that can be used to satisfy the compound
  *request.
@@ -95,11 +89,11 @@ inline bool is_ordered(operators op) {
  * @param compound_requests The set of compound aggregation requests
  * @return The set of corresponding simple aggregation requests that can be used
  * to satisfy the compound requests
- *---------------------------------------------------------------------------**/
+ **/
 std::vector<SimpleAggRequestCounter> compound_to_simple(
-    std::vector<AggRequestType> const& compound_requests);
+  std::vector<AggRequestType> const& compound_requests);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the `MEAN` aggregation of a column by doing element-wise
  * division of the corresponding `SUM` and `COUNT` aggregation columns.
  *
@@ -108,11 +102,10 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
  * @param stream Stream on which to perform operation
  * @return gdf_column* New column containing the result of elementwise division
  * of the sum and count columns
- *---------------------------------------------------------------------------**/
-gdf_column* compute_average(gdf_column sum, gdf_column count,
-                            cudaStream_t stream);
+ **/
+gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t stream);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes the results of a set of aggregation requests from a set of
  * computed simple requests.
  *
@@ -129,11 +122,11 @@ gdf_column* compute_average(gdf_column sum, gdf_column count,
  *the simple requests
  * @param stream[in] CUDA stream on which to execute
  * @return table Set of columns satisfying each of the original requests
- *---------------------------------------------------------------------------**/
-table compute_original_requests(
-    std::vector<AggRequestType> const& original_requests,
-    std::vector<SimpleAggRequestCounter> const& simple_requests, table simple_outputs,
-    cudaStream_t stream);
+ **/
+table compute_original_requests(std::vector<AggRequestType> const& original_requests,
+                                std::vector<SimpleAggRequestCounter> const& simple_requests,
+                                table simple_outputs,
+                                cudaStream_t stream);
 
 }  // namespace groupby
 }  // namespace cudf

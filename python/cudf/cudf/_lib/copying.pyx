@@ -8,6 +8,7 @@ from libcpp.vector cimport vector
 from libc.stdint cimport int32_t
 
 from cudf._lib.column cimport Column
+from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.table cimport Table
 from cudf._lib.move cimport move
@@ -202,7 +203,7 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
-        slr = Scalar(val, col.dtype)
+        slr = as_scalar(val, col.dtype)
         source_scalars.push_back(move(slr.c_value))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
@@ -236,7 +237,7 @@ def _scatter_scalar(scalars, Column scatter_map,
 def scatter(object input, object scatter_map, Table target,
             bool bounds_check=True):
     """
-    Scattering input into taregt as per the scatter map,
+    Scattering input into target as per the scatter map,
     input can be a list of scalars or can be a table
     """
 
@@ -533,17 +534,17 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, Scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_scalar(rhs, lhs.dtype), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                Scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_scalar(lhs, rhs.dtype), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs
 
             return _copy_if_else_scalar_scalar(
-                Scalar(lhs), Scalar(rhs), boolean_mask)
+                as_scalar(lhs), as_scalar(rhs), boolean_mask)
 
 
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
@@ -605,10 +606,18 @@ def boolean_mask_scatter(object input, Table target_table,
                          Column boolean_mask):
 
     if isinstance(input, Table):
-        _boolean_mask_scatter_table(input, target_table, boolean_mask)
+        return _boolean_mask_scatter_table(
+            input,
+            target_table,
+            boolean_mask
+        )
     else:
-        scalar_list = [Scalar(i) for i in input]
-        _boolean_mask_scatter_scalar(scalar_list, target_table, boolean_mask)
+        scalar_list = [as_scalar(i) for i in input]
+        return _boolean_mask_scatter_scalar(
+            scalar_list,
+            target_table,
+            boolean_mask
+        )
 
 
 def shift(Column input, int offset, object fill_value=None):
@@ -618,7 +627,7 @@ def shift(Column input, int offset, object fill_value=None):
     if isinstance(fill_value, Scalar):
         fill = fill_value
     else:
-        fill = Scalar(fill_value, input.dtype)
+        fill = as_scalar(fill_value, input.dtype)
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
@@ -635,3 +644,15 @@ def shift(Column input, int offset, object fill_value=None):
         )
 
     return Column.from_unique_ptr(move(c_output))
+
+
+def get_element(Column input_column, size_type index):
+    cdef column_view col_view = input_column.view()
+
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(col_view, index)
+        )
+
+    return Scalar.from_unique_ptr(move(c_output))

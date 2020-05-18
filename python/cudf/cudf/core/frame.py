@@ -10,7 +10,8 @@ from pandas.api.types import is_dtype_equal
 
 import cudf
 import cudf._lib as libcudf
-from cudf._lib.scalar import Scalar
+from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import as_scalar
 from cudf.core import column
 from cudf.core.column import as_column, build_categorical_column
 from cudf.utils.dtypes import (
@@ -40,13 +41,12 @@ class Frame(libcudf.table.Table):
         return cls(table._data, index=table._index)
 
     @classmethod
+    @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False):
 
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
         objs = [f.copy(deep=False) for f in objs]
-
-        libcudf.nvtx.range_push("CUDF_CONCAT", "orange")
 
         from cudf.core.index import as_index
         from cudf.core.column.column import column_empty
@@ -97,7 +97,7 @@ class Frame(libcudf.table.Table):
                     categories[idx] = (
                         cudf.concat([col.cat().categories for col in cols])
                         .to_series()
-                        .drop_duplicates()
+                        .drop_duplicates(ignore_index=True)
                         ._column
                     )
                     # Set the column dtype to the codes' dtype. The categories
@@ -159,7 +159,7 @@ class Frame(libcudf.table.Table):
         # missing a column, that list will have None in the slot instead
         columns = [
             ([] if ignore_index else list(f._index._data.columns))
-            + [f[name]._column if name in f else None for name in names]
+            + [f._data[name] if name in f._data else None for name in names]
             for i, f in enumerate(objs)
         ]
 
@@ -184,7 +184,7 @@ class Frame(libcudf.table.Table):
         # order. This strips the given index/column names and replaces the
         # names with their integer positions in the `cols` list
         tables = []
-        for i, cols in enumerate(columns):
+        for cols in columns:
             table_cols = cols[first_data_column_position:]
             table_names = indices[first_data_column_position:]
             table = cls(data=dict(zip(table_names, table_cols)))
@@ -219,8 +219,6 @@ class Frame(libcudf.table.Table):
 
         out._index.name = objs[0]._index.name
         out._index.names = objs[0]._index.names
-
-        libcudf.nvtx.range_pop()
 
         return out
 
@@ -321,11 +319,6 @@ class Frame(libcudf.table.Table):
             return self
         start, stop, stride = arg.indices(num_rows)
 
-        if stride is not None and stride != 1:
-            raise ValueError(
-                """Step size is not supported other than None and 1"""
-            )
-
         # This is just to handle RangeIndex type, stop
         # it from materializing unnecessarily
         keep_index = True
@@ -337,23 +330,32 @@ class Frame(libcudf.table.Table):
         if stop < 0:
             stop = stop + num_rows
 
-        if start > stop:
+        if (start > stop and (stride is None or stride == 1)) or (
+            len(self._data) == 0 and keep_index is False
+        ):
             return self._empty_like(keep_index)
         else:
             start = len(self) if start > num_rows else start
             stop = len(self) if stop > num_rows else stop
 
-            result = self._from_table(
-                libcudf.copying.table_slice(self, [start, stop], keep_index)[0]
-            )
+            if stride is not None and stride != 1:
+                return self._gather(
+                    cupy.arange(start, stop=stop, step=stride, dtype=np.int32)
+                )
+            else:
+                result = self._from_table(
+                    libcudf.copying.table_slice(
+                        self, [start, stop], keep_index
+                    )[0]
+                )
 
-            result._copy_categories(self, include_index=keep_index)
-            # Adding index of type RangeIndex back to
-            # result
-            if keep_index is False and self.index is not None:
-                result.index = self.index[start:stop]
-            result.columns = self.columns
-            return result
+                result._copy_categories(self, include_index=keep_index)
+                # Adding index of type RangeIndex back to
+                # result
+                if keep_index is False and self.index is not None:
+                    result.index = self.index[start:stop]
+                result.columns = self.columns
+                return result
 
     def _normalize_scalars(self, other):
         """
@@ -391,7 +393,7 @@ class Frame(libcudf.table.Table):
 
             if self is DataFrame, other can be only a
             scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimenstion
+            in DataFrame or a DataFrame with same dimension
 
             if self is Series, other can be only a scalar or
             a series like with same length as self
@@ -404,8 +406,8 @@ class Frame(libcudf.table.Table):
             other, cudf.DataFrame
         ):
             return [
-                other[self_col].astype(self[self_col].dtype)._column
-                for self_col in self.columns
+                other[self_col].astype(self._data[self_col].dtype)._column
+                for self_col in self._data.names
             ]
 
         elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
@@ -421,13 +423,13 @@ class Frame(libcudf.table.Table):
             ):
                 return self._normalize_scalars(other)
 
-            elif (self, cudf.DataFrame):
+            elif isinstance(self, cudf.DataFrame):
                 out = []
                 if is_scalar(other):
-                    other = [other for i in range(len(self.columns))]
+                    other = [other for i in range(len(self._data.names))]
                 out = [
                     self[in_col_name]._normalize_scalars(sclr)
-                    for in_col_name, sclr in zip(self.columns, other)
+                    for in_col_name, sclr in zip(self._data.names, other)
                 ]
 
                 return out
@@ -438,58 +440,86 @@ class Frame(libcudf.table.Table):
                     )
                 )
 
-    def where(self, boolean_mask, other):
+    def where(self, cond, other=None, inplace=False):
         """
-        Replace values with other where the condition is False.
+        Replace values where the condition is False.
 
         Parameters
         ----------
-        cond : boolean
-            This can be Frame of booleans, where cond is True, keep the
-            original value. Where False, replace with corresponding value
-            from other. Callables are not supported.
-        other: list of scalars or a dataframe or a series,
+        cond : bool Series/DataFrame, array-like
+            Where cond is True, keep the original value.
+            Where False, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
             Entries where cond is False are replaced with
             corresponding value from other. Callables are not
-            supported.
+            supported. Default is None.
 
             DataFrame expects only Scalar or array like with scalars or
-            dataframe with same dimention as self.
+            dataframe with same dimension as self.
 
             Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
 
         Returns
         -------
-        result : DataFrame/Series
+        Same type as caller
 
         Examples:
         ---------
         >>> import cudf
         >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
-        >>> print (df.where(df % 2 == 0, [-1, -1]))
+        >>> df.where(df % 2 == 0, [-1, -1])
            A  B
         0 -1 -1
         1  4 -1
         2 -1  8
 
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.where(ser > 2, 10))
+        >>> ser.where(ser > 2, 10)
         0     4
         1     3
         2    10
         3    10
         4    10
-        >>> print(ser.where(ser > 2))
-        0    4
-        1    3
-        2
-        3
-        4
+        dtype: int64
+        >>> ser.where(ser > 2)
+        0       4
+        1       3
+        2    null
+        3    null
+        4    null
+        dtype: int64
         """
 
         if isinstance(self, cudf.DataFrame):
-            if not isinstance(boolean_mask, cudf.DataFrame):
-                boolean_mask = self.from_pandas(pd.DataFrame(boolean_mask))
+            if hasattr(cond, "__cuda_array_interface__"):
+                cond = self.from_gpu_matrix(
+                    cond, columns=self._data.names, index=self.index
+                )
+            elif not isinstance(cond, cudf.DataFrame):
+                cond = self.from_pandas(pd.DataFrame(cond))
+
+            common_cols = set(self._data.names).intersection(
+                set(cond._data.names)
+            )
+            if len(common_cols) > 0:
+                # If `self` and `cond` are having unequal index,
+                # then re-index `cond`.
+                if len(self.index) != len(cond.index) or any(
+                    self.index != cond.index
+                ):
+                    cond = cond.reindex(self.index)
+            else:
+                if cond.shape != self.shape:
+                    raise ValueError(
+                        """Array conditional must be same shape as self"""
+                    )
+                # Setting `self` column names to `cond`
+                # as `cond` has no column names.
+                cond.columns = self.columns
+
             other = self._normalize_columns_and_scalars_type(other)
             out_df = cudf.DataFrame(index=self.index)
             if len(self._columns) != len(other):
@@ -497,69 +527,157 @@ class Frame(libcudf.table.Table):
                     """Replacement list length or number of dataframe columns
                     should be equal to Number of columns of dataframe"""
                 )
-            if len(self._columns) != len(boolean_mask._columns):
+
+            for column_name, other_column in zip(self._data.names, other):
+                input_col = self._data[column_name]
+                if column_name in cond._data:
+                    if is_categorical_dtype(input_col.dtype):
+                        if np.isscalar(other_column):
+                            try:
+                                other_column = input_col._encode(other_column)
+                            except ValueError:
+                                # When other is not present in categories,
+                                # fill with Null.
+                                other_column = None
+                        elif hasattr(other_column, "codes"):
+                            other_column = other_column.codes
+                        input_col = input_col.codes
+
+                    result = libcudf.copying.copy_if_else(
+                        input_col, other_column, cond._data[column_name]
+                    )
+
+                    if is_categorical_dtype(self._data[column_name].dtype):
+                        result = build_categorical_column(
+                            categories=self._data[column_name].categories,
+                            codes=as_column(
+                                result.base_data, dtype=result.dtype
+                            ),
+                            mask=result.base_mask,
+                            size=result.size,
+                            offset=result.offset,
+                            ordered=self._data[column_name].ordered,
+                        )
+                else:
+                    from cudf._lib.null_mask import MaskState, create_null_mask
+
+                    out_mask = create_null_mask(
+                        len(input_col), state=MaskState.ALL_NULL
+                    )
+                    result = input_col.set_mask(out_mask)
+                out_df[column_name] = self[column_name].__class__(result)
+
+            return self._mimic_inplace(out_df, inplace=inplace)
+
+        else:
+
+            if isinstance(other, cudf.DataFrame):
+                raise NotImplementedError(
+                    "cannot align with a higher dimensional Frame"
+                )
+
+            other = self._normalize_columns_and_scalars_type(other)
+
+            cond = as_column(cond)
+            if len(cond) != len(self):
                 raise ValueError(
                     """Array conditional must be same shape as self"""
                 )
-
-            for in_col_name, cond_col_name, otr_col in zip(
-                self.columns, boolean_mask.columns, other
-            ):
-                input_col = self[in_col_name]._column
-                if is_categorical_dtype(input_col.dtype):
-                    if np.isscalar(otr_col):
-                        otr_col = input_col._encode(otr_col)
-                    else:
-                        otr_col = otr_col.codes
-                    input_col = input_col.codes
-
-                result = libcudf.copying.copy_if_else(
-                    input_col, otr_col, boolean_mask[cond_col_name]._column
-                )
-
-                if is_categorical_dtype(self[in_col_name].dtype):
-                    result = build_categorical_column(
-                        categories=self[in_col_name]._column.categories,
-                        codes=as_column(result.base_data, dtype=result.dtype),
-                        mask=result.base_mask,
-                        size=result.size,
-                        offset=result.offset,
-                        ordered=self[in_col_name]._column.ordered,
-                    )
-
-                out_df[in_col_name] = self[in_col_name].__class__(result)
-
-            return out_df
-
-        else:
-            other = self._normalize_columns_and_scalars_type(other)
-            if isinstance(other, (cudf.Series, cudf.Index)):
-                other = other._column
-
-            input_col = self._column
+            input_col = self._data[self.name]
             if is_categorical_dtype(input_col.dtype):
-                if np.isscalar(otr_col):
-                    other = input_col._encode(other)
-                else:
+                if np.isscalar(other):
+                    try:
+                        other = input_col._encode(other)
+                    except ValueError:
+                        # When other is not present in categories,
+                        # fill with Null.
+                        other = None
+                elif hasattr(other, "codes"):
                     other = other.codes
+
                 input_col = input_col.codes
-            result = libcudf.copying.copy_if_else(
-                self._column, other, boolean_mask._column
-            )
+
+            result = libcudf.copying.copy_if_else(input_col, other, cond)
 
             if is_categorical_dtype(self.dtype):
                 result = build_categorical_column(
-                    categories=self._column.categories,
+                    categories=self._data[self.name].categories,
                     codes=as_column(result.base_data, dtype=result.dtype),
                     mask=result.base_mask,
                     size=result.size,
                     offset=result.offset,
-                    ordered=self._column.ordered,
+                    ordered=self._data[self.name].ordered,
                 )
 
-            result = self.__class__(result)
-            result.index = self.index
-            return result
+            if isinstance(self, cudf.Index):
+                from cudf.core.index import as_index
+
+                result = as_index(result, name=self.name)
+            else:
+                result = self._copy_construct(data=result)
+
+            return self._mimic_inplace(result, inplace=inplace)
+
+    def mask(self, cond, other=None, inplace=False):
+        """
+        Replace values where the condition is True.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is False, keep the original value.
+            Where True, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is True are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimension as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.mask(df % 2 == 0, [-1, -1])
+           A  B
+        0  1  3
+        1 -1  5
+        2  5 -1
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.mask(ser > 2, 10)
+        0    10
+        1    10
+        2     2
+        3     1
+        4     0
+        dtype: int64
+        >>> ser.mask(ser > 2)
+        0    null
+        1    null
+        2       2
+        3       1
+        4       0
+        dtype: int64
+        """
+
+        if not hasattr(cond, "__invert__"):
+            # We Invert `cond` below and call `where`, so
+            # making sure the object supports
+            # `~`(inversion) operator or `__invert__` method
+            cond = cupy.asarray(cond)
+
+        return self.where(cond=~cond, other=other, inplace=inplace)
 
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
@@ -582,7 +700,75 @@ class Frame(libcudf.table.Table):
         for frame in result:
             frame._copy_categories(self, include_index=keep_index)
 
+        if npartitions:
+            for i in range(npartitions - len(result)):
+                result.append(self._empty_like(keep_index))
+
         return result
+
+    @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
+    def scatter_by_map(
+        self, map_index, map_size=None, keep_index=True, **kwargs
+    ):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+
+        # map_index might be a column name or array,
+        # make it a Column
+        if isinstance(map_index, str):
+            map_index = self._data[map_index]
+        elif isinstance(map_index, cudf.Series):
+            map_index = map_index._column
+        else:
+            map_index = as_column(map_index)
+
+        # Convert float to integer
+        if map_index.dtype == np.float:
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index, cudf.core.column.StringColumn):
+            map_index = map_index.as_categorical_column(
+                "category"
+            ).as_numerical
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index, cudf.core.column.CategoricalColumn):
+            map_index = map_index.as_numerical
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        if kwargs.get("debug", False) == 1 and map_size is not None:
+            unique_count = map_index.unique_count()
+            if map_size < unique_count:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (unique_count, map_size)
+                )
+
+        tables = self._partition(map_index, map_size, keep_index)
+
+        return tables
 
     def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
@@ -637,7 +823,7 @@ class Frame(libcudf.table.Table):
             not np.iterable(subset)
             or isinstance(subset, str)
             or isinstance(subset, tuple)
-            and subset in self.columns
+            and subset in self._data.names
         ):
             subset = (subset,)
         diff = set(subset) - set(self._data)
@@ -673,7 +859,7 @@ class Frame(libcudf.table.Table):
             else:
                 thresh = len(df)
 
-        for col in self.columns:
+        for col in self._data.names:
             if (len(df[col]) - df[col].null_count) < thresh:
                 continue
             out_cols.append(col)
@@ -685,6 +871,11 @@ class Frame(libcudf.table.Table):
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
+        boolean_mask = as_column(boolean_mask)
+        if boolean_mask.has_nulls:
+            raise ValueError(
+                "cannot mask with boolean_mask containing null values"
+            )
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -826,7 +1017,7 @@ class Frame(libcudf.table.Table):
 
     def _repeat(self, count):
         if is_scalar(count):
-            count = Scalar(count)
+            count = as_scalar(count)
         else:
             count = as_column(count)
 
@@ -861,7 +1052,21 @@ class Frame(libcudf.table.Table):
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def drop_duplicates(self, subset=None, keep="first", nulls_are_equal=True):
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            To explicitly construct a GPU array, consider using \
+            cupy.asarray(...)\nTo explicitly construct a \
+            host array, consider using .to_array()"
+        )
+
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
         """
         Drops rows in frame as per duplicate rows in `subset` columns from
         self.
@@ -873,6 +1078,8 @@ class Frame(libcudf.table.Table):
             duplicate
         nulls_are_equal: null elements are considered equal to other null
             elements
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
         """
         if subset is None:
             subset = self._column_names
@@ -880,7 +1087,7 @@ class Frame(libcudf.table.Table):
             not np.iterable(subset)
             or isinstance(subset, str)
             or isinstance(subset, tuple)
-            and subset in self.columns
+            and subset in self._data.names
         ):
             subset = (subset,)
         diff = set(subset) - set(self._data)
@@ -892,11 +1099,42 @@ class Frame(libcudf.table.Table):
 
         result = self._from_table(
             libcudf.stream_compaction.drop_duplicates(
-                self, keys=subset, keep=keep, nulls_are_equal=nulls_are_equal
+                self,
+                keys=subset,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+                ignore_index=ignore_index,
             )
         )
 
         result._copy_categories(self)
+        return result
+
+    def replace(self, to_replace, replacement):
+        copy_data = self._data.copy()
+
+        for name, col in copy_data.items():
+            if not (to_replace is None and replacement is None):
+                try:
+                    (
+                        col_all_nan,
+                        col_replacement,
+                        col_to_replace,
+                    ) = _get_replacement_values(
+                        to_replace=to_replace,
+                        replacement=replacement,
+                        col_name=name,
+                        column=col,
+                    )
+
+                    copy_data[name] = col.find_and_replace(
+                        col_to_replace, col_replacement, col_all_nan
+                    )
+                except KeyError:
+                    # Do not change the copy_data[name]
+                    pass
+
+        result = self._from_table(Frame(copy_data, self.index))
         return result
 
     def _copy_categories(self, other, include_index=True):
@@ -905,11 +1143,11 @@ class Frame(libcudf.table.Table):
         to `self`.
         """
         for name, col, other_col in zip(
-            self._column_names, self._columns, other._columns
+            self._data.keys(), self._data.values(), other._data.values()
         ):
-            if is_categorical_dtype(other_col) and not is_categorical_dtype(
-                col
-            ):
+            if isinstance(
+                other_col, cudf.core.column.CategoricalColumn
+            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
                 self._data[name] = build_categorical_column(
                     categories=other_col.categories,
                     codes=as_column(col.base_data, dtype=col.dtype),
@@ -919,14 +1157,27 @@ class Frame(libcudf.table.Table):
                     offset=col.offset,
                 )
         if include_index:
-            from cudf.core.index import RangeIndex
-
             # include_index will still behave as False
             # incase of self._index being a RangeIndex
-            if (self._index is not None) and (
-                not isinstance(self._index, RangeIndex)
+            if (
+                self._index is not None
+                and not isinstance(self._index, cudf.core.index.RangeIndex)
+                and isinstance(
+                    other._index,
+                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
+                )
             ):
-                self._index._copy_categories(other._index)
+                self._index._copy_categories(other._index, include_index=False)
+                # When other._index is a CategoricalIndex, there is
+                # possibility that corresposing self._index be GenericIndex
+                # with codes. So to update even the class signature, we
+                # have to call as_index.
+                if isinstance(
+                    other._index, cudf.core.index.CategoricalIndex
+                ) and not isinstance(
+                    self._index, cudf.core.index.CategoricalIndex
+                ):
+                    self._index = cudf.core.index.as_index(self._index)
         return self
 
     def _unaryop(self, op):
@@ -1159,11 +1410,6 @@ class Frame(libcudf.table.Table):
         """
         Error for various combinations of merge input parameters
         """
-        if isinstance(
-            lhs.index, cudf.core.multiindex.MultiIndex
-        ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
-            raise TypeError("MultiIndex joins not yet supported.")
-
         len_left_on = len(left_on) if left_on is not None else 0
         len_right_on = len(right_on) if right_on is not None else 0
 
@@ -1182,7 +1428,9 @@ class Frame(libcudf.table.Table):
                 )
 
         # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index) == (len_right_on + right_index):
+        if not (len_left_on + left_index * len(lhs.index.names)) == (
+            len_right_on + right_index * len(rhs.index.names)
+        ):
             raise ValueError(
                 "Merge operands must have same number of join key columns"
             )
@@ -1338,7 +1586,7 @@ class Frame(libcudf.table.Table):
         cat_codes = dict(cat_codes)
 
         # Build a new data frame based on the merged columns from GDF
-        to_frame_data = OrderedDict()
+        to_frame_data = cudf.core.column_accessor.ColumnAccessor()
         for name, col in result:
             if is_string_dtype(col):
                 to_frame_data[name] = col
@@ -1347,7 +1595,7 @@ class Frame(libcudf.table.Table):
                 dtype = categorical_dtypes.get(name, col.dtype)
                 to_frame_data[name] = column.build_categorical_column(
                     categories=dtype.categories,
-                    codes=cat_codes.get(name + "_codes", col),
+                    codes=cat_codes.get(str(name) + "_codes", col),
                     mask=col.base_mask,
                     size=col.size,
                     offset=col.offset,
@@ -1458,6 +1706,27 @@ class Frame(libcudf.table.Table):
             return rtn
 
         if left_index or right_index:
+            if isinstance(
+                lhs.index, cudf.core.multiindex.MultiIndex
+            ) or isinstance(rhs.index, cudf.core.multiindex.MultiIndex):
+                if left_index and right_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                elif left_index:
+                    compare_cols_l = lhs._index._data.columns
+                    compare_cols_r = rhs[right_on]._data.columns
+                elif right_index:
+                    compare_cols_l = lhs[left_on]._data.columns
+                    compare_cols_r = rhs._index._data.columns
+                for left, right in compare_cols_l, compare_cols_r:
+                    if not pd.api.types.is_dtype_equal(
+                        left.dtype, right.dtype
+                    ):
+                        raise NotImplementedError(
+                            "Typecasting not yet supported for MultiIndicies"
+                        )
+
+                return lhs, rhs, []
             if left_index and right_index:
                 to_dtype = casting_rules(
                     lhs.index, rhs.index, lhs.index.dtype, rhs.index.dtype, how
@@ -1520,3 +1789,65 @@ class Frame(libcudf.table.Table):
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+
+def _get_replacement_values(to_replace, replacement, col_name, column):
+    from cudf.utils import utils
+    from pandas.api.types import is_dict_like
+
+    all_nan = False
+
+    if is_dict_like(to_replace) and replacement is None:
+        replacement = list(to_replace.values())
+        to_replace = list(to_replace.keys())
+    elif not is_scalar(to_replace):
+        if is_scalar(replacement):
+            all_nan = replacement is None
+            if all_nan:
+                replacement = [replacement] * len(to_replace)
+            # Do not broadcast numeric dtypes
+            elif pd.api.types.is_numeric_dtype(column.dtype):
+                if len(to_replace) > 0:
+                    replacement = [replacement]
+                else:
+                    # If to_replace is empty, replacement has to be empty.
+                    replacement = []
+            else:
+                replacement = utils.scalar_broadcast_to(
+                    replacement,
+                    (len(to_replace),),
+                    np.dtype(type(replacement)),
+                )
+        else:
+            # If both are non-scalar
+            if len(to_replace) != len(replacement):
+                raise ValueError(
+                    "Replacement lists must be "
+                    "of same length."
+                    "Expected {}, got {}.".format(
+                        len(to_replace), len(replacement)
+                    )
+                )
+    else:
+        if not is_scalar(replacement):
+            raise TypeError(
+                "Incompatible types '{}' and '{}' "
+                "for *to_replace* and *replacement*.".format(
+                    type(to_replace).__name__, type(replacement).__name__
+                )
+            )
+        to_replace = [to_replace]
+        replacement = [replacement]
+
+    if is_dict_like(to_replace) and is_dict_like(replacement):
+        replacement = replacement[col_name]
+        to_replace = to_replace[col_name]
+
+        if is_scalar(replacement):
+            replacement = [replacement]
+        if is_scalar(to_replace):
+            to_replace = [to_replace]
+
+    if isinstance(replacement, list):
+        all_nan = replacement.count(None) == len(replacement)
+    return all_nan, replacement, to_replace

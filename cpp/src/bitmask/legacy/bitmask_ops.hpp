@@ -17,17 +17,17 @@
 #ifndef BITMASK_OPS_HPP
 #define BITMASK_OPS_HPP
 
-#include <cudf/cudf.h>
 #include <cuda_runtime.h>
+#include <cudf/cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 
-/**---------------------------------------------------------------------------*
+/**
  * @file legacy/bitmask_ops.hpp
  * @brief Internal functions for bitmask operations.
-*---------------------------------------------------------------------------**/
+ **/
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Sets all bits in input valid mask to 1
  *
  * @param valid_out preallocated output valid mask
@@ -35,12 +35,13 @@
  * @param num_values number of values in column associated with output mask
  * @param stream cuda stream to run in
  * @return gdf_error
- *---------------------------------------------------------------------------**/
+ **/
 gdf_error all_bitmask_on(cudf::valid_type* valid_out,
                          cudf::size_type& out_null_count,
-                         cudf::size_type num_values, cudaStream_t stream);
+                         cudf::size_type num_values,
+                         cudaStream_t stream);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes bitwise AND on two valid masks and sets it in output
  *
  * @param out_null_count number of nulls (0 bits) in output valid mask
@@ -51,7 +52,7 @@ gdf_error all_bitmask_on(cudf::valid_type* valid_out,
  * @param num_values number of values in each input mask valid_left and
  * valid_right
  * @return gdf_error
- *---------------------------------------------------------------------------**/
+ **/
 gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    cudf::valid_type* valid_out,
                                    const cudf::valid_type* valid_left,
@@ -59,10 +60,9 @@ gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    cudaStream_t stream,
                                    cudf::size_type num_values);
 
-
 namespace cudf {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Computes a bitmask indicating the presence of NULL values in rows of a
  * table.
  *
@@ -74,7 +74,7 @@ namespace cudf {
  * @param table The table to compute the row bitmask of.
  * @return bit_mask::bit_mask_t* The bitmask indicating the presence of NULLs in
  * a row
- *---------------------------------------------------------------------------**/
+ **/
 rmm::device_vector<bit_mask::bit_mask_t> row_bitmask(cudf::table const& table,
                                                      cudaStream_t stream = 0);
 }  // namespace cudf

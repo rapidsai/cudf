@@ -19,9 +19,12 @@
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {
+/**
+ * @addtogroup column_hash
+ * @{
+ */
 
-
-/** --------------------------------------------------------------------------*
+/**
  * @brief Computes the hash value of each row in the input set of columns.
  *
  * @param input The table of columns to hash
@@ -30,9 +33,10 @@ namespace cudf {
  * @param mr Optional resource to use for device memory allocation
  *
  * @returns A column where each row is the hash of a column from the input
- * -------------------------------------------------------------------------**/
+ */
 std::unique_ptr<column> hash(table_view const& input,
                              std::vector<uint32_t> const& initial_hash = {},
                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace cudf

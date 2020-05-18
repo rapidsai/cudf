@@ -24,10 +24,7 @@ from cudf._lib.nvtext.tokenize import (
     count_tokens as cpp_count_tokens,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.nvtx import (
-    range_pop as nvtx_range_pop,
-    range_push as nvtx_range_push,
-)
+from cudf._lib.nvtx import annotate
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_characters as cpp_count_characters,
@@ -46,6 +43,8 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
+    is_float as cpp_is_float,
+    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -113,8 +112,8 @@ from cudf._lib.strings.substring import (
 from cudf._lib.strings.translate import translate as cpp_translate
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, column_empty
-from cudf.utils import utils, cudautils
+from cudf.core.column import column, column_empty, datetime
+from cudf.utils import utils
 from cudf.utils.dtypes import is_list_like, is_scalar
 
 _str_to_numeric_typecast_functions = {
@@ -152,7 +151,7 @@ _numeric_to_str_typecast_functions = {
 
 class StringMethods(object):
     """
-    This mimicks pandas `df.str` interface.
+    This mimics pandas `df.str` interface.
     """
 
     def __init__(self, column, parent=None):
@@ -183,6 +182,24 @@ class StringMethods(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def htoi(self):
+        """
+        This converts hex strings to integers
+        """
+
+        out = str_cast.htoi(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
+
+    def ip2int(self):
+        """
+        This converts ip strings to integers
+        """
+
+        out = str_cast.ip2int(self._column)
+
+        return self._return_or_inplace(out, inplace=False)
 
     def _return_or_inplace(self, new_col, **kwargs):
         """
@@ -292,10 +309,12 @@ class StringMethods(object):
         if sep is None:
             sep = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if others is None:
-            data = cpp_join(self._column, Scalar(sep), Scalar(na_rep, "str"))
+            data = cpp_join(
+                self._column, as_scalar(sep), as_scalar(na_rep, "str")
+            )
         else:
             other_cols = _get_cols_list(others)
             all_cols = [self._column] + other_cols
@@ -303,15 +322,15 @@ class StringMethods(object):
                 DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
-                Scalar(sep),
-                Scalar(na_rep, "str"),
+                as_scalar(sep),
+                as_scalar(na_rep, "str"),
             )
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
         out = self._return_or_inplace(data, **kwargs)
         if len(out) == 1 and others is None:
-            out = out[0]
+            out = out.iloc[0]
         return out
 
     def join(self, sep):
@@ -399,12 +418,12 @@ class StringMethods(object):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
             cpp_contains_re(self._column, pat)
             if regex is True
-            else cpp_contains(self._column, Scalar(pat, "str")),
+            else cpp_contains(self._column, as_scalar(pat, "str")),
             **kwargs,
         )
 
@@ -412,8 +431,8 @@ class StringMethods(object):
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
     ):
         """
-        Replace occurences of pattern/regex in the Series/Index with some other
-        string.
+        Replace occurrences of pattern/regex in the Series/Index with some
+        other string.
 
         Parameters
         ----------
@@ -472,14 +491,14 @@ class StringMethods(object):
         # Pandas treats 0 as all
         if n == 0:
             n = -1
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            cpp_replace_re(self._column, pat, Scalar(repl, "str"), n)
+            cpp_replace_re(self._column, pat, as_scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
-                self._column, Scalar(pat, "str"), Scalar(repl, "str"), n
+                self._column, as_scalar(pat, "str"), as_scalar(repl, "str"), n
             ),
             **kwargs,
         )
@@ -602,16 +621,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "isupper currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_upper(self._column), **kwargs)
 
     def islower(self, **kwargs):
@@ -623,16 +633,7 @@ class StringMethods(object):
         -------
         Series/Index of bool dtype
 
-        Notes
-        -----
-        Results are incompatible with standard python string logic. Use caution
-        when operating on data which contains non-alphabetical characters.
         """
-        warnings.warn(
-            "islower currently returns False for non-cased characters whereas"
-            + "Pandas returns True, this will be fixed in the near future"
-        )
-
         return self._return_or_inplace(cpp_is_lower(self._column), **kwargs)
 
     def lower(self, **kwargs):
@@ -766,10 +767,10 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_slice_replace(self._column, start, stop, Scalar(repl)),
+            cpp_slice_replace(self._column, start, stop, as_scalar(repl)),
             **kwargs,
         )
 
@@ -785,7 +786,7 @@ class StringMethods(object):
             Default is beginning of the each string.
             Specify -1 to insert at the end of each string.
         repl : str
-            String to insert into the specified position valus.
+            String to insert into the specified position value.
 
         Returns
         -------
@@ -797,10 +798,10 @@ class StringMethods(object):
         if repl is None:
             repl = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, Scalar(repl)), **kwargs
+            cpp_string_insert(self._column, start, as_scalar(repl)), **kwargs
         )
 
     def get(self, i=0, **kwargs):
@@ -822,7 +823,7 @@ class StringMethods(object):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=True, **kwargs):
+    def split(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -847,8 +848,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand` parameter is not supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -858,9 +864,9 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
-        result_table = cpp_split(self._column, Scalar(pat, "str"), n)
+        result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._column):
                 result_table = []
@@ -869,7 +875,7 @@ class StringMethods(object):
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=True, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -894,8 +900,13 @@ class StringMethods(object):
         The parameter `expand` is not yet supported and will raise a
         NotImplementedError if anything other than the default value is set.
         """
-        if expand is not True:
-            raise NotImplementedError("`expand=False` is not yet supported")
+        if expand is None:
+            expand = True
+            warnings.warn("`expand` parameter defatults to True.")
+        elif expand is not True:
+            raise NotImplementedError(
+                "`expand=False` setting is not supported yet"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -905,9 +916,9 @@ class StringMethods(object):
         if pat is None:
             pat = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
-        result_table = cpp_rsplit(self._column, Scalar(pat), n)
+        result_table = cpp_rsplit(self._column, as_scalar(pat), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -951,10 +962,10 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_partition(self._column, Scalar(sep)), **kwargs
+            cpp_partition(self._column, as_scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -992,10 +1003,10 @@ class StringMethods(object):
         if sep is None:
             sep = " "
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, Scalar(sep)), **kwargs
+            cpp_rpartition(self._column, as_scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -1209,10 +1220,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_strip(self._column, Scalar(to_strip)), **kwargs
+            cpp_strip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def lstrip(self, to_strip=None, **kwargs):
@@ -1239,10 +1250,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_lstrip(self._column, Scalar(to_strip)), **kwargs
+            cpp_lstrip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def rstrip(self, to_strip=None, **kwargs):
@@ -1270,10 +1281,10 @@ class StringMethods(object):
         if to_strip is None:
             to_strip = ""
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         return self._return_or_inplace(
-            cpp_rstrip(self._column, Scalar(to_strip)), **kwargs
+            cpp_rstrip(self._column, as_scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -1411,7 +1422,7 @@ class StringMethods(object):
 
     def isempty(self, **kwargs):
         """
-        Check whether each string is a an empty string.
+        Check whether each string is an empty string.
 
         Returns : Series or Index of bool
             Series or Index of boolean values with the same length as
@@ -1458,9 +1469,9 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import Scalar
+            from cudf._lib.scalar import as_scalar
 
-            result_col = cpp_endswith(self._column, Scalar(pat, "str"))
+            result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1491,9 +1502,9 @@ class StringMethods(object):
                 len(self._column), dtype="bool", masked=True
             )
         else:
-            from cudf._lib.scalar import Scalar
+            from cudf._lib.scalar import as_scalar
 
-            result_col = cpp_startswith(self._column, Scalar(pat, "str"))
+            result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1523,12 +1534,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1558,12 +1569,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -1594,12 +1605,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -1635,12 +1646,12 @@ class StringMethods(object):
             msg = "expected a string object, not {0}"
             raise TypeError(msg.format(type(sub).__name__))
 
-        from cudf._lib.scalar import Scalar
+        from cudf._lib.scalar import as_scalar
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, Scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -1786,12 +1797,12 @@ class StringMethods(object):
 
 
 def _massage_string_arg(value, name, allow_col=False):
-    from cudf._lib.scalar import Scalar
+    from cudf._lib.scalar import as_scalar, Scalar
     from cudf._lib.column import Column
     from cudf.utils.dtypes import is_string_dtype
 
     if isinstance(value, str):
-        return Scalar(value, dtype="str")
+        return as_scalar(value, dtype="str")
 
     if isinstance(value, Scalar) and is_string_dtype(value.dtype):
         return value
@@ -1825,7 +1836,9 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
-    def __init__(self, mask=None, size=None, offset=0, children=()):
+    def __init__(
+        self, mask=None, size=None, offset=0, null_count=None, children=()
+    ):
         """
         Parameters
         ----------
@@ -1854,7 +1867,13 @@ class StringColumn(column.ColumnBase):
             size = size - offset
 
         super().__init__(
-            None, size, dtype, mask=mask, offset=offset, children=children
+            None,
+            size,
+            dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
+            children=children,
         )
 
         # TODO: Remove these once NVStrings is fully deprecated / removed
@@ -1924,20 +1943,23 @@ class StringColumn(column.ColumnBase):
                 # Now run a subtraction binary op to shift all of the offsets
                 # by the respective number of characters relative to the
                 # parent offset
-                chars_offset = offsets_column[0]
+                chars_offset = libcudf.copying.get_element(offsets_column, 0)
                 offsets_column = offsets_column.binary_operator(
-                    "sub", offsets_column.dtype.type(chars_offset)
+                    "sub", chars_offset
                 )
 
                 # Shift the chars offset by the new first element of the
                 # offsets column
-                chars_size = offsets_column[self.size]
+                chars_size = libcudf.copying.get_element(
+                    offsets_column, self.size
+                )
+
                 chars_column = column.build_column(
                     data=chars_column.base_data,
                     dtype=chars_column.dtype,
                     mask=chars_column.base_mask,
-                    size=chars_size,
-                    offset=chars_offset,
+                    size=chars_size.value,
+                    offset=chars_offset.value,
                 )
 
                 self._children = (offsets_column, chars_column)
@@ -1945,13 +1967,6 @@ class StringColumn(column.ColumnBase):
 
     def __contains__(self, item):
         return True in self.str().contains(f"^{item}$")
-
-    def __reduce__(self):
-        mask = None
-        if self.null_count > 0:
-            mask = self.mask
-
-        return column.build_column, (None, "str", mask, None, 0, self.children)
 
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
@@ -2046,11 +2061,24 @@ class StringColumn(column.ColumnBase):
             if "format" not in kwargs:
                 if len(self) > 0:
                     # infer on host from the first not na element
-                    fmt = pd.core.tools.datetimes._guess_datetime_format(
-                        self[self.notna()][0]
-                    )
+                    fmt = datetime.infer_format(self[self.notna()][0])
                     kwargs.update(format=fmt)
         kwargs.update(dtype=out_dtype)
+
+        if str_dtype.kind in ("i"):
+
+            if not cpp_is_integer(self).all():
+                raise ValueError(
+                    "Could not convert strings to integer \
+                        type due to presence of non-integer values."
+                )
+        elif str_dtype.kind in ("f"):
+
+            if not cpp_is_float(self).all():
+                raise ValueError(
+                    "Could not convert strings to float \
+                        type due to presence of non-floating values."
+                )
 
         return _str_to_numeric_typecast_functions[str_dtype](self, **kwargs)
 
@@ -2116,6 +2144,13 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not allowed, \
+            Conversion to GPU array in strings is not yet supported.\nTo \
+            explicitly construct a host array, consider using .to_array()"
+        )
+
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
@@ -2165,7 +2200,7 @@ class StringColumn(column.ColumnBase):
     def fillna(self, fill_value):
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value)
+        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
@@ -2239,10 +2274,9 @@ class StringColumn(column.ColumnBase):
         return out
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _string_column_binop(lhs, rhs, op, out_dtype):
-    nvtx_range_push("CUDF_BINARY_OP", "orange")
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    nvtx_range_pop()
     return out
 
 

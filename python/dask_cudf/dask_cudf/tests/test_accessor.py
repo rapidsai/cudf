@@ -3,7 +3,9 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-from cudf import Series
+import dask.dataframe as dd
+
+from cudf import DataFrame, Series
 
 import dask_cudf as dgd
 
@@ -24,12 +26,12 @@ dt_fields = ["year", "month", "day", "hour", "minute", "second"]
 
 
 @pytest.mark.parametrize("data", [data_dt_2()])
-@pytest.mark.xfail(raises=AttributeError)
 def test_datetime_accessor_initialization(data):
     pdsr = pd.Series(data.copy())
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
-    dsr.dt
+    with pytest.raises(AttributeError):
+        dsr.dt
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -38,7 +40,7 @@ def test_series(data):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
 
-    np.testing.assert_equal(np.array(pdsr), np.array(dsr.compute()))
+    np.testing.assert_equal(np.array(pdsr), dsr.compute().to_array())
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -50,6 +52,19 @@ def test_dt_series(data, field):
     base = getattr(pdsr.dt, field)
     test = getattr(dsr.dt, field).compute().to_pandas().astype("int64")
     assert_series_equal(base, test)
+
+
+@pytest.mark.parametrize("data", [data_dt_1()])
+def test_dt_accessor(data):
+    df = DataFrame({"dt_col": data.copy()})
+    ddf = dgd.from_cudf(df, npartitions=5)
+
+    for i in ["year", "month", "day", "hour", "minute", "second", "weekday"]:
+        assert i in dir(ddf.dt_col.dt)
+        assert_series_equal(
+            getattr(ddf.dt_col.dt, i).compute().to_pandas(),
+            getattr(df.dt_col.dt, i).to_pandas(),
+        )
 
 
 #############################################################################
@@ -76,15 +91,21 @@ def data_cat_3():
     return cat1, cat2
 
 
-@pytest.mark.parametrize("data", [data_cat_2()])
-@pytest.mark.xfail(raises=AttributeError)
-def test_categorical_accessor_initialization(data):
+@pytest.mark.parametrize("data", [data_cat_1()])
+def test_categorical_accessor_initialization1(data):
     sr = Series(data.copy())
     dsr = dgd.from_cudf(sr, npartitions=5)
     dsr.cat
 
 
-@pytest.mark.xfail(reason="")
+@pytest.mark.parametrize("data", [data_cat_2()])
+def test_categorical_accessor_initialization2(data):
+    sr = Series(data.copy())
+    dsr = dgd.from_cudf(sr, npartitions=5)
+    with pytest.raises(AttributeError):
+        dsr.cat
+
+
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -93,14 +114,12 @@ def test_categorical_basic(data):
     dsr = dgd.from_cudf(sr, npartitions=2)
     result = dsr.compute()
     np.testing.assert_array_equal(cat.codes, result.to_array())
-    assert dsr.dtype == pdsr.dtype
 
+    assert dsr.dtype.to_pandas() == pdsr.dtype
     # Test attributes
     assert pdsr.cat.ordered == dsr.cat.ordered
-    # TODO: Investigate dsr.cat.categories: It raises
-    # ValueError: Expected iterable of tuples of (name, dtype),
-    # got ('a', 'b', 'c')
-    # assert(tuple(pdsr.cat.categories) == tuple(dsr.cat.categories))
+
+    assert tuple(pdsr.cat.categories) == tuple(dsr.cat.categories)
 
     np.testing.assert_array_equal(pdsr.cat.codes.data, result.to_array())
     np.testing.assert_array_equal(pdsr.cat.codes.dtype, dsr.cat.codes.dtype)
@@ -114,9 +133,33 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    from cudf.tests.utils import assert_eq
+
+    df = DataFrame()
+    df["a"] = ["xyz", "abc", "def"] * 10
+
+    pdf = df.to_pandas()
+    cddf = dgd.from_cudf(df, 1)
+    cddf["b"] = cddf["a"].astype("category")
+
+    ddf = dd.from_pandas(pdf, 1)
+    ddf["b"] = ddf["a"].astype("category")
+
+    assert_eq(ddf._meta_nonempty["b"], cddf._meta_nonempty["b"])
+
+    with pytest.raises(NotImplementedError):
+        cddf["b"].cat.categories
+
+    with pytest.raises(NotImplementedError):
+        ddf["b"].cat.categories
+
+    cddf = cddf.categorize()
+    ddf = ddf.categorize()
+
+    assert_eq(ddf["b"].cat.categories, cddf["b"].cat.categories)
+    assert_eq(ddf["b"].cat.ordered, cddf["b"].cat.ordered)
 
 
-@pytest.mark.xfail(reason="")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_compare_unordered(data):
     cat = data.copy()
@@ -138,15 +181,17 @@ def test_categorical_compare_unordered(data):
     assert not dsr.cat.ordered
     assert not pdsr.cat.ordered
 
-    with pytest.raises((TypeError, ValueError)) as raises:
+    with pytest.raises(
+        (TypeError, ValueError),
+        match="Unordered Categoricals can only compare equality or not",
+    ):
         pdsr < pdsr
 
-    raises.match("Unordered Categoricals can only compare equality or not")
-
-    with pytest.raises((TypeError, ValueError)) as raises:
+    with pytest.raises(
+        (TypeError, ValueError),
+        match="Unordered Categoricals can only compare equality or not",
+    ):
         dsr < dsr
-
-    raises.match("Unordered Categoricals can only compare equality or not")
 
 
 @pytest.mark.parametrize("data", [data_cat_3()])
@@ -175,8 +220,12 @@ def test_categorical_compare_ordered(data):
     assert pdsr1.cat.ordered
 
     # Test ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, (dsr1 < dsr2).compute())
-    np.testing.assert_array_equal(pdsr1 > pdsr2, (dsr1 > dsr2).compute())
+    np.testing.assert_array_equal(
+        pdsr1 < pdsr2, (dsr1 < dsr2).compute().to_array()
+    )
+    np.testing.assert_array_equal(
+        pdsr1 > pdsr2, (dsr1 > dsr2).compute().to_array()
+    )
 
 
 #############################################################################
@@ -196,3 +245,49 @@ def test_string_slicing(data):
     base = pdsr.str.slice(0, 4)
     test = dsr.str.slice(0, 4).compute().to_pandas()
     assert_series_equal(base, test)
+
+
+def test_categorical_categories():
+
+    df = DataFrame(
+        {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
+    )
+    df["a"] = df["a"].astype("category")
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, 2)
+    dpdf = dd.from_pandas(pdf, 2)
+
+    dd.assert_eq(
+        ddf.a.cat.categories.to_series(),
+        dpdf.a.cat.categories.to_series(),
+        check_index=False,
+    )
+
+
+def test_categorical_as_known():
+    df = dgd.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
+    df["col_1"] = df["col_1"].astype("category")
+    actual = df["col_1"].cat.as_known()
+
+    pdf = dd.from_pandas(pd.DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
+    pdf["col_1"] = pdf["col_1"].astype("category")
+    expected = pdf["col_1"].cat.as_known()
+    dd.assert_eq(expected, actual)
+
+
+def test_str_slice():
+
+    df = DataFrame({"a": ["abc,def,123", "xyz,hi,bye"]})
+
+    ddf = dgd.from_cudf(df, 1)
+    pdf = df.to_pandas()
+
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=1),
+        ddf.a.str.split(",", expand=True, n=1),
+    )
+    dd.assert_eq(
+        pdf.a.str.split(",", expand=True, n=2),
+        ddf.a.str.split(",", expand=True, n=2),
+    )

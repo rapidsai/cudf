@@ -6,6 +6,8 @@ import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
 import cudf._lib as libcudf
+from cudf._lib.nvtx import annotate
+from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, column
 from cudf.utils import cudautils, utils
@@ -19,7 +21,9 @@ from cudf.utils.dtypes import (
 
 
 class NumericalColumn(column.ColumnBase):
-    def __init__(self, data, dtype, mask=None, size=None, offset=0):
+    def __init__(
+        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+    ):
         """
         Parameters
         ----------
@@ -35,7 +39,12 @@ class NumericalColumn(column.ColumnBase):
             size = data.size // dtype.itemsize
             size = size - offset
         super().__init__(
-            data, size=size, dtype=dtype, mask=mask, offset=offset
+            data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            offset=offset,
+            null_count=null_count,
         )
 
     def __contains__(self, item):
@@ -69,7 +78,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -114,6 +123,12 @@ class NumericalColumn(column.ColumnBase):
                 )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
+
+    def int2ip(self):
+        if self.dtype != np.dtype("int64"):
+            raise TypeError("Only int64 type can be converted to ip")
+
+        return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.core.column import string, as_column
@@ -210,7 +225,7 @@ class NumericalColumn(column.ColumnBase):
         return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
 
     def applymap(self, udf, out_dtype=None):
-        """Apply a elemenwise function to transform the values in the Column.
+        """Apply an element-wise function to transform the values in the Column.
 
         Parameters
         ----------
@@ -408,10 +423,10 @@ class NumericalColumn(column.ColumnBase):
                 return False
 
 
+@annotate("BINARY_OP", color="orange", domain="cudf_python")
 def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:
         lhs, rhs = rhs, lhs
-    libcudf.nvtx.range_push("CUDF_BINARY_OP", "orange")
 
     is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
 
@@ -423,7 +438,6 @@ def _numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if is_op_comparison:
         out = out.fillna(op == "ne")
 
-    libcudf.nvtx.range_pop()
     return out
 
 
@@ -456,7 +470,10 @@ def _safe_cast_to_int(col, dtype):
 
 
 def _normalize_find_and_replace_input(input_column_dtype, col_to_normalize):
-    normalized_column = column.as_column(col_to_normalize)
+    normalized_column = column.as_column(
+        col_to_normalize,
+        dtype=input_column_dtype if len(col_to_normalize) <= 0 else None,
+    )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
         col_to_normalize_dtype = min_numeric_column_type(normalized_column)

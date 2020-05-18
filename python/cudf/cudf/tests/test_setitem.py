@@ -62,7 +62,7 @@ def test_dataframe_setitem_new_columns(df, arg, value):
     assert_eq(df, gdf, check_dtype=True)
 
 
-# we dont raise keyerror
+# we don't raise keyerror
 # pandas raises it
 # inconsistent with dataframe again
 @pytest.mark.xfail()
@@ -82,3 +82,46 @@ def test_series_setitem_index():
     gdf = DataFrame(data={"b": [-1, -2, -3], "c": [1, 2, 3]}, index=[1, 2, 3])
     gdf["b"] = Series(data=[12, 11, 10], index=[3, 2, 1])
     assert_eq(df, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("psr", [pd.Series([1, 2, 3], index=["a", "b", "c"])])
+@pytest.mark.parametrize(
+    "arg", ["b", ["a", "c"], slice(1, 2, 1), [True, False, True]]
+)
+def test_series_set_item(psr, arg):
+    gsr = Series.from_pandas(psr)
+
+    psr[arg] = 11
+    gsr[arg] = 11
+
+    assert_eq(psr, gsr)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3]},
+            index=pd.MultiIndex.from_frame(
+                pd.DataFrame({"b": [3, 2, 1], "c": ["a", "b", "c"]})
+            ),
+        ),
+        pd.DataFrame({"a": [1, 2, 3]}, index=["a", "b", "c"]),
+    ],
+)
+def test_setitem_dataframe_series_inplace(df):
+    pdf = df
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf["a"].replace(1, 500, inplace=True)
+    gdf["a"].replace(1, 500, inplace=True)
+
+    assert_eq(pdf, gdf)
+
+    psr_a = pdf["a"]
+    gsr_a = gdf["a"]
+
+    psr_a.replace(500, 501, inplace=True)
+    gsr_a.replace(500, 501, inplace=True)
+
+    assert_eq(pdf, gdf)

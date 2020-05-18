@@ -8,7 +8,9 @@ from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
-    string_character_types as string_character_types
+    string_character_types as string_character_types,
+    is_integer as cpp_is_integer,
+    is_float as cpp_is_float,
 )
 
 
@@ -24,7 +26,8 @@ def is_decimal(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.DECIMAL
+            string_character_types.DECIMAL,
+            string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -43,7 +46,8 @@ def is_alnum(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.ALPHANUM
+            string_character_types.ALPHANUM,
+            string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -60,7 +64,8 @@ def is_alpha(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.ALPHA
+            string_character_types.ALPHA,
+            string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -77,7 +82,8 @@ def is_digit(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.DIGIT
+            string_character_types.DIGIT,
+            string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -95,7 +101,8 @@ def is_numeric(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.NUMERIC
+            string_character_types.NUMERIC,
+            string_character_types.ALL_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -112,7 +119,8 @@ def is_upper(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.UPPER
+            string_character_types.UPPER,
+            string_character_types.CASE_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -129,7 +137,8 @@ def is_lower(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.LOWER
+            string_character_types.LOWER,
+            string_character_types.CASE_TYPES
         ))
 
     return Column.from_unique_ptr(move(c_result))
@@ -146,7 +155,40 @@ def is_space(Column source_strings):
     with nogil:
         c_result = move(cpp_all_characters_of_type(
             source_view,
-            string_character_types.SPACE
+            string_character_types.SPACE,
+            string_character_types.ALL_TYPES
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_integer(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have intergers.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_integer(
+            source_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def is_float(Column source_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that have floats.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+
+    with nogil:
+        c_result = move(cpp_is_float(
+            source_view
         ))
 
     return Column.from_unique_ptr(move(c_result))

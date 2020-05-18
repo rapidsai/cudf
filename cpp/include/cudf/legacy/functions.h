@@ -1,46 +1,48 @@
 #pragma once
 
-/** 
+#include <cudf/types.h>
+#include <cudf/types.hpp>
+
+/**
  * @brief  Start a NVTX range with predefined color.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * demarcates the begining of a user-defined range with a specified name and
  * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
  * nested within other ranges.
- * 
+ *
  * @param[in] name The name of the NVTX range
  * @param[in] color The predefined gdf_color enum to use to color this range
- * 
- * @returns   
+ *
+ * @returns
  */
-gdf_error gdf_nvtx_range_push(char const * const name, gdf_color color );
+gdf_error gdf_nvtx_range_push(char const *const name, gdf_color color);
 
-/** 
+/**
  * @brief  Start a NVTX range with a custom ARGB color code.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * demarcates the begining of a user-defined range with a specified name and
  * color that will show up in the timeline view of nvvp/Nsight Systems. Can be
  * nested within other ranges.
- * 
+ *
  * @param[in] name The name of the NVTX range
  * @param[in] color The ARGB hex color code to use to color this range (e.g., 0xFF00FF00)
- * 
- * @returns   
+ *
+ * @returns
  */
-gdf_error gdf_nvtx_range_push_hex(char const * const name, unsigned int color );
+gdf_error gdf_nvtx_range_push_hex(char const *const name, unsigned int color);
 
-/** 
+/**
  * @brief Ends the inner-most NVTX range.
  *
  * This function is useful only for profiling with nvvp or Nsight Systems. It
  * will demarcate the end of the inner-most range, i.e., the most recent call to
  * gdf_nvtx_range_push.
- * 
- * @returns   
+ *
+ * @returns
  */
 gdf_error gdf_nvtx_range_pop();
-
 
 /**
  * Calculates the number of bytes to allocate for a column's validity bitmask
@@ -50,7 +52,7 @@ gdf_error gdf_nvtx_range_pop();
  *
  * @note Note that this function assumes the bitmask needs to be allocated to be
  * padded to a multiple of 64 bytes
- * 
+ *
  * @note This function assumes that the size of cudf::valid_type is 1 byte
  *
  * @param[in] column_size The number of elements
@@ -75,7 +77,6 @@ cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size);
  */
 cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);
 
-
 /* context operations */
 
 /**
@@ -85,20 +86,24 @@ cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);
  * @param[in] flag_sorted Indicates if the input data is sorted. 0 = No, 1 = yes
  * @param[in] flag_method The method to be used for the operation (e.g., sort vs hash)
  * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
- * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
+ * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is
+ * sorted
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
  * @param[in] flag_groupby_include_nulls false = Nulls are ignored (Pandas style)
  *                                       true = Nulls compare as equal (SQL style)
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
- *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
+ *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
-gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace,
-			   bool flag_groupby_include_nulls,
+gdf_error gdf_context_view(gdf_context *context,
+                           int flag_sorted,
+                           gdf_method flag_method,
+                           int flag_distinct,
+                           int flag_sort_result,
+                           int flag_sort_inplace,
+                           bool flag_groupby_include_nulls,
                            gdf_null_sort_behavior flag_null_sort_behavior);
-
 
 /* error handling */
 
@@ -109,7 +114,7 @@ gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method fla
  *
  * @returns  name of the error
  */
-const char * gdf_error_get_name(gdf_error errcode);
+const char *gdf_error_get_name(gdf_error errcode);
 
 /**
  * @brief  returns the last error from a runtime call.
@@ -125,7 +130,7 @@ int gdf_cuda_last_error();
  *
  * @returns  description string for an error code.
  */
-const char * gdf_cuda_error_string(int cuda_error);
+const char *gdf_cuda_error_string(int cuda_error);
 
 /**
  * @brief  returns the string representation of an error code enum name.
@@ -134,53 +139,49 @@ const char * gdf_cuda_error_string(int cuda_error);
  *
  * @returns  string representation of an error code enum name.
  */
-const char * gdf_cuda_error_name(int cuda_error);
+const char *gdf_cuda_error_name(int cuda_error);
 
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
- * 
+ *
  * @param[in] ncols Number of columns in in_cols
  * @param[in] in_cols[] Input table of (ncols) number of columns each of size (nrows)
  * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
  * @returns gdf_error GDF_SUCCESS if successful, else appropriate error code
  */
-gdf_error gdf_transpose(cudf::size_type ncols,
-                        gdf_column** in_cols,
-                        gdf_column** out_cols);
-
+gdf_error gdf_transpose(cudf::size_type ncols, gdf_column **in_cols, gdf_column **out_cols);
 
 /* partioning */
 
-/** 
- * @brief Computes the hash values of the rows in the specified columns of the 
- * input columns and bins the hash values into the desired number of partitions. 
- * Rearranges the input columns such that rows with hash values in the same bin 
+/**
+ * @brief Computes the hash values of the rows in the specified columns of the
+ * input columns and bins the hash values into the desired number of partitions.
+ * Rearranges the input columns such that rows with hash values in the same bin
  * are contiguous.
- * 
+ *
  * @param[in] num_input_cols The number of columns in the input columns
  * @param[in] input[] The input set of columns
  * @param[in] columns_to_hash[] Indices of the columns in the input set to hash
  * @param[in] num_cols_to_hash The number of columns to hash
  * @param[in] num_partitions The number of partitions to rearrange the input rows into
- * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement 
+ * @param[out] partitioned_output Preallocated gdf_columns to hold the rearrangement
  * of the input columns into the desired number of partitions
  * @param[out] partition_offsets Preallocated array the size of the number of
  * partitions. Where partition_offsets[i] indicates the starting position
  * of partition 'i'
  * @param[in] hash The hash function to use
- * 
+ *
  * @returns  If the operation was successful, returns GDF_SUCCESS
  */
-gdf_error gdf_hash_partition(int num_input_cols, 
-                             gdf_column * input[], 
+gdf_error gdf_hash_partition(int num_input_cols,
+                             gdf_column *input[],
                              int columns_to_hash[],
                              int num_cols_to_hash,
-                             int num_partitions, 
-                             gdf_column * partitioned_output[],
+                             int num_partitions,
+                             gdf_column *partitioned_output[],
                              int partition_offsets[],
                              gdf_hash_func hash);
-
 
 /* unary operators */
 
@@ -191,9 +192,9 @@ gdf_error gdf_hash_partition(int num_input_cols,
  * @param[in] num_cols The number of columns in the input set
  * @param[in] input The list of columns whose rows will be hashed
  * @param[in] hash The hash function to use
- * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value for each column
- * that will be combined with the hash of every element in the column. If this argument is `nullptr`,
- * then each element will be hashed as-is.
+ * @param[in] initial_hash_values Optional array in device memory specifying an initial hash value
+ * for each column that will be combined with the hash of every element in the column. If this
+ * argument is `nullptr`, then each element will be hashed as-is.
  * @param[out] output The hash value of each row of the input
  *
  * @returns    GDF_SUCCESS if the operation was successful, otherwise an
@@ -205,11 +206,11 @@ gdf_error gdf_hash(int num_cols,
                    uint32_t *initial_hash_values,
                    gdf_column *output);
 
-
 /* datetime extract*/
 
 /**
- * @brief  Extracts year from any date time type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts year from any date time type and places results into a preallocated GDF_INT16
+ * column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -219,7 +220,8 @@ gdf_error gdf_hash(int num_cols,
 gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts month from any date time type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts month from any date time type and places results into a preallocated GDF_INT16
+ * column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -229,7 +231,8 @@ gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16
+ * column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -239,7 +242,8 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16
+ * column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -249,7 +253,8 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a
+ * preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -259,7 +264,8 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts minute from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts minute from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a
+ * preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -269,7 +275,8 @@ gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
 
 /**
- * @brief  Extracts second from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
+ * @brief  Extracts second from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a
+ * preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
  * @param[out] output gdf_column. The output memory needs to be preallocated
@@ -278,10 +285,9 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-
-/** 
+/**
  * @brief Sorts an array of gdf_column.
- * 
+ *
  * @param[in]  input_columns Array of gdf_columns
  * @param[in]  asc_desc Device array of sort order types for each column
  *                     (0 is ascending order and 1 is descending). If NULL
@@ -290,16 +296,16 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
  * @param[out] output_indices Pre-allocated gdf_column to be filled with sorted indices
  * @param[in]  context  The options for controlling treatment of nulls
  *             context->flag_null_sort_behavior
- *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
- *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- * 
+ *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest,
+ *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
+ *
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column const* const* input_columns,
-                       int8_t*      asc_desc,
-                       size_t       num_inputs,
-                       gdf_column*  output_indices,
-                       gdf_context * context);
+gdf_error gdf_order_by(gdf_column const *const *input_columns,
+                       int8_t *asc_desc,
+                       size_t num_inputs,
+                       gdf_column *output_indices,
+                       gdf_context *context);
 
 /**
  * @brief Finds the indices of the bins in which each value of the column
@@ -322,8 +328,8 @@ gdf_error gdf_order_by(gdf_column const* const* input_columns,
  * @returns GDF_SUCCESS upon successful completion, otherwise an
  *         appropriate error code.
  */
-gdf_error gdf_digitize(gdf_column* col,
-                       gdf_column* bins,   // same type as col
+gdf_error gdf_digitize(gdf_column *col,
+                       gdf_column *bins,  // same type as col
                        bool right,
                        cudf::size_type out_indices[]);
 
@@ -337,9 +343,9 @@ typedef struct DLManagedTensor DLManagedTensor_;
  *
  * 1D and 2D tensors are supported. This function makes copies
  * of the input DLPack data into the created output columns.
- * 
+ *
  * Note: currently only supports column-major ("Fortran" order) memory layout
- * Therefore row-major tensors should be transposed before calling 
+ * Therefore row-major tensors should be transposed before calling
  * this function
  * TODO: provide a parameter to select row- or column-major ordering (row major
  * input will require a transpose)
@@ -354,16 +360,16 @@ typedef struct DLManagedTensor DLManagedTensor_;
  * @param[in] tensor The input DLPack DLTensor
  * @return gdf_error GDF_SUCCESS if conversion is successful
  */
-gdf_error gdf_from_dlpack(gdf_column** columns,
+gdf_error gdf_from_dlpack(gdf_column **columns,
                           cudf::size_type *num_columns,
-                          DLManagedTensor_ const * tensor);
+                          DLManagedTensor_ const *tensor);
 
 /**
  * @brief Convert an array of gdf_column(s) into a DLPack DLTensor
  *
- * 1D and 2D tensors are supported. This function allocates the DLPack tensor 
+ * 1D and 2D tensors are supported. This function allocates the DLPack tensor
  * data and copies the data from the input column(s) into the tensor.
- * 
+ *
  * Note: currently only supports column-major ("Fortran" order) memory layout
  * Therefore the output of this function should be transposed if row-major is
  * needed.
@@ -371,12 +377,10 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
  * output will require a transpose)
  *
  * @param[out] tensor The output DLTensor
- * @param[in] columns An array of pointers to gdf_column 
+ * @param[in] columns An array of pointers to gdf_column
  * @param[in] num_columns The number of input columns
  * @return gdf_error GDF_SUCCESS if conversion is successful
  */
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
-                        gdf_column const * const * columns,
+                        gdf_column const *const *columns,
                         cudf::size_type num_columns);
-
-

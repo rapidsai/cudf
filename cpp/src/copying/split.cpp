@@ -14,56 +14,51 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/error.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 
 namespace cudf {
-
 namespace experimental {
+namespace {
+template <typename T>
+std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
+{
+  if (splits.size() == 0 or column_size == 0) { return std::vector<T>{input}; }
+  CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
-namespace  {
-    template<typename T>
-    std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits) {
+  // If the size is not zero, the split will always start at `0`
+  std::vector<size_type> indices{0};
+  std::for_each(splits.begin(), splits.end(), [&indices](auto split) {
+    indices.push_back(split);  // This for end
+    indices.push_back(split);  // This for the start
+  });
 
-        if(splits.size() == 0 or column_size == 0) {
-            return std::vector<T>{input};
-        }
-        CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
+  indices.push_back(column_size);  // This to include rest of the elements
 
-        // If the size is not zero, the split will always start at `0`
-        std::vector<size_type> indices{0};
-        std::for_each(splits.begin(), splits.end(), 
-                [&indices](auto split) {
-                    indices.push_back(split); // This for end
-                    indices.push_back(split); // This for the start
-                });
-        
-        indices.push_back(column_size); // This to include rest of the elements
-
-        return cudf::experimental::slice(input, indices);
-    }   
+  return cudf::experimental::slice(input, indices);
+}
 };  // anonymous namespace
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                                std::vector<size_type> const& splits) {       
-    CUDF_FUNC_RANGE();
-    return split(input, input.size(), splits);
+                                     std::vector<size_type> const& splits)
+{
+  CUDF_FUNC_RANGE();
+  return split(input, input.size(), splits);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
-                                                std::vector<size_type> const& splits) {            
-    CUDF_FUNC_RANGE();
-    std::vector<table_view> result{};
-    if(input.num_columns() == 0) {
-        return result;
-    }    
-    return split(input, input.column(0).size(), splits);
+                                    std::vector<size_type> const& splits)
+{
+  CUDF_FUNC_RANGE();
+  std::vector<table_view> result{};
+  if (input.num_columns() == 0) { return result; }
+  return split(input, input.column(0).size(), splits);
 }
 
-} // experimental
+}  // namespace experimental
 
-} // cudf
+}  // namespace cudf

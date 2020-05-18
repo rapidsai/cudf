@@ -42,8 +42,8 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private static volatile PinnedMemoryPool singleton_ = null;
   private static Future<PinnedMemoryPool> initFuture = null;
 
-  private long pinnedPoolBase;
-  private PriorityQueue<MemorySection> freeHeap = new PriorityQueue<>(new SortedBySize());
+  private final long pinnedPoolBase;
+  private final PriorityQueue<MemorySection> freeHeap = new PriorityQueue<>(new SortedBySize());
   private int numAllocatedSections = 0;
   private long availableBytes;
 
@@ -113,11 +113,14 @@ public final class PinnedMemoryPool implements AutoCloseable {
       long origAddress = 0;
       if (section != null) {
         origAddress = section.baseAddress;
-        PinnedMemoryPool.freeInternal(section);
-        if (origLength > 0) {
-          MemoryListener.hostDeallocation(origLength, id);
+        try {
+          PinnedMemoryPool.freeInternal(section);
+        } finally {
+          // Always mark the resource as freed even if an exception is thrown.
+          // We cannot know how far it progressed before the exception, and
+          // therefore it is unsafe to retry.
+          section = null;
         }
-        section = null;
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {

@@ -14,7 +14,7 @@ import numpy as np
 from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
-from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
@@ -31,10 +31,16 @@ from cudf._lib.cpp.io.functions cimport (
     write_parquet as parquet_writer,
     merge_rowgroup_metadata as parquet_merge_metadata,
     read_parquet_args,
-    read_parquet as parquet_reader
+    read_parquet as parquet_reader,
+    write_parquet_chunked_args,
+    write_parquet_chunked_begin,
+    write_parquet_chunked,
+    write_parquet_chunked_end,
+    pq_chunked_state
 )
 from cudf._lib.io.utils cimport (
-    make_source_info
+    make_source_info,
+    make_sink_info
 )
 
 cimport cudf._lib.cpp.types as cudf_types
@@ -225,14 +231,14 @@ cpdef write_parquet(
     """
 
     # Create the write options
-    cdef string filepath = <string>str(path).encode()
-    cdef cudf_io_types.sink_info sink = cudf_io_types.sink_info(filepath)
     cdef unique_ptr[cudf_io_types.table_metadata] tbl_meta = \
         make_unique[cudf_io_types.table_metadata]()
 
     cdef vector[string] column_names
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
+    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
+    cdef cudf_io_types.sink_info sink = make_sink_info(path, &_data_sink)
 
     if index is not False:
         tv = table.view()
@@ -256,24 +262,8 @@ cpdef write_parquet(
     tbl_meta.get().column_names = column_names
     tbl_meta.get().user_data = user_data
 
-    cdef cudf_io_types.compression_type comp_type
-    if compression is None:
-        comp_type = cudf_io_types.compression_type.NONE
-    elif compression == "snappy":
-        comp_type = cudf_io_types.compression_type.SNAPPY
-    else:
-        raise ValueError("Unsupported `compression` type")
-
-    cdef cudf_io_types.statistics_freq stat_freq
-    statistics = statistics.upper()
-    if statistics == "NONE":
-        stat_freq = cudf_io_types.statistics_freq.STATISTICS_NONE
-    elif statistics == "ROWGROUP":
-        stat_freq = cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
-    elif statistics == "PAGE":
-        stat_freq = cudf_io_types.statistics_freq.STATISTICS_PAGE
-    else:
-        raise ValueError("Unsupported `statistics_freq` type")
+    cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
+    cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
     cdef write_parquet_args args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
@@ -301,6 +291,74 @@ cpdef write_parquet(
     else:
         return None
 
+
+cdef class ParquetWriter:
+    """
+    ParquetWriter lets you incrementally write out a Parquet file from a series
+    of cudf tables
+
+    See Also
+    --------
+    cudf.io.parquet.write_parquet
+    """
+    cdef shared_ptr[pq_chunked_state] state
+    cdef cudf_io_types.sink_info sink
+    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
+    cdef cudf_io_types.statistics_freq stat_freq
+    cdef cudf_io_types.compression_type comp_type
+    cdef object index
+
+    def __cinit__(self, object path, object index=None,
+                  object compression=None, str statistics="ROWGROUP"):
+        self.sink = make_sink_info(path, &self._data_sink)
+        self.stat_freq = _get_stat_freq(statistics)
+        self.comp_type = _get_comp_type(compression)
+        self.index = index
+
+    def write_table(self, Table table):
+        """ Writes a single table to the file """
+        if not self.state:
+            self._initialize_chunked_state(table)
+
+        cdef table_view tv = table.data_view()
+        if self.index is not False:
+            if isinstance(table._index, cudf.core.multiindex.MultiIndex) \
+                    or table._index.name is not None:
+                tv = table.view()
+
+        with nogil:
+            write_parquet_chunked(tv, self.state)
+
+    def close(self):
+        if self.state:
+            with nogil:
+                write_parquet_chunked_end(self.state)
+                self.state.reset()
+
+    def __dealloc__(self):
+        self.close()
+
+    def _initialize_chunked_state(self, Table table):
+        """ Wraps write_parquet_chunked_begin. This is called lazily on the first
+        call to write, so that we can get metadata from the first table """
+        cdef unique_ptr[cudf_io_types.table_metadata_with_nullability] tbl_meta
+        tbl_meta = make_unique[cudf_io_types.table_metadata_with_nullability]()
+
+        # Set the table_metadata
+        tbl_meta.get().column_names = _get_column_names(table, self.index)
+        pandas_metadata = generate_pandas_metadata(table, self.index)
+        tbl_meta.get().user_data[str.encode("pandas")] = \
+            str.encode(pandas_metadata)
+
+        # call write_parquet_chunked_begin
+        cdef write_parquet_chunked_args args
+        with nogil:
+            args = write_parquet_chunked_args(self.sink,
+                                              tbl_meta.get(),
+                                              self.comp_type, self.stat_freq)
+            self.state = write_parquet_chunked_begin(args)
+
+
 cpdef merge_filemetadata(filemetadata_list):
     """
     Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
@@ -322,3 +380,40 @@ cpdef merge_filemetadata(filemetadata_list):
 
     out_metadata_py = BufferArrayFromVector.from_unique_ptr(move(output_c))
     return np.asarray(out_metadata_py)
+
+
+cdef cudf_io_types.statistics_freq _get_stat_freq(str statistics):
+    statistics = statistics.upper()
+    if statistics == "NONE":
+        return cudf_io_types.statistics_freq.STATISTICS_NONE
+    elif statistics == "ROWGROUP":
+        return cudf_io_types.statistics_freq.STATISTICS_ROWGROUP
+    elif statistics == "PAGE":
+        return cudf_io_types.statistics_freq.STATISTICS_PAGE
+    else:
+        raise ValueError("Unsupported `statistics_freq` type")
+
+
+cdef cudf_io_types.compression_type _get_comp_type(object compression):
+    if compression is None:
+        return cudf_io_types.compression_type.NONE
+    elif compression == "snappy":
+        return cudf_io_types.compression_type.SNAPPY
+    else:
+        raise ValueError("Unsupported `compression` type")
+
+
+cdef vector[string] _get_column_names(Table table, object index):
+    cdef vector[string] column_names
+    if index is not False:
+        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
+            for idx_name in table._index.names:
+                column_names.push_back(str.encode(idx_name))
+        else:
+            if table._index.name is not None:
+                column_names.push_back(str.encode(table._index.name))
+
+    for col_name in table._column_names:
+        column_names.push_back(str.encode(col_name))
+
+    return column_names

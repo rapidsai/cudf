@@ -113,7 +113,7 @@ def test_string_export(ps_gs):
 def test_string_get_item(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -145,7 +145,7 @@ def test_string_get_item(ps_gs, item):
 def test_string_bool_mask(ps_gs, item):
     ps, gs = ps_gs
 
-    got = gs[item]
+    got = gs.iloc[item]
     if isinstance(got, Series):
         got = got.to_arrow()
 
@@ -164,7 +164,7 @@ def test_string_bool_mask(ps_gs, item):
 def test_string_repr(ps_gs, item):
     ps, gs = ps_gs
 
-    got_out = gs[item]
+    got_out = gs.iloc[item]
     expect_out = ps.iloc[item]
 
     expect = str(expect_out)
@@ -870,11 +870,11 @@ def test_string_index():
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
 
@@ -1121,11 +1121,21 @@ _string_char_types_data = [
     [" ", "\t\r\n ", ""],
     ["leopard", "Golden Eagle", "SNAKE", ""],
     [r"¯\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻", "┬─┬ノ( º _ ºノ)"],
+    ["a1", "A1", "a!", "A!", "!1", "aA"],
 ]
 
 
 @pytest.mark.parametrize(
-    "type_op", ["isdecimal", "isalnum", "isalpha", "isdigit", "isnumeric"]
+    "type_op",
+    [
+        "isdecimal",
+        "isalnum",
+        "isalpha",
+        "isdigit",
+        "isnumeric",
+        "isupper",
+        "islower",
+    ],
 )
 @pytest.mark.parametrize("data", _string_char_types_data)
 def test_string_char_types(type_op, data):
@@ -1133,19 +1143,6 @@ def test_string_char_types(type_op, data):
     ps = pd.Series(data)
 
     assert_eq(getattr(gs.str, type_op)(), getattr(ps.str, type_op)())
-
-
-@pytest.mark.xfail(reason="unresolved libcudf/pandas incompatibility")
-@pytest.mark.parametrize("data", _string_char_types_data)
-@pytest.mark.parametrize("case_check_op", ["isupper", "islower"])
-def test_string_char_case_check(data, case_check_op):
-    gs = Series(data)
-    ps = pd.Series(data)
-
-    # some tests may pass, but for the wrong reasons.
-    assert_eq(
-        getattr(gs.str, case_check_op)(), getattr(ps.str, case_check_op)()
-    )
 
 
 @pytest.mark.parametrize(
@@ -1849,13 +1846,115 @@ def test_string_str_decode_url(data):
     assert_eq(expected, got)
 
 
-def test_to_pandas_nullable_string():
-    gsr_not_null = Series(["a", "b", "c"])
-    gsr_has_null = Series(["a", "b", None])
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "float"),
+        (["-0.1", "10.2", "+10.876"], "float"),
+        (["1", "10.2", "10.876"], "float32"),
+        (["+123", "6344556789", "0"], "int"),
+        (["+123", "6344556789", "0"], "float"),
+        (["0.1", "-10.2", "10.876", None], "float"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
 
-    # pandas initally casts to object for backwards compatibility
-    psr_not_null = pd.Series(["a", "b", "c"], dtype=pd.StringDtype())
-    psr_has_null = pd.Series(["a", "b", None], dtype=pd.StringDtype())
+    expect = psr.astype(dtype=dtype)
+    actual = gsr.astype(dtype=dtype)
+    assert_eq(expect, actual)
 
-    assert_eq(gsr_not_null.to_pandas(), psr_not_null)
-    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        (["0.1", "10.2", "10.876"], "int"),
+        (["1", "10.2", "+10.876"], "int"),
+        (["abc", "1", "2", " "], "int"),
+        ([" ", "0.1", "2"], "float"),
+        ([""], "int"),
+        ([" "], "float"),
+        (["\n"], "int"),
+        (["0.1", "-10.2", "10.876", None], "int"),
+        (["0.1", "-10.2", "10.876", None, "ab"], "float"),
+        (["+", "-"], "float"),
+        (["+", "-"], "int"),
+        (["1++++", "--2"], "float"),
+        (["1++++", "--2"], "int"),
+        (["++++1", "--2"], "float"),
+        (["++++1", "--2"], "int"),
+    ],
+)
+@pytest.mark.parametrize("obj_type", [None, "str", "category"])
+def test_string_typecast_error(data, obj_type, dtype):
+    psr = pd.Series(data, dtype=obj_type)
+    gsr = Series(data, dtype=obj_type)
+
+    exception_type = None
+    try:
+        psr.astype(dtype=dtype)
+    except Exception as e:
+        exception_type = type(e)
+
+    if exception_type is None:
+        raise TypeError("Was expecting `psr.astype` to fail")
+
+    with pytest.raises(exception_type):
+        gsr.astype(dtype=dtype)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["f0:18:98:22:c2:e4", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"],
+        ["f0189822c2e4", "000000000000", "ffffffffffff"],
+        ["0xf0189822c2e4", "0x000000000000", "0xffffffffffff"],
+        ["0Xf0189822c2e4", "0X000000000000", "0Xffffffffffff"],
+    ],
+)
+def test_string_hex_to_int(data):
+
+    gsr = Series(data)
+
+    got = gsr.str.htoi()
+    expected = Series([263988422296292, 0, 281474976710655])
+
+    assert_eq(expected, got)
+
+
+def test_string_ip4_to_int():
+    gsr = Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
+    expected = Series([0, None, 0, 698875905, 2130706433, 700776449])
+
+    got = gsr.str.ip2int()
+
+    assert_eq(expected, got)
+
+
+def test_string_int_to_ipv4():
+    gsr = Series([0, None, 0, 698875905, 2130706433, 700776449])
+    expected = Series(
+        ["0.0.0.0", None, "0.0.0.0", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
+
+    got = Series(gsr._column.int2ip())
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("int8"),
+        np.dtype("int16"),
+        np.dtype("int32"),
+        np.dtype("float32"),
+        np.dtype("float64"),
+    ],
+)
+def test_string_int_to_ipv4_dtype_fail(dtype):
+    gsr = Series([1, 2, 3, 4, 5]).astype(dtype)
+    with pytest.raises(TypeError):
+        gsr._column.int2ip()

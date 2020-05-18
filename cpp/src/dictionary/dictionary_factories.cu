@@ -14,62 +14,62 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
-
-namespace cudf
+namespace cudf {
+std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
+                                               column_view const& indices_column,
+                                               rmm::mr::device_memory_resource* mr,
+                                               cudaStream_t stream)
 {
+  CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
+  if (keys_column.size() == 0) return make_empty_column(data_type{DICTIONARY32});
+  CUDF_EXPECTS(indices_column.type().id() == cudf::type_id::INT32, "indices column must be INT32");
 
-std::unique_ptr<column> make_dictionary_column( column_view const& keys_column,
-                                                column_view const& indices_column,
-                                                rmm::mr::device_memory_resource* mr,
-                                                cudaStream_t stream)
-{
-    CUDF_EXPECTS( !keys_column.has_nulls(), "keys column must not have nulls" );
-    if( keys_column.size()==0 )
-        return make_empty_column( data_type{DICTIONARY32} );
-    CUDF_EXPECTS( indices_column.type().id()==cudf::type_id::INT32, "indices column must be INT32" );
+  auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
+  column_view indices_view{indices_column.type(),
+                           indices_column.size(),
+                           indices_column.data<int32_t>(),
+                           nullptr,
+                           0,
+                           indices_column.offset()};
+  auto indices_copy = std::make_unique<column>(indices_view, stream, mr);
+  rmm::device_buffer null_mask;
+  auto null_count = indices_column.null_count();
+  if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
 
-    auto keys_copy = std::make_unique<column>( keys_column, stream, mr );
-    column_view indices_view{ indices_column.type(), indices_column.size(),
-                              indices_column.data<int32_t>(),
-                              nullptr, 0, indices_column.offset() };
-    auto indices_copy = std::make_unique<column>( indices_view, stream, mr);
-    rmm::device_buffer null_mask;
-    auto null_count = indices_column.null_count();
-    if( null_count )
-        null_mask = copy_bitmask(indices_column,stream,mr);
-
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(indices_copy));
-    children.emplace_back(std::move(keys_copy));
-    return std::make_unique<column>(
-        data_type{DICTIONARY32}, indices_column.size(),
-        rmm::device_buffer{},
-        null_mask, null_count,
-        std::move(children));
+  std::vector<std::unique_ptr<column>> children;
+  children.emplace_back(std::move(indices_copy));
+  children.emplace_back(std::move(keys_copy));
+  return std::make_unique<column>(data_type{DICTIONARY32},
+                                  indices_column.size(),
+                                  rmm::device_buffer{0, stream, mr},
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
 }
 
-std::unique_ptr<column> make_dictionary_column( std::unique_ptr<column> keys_column,
-                                                std::unique_ptr<column> indices_column,
-                                                rmm::device_buffer&& null_mask,
-                                                size_type null_count )
+std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_column,
+                                               std::unique_ptr<column> indices_column,
+                                               rmm::device_buffer&& null_mask,
+                                               size_type null_count)
 {
-    CUDF_EXPECTS( !keys_column->has_nulls(), "keys column must not have nulls" );
-    CUDF_EXPECTS( !indices_column->has_nulls(), "indices column must not have nulls" );
-    CUDF_EXPECTS( indices_column->type().id()==cudf::type_id::INT32, "indices must be type INT32" );
+  CUDF_EXPECTS(!keys_column->has_nulls(), "keys column must not have nulls");
+  CUDF_EXPECTS(!indices_column->has_nulls(), "indices column must not have nulls");
+  CUDF_EXPECTS(indices_column->type().id() == cudf::type_id::INT32, "indices must be type INT32");
 
-    auto count = indices_column->size();
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(indices_column));
-    children.emplace_back(std::move(keys_column));
-    return std::make_unique<column>(
-        data_type{DICTIONARY32}, count,
-        rmm::device_buffer{},
-        std::move(null_mask), null_count,
-        std::move(children));
+  auto count = indices_column->size();
+  std::vector<std::unique_ptr<column>> children;
+  children.emplace_back(std::move(indices_column));
+  children.emplace_back(std::move(keys_column));
+  return std::make_unique<column>(data_type{DICTIONARY32},
+                                  count,
+                                  rmm::device_buffer{},
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
 }
 
 }  // namespace cudf

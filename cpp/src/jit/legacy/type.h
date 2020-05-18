@@ -25,10 +25,9 @@
 
 namespace cudf {
 namespace jit {
-
-    std::string getTypeName(gdf_dtype type);
+std::string getTypeName(gdf_dtype type);
 
 }
-}
+}  // namespace cudf
 
 #endif

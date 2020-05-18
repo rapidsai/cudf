@@ -18,23 +18,27 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-namespace nvtext
-{
+//! NVText APIs
+namespace nvtext {
+/**
+ * @addtogroup nvtext_normalize
+ * @{
+ */
 
 /**
  * @brief Returns a new strings column by normalizing the whitespace in each
  * string in the input column.
  *
- * Normalizing a string replaces any number of whitespace character 
+ * Normalizing a string replaces any number of whitespace character
  * (character code-point <= ' ') runs with a single space ' ' and
  * trims whitespace from the beginning and end of the string.
  *
+ * @code{.pseudo}
  * Example:
- * ```
  * s = ["a b", "  c  d\n", "e \t f "]
  * t = normalize_spaces(s)
  * t is now ["a b","c d","e f"]
- * ```
+ * @endcode
  *
  * A null input element at row `i` produces a corresponding null entry
  * for row `i` in the output column.
@@ -43,7 +47,9 @@ namespace nvtext
  * @param mr Resource for allocating device memory.
  * @return New strings columns of normalized strings.
  */
-std::unique_ptr<cudf::column> normalize_spaces( cudf::strings_column_view const& strings,
-                                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<cudf::column> normalize_spaces(
+  cudf::strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace nvtext
+/** @} */  // end of group
+}  // namespace nvtext

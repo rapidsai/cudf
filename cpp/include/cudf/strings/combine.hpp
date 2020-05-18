@@ -15,15 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_combine
+ * @{
+ */
 
 /**
  * @brief Row-wise concatenates the given list of strings columns and
@@ -38,14 +40,15 @@ namespace strings
  *
  * The number of strings in the columns provided must be the same.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s1 = ['aa', null, '', 'aa']
  * s2 = ['', 'bb', 'bb', null]
  * r1 = concatenate([s1,s2])
  * r1 is ['aa', null, 'bb', null]
  * r2 = concatenate([s1,s2],':','_')
  * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
  * @throw cudf::logic_error if separator is not valid.
@@ -59,10 +62,11 @@ namespace strings
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> concatenate( table_view const& strings_columns,
-                                     string_scalar const& separator = string_scalar(""),
-                                     string_scalar const& narep = string_scalar("",false),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> concatenate(
+  table_view const& strings_columns,
+  string_scalar const& separator      = string_scalar(""),
+  string_scalar const& narep          = string_scalar("", false),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**
  * @brief Concatenates all strings in the column into one new string delimited
@@ -71,11 +75,12 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
  * This returns a column with one string. Any null entries are ignored unless
  * the narep parameter specifies a replacement string.
  *
- * ```
+ * @code{.pseudo}
+ * Example:
  * s = ['aa', null, '', 'zz' ]
  * r = join_strings(s,':','_')
  * r is ['aa:_::zz']
- * ```
+ * @endcode
  *
  * @throw cudf::logic_error if separator is not valid.
  *
@@ -87,10 +92,12 @@ std::unique_ptr<column> concatenate( table_view const& strings_columns,
  * @param mr Resource for allocating device memory.
  * @return New column containing one string.
  */
-std::unique_ptr<column> join_strings( strings_column_view const& strings,
-                                      string_scalar const& separator = string_scalar(""),
-                                      string_scalar const& narep = string_scalar("",false),
-                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> join_strings(
+  strings_column_view const& strings,
+  string_scalar const& separator      = string_scalar(""),
+  string_scalar const& narep          = string_scalar("", false),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf
