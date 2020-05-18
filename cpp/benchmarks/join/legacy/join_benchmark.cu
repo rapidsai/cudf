@@ -23,7 +23,7 @@
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <vector>
 
-#include "generate_input_tables.cuh"
+#include "../generate_input_tables.cuh"
 
 template <typename key_type, typename payload_type>
 class Join : public cudf::benchmark {

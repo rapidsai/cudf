@@ -125,12 +125,12 @@ set(LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC
 ConfigureBench(LEGACY_APPLY_BOOLEAN_MASK_BENCH "${LEGACY_APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
-# - join benchmark --------------------------------------------------------------------------------
+# - legacy join benchmark --------------------------------------------------------------------------------
 
-set(JOIN_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/join/join_benchmark.cu")
+set(LEGACY_JOIN_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/join/legacy/join_benchmark.cu")
 
-ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
+ConfigureBench(LEGACY_JOIN_BENCH "${LEGACY_JOIN_BENCH_SRC}")
 
 ###################################################################################################
 # - iterator benchmark ----------------------------------------------------------------------------
