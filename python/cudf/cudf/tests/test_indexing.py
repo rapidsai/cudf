@@ -462,12 +462,12 @@ def test_dataframe_series_loc_multiindex(obj):
     gobj = cudf.from_pandas(obj)
     gindex = cudf.MultiIndex.from_pandas(pindex)
 
-    # cudf MultinIndex as arg
+    # cudf MultiIndex as arg
     expected = obj.loc[pindex]
     got = gobj.loc[gindex]
     assert_eq(expected, got)
 
-    # pandas MultinIndex as arg
+    # pandas MultiIndex as arg
     expected = obj.loc[pindex]
     got = gobj.loc[pindex]
     assert_eq(expected, got)

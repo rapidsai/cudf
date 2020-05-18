@@ -17,7 +17,7 @@ from cudf.core.dtypes import CategoricalDtype
 
 class CategoricalAccessor(object):
     """
-    This mimicks pandas `df.cat` interface.
+    This mimics pandas `df.cat` interface.
     """
 
     def __init__(self, column, parent=None):

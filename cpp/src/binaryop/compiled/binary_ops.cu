@@ -113,7 +113,7 @@ struct binary_op {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     auto out      = make_fixed_width_column(out_type,
                                        lhs.size(),
-                                       new_mask,
+                                       std::move(new_mask),
                                        rhs.is_valid(stream) ? cudf::UNKNOWN_NULL_COUNT : lhs.size(),
                                        stream,
                                        mr);
@@ -169,8 +169,8 @@ struct binary_op {
                                      cudaStream_t stream)
   {
     auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
-    auto out =
-      make_fixed_width_column(out_type, lhs.size(), new_mask, cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    auto out      = make_fixed_width_column(
+      out_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
     if (lhs.size() > 0) {
       auto out_view        = out->mutable_view();

@@ -74,7 +74,7 @@ __device__ __inline__ void trim_field_start_end(const char *data,
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  *
- * @param c Chracter to check
+ * @param c Character to check
  * @param is_hex Whether to check as a hexadecimal
  *
  * @return `true` if it is digit-like, `false` otherwise
@@ -658,7 +658,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 /*
  * @brief 512-wide row context merge transform
  *
- * Repeatingly merge row context blocks, keeping track of each merge operation
+ * Repeatedly merge row context blocks, keeping track of each merge operation
  * in a context tree so that the transform is reversible
  * The tree is organized such that the left and right children of node n
  * are located at indices n*2 and n*2+1, the root node starting at index 1
@@ -811,7 +811,7 @@ __global__ void __launch_bounds__(rowofs_block_dim) gather_row_offsets_gpu(uint6
     .y = 0,
     .z = 0,
     .w = (ROW_CTX_NONE << 0) | (ROW_CTX_QUOTE << 2) | (ROW_CTX_COMMENT << 4) | (ROW_CTX_EOF << 6)};
-  int c, c_prev = (cur > start) ? cur[-1] : terminator;
+  int c, c_prev = (cur > start && cur <= end) ? cur[-1] : terminator;
   // Loop through all 32 bytes and keep a bitmask of row starts for each possible input context
   for (uint32_t pos = 0; pos < 32; pos++, cur++, c_prev = c) {
     uint32_t ctx;
