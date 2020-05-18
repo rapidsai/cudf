@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 #################################
 # cuDF Docs build script for CI #
 #################################
@@ -49,7 +49,7 @@ cd $PROJECT_WORKSPACE/docs/cudf
 make html
 
 #libnvstrings Doxygen build
-logger "Build livnvstrings docs..."
+logger "Build libnvstrings docs..."
 cd $PROJECT_WORKSPACE/cpp/custrings/doxygen
 doxygen Doxyfile
 
@@ -83,10 +83,6 @@ for PROJECT in ${PROJECTS[@]}; do
     echo ""
     echo "Customizing: $PROJECT"
     ./customization/customize_docs_in_folder.sh api/$PROJECT/ $NIGHTLY_VERSION
-done
-
-for PROJECT in ${PROJECTS[@]}; do
-    cd $DOCS_WORKSPACE/api/$PROJECT/
-    git add .	
+    git add $DOCS_WORKSPACE/api/$PROJECT/*
 done
 
