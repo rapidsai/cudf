@@ -160,6 +160,43 @@ class Series(Frame):
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
+        """
+        Convert from a Pandas Series.
+
+        Parameters
+        ----------
+        s : Pandas Series object
+            A Pandads Series object which has to be converted
+            to cuDF Series.
+        nan_as_null : bool, Default True
+            If ``True``, converts ``np.nan`` values to ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> data = [10, 20, 30, np.nan]
+        >>> pds = pd.Series(data)
+        >>> cudf.Series.from_pandas(pds)
+        0    10.0
+        1    20.0
+        2    30.0
+        3    null
+        dtype: float64
+        >>> cudf.Series.from_pandas(pds, nan_as_null=False)
+        0    10.0
+        1    20.0
+        2    30.0
+        3     NaN
+        dtype: float64
+
+        """
         return cls(s, nan_as_null=nan_as_null)
 
     @property
@@ -189,6 +226,37 @@ class Series(Frame):
 
     @classmethod
     def from_arrow(cls, s):
+        """Convert from a PyArrow Array.
+
+        Parameters
+        ----------
+        s : PyArrow Object
+            PyArrow Object which has to be converted to cudf Series.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Examples
+        --------
+        >>> import pyarrow as pa
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> data = pa.array([1, 2, 3])
+        >>> data
+        <pyarrow.lib.Int64Array object at 0x7f67007e07c0>
+        [
+        1,
+        2,
+        3
+        ]
+        >>> cudf.Series.from_arrow(data)
+        0    1
+        1    2
+        2    3
+        dtype: int64
+
+        """
         return cls(s)
 
     def serialize(self):
@@ -265,9 +333,85 @@ class Series(Frame):
         return cls(**params)
 
     def copy(self, deep=True):
+        """
+        Make a copy of this object's indices and data.
+
+        When ``deep=True`` (default), a new object will be created with a
+        copy of the calling object's data and indices. Modifications to
+        the data or indices of the copy will not be reflected in the
+        original object (see notes below).
+        When ``deep=False``, a new object will be created without copying
+        the calling object's data or index (only references to the data
+        and index are copied). Any changes to the data of the original
+        will be reflected in the shallow copy (and vice versa).
+
+        Parameters
+        ----------
+        deep : bool, default True
+            Make a deep copy, including a copy of the data and the indices.
+            With ``deep=False`` neither the indices nor the data are copied.
+
+        Returns
+        -------
+        copy : Series or DataFrame
+            Object type matches caller.
+
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> s
+        a    1
+        b    2
+        dtype: int64
+        >>> s_copy = s.copy()
+        >>> s_copy
+        a    1
+        b    2
+        dtype: int64
+
+        **Shallow copy versus default (deep) copy:**
+
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> deep = s.copy()
+        >>> shallow = s.copy(deep=False)
+
+        Shallow copy shares data and index with original.
+
+        >>> s is shallow
+        False
+        >>> s._column is shallow._column and s.index is shallow.index
+        True
+
+        Deep copy has own copy of data and index.
+        >>> s is deep
+        False
+        >>> s.values is deep.values or s.index is deep.index
+        False
+
+        Updates to the data shared by shallow copy and original is reflected
+        in both; deep copy remains unchanged.
+
+        >>> s['a'] = 3
+        >>> shallow['b'] = 4
+        >>> s
+        a    3
+        b    4
+        dtype: int64
+        >>> shallow
+        a    3
+        b    4
+        dtype: int64
+        >>> deep
+        a    1
+        b    2
+        dtype: int64
+
+        """
         result = self._copy_construct()
         if deep:
             result._column = self._column.copy(deep)
+            result.index = self.index.copy(deep)
         return result
 
     def __copy__(self, deep=True):
@@ -349,6 +493,23 @@ class Series(Frame):
         return self._copy_construct(index=index)
 
     def as_index(self):
+        """Returns a new Series with a RangeIndex.
+
+        Examples
+        ----------
+        >>> s = cudf.Series([1,2,3], index=['a','b','c'])
+        >>> s
+        a    1
+        b    2
+        c    3
+        dtype: int64
+        >>> s.as_index()
+        0    1
+        1    2
+        2    3
+        dtype: int64
+
+        """
         return self.set_index(RangeIndex(len(self)))
 
     def to_frame(self, name=None):
@@ -401,6 +562,43 @@ class Series(Frame):
         return self._column.__sizeof__() + self._index.__sizeof__()
 
     def memory_usage(self, index=True, deep=False):
+        """
+        Return the memory usage of the Series.
+
+        The memory usage can optionally include the contribution of
+        the index and of elements of `object` dtype.
+
+        Parameters
+        ----------
+        index : bool, default True
+            Specifies whether to include the memory usage of the Series index.
+        deep : bool, default False
+            If True, introspect the data deeply by interrogating
+            `object` dtypes for system-level memory consumption, and include
+            it in the returned value.
+
+        Returns
+        -------
+        int
+            Bytes of memory consumed.
+
+        See Also
+        --------
+        cudf.DataFrame.memory_usage : Bytes consumed by a DataFrame.
+
+        Examples
+        --------
+        >>> s = cudf.Series(range(3), index=['a','b','c'])
+        >>> s.memory_usage()
+        48
+
+        Not including the index gives the size of the rest of the data, which
+        is necessarily smaller:
+
+        >>> s.memory_usage(index=False)
+        24
+
+        """
         n = self._column._memory_usage(deep=deep)
         if index:
             n += self._index.memory_usage(deep=deep)
@@ -501,6 +699,74 @@ class Series(Frame):
         return self.to_arrow().to_pylist()
 
     def head(self, n=5):
+        """
+        Return the first `n` rows.
+        This function returns the first `n` rows for the object based
+        on position. It is useful for quickly testing if your object
+        has the right type of data in it.
+        For negative values of `n`, this function returns all rows except
+        the last `n` rows, equivalent to ``df[:-n]``.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Number of rows to select.
+
+        Returns
+        -------
+        same type as caller
+            The first `n` rows of the caller object.
+
+        See Also
+        --------
+        Series.tail: Returns the last `n` rows.
+
+        Examples
+        --------
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon', 'lion',
+        ...                    'monkey', 'parrot', 'shark', 'whale', 'zebra'])
+        >>> ser
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        6        shark
+        7        whale
+        8        zebra
+        dtype: object
+
+        Viewing the first 5 lines
+
+        >>> ser.head()
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        dtype: object
+
+        Viewing the first `n` lines (three in this case)
+
+        >>> ser.head(3)
+        0    alligator
+        1          bee
+        2       falcon
+        dtype: object
+
+        For negative values of `n`
+
+        >>> ser.head(-3)
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        dtype: object
+
+        """
         return self.iloc[:n]
 
     def tail(self, n=5):
@@ -982,6 +1248,36 @@ class Series(Frame):
         return self._binaryop(other, "eq")
 
     def equals(self, other):
+        """
+        Test whether two objects contain the same elements.
+        This function allows two Series or DataFrames to be compared against
+        each other to see if they have the same shape and elements. NaNs in
+        the same location are considered equal. The column headers do not
+        need to have the same type.
+
+        Parameters
+        ----------
+        other : Series or DataFrame
+            The other Series or DataFrame to be compared with the first.
+
+        Returns
+        -------
+        bool
+            True if all elements are the same in both objects, False
+            otherwise.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3])
+        >>> other = cudf.Series([1, 2, 3])
+        >>> s.equals(other)
+        True
+        >>> different = cudf.Series([1.5, 2, 3])
+        >>> s.equals(different)
+        False
+
+        """
         if self is other:
             return True
         if other is None or len(self) != len(other):
@@ -1358,6 +1654,31 @@ class Series(Frame):
         return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self, index=True):
+        """
+        Convert to a Pandas Series.
+
+        Parameters
+        ----------
+        index : Boolean, Default True
+            If ``index`` is ``True``, converts the index of cudf.Series
+            and sets it to the pandas.Series. If ``index`` is ``False``,
+            no index conversion is performed and pandas.Series will assign
+            a default index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-3, 2, 0])
+        >>> pds = ser.to_pandas()
+        >>> pds
+        0   -3
+        1    2
+        2    0
+        dtype: int64
+        >>> type(pds)
+        <class 'pandas.core.series.Series'>
+
+        """
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index)
@@ -1365,6 +1686,23 @@ class Series(Frame):
         return s
 
     def to_arrow(self):
+        """
+        Convert Series to a PyArrow Array.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([-3, 10, 15, 20])
+        >>> ser.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f5e769499f0>
+        [
+        -3,
+        10,
+        15,
+        20
+        ]
+
+        """
         return self._column.to_arrow()
 
     @property
@@ -1434,11 +1772,12 @@ class Series(Frame):
             values then may propagate to other cudf objects.
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
-            - ``raise`` : allow exceptions to be raised
-            - ``ignore`` : suppress exceptions. On error return original
-            object.
-            - ``warn`` : prints last exceptions as warnings and
-            return original object.
+
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns

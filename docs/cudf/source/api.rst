@@ -21,7 +21,7 @@ Series
 
 .. autoclass:: Series
     :members:
-    :exclude-members: serialize, deserialize, logical_not, logical_or, remainder, sum_of_squares
+    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill
 
 Strings
 -------

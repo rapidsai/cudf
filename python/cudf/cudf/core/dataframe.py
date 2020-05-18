@@ -658,6 +658,7 @@ class DataFrame(Frame):
         many repeated values.
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
+
         """
         ind = list(self.columns)
         sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
@@ -861,12 +862,11 @@ class DataFrame(Frame):
         errors : {'raise', 'ignore', 'warn'}, default 'raise'
             Control raising of exceptions on invalid data for provided dtype.
 
-            - ``raise`` : allow exceptions to be raised
-            - ``ignore`` : suppress exceptions. On error return original
-            object.
-
-            - ``warn`` : prints last exceptions as warnings and
-            return original object.
+            -   ``raise`` : allow exceptions to be raised
+            -   ``ignore`` : suppress exceptions. On error return original
+                object.
+            -   ``warn`` : prints last exceptions as warnings and
+                return original object.
         **kwargs : extra arguments to pass on to the constructor
 
         Returns
@@ -4058,11 +4058,16 @@ class DataFrame(Frame):
         Examples
         --------
         >>> import cudf
-        >>> a = ('a', [0, 1, 2])
-        >>> b = ('b', [-3, 2, 0])
-        >>> df = cudf.DataFrame([a, b])
-        >>> type(df.to_pandas())
+        >>> df = cudf.DataFrame({'a': [0, 1, 2], 'b': [-3, 2, 0]})
+        >>> pdf = df.to_pandas()
+        >>> pdf
+           a  b
+        0  0 -3
+        1  1  2
+        2  2  0
+        >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
+
         """
         out_data = {}
         out_index = self.index.to_pandas()
@@ -4092,6 +4097,15 @@ class DataFrame(Frame):
         """
         Convert from a Pandas DataFrame.
 
+        Parameters
+        ----------
+        dataframe : Pandas DataFrame object
+            A Pandads DataFrame object which has to be converted
+            to cuDF DataFrame.
+        nan_as_null : bool, Default True
+            If ``True``, converts ``np.nan`` values to ``null`` values.
+            If ``False``, leaves ``np.nan`` values as is.
+
         Raises
         ------
         TypeError for invalid input type.
@@ -4103,7 +4117,11 @@ class DataFrame(Frame):
         >>> data = [[0,1], [1,2], [3,4]]
         >>> pdf = pd.DataFrame(data, columns=['a', 'b'], dtype=int)
         >>> cudf.from_pandas(pdf)
-        <cudf.DataFrame ncols=2 nrows=3 >
+           a  b
+        0  0  1
+        1  1  2
+        2  3  4
+
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
@@ -4214,6 +4232,11 @@ class DataFrame(Frame):
     def from_arrow(cls, table):
         """Convert from a PyArrow Table.
 
+        Parameters
+        ----------
+        table : PyArrow Table Object
+            PyArrow Table Object which has to be converted to cudf DataFrame.
+
         Raises
         ------
         TypeError for invalid input type.
@@ -4221,8 +4244,8 @@ class DataFrame(Frame):
         Notes
         -----
 
-        - Does not support automatically setting index column(s) similar to how
-        ``to_pandas`` works for PyArrow Tables.
+        -   Does not support automatically setting index column(s) similar
+            to how ``to_pandas`` works for PyArrow Tables.
 
         Examples
         --------
@@ -4232,7 +4255,11 @@ class DataFrame(Frame):
         >>> batch = pa.RecordBatch.from_arrays(data, ['f0', 'f1'])
         >>> table = pa.Table.from_batches([batch])
         >>> cudf.DataFrame.from_arrow(table)
-        <cudf.DataFrame ncols=2 nrows=3 >
+            f0  f1
+        0   1   4
+        1   2   5
+        2   3   6
+
         """
 
         if not isinstance(table, pa.Table):
