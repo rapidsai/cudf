@@ -32,7 +32,7 @@ namespace detail {
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
  * Because `column_view_base` is non-owning, no device memory is allocated nor
- *free'd when `column_view_base` objects are created or destroyed.
+ *freed when `column_view_base` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `column_view_base` has an `offset` that
  *indicates the index of the first element in the column relative to the base
@@ -150,7 +150,7 @@ class column_view_base {
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param[in] begin The starting index of the range (inclusive).
-   * @param[in] end The index of the last element in the range (exlusive).
+   * @param[in] end The index of the last element in the range (exclusive).
    **/
   size_type null_count(size_type begin, size_type end) const;
 
@@ -171,7 +171,7 @@ class column_view_base {
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param begin The starting index of the range (inclusive).
-   * @param end The index of the last element in the range (exlusive).
+   * @param end The index of the last element in the range (exclusive).
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
    */
@@ -258,6 +258,8 @@ class mutable_column_view_base : public column_view_base {
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
+ * @ingroup column_classes
+ *
  * A `column_view` can be constructed implicitly from a `cudf::column`, or may
  * be constructed explicitly from a pointer to pre-existing device memory.
  *
@@ -265,7 +267,7 @@ class mutable_column_view_base : public column_view_base {
  * bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
- * Because `column_view` is non-owning, no device memory is allocated nor free'd
+ * Because `column_view` is non-owning, no device memory is allocated nor freed
  * when `column_view` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
@@ -342,19 +344,21 @@ class column_view : public detail::column_view_base {
  * @brief A non-owning, mutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
+ * @ingroup column_classes
+ *
  * A `mutable_column_view` can be constructed implicitly from a `cudf::column`,
- *or may be constructed explicitly from a pointer to pre-existing device memory.
+ * or may be constructed explicitly from a pointer to pre-existing device memory.
  *
  * Unless otherwise noted, the memory layout of the `mutable_column_view`'s data
- *and bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * and bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
  * Because `mutable_column_view` is non-owning, no device memory is allocated
- *nor free'd when `mutable_column_view` objects are created or destroyed.
+ * nor freed when `mutable_column_view` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `mutable_column_view` has an `offset` that
- *indicates the index of the first element in the column relative to the base
- *device memory allocation. By default, `offset()` is zero.
+ * indicates the index of the first element in the column relative to the base
+ * device memory allocation. By default, `offset()` is zero.
  *
  **/
 class mutable_column_view : public detail::column_view_base {

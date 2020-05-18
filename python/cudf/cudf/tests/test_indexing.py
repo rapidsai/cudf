@@ -462,12 +462,12 @@ def test_dataframe_series_loc_multiindex(obj):
     gobj = cudf.from_pandas(obj)
     gindex = cudf.MultiIndex.from_pandas(pindex)
 
-    # cudf MultinIndex as arg
+    # cudf MultiIndex as arg
     expected = obj.loc[pindex]
     got = gobj.loc[gindex]
     assert_eq(expected, got)
 
-    # pandas MultinIndex as arg
+    # pandas MultiIndex as arg
     expected = obj.loc[pindex]
     got = gobj.loc[pindex]
     assert_eq(expected, got)
@@ -661,6 +661,9 @@ def test_dataframe_boolean_mask_with_None():
     pdf_masked = pdf[[True, False, True, False]]
     gdf_masked = gdf[[True, False, True, False]]
     assert_eq(pdf_masked, gdf_masked)
+
+    with pytest.raises(ValueError):
+        gdf[Series([True, False, None, False])]
 
 
 @pytest.mark.parametrize("dtype", [int, float, str])

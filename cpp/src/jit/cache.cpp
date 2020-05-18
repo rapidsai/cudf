@@ -53,7 +53,7 @@ boost::filesystem::path get_user_home_cache_dir()
  *
  * This path can be overridden at runtime by defining an environment variable
  * named `LIBCUDF_KERNEL_CACHE_PATH`. The value of this variable must be a path
- * under which the process' user has read/write priveleges.
+ * under which the process' user has read/write privileges.
  *
  * This function returns a path to the cache directory, creating it if it
  * doesn't exist.

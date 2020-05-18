@@ -37,6 +37,7 @@
 
 namespace cudf {
 namespace transformation {
+namespace jit {
 
 /**
  * @brief Computes output valid mask for op between a column and a scalar
@@ -46,8 +47,6 @@ namespace transformation {
  * @param valid_col input mask of column
  * @param num_values number of values in input mask valid_col
  **/
-
-namespace jit {
 void unary_operation(gdf_column& output,
                      const gdf_column& input,
                      const std::string& udf,

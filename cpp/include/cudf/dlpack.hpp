@@ -22,6 +22,11 @@ struct DLManagedTensor;
 
 namespace cudf {
 /**
+ * @addtogroup interop_dlpack
+ * @{
+ */
+
+/**
  * @brief Convert a DLPack DLTensor into a cudf table
  *
  * The `device_type` of the DLTensor must be `kDLGPU`, `kDLCPU`, or
@@ -63,4 +68,5 @@ std::unique_ptr<experimental::table> from_dlpack(
 DLManagedTensor* to_dlpack(table_view const& input,
                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace cudf

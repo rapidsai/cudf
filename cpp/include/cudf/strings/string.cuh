@@ -25,6 +25,8 @@ namespace string {
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to an integer.
  *
+ * @ingroup strings_classes
+ *
  * Valid characters are in [-+0-9]. The sign character (+/-)
  * is optional but if present must be the first character.
  * An empty string returns `false`.
@@ -48,6 +50,8 @@ __device__ bool is_integer(string_view const& d_str)
 /**
  * @brief Returns `true` if all characters in the string
  * are valid for conversion to a float type.
+ *
+ * @ingroup strings_classes
  *
  * Valid characters are in [-+0-9eE.]. The sign character (+/-)
  * is optional but if present must be the first character.

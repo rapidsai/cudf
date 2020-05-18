@@ -319,7 +319,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
-      // Wait a bit in a attempt to make the spin less resource-hungry
+      // Wait a bit in an attempt to make the spin less resource-hungry
       NANOSLEEP(100);
       continue;
     }
@@ -1591,7 +1591,7 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
   int dist_rb_idx;
   uint32_t blen_L, blen_I, blen_D;
   uint8_t *const dict_scratch =
-    (uint8_t *)&s->hs;  // 24+13 bytes (max length of a dictionary word incuding prefix & suffix)
+    (uint8_t *)&s->hs;  // 24+13 bytes (max length of a dictionary word including prefix & suffix)
   int context_mode;
 
   if (!t) {

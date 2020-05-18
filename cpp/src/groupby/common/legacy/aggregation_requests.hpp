@@ -56,7 +56,7 @@ static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, 
 
 static constexpr std::array<operators, 4> ordered_aggregations = {MEDIAN, QUANTILE, VARIANCE, STD};
 
-// Just an utility function to find the existence of on element in a constexpr array
+// Just a utility function to find the existence of on element in a constexpr array
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
 {
