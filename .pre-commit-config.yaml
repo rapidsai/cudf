@@ -8,16 +8,30 @@ repos:
         hooks:
               - id: black
       - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.7.7
+        rev: 3.8.1
         hooks:
               - id: flake8
+                alias: flake8
+                name: flake8
+                args: ["--config=python/.flake8"]
+                types: [python]
       - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.7.7
+        rev: 3.8.1
         hooks:
               - id: flake8
                 alias: flake8-cython
                 name: flake8-cython
-                args: ["--config=python/cudf/.flake8.cython"]
+                args: ["--config=python/.flake8.cython"]
                 types: [cython]
+      - repo: local
+        hooks:
+              - id: clang-format
+                name: clang-format
+                description: Format files with ClangFormat.
+                entry: clang-format -i
+                language: system
+                files: \.(cu|cuh|h|hpp|cpp|inl)$
+                args: ['-fallback-style=none']
+
 default_language_version:
       python: python3

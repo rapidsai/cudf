@@ -1186,6 +1186,27 @@ def test_csv_reader_pd_consistent_quotes(quoting):
     assert_eq(pd_df, gd_df)
 
 
+def test_read_csv_names_header_combination():
+    pdf = pd.DataFrame(
+        {
+            "firstname": ["Emma", "Ava", "Sophia"],
+            "lastname": ["Olivia", "Isabella", "Charlotte"],
+            "gender": ["F", "F", "F"],
+        }
+    )
+    buffer = pdf.to_csv(header=True, index=False)
+    names = pdf.columns
+
+    gdf = read_csv(StringIO(buffer), names=names, header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer), header=0)
+    assert_eq(pdf, gdf)
+
+    gdf = read_csv(StringIO(buffer))
+    assert_eq(pdf, gdf)
+
+
 def test_csv_reader_scientific_type_detection():
     buffer = """1.,1.1,-1.1,1E1,1e1,-1e1,-1e-1,1e-1,1.1e1,1.1e-1,-1.1e-1,-1.1e1
                 +1.1,1E+1,1e+1,+1e1,+1e-1,1e-1,+1.1e1,1.1e+1,+1.1e+1,+1.1e1"""
@@ -1383,7 +1404,8 @@ def test_csv_writer_mixed_data(
         header=header,
         line_terminator=line_terminator,
         date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
+        quoting=csv.QUOTE_NONE,
+        escapechar="\\",
     )
     gdf.to_csv(
         path=gdf_df_fname,
@@ -1397,7 +1419,7 @@ def test_csv_writer_mixed_data(
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname)
+    expect = pd.read_csv(pdf_df_fname, quoting=csv.QUOTE_NONE, escapechar="\\")
     got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
@@ -1439,10 +1461,7 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     gdf = cudf.from_pandas(pdf)
 
     pdf.to_csv(
-        pdf_df_fname,
-        date_format="%Y-%m-%dT%H:%M:%SZ",
-        quoting=csv.QUOTE_NONNUMERIC,
-        chunksize=chunksize,
+        pdf_df_fname, date_format="%Y-%m-%dT%H:%M:%SZ", chunksize=chunksize,
     )
     gdf.to_csv(gdf_df_fname, chunksize=chunksize)
 
@@ -1461,3 +1480,18 @@ def test_to_csv_empty_filename():
 
     with exception:
         df.to_csv()
+
+
+def test_csv_writer_empty_dataframe(tmpdir):
+
+    df_fname = tmpdir.join("gdf_df_5.csv")
+    gdf = cudf.DataFrame({"float_point": [], "integer": []})
+    gdf["float_point"] = gdf["float_point"].astype("float")
+    gdf["integer"] = gdf["integer"].astype("int")
+
+    gdf.to_csv(df_fname, index=False)
+
+    df = cudf.read_csv(df_fname)
+
+    assert df.shape == (0, 2)
+    assert all(df.dtypes == ["object", "object"])

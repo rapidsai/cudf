@@ -3,8 +3,7 @@ import os.path
 
 import numpy as np
 import pytest
-
-import rmm
+from numba import cuda
 
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.core import DataFrame, Series
@@ -45,7 +44,7 @@ def read_data():
     )
     data = batch.serialize().to_pybytes()
     data = np.ndarray(shape=len(data), dtype=np.byte, buffer=bytearray(data))
-    darr = rmm.to_device(data)
+    darr = cuda.to_device(data)
     return df, schema, darr
 
 

@@ -35,6 +35,8 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/lists/lists_column_wrapper.cpp")
 
+set_property(TARGET cudftestutil PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 target_link_libraries(cudftestutil cudf)
 
 install(TARGETS cudftestutil
@@ -375,6 +377,11 @@ set(REPLACE_NULLS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nulls_tests.cu")
 
 ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+
+set(REPLACE_NANS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_nans_tests.cu")
+
+ConfigureTest(REPLACE_NANS_TEST "${REPLACE_NANS_TEST_SRC}")
 
 set(NORMALIZE_REPLACE_TEST_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/replace/normalize_replace_tests.cu")

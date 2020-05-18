@@ -6,7 +6,13 @@ import pyarrow as pa
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
-from dask.dataframe.utils import UNKNOWN_CATEGORIES
+from dask.dataframe.utils import (
+    UNKNOWN_CATEGORIES,
+    _nonempty_scalar,
+    _scalar_from_dtype,
+    is_arraylike,
+    is_scalar,
+)
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
@@ -44,7 +50,7 @@ def _nonempty_index(idx):
             np.arange(2, dtype=idx.dtype), name=idx.name
         )
     elif isinstance(idx, cudf.core.MultiIndex):
-        levels = [meta_nonempty(l) for l in idx.levels]
+        levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0] for i in idx.levels]
         return cudf.core.MultiIndex(
             levels=levels, codes=codes, names=idx.names
@@ -111,6 +117,86 @@ def make_meta_cudf(x, index=None):
 @make_meta.register(cudf.Index)
 def make_meta_cudf_index(x, index=None):
     return x[:0]
+
+
+def _empty_series(name, dtype, index=None):
+    if isinstance(dtype, str) and dtype == "category":
+        return cudf.Series(
+            [UNKNOWN_CATEGORIES], dtype=dtype, name=name, index=index
+        ).iloc[:0]
+    return cudf.Series([], dtype=dtype, name=name, index=index)
+
+
+@make_meta.register(object)
+def make_meta_object(x, index=None):
+    """Create an empty cudf object containing the desired metadata.
+
+    Parameters
+    ----------
+    x : dict, tuple, list, cudf.Series, cudf.DataFrame, cudf.Index,
+        dtype, scalar
+        To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
+        an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
+        tuple of `(name, dtype)`. If a cudf object, names, dtypes, and index
+        should match the desired output. If a dtype or scalar, a scalar of the
+        same dtype is returned.
+    index :  cudf.Index, optional
+        Any cudf index to use in the metadata. If none provided, a
+        `RangeIndex` will be used.
+
+    Examples
+    --------
+    >>> make_meta([('a', 'i8'), ('b', 'O')])
+    Empty DataFrame
+    Columns: [a, b]
+    Index: []
+    >>> make_meta(('a', 'f8'))
+    Series([], Name: a, dtype: float64)
+    >>> make_meta('i8')
+    1
+    """
+    if hasattr(x, "_meta"):
+        return x._meta
+    elif is_arraylike(x) and x.shape:
+        return x[:0]
+
+    if index is not None:
+        index = make_meta(index)
+
+    if isinstance(x, dict):
+        return cudf.DataFrame(
+            {c: _empty_series(c, d, index=index) for (c, d) in x.items()},
+            index=index,
+        )
+    if isinstance(x, tuple) and len(x) == 2:
+        return _empty_series(x[0], x[1], index=index)
+    elif isinstance(x, (list, tuple)):
+        if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
+            raise ValueError(
+                "Expected iterable of tuples of (name, dtype), got {0}".format(
+                    x
+                )
+            )
+        return cudf.DataFrame(
+            {c: _empty_series(c, d, index=index) for (c, d) in x},
+            columns=[c for c, d in x],
+            index=index,
+        )
+    elif not hasattr(x, "dtype") and x is not None:
+        # could be a string, a dtype object, or a python type. Skip `None`,
+        # because it is implictly converted to `dtype('f8')`, which we don't
+        # want here.
+        try:
+            dtype = np.dtype(x)
+            return _scalar_from_dtype(dtype)
+        except Exception:
+            # Continue on to next check
+            pass
+
+    if is_scalar(x):
+        return _nonempty_scalar(x)
+
+    raise TypeError("Don't know how to create metadata from {0}".format(x))
 
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))

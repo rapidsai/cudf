@@ -25,6 +25,12 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**
+ * @addtogroup utility_types
+ * @{
+ */
+
 template <typename...>
 using void_t = void;
 
@@ -324,9 +330,9 @@ struct is_simple_impl {
 constexpr inline bool is_simple(data_type type) { return not is_compound(type); }
 
 /**
- * @brief Indicates whether `T` is a nesting type.
+ * @brief Indicates whether `T` is a nested type.
  *
- * "Nesting" types are distinct from compound types in that they
+ * "Nested" types are distinct from compound types in that they
  * can have an arbitrarily deep list of descendants of the same
  * type. Strings are not a nested type, but lists are.
  *
@@ -349,9 +355,9 @@ struct is_nested_impl {
 };
 
 /**
- * @brief Indicates whether `type` is a nesting type
+ * @brief Indicates whether `type` is a nested type
  *
- * "Nesting" types are distinct from compound types in that they
+ * "Nested" types are distinct from compound types in that they
  * can have an arbitrarily deep list of descendants of the same
  * type. Strings are not a nested type, but lists are.
  *
@@ -364,4 +370,5 @@ constexpr inline bool is_nested(data_type type)
   return cudf::experimental::type_dispatcher(type, is_nested_impl{});
 }
 
+/** @} */
 }  // namespace cudf

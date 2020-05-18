@@ -26,6 +26,11 @@
 namespace cudf {
 namespace experimental {
 /**
+ * @addtogroup column_search
+ * @{
+ */
+
+/**
  * @brief Find smallest indices in a sorted table where values should be
  *  inserted to maintain order
  *
@@ -166,5 +171,6 @@ std::unique_ptr<column> contains(
   column_view const& needles,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
+/** @} */  // end of group
 }  // namespace experimental
 }  // namespace cudf

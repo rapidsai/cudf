@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
-#include <cudf/types.hpp>
-
 /**
  * @file list_view.cuh
  * @brief Class definition for cudf::list_view.

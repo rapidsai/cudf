@@ -349,9 +349,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *
    * @return ColumnVector holding length of string at index 'i' in the original vector
    */
-  public ColumnVector getLengths() {
-    assert DType.STRING == type : "length only available for String type";
-    return new ColumnVector(lengths(getNativeView()));
+  public ColumnVector getCharLengths() {
+    assert DType.STRING == type : "char length only available for String type";
+    return new ColumnVector(charLengths(getNativeView()));
   }
 
   /**
@@ -2058,6 +2058,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return new ColumnVector(containsRe(getNativeView(), pattern));
   }
 
+  /**
+   * For each captured group specified in the given regular expression
+   * return a column in the table. Null entries are added if the string
+   * does not match. Any null inputs also result in null output entries.
+   *
+   * For supported regex patterns refer to:
+   * @link https://rapidsai.github.io/projects/nvstrings/en/0.13.0/regex.html
+   * @param pattern the pattern to use
+   * @return the table of extracted matches
+   * @throws CudfException if any error happens including if the RE does
+   * not contain any capture groups.
+   */
+  public Table extractRe(String pattern) throws CudfException {
+    assert type == DType.STRING : "column type must be a String";
+    assert pattern != null : "pattern may not be null";
+    return new Table(extractRe(this.getNativeView(), pattern));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2261,6 +2279,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
+   * Native method for extracting results from an regular expressions.  Returns a table handle.
+   */
+  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  /**
    * Native method to concatenate columns of strings together, combining a row from
    * each colunm into a single string.
    * @param columnViews array of longs holding the native handles of the column_views to combine.
@@ -2312,7 +2335,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
-  private static native long lengths(long viewHandle) throws CudfException;
+  private static native long charLengths(long viewHandle) throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
 

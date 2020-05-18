@@ -418,8 +418,8 @@ class ColumnBase(Column):
         index = np.int32(index)
         if index < 0:
             index = len(self) + index
-        if index > len(self) - 1:
-            raise IndexError
+        if index > len(self) - 1 or index < 0:
+            raise IndexError("single positional indexer is out-of-bounds")
 
         return libcudf.copying.get_element(self, index).value
 
@@ -846,6 +846,17 @@ class ColumnBase(Column):
             ordered = False
 
         sr = cudf.Series(self)
+
+        # Re-label self w.r.t. the provided categories
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            labels = sr.label_encoding(cats=dtype.categories)
+            return build_categorical_column(
+                categories=dtype.categories,
+                codes=labels._column,
+                mask=self.mask,
+                ordered=ordered,
+            ).astype(dtype)
+
         labels, cats = sr.factorize()
 
         # columns include null index in factorization; remove:
@@ -1215,7 +1226,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
     elif isinstance(arbitrary, Buffer):
         if dtype is None:
-            raise TypeError(f"dtype cannot be None if 'arbitrary' is a Buffer")
+            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
         data = build_column(arbitrary, dtype=dtype)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
@@ -1269,9 +1280,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
-                if nan_as_null:
-                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
-                else:
+                if nan_as_null is False:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
                     if new_dtype == np.dtype("object"):
@@ -1282,6 +1291,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                         arbitrary = utils.scalar_broadcast_to(
                             np.nan, (len(arbitrary),), dtype=new_dtype
                         )
+                else:
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
             data = as_column(arbitrary, nan_as_null=nan_as_null)
         elif isinstance(arbitrary, pa.DictionaryArray):
             codes = as_column(arbitrary.indices)
@@ -1463,7 +1474,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
 
             buffer = Buffer(arbitrary)
             mask = None
-            if nan_as_null:
+            if nan_as_null is None or nan_as_null is True:
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
