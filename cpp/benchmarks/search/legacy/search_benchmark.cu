@@ -26,8 +26,6 @@
 #include "../../fixture/benchmark_fixture.hpp"
 #include "../../synchronization/synchronization.hpp"
 
-#include <gperftools/profiler.h>
-
 class Search : public cudf::benchmark {
 };
 
@@ -41,13 +39,11 @@ void BM_non_null_column(benchmark::State& state)
   cudf::test::column_wrapper<float> values(
     values_size, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
 
-  ProfilerStart("search_legacy.prof");
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
     gdf_column_free(&col);
   }
-  ProfilerStop();
 }
 
 BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) { BM_non_null_column(state); }

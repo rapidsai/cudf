@@ -28,8 +28,6 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <tests/utilities/base_fixture.hpp>
 
-// #include <gperftools/profiler.h>
-
 class Search : public cudf::benchmark {
 };
 
@@ -46,7 +44,6 @@ void BM_non_null_column(benchmark::State& state)
   cudf::test::fixed_width_column_wrapper<float> column(col_data_it, col_data_it + column_size);
   cudf::test::fixed_width_column_wrapper<float> values(val_data_it, val_data_it + values_size);
 
-  // ProfilerStart("search_new.prof");
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
     auto col = cudf::experimental::upper_bound(cudf::table_view({column}),
@@ -54,7 +51,6 @@ void BM_non_null_column(benchmark::State& state)
                                                {cudf::order::ASCENDING},
                                                {cudf::null_order::BEFORE});
   }
-  // ProfilerStop();
 }
 
 BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) { BM_non_null_column(state); }
