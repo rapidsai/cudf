@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,19 @@
  */
 #pragma once
 
-#include <stdint.h>
-#include <string>
-#include <vector>
+/**
+ * @file list_view.cuh
+ * @brief Class definition for cudf::list_view.
+ */
 
 namespace cudf {
-namespace io {
-/**
- * @brief Creates a transition table to convert ORC timestamps to UTC
- *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
- *transitions repeat forever with 400 year cycle)
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
- *
- * @return true if successful, false if failed to find/parse the timezone information
- **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
 
-}  // namespace io
+/**
+ * @brief A non-owning, immutable view of device data that represents
+ * a list of elements of arbitrary type (including further nested lists).
+ *
+ */
+class list_view {
+};
+
 }  // namespace cudf

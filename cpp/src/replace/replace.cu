@@ -398,12 +398,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   }
 
   // Create new offsets column to use in kernel
-  std::unique_ptr<cudf::column> sizes =
-    cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT32),
-                              input_col.size(),
-                              cudf::mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+  std::unique_ptr<cudf::column> sizes = cudf::make_numeric_column(
+    cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
   std::unique_ptr<cudf::column> indices = cudf::make_numeric_column(
     cudf::data_type(cudf::type_id::INT32), input_col.size(), cudf::mask_state::UNALLOCATED, stream);
 
@@ -449,14 +445,13 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
     *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);
 
-  std::unique_ptr<cudf::column> output = cudf::make_strings_column(input_col.size(),
-                                                                   std::move(offsets),
-                                                                   std::move(output_chars),
-                                                                   null_count,
-                                                                   std::move(valid_bits),
-                                                                   stream,
-                                                                   mr);
-  return output;
+  return cudf::make_strings_column(input_col.size(),
+                                   std::move(offsets),
+                                   std::move(output_chars),
+                                   null_count,
+                                   std::move(valid_bits),
+                                   stream,
+                                   mr);
 }
 
 }  // end anonymous namespace
@@ -735,15 +730,13 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     output_chars_view.data<char>(),
     valid_count);
 
-  std::unique_ptr<cudf::column> output =
-    cudf::make_strings_column(input.size(),
-                              std::move(offsets),
-                              std::move(output_chars),
-                              input.size() - valid_counter.value(stream),
-                              std::move(valid_bits),
-                              stream,
-                              mr);
-  return output;
+  return cudf::make_strings_column(input.size(),
+                                   std::move(offsets),
+                                   std::move(output_chars),
+                                   input.size() - valid_counter.value(stream),
+                                   std::move(valid_bits),
+                                   stream,
+                                   mr);
 }
 
 template <typename T>

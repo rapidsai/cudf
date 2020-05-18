@@ -930,7 +930,7 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
- * conversion will be perfomed to translate from the Parquet datatype to
+ * conversion will be performed to translate from the Parquet datatype to
  * desired output datatype (ex. 32-bit to 16-bit, string to hash).
  *
  * @param[in] pages List of pages

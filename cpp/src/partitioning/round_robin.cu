@@ -61,7 +61,7 @@ using VectorT = rmm::device_vector<T>;
  * transpose_dbg = transpose graph of dbg; (i.e., (i -> j) edge in dbg means (j -> i) edge in
  * transpose);
  *
- * (offsets, indxs) = (row_offsets, col_indices) of transpose_dbg;
+ * (offsets, indices) = (row_offsets, col_indices) of transpose_dbg;
  * where (row_offsets, col_indices) are the CSR format of the graph;
  *
  * @Param[in] input The input table to be round-robin partitioned
@@ -70,7 +70,7 @@ using VectorT = rmm::device_vector<T>;
  * @Param[in] mr Device memory allocator
  * @Param[in] stream cuda stream to execute on
  *
- * @Returns A std::pair consisting of an unique_ptr to the partitioned table and the partition
+ * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
 std::pair<std::unique_ptr<cudf::experimental::table>, std::vector<cudf::size_type>>
