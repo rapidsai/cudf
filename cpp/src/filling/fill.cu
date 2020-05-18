@@ -167,10 +167,10 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   auto contents          = new_indices->release();
   // create the new indices column from the result
   auto indices_column = std::make_unique<cudf::column>(cudf::data_type{cudf::INT32},
-                                                        static_cast<cudf::size_type>(output_size),
-                                                        std::move(*(contents.data.release())),
-                                                        rmm::device_buffer{0, stream, mr},
-                                                        0);
+                                                       static_cast<cudf::size_type>(output_size),
+                                                       std::move(*(contents.data.release())),
+                                                       rmm::device_buffer{0, stream, mr},
+                                                       0);
 
   // take the keys from matched column
   std::unique_ptr<cudf::column> keys_column(std::move(target_matched->release().children.back()));
