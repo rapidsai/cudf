@@ -70,7 +70,7 @@ class example_class {
                          float* third_parameter)
   {
     // DESCRIPTION: Notice the use of *human readable* variable names. Human
-    // readable variable names are vastly prefered to short, hard to read names.
+    // readable variable names are vastly preferred to short, hard to read names.
     // E.g., use 'first_parameter' or `firstParameter` instead of 'fp'. When in
     // doubt, opt for the longer, easier to read name that conveys the meaning
     // and purpose of the variable. Well named variables are self-documenting.

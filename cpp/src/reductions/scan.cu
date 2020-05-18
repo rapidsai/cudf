@@ -20,7 +20,7 @@ namespace experimental {
 namespace detail {
 /**
  * @brief Dispatcher for running Scan operation on input column
- * Dispatches scan operartion on `Op` and creates output column
+ * Dispatches scan operation on `Op` and creates output column
  *
  * @tparam Op device binary operator
  */
