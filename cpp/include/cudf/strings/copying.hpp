@@ -24,7 +24,7 @@ namespace detail {
 /**
  * @brief Returns a new strings column created from a subset of
  * of the strings column. The subset of strings selected is between
- * start (inclusive) and end (exclusive) with incrememnts of step.
+ * start (inclusive) and end (exclusive) with increments of step.
  *
  * @code{.pseudo}
  * Example:

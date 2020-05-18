@@ -48,7 +48,7 @@ namespace strings {
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Device memory resource used to allocate the returned table.
  * @return New table of strings columns.
@@ -80,7 +80,7 @@ std::unique_ptr<experimental::table> partition(
  * @endcode
  *
  * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying where to split each string.
+ * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
  * @param mr Device memory resource used to allocate the returned table.
  * @return New strings columns.

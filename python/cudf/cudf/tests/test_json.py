@@ -302,7 +302,7 @@ def test_json_bool_values():
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
 
-    # first column contains a null field, type sould be set to float
+    # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
     np.testing.assert_array_equal(

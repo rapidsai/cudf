@@ -49,7 +49,7 @@ namespace detail {
  * has negative values or the sum of @p count elements overflows.
  *
  * @param input_table Input table
- * @param count Non-nullable column of a integral type
+ * @param count Non-nullable column of an integral type
  * @param check_count Whether to check count (negative values and overflow)
  * @param mr Device memory resource used to allocate the returned table
  * @param stream CUDA stream to run this function
@@ -77,7 +77,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
  * size_type.
  *
  * @param input_table Input table
- * @param count Non-null scalar of a integral type
+ * @param count Non-null scalar of an integral type
  * @param mr Device memory resource used to allocate the returned table
  * @param stream CUDA stream to run this function
  * @return std::unique_ptr<table> The result table containing the repetitions
