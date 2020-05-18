@@ -181,6 +181,7 @@
 - PR #5214 Move docs build script into repository
 - PR #5155 Fix cudf documentation misspellings
 - PR #5214 Move docs build script into repository
+- PR #5219 Add per context cache for JIT kernels
 
 ## Bug Fixes
 
