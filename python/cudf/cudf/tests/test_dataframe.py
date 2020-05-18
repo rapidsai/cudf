@@ -822,17 +822,9 @@ def test_dataframe_hash_partition_masked_value(nrows):
         df = p.to_pandas()
         for row in df.itertuples():
             valid = bool(bytemask[row.key])
-            expected_value = row.key + 100 if valid else pd.NA
+            expected_value = row.key + 100 if valid else -1
             got_value = row.val
-            try:
-                if valid:
-                    assert expected_value == got_value
-                else:
-                    # pd.NA doesn't compare as bool
-                    assert expected_value is got_value
-            except:
-                import pdb
-                pdb.set_trace()
+            assert expected_value == got_value
 
 @pytest.mark.parametrize("nrows", [3, 10, 50])
 def test_dataframe_hash_partition_masked_keys(nrows):
@@ -3432,8 +3424,7 @@ def test_series_astype_null_cases():
     )
 
     # datetime to other
-    data = ["2001-01-01 00:00:00.000000000", "2001-02-01 00:00:00.000000000", None, "2001-03-01 00:00:00.000000000"]
-
+    data = ["2001-01-01 00:00:00.000000", "2001-02-01 00:00:00.000000", None, "2001-03-01 00:00:00.000000"]
     assert_eq(
         gd.from_pandas(pd.Series(data)),
         gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
