@@ -31,7 +31,7 @@ engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
 columns : list, default None
     If not None, only these columns will be read.
 skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
+    If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
 
@@ -113,7 +113,7 @@ columns : list, default None
 row_group : int, default None
     If not None, only the row group with the specified index will be read.
 skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
+    If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
 strings_to_categorical : boolean, default False
@@ -368,7 +368,7 @@ precise_float : boolean, default False
     is to use fast but less precise builtin functionality
 date_unit : string, default None
     The timestamp unit to detect if converting dates (pandas engine only).
-    The default behaviour is to try and detect the correct precision, but if
+    The default behavior is to try and detect the correct precision, but if
     this is not desired then pass one of 's', 'ms', 'us' or 'ns' to force
     parsing only seconds, milliseconds, microseconds or nanoseconds.
 encoding : str, default is 'utf-8'
@@ -378,7 +378,7 @@ lines : boolean, default False
     Read the file as a json object per line.
 chunksize : integer, default None
     Return JsonReader object for iteration (pandas engine only).
-    See the `line-delimted json docs
+    See the `line-delimited json docs
     <http://pandas.pydata.org/pandas-docs/stable/io.html#io-jsonl>`_
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
@@ -453,7 +453,7 @@ date_unit : string, default 'ms' (milliseconds)
 default_handler : callable, default None
     Handler to call if object cannot otherwise be converted to a
     suitable format for JSON. Should receive a single argument which is
-    the object to convert and return a serialisable object.
+    the object to convert and return a serializable object.
 lines : bool, default False
     If 'orient' is 'records' write out line delimited json format. Will
     throw ValueError if incorrect 'orient' since others are not list
