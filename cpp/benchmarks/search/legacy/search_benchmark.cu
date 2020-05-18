@@ -51,7 +51,7 @@ BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) { BM_non_n
 BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
-  ->Arg(400000000);
+  ->Arg(100000000);
 
 void BM_nullable_column(benchmark::State& state)
 {

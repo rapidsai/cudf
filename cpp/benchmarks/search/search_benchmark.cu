@@ -58,7 +58,7 @@ BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) { BM_non_n
 BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
-  ->Arg(400000000);
+  ->Arg(100000000);
 
 auto make_validity_iter()
 {
