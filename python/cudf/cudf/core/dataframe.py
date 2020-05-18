@@ -863,7 +863,8 @@ class DataFrame(Frame):
 
             - ``raise`` : allow exceptions to be raised
             - ``ignore`` : suppress exceptions. On error return original
-                           object.
+            object.
+
             - ``warn`` : prints last exceptions as warnings and
             return original object.
         **kwargs : extra arguments to pass on to the constructor
