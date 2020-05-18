@@ -81,6 +81,17 @@ class datasource {
   virtual std::unique_ptr<buffer> host_read(size_t offset, size_t size) = 0;
 
   /**
+   * @brief Read a selected range into a preallocated buffer
+   *
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
+   * @param[in] dst Address in existing host memory
+   *
+   * @return The number of bytes read (can be smaller than size)
+   **/
+  virtual size_t host_read(size_t offset, size_t size, uint8_t *dst) = 0;
+
+  /**
    * @brief Returns the size of the data in the source
    *
    * @return size_t The size of the source data in bytes
