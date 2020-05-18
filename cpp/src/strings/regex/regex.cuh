@@ -181,7 +181,7 @@ class reprog_device {
 };
 
 // 10128 ≈ 1000 instructions
-// Formula is based on relist::data_size_for() calculaton;
+// Formula is based on relist::data_size_for() calculation;
 // Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
 constexpr int32_t MAX_STACK_INSTS = 1000;
 

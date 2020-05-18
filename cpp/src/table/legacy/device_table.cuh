@@ -44,7 +44,7 @@ class device_table {
    * unique_ptr.
    *
    * Because this class allocates device memory, and we want to be sure that
-   * device memory is free'd, this factory function returns a device_table
+   * device memory is freed, this factory function returns a device_table
    * wrapped in a unique_ptr with a custom deleter that frees the device memory.
    *
    * The class' destructor does **not** free the device memory, because we would
@@ -54,7 +54,7 @@ class device_table {
    * the device memory, then you would end up trying to free the underlying
    * device memory any time a copy is destroyed.
    *
-   * Instead, the underlying device memory will not be free'd until the returned
+   * Instead, the underlying device memory will not be freed until the returned
    * `unique_ptr` invokes its deleter.
    *
    * The methods of this class with `stream` parameters are asynchronous with

@@ -465,7 +465,7 @@ def test_csv_reader_NaN_values():
     all_cells = empty_cells + default_na_cells + custom_na_cells
     custom_na_values = ["NV_NAN", "NotANumber"]
 
-    # test default NA values. emply cells should also yield NaNs
+    # test default NA values. empty cells should also yield NaNs
     all_nan = read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )

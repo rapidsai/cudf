@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -337,7 +337,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
             cudf::experimental::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+            std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window,
@@ -382,7 +382,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
+        cudf::detail::rolling_store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
       }
     }
 
@@ -394,7 +394,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
             cudf::experimental::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+            std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& input,
                                                         std::vector<size_type> const& group_offsets,
                                                         size_type const& preceding_window_col,
@@ -948,7 +948,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
             cudf::experimental::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+            std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& timestamp_column,
                                                         cudf::order const& timestamp_order,
                                                         cudf::column_view const& input,
@@ -1020,7 +1020,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
 
       ref_valid[i] = (count >= min_periods);
       if (ref_valid[i]) {
-        cudf::detail::store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
+        cudf::detail::rolling_store_output_functor<OutputType, is_mean>{}(ref_data[i], val, count);
       }
     }
 
@@ -1032,7 +1032,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
             cudf::experimental::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!cudf::detail::is_supported<T, agg_op, k, is_mean>()>* = nullptr>
+            std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(cudf::column_view const& timestamp_column,
                                                         cudf::order const& timestamp_order,
                                                         cudf::column_view const& input,
