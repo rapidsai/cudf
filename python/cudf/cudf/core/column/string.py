@@ -151,7 +151,7 @@ _numeric_to_str_typecast_functions = {
 
 class StringMethods(object):
     """
-    This mimicks pandas `df.str` interface.
+    This mimicks pandas ``df.str`` interface.
     """
 
     def __init__(self, column, parent=None):

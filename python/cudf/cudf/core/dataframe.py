@@ -1042,10 +1042,10 @@ class DataFrame(Frame):
             for col in lhs._data:
                 if col not in rhs._data:
                     result[col] = fallback(lhs[col], fn)
-            for col in rhs._data:
-                if col in lhs._data:
-                    result[col] = op(lhs[col], rhs[col])
                 else:
+                    result[col] = op(lhs[col], rhs[col])
+            for col in rhs._data:
+                if col not in lhs._data:
                     result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
@@ -1082,114 +1082,751 @@ class DataFrame(Frame):
             )
         return result
 
-    def add(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def add(self, other, axis="columns", fill_value=None):
+        """
+        Get Addition of dataframe and other, element-wise (binary
+        operator `add`).
+
+        Equivalent to ``dataframe + other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `radd`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df + 1
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        >>> df.add(1)
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("add", other, fill_value)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
-    def radd(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def radd(self, other, axis=1, fill_value=None):
+        """
+        Get Addition of dataframe and other, element-wise (binary
+        operator `radd`).
+
+        Equivalent to ``other + dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `add`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df + 1
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+        >>> df.radd(1)
+                angles  degrees
+        circle          1      361
+        triangle        4      181
+        rectangle       5      361
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("radd", other, fill_value)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
-    def sub(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def sub(self, other, axis="columns", fill_value=None):
+        """
+        Get Subtraction of dataframe and other, element-wise (binary
+        operator `sub`).
+
+        Equivalent to ``dataframe - other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rsub`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.sub(1)
+                angles  degrees
+        circle         -1      359
+        triangle        2      179
+        rectangle       3      359
+        >>> df.sub([1, 2])
+                angles  degrees
+        circle         -1      358
+        triangle        2      178
+        rectangle       3      358
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("sub", other, fill_value)
 
     def __sub__(self, other):
         return self._apply_op("__sub__", other)
 
-    def rsub(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rsub(self, other, axis="columns", fill_value=None):
+        """
+        Get Subtraction of dataframe and other, element-wise (binary
+        operator `rsub`).
+
+        Equivalent to ``other - dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `sub`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.rsub(1)
+                angles  degrees
+        circle          1     -359
+        triangle       -2     -179
+        rectangle      -3     -359
+        >>> df.rsub([1, 2])
+                angles  degrees
+        circle          1     -358
+        triangle       -2     -178
+        rectangle      -3     -358
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rsub", other, fill_value)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
-    def mul(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def mul(self, other, axis="columns", fill_value=None):
+        """
+        Get Multiplication of dataframe and other, element-wise (binary
+        operator `mul`).
+
+        Equivalent to ``dataframe * other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rmul`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        ...                      index=['circle', 'triangle', 'rectangle'])
+        >>> df * other
+                angles degrees
+        circle          0    null
+        triangle        9    null
+        rectangle      16    null
+        >>> df.mul(other, fill_value=0)
+                angles  degrees
+        circle          0        0
+        triangle        9        0
+        rectangle      16        0
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("mul", other, fill_value)
 
     def __mul__(self, other):
         return self._apply_op("__mul__", other)
 
-    def rmul(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rmul(self, other, axis="columns", fill_value=None):
+        """
+        Get Multiplication of dataframe and other, element-wise (binary
+        operator `rmul`).
+
+        Equivalent to ``other * dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `mul`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> other = pd.DataFrame({'angles': [0, 3, 4]},
+        ...                      index=['circle', 'triangle', 'rectangle'])
+        >>> other * df
+                angles degrees
+        circle          0    null
+        triangle        9    null
+        rectangle      16    null
+        >>> df.rmul(other, fill_value=0)
+                angles  degrees
+        circle          0        0
+        triangle        9        0
+        rectangle      16        0
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rmul", other, fill_value)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
-    def mod(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def mod(self, other, axis="columns", fill_value=None):
+        """
+        Get Modulo division of dataframe and other, element-wise (binary
+        operator `mod`).
+
+        Equivalent to ``dataframe % other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rmod`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df % 100
+                angles  degrees
+        circle          0       60
+        triangle        3       80
+        rectangle       4       60
+        >>> df.mod(100)
+                angles  degrees
+        circle          0       60
+        triangle        3       80
+        rectangle       4       60
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("mod", other, fill_value)
 
     def __mod__(self, other):
         return self._apply_op("__mod__", other)
 
-    def rmod(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rmod(self, other, axis="columns", fill_value=None):
+        """
+        Get Modulo division of dataframe and other, element-wise (binary
+        operator `rmod`).
+
+        Equivalent to ``other % dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `mod`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> 100 % df
+                angles  degrees
+        circle          0      100
+        triangle        1      100
+        rectangle       0      100
+        >>> df.rmod(100)
+                angles  degrees
+        circle          0      100
+        triangle        1      100
+        rectangle       0      100
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rmod", other, fill_value)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
-    def pow(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def pow(self, other, axis="columns", fill_value=None):
+        """
+        Get Exponential power of dataframe and other, element-wise (binary
+        operator `pow`).
+
+        Equivalent to ``dataframe ** other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rpow`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df ** 2
+                angles  degrees
+        circle          0   129600
+        triangle        9    32400
+        rectangle      16   129600
+        >>> df.pow(2)
+                angles  degrees
+        circle          0   129600
+        triangle        9    32400
+        rectangle      16   129600
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("pow", other, fill_value)
 
     def __pow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def rpow(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rpow(self, other, axis="columns", fill_value=None):
+        """
+        Get Exponential power of dataframe and other, element-wise (binary
+        operator `pow`).
+
+        Equivalent to ``other ** dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `pow`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> 1 ** df
+                angles  degrees
+        circle          1        1
+        triangle        1        1
+        rectangle       1        1
+        >>> df.rpow(1)
+                angles  degrees
+        circle          1        1
+        triangle        1        1
+        rectangle       1        1
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rpow", other, fill_value)
 
     def __rpow__(self, other):
         return self._apply_op("__pow__", other)
 
-    def floordiv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def floordiv(self, other, axis="columns", fill_value=None):
+        """
+        Get Integer division of dataframe and other, element-wise (binary
+        operator `floordiv`).
+
+        Equivalent to ``dataframe // other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rfloordiv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.floordiv(2)
+                angles  degrees
+        circle          0      180
+        triangle        1       90
+        rectangle       2      180
+        >>> df // 2
+                angles  degrees
+        circle          0      180
+        triangle        1       90
+        rectangle       2      180
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("floordiv", other, fill_value)
 
     def __floordiv__(self, other):
         return self._apply_op("__floordiv__", other)
 
-    def rfloordiv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rfloordiv(self, other, axis="columns", fill_value=None):
+        """
+        Get Integer division of dataframe and other, element-wise (binary
+        operator `rfloordiv`).
+
+        Equivalent to ``other // dataframe``, but with support to substitute
+        a fill_value for missing data in one of the inputs. With reverse
+        version, `floordiv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        # TODO: Add emaples
+        """
+
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rfloordiv", other, fill_value)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
-    def truediv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def truediv(self, other, axis="columns", fill_value=None):
+        """
+        Get Floating division of dataframe and other, element-wise (binary
+        operator `truediv`).
+
+        Equivalent to ``dataframe / other``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `rtruediv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.truediv(10)
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+        >>> df.div(10)
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+        >>> df / 10
+                    angles  degrees
+        circle        0.0     36.0
+        triangle      0.3     18.0
+        rectangle     0.4     36.0
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("truediv", other, fill_value)
+
+    # Alias for truediv
+    div = truediv
 
     def __truediv__(self, other):
         return self._apply_op("__truediv__", other)
 
-    def rtruediv(self, other, fill_value=None, axis=1):
-        if axis != 1:
+    def rtruediv(self, other, axis="columns", fill_value=None):
+        """
+        Get Floating division of dataframe and other, element-wise (binary
+        operator `rtruediv`).
+
+        Equivalent to ``other / dataframe``, but with support to substitute a
+        fill_value for missing data in one of the inputs. With reverse
+        version, `truediv`.
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
+        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
+
+        Parameters
+        ----------
+
+        other : scalar, sequence, Series, or DataFrame
+            Any single or multiple element data structure, or list-like object.
+        fill_value  : float or None, default None
+            Fill existing missing (NaN) values, and any new element needed
+            for successful DataFrame alignment, with this value before
+            computation. If data in both corresponding DataFrame locations
+            is missing the result will be missing.
+
+        Returns
+        -------
+        DataFrame
+            Result of the arithmetic operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
+        ...                    'degrees': [360, 180, 360]},
+        ...                   index=['circle', 'triangle', 'rectangle'])
+        >>> df.rtruediv(10)
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+        >>> df.rdiv(10)
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+        >>> 10 / df
+                    angles   degrees
+        circle          inf  0.027778
+        triangle   3.333333  0.055556
+        rectangle  2.500000  0.027778
+
+        """
+        if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return self._apply_op("rtruediv", other, fill_value)
+
+    # Alias for rtruediv
+    rdiv = rtruediv
 
     def __rtruediv__(self, other):
         return self._apply_op("__rtruediv__", other)
