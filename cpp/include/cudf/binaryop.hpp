@@ -60,19 +60,19 @@ enum class binary_operator : int32_t {
   SHIFT_LEFT,            ///< operator <<
   SHIFT_RIGHT,           ///< operator >>
   SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
-  ///< Logical right shift. Casts to an unsigned value before shifing.
-  LOG_BASE,  ///< logarithm to the base
-  ATAN2,     ///< 2-argument arctangent
-  PMOD,      ///< positive modulo operator
-  ///< If remainder is negative, this returns (remainder + divisor) % divisor
-  ///< else, it returns (dividend % divisor)
-  NULL_EQUALS,    ///< Returns true when both operands are null; false when one is null; the
-                  ///< result of equality when both are non-null
-  NULL_MAX,       ///< Returns max of operands when both are non-null; returns the non-null
-                  ///< operand when one is null; or invalid when both are null
-  NULL_MIN,       ///< Returns min of operands when both are non-null; returns the non-null
-                  ///< operand when one is null; or invalid when both are null
-  INVALID_BINARY  ///< invalid operation
+                         ///< Logical right shift. Casts to an unsigned value before shifting.
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  PMOD,                  ///< positive modulo operator
+                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                         ///< else, it returns (dividend % divisor)
+  NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
+                         ///< result of equality when both are non-null
+  NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
+                         ///< operand when one is null; or invalid when both are null
+  INVALID_BINARY         ///< invalid operation
 };
 /**
  * @brief Performs a binary operation between a scalar and a column.

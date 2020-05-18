@@ -37,7 +37,7 @@ enum class unary_op : int32_t {
   COSH,        // < Hyperbolic cosine
   TANH,        // < Hyperbolic tangent
   ARCSINH,     // < Hyperbolic sine inverse
-  ARCCOSH,     // < Hperbolic cosine inverse
+  ARCCOSH,     // < Hyperbolic cosine inverse
   ARCTANH,     // < Hyperbolic tangent inverse
   EXP,         // < Exponential (base e, Euler number)
   LOG,         // < Natural Logarithm (base e)
